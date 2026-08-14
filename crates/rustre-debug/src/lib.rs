@@ -9927,7 +9927,10 @@ mod tests_extra {
         ] {
             let body = item_body(
                 src,
-                "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent) {",
+                // Anchored WITHOUT the trailing brace: the signature gained a
+                // return type in iteration 540 and this anchor broke, failing
+                // two guards for a reason unrelated to what they check.
+                "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent)",
                 &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
             );
             assert!(
@@ -9944,6 +9947,85 @@ mod tests_extra {
                 "{name}: the watchpoint path reaches the PC rewind, which would write the \
                  watched DATA address into the program counter"
             );
+        }
+    }
+
+    /// A rewind that FAILED must not be reported as a stop that succeeded.
+    ///
+    /// The CPU leaves the PC one byte past an executed `int3`, so after our own
+    /// breakpoint fires the PC must be pulled back to the breakpoint address
+    /// before the target can be resumed. If that write fails and the failure is
+    /// discarded, the caller still receives `Ok(Breakpoint { address })` — a
+    /// stop event that is TRUE about what happened and FALSE about the state it
+    /// left behind. Resuming from there restarts the target one byte into an
+    /// instruction, which is not "a wrong value" but arbitrary execution.
+    ///
+    /// This is the third time in this crate that a comment justifying an action
+    /// was used to justify discarding its outcome (iterations 536/537/538), and
+    /// the reason the pattern is now checked on the source of all three
+    /// backends: it is the only lens that also covers macOS, where nothing is
+    /// ever executed.
+    #[test]
+    fn every_backend_reports_a_failed_breakpoint_rewind_instead_of_discarding_it() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let body = item_body(
+                src,
+                "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent)",
+                &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
+            );
+            assert!(
+                !body.contains("let _ = self.set_registers"),
+                "{name}: rewind_past_own_breakpoint discards the result of set_registers, so a \
+                 failed rewind leaves the PC one byte inside an instruction while the event \
+                 still claims a clean breakpoint stop"
+            );
+            // Reporting it requires a channel to report it THROUGH: a function
+            // returning `()` has nowhere to put the failure, so the signature
+            // is part of the invariant, not a separate style preference.
+            assert!(
+                src.contains(
+                    "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent) -> Result<(), DebugError>"
+                ),
+                "{name}: rewind_past_own_breakpoint returns (), so it has no way to tell its \
+                 caller the target is not resumable"
+            );
+        }
+    }
+
+    /// The callers of the rewind must not throw that answer away either.
+    ///
+    /// Separate from the test above on purpose: giving the function a return
+    /// type and then calling it as a bare statement restores the exact defect
+    /// with the guard passing, because the discard has merely moved one level
+    /// out.
+    #[test]
+    fn every_backend_acts_on_the_result_of_the_breakpoint_rewind() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            for (lineno, line) in src.lines().enumerate() {
+                let trimmed = line.trim();
+                if !trimmed.contains("rewind_past_own_breakpoint(") || trimmed.starts_with("//") {
+                    continue;
+                }
+                // The definition and doc references are not call sites.
+                if trimmed.starts_with("async fn") || trimmed.starts_with("///") {
+                    continue;
+                }
+                assert!(
+                    !trimmed.starts_with("self.rewind_past_own_breakpoint(")
+                        && !trimmed.starts_with("let _ = self.rewind_past_own_breakpoint("),
+                    "{name}:{}: the rewind's result is discarded at the call site — the target \
+                     may be left mid-instruction while this event is handed back as a normal stop",
+                    lineno + 1
+                );
+            }
         }
     }
 
@@ -10445,7 +10527,10 @@ mod tests_extra {
             let code = code_only(raw);
             let body = item_body(
                 &code,
-                "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent) {",
+                // Anchored WITHOUT the trailing brace: the signature gained a
+                // return type in iteration 540 and this anchor broke, failing
+                // two guards for a reason unrelated to what they check.
+                "async fn rewind_past_own_breakpoint(&self, event: &DebugEvent)",
                 &["\n    fn ", "\n    async fn "],
             );
             assert!(

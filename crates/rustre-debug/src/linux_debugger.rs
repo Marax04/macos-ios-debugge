@@ -704,7 +704,14 @@ impl LinuxDebugger {
                     // a live test that single-stepped then asked
                     // `current_thread` and got `NotAttached` back.
                     *self.current_tid.lock() = Some(ev.tid);
-                    self.rewind_past_own_breakpoint(ev).await;
+                    // A failed rewind leaves the PC one byte inside an
+                    // instruction. Returning this event as a normal step would
+                    // report a clean stop for a target that cannot be resumed,
+                    // so the failure replaces the event instead of riding
+                    // alongside it.
+                    if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
+                        return Err(e);
+                    }
                     // A single step CAN be the process's last instruction, and
                     // the event loop returns just the same. Retiring only from
                     // `continue_execution` would leave that path stuck.
@@ -761,9 +768,9 @@ impl LinuxDebugger {
     /// and only breakpoints *we* planted (byte patched to `0xCC`) need that
     /// rewound before resuming — a foreign/target-owned `int3` must be left
     /// alone or resuming re-executes the same trap forever.
-    async fn rewind_past_own_breakpoint(&self, event: &DebugEvent) {
+    async fn rewind_past_own_breakpoint(&self, event: &DebugEvent) -> Result<(), DebugError> {
         let StopReason::Breakpoint { address, .. } = &event.reason else {
-            return;
+            return Ok(());
         };
         if !self.breakpoints.lock().contains_key(&address.as_u64()) {
             // A hardware watchpoint hit arrives here too, and it must be
@@ -779,25 +786,35 @@ impl LinuxDebugger {
             if self.hw_watchpoints.lock().contains_key(&address.as_u64()) {
                 *self.hit_counts.lock().entry(address.as_u64()).or_insert(0) += 1;
             }
-            return;
+            return Ok(());
         }
         // This is our breakpoint and it just fired — the only place that
         // knows both facts, so it is where the hit is counted.
         *self.hit_counts.lock().entry(address.as_u64()).or_insert(0) += 1;
-        if let Ok(mut regs) = self.get_registers(event.tid).await {
-            regs.pc = address.as_u64();
-            // The PC is written by the name THIS architecture uses. Hardcoding
-            // "rip" wrote a key that does not exist on AArch64: the map still
-            // held the old `pc`, `apply_register_set` reads `pc`, and the
-            // rewind therefore wrote nothing at all on Apple Silicon — silent,
-            // because `regs.pc` (the struct field) is not what gets written
-            // back. `pc_key` is the shared answer added in iteration 443.
-            regs.set(
-                crate::instr_step::pc_key(crate::instr_step::native_arch()),
-                address.as_u64(),
-            );
-            let _ = self.set_registers(event.tid, regs).await;
-        }
+        // Both failures below are RETURNED, never swallowed.
+        //
+        // This used to read the registers under `if let Ok(..)` and write them
+        // back under `let _ =`, so either failure left the PC one byte past the
+        // `int3` while the caller still received `Ok(Breakpoint { address })`.
+        // That event is true about what happened and false about the state it
+        // left: resuming restarts the target INSIDE an instruction, which is
+        // arbitrary execution, not an approximate answer. The hit above is
+        // still counted first — the breakpoint really did fire, and that fact
+        // stays true even when the rewind that follows it does not.
+        let mut regs = self.get_registers(event.tid).await?;
+        regs.pc = address.as_u64();
+        // The PC is written by the name THIS architecture uses. Hardcoding
+        // "rip" wrote a key that does not exist on AArch64: the map still
+        // held the old `pc`, `apply_register_set` reads `pc`, and the
+        // rewind therefore wrote nothing at all on Apple Silicon — silent,
+        // because `regs.pc` (the struct field) is not what gets written
+        // back. `pc_key` is the shared answer added in iteration 443.
+        regs.set(
+            crate::instr_step::pc_key(crate::instr_step::native_arch()),
+            address.as_u64(),
+        );
+        self.set_registers(event.tid, regs).await?;
+        Ok(())
     }
 
     /// Set a temporary breakpoint at `target`, resume execution until it's
@@ -2441,7 +2458,14 @@ impl crate::Debugger for LinuxDebugger {
             };
             if let Ok(ev) = &mut r {
                 *self.current_tid.lock() = Some(ev.tid);
-                self.rewind_past_own_breakpoint(ev).await;
+                // Same reasoning as in `single_step_raw`: a stop whose rewind
+                // failed is not a stop the caller may resume from. It is
+                // surfaced before `arm_pending_breakpoints`, because arming
+                // more traps in a process parked mid-instruction only widens
+                // the damage.
+                if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
+                    return Err(e);
+                }
                 self.arm_pending_breakpoints(ev).await;
                 // A library event is RETURNED to the caller, not swallowed.
                 //
