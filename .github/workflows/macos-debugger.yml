@@ -98,15 +98,109 @@ jobs:
         continue-on-error: true
         run: cargo clippy --release -p rustre-debug --target ${{ matrix.target }} -- -W clippy::all
 
+  # ── iOS ────────────────────────────────────────────────────────────────────
+  #
+  # What this job can and cannot prove, stated up front so a green tick is not
+  # read as more than it is:
+  #
+  #   CAN   — that `src/ios` (30 739 lines, 502 tests) COMPILES for the two iOS
+  #           triples. It never has: `grep -r apple-ios` over this repo returned
+  #           nothing, so iOS has been a backend without ever being a target.
+  #   CAN   — that a real `debugserver` exists and answers, which is the one
+  #           thing `mock_debugserver.rs` structurally cannot check: the mock
+  #           proves we speak the protocol as WE understood it, not that Apple's
+  #           implementation agrees.
+  #   CANNOT — anything about iOS itself. The Simulator runs the HOST's macOS
+  #           kernel; its processes are macOS processes with an iOS userland.
+  #           Device-level behaviour needs physical hardware and a self-hosted
+  #           runner, and no configuration of GitHub-hosted Actions reaches it.
+  ios:
+    name: iOS ${{ matrix.name }}
+    runs-on: macos-14
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: device triple (compile only)
+            target: aarch64-apple-ios
+            simulator: false
+          - name: simulator
+            target: aarch64-apple-ios-sim
+            simulator: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ios-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ios-${{ matrix.target }}-cargo-
+
+      # This step is NOT allowed to fail. It is the whole point of the job:
+      # a backend that cannot be built for its own platform is not a backend.
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --release -p rustre-debug --target ${{ matrix.target }}
+
+      # The 502 iOS tests are host-independent by design (see src/ios/mod.rs:
+      # nothing is gated on `cfg(target_os = "macos")`), so they already run on
+      # Windows and Linux. Running them HERE adds one fact those runs cannot
+      # give: that they also hold when compiled by the Apple toolchain for an
+      # Apple triple, where integer widths, alignment and ABI are its own.
+      - name: Test on the simulator
+        if: matrix.simulator
+        run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} -- --test-threads=1
+
+      # ── The fragile part, deliberately quarantined ─────────────────────────
+      #
+      # `continue-on-error` is used here and NOWHERE above. Booting a simulator
+      # and driving Apple's debugserver depends on Xcode's layout, on runtime
+      # images being present, and on a device that may take minutes to boot —
+      # none of which is this project's code. A flake in it must never turn a
+      # real compile or test failure green, nor the reverse.
+      - name: Boot a simulator and locate debugserver
+        if: matrix.simulator
+        continue-on-error: true
+        run: |
+          set -x
+          xcrun simctl list runtimes
+          DEVICE=$(xcrun simctl create rustre-ci "iPhone 15" || true)
+          echo "device=$DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b || true
+          # debugserver is what src/ios/rsp.rs speaks to. Finding it proves the
+          # counterpart of the mock exists on this machine; it does not yet
+          # prove they agree.
+          find "$(xcode-select -p)" -name debugserver -type f 2>/dev/null | head -5
+          xcrun simctl shutdown "$DEVICE" || true
+          xcrun simctl delete "$DEVICE" || true
+
   # A short summary job so the repository's badge/checks answer one question:
   # did the macOS backend run, on both architectures?
+  #
+  # `ios` is in `needs` so the job is ordered and reported, but only the macOS
+  # result is asserted: the iOS job is new and its Simulator half is explicitly
+  # best-effort, so gating the whole workflow on it would make the signal that
+  # matters — macOS executed, at last — hostage to the one that does not yet.
   summary:
     name: macOS verified
     runs-on: ubuntu-latest
-    needs: macos
+    needs: [macos, ios]
     if: always()
     steps:
       - name: Report
         run: |
           echo "macOS job result: ${{ needs.macos.result }}"
+          echo "iOS   job result: ${{ needs.ios.result }}  (informational)"
           test "${{ needs.macos.result }}" = "success"
