@@ -898,7 +898,27 @@ impl LinuxDebugger {
             // branch below skips its cleanup: writing to a dead process blocks
             // on a channel whose debug thread is gone. Measured, not assumed —
             // the first version of this fix hung a live test on exactly that.
-            let _ = self.disable_breakpoint(target).await;
+            // A failed restore is REPORTED, not discarded.
+            //
+            // The "writing to a dead process blocks" reason above is why the
+            // SIBLING branch guards its `?` with an exit check — but this
+            // branch already excludes the exit case in its own `if`, so by the
+            // time we get here the process is known to be ALIVE. The two
+            // adjacent branches were doing opposite things in the same
+            // situation.
+            //
+            // If this fails, a breakpoint the caller explicitly DISABLED is
+            // left ARMED in a live target while the step is reported as having
+            // succeeded, and the program then stops at a trap that, as far as
+            // the API is concerned, does not exist.
+            //
+            // Propagated only when `result` is itself Ok: an error already on
+            // its way to the caller says more than this one, and clobbering it
+            // would be the same defect facing the other way.
+            let restored = self.disable_breakpoint(target).await;
+            if result.is_ok() {
+                restored?;
+            }
         } else if !armed && !tracked {
             // Best-effort cleanup: if the target exited, the process (and
             // its memory) is already gone, so `remove_breakpoint` failing
@@ -1217,10 +1237,58 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
     // since those stops are the debugger's own doing.
     let mut pending_signal: libc::c_int = 0;
 
+    // Thread exits that `ensure_stopped` has already REAPED, waiting to be
+    // delivered as `StopReason::ThreadExit`.
+    //
+    // Why a queue is needed at all: a per-tid command (GetRegisters,
+    // SetRegisters, SingleStep) must first bring its target into a ptrace-stop,
+    // and a thread can die in that window. `ensure_stopped`'s `waitpid` then
+    // consumes the exit — measured in iteration 528 as
+    // `ensure_stopped waitpid(2719) -> 2719 status=0x0` — so `wait_for_stop_any`
+    // can never see it and `StopReason::ThreadExit` had no producer on Linux
+    // even though its branch was written and correct.
+    //
+    // A synchronous command cannot answer with an event that belongs to a
+    // different thread: its caller asked for registers, not for news. The exit
+    // is therefore parked here and handed over by the next `ContinueExecution`,
+    // which is the one command whose whole purpose is to return the next event.
+    let mut deferred_exits: Vec<(libc::pid_t, libc::c_int)> = Vec::new();
+
     while let Ok(cmd) = cmd_rx.recv() {
         match cmd {
             Command::DoLaunch(_) | Command::DoAttach(_) => {}
             Command::ContinueExecution => {
+                // An exit already reaped by `ensure_stopped` is delivered here,
+                // BEFORE anything is resumed.
+                //
+                // Before, not after, for two reasons. The currently stopped
+                // thread must stay stopped: this event belongs to a thread that
+                // is already gone, so resuming for it would advance the target
+                // for news that cost it nothing, and the next resume would have
+                // nothing left to resume. And `last_tid` is deliberately left
+                // alone — the thread that is parked in a ptrace-stop is still
+                // the one the NEXT continue has to resume.
+                //
+                // A dead thread is not a thread to resume, which is why
+                // `wait_for_stop_any` sets `NO_THREAD_TO_RESUME` on its own
+                // ThreadExit path; here the stopped thread is a different one
+                // and is still resumable, so that must NOT be copied.
+                if let Some((dead, status)) = deferred_exits.pop() {
+                    let exit_code = if libc::WIFEXITED(status) {
+                        libc::WEXITSTATUS(status)
+                    } else {
+                        -libc::WTERMSIG(status)
+                    };
+                    if ptrace_trace_enabled() {
+                        eprintln!("[ptrace] delivering deferred ThreadExit tid={dead} code={exit_code}");
+                    }
+                    let _ = reply_tx.send(Reply::Event(Ok(DebugEvent::new(
+                        ProcessId(pid as u32),
+                        ThreadId(dead as u32),
+                        StopReason::ThreadExit { tid: ThreadId(dead as u32), exit_code },
+                    ))));
+                    continue;
+                }
                 // Resume whichever thread last reported a stop, not a hardcoded
                 // `pid`: with TRACECLONE any thread can be the stopped one.
                 //
@@ -1303,7 +1371,7 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 // thread IS attached, so a secondary tid now genuinely works —
                 // it just has to be brought into a ptrace-stop first.
                 let target = tid.0 as libc::pid_t;
-                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids);
+                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids, &mut deferred_exits);
                 // Same re-injection as `ContinueExecution`: stepping past a
                 // signal must not eat it either.
                 let deliver = pending_signal;
@@ -1355,7 +1423,7 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
             Command::GetRegisters(tid) => {
                 // Same tid-targeting fix as `SingleStep` above.
                 let target = tid.0 as libc::pid_t;
-                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids);
+                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids, &mut deferred_exits);
                 let result = read_regs(target).map(|r| {
                     let mut regs = regs_to_register_set(&r);
                     // Debug registers live in a separate area of `struct user`
@@ -1375,7 +1443,7 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
             Command::SetRegisters(tid, regs) => {
                 // Same tid-targeting fix as `SingleStep` above.
                 let target = tid.0 as libc::pid_t;
-                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids);
+                ensure_stopped(pid, target, &mut known_tids, &mut stopped_tids, &mut deferred_exits);
                 let result = read_regs(target).and_then(|mut r| {
                     apply_register_set(&mut r, &regs);
                     write_regs(target, &r)
@@ -1422,15 +1490,44 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 let _ = reply_tx.send(Reply::WriteCount(result));
             }
             Command::Detach => {
+                // The answer is DERIVED from the syscalls, not asserted.
+                //
+                // Every `PTRACE_DETACH` below had its result discarded and the
+                // reply was the literal `Ok(())`, so `detach()` said "detached"
+                // whether or not anything had been.
+                //
+                // ESRCH is NOT a failure, and forgiving it is the whole
+                // difference between a useful check and a useless one: a thread
+                // that died while we were attached answers ESRCH, and so does a
+                // process that is already gone — in both cases there is nothing
+                // left to detach from, which is what "detached" means. Any
+                // OTHER errno (EPERM, EINVAL) says the target is still there
+                // and still ours, and that is what must reach the caller. The
+                // same asymmetry is already applied in `ensure_stopped`:
+                // "Only ESRCH removes."
+                //
+                // The FIRST real failure is kept rather than the last: it is
+                // the one closest to the cause.
+                let mut failure: Option<String> = None;
                 unsafe {
                     // Every auto-attached (TRACECLONE) thread needs its own
                     // detach, otherwise secondary threads stay traced/stopped.
                     for &t in &known_tids {
                         if t != pid {
-                            libc::ptrace(libc::PTRACE_DETACH, t, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>());
+                            if libc::ptrace(libc::PTRACE_DETACH, t, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>()) < 0 {
+                                let e = std::io::Error::last_os_error();
+                                if e.raw_os_error() != Some(libc::ESRCH) && failure.is_none() {
+                                    failure = Some(format!("PTRACE_DETACH(tid {t}) failed: {e}"));
+                                }
+                            }
                         }
                     }
-                    libc::ptrace(libc::PTRACE_DETACH, pid, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>());
+                    if libc::ptrace(libc::PTRACE_DETACH, pid, std::ptr::null_mut::<libc::c_void>(), std::ptr::null_mut::<libc::c_void>()) < 0 {
+                        let e = std::io::Error::last_os_error();
+                        if e.raw_os_error() != Some(libc::ESRCH) && failure.is_none() {
+                            failure = Some(format!("PTRACE_DETACH(pid {pid}) failed: {e}"));
+                        }
+                    }
                     // `PTRACE_DETACH` only resumes the tracee from a
                     // ptrace-stop — it does NOT clear an independent
                     // job-control stop from `SIGSTOP` (which `pause()`
@@ -1444,7 +1541,8 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     // rather than tracking whether `pause()` was ever called.
                     libc::kill(pid, libc::SIGCONT);
                 }
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                let result = failure.map_or(Ok(()), |m| Err(DebugError::DetachError(m)));
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
             Command::Kill => {
@@ -1558,7 +1656,13 @@ fn ptrace_trace_enabled() -> bool {
 /// *running*, and ptrace requests against a running tracee fail with ESRCH.
 /// `tgkill(SIGSTOP)` + a blocking `waitpid` on that specific tid converts it
 /// into a stop. No-op when the tid is already stopped, or is not one of ours.
-fn ensure_stopped(pid: libc::pid_t, tid: libc::pid_t, known_tids: &mut HashSet<libc::pid_t>, stopped_tids: &mut HashSet<libc::pid_t>) {
+fn ensure_stopped(
+    pid: libc::pid_t,
+    tid: libc::pid_t,
+    known_tids: &mut HashSet<libc::pid_t>,
+    stopped_tids: &mut HashSet<libc::pid_t>,
+    deferred_exits: &mut Vec<(libc::pid_t, libc::c_int)>,
+) {
     if stopped_tids.contains(&tid) || !known_tids.contains(&tid) {
         return;
     }
@@ -1609,12 +1713,21 @@ fn ensure_stopped(pid: libc::pid_t, tid: libc::pid_t, known_tids: &mut HashSet<l
                 //   [ptrace] ensure_stopped waitpid(2719) -> 2719 status=0x0
                 // which is the worker's WIFEXITED, consumed here.
                 //
-                // The event cannot be handed on from a synchronous per-tid
-                // command, but the STATE must at least stay true: drop the tid
-                // rather than keep answering questions about a thread that no
-                // longer exists.
+                // The state is made true (the tid is forgotten, because Linux
+                // REUSES tids and a stale entry makes the next thread to
+                // inherit that number arrive as an ordinary stop instead of a
+                // birth), and the exit itself is HANDED ON rather than dropped.
+                //
+                // Iteration 541: it used to only `return` here. A synchronous
+                // per-tid command still cannot answer with an event about a
+                // different thread — its caller asked for registers, not for
+                // news — so the exit is queued and delivered by the next
+                // `ContinueExecution`, whose whole purpose is to return the
+                // next event. Until this existed, `StopReason::ThreadExit` had
+                // a correct branch in `wait_for_stop_any` and no producer.
                 known_tids.remove(&tid);
                 stopped_tids.remove(&tid);
+                deferred_exits.push((tid, status));
                 return;
             }
             if libc::WIFSTOPPED(status) {
@@ -4007,24 +4120,22 @@ int main(void) {
         );
         let _ = process_exited;
 
-        // NOT asserted: that `died` is non-empty.
-        //
-        // The ThreadExit branch is in place and correct, but in THIS scenario
-        // the event never reaches it — measured with `RUSTRE_PTRACE_TRACE=1`:
+        // Now asserted (iteration 541). It could not be until this iteration:
+        // the exit was reaped by `ensure_stopped` while it tried to stop that
+        // very thread — measured with `RUSTRE_PTRACE_TRACE=1`:
         //
         //     [ptrace] ensure_stopped waitpid(2719) -> 2719 status=0x0
         //
-        // `status=0x0` is WIFEXITED with code 0, i.e. the worker's death, and
-        // `ensure_stopped` reaps it while trying to stop that thread. The exit
-        // is consumed there and `wait_for_stop_any` never sees it, so no
-        // `ThreadExit` can be produced. That is a THIRD defect in this area —
-        // `ensure_stopped` does not handle "the thread died while I was
-        // stopping it" and drops the fact silently — and fixing it is separate
-        // work, not a tweak to this branch.
-        //
-        // Asserting `!died.is_empty()` here would demand behaviour that a
-        // different function currently prevents, so the test would fail for a
-        // reason it does not name. It is left out deliberately, not forgotten.
+        // `status=0x0` is WIFEXITED with code 0, i.e. the worker's death,
+        // consumed there, so `wait_for_stop_any` could never see it and no
+        // `ThreadExit` could be produced. `ensure_stopped` now hands that exit
+        // to the event loop instead of dropping it, which is what makes the
+        // assertion below meaningful rather than a demand on a function that
+        // structurally could not satisfy it.
+        assert!(
+            !died.is_empty(),
+            "the worker thread died and the caller was never told: born={born:?} died={died:?}"
+        );
 
         let _ = dbg.kill().await;
         let _ = std::fs::remove_file(&bin);
@@ -4060,12 +4171,12 @@ int main(void) {
         let mut stopped: HashSet<libc::pid_t> = HashSet::new();
         stopped.insert(dead_tid);
 
-        ensure_stopped(live_pid, dead_tid, &mut known, &mut stopped);
+        ensure_stopped(live_pid, dead_tid, &mut known, &mut stopped, &mut Vec::new());
 
         // `stopped` still lists it, so the early-out at the top of the function
         // is not what we are exercising — clear it and go again.
         stopped.remove(&dead_tid);
-        ensure_stopped(live_pid, dead_tid, &mut known, &mut stopped);
+        ensure_stopped(live_pid, dead_tid, &mut known, &mut stopped, &mut Vec::new());
 
         assert!(
             !known.contains(&dead_tid),

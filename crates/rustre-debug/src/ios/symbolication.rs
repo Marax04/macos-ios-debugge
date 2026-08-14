@@ -3,9 +3,12 @@
 //! Why this module exists in this shape:
 //!
 //! * The workspace already owns exactly one real Mach-O container parser
-//!   (`rustre_loader_macho`). Everything here is a *consumer* of it; no nlist,
-//!   segment or fat-header decoding is re-derived. A fourth Mach-O parser was
-//!   an explicit non-goal.
+//!   (`rustre_loader_macho`). Everything here is a *consumer* of it; no nlist
+//!   or segment decoding is re-derived. A fourth Mach-O parser was an explicit
+//!   non-goal. The single exception is the 64-bit universal header
+//!   (`FAT_MAGIC_64`), whose 32-byte `fat_arch_64` records that parser does not
+//!   know: only the slice table is read here, and every slice is still handed
+//!   to the shared thin parser.
 //! * A debugger sees **runtime** addresses, a Mach-O file describes **static**
 //!   ones. The single invariant that connects them is
 //!   `static_addr + slide == runtime_addr`, so the slide is a first-class field
@@ -256,6 +259,10 @@ impl ImageSymbols {
                 MachoParser::parse_fat(bytes).map_err(|e| SymbolicationError::Macho(e.to_string()))?;
             thin_owned = select_slice(&entries, pref)?.data.clone();
             &thin_owned
+        } else if is_fat64(bytes) {
+            let entries = parse_fat64(bytes);
+            thin_owned = select_slice(&entries, pref)?.data.clone();
+            &thin_owned
         } else {
             bytes
         };
@@ -446,6 +453,16 @@ impl ImageSymbols {
             .find(|(_, addr, size)| static_addr >= *addr && static_addr < addr.saturating_add(*size))
     }
 
+    /// Exclusive end of the segment that contains `static_addr`.
+    ///
+    /// `None` when the address is in no mapped segment — which for a *symbol*
+    /// means the symbol cannot legitimately cover anything, so callers stop
+    /// trusting it rather than falling back to a wider bound.
+    fn segment_end_of(&self, static_addr: u64) -> Option<u64> {
+        self.segment_containing(static_addr)
+            .map(|(_, addr, size)| addr.saturating_add(*size))
+    }
+
     /// Resolve a runtime address inside this image.
     ///
     /// Cascade, most trustworthy first: symbol table → function starts →
@@ -455,8 +472,8 @@ impl ImageSymbols {
     #[must_use]
     pub fn resolve(&self, runtime_addr: u64) -> Option<ResolvedAddress> {
         let static_addr = self.static_of(runtime_addr)?;
-        let (_, seg_addr, seg_size) = self.segment_containing(static_addr)?;
-        let seg_end = seg_addr.saturating_add(*seg_size);
+        // Containment in *some* mapped segment is what makes the address ours.
+        self.segment_containing(static_addr)?;
 
         if let Some(idx) = index_of_last_le(
             self.symbols.len(),
@@ -464,22 +481,29 @@ impl ImageSymbols {
             |i| self.symbols[i].static_address,
         ) {
             let sym = &self.symbols[idx];
-            // A symbol only covers up to the next symbol, or the end of its
-            // segment — whichever comes first. Without that bound the last
-            // symbol of a segment would claim every trailing address.
-            let next = self
-                .symbols
-                .get(idx + 1)
-                .map_or(seg_end, |s| s.static_address.min(seg_end));
-            if static_addr < next {
-                return Some(ResolvedAddress {
-                    module: self.name.clone(),
-                    symbol: sym.name.clone(),
-                    demangled: demangle_symbol(&sym.name),
-                    offset: static_addr - sym.static_address,
-                    symbol_address: self.runtime_of(sym.static_address),
-                    source: Symbolication::Nlist,
-                });
+            // A symbol only covers up to the next symbol, or the end of the
+            // segment **the symbol itself** lives in — whichever comes first.
+            //
+            // The bound must come from the symbol's segment, not the queried
+            // address's: an address past every symbol has no successor to cap
+            // it, so bounding by the queried address's segment lets the last
+            // symbol of `__TEXT` claim a `__DATA` address thousands of bytes
+            // beyond the end of its own segment.
+            if let Some(sym_seg_end) = self.segment_end_of(sym.static_address) {
+                let next = self
+                    .symbols
+                    .get(idx + 1)
+                    .map_or(sym_seg_end, |s| s.static_address.min(sym_seg_end));
+                if static_addr < next {
+                    return Some(ResolvedAddress {
+                        module: self.name.clone(),
+                        symbol: sym.name.clone(),
+                        demangled: demangle_symbol(&sym.name),
+                        offset: static_addr - sym.static_address,
+                        symbol_address: self.runtime_of(sym.static_address),
+                        source: Symbolication::Nlist,
+                    });
+                }
             }
         }
 
@@ -487,10 +511,14 @@ impl ImageSymbols {
             self.function_starts[i]
         }) {
             let start = self.function_starts[idx];
-            let next = self
-                .function_starts
-                .get(idx + 1)
-                .map_or(seg_end, |a| (*a).min(seg_end));
+            // Same rule for a synthetic boundary: it ends with the segment the
+            // function start lies in, never with the segment being queried.
+            let fn_seg_end = self.segment_end_of(start);
+            let next = fn_seg_end.map_or(start, |end| {
+                self.function_starts
+                    .get(idx + 1)
+                    .map_or(end, |a| (*a).min(end))
+            });
             if static_addr < next {
                 let runtime_start = self.runtime_of(start);
                 return Some(ResolvedAddress {
@@ -660,9 +688,18 @@ impl Symbolicator {
 
 const FAT_MAGIC: u32 = 0xCAFE_BABE;
 const FAT_CIGAM: u32 = 0xBEBA_FECA;
+/// 64-bit universal header. On disk the bytes are `CA FE BA BF`; read
+/// little-endian (as [`magic_of`] does) that is [`FAT_CIGAM_64`], so both
+/// spellings are accepted exactly as for the 32-bit pair above.
+const FAT_MAGIC_64: u32 = 0xCAFE_BABF;
+const FAT_CIGAM_64: u32 = 0xBFBA_FECA;
 const MH_MAGIC_64: u32 = 0xFEED_FACF;
 const MH_CIGAM: u32 = 0xCEFA_EDFE;
 const MH_CIGAM_64: u32 = 0xCFFA_EDFE;
+
+/// Size of one `fat_arch_64` record: cputype, cpusubtype, offset(u64),
+/// size(u64), align, reserved.
+const FAT_ARCH_64_SIZE: usize = 32;
 
 fn magic_of(bytes: &[u8]) -> Option<u32> {
     bytes
@@ -672,6 +709,74 @@ fn magic_of(bytes: &[u8]) -> Option<u32> {
 
 fn is_fat(bytes: &[u8]) -> bool {
     matches!(magic_of(bytes), Some(FAT_MAGIC | FAT_CIGAM))
+}
+
+/// `true` for a 64-bit universal container (`FAT_MAGIC_64`).
+///
+/// `lipo` emits this form once a slice offset or size no longer fits in the
+/// 32-bit `fat_arch` fields, and Apple ships such containers.
+fn is_fat64(bytes: &[u8]) -> bool {
+    matches!(magic_of(bytes), Some(FAT_MAGIC_64 | FAT_CIGAM_64))
+}
+
+/// Decode the slice table of a 64-bit universal container.
+///
+/// This is the one place the module does decode a Mach-O structure itself, and
+/// only because it must: `MachoParser::parse_fat` walks 20-byte `fat_arch`
+/// records, while a `FAT_MAGIC_64` container stores 32-byte `fat_arch_64`
+/// records with 64-bit `offset`/`size`. Nothing below the fat header is
+/// touched — every slice is still handed to the shared thin parser, so this
+/// does not become a second Mach-O implementation.
+///
+/// Every field of a fat header is big-endian regardless of slice endianness.
+/// Slices whose extent escapes the buffer are skipped rather than truncated,
+/// and an empty result is reported by [`select_slice`] as
+/// [`SymbolicationError::EmptyUniversalBinary`].
+fn parse_fat64(bytes: &[u8]) -> Vec<UniversalBinaryEntry> {
+    let nfat = bytes
+        .get(4..8)
+        .map_or(0, |b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize);
+    // Cap by what the buffer can actually hold: nfat is attacker-controlled.
+    let nfat = nfat.min(bytes.len().saturating_sub(8) / FAT_ARCH_64_SIZE);
+
+    let mut entries = Vec::with_capacity(nfat);
+    for i in 0..nfat {
+        let base = 8 + i * FAT_ARCH_64_SIZE;
+        let Some(rec) = bytes.get(base..base + FAT_ARCH_64_SIZE) else {
+            break;
+        };
+        let be32 = |o: usize| u32::from_be_bytes([rec[o], rec[o + 1], rec[o + 2], rec[o + 3]]);
+        let be64 = |o: usize| {
+            let mut v = [0u8; 8];
+            v.copy_from_slice(&rec[o..o + 8]);
+            u64::from_be_bytes(v)
+        };
+
+        let cputype = be32(0);
+        let offset = be64(8);
+        let size = be64(16);
+        let align = be32(24);
+
+        let (Ok(start), Ok(len)) = (usize::try_from(offset), usize::try_from(size)) else {
+            continue;
+        };
+        let end = start.saturating_add(len);
+        if end > bytes.len() {
+            continue;
+        }
+
+        entries.push(UniversalBinaryEntry {
+            arch: MachoArch::from_cputype(cputype),
+            // `UniversalBinaryEntry` carries 32-bit offset/size fields; a slice
+            // that genuinely exceeds them is reported saturated rather than
+            // wrapped, and `data` below is always the exact bytes.
+            offset: u32::try_from(offset).unwrap_or(u32::MAX),
+            size: u32::try_from(size).unwrap_or(u32::MAX),
+            align,
+            data: bytes[start..end].to_vec(),
+        });
+    }
+    entries
 }
 
 /// A byte-swapped Mach-O magic means the header is big-endian relative to us,
@@ -927,6 +1032,117 @@ mod tests {
         b
     }
 
+    /// One segment (each carrying exactly one section) of a synthetic image.
+    struct SegSpec {
+        seg: &'static str,
+        sect: &'static str,
+        vmaddr: u64,
+        vmsize: u64,
+    }
+
+    /// Like [`build_macho64`] but with an arbitrary number of segments, so a
+    /// test can place a symbol in one segment and probe an address in another.
+    fn build_macho64_segs(cputype: u32, segs: &[SegSpec], syms: &[Sym]) -> Vec<u8> {
+        let mut strtab = vec![0u8];
+        let mut strx = Vec::new();
+        for s in syms {
+            strx.push(u32::try_from(strtab.len()).unwrap());
+            strtab.extend_from_slice(s.name.as_bytes());
+            strtab.push(0);
+        }
+
+        let seg_cmdsize: u32 = 72 + 80;
+        let symtab_cmdsize: u32 = 24;
+        let dysymtab_cmdsize: u32 = 80;
+        let uuid_cmdsize: u32 = 24;
+        let nsegs = u32::try_from(segs.len()).unwrap();
+        let sizeofcmds =
+            seg_cmdsize * nsegs + symtab_cmdsize + dysymtab_cmdsize + uuid_cmdsize;
+        let header_size: u32 = 32;
+
+        let symoff = header_size + sizeofcmds;
+        let nsyms = u32::try_from(syms.len()).unwrap();
+        let stroff = symoff + nsyms * 16;
+        let strsize = u32::try_from(strtab.len()).unwrap();
+
+        let mut b = Vec::new();
+        b.extend_from_slice(&MH_MAGIC_64.to_le_bytes());
+        b.extend_from_slice(&cputype.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&2u32.to_le_bytes()); // MH_EXECUTE
+        b.extend_from_slice(&(nsegs + 3).to_le_bytes()); // ncmds
+        b.extend_from_slice(&sizeofcmds.to_le_bytes());
+        b.extend_from_slice(&0x0020_0085u32.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+
+        for s in segs {
+            b.extend_from_slice(&LC_SEGMENT_64.to_le_bytes());
+            b.extend_from_slice(&seg_cmdsize.to_le_bytes());
+            b.extend_from_slice(&seg_name(s.seg));
+            b.extend_from_slice(&s.vmaddr.to_le_bytes());
+            b.extend_from_slice(&s.vmsize.to_le_bytes());
+            b.extend_from_slice(&0u64.to_le_bytes()); // fileoff
+            b.extend_from_slice(&0u64.to_le_bytes()); // filesize
+            b.extend_from_slice(&7u32.to_le_bytes());
+            b.extend_from_slice(&5u32.to_le_bytes());
+            b.extend_from_slice(&1u32.to_le_bytes()); // nsects
+            b.extend_from_slice(&0u32.to_le_bytes());
+            // section_64
+            b.extend_from_slice(&seg_name(s.sect));
+            b.extend_from_slice(&seg_name(s.seg));
+            b.extend_from_slice(&s.vmaddr.to_le_bytes());
+            b.extend_from_slice(&s.vmsize.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+            b.extend_from_slice(&4u32.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+            b.extend_from_slice(&0x8000_0400u32.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+            b.extend_from_slice(&0u32.to_le_bytes());
+        }
+
+        b.extend_from_slice(&LC_SYMTAB.to_le_bytes());
+        b.extend_from_slice(&symtab_cmdsize.to_le_bytes());
+        b.extend_from_slice(&symoff.to_le_bytes());
+        b.extend_from_slice(&nsyms.to_le_bytes());
+        b.extend_from_slice(&stroff.to_le_bytes());
+        b.extend_from_slice(&strsize.to_le_bytes());
+
+        b.extend_from_slice(&LC_DYSYMTAB.to_le_bytes());
+        b.extend_from_slice(&dysymtab_cmdsize.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&nsyms.to_le_bytes());
+        b.extend_from_slice(&nsyms.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        for _ in 0..12 {
+            b.extend_from_slice(&0u32.to_le_bytes());
+        }
+
+        b.extend_from_slice(&LC_UUID.to_le_bytes());
+        b.extend_from_slice(&uuid_cmdsize.to_le_bytes());
+        b.extend_from_slice(&[
+            0x11, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ]);
+
+        assert_eq!(b.len(), symoff as usize, "load commands must end at symoff");
+
+        for (s, sx) in syms.iter().zip(&strx) {
+            b.extend_from_slice(&sx.to_le_bytes());
+            b.push(N_SECT | if s.external { N_EXT } else { 0 });
+            b.push(1);
+            b.extend_from_slice(&0u16.to_le_bytes());
+            b.extend_from_slice(&s.value.to_le_bytes());
+        }
+
+        assert_eq!(b.len(), stroff as usize, "nlist array must end at stroff");
+        b.extend_from_slice(&strtab);
+        b
+    }
+
     /// Wrap the given thin slices into a fat/universal container.
     fn build_fat(slices: &[(u32, Vec<u8>)]) -> Vec<u8> {
         let nfat = u32::try_from(slices.len()).unwrap();
@@ -948,6 +1164,36 @@ mod tests {
             b.extend_from_slice(&u32::try_from(offsets[i]).unwrap().to_be_bytes());
             b.extend_from_slice(&u32::try_from(data.len()).unwrap().to_be_bytes());
             b.extend_from_slice(&14u32.to_be_bytes()); // align 2^14
+        }
+        for (i, (_, data)) in slices.iter().enumerate() {
+            b.resize(offsets[i], 0);
+            b.extend_from_slice(data);
+        }
+        b
+    }
+
+    /// Wrap the given thin slices into a **64-bit** fat/universal container
+    /// (`FAT_MAGIC_64`, 32-byte `fat_arch_64` records with 64-bit offsets).
+    fn build_fat64(slices: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let nfat = u32::try_from(slices.len()).unwrap();
+        let header_len = 8 + 32 * slices.len();
+        let mut offsets = Vec::new();
+        let mut cursor = header_len.next_multiple_of(0x4000);
+        for (_, data) in slices {
+            offsets.push(cursor);
+            cursor = (cursor + data.len()).next_multiple_of(0x4000);
+        }
+
+        let mut b = Vec::new();
+        b.extend_from_slice(&0xCAFE_BABFu32.to_be_bytes()); // FAT_MAGIC_64
+        b.extend_from_slice(&nfat.to_be_bytes());
+        for (i, (cputype, data)) in slices.iter().enumerate() {
+            b.extend_from_slice(&cputype.to_be_bytes());
+            b.extend_from_slice(&0u32.to_be_bytes()); // cpusubtype
+            b.extend_from_slice(&(offsets[i] as u64).to_be_bytes()); // offset (u64)
+            b.extend_from_slice(&(data.len() as u64).to_be_bytes()); // size   (u64)
+            b.extend_from_slice(&14u32.to_be_bytes()); // align
+            b.extend_from_slice(&0u32.to_be_bytes()); // reserved
         }
         for (i, (_, data)) in slices.iter().enumerate() {
             b.resize(offsets[i], 0);
@@ -1061,6 +1307,49 @@ mod tests {
         assert!(img.resolve(0x1_0000_9000).is_none());
     }
 
+    /// A symbol's upper bound is the end of the segment **the symbol** lives
+    /// in, not the end of the segment the *queried address* happens to fall in.
+    ///
+    /// Image: `__TEXT` [0x1_0000_0000, +0x4000) holding the only symbol, then a
+    /// disjoint `__DATA` [0x1_0001_0000, +0x4000). An address inside `__DATA`
+    /// is above every symbol, so the last symbol has no successor and the bound
+    /// degenerates to "end of the queried address's segment" — which is the end
+    /// of `__DATA`. The `__TEXT` symbol then claims a `__DATA` address 0xF100
+    /// bytes past the end of its own segment.
+    #[test]
+    fn a_symbol_may_not_claim_an_address_in_another_segment() {
+        let bytes = build_macho64_segs(
+            CPU_TYPE_ARM64,
+            &[
+                SegSpec { seg: "__TEXT", sect: "__text", vmaddr: 0x1_0000_0000, vmsize: 0x4000 },
+                SegSpec { seg: "__DATA", sect: "__data", vmaddr: 0x1_0001_0000, vmsize: 0x4000 },
+            ],
+            &[Sym { name: "_fn", value: 0x1_0000_1000, external: true }],
+        );
+        let img = ImageSymbols::from_bytes("two_segs", &bytes, ArchPreference::Arm64).unwrap();
+
+        // Sanity: the fixture really does have both segments and the symbol.
+        assert!(img.contains(0x1_0000_1000), "__TEXT must be mapped");
+        assert!(img.contains(0x1_0001_0100), "__DATA must be mapped");
+        assert_eq!(img.symbol_count(), 1);
+
+        // The __TEXT symbol ends with __TEXT at 0x1_0000_4000. Nothing may name
+        // an address in __DATA.
+        let r = img.resolve(0x1_0001_0100).expect("inside __DATA");
+        assert_eq!(
+            r.source,
+            Symbolication::ModuleOnly,
+            "a __TEXT symbol claimed a __DATA address as {} +{:#x}",
+            r.symbol,
+            r.offset
+        );
+        // And an address still inside __TEXT, past the symbol, is unaffected.
+        let inside = img.resolve(0x1_0000_1004).expect("inside __TEXT");
+        assert_eq!(inside.symbol, "_fn");
+        assert_eq!(inside.offset, 4);
+        assert_eq!(inside.source, Symbolication::Nlist);
+    }
+
     #[test]
     fn address_before_the_first_symbol_falls_back_to_module_only() {
         let img = sample_image();
@@ -1096,6 +1385,44 @@ mod tests {
         // First-listed slice, whatever it is.
         let img = ImageSymbols::from_bytes("fat", &fat, ArchPreference::First).unwrap();
         assert_eq!(img.arch(), MachoArch::X86_64);
+    }
+
+    /// 64-bit universal containers (`FAT_MAGIC_64`, 0xCAFEBABF) carry 32-byte
+    /// `fat_arch_64` records with 64-bit offsets. They are what `lipo` emits
+    /// once a slice crosses the 4 GiB mark, and Apple ships them; a container
+    /// that is not recognised as fat is handed to the thin parser whole, which
+    /// can only report an unknown magic.
+    #[test]
+    fn fat64_universal_containers_are_recognised() {
+        let x86 = build_macho64(CPU_TYPE_X86_64, 0x1_0000_0000, 0x8000, &sample_syms());
+        let arm = build_macho64(CPU_TYPE_ARM64, 0x1_0000_0000, 0x8000, &sample_syms());
+        let fat = build_fat64(&[(CPU_TYPE_X86_64, x86), (CPU_TYPE_ARM64, arm)]);
+
+        let img = ImageSymbols::from_bytes("fat64", &fat, ArchPreference::Arm64)
+            .expect("a FAT_MAGIC_64 container must be sliced, not rejected");
+        assert_eq!(img.arch(), MachoArch::Arm64);
+        assert_eq!(img.symbol_count(), 3);
+        assert_eq!(img.resolve(0x1_0000_4100).unwrap().symbol, "_middle");
+
+        let img = ImageSymbols::from_bytes("fat64", &fat, ArchPreference::X86_64).unwrap();
+        assert_eq!(img.arch(), MachoArch::X86_64);
+
+        let img = ImageSymbols::from_bytes("fat64", &fat, ArchPreference::First).unwrap();
+        assert_eq!(img.arch(), MachoArch::X86_64);
+    }
+
+    #[test]
+    fn fat64_missing_slice_is_the_same_typed_error_as_fat32() {
+        let x86 = build_macho64(CPU_TYPE_X86_64, 0x1_0000_0000, 0x8000, &sample_syms());
+        let fat = build_fat64(&[(CPU_TYPE_X86_64, x86)]);
+        let err = ImageSymbols::from_bytes("fat64", &fat, ArchPreference::Arm64).unwrap_err();
+        match err {
+            SymbolicationError::NoSliceForArch { requested, available } => {
+                assert_eq!(requested, "arm64");
+                assert!(available.contains("x86_64"));
+            }
+            other => panic!("expected NoSliceForArch, got {other:?}"),
+        }
     }
 
     #[test]

@@ -9996,6 +9996,84 @@ mod tests_extra {
         }
     }
 
+    /// `detach` must not answer with a constant.
+    ///
+    /// All three backends issued their detach syscalls — `DebugActiveProcessStop`
+    /// on Windows, `PTRACE_DETACH` per thread on Linux, `PT_DETACH` on macOS —
+    /// discarded every return value, and then replied `Reply::Ack(Ok(()))`. The
+    /// answer was a literal: it said "detached" whether or not anything had
+    /// been.
+    ///
+    /// Not cosmetic, and worst on Windows: a process stays debugged if
+    /// `DebugActiveProcessStop` fails, and Windows KILLS a debuggee when its
+    /// debugger exits unless told otherwise. So the caller is told it has let
+    /// the target go, and the target dies with the debugger instead.
+    ///
+    /// This is the same rule the MCP layer already follows one level up — every
+    /// status field it publishes is DERIVED, never constant (iterations
+    /// 536-539). It just had nothing truthful underneath to derive from.
+    #[test]
+    fn detach_does_not_claim_success_without_checking_it() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let start = src
+                .find("Command::Detach => {")
+                .unwrap_or_else(|| panic!("{name}: no Detach arm to check"));
+            let arm = &src[start..];
+            // The arm ends at the first line that closes it at match-arm
+            // indentation; `return;` sits just above it.
+            let end = arm.find("\n            }").unwrap_or(arm.len());
+            let arm = &arm[..end];
+            assert!(
+                !arm.contains("Reply::Ack(Ok(()))"),
+                "{name}: the Detach arm answers with a literal Ok — every detach syscall's \
+                 result is discarded, so `detach()` reports success for a target that may \
+                 still be attached"
+            );
+        }
+    }
+
+    /// Restoring a breakpoint to DISABLED must not fail silently.
+    ///
+    /// `step_over`/`step_out` re-arm a breakpoint the caller had explicitly
+    /// disabled, because the step cannot work through a disabled trap. Putting
+    /// it back is therefore part of the operation, not tidying up: if it fails
+    /// and the failure is discarded, the caller is told the step succeeded
+    /// while the target is left with an ARMED trap at an address the user
+    /// turned off. The program then stops at a breakpoint that, as far as the
+    /// API is concerned, does not exist.
+    ///
+    /// The excuse written above that line — "writing to a dead process blocks
+    /// on a channel whose debug thread is gone" — is real, and it is why the
+    /// SIBLING branch guards its `?` with an exit check. But this branch
+    /// already excludes the exit case in its own `if` condition, so by the time
+    /// the discard happens the process is known to be alive. The two adjacent
+    /// branches were doing opposite things in the same situation.
+    ///
+    /// macOS is not checked here YET: another engineer holds
+    /// `macos_debugger.rs` while this is written, and a guard that fails
+    /// because a file is mid-edit reports the wrong thing. It carries the
+    /// identical block (verified byte-for-byte) and must be added to this list
+    /// as soon as the file is free.
+    #[test]
+    fn a_failed_restore_of_a_disabled_breakpoint_is_not_discarded() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            assert!(
+                !src.contains("let _ = self.disable_breakpoint(target).await;"),
+                "{name}: step_over/step_out re-arms a disabled breakpoint and discards the result \
+                 of putting it back, so a failed restore leaves an armed trap in a live target \
+                 while the step is reported as successful"
+            );
+        }
+    }
+
     /// The callers of the rewind must not throw that answer away either.
     ///
     /// Separate from the test above on purpose: giving the function a return
@@ -11847,22 +11925,51 @@ fn ";
     }
 
     /// The backend built for this host must name this host's architecture.
+    ///
+    /// iOS is handled explicitly rather than left to fall off the end of the
+    /// list. With only the three arms below, `dbg` was never bound on
+    /// `target_os = "ios"`, the bare name then resolved to the std `dbg!`
+    /// macro, and the crate did not COMPILE:
+    ///
+    /// ```text
+    /// error[E0423]: expected value, found macro `dbg`
+    ///   --> crates/rustre-debug/src/lib.rs:11859:22
+    ///       let arches = dbg.supported_architectures();
+    /// ```
+    ///
+    /// That error appeared the first time this crate was ever built for
+    /// `aarch64-apple-ios-sim` (CI, 2026-08-14) — iOS is a platform this
+    /// project targets, so it must not be able to disappear from a list in
+    /// silence.
     #[tokio::test]
     async fn the_native_backend_reports_the_running_architecture() {
-        #[cfg(windows)]
-        let dbg = crate::windows_debugger::WindowsDebugger::default();
-        #[cfg(target_os = "linux")]
-        let dbg = crate::linux_debugger::LinuxDebugger::default();
-        #[cfg(target_os = "macos")]
-        let dbg = crate::macos_debugger::MacosDebugger::default();
+        // No LOCAL backend exists here, so there is no architecture claim to
+        // check. On iOS the Apple backend drives a REMOTE target across a
+        // transport (`ios::AppleDebugger` over RSP) rather than debugging the
+        // process it runs inside, which is a different question from the one
+        // this test asks.
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+        {
+            return;
+        }
 
-        let arches = dbg.supported_architectures();
-        assert!(
-            arches.contains(&std::env::consts::ARCH.to_string()),
-            "backend `{}` runs on {} but advertises {arches:?}",
-            dbg.name(),
-            std::env::consts::ARCH
-        );
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+        {
+            #[cfg(windows)]
+            let dbg = crate::windows_debugger::WindowsDebugger::default();
+            #[cfg(target_os = "linux")]
+            let dbg = crate::linux_debugger::LinuxDebugger::default();
+            #[cfg(target_os = "macos")]
+            let dbg = crate::macos_debugger::MacosDebugger::default();
+
+            let arches = dbg.supported_architectures();
+            assert!(
+                arches.contains(&std::env::consts::ARCH.to_string()),
+                "backend `{}` runs on {} but advertises {arches:?}",
+                dbg.name(),
+                std::env::consts::ARCH
+            );
+        }
     }
 
     /// `item_body` must not silently hand back the rest of the file.

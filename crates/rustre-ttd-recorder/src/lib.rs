@@ -2237,6 +2237,20 @@ impl PtraceRecordSession {
 
 // ─── TtdRecordSession::start rewrite ─────────────────────────────────────────
 //
+// NOTE: the six functions below are deliberately NOT `const fn`.
+//
+// They were, and it compiled on Windows for a reason that had nothing to do
+// with them being const-evaluable: their real bodies live inside
+// `#[cfg(target_os = "linux")]`, so on Windows the compiler saw only the
+// short non-Linux stub — which IS const-compatible — and accepted the
+// qualifier. On Linux the real body appears, and it locks an RwLock, calls
+// `Instant::now`, builds a PathBuf, formats a string and uses `?`: none of
+// which is allowed in a const fn.
+//
+// The effect was not a warning: `rustre-ttd-recorder` could not compile on
+// Linux AT ALL, which means the "Linux-native recording path" this module
+// exists for had never once been built. Measured 2026-08-14 while making the
+// workspace build on Unix for the first time.
 // The struct definition and most methods stay as-is above.  We add a Linux-
 // specific helper that actually runs a ptrace-backed recording and serializes
 // the result, wiring it into the existing `start()`/`stop()` flow.
@@ -2251,7 +2265,7 @@ impl TtdRecordSession {
     /// # Errors
     /// Returns `TtdRecordError` if attachment or file I/O fails, or if the
     /// platform is not Linux.
-    pub const fn start_real(&mut self) -> Result<(), TtdRecordError> {
+    pub fn start_real(&mut self) -> Result<(), TtdRecordError> {
         #[cfg(target_os = "linux")]
         {
             self.config
@@ -4162,7 +4176,7 @@ impl InstructionCounter {
     /// # Errors
     /// Returns an `std::io::Error` on Linux if `perf_event_open` fails
     /// (e.g. `perf_event_paranoid` is too restrictive).
-    pub const fn new(pid: i32) -> Result<Self, std::io::Error> {
+    pub fn new(pid: i32) -> Result<Self, std::io::Error> {
         #[cfg(target_os = "linux")]
         {
             let fd = crate::open_instruction_counter(pid)?;
@@ -4186,7 +4200,7 @@ impl InstructionCounter {
 
     /// Read the current counter value minus the baseline (post-reset delta).
     #[must_use]
-    pub const fn read(&self) -> u64 {
+    pub fn read(&self) -> u64 {
         #[cfg(target_os = "linux")]
         {
             crate::read_perf_counter(self.fd)
@@ -4200,7 +4214,7 @@ impl InstructionCounter {
     }
 
     /// Reset the counter: the next call to `read` will return 0.
-    pub const fn reset(&mut self) {
+    pub fn reset(&mut self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_RESET = 0x2403
@@ -4211,7 +4225,7 @@ impl InstructionCounter {
     }
 
     /// Enable the counter (start counting instructions).
-    pub const fn enable(&self) {
+    pub fn enable(&self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_ENABLE = 0x2400
@@ -4220,7 +4234,7 @@ impl InstructionCounter {
     }
 
     /// Disable the counter (stop counting instructions without resetting).
-    pub const fn disable(&self) {
+    pub fn disable(&self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_DISABLE = 0x2401
@@ -4230,7 +4244,7 @@ impl InstructionCounter {
 
     /// Read the counter and update `last_read`; return the delta since the
     /// previous call to `read_delta`.
-    pub const fn read_delta(&mut self) -> u64 {
+    pub fn read_delta(&mut self) -> u64 {
         let current = self.read();
         let delta = current.saturating_sub(self.last_read);
         self.last_read = current;
@@ -5585,10 +5599,15 @@ impl LinuxDebugger {
 
             // SAFETY: `PTRACE_POKEDATA` is a Linux syscall; safety is the
             // caller's responsibility (they own the ptrace attachment).
+            // The third argument of `ptrace::write` is the WORD to store, not
+            // a pointer to it: nix types it `i64` because PTRACE_POKEDATA
+            // takes the datum by value. Casting the word to `*mut c_void`
+            // compiled nowhere — this file had never been built on Linux — and
+            // would have been a type error the moment it was.
             nix::sys::ptrace::write(
                 self.pid,
                 word_addr as *mut libc::c_void,
-                word as *mut libc::c_void,
+                word as i64,
             )?;
             off += word_size;
         }
@@ -5682,7 +5701,7 @@ impl FullTtdSession {
     }
 
     /// Update the current instruction count from the hardware counter.
-    pub const fn sync_instr_count(&mut self) {
+    pub fn sync_instr_count(&mut self) {
         if let Some(ref c) = self.counter {
             self.current_instr_count = c.read();
         }

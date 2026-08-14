@@ -164,13 +164,37 @@ impl fmt::Display for PdbIdentity {
 /// Returns [`SymSrvError::NoHome`] when the home directory cannot be
 /// determined.
 pub fn cache_path(identity: &PdbIdentity) -> Result<PathBuf, SymSrvError> {
-    let home = dirs_home()?;
-    Ok(home
-        .join(".rustre")
-        .join("pdb")
+    Ok(cache_root()?
         .join(&identity.pdb_name)
         .join(&identity.guid_age)
         .join(&identity.pdb_name))
+}
+
+/// The directory downloaded symbols are cached under.
+///
+/// `RUSTRE_PDB_CACHE` wins when set and non-empty; otherwise
+/// `~/.rustre/pdb`.
+///
+/// The override is not a test hook, it is the capability every symbol tool
+/// has and this one lacked: `_NT_SYMBOL_PATH`, `SRV*`, `DEBUGINFOD_URLS` all
+/// exist because on a shared build machine the home directory is the wrong
+/// answer — it is per-user, often small, and not the corporate symbol store
+/// the team already populated.
+///
+/// It also makes the cache tests isolatable. They wrote a fixture to a FIXED
+/// path under the real user home and deleted it at the end, so two test
+/// processes at once raced on the same file: measured 2026-08-15, with
+/// thirteen agents compiling in parallel,
+/// `a_valid_cache_entry_is_still_returned` failed in the full suite and passed
+/// in isolation — the signature of a test that only works when nothing else
+/// runs.
+fn cache_root() -> Result<PathBuf, SymSrvError> {
+    if let Ok(dir) = std::env::var("RUSTRE_PDB_CACHE")
+        && !dir.trim().is_empty()
+    {
+        return Ok(PathBuf::from(dir));
+    }
+    Ok(dirs_home()?.join(".rustre").join("pdb"))
 }
 
 fn dirs_home() -> Result<PathBuf, SymSrvError> {
@@ -706,11 +730,46 @@ mod tests {
         assert!(!looks_like_pdb(b"Microsoft C/C++ MSF 7.00\r\n\x1aXX"));
     }
 
+    /// The cache location must be configurable, and each process must be able
+    /// to have its own.
+    ///
+    /// Two defects in one place. The first is a missing capability: every
+    /// symbol tool lets an operator say where symbols live (`_NT_SYMBOL_PATH`,
+    /// `DEBUGINFOD_URLS`, `SRV*`), because on a shared build machine the home
+    /// directory is the wrong answer — it is small, per-user, and not the
+    /// corporate symbol store. This one hard-coded `~/.rustre/pdb`.
+    ///
+    /// The second is that the hard-coded path made the cache tests
+    /// **non-isolated**: they write a fixture to a FIXED location under the
+    /// real user home and delete it at the end, so two test processes running
+    /// at once race on the same file. Measured on 2026-08-15 while thirteen
+    /// agents were compiling in parallel:
+    /// `a_valid_cache_entry_is_still_returned` failed in the full suite and
+    /// passed in isolation — the signature of a test that only works when
+    /// nothing else is running.
+    #[test]
+    fn the_cache_directory_can_be_overridden() {
+        let id = PdbIdentity::new(&[0x11; 16], 3, "over.pdb");
+        let dir = std::env::temp_dir().join(format!("rustre-pdb-{}", std::process::id()));
+        // SAFETY: single-threaded within this test; the variable is read by
+        // `cache_path` and by nothing else in the process.
+        unsafe { std::env::set_var("RUSTRE_PDB_CACHE", &dir) };
+        let got = cache_path(&id);
+        unsafe { std::env::remove_var("RUSTRE_PDB_CACHE") };
+        let got = got.expect("cache_path must succeed when the override is set");
+        assert!(
+            got.starts_with(&dir),
+            "RUSTRE_PDB_CACHE was ignored: asked for {}, got {}",
+            dir.display(),
+            got.display()
+        );
+    }
+
     /// A cache entry that is not a PDB must be ignored, so it can be fetched
     /// again instead of being served for the rest of the installation life.
     #[test]
     fn a_poisoned_cache_entry_is_not_returned() {
-        let id = PdbIdentity::new(&[0xAB; 16], 1, "poisoned.pdb");
+        let id = PdbIdentity::new(&[0xAB; 16], 1, &format!("poisoned-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
         if std::fs::create_dir_all(&parent).is_err() {
@@ -732,7 +791,7 @@ mod tests {
     /// everything.
     #[test]
     fn a_valid_cache_entry_is_still_returned() {
-        let id = PdbIdentity::new(&[0xCD; 16], 2, "valid.pdb");
+        let id = PdbIdentity::new(&[0xCD; 16], 2, &format!("valid-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
         if std::fs::create_dir_all(&parent).is_err() {

@@ -8,9 +8,13 @@ name: macOS debugger
 # makes it the backend most likely to drift, and the project's STATUS.md lists
 # that as its main limitation.
 #
-# These runners close exactly that gap: macos-13 is Intel (x86_64) and macos-14
-# is Apple Silicon (aarch64), so both halves of the macOS backend get compiled
-# AND run on real hardware and a real kernel.
+# These runners close exactly that gap: macos-15-intel is Intel (x86_64) and
+# macos-14 is Apple Silicon (aarch64), so both halves of the macOS backend get
+# compiled AND run on real hardware and a real kernel.
+#
+# Status as of 2026-08-15: the aarch64 half HAS now run, and the debugger's own
+# suite passed on it — the first time this backend was ever executed. The Intel
+# half has not: see the runner-label note in the matrix below.
 
 on:
   push:
@@ -39,7 +43,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
+          # `macos-15-intel`, not `macos-13`.
+          #
+          # Measured, not assumed: with `macos-13` this row sat "queued" through
+          # every run of 2026-08-14/15 and never once started, while the two
+          # arm64 jobs and the iOS jobs completed repeatedly. GitHub retired the
+          # macos-13 image, so the label is accepted at parse time and then
+          # never scheduled — which is worse than a failure, because a job that
+          # never reports also never tells you it will not.
+          - os: macos-15-intel
             name: macOS Intel (x86_64)
             target: x86_64-apple-darwin
           - os: macos-14

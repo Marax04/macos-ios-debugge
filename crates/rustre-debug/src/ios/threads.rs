@@ -143,6 +143,14 @@ pub enum ThreadStopReason {
     Exception { metype: u64, medata: Vec<u64> },
     /// The process exited.
     Exited(u8),
+    /// The process was *killed* by a signal (`Xnn`).
+    ///
+    /// Deliberately not [`Self::Signal`]: that one means the thread is stopped
+    /// *with* a signal pending and is still there to be inspected, whereas this
+    /// one means the process is gone and its registers, stack and memory no
+    /// longer exist. Collapsing the two made a terminated target look like a
+    /// live thread that had merely faulted.
+    Terminated(u32),
     /// A reason string this crate does not model. Preserved verbatim rather
     /// than mapped to `Unspecified`, so nothing is silently lost.
     Other(String),
@@ -160,6 +168,7 @@ impl fmt::Display for ThreadStopReason {
                 write!(f, "mach exception {metype} {medata:?}")
             }
             Self::Exited(code) => write!(f, "exited {code}"),
+            Self::Terminated(sig) => write!(f, "terminated by signal {sig}"),
             Self::Other(s) => write!(f, "{s}"),
         }
     }
@@ -173,6 +182,17 @@ impl ThreadStopReason {
             self,
             Self::Breakpoint | Self::Watchpoint | Self::Trace | Self::Exception { .. }
         ) || matches!(self, Self::Signal(s) if *s != 0)
+    }
+
+    /// `true` when this reason says the process no longer exists.
+    ///
+    /// Both ends of a process are covered — a clean `exit()` ([`Self::Exited`])
+    /// and a fatal signal ([`Self::Terminated`]) — because a caller deciding
+    /// whether it may still read registers cares only that the target is gone,
+    /// not how it left.
+    #[must_use]
+    pub const fn is_process_gone(&self) -> bool {
+        matches!(self, Self::Exited(_) | Self::Terminated(_))
     }
 
     /// Map a textual `reason:` field, plus the numeric detail that came with
@@ -212,7 +232,7 @@ impl ThreadStopReason {
     pub fn from_stop_reply(reply: &StopReply) -> Self {
         match reply {
             StopReply::Exited { status } => Self::Exited(*status),
-            StopReply::Terminated { signal } => Self::Signal(u32::from(*signal)),
+            StopReply::Terminated { signal } => Self::Terminated(u32::from(*signal)),
             StopReply::Signal { signal } => {
                 if *signal == 0 {
                     Self::Unspecified
@@ -752,6 +772,40 @@ mod tests {
         assert_eq!(
             ThreadStopReason::from_stop_reply(&StopReply::parse(b"S0b").unwrap()),
             ThreadStopReason::Signal(11)
+        );
+    }
+
+    #[test]
+    fn killed_by_a_signal_is_not_the_same_as_stopped_by_one() {
+        // `Xnn` says the process was TERMINATED by signal nn: it is gone, and
+        // nothing about it can be inspected any more. `Snn` says a thread is
+        // STOPPED with signal nn pending: it is alive and its registers and
+        // stack are readable. Reporting the first as the second invites a
+        // caller to unwind a corpse.
+        let killed = ThreadStopReason::from_stop_reply(&StopReply::parse(b"X0b").unwrap());
+        let stopped = ThreadStopReason::from_stop_reply(&StopReply::parse(b"S0b").unwrap());
+
+        assert_ne!(
+            killed, stopped,
+            "X0b (killed by SIGSEGV) must not decay into S0b (stopped by SIGSEGV)"
+        );
+        assert_eq!(killed, ThreadStopReason::Terminated(11));
+        assert_eq!(killed.to_string(), "terminated by signal 11");
+
+        // A dead process has no culprit thread, exactly like `Wnn`.
+        assert!(
+            !killed.is_stopping_reason(),
+            "a terminated process must not be reported as the thread that stopped it"
+        );
+        // ...and it is an end-of-process reason, unlike a plain signal stop.
+        assert!(killed.is_process_gone());
+        assert!(ThreadStopReason::Exited(3).is_process_gone());
+        assert!(!stopped.is_process_gone());
+
+        // The signal number still survives — nothing is lost by the fix.
+        assert_eq!(
+            ThreadStopReason::from_stop_reply(&StopReply::parse(b"X09").unwrap()),
+            ThreadStopReason::Terminated(9)
         );
     }
 

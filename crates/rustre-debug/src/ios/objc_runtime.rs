@@ -939,7 +939,12 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
             });
         }
         let small = entsize_and_flags & 0x8000_0000 != 0;
-        let entsize = u64::from(entsize_and_flags & 0xffff_fffc);
+        // `entsizeAndFlags`: nel runtime i flag di una method_list_t sono
+        // `0xffff_0003`, cioè TUTTI i 16 bit alti (fra cui
+        // `smallMethodListFlag` = 0x8000_0000) più i 2 bit bassi. Solo i bit
+        // 2..=15 sono la dimensione della voce. Includere il bit 31 darebbe
+        // uno stride di 0x8000_000C e la seconda voce finirebbe fuori lista.
+        let entsize = u64::from(entsize_and_flags & 0x0000_fffc);
         let entsize = if entsize == 0 {
             if small { 12 } else { 24 }
         } else {
@@ -1493,6 +1498,49 @@ mod tests {
         assert_eq!(methods[0].name, "doWork:");
         assert_eq!(methods[0].types, "v20@0:8i16");
         assert_eq!(methods[0].imp, IMP);
+    }
+
+    /// Il campo `entsizeAndFlags` di una small method list vale
+    /// `12 | 0x8000_0000`. Se il bit 31 finisce nello stride, la seconda voce
+    /// viene cercata a `list + 8 + 0x8000_000C` invece che a `list + 20`.
+    /// Con una sola voce il difetto è invisibile: servono almeno due metodi.
+    #[test]
+    fn small_method_list_stride_excludes_flag_bit() {
+        let mut m = SparseMemory::new();
+        const LIST: u64 = 0x3_0000_0000;
+        const SELREF0: u64 = 0x3_0000_1000;
+        const SELREF1: u64 = 0x3_0000_1008;
+        const SELNAME0: u64 = 0x3_0000_1100;
+        const SELNAME1: u64 = 0x3_0000_1180;
+        const TYPESTR: u64 = 0x3_0000_1200;
+        const IMP0: u64 = 0x3_0000_2000;
+        const IMP1: u64 = 0x3_0000_2100;
+
+        let entry0 = LIST + 8;
+        let entry1 = LIST + 8 + 12;
+        let mut ml = Vec::new();
+        ml.extend_from_slice(&(12u32 | 0x8000_0000).to_le_bytes());
+        ml.extend_from_slice(&2u32.to_le_bytes());
+        for (entry, selref, imp) in [(entry0, SELREF0, IMP0), (entry1, SELREF1, IMP1)] {
+            ml.extend_from_slice(&i32::try_from(selref - entry).unwrap().to_le_bytes());
+            ml.extend_from_slice(&i32::try_from(TYPESTR - (entry + 4)).unwrap().to_le_bytes());
+            ml.extend_from_slice(&i32::try_from(imp - (entry + 8)).unwrap().to_le_bytes());
+        }
+        m.write(LIST, ml);
+        m.write_u64(SELREF0, SELNAME0);
+        m.write_u64(SELREF1, SELNAME1);
+        m.write_cstr(SELNAME0, "start");
+        m.write_cstr(SELNAME1, "stop");
+        m.write_cstr(TYPESTR, "v16@0:8");
+
+        let methods = rt(&m)
+            .read_method_list(LIST)
+            .expect("lo stride di 12 byte deve restare dentro la lista");
+        assert_eq!(methods.len(), 2);
+        assert_eq!(methods[0].name, "start");
+        assert_eq!(methods[0].imp, IMP0);
+        assert_eq!(methods[1].name, "stop");
+        assert_eq!(methods[1].imp, IMP1);
     }
 
     #[test]

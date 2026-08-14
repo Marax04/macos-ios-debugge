@@ -1692,8 +1692,16 @@ impl<T: RspTransport> RspClient<T> {
 
     /// Enumerate thread ids via `qfThreadInfo`/`qsThreadInfo`.
     ///
+    /// Every entry the stub sends must parse. An entry that does not is a
+    /// hard error rather than a skipped element: this list is the caller's
+    /// only picture of which threads exist, so a quietly shortened one turns
+    /// into a thread that is never selected with `H`, never stopped and never
+    /// read — a partial debugging session that looks complete. See
+    /// `thread_enumeration_reports_an_unparsable_id_instead_of_dropping_it`.
+    ///
     /// # Errors
-    /// See [`RspError`].
+    /// See [`RspError`]. In particular [`RspError::Framing`] when an entry of
+    /// the reply is not a thread id this parser understands.
     pub fn thread_ids(&mut self) -> RspResult<Vec<u64>> {
         let mut out = Vec::new();
         let mut payload = commands::q_first_thread_info();
@@ -1706,9 +1714,12 @@ impl<T: RspTransport> RspClient<T> {
             let list = s.strip_prefix('m').unwrap_or(&s);
             for tid in list.split(',').filter(|t| !t.is_empty()) {
                 let bare = tid.rsplit('.').next().unwrap_or(tid);
-                if let Ok(v) = parse_hex_u64(bare.trim_start_matches('p').as_bytes()) {
-                    out.push(v);
-                }
+                let v = parse_hex_u64(bare.trim_start_matches('p').as_bytes()).map_err(|e| {
+                    RspError::Framing(format!(
+                        "unparsable thread id {tid:?} in thread-info reply {s:?}: {e}"
+                    ))
+                })?;
+                out.push(v);
             }
             payload = commands::q_next_thread_info();
         }
@@ -2492,6 +2503,42 @@ mod tests {
     fn thread_enumeration_paginates() {
         let mut c = client_with(&[b"m1,2", b"m3", b"l"]);
         assert_eq!(c.thread_ids().unwrap(), vec![1, 2, 3]);
+    }
+
+    /// An unparsable entry in `qfThreadInfo` must FAIL the enumeration, not
+    /// shrink it.
+    ///
+    /// `thread_ids` is the only way this backend learns which threads exist:
+    /// every `H` selection, every per-thread register read and every "stop
+    /// all threads" sweep is driven off the returned list. Dropping an entry
+    /// the parser did not understand hands the caller a list that is
+    /// *plausible but short* — the missing thread is simply never selected,
+    /// never stopped, never read — and nothing anywhere says so. A stub that
+    /// answers with a form we do not model (or a corrupted byte on the wire)
+    /// therefore degrades into silent partial debugging rather than a visible
+    /// failure.
+    ///
+    /// Not vacuous: the reply is fixed and contains exactly one bad entry
+    /// between two good ones, so both assertions run unconditionally. Reverting
+    /// the fix to `if let Ok(v) = … { out.push(v) }` makes `thread_ids` return
+    /// `Ok(vec![1, 3])` and turns the first assertion red.
+    #[test]
+    fn thread_enumeration_reports_an_unparsable_id_instead_of_dropping_it() {
+        let mut c = client_with(&[b"m1,zz,3", b"l"]);
+        let err = c
+            .thread_ids()
+            .expect_err("an unparsable thread id must not be silently skipped");
+        // The report has to name the offending token, otherwise the operator
+        // cannot tell which entry of the enumeration was lost.
+        assert!(
+            err.to_string().contains("zz"),
+            "error must name the bad token, got: {err}"
+        );
+
+        // The good entries alone must not be handed back as if they were the
+        // whole list.
+        let mut c2 = client_with(&[b"m1,zz,3", b"l"]);
+        assert!(c2.thread_ids().is_err());
     }
 
     #[test]

@@ -1152,11 +1152,22 @@ impl AppleDebugger {
                 // list: which registers are expedited is stub-dependent, and a
                 // breakpoint misattributed to the wrong address is worse than
                 // one extra round trip.
-                let pc = session
-                    .read_register_set(session.current_tid)
-                    .map(|r| r.pc)
-                    .unwrap_or(0);
+                //
+                // And when that round trip FAILS there is no PC — `unwrap_or(0)`
+                // fabricated one, which is the very misattribution the sentence
+                // above refuses: a stop at a registered breakpoint was looked up
+                // at address 0, found nothing, and came back as a bare signal
+                // with `address: Some(0)`, its hit uncounted, while the caller
+                // was handed a program counter the target never had. An
+                // unreadable register block is a real failure of this stop's
+                // classification and is reported as one.
                 let tid = session.current_tid;
+                let pc = session.read_register_set(tid).map(|r| r.pc).map_err(|e| {
+                    DebugError::RegisterError(format!(
+                        "stop reply for {tid} could not be classified: reading the program \
+                         counter failed: {e}"
+                    ))
+                })?;
                 let pairs_slice: &[(String, String)] = match reply {
                     StopReply::SignalWithInfo { pairs, .. } => pairs,
                     _ => &[],
@@ -2230,11 +2241,26 @@ impl Debugger for AppleDebugger {
         // `vKill` is answered; bare `k` is not (the stub dies mid-reply), so it
         // is only used as a fallback and its silence is expected.
         let reply = session.text(format!("vKill;{:x}", pid.0).as_bytes(), "vKill");
-        let killed = match reply {
-            Ok(r) if r.starts_with("OK") => true,
+        let killed: Result<(), DebugError> = match reply {
+            Ok(r) if r.starts_with("OK") => Ok(()),
             _ => {
-                let _ = session.client.transport_mut().send(&crate::ios::rsp::RspPacket::new(commands::kill()).encode());
-                true
+                // The expected silence is about the REPLY, not about the write.
+                // Discarding the `io::Result` of the send made `kill` report
+                // success on the strength of a byte that never left this
+                // process: the caller then tears its own state down, stops
+                // watching, and leaves a live target behind. Whether `k`
+                // reached the wire is the only evidence this fallback has, so
+                // it is the evidence that decides.
+                session
+                    .client
+                    .transport_mut()
+                    .send(&crate::ios::rsp::RspPacket::new(commands::kill()).encode())
+                    .map_err(|e| {
+                        DebugError::Os(format!(
+                            "the target was not killed: `vKill` did not succeed and the `k` \
+                             fallback could not be written: {e}"
+                        ))
+                    })
             }
         };
         *guard = None;
@@ -2251,11 +2277,10 @@ impl Debugger for AppleDebugger {
         self.reset_auto_load();
         self.breakpoints.write().clear();
         *self.hw.lock() = None;
-        if killed {
-            Ok(())
-        } else {
-            Err(DebugError::Os("stub refused to kill the target".to_string()))
-        }
+        // The teardown above happens either way — this connection is finished
+        // whatever the target did — but the RESULT still says whether the
+        // target was actually killed.
+        killed
     }
 
     fn is_attached(&self) -> bool {
@@ -4833,5 +4858,143 @@ mod tests {
     async fn evaluate_without_a_session_is_not_attached() {
         let dbg = debugger_with_symbols();
         assert!(matches!(dbg.evaluate(ThreadId(0), "1 + 1").await, Err(DebugError::NotAttached)));
+    }
+
+    // -- a transport that can refuse to WRITE -------------------------------
+    //
+    // The mock debugserver can refuse to ANSWER (`E09`), but a whole class of
+    // defect lives one layer lower: a write that never reaches the wire whose
+    // `io::Result` is discarded. Nothing in this crate could express that, so
+    // the tests below wrap the loopback transport in one that fails `send` for
+    // the packets a test names. The debugger under test is untouched — only the
+    // socket lies, which is exactly the failure a real half-closed connection
+    // produces.
+
+    type PacketPredicate = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
+    struct CensoringTransport {
+        inner: Box<dyn RspTransport>,
+        refuse: PacketPredicate,
+    }
+
+    impl RspTransport for CensoringTransport {
+        fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+            let text = String::from_utf8_lossy(data).into_owned();
+            if (self.refuse)(&text) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    format!("transport refused to write {text:?}"),
+                ));
+            }
+            self.inner.send(data)
+        }
+        fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.inner.recv(buf)
+        }
+        fn description(&self) -> String {
+            self.inner.description()
+        }
+        fn interrupter(&self) -> Option<Arc<dyn crate::ios::rsp::RspInterrupter>> {
+            self.inner.interrupter()
+        }
+    }
+
+    struct CensoringFactory {
+        inner: LoopbackFactory,
+        refuse: PacketPredicate,
+    }
+
+    impl TransportFactory for CensoringFactory {
+        fn connect(
+            &self,
+            request: &ConnectRequest<'_>,
+        ) -> Result<Box<dyn RspTransport>, DebugError> {
+            Ok(Box::new(CensoringTransport {
+                inner: self.inner.connect(request)?,
+                refuse: Arc::clone(&self.refuse),
+            }))
+        }
+        fn description(&self) -> String {
+            "censoring-loopback".to_string()
+        }
+    }
+
+    fn censoring_debugger(refuse: PacketPredicate) -> AppleDebugger {
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        AppleDebugger::new(Arc::new(CensoringFactory {
+            inner: LoopbackFactory::new(srv, 7),
+            refuse,
+        }))
+    }
+
+    /// `kill` must report a kill that never reached the target.
+    ///
+    /// `vKill` is answered and its reply is checked; the bare `k` fallback is
+    /// not answered — the stub dies mid-reply — and that silence is genuinely
+    /// expected. What is NOT expected, and what the comment above it does not
+    /// justify, is discarding the `io::Result` of the WRITE: `let _ =
+    /// transport.send(...)` followed by `killed = true` says the target was
+    /// terminated on the strength of a byte that never left the process. The
+    /// caller then tears down its own state, stops watching, and leaves a live
+    /// target behind. The same class was fixed four times elsewhere in this
+    /// crate; the emergency exit kept it.
+    ///
+    /// Both packets are refused here because both are the kill: if `vKill`
+    /// could still be written the target would really die and the fallback
+    /// would never run.
+    #[tokio::test]
+    async fn kill_reports_failure_when_the_kill_packet_never_reaches_the_target() {
+        let dbg = censoring_debugger(Arc::new(|pkt: &str| {
+            pkt.contains("vKill") || pkt.contains("$k#")
+        }));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let outcome = dbg.kill().await;
+        assert!(
+            outcome.is_err(),
+            "kill reported success although neither `vKill` nor `k` could be written: \
+             the caller now believes a live target is dead"
+        );
+    }
+
+    /// A stop whose program counter cannot be read must not be classified from
+    /// a fabricated `pc = 0`.
+    ///
+    /// `classify` reads the PC back deliberately — its own comment says the
+    /// expedited register list is stub-dependent and "a breakpoint
+    /// misattributed to the wrong address is worse than one extra round trip".
+    /// The `unwrap_or(0)` under that comment does exactly what it forbids: when
+    /// the read fails the stop is attributed to address 0, so a stop AT a
+    /// registered breakpoint comes back as a bare signal, its hit is not
+    /// counted, and the caller is handed a program counter the target never had.
+    ///
+    /// The `g` block is refused only from the resume onward, so attaching and
+    /// planting the breakpoint work normally and the failure lands exactly on
+    /// the classification round trip this test is about.
+    #[tokio::test]
+    async fn a_stop_is_not_classified_from_a_fabricated_program_counter() {
+        let fail_g = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&fail_g);
+        let dbg = censoring_debugger(Arc::new(move |pkt: &str| {
+            flag.load(Ordering::SeqCst) && pkt.contains("$g#")
+        }));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let target = Address::new(TEXT_BASE + 0x18);
+        dbg.set_breakpoint(target, BreakpointKind::Software).await.expect("breakpoint");
+
+        fail_g.store(true, Ordering::SeqCst);
+        match dbg.continue_execution().await {
+            // Honest: the PC could not be read, so the stop was not classified.
+            Err(_) => {}
+            // Also honest: the address was recovered from the stop reply itself.
+            Ok(ev) => match ev.reason {
+                StopReason::Breakpoint { address, .. } if address == target => {}
+                other => panic!(
+                    "the program counter could not be read, yet the stop was reported as \
+                     {other:?} — classified from a fabricated pc instead of failing or \
+                     recovering the real address {target:?}"
+                ),
+            },
+        }
     }
 }

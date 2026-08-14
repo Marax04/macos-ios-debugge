@@ -5005,7 +5005,26 @@ mod tests {
     }
 
     // Drive a tool handler by name and parse its JSON response text.
-    #[cfg(any(windows, target_os = "linux"))]
+    //
+    // Deliberately NOT gated on a platform.
+    //
+    // It used to be `#[cfg(any(windows, target_os = "linux"))]`, which was
+    // never about the helper — it drives a handler by name and parses JSON,
+    // with nothing platform-specific in it — but about silencing a dead-code
+    // warning on hosts where no caller compiled. The gate then went out of
+    // sync with its callers: the `debug.multi_target_*` smoke tests are plain
+    // `#[tokio::test]`, so on macOS the callers existed and the helper did not:
+    //
+    //   error[E0425]: cannot find function `call_tool` in this scope
+    //     --> crates/rustre-mcp-tools/src/tools/debug.rs:6771:17
+    //
+    // measured on the macOS CI runner, 2026-08-15. Gating the CALLERS instead
+    // would have silenced ~30 MCP smoke tests on the one platform this project
+    // is trying to verify, which is the opposite of what is wanted:
+    // `#[allow(dead_code)]` costs a warning suppression on an unused path, the
+    // alternative costs coverage. Its sibling `call_tool_err` already carries
+    // the same allow for the same reason.
+    #[allow(dead_code)]
     async fn call_tool(
         tools: &[(rustre_mcp_server::ToolDefinition, Box<dyn rustre_mcp_server::ToolHandler>)],
         name: &str,
@@ -6481,7 +6500,8 @@ mod tests {
         })).await;
         assert_eq!(w1["live"], json!(true), "w1: {w1}");
         assert_eq!(w1["dr_addresses"][0].as_u64(), Some(rsp), "w1 in DR0");
-        let w1_id = w1["watchpoint_id"].as_str().unwrap().to_string();
+        let w1_id = w1["watchpoint_id"].as_str().unwrap().to_string();
+
         let listed_dr7 = w1["dr7"].as_u64();
         // The watchpoint must be visible to the DEBUGGER, not only to this
         // tool's own engine. Before the arming path went through

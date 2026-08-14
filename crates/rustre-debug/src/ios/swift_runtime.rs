@@ -360,7 +360,10 @@ impl<M: crate::ios::objc_runtime::ObjcMemory + ?Sized> SwiftMemoryReader for Obj
 /// The authentic address space on Darwin `arm64` is 47 bits; everything above is
 /// signature or tag. Stripping is idempotent and harmless on `x86_64`, where
 /// those bits are zero for user pointers anyway.
-const PAC_STRIP_MASK: u64 = 0x0000_007F_FFFF_FFFF;
+const PAC_STRIP_MASK: u64 = (1u64 << PAC_STRIP_VA_BITS) - 1;
+
+/// Width of [`PAC_STRIP_MASK`], kept next to it so the two cannot drift apart.
+const PAC_STRIP_VA_BITS: u32 = 47;
 
 /// Remove an `arm64e` pointer-authentication signature.
 ///
@@ -2032,6 +2035,34 @@ mod tests {
         assert_eq!(strip_pac(stripped), stripped);
         // x86_64 user pointers survive untouched.
         assert_eq!(strip_pac(0x0000_0001_0000_4000), 0x0000_0001_0000_4000);
+    }
+
+    #[test]
+    fn pac_stripping_preserves_the_full_47_bit_address_space() {
+        // The documented contract is 47 bits of address, everything above being
+        // signature or tag. The mask must therefore expose exactly 47 bits.
+        assert_eq!(strip_pac(u64::MAX), (1u64 << 47) - 1);
+
+        // A legitimate user pointer above 2^39 must survive untouched...
+        let high = 0x0000_6000_0000_1000u64;
+        assert_eq!(strip_pac(high), high);
+
+        // ...and stripping a signature off it must recover exactly that
+        // address, not a truncation of it.
+        let signed = 0x9A3C_0000_0000_0000u64 | high;
+        assert_eq!(strip_pac(signed), high);
+        assert_eq!(strip_object_bits(signed), high);
+    }
+
+    #[test]
+    fn metadata_read_does_not_truncate_a_high_address() {
+        let mut m = SparseMemory::new();
+        // Inside the 47-bit user VA space, but above the 39-bit threshold.
+        let addr = 0x0000_6000_0014_0000u64;
+        m.write_u64(addr, SwiftMetadataKind::Struct.raw());
+        m.write_u64(addr + 8, 0);
+        let md = TypeMetadata::read(&m, 0x9900_0000_0000_0000u64 | addr).unwrap();
+        assert_eq!(md.address, addr);
     }
 
     #[test]

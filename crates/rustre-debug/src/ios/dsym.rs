@@ -486,12 +486,43 @@ pub struct DwarfSections {
 }
 
 impl DwarfSections {
-    /// Extract the `__DWARF` sections from a thin Mach-O image.
+    /// Extract the `__DWARF` sections from a Mach-O image.
     ///
     /// Section *names* are matched, not segment names, because `dsymutil`
     /// output and `-gdwarf` object files disagree about the containing segment
     /// while agreeing about the section name.
+    ///
+    /// A universal payload is walked slice by slice and the first slice that
+    /// actually carries DWARF wins; [`DsymBundle::from_payload_bytes_for_uuids`]
+    /// is the entry point that picks a slice by *identity* instead.
     pub fn from_macho(bytes: &[u8]) -> DsymResult<Self> {
+        let mut first_err: Option<DsymError> = None;
+        let mut empty: Option<Self> = None;
+        for slice in thin_macho_slices(bytes) {
+            match Self::from_thin_macho(slice) {
+                Ok(s) if !s.is_empty() => return Ok(s),
+                Ok(s) => {
+                    empty.get_or_insert(s);
+                }
+                Err(e) => {
+                    first_err.get_or_insert(e);
+                }
+            }
+        }
+        // No slice had DWARF: report the parsed-but-empty result if there was
+        // one (callers turn that into `MissingSection`), else the parse failure.
+        empty.map_or_else(
+            || {
+                Err(first_err.unwrap_or_else(|| {
+                    DsymError::Macho("universal container has no slices".into())
+                }))
+            },
+            Ok,
+        )
+    }
+
+    /// [`Self::from_macho`] for one already-selected thin image.
+    fn from_thin_macho(bytes: &[u8]) -> DsymResult<Self> {
         let info =
             MachoParser::parse_single(bytes).map_err(|e| DsymError::Macho(e.to_string()))?;
         let mut out = Self::default();
@@ -1073,6 +1104,13 @@ fn read_v5_entries(
         formats.push((ct, form));
     }
     let count = c.uleb().ok_or_else(|| bad("truncated entry count"))?;
+    // A line header carries no `DW_AT_str_offsets_base` of its own: DWARF 5
+    // resolves its `DW_FORM_strx*` paths against the base of the compile unit
+    // that owns the program. That unit is not in scope here, so the section
+    // default is used — the offset of the first entry past the
+    // `.debug_str_offsets` header, which is what a single-contribution section
+    // (what clang emits for one dSYM) always has.
+    let default_str_offsets_base = if is_64bit { 16 } else { 8 };
     // A hostile count cannot be trusted to allocate against; the loop below
     // fails fast on truncation anyway, so the vector grows only as it decodes.
     let mut out: Vec<V5Entry> = Vec::new();
@@ -1083,6 +1121,15 @@ fn read_v5_entries(
                 .ok_or_else(|| bad("truncated entry value"))?;
             match (ct, v) {
                 (dw_lnct::PATH, AttrValue::Str(s)) => e.path = s,
+                // `DW_FORM_strx*` decodes to an INDEX, not to text: clang emits
+                // exactly this form whenever it emits a `.debug_str_offsets`
+                // section. Discarding the index left `path` empty and silently
+                // cost every row in the unit its file name, so resolve it.
+                (dw_lnct::PATH, AttrValue::StrIndex(i)) => {
+                    if let Some(s) = sections.strx(default_str_offsets_base, i, is_64bit) {
+                        e.path = s;
+                    }
+                }
                 (dw_lnct::DIRECTORY_INDEX, AttrValue::Uint(u)) => {
                     e.dir_index = u32::try_from(u).unwrap_or(0);
                 }
@@ -1183,19 +1230,135 @@ pub fn candidate_bundle_paths(binary_path: &Path) -> Vec<PathBuf> {
     out
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Universal (FAT) containers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `FAT_MAGIC` — 32-bit fat header, as it reads big-endian off disk.
+const FAT_MAGIC: u32 = 0xCAFE_BABE;
+/// `FAT_MAGIC_64` — 64-bit fat header (8-byte offsets, 32-byte `fat_arch_64`).
+const FAT_MAGIC_64: u32 = 0xCAFE_BABF;
+/// The byte-swapped spellings of the two above.
+const FAT_CIGAM: u32 = 0xBEBA_FECA;
+/// The byte-swapped spelling of [`FAT_MAGIC_64`].
+const FAT_CIGAM_64: u32 = 0xBFBA_FECA;
+
+/// The thin Mach-O images inside a payload, in file order.
+///
+/// A dSYM built for a multi-architecture image is itself universal: `dsymutil`
+/// mirrors the slices of the image it was made from, so `arm64 + arm64e` in the
+/// binary means `arm64 + arm64e` in `Contents/Resources/DWARF/<name>`. Handing
+/// such a payload straight to a thin-image parser fails on the `0xCAFEBABE`
+/// magic, which is why a present, correct dSYM used to be reported absent.
+///
+/// A thin image yields itself, so every caller can iterate unconditionally.
+/// Nothing is copied: the returned slices borrow `bytes`.
+#[must_use]
+pub fn thin_macho_slices(bytes: &[u8]) -> Vec<&[u8]> {
+    let Some(head) = bytes.get(..8) else { return vec![bytes] };
+    let magic = u32::from_be_bytes([head[0], head[1], head[2], head[3]]);
+    // A fat header is big-endian on disk; the swapped spellings exist in the
+    // wild and cost four bytes of arithmetic to accept.
+    let (wide, swapped) = match magic {
+        FAT_MAGIC => (false, false),
+        FAT_MAGIC_64 => (true, false),
+        FAT_CIGAM => (false, true),
+        FAT_CIGAM_64 => (true, true),
+        // Thin, or not a Mach-O at all — let the image parser say which.
+        _ => return vec![bytes],
+    };
+
+    let u32_at = |off: usize| -> Option<u32> {
+        let b: [u8; 4] = bytes.get(off..off + 4)?.try_into().ok()?;
+        Some(if swapped { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
+    };
+    let u64_at = |off: usize| -> Option<u64> {
+        let b: [u8; 8] = bytes.get(off..off + 8)?.try_into().ok()?;
+        Some(if swapped { u64::from_le_bytes(b) } else { u64::from_be_bytes(b) })
+    };
+
+    let entry_size = if wide { 32usize } else { 20 };
+    // The declared arch count is attacker-controlled; cap it at what the file
+    // can physically hold before it is used to drive a loop.
+    let declared = u32_at(4).unwrap_or(0) as usize;
+    let capacity = bytes.len().saturating_sub(8) / entry_size;
+    let nfat = declared.min(capacity);
+
+    let mut out = Vec::with_capacity(nfat);
+    for i in 0..nfat {
+        let base = 8 + i * entry_size;
+        let (offset, size) = if wide {
+            let Some(o) = u64_at(base + 8) else { continue };
+            let Some(s) = u64_at(base + 16) else { continue };
+            (usize::try_from(o).unwrap_or(usize::MAX), usize::try_from(s).unwrap_or(usize::MAX))
+        } else {
+            let Some(o) = u32_at(base + 8) else { continue };
+            let Some(s) = u32_at(base + 12) else { continue };
+            (o as usize, s as usize)
+        };
+        let end = offset.saturating_add(size);
+        // A slice reaching past the file is a corrupt container; skip it and
+        // keep the ones that are intact rather than losing the whole payload.
+        if size == 0 || end > bytes.len() {
+            continue;
+        }
+        out.push(&bytes[offset..end]);
+    }
+    out
+}
+
 /// Read the `LC_UUID` of a Mach-O file on disk.
+///
+/// For a universal file this is the UUID of the *first* slice; use
+/// [`uuids_of_macho_file`] when every architecture matters, which it does
+/// whenever the answer is used to prove that a dSYM belongs to an image.
 pub fn uuid_of_macho_file(path: &Path) -> DsymResult<Option<[u8; 16]>> {
+    Ok(uuids_of_macho_file(path)?.first().copied())
+}
+
+/// Read the `LC_UUID` of a Mach-O image held in memory.
+pub fn uuid_of_macho_bytes(bytes: &[u8]) -> DsymResult<Option<[u8; 16]>> {
+    Ok(uuids_of_macho_bytes(bytes)?.first().copied())
+}
+
+/// Every `LC_UUID` in a Mach-O file on disk — one per architecture slice.
+///
+/// The `Err` is deliberately not collapsed into an empty result: "this file
+/// could not be read or parsed" and "this image carries no UUID" demand
+/// different actions, and a caller that cannot tell them apart ends up
+/// accepting debug info it has not verified.
+pub fn uuids_of_macho_file(path: &Path) -> DsymResult<Vec<[u8; 16]>> {
     let bytes = std::fs::read(path).map_err(|e| DsymError::Io {
         path: path.display().to_string(),
         message: e.to_string(),
     })?;
-    uuid_of_macho_bytes(&bytes)
+    uuids_of_macho_bytes(&bytes)
 }
 
-/// Read the `LC_UUID` of a thin Mach-O image held in memory.
-pub fn uuid_of_macho_bytes(bytes: &[u8]) -> DsymResult<Option<[u8; 16]>> {
-    let info = MachoParser::parse_single(bytes).map_err(|e| DsymError::Macho(e.to_string()))?;
-    Ok(info.uuid)
+/// Every `LC_UUID` in a Mach-O image held in memory — one per slice.
+pub fn uuids_of_macho_bytes(bytes: &[u8]) -> DsymResult<Vec<[u8; 16]>> {
+    let mut out = Vec::new();
+    let mut parsed_any = false;
+    let mut first_err: Option<DsymError> = None;
+    for slice in thin_macho_slices(bytes) {
+        match MachoParser::parse_single(slice) {
+            Ok(info) => {
+                parsed_any = true;
+                if let Some(u) = info.uuid {
+                    out.push(u);
+                }
+            }
+            Err(e) => {
+                first_err.get_or_insert_with(|| DsymError::Macho(e.to_string()));
+            }
+        }
+    }
+    if parsed_any {
+        Ok(out)
+    } else {
+        Err(first_err
+            .unwrap_or_else(|| DsymError::Macho("universal container has no slices".into())))
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1219,19 +1382,68 @@ pub struct DsymBundle {
 impl DsymBundle {
     /// Open a dSYM payload (the Mach-O *inside* `Contents/Resources/DWARF`).
     pub fn open_payload(path: &Path) -> DsymResult<Self> {
+        Self::open_payload_for_uuids(path, &[])
+    }
+
+    /// Open a payload and, when `wanted` is non-empty, prefer the architecture
+    /// slice whose `LC_UUID` is one of those listed.
+    ///
+    /// Slice choice is an identity question, not an architecture question: a
+    /// universal dSYM holds one line table per slice and only the slice built
+    /// from the image being debugged describes it. Falling back to "first
+    /// usable slice" would hand back a *plausible* line table for the wrong
+    /// architecture, so the caller's UUID gate still runs on the result.
+    pub fn open_payload_for_uuids(path: &Path, wanted: &[[u8; 16]]) -> DsymResult<Self> {
         let bytes = std::fs::read(path).map_err(|e| DsymError::Io {
             path: path.display().to_string(),
             message: e.to_string(),
         })?;
-        Self::from_payload_bytes(path, &bytes)
+        Self::from_payload_bytes_for_uuids(path, &bytes, wanted)
     }
 
     /// Build from payload bytes already in memory (symbol server, archive,
     /// remote fetch).
     pub fn from_payload_bytes(path: &Path, bytes: &[u8]) -> DsymResult<Self> {
+        Self::from_payload_bytes_for_uuids(path, bytes, &[])
+    }
+
+    /// [`Self::from_payload_bytes`] with slice selection by UUID; see
+    /// [`Self::open_payload_for_uuids`].
+    pub fn from_payload_bytes_for_uuids(
+        path: &Path,
+        bytes: &[u8],
+        wanted: &[[u8; 16]],
+    ) -> DsymResult<Self> {
+        let mut first_err: Option<DsymError> = None;
+        let mut fallback: Option<Self> = None;
+        for slice in thin_macho_slices(bytes) {
+            match Self::from_thin_payload_bytes(path, slice) {
+                Ok(b) => {
+                    if b.uuid.is_some_and(|u| wanted.contains(&u)) {
+                        return Ok(b);
+                    }
+                    fallback.get_or_insert(b);
+                }
+                Err(e) => {
+                    first_err.get_or_insert(e);
+                }
+            }
+        }
+        fallback.map_or_else(
+            || {
+                Err(first_err.unwrap_or_else(|| {
+                    DsymError::Macho("universal container has no slices".into())
+                }))
+            },
+            Ok,
+        )
+    }
+
+    /// Build from one already-selected thin image.
+    fn from_thin_payload_bytes(path: &Path, bytes: &[u8]) -> DsymResult<Self> {
         let info =
             MachoParser::parse_single(bytes).map_err(|e| DsymError::Macho(e.to_string()))?;
-        let sections = DwarfSections::from_macho(bytes)?;
+        let sections = DwarfSections::from_thin_macho(bytes)?;
         if sections.is_empty() {
             return Err(DsymError::MissingSection("__DWARF"));
         }
@@ -1396,9 +1608,17 @@ fn comp_dir_for(cu: &CompileUnit, program: &LineProgram) -> PathBuf {
 /// not match is reported as [`DsymError::UuidMismatch`] rather than skipped,
 /// because a stale `Foo.dSYM` next to a rebuilt `Foo` is the single most common
 /// way a debugger ends up lying about line numbers, and silence would hide it.
+///
+/// Reading the binary's own identity is allowed to *fail*, and that failure is
+/// propagated. It used to be swallowed — `uuid_of_macho_file(..).ok().flatten()`
+/// mapped "the file could not be read", "the file is not a Mach-O" and "the
+/// image genuinely has no `LC_UUID`" onto the same `None`, and the `None` arm
+/// then returned the first bundle it found. All three are states in which
+/// nothing about the dSYM has been proven, so none of them may end in `Ok`.
 pub fn find_dsym_for_binary(binary_path: &Path) -> DsymResult<DsymBundle> {
-    let binary_uuid = uuid_of_macho_file(binary_path).ok().flatten();
-    let mut mismatch: Option<DsymError> = None;
+    // `?`: an unreadable or unparseable binary is reported as what it is.
+    let binary_uuids = uuids_of_macho_file(binary_path)?;
+    let mut unproven: Option<DsymError> = None;
 
     for bundle in candidate_bundle_paths(binary_path) {
         if !bundle.is_dir() {
@@ -1406,25 +1626,34 @@ pub fn find_dsym_for_binary(binary_path: &Path) -> DsymResult<DsymBundle> {
         }
         let Ok(payloads) = dwarf_payloads_in_bundle(&bundle) else { continue };
         for payload in payloads {
-            let Ok(dsym) = DsymBundle::open_payload(&payload) else { continue };
-            match (binary_uuid, dsym.uuid) {
-                // No UUID on the binary: accept, but the caller has no proof.
-                (None, _) => return Ok(dsym),
-                (Some(b), Some(d)) if b == d => return Ok(dsym),
-                (Some(b), Some(d)) => {
-                    mismatch.get_or_insert(DsymError::UuidMismatch {
-                        binary: format_uuid(&b),
+            let Ok(dsym) = DsymBundle::open_payload_for_uuids(&payload, &binary_uuids) else {
+                continue;
+            };
+            let Some(&first_binary_uuid) = binary_uuids.first() else {
+                // The binary parsed but carries no LC_UUID. A candidate is
+                // sitting right there and cannot be tied to it; say so instead
+                // of guessing, exactly as `verify_against_uuid` does.
+                unproven.get_or_insert(DsymError::MissingUuid { which: "binary" });
+                continue;
+            };
+            match dsym.uuid {
+                // A universal binary has one UUID per slice; belonging to any
+                // one of them is belonging to the image.
+                Some(d) if binary_uuids.contains(&d) => return Ok(dsym),
+                Some(d) => {
+                    unproven.get_or_insert(DsymError::UuidMismatch {
+                        binary: format_uuid(&first_binary_uuid),
                         dsym: format_uuid(&d),
                     });
                 }
-                (Some(_), None) => {
-                    mismatch.get_or_insert(DsymError::MissingUuid { which: "dSYM" });
+                None => {
+                    unproven.get_or_insert(DsymError::MissingUuid { which: "dSYM" });
                 }
             }
         }
     }
 
-    Err(mismatch.unwrap_or_else(|| DsymError::NotFound(binary_path.display().to_string())))
+    Err(unproven.unwrap_or_else(|| DsymError::NotFound(binary_path.display().to_string())))
 }
 
 /// Search `root` recursively (up to `max_depth` directory levels) for a dSYM
@@ -1447,8 +1676,10 @@ pub fn find_dsym_by_uuid(root: &Path, uuid: [u8; 16], max_depth: usize) -> DsymR
         }
         let Ok(payloads) = dwarf_payloads_in_bundle(bundle) else { return };
         for payload in payloads {
-            if uuid_of_macho_file(&payload).ok().flatten() == Some(uuid) {
-                match DsymBundle::open_payload(&payload) {
+            // `contains`, not equality: a universal payload carries one UUID
+            // per slice and the wanted one need not be the first.
+            if uuids_of_macho_file(&payload).is_ok_and(|us| us.contains(&uuid)) {
+                match DsymBundle::open_payload_for_uuids(&payload, &[uuid]) {
                     Ok(d) => {
                         found = Some(d);
                         return;
@@ -2440,5 +2671,252 @@ mod tests {
         // DW_FORM_indirect naming itself must not recurse.
         let mut c2 = Cursor::new(&[dw_form::INDIRECT as u8]);
         assert!(read_attr_value(&sections, &mut c2, dw_form::INDIRECT, 0, 8, false).is_none());
+    }
+
+    // ── UUID provenance: "cannot read" is not "no UUID" ─────────────────────
+
+    /// `find_dsym_for_binary` used to reduce the binary's identity with
+    /// `uuid_of_macho_file(..).ok().flatten()`, which maps THREE outcomes onto
+    /// one `None`: the file could not be read, the file is not a Mach-O, and the
+    /// Mach-O genuinely carries no `LC_UUID`. The `(None, _)` arm then returned
+    /// the first candidate bundle it found, unverified — the exact silent
+    /// acceptance the module header forbids.
+    #[test]
+    fn a_binary_whose_uuid_cannot_be_read_is_not_a_licence_to_accept_any_dsym() {
+        let root = scratch("unreadable_uuid");
+        // A dSYM with a UUID that belongs to some *other* build.
+        let mut foreign = TEST_UUID;
+        foreign[0] ^= 0x5A;
+        write_bundle(&root, "MyApp", &build_dsym_macho(foreign, &standard_sections()));
+
+        // (b) the read/parse failed: the "binary" is not a Mach-O at all.
+        let garbage = root.join("MyApp");
+        std::fs::write(&garbage, b"#!/bin/sh\necho not a mach-o\n").expect("binary");
+        match find_dsym_for_binary(&garbage) {
+            Ok(b) => panic!(
+                "unverifiable binary accepted dSYM {} on no evidence",
+                b.uuid_string()
+            ),
+            Err(DsymError::NotFound(_)) => {
+                panic!("a bundle IS there; the defect is that its identity is unproven")
+            }
+            Err(_) => {}
+        }
+
+        // (b') the file does not exist: an I/O failure, not "no LC_UUID".
+        match find_dsym_for_binary(&root.join("Absent")) {
+            Ok(b) => panic!("missing binary accepted dSYM {}", b.uuid_string()),
+            Err(DsymError::Io { .. }) => {}
+            Err(e) => panic!("expected an i/o error naming the unreadable path, got {e}"),
+        }
+
+        // (a) the binary really has no LC_UUID: still unprovable, so still an
+        // error — but a different one, because the fix is different (rebuild
+        // with -g / keep the UUID, not "restore the file").
+        let no_uuid = root.join("Stripped");
+        let mut macho = build_dsym_macho(TEST_UUID, &[("__text", vec![0u8; 4])]);
+        // ncmds 2 -> 1 drops the trailing LC_UUID from the walk.
+        macho[16] = 1;
+        std::fs::write(&no_uuid, &macho).expect("binary");
+        write_bundle(&root, "Stripped", &build_dsym_macho(foreign, &standard_sections()));
+        match find_dsym_for_binary(&no_uuid) {
+            Ok(b) => panic!("dSYM {} accepted against a UUID-less binary", b.uuid_string()),
+            Err(DsymError::MissingUuid { which: "binary" }) => {}
+            Err(e) => panic!("expected MissingUuid{{binary}}, got {e}"),
+        }
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // ── universal (FAT) dSYM payloads ───────────────────────────────────────
+
+    /// Wrap thin Mach-O images in an Apple universal (FAT) container.
+    fn build_fat(slices: &[Vec<u8>]) -> Vec<u8> {
+        const ALIGN: usize = 0x4000;
+        let header_len = 8 + 20 * slices.len();
+        let mut offsets = Vec::new();
+        let mut cursor = header_len.div_ceil(ALIGN) * ALIGN;
+        for s in slices {
+            offsets.push(cursor);
+            cursor += s.len().div_ceil(ALIGN) * ALIGN;
+        }
+
+        let mut out = Vec::new();
+        out.extend_from_slice(&0xCAFE_BABEu32.to_be_bytes()); // FAT_MAGIC, big-endian on disk
+        out.extend_from_slice(&(slices.len() as u32).to_be_bytes());
+        for (i, s) in slices.iter().enumerate() {
+            out.extend_from_slice(&0x0100_000Cu32.to_be_bytes()); // CPU_TYPE_ARM64
+            out.extend_from_slice(&(i as u32).to_be_bytes()); // cpusubtype: arm64, arm64e
+            out.extend_from_slice(&(offsets[i] as u32).to_be_bytes());
+            out.extend_from_slice(&(s.len() as u32).to_be_bytes());
+            out.extend_from_slice(&14u32.to_be_bytes()); // align 2^14
+        }
+        for (i, s) in slices.iter().enumerate() {
+            out.resize(offsets[i], 0);
+            out.extend_from_slice(s);
+        }
+        out
+    }
+
+    /// A dSYM for a multi-architecture image has a FAT payload — `dsymutil`
+    /// mirrors the slices of the image it was made from. `MachoParser::parse_single`
+    /// rejects `0xCAFEBABE`, so every such payload failed to open and the search
+    /// ended in `NotFound`: a dSYM that is present, correct and sitting right
+    /// beside the binary reported as absent.
+    #[test]
+    fn a_fat_dsym_payload_is_opened_and_the_matching_slice_is_chosen() {
+        let root = scratch("fat_payload");
+
+        let mut other = TEST_UUID;
+        other[1] ^= 0x77;
+        // Slice order is deliberately hostile: the FIRST slice is the wrong
+        // build, so "parse the fat container" alone is not enough — the slice
+        // has to be picked by UUID.
+        let fat = build_fat(&[
+            build_dsym_macho(other, &standard_sections()),
+            build_dsym_macho(TEST_UUID, &standard_sections()),
+        ]);
+        write_bundle(&root, "MyApp", &fat);
+
+        let binary = root.join("MyApp");
+        std::fs::write(&binary, build_dsym_macho(TEST_UUID, &[("__text", vec![0u8; 8])]))
+            .expect("binary");
+
+        let bundle = find_dsym_for_binary(&binary)
+            .expect("a FAT dSYM beside the binary must be found, not reported missing");
+        assert_eq!(
+            bundle.uuid,
+            Some(TEST_UUID),
+            "the slice belonging to the binary must be the one opened"
+        );
+        assert!(!bundle.sections.debug_line.is_empty(), "DWARF must come from that slice");
+
+        // And the line table of the chosen slice must be usable end to end.
+        let mapper =
+            DsymLineMapper::from_bundle(&bundle, &SourceRootMapper::new()).expect("mapper");
+        assert_eq!(mapper.static_addr_to_source(0x1000).map(|l| l.line), Some(10));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    // ── DWARF 5 indexed strings in the line header ──────────────────────────
+
+    /// `.debug_line` v5 header whose paths are `DW_FORM_strx1` indices.
+    fn build_debug_line_v5_strx() -> Vec<u8> {
+        let mut tail = Vec::new();
+        tail.push(1); // min_inst_len
+        tail.push(1); // max_ops
+        tail.push(1); // default_is_stmt
+        tail.push(0xFBu8); // line_base -5
+        tail.push(14);
+        tail.push(13);
+        tail.extend_from_slice(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
+        // directory table: one format (path, strx1), two entries
+        tail.push(1);
+        uleb(dw_lnct::PATH, &mut tail);
+        uleb(dw_form::STRX1, &mut tail);
+        uleb(2, &mut tail);
+        tail.push(0); // str index 0 -> "/build/strx"  (dir 0 == comp dir)
+        tail.push(2); // str index 2 -> "sub"
+        // file table: two formats (path, dir index), one entry
+        tail.push(2);
+        uleb(dw_lnct::PATH, &mut tail);
+        uleb(dw_form::STRX1, &mut tail);
+        uleb(dw_lnct::DIRECTORY_INDEX, &mut tail);
+        uleb(dw_form::UDATA, &mut tail);
+        uleb(1, &mut tail);
+        tail.push(1); // str index 1 -> "gen.c"
+        uleb(1, &mut tail); // in directory 1 ("sub")
+
+        let mut prog = Vec::new();
+        prog.push(0);
+        uleb(9, &mut prog);
+        prog.push(0x02);
+        prog.extend_from_slice(&0x3000u64.to_le_bytes());
+        // DW_LNS_set_file 0: DWARF 5 numbers files from 0 and defaults the file
+        // register to 1, so the single entry has to be named explicitly.
+        prog.push(0x04);
+        uleb(0, &mut prog);
+        prog.push(0x03);
+        sleb(6, &mut prog); // line 7
+        prog.push(0x01); // copy
+        prog.push(0x02);
+        uleb(4, &mut prog);
+        prog.push(0);
+        uleb(1, &mut prog);
+        prog.push(0x01); // end_sequence
+
+        let mut out = Vec::new();
+        let header_len = tail.len() as u32;
+        let unit_len = 2 + 1 + 1 + 4 + header_len + prog.len() as u32;
+        out.extend_from_slice(&unit_len.to_le_bytes());
+        out.extend_from_slice(&5u16.to_le_bytes());
+        out.push(8); // address_size
+        out.push(0); // segment selector size
+        out.extend_from_slice(&header_len.to_le_bytes());
+        out.extend_from_slice(&tail);
+        out.extend_from_slice(&prog);
+        out
+    }
+
+    /// `__debug_str` + `__debug_str_offsets` for [`build_debug_line_v5_strx`].
+    fn strx_string_sections() -> (Vec<u8>, Vec<u8>) {
+        let mut s = Vec::new();
+        let off0 = s.len() as u32;
+        s.extend_from_slice(b"/build/strx\0");
+        let off1 = s.len() as u32;
+        s.extend_from_slice(b"gen.c\0");
+        let off2 = s.len() as u32;
+        s.extend_from_slice(b"sub\0");
+
+        let mut so = Vec::new();
+        // unit_length covers version + padding + the three offsets.
+        so.extend_from_slice(&(4u32 + 4 * 3).to_le_bytes());
+        so.extend_from_slice(&5u16.to_le_bytes()); // version
+        so.extend_from_slice(&0u16.to_le_bytes()); // padding
+        so.extend_from_slice(&off0.to_le_bytes());
+        so.extend_from_slice(&off1.to_le_bytes());
+        so.extend_from_slice(&off2.to_le_bytes());
+        (s, so)
+    }
+
+    /// `read_v5_entries` matched only `AttrValue::Str`, so a path expressed as
+    /// `DW_FORM_strx*` — what clang emits whenever it emits a `.debug_str_offsets`
+    /// section — decoded to an index and was then silently dropped, leaving the
+    /// entry's path empty. Every `file:line` from such a unit lost its file.
+    #[test]
+    fn v5_line_header_resolves_strx_paths_through_debug_str_offsets() {
+        let (debug_str, debug_str_offsets) = strx_string_sections();
+        let s = DwarfSections {
+            debug_line: build_debug_line_v5_strx(),
+            debug_str,
+            debug_str_offsets,
+            ..DwarfSections::default()
+        };
+        let p = parse_line_program(&s, 0).expect("v5 strx header");
+
+        assert_eq!(p.header_comp_dir, Some(PathBuf::from("/build/strx")));
+        assert_eq!(p.header.include_directories, vec![PathBuf::from("sub")]);
+        assert_eq!(p.primary_file, Some(PathBuf::from("gen.c")));
+        assert_eq!(p.header.file_names.len(), 1);
+        assert_eq!(p.header.file_names[0].name, PathBuf::from("gen.c"));
+        assert_eq!(p.header.file_names[0].dir_index, 1);
+
+        // And it survives the whole pipeline into a resolved path.
+        let rows = run_line_program(&s, &p).expect("rows");
+        let map = SourceMap::from_line_table(
+            &rows,
+            &p.header,
+            Path::new("/build/strx"),
+            SourceRootMapper::new(),
+            &HashMap::new(),
+        );
+        let loc = map.addr_to_source(0x3000).expect("location");
+        assert_eq!(loc.line, 7);
+        assert!(
+            loc.file.to_string_lossy().replace('\\', "/").ends_with("sub/gen.c"),
+            "indexed path lost: {}",
+            loc.file.display()
+        );
     }
 }

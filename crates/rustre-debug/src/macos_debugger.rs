@@ -1264,7 +1264,27 @@ impl MacosDebugger {
             // branch below skips its cleanup: writing to a dead process blocks
             // on a channel whose debug thread is gone. Measured, not assumed —
             // the first version of this fix hung a live test on exactly that.
-            let _ = self.disable_breakpoint(target).await;
+            // A failed restore is REPORTED, not discarded.
+            //
+            // The "writing to a dead process blocks" reason above is why the
+            // SIBLING branch guards its `?` with an exit check — but this
+            // branch already excludes the exit case in its own `if`, so by the
+            // time we get here the process is known to be ALIVE. The two
+            // adjacent branches were doing opposite things in the same
+            // situation.
+            //
+            // If this fails, a breakpoint the caller explicitly DISABLED is
+            // left ARMED in a live target while the step is reported as having
+            // succeeded, and the program then stops at a trap that, as far as
+            // the API is concerned, does not exist.
+            //
+            // Propagated only when `result` is itself Ok: an error already on
+            // its way to the caller says more than this one, and clobbering it
+            // would be the same defect facing the other way.
+            let restored = self.disable_breakpoint(target).await;
+            if result.is_ok() {
+                restored?;
+            }
         } else if !armed && !tracked {
             // Best-effort cleanup, matching the other two backends: if the
             // target exited, its memory is gone and `remove_breakpoint`
@@ -1745,8 +1765,24 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 let _ = reply_tx.send(Reply::WriteCount(result));
             }
             Command::Detach => {
+                // The answer is DERIVED from the syscall, not asserted.
+                //
+                // `PT_DETACH`'s result was discarded and the reply was the
+                // literal `Ok(())`, so `detach()` said "detached" whether or
+                // not anything had been.
+                //
+                // ESRCH is forgiven for the same reason as on Linux: a target
+                // that is already gone has nothing left to detach from, which
+                // is what "detached" means. Any other errno says it is still
+                // there and still ours.
+                let mut failure: Option<String> = None;
                 unsafe {
-                    libc::ptrace(PT_DETACH, pid, std::ptr::null_mut(), 0);
+                    if libc::ptrace(PT_DETACH, pid, std::ptr::null_mut(), 0) < 0 {
+                        let e = std::io::Error::last_os_error();
+                        if e.raw_os_error() != Some(libc::ESRCH) {
+                            failure = Some(format!("PT_DETACH({pid}) failed: {e}"));
+                        }
+                    }
                     // `PT_DETACH` resumes the tracee from its ptrace-stop, and
                     // that is ALL it does — it does not clear an independent
                     // job-control stop, which is exactly what `pause()` above
@@ -1768,7 +1804,8 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     // is not.
                     libc::kill(pid, libc::SIGCONT);
                 }
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                let result = failure.map_or(Ok(()), |m| Err(DebugError::DetachError(m)));
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
             Command::Kill => {
@@ -1830,15 +1867,32 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
     // failed syscall: the caller would be told the process exited normally
     // when in fact nothing at all was learned about it.
     let rc = unsafe { libc::waitpid(pid, &mut status, 0) };
-    let tid = ThreadId(pid as u32);
     let process_id = ProcessId(pid as u32);
+    // The pid-shaped id is a LAST RESORT now, not the answer.
+    //
+    // Every event this function produced used to carry `ThreadId(pid as u32)`,
+    // which names no thread of the task at all: `list_thread_ids` reports the
+    // kernel's 64-bit ids from `thread_info(THREAD_IDENTIFIER_INFO)`, and
+    // `thread_port_for` rejects an id matching none of them. So a
+    // thread-restricted breakpoint — whose whole purpose is to compare the
+    // stopping thread against the thread it was scoped to — could never match,
+    // and `current_tid` (fed from `ev.tid` at three call sites) was left naming
+    // a thread that does not exist, so the next `get_registers(current_thread())`
+    // failed outright on any process whose threads CAN be identified.
+    //
+    // It is still the right answer in exactly one case, which is why it stays:
+    // process-level events (exit, termination, a failed wait) belong to no
+    // thread, and `threads()` itself falls back to the pid when nothing can be
+    // identified. `identify_stopped_thread` reproduces that fallback rather
+    // than inventing a second convention.
+    let pid_tid = ThreadId(pid as u32);
 
     if rc < 0 {
         let err = std::io::Error::last_os_error();
         return (
             DebugEvent::new(
                 process_id,
-                tid,
+                pid_tid,
                 StopReason::Unknown { description: format!("waitpid({pid}) failed: {err}") },
             ),
             false,
@@ -1847,14 +1901,24 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
 
     if libc::WIFEXITED(status) {
         let code = libc::WEXITSTATUS(status);
-        return (DebugEvent::new(process_id, tid, StopReason::ProcessExit { exit_code: code }), true);
+        return (DebugEvent::new(process_id, pid_tid, StopReason::ProcessExit { exit_code: code }), true);
     }
     if libc::WIFSIGNALED(status) {
         let sig = libc::WTERMSIG(status);
-        return (DebugEvent::new(process_id, tid, StopReason::ProcessExit { exit_code: -sig }), true);
+        return (DebugEvent::new(process_id, pid_tid, StopReason::ProcessExit { exit_code: -sig }), true);
     }
     if libc::WIFSTOPPED(status) {
         let sig = libc::WSTOPSIG(status);
+        // WHICH thread stopped. Resolved once, here, and used for both halves
+        // of the answer: the tid the event is attributed to, and the register
+        // state the SIGTRAP classification below reads. Those two used to
+        // disagree — the tid was the pid, the registers were
+        // `read_thread_state(task, None)`, i.e. whichever thread `task_threads`
+        // happened to list first — so on a multi-threaded target the reported
+        // stop address could belong to a thread that had not trapped at all.
+        let stopped = identify_stopped_thread(pid, task);
+        let tid = stopped.tid;
+        let named = stopped.named;
         let reason = if sig == libc::SIGTRAP {
             // Same INT3-precedes-rip heuristic as the Linux backend — Darwin
             // ptrace doesn't hand back richer exception classification here
@@ -1877,33 +1941,33 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
             // is treated as "not 0xCC" rather than propagated: `wait_for_stop`
             // returns no `Result`, and inventing a breakpoint address is the
             // worse of the two wrong answers.
-            read_thread_state(task, None).map_or(
+            stopped.state.map_or(
                 StopReason::Unknown { description: "SIGTRAP but thread_get_state failed".into() },
                 |regs| {
-                    // `__rip`, not `rip`: Darwin's `x86_thread_state64_t`
-                    // prefixes every field with a double underscore. This line
-                    // read `regs.rip` for as long as the file has existed and
-                    // nobody could see it, because no compiler in this
-                    // environment ever looked at a `#[cfg(target_os = "macos")]`
-                    // module. It is the first error rustc reported once the
-                    // darwin target was unblocked.
-                    // The program counter, whatever this architecture calls
-                    // it. Reading `__rip` unconditionally is what stopped the
+                    // The program counter, via `thread_pc` — the `#[cfg]` split
+                    // that used to be spelled out inline here, now shared with
+                    // `identify_stopped_thread`, which must agree with this
+                    // exactly or the two would disagree about which thread is
+                    // sitting on the int3.
+                    //
+                    // Its history is worth keeping: this read `regs.rip` for as
+                    // long as the file existed and nobody could see it, because
+                    // no compiler in this environment ever looked at a
+                    // `#[cfg(target_os = "macos")]` module — Darwin's
+                    // `x86_thread_state64_t` prefixes every field with a double
+                    // underscore, so `__rip` is the name, and it was the first
+                    // error rustc reported once the darwin target was unblocked.
+                    // Reading `__rip` unconditionally is then what stopped the
                     // crate compiling for arm64 at all.
-                    #[cfg(target_arch = "x86_64")]
-                    let rip = regs.__rip;
-                    #[cfg(target_arch = "aarch64")]
-                    let rip = regs.__pc;
+                    let rip = thread_pc(&regs);
                     let prev = rip.wrapping_sub(1);
-                    let is_int3 =
-                        mach_read_memory(task, prev, 1).ok().and_then(|b| b.first().copied())
-                            == Some(0xCC);
+                    let is_int3 = byte_is_int3(task, prev);
                     if is_int3 {
                         StopReason::Breakpoint {
                             address: Address(prev),
                             bp: Breakpoint::new_software(Address(prev)),
                         }
-                    } else if let Some((watched, kind)) = watchpoint_hit(task, None) {
+                    } else if let Some((watched, kind)) = watchpoint_hit(task, named) {
                         // A watchpoint hit arrives as a plain SIGTRAP here too:
                         // only the debug STATUS register tells it apart from a
                         // single step. Windows and Linux have attributed hits for
@@ -1927,7 +1991,137 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
         };
         return (DebugEvent::new(process_id, tid, reason), false);
     }
-    (DebugEvent::new(process_id, tid, StopReason::Unknown { description: format!("unrecognised wait status {status:#x}") }), false)
+    (DebugEvent::new(process_id, pid_tid, StopReason::Unknown { description: format!("unrecognised wait status {status:#x}") }), false)
+}
+
+/// The program counter, whatever this architecture calls it.
+///
+/// The same two-line `#[cfg]` split used to sit inline inside `wait_for_stop`;
+/// it is a function now because `identify_stopped_thread` needs the identical
+/// answer, and two copies of an architecture split are two chances to update
+/// only one of them — the failure mode this whole file is a monument to.
+#[cfg(target_arch = "x86_64")]
+const fn thread_pc(regs: &ThreadState) -> u64 {
+    // `__rip`, not `rip`: Darwin's `x86_thread_state64_t` prefixes every field
+    // with a double underscore.
+    regs.__rip
+}
+
+#[cfg(target_arch = "aarch64")]
+const fn thread_pc(regs: &ThreadState) -> u64 {
+    regs.__pc
+}
+
+/// Is the byte at `addr` a planted `0xCC` (int3)?
+///
+/// A failed read (unmapped or unreadable page) answers `false` rather than
+/// propagating: neither caller returns a `Result`, and inventing a breakpoint
+/// address is the worse of the two wrong answers.
+fn byte_is_int3(task: task_t, addr: u64) -> bool {
+    mach_read_memory(task, addr, 1).ok().and_then(|b| b.first().copied()) == Some(0xCC)
+}
+
+/// Which thread of `task` took the trap `waitpid` just reported, and its
+/// register state.
+struct StoppedThread {
+    /// The id to put on the `DebugEvent`. Never absent: falls back to the
+    /// pid-shaped id when the task's threads cannot be enumerated or
+    /// identified at all, which is the convention `threads()` already uses.
+    tid: ThreadId,
+    /// `Some` only when `tid` is a REAL kernel thread id — the only case in
+    /// which it may be handed to `thread_port_for`, which (rightly) errors on
+    /// an id naming no live thread rather than silently falling back to
+    /// thread 0. `None` means "whatever thread stopped", the historical
+    /// first-thread behaviour those helpers already accept.
+    named: Option<ThreadId>,
+    /// The stopping thread's general-purpose state, read while its port was
+    /// already in hand. `None` if `thread_get_state` failed for it.
+    state: Option<ThreadState>,
+}
+
+/// Identify the thread that took the trap.
+///
+/// Darwin's BSD `ptrace`+`waitpid` path reports a stop for the PROCESS and says
+/// nothing about which thread caused it — the thread identity lives in the Mach
+/// EXCEPTION message, which nothing here listens for yet (the same gap that
+/// keeps the faulting address unavailable). So it is reconstructed from the
+/// state the stopped task is in, which is enough for the case that matters:
+/// a software breakpoint leaves exactly one thread with `pc` one byte past a
+/// planted `0xCC`, so that thread is the one that trapped.
+///
+/// When no thread is sitting on an int3 — a genuine single step, a
+/// watchpoint hit, a signal — the first identifiable thread is reported. That
+/// is a guess, and it is the same guess this backend has always made
+/// (`read_thread_state(task, None)` reads exactly that thread); the difference
+/// is that it is now reported under the thread's REAL kernel id instead of the
+/// pid, so `thread_port_for`, `current_thread()` and thread-restricted
+/// breakpoints all agree about who it is. Anything better needs the Mach
+/// exception port, and is deliberately not faked here.
+fn identify_stopped_thread(pid: libc::pid_t, task: task_t) -> StoppedThread {
+    let fallback = StoppedThread { tid: ThreadId(pid as u32), named: None, state: None };
+    let mut list: *mut thread_act_t = std::ptr::null_mut();
+    let mut count: mach_msg_type_number_t = 0;
+    let kr = unsafe { task_threads(task, &raw mut list, &raw mut count) };
+    if kr != KERN_SUCCESS || count == 0 {
+        return fallback;
+    }
+
+    // The thread found sitting on an int3, and — separately — the first thread
+    // that could be identified at all. The int3 one wins; the other is the
+    // fallback for every trap that leaves no such trace.
+    let mut trapped: Option<StoppedThread> = None;
+    let mut first: Option<StoppedThread> = None;
+    for i in 0..count {
+        // SAFETY: `list` points to a Mach-allocated array of `count` valid
+        // `thread_act_t` ports; `i < count`.
+        let port = unsafe { *list.add(i as usize) };
+        let mut info = ThreadIdentifierInfo::default();
+        let mut info_count = THREAD_IDENTIFIER_INFO_COUNT;
+        let identified = unsafe {
+            thread_info(
+                port,
+                THREAD_IDENTIFIER_INFO,
+                std::ptr::from_mut(&mut info).cast::<i32>(),
+                &raw mut info_count,
+            )
+        } == KERN_SUCCESS;
+        // Read the state through the port already in hand rather than going
+        // back through `thread_port_for`, which would re-enumerate the whole
+        // task per thread — quadratic, and racy across the two enumerations.
+        let state = read_thread_state_port(port).ok();
+        // Every port enumerated here carries a send right refcounted against
+        // THIS task, and none of them is handed on to the caller: the state was
+        // copied out and the id is a plain integer. So all of them are released,
+        // exactly as `list_thread_ids` does.
+        release_port(port);
+        if !identified {
+            // A thread that exited between `task_threads` and here cannot be
+            // named, and an unnamed id is the defect this function exists to
+            // remove. Skip it, matching `list_thread_ids`.
+            continue;
+        }
+        let tid = ThreadId(info.thread_id as u32);
+        // Asked BEFORE `state` is handed to the candidate: `ThreadState` is
+        // `Copy` today, so the order is free, but a struct that stops being
+        // `Copy` would otherwise turn this into a borrow error at the far end
+        // of an architecture no host here compiles.
+        let at_breakpoint =
+            state.is_some_and(|regs| byte_is_int3(task, thread_pc(&regs).wrapping_sub(1)));
+        let candidate = StoppedThread { tid, named: Some(tid), state };
+        if at_breakpoint {
+            if trapped.is_none() {
+                trapped = Some(candidate);
+            }
+        } else if first.is_none() {
+            first = Some(candidate);
+        }
+    }
+
+    let dealloc_size = (count as usize * std::mem::size_of::<thread_act_t>()) as mach_vm_size_t;
+    unsafe {
+        mach_vm_deallocate(mach_task_self(), list as mach_vm_address_t, dealloc_size);
+    }
+    trapped.or(first).unwrap_or(fallback)
 }
 
 /// Report the watched address and access kind if a hardware watchpoint just
@@ -2238,8 +2432,21 @@ fn write_debug_registers(task: task_t, tid: Option<ThreadId>, regs: &RegisterSet
     write_arm_debug_state(task, tid, &state)
 }
 
-fn read_thread_state(task: task_t, tid: Option<ThreadId>) -> Result<ThreadState, DebugError> {
-    let thread = thread_port_for(task, tid)?;
+/// Read one thread's general-purpose state through a port the CALLER owns.
+///
+/// Split out from [`read_thread_state`] for two reasons, both of which were
+/// defects before it existed:
+///
+/// 1. Port ownership. `thread_port_for` deliberately keeps the send right of
+///    the port it returns (it releases every other port it enumerated), so
+///    exactly one `release_port` must answer it. Concentrating the acquire and
+///    the release in [`read_thread_state`] leaves this function with no
+///    ownership question at all.
+/// 2. `identify_stopped_thread` already holds a port for every thread it is
+///    scanning. Going back through `thread_port_for` — which re-enumerates the
+///    whole task per call — would be quadratic AND racy, since the answer could
+///    change between the two enumerations.
+fn read_thread_state_port(thread: thread_act_t) -> Result<ThreadState, DebugError> {
     let mut state = ThreadState::default();
     let mut count = THREAD_STATE_COUNT;
     let kr = unsafe {
@@ -2256,6 +2463,29 @@ fn read_thread_state(task: task_t, tid: Option<ThreadId>) -> Result<ThreadState,
     Ok(state)
 }
 
+fn read_thread_state(task: task_t, tid: Option<ThreadId>) -> Result<ThreadState, DebugError> {
+    let thread = thread_port_for(task, tid)?;
+    let state = read_thread_state_port(thread);
+    // `thread_port_for` hands back a port whose send right it deliberately
+    // KEPT for this caller — it releases every other port it enumerated, and
+    // says so. Whoever takes that right owes exactly one `release_port`, or
+    // the right is refcounted against this task forever.
+    //
+    // `read_debug_state`, `write_debug_state`, `read_arm_debug_state` and
+    // `write_arm_debug_state` — the four other callers, two functions away —
+    // all do this. These two did not, so EVERY `GetRegisters` and every
+    // `SetRegisters` (which calls both) leaked one Mach port right. A debugger
+    // that steps in a loop, or a UI that refreshes a register view, therefore
+    // grew this process's ipc space without bound until it hit its port limit;
+    // nothing in the register path would report the failure as what it was.
+    //
+    // Bound before the `?` so the error path releases too, exactly as
+    // `threads()` binds `list_thread_ids`'s result before releasing its task
+    // port.
+    release_port(thread);
+    state
+}
+
 fn write_thread_state(task: task_t, tid: Option<ThreadId>, state: &ThreadState) -> Result<(), DebugError> {
     let thread = thread_port_for(task, tid)?;
     let kr = unsafe {
@@ -2266,6 +2496,10 @@ fn write_thread_state(task: task_t, tid: Option<ThreadId>, state: &ThreadState) 
             THREAD_STATE_COUNT,
         )
     };
+    // Same debt as `read_thread_state` above, and the same one the debug-state
+    // twins already pay: the port came with a send right, so it must be given
+    // back before returning down EITHER path.
+    release_port(thread);
     if kr != KERN_SUCCESS {
         return Err(DebugError::RegisterError(format!("thread_set_state failed: kern_return {kr}")));
     }

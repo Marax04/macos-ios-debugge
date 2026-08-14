@@ -229,7 +229,7 @@ pub enum BranchKind {
     IndirectCall { reg: u8 },
     /// `B <label>` — unconditional direct branch.
     DirectBranch { offset: i64 },
-    /// `BR Xn` — indirect branch.
+    /// `BR Xn` / `BRAA…` — indirect branch.
     IndirectBranch { reg: u8 },
     /// `RET {Xn}` — return (defaults to `x30`).
     Return { reg: u8 },
@@ -256,10 +256,47 @@ impl BranchKind {
         if word & 0xFE00_0000 == 0xD600_0000 {
             let reg = ((word >> 5) & 0x1F) as u8;
             let opc = (word >> 21) & 0xF;
+            // `op3` picks the pointer-authentication key: `0b000000` is the
+            // plain unauthenticated form, `0b000010` is key A and `0b000011`
+            // is key B. The zero-modifier variants (`BRAAZ`/`BLRAAZ`/`RETAA`)
+            // stay in the same `opc` slot as their plain counterparts and so
+            // need no special case; only the forms that take an explicit
+            // modifier register in `op4` move to their own `opc`.
+            let op3 = (word >> 10) & 0x3F;
+            // `op2` is architecturally 11111 for EVERY form in this class, and
+            // was never checked. Without it, words that the architecture leaves
+            // unallocated decode as real branches: `0xD720_0909` (opc=1000,
+            // op3=000010, op2=00000) came back as an `IndirectBranch` the
+            // stepper would have acted on. Rejecting up front covers the plain
+            // forms too, not just the authenticated ones added later.
+            if (word >> 16) & 0x1F != 0b1_1111 {
+                return None;
+            }
+            let signed_with_modifier = op3 == 0b00_0010 || op3 == 0b00_0011;
             return match opc {
                 0b0000 => Some(Self::IndirectBranch { reg }),
                 0b0001 => Some(Self::IndirectCall { reg }),
-                0b0010 => Some(Self::Return { reg }),
+                // `RET Xn` names its register; `RETAA`/`RETAB` do not.
+                //
+                // The architecture MANDATES Rn = 11111 for the authenticated
+                // returns, but the address they return to is implicitly X30 —
+                // 11111 there is `xzr`, not an operand. Reading Rn literally
+                // reported register 31, so the same logical instruction
+                // answered 30 or 31 depending only on whether it was signed.
+                //
+                // Latent today: nothing outside the tests reads
+                // `Return { reg }`. `step_out` is the caller it is waiting
+                // for, and it would have picked `xzr` as the link register on
+                // every arm64e frame.
+                0b0010 => Some(Self::Return {
+                    reg: if signed_with_modifier { 30 } else { reg },
+                }),
+                // `BRAA`/`BRAB Xn, Xm` — arm64e authenticated indirect branch.
+                0b1000 if signed_with_modifier => Some(Self::IndirectBranch { reg }),
+                // `BLRAA`/`BLRAB Xn, Xm` — arm64e authenticated indirect call.
+                // This is the ordinary call shape on Apple silicon, so failing
+                // to decode it makes `step_over` step *into* every call.
+                0b1001 if signed_with_modifier => Some(Self::IndirectCall { reg }),
                 _ => None,
             };
         }
@@ -1259,6 +1296,96 @@ mod tests {
         assert_eq!(BranchKind::decode(0xD63F_0100), Some(BranchKind::IndirectCall { reg: 8 }));
         assert_eq!(BranchKind::decode(0xD61F_0100), Some(BranchKind::IndirectBranch { reg: 8 }));
         assert!(BranchKind::decode(0xD63F_0100).unwrap().is_call());
+    }
+
+    /// arm64e (`BLRAA`/`BLRAB`/`BRAA`/`BRAB`) — the authenticated branch forms
+    /// that take an explicit modifier register in `op4`. Encoding is
+    /// `1101011 opc:4 op2:5 op3:6 Rn:5 op4:5` with `opc = 0b1000` (branch) or
+    /// `0b1001` (call), `op2 = 0b11111`, `op3 = 0b000010` (key A) /
+    /// `0b000011` (key B), `Rn` = target, `op4` = modifier.
+    ///
+    /// These are the ordinary call shape on arm64e, so a stepper that returns
+    /// `None` here would single-step *into* every call instead of stepping over
+    /// it, and `step_out` would never see the frame.
+    #[test]
+    fn arm64e_authenticated_branches_with_modifier_are_calls_and_branches() {
+        // blraa x8, x9 -> 0xD73F0909
+        assert_eq!(
+            BranchKind::decode(0xD73F_0909),
+            Some(BranchKind::IndirectCall { reg: 8 }),
+            "blraa x8, x9"
+        );
+        // blrab x8, x9 -> 0xD73F0D09
+        assert_eq!(
+            BranchKind::decode(0xD73F_0D09),
+            Some(BranchKind::IndirectCall { reg: 8 }),
+            "blrab x8, x9"
+        );
+        // braa x8, x9 -> 0xD71F0909
+        assert_eq!(
+            BranchKind::decode(0xD71F_0909),
+            Some(BranchKind::IndirectBranch { reg: 8 }),
+            "braa x8, x9"
+        );
+        // brab x8, x9 -> 0xD71F0D09
+        assert_eq!(
+            BranchKind::decode(0xD71F_0D09),
+            Some(BranchKind::IndirectBranch { reg: 8 }),
+            "brab x8, x9"
+        );
+        // The call forms must push a return address, so `step_over` plants a
+        // breakpoint at pc+4 rather than stepping into the callee.
+        assert!(BranchKind::decode(0xD73F_0909).unwrap().is_call());
+        assert!(BranchKind::decode(0xD73F_0D09).unwrap().is_call());
+        assert!(!BranchKind::decode(0xD71F_0909).unwrap().is_call());
+    }
+
+    /// The zero-modifier forms (`BLRAAZ`/`BRAAZ`/`RETAA`) keep `opc` at the
+    /// unauthenticated value and only change `op3`/`op4`, so they must keep
+    /// decoding as plain calls/branches/returns.
+    #[test]
+    fn arm64e_zero_modifier_forms_keep_their_plain_meaning() {
+        // blraaz x8 -> 0xD63F091F
+        assert_eq!(
+            BranchKind::decode(0xD63F_091F),
+            Some(BranchKind::IndirectCall { reg: 8 }),
+            "blraaz x8"
+        );
+        // braaz x8 -> 0xD61F091F
+        assert_eq!(
+            BranchKind::decode(0xD61F_091F),
+            Some(BranchKind::IndirectBranch { reg: 8 }),
+            "braaz x8"
+        );
+        // `retaa` -> 0xD65F0BFF, and `retab` -> 0xD65F0FFF.
+        //
+        // Both must report register 30, not 31. The architecture MANDATES
+        // Rn = 11111 for the authenticated return forms, but the address they
+        // return to is implicitly X30 — 11111 there is `xzr`, not an operand.
+        // Reading Rn literally reported 31, while plain `ret` (asserted above)
+        // reports 30 for the same logical instruction: the register a return
+        // uses would have changed depending on whether it was authenticated.
+        assert_eq!(
+            BranchKind::decode(0xD65F_0BFF),
+            Some(BranchKind::Return { reg: 30 }),
+            "retaa returns through x30, not xzr"
+        );
+        assert_eq!(
+            BranchKind::decode(0xD65F_0FFF),
+            Some(BranchKind::Return { reg: 30 }),
+            "retab returns through x30, not xzr"
+        );
+    }
+
+    /// `opc = 0b1000/0b1001` is only allocated for `op3 = 0b000010/0b000011`.
+    /// Anything else in that slot is unallocated and must stay `None` rather
+    /// than being reported as a call the stepper would act on.
+    #[test]
+    fn unallocated_op3_in_the_pac_branch_slot_is_not_decoded() {
+        // opc=1001, op3=000000 -> unallocated.
+        assert_eq!(BranchKind::decode(0xD73F_0109), None);
+        // opc=1000, op3=000001 -> unallocated.
+        assert_eq!(BranchKind::decode(0xD71F_0509), None);
     }
 
     #[test]

@@ -207,6 +207,34 @@ const ARM_THREAD_STATE64_FLAVOUR: u32 = 6;
 /// `pc` (32).
 const ARM_THREAD_STATE64_PC_SLOT: usize = 32;
 
+/// `CPU_TYPE_X86_64` — `CPU_TYPE_X86 (7) | CPU_ARCH_ABI64 (0x0100_0000)`.
+pub(crate) const CPU_TYPE_X86_64: u32 = 0x0100_0007;
+/// `CPU_TYPE_ARM64` — `CPU_TYPE_ARM (12) | CPU_ARCH_ABI64 (0x0100_0000)`.
+pub(crate) const CPU_TYPE_ARM64: u32 = 0x0100_000c;
+
+/// Where the program counter sits, in `u64` slots, inside the thread state
+/// identified by (`cputype`, `flavour`) — or `None` if that pair is not a
+/// general-purpose 64-bit thread state this module models.
+///
+/// A flavour tag is meaningless on its own: the numbers are per-architecture
+/// and they COLLIDE. 6 is `ARM_THREAD_STATE64` on arm64 but
+/// `x86_EXCEPTION_STATE64` on x86_64; 4 is `x86_THREAD_STATE64` on x86_64 but
+/// `ARM_DEBUG_STATE` on arm64. Reading a fixed slot out of the wrong layout
+/// does not fail visibly — it returns whatever register or fault address lies
+/// at that offset, as a confident entry point no caller can tell from a real
+/// one. That is exactly the failure the unmodelled-flavour arm below exists to
+/// prevent, so the flavours that DO collide must be resolved by `cputype` too.
+///
+/// An architecture this module does not model yields `None` for the same
+/// reason an unmodelled flavour does: no guess is better than no answer.
+fn thread_state_pc_slot(cputype: u32, flavour: u32) -> Option<usize> {
+    match (cputype, flavour) {
+        (CPU_TYPE_X86_64, X86_THREAD_STATE64_FLAVOUR) => Some(X86_THREAD_STATE64_RIP_SLOT),
+        (CPU_TYPE_ARM64, ARM_THREAD_STATE64_FLAVOUR) => Some(ARM_THREAD_STATE64_PC_SLOT),
+        _ => None,
+    }
+}
+
 /// Extract an image's entry point (as an offset from its base) from a Mach-O
 /// header + load-command buffer.
 ///
@@ -226,7 +254,10 @@ const ARM_THREAD_STATE64_PC_SLOT: usize = 32;
 /// * `LC_UNIXTHREAD` carries an absolute `rip` in its thread state. It is
 ///   returned relative to `image_base` so both forms hand back the same thing;
 ///   an `rip` below the base (a malformed or foreign-slid image) yields `None`
-///   rather than a wrapped offset.
+///   rather than a wrapped offset. The command holds a *sequence* of
+///   `(flavour, count, state)` triples, each walked via its own `count`, and
+///   the flavour is resolved against the header's `cputype` — the tags collide
+///   between architectures.
 pub(crate) fn parse_mach_o_entry_offset(buf: &[u8], image_base: u64) -> Option<u64> {
     if buf.len() < MACH_HEADER_64_SIZE {
         return None;
@@ -234,6 +265,10 @@ pub(crate) fn parse_mach_o_entry_offset(buf: &[u8], image_base: u64) -> Option<u
     if u32::from_le_bytes(buf[0..4].try_into().ok()?) != MH_MAGIC_64 {
         return None;
     }
+    // Needed before any thread state can be read: a flavour tag only names a
+    // layout together with the architecture it belongs to (see
+    // `thread_state_pc_slot`).
+    let cputype = u32::from_le_bytes(buf[4..8].try_into().ok()?);
     let ncmds = u32::from_le_bytes(buf[16..20].try_into().ok()?) as usize;
     let sizeofcmds = u32::from_le_bytes(buf[20..24].try_into().ok()?) as usize;
     let cmds_end = MACH_HEADER_64_SIZE.checked_add(sizeofcmds)?;
@@ -264,24 +299,56 @@ pub(crate) fn parse_mach_o_entry_offset(buf: &[u8], image_base: u64) -> Option<u
             LC_MAIN if offset + 16 <= cmds_end && 16 <= cmdsize => {
                 return Some(u64::from_le_bytes(buf[offset + 8..offset + 16].try_into().ok()?));
             }
-            // thread_command: cmd/cmdsize (8) + flavour u32 + count u32,
-            // then `count` u32 words of state.
-            LC_UNIXTHREAD if offset + 16 <= cmds_end => {
-                let flavour = u32::from_le_bytes(buf[offset + 8..offset + 12].try_into().ok()?);
-                let pc_slot = match flavour {
-                    X86_THREAD_STATE64_FLAVOUR => Some(X86_THREAD_STATE64_RIP_SLOT),
-                    ARM_THREAD_STATE64_FLAVOUR => Some(ARM_THREAD_STATE64_PC_SLOT),
-                    // An unmodelled flavour is skipped, not guessed at: reading
-                    // a fixed slot out of a state whose layout is unknown would
-                    // return whatever register happens to sit there.
-                    _ => None,
-                };
-                if let Some(slot) = pc_slot {
-                    let pc_at = offset + 16 + slot * 8;
-                    if pc_at + 8 <= cmds_end && pc_at + 8 <= offset + cmdsize {
-                        let pc = u64::from_le_bytes(buf[pc_at..pc_at + 8].try_into().ok()?);
-                        return pc.checked_sub(image_base);
+            // thread_command: cmd/cmdsize (8), then a SEQUENCE of
+            // `(flavour u32, count u32, state[count] u32)` triples filling the
+            // rest of the command — not one triple. `dyld` and static
+            // executables really do emit a float or exception state ahead of
+            // the general-purpose one, and only the first was ever inspected,
+            // so those images reported no entry point at all while the state
+            // carrying it sat a few bytes further on.
+            //
+            // `count` is the field that makes the walk possible, and it was
+            // never read: it says both where the next triple begins and how
+            // far THIS state legitimately extends. Bounding the pc read by
+            // `cmdsize` alone (the whole command) let a state too short to
+            // contain its own pc have that slot read out of a LATER triple's
+            // registers — a wrong answer indistinguishable from a right one.
+            LC_UNIXTHREAD => {
+                let cmd_end = offset + cmdsize;
+                let mut pair = offset + 8;
+                while pair + 8 <= cmd_end {
+                    let flavour = u32::from_le_bytes(buf[pair..pair + 4].try_into().ok()?);
+                    let count =
+                        u32::from_le_bytes(buf[pair + 4..pair + 8].try_into().ok()?) as usize;
+                    let state = pair + 8;
+                    // A `count` whose state would run past the command is
+                    // malformed: stop rather than read the next command's
+                    // bytes as registers.
+                    let Some(state_end) = count.checked_mul(4).and_then(|n| state.checked_add(n))
+                    else {
+                        break;
+                    };
+                    if state_end > cmd_end {
+                        break;
                     }
+                    if let Some(slot) = thread_state_pc_slot(cputype, flavour) {
+                        let pc_end = slot
+                            .checked_mul(8)
+                            .and_then(|o| state.checked_add(o))
+                            .and_then(|at| at.checked_add(8));
+                        // Only within this state's OWN `count` words. A
+                        // truncated state is skipped, not read past — a later
+                        // triple may still carry the real thread state.
+                        if let Some(pc_end) = pc_end
+                            && pc_end <= state_end
+                            && let Ok(pc_bytes) = buf[pc_end - 8..pc_end].try_into()
+                        {
+                            return u64::from_le_bytes(pc_bytes).checked_sub(image_base);
+                        }
+                    }
+                    // `state_end >= pair + 8`, so the walk always advances and
+                    // a `count` of 0 cannot spin.
+                    pair = state_end;
                 }
             }
             _ => {}
@@ -318,11 +385,20 @@ mod tests {
     }
 
     /// Assemble a `mach_header_64` followed by `cmds`, with an overridable
-    /// `ncmds` so hostile headers can be built.
+    /// `ncmds` so hostile headers can be built. Defaults to an `x86_64`
+    /// `cputype`: a thread-state flavour has no meaning without one (flavour
+    /// 6 is `ARM_THREAD_STATE64` on arm64 and `x86_EXCEPTION_STATE64` on
+    /// x86_64), so a header claiming no architecture cannot carry a readable
+    /// `LC_UNIXTHREAD` entry point.
     fn header_with(ncmds: u32, cmds: &[u8]) -> Vec<u8> {
+        header_with_cpu(CPU_TYPE_X86_64, ncmds, cmds)
+    }
+
+    /// `header_with`, with the `cputype` field spelled out.
+    fn header_with_cpu(cputype: u32, ncmds: u32, cmds: &[u8]) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend_from_slice(&MH_MAGIC_64.to_le_bytes()); // magic
-        buf.extend_from_slice(&0u32.to_le_bytes()); // cputype
+        buf.extend_from_slice(&cputype.to_le_bytes()); // cputype
         buf.extend_from_slice(&0u32.to_le_bytes()); // cpusubtype
         buf.extend_from_slice(&0u32.to_le_bytes()); // filetype
         buf.extend_from_slice(&ncmds.to_le_bytes()); // ncmds
@@ -669,17 +745,193 @@ mod tests {
     /// from the minidump reader in iteration 465.
     #[test]
     fn an_arm64_thread_state_yields_its_pc_relative_to_the_image_base() {
-        let buf = header_with(1, &lc_unixthread_arm64(0x1_0000_3f10));
+        // An ARM thread state lives in an arm64 image: the flavour tag alone
+        // does not identify it (6 is x86_EXCEPTION_STATE64 on x86_64).
+        let buf = header_with_cpu(CPU_TYPE_ARM64, 1, &lc_unixthread_arm64(0x1_0000_3f10));
         assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x3f10));
 
         // Below the base is not an offset into the image: None, never a
         // wrapped value near the top of the address space.
-        let buf = header_with(1, &lc_unixthread_arm64(0x1000));
+        let buf = header_with_cpu(CPU_TYPE_ARM64, 1, &lc_unixthread_arm64(0x1000));
         assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
 
         // The x86 form still works: this is an addition, not a swap.
         let buf = header_with(1, &lc_unixthread(0x1_0000_2222));
         assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x2222));
+    }
+
+    /// Spell a `u64` register file out as the `u32` words a thread state is
+    /// actually counted in — `count` is a word count, not a register count.
+    fn state_words(slots: &[u64]) -> Vec<u32> {
+        let mut words = Vec::with_capacity(slots.len() * 2);
+        for s in slots {
+            words.push(*s as u32);
+            words.push((*s >> 32) as u32);
+        }
+        words
+    }
+
+    /// A `thread_command` carrying an ARBITRARY SEQUENCE of
+    /// `(flavour, count, state[count])` triples — which is what the format
+    /// permits, and what `dyld` and static executables actually emit. The
+    /// single-pair `lc_unixthread` helpers above are the degenerate case.
+    fn lc_unixthread_pairs(pairs: &[(u32, Vec<u32>)]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        for (flavour, words) in pairs {
+            payload.extend_from_slice(&flavour.to_le_bytes());
+            payload.extend_from_slice(&(words.len() as u32).to_le_bytes());
+            for w in words {
+                payload.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        let mut b = Vec::new();
+        b.extend_from_slice(&LC_UNIXTHREAD.to_le_bytes());
+        b.extend_from_slice(&((8 + payload.len()) as u32).to_le_bytes());
+        b.extend_from_slice(&payload);
+        b
+    }
+
+    /// A `thread_command` holds a SEQUENCE of `(flavour, count, state)`
+    /// triples, not one.
+    ///
+    /// Only the first was ever examined, so an image whose thread command
+    /// opens with any other state — `x86_FLOAT_STATE64` here, which real
+    /// linkers do emit ahead of the general-purpose state — reported no entry
+    /// point at all, even though the general-purpose state sat right behind
+    /// it. The `count` field, which is the only way to find where the next
+    /// triple starts, was never read.
+    #[test]
+    fn a_thread_command_is_scanned_past_its_first_flavour_count_pair() {
+        let mut rip_state = vec![0u64; 21];
+        rip_state[16] = 0x1_0000_3f10;
+        let cmd = lc_unixthread_pairs(&[
+            // x86_FLOAT_STATE64 = 5: present, unmodelled, and NOT the end of
+            // the command.
+            (5, state_words(&vec![0u64; 8])),
+            (X86_THREAD_STATE64_FLAVOUR, state_words(&rip_state)),
+        ]);
+        let buf = header_with_cpu(CPU_TYPE_X86_64, 1, &cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            Some(0x3f10),
+            "the general-purpose state is the SECOND triple; stopping at the \
+             first one loses the entry point of every image that emits a \
+             float state ahead of it"
+        );
+    }
+
+    /// `count` bounds a thread state; `cmdsize` does not.
+    ///
+    /// The read was bounded only by `offset + cmdsize`, i.e. by the whole
+    /// command, so a flavour whose `count` is too small to reach `rip` had
+    /// that slot read out of a LATER triple's registers. The value comes back
+    /// as a confident entry point that no caller can tell from a real one —
+    /// here `0xdead`, which lives in the second triple's `r13`.
+    #[test]
+    fn a_state_shorter_than_its_own_pc_slot_is_not_read_past_its_count() {
+        let mut real = vec![0u64; 21];
+        real[16] = 0x1_0000_3f10; // the true rip
+        // Byte offset 16 + 16*8 = 144 from the command start — what the
+        // unbounded read takes as `rip` — lands on slot 11 of this state.
+        real[11] = 0x1_0000_dead;
+        let cmd = lc_unixthread_pairs(&[
+            // Claims x86_THREAD_STATE64 but carries only 8 words: malformed,
+            // and far too short to contain rip at slot 16.
+            (X86_THREAD_STATE64_FLAVOUR, vec![0u32; 8]),
+            (X86_THREAD_STATE64_FLAVOUR, state_words(&real)),
+        ]);
+        let buf = header_with_cpu(CPU_TYPE_X86_64, 1, &cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            Some(0x3f10),
+            "a state's pc may only be read within its own `count` words"
+        );
+    }
+
+    /// A flavour number means nothing without the header's `cputype`.
+    ///
+    /// 6 is `ARM_THREAD_STATE64` on arm64 and `x86_EXCEPTION_STATE64` on
+    /// x86_64; 4 is `x86_THREAD_STATE64` on x86_64 and `ARM_DEBUG_STATE` on
+    /// arm64. Interpreting the tag alone reads a fixed slot out of a state
+    /// with a completely different layout and hands the result back as an
+    /// entry point — the exact failure the unmodelled-flavour arm exists to
+    /// prevent, reintroduced for the flavours that DO collide.
+    #[test]
+    fn a_thread_flavour_is_interpreted_according_to_the_headers_cputype() {
+        let mut arm = vec![0u64; 33];
+        arm[32] = 0x1_0000_3f10;
+        let arm_cmd = lc_unixthread_pairs(&[(ARM_THREAD_STATE64_FLAVOUR, state_words(&arm))]);
+
+        let buf = header_with_cpu(CPU_TYPE_ARM64, 1, &arm_cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            Some(0x3f10),
+            "flavour 6 in an arm64 image IS the thread state"
+        );
+        let buf = header_with_cpu(CPU_TYPE_X86_64, 1, &arm_cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            None,
+            "the identical bytes in an x86_64 image are an EXCEPTION state; \
+             slot 32 of it is not a pc"
+        );
+
+        let mut x86 = vec![0u64; 21];
+        x86[16] = 0x1_0000_2222;
+        let x86_cmd = lc_unixthread_pairs(&[(X86_THREAD_STATE64_FLAVOUR, state_words(&x86))]);
+
+        let buf = header_with_cpu(CPU_TYPE_X86_64, 1, &x86_cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            Some(0x2222),
+            "flavour 4 in an x86_64 image IS the thread state"
+        );
+        let buf = header_with_cpu(CPU_TYPE_ARM64, 1, &x86_cmd);
+        assert_eq!(
+            parse_mach_o_entry_offset(&buf, 0x1_0000_0000),
+            None,
+            "flavour 4 in an arm64 image is ARM_DEBUG_STATE, not a thread state"
+        );
+
+        // An architecture this module does not model is skipped rather than
+        // guessed at, for the same reason an unmodelled flavour is.
+        let buf = header_with_cpu(0, 1, &x86_cmd);
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
+    }
+
+    /// Property (fuzz-lite) for the triple walk: hostile `cmdsize`/`count`
+    /// combinations must neither panic nor spin.
+    ///
+    /// Walking `(flavour, count, state)` triples means the loop's stride comes
+    /// from attacker-controlled bytes, so termination is a real obligation:
+    /// `count == 0` must still advance (it does — by the 8-byte triple header)
+    /// and a `count` that overflows the buffer must stop. A hang here would be
+    /// worse than a wrong answer, since it takes the debugger with it.
+    #[test]
+    fn hostile_thread_command_triples_terminate_without_panicking() {
+        let mut checked = 0usize;
+        for cputype in [CPU_TYPE_X86_64, CPU_TYPE_ARM64, 0] {
+            for count in [0u32, 1, 2, 8, 42, 68, 0xFFFF, u32::MAX] {
+                for flavour in [0u32, 4, 5, 6, 99] {
+                    for cmdsize_delta in [-8i64, -1, 0, 1, 8] {
+                        let mut cmd = lc_unixthread_pairs(&[
+                            (flavour, vec![0xdeu32; 8]),
+                            (flavour, vec![0xadu32; 8]),
+                        ]);
+                        // Overwrite the FIRST triple's count with the hostile
+                        // value and skew cmdsize away from the truth.
+                        cmd[12..16].copy_from_slice(&count.to_le_bytes());
+                        let skewed = (cmd.len() as i64 + cmdsize_delta).max(0) as u32;
+                        cmd[4..8].copy_from_slice(&skewed.to_le_bytes());
+                        let buf = header_with_cpu(cputype, 1, &cmd);
+                        // Must return, never panic, never loop forever.
+                        let _ = parse_mach_o_entry_offset(&buf, 0x1_0000_0000);
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked >= 200, "expected a meaningful grid, ran {checked}");
     }
 
     /// A flavour this module does not model must be SKIPPED, not read at a

@@ -641,6 +641,12 @@ impl CompactUnwindInfo {
                 let entry_page_offset = rd_u16(&self.data, page + 4, W)? as usize;
                 let entry_count = u32::from(rd_u16(&self.data, page + 6, W)?);
                 let encodings_page_offset = rd_u16(&self.data, page + 8, W)? as usize;
+                // The page-local encodings array is bounded by its own count,
+                // sitting right after the offset in the page header. Without
+                // it an index past the end reads whatever bytes follow the
+                // array — in a real table, the NEXT second-level page — and
+                // hands them back as a perfectly well-formed encoding word.
+                let encodings_count = u32::from(rd_u16(&self.data, page + 10, W)?);
                 if entry_count == 0 {
                     return Err(UnwindError::NoEntryForPc(function_offset));
                 }
@@ -662,6 +668,14 @@ impl CompactUnwindInfo {
                     self.common_encoding(encoding_index)?
                 } else {
                     let local = encoding_index - self.common_encodings_count;
+                    if local >= encodings_count {
+                        return Err(UnwindError::Truncated {
+                            what: "__unwind_info second-level page encodings",
+                            offset: local as usize,
+                            need: 4,
+                            have: encodings_count as usize,
+                        });
+                    }
                     rd_u32(&self.data, page + encodings_page_offset + (local as usize) * 4, W)?
                 };
                 Ok(CompactEntry { function_offset: entry_fn, encoding })
@@ -1215,7 +1229,13 @@ impl AppleUnwinder {
         // a function that spills lr elsewhere will produce a frame this
         // unwinder then rejects in `validate` rather than reporting wrongly.
         let lr = strip_pac(mem.read_u64(cfa.wrapping_sub(8))?);
-        let caller_fp = mem.read_u64(cfa.wrapping_sub(16)).unwrap_or(regs.fp);
+        // Propagated, never defaulted. `regs.fp` is the CURRENT frame's x29,
+        // so substituting it here does not produce a merely-incomplete frame:
+        // the next step walks the same frame record a second time and emits a
+        // duplicate frame that passes `validate` (pc in an image, sp grew).
+        // A missing caller x29 is unknown information, and this module's
+        // contract is to say so.
+        let caller_fp = mem.read_u64(cfa.wrapping_sub(16))?;
         Ok(Arm64UnwindRegs { pc: lr, sp: cfa, fp: caller_fp, lr: None })
     }
 }
@@ -1986,6 +2006,46 @@ mod tests {
         assert!(matches!(info.lookup(0x7FFF), Err(UnwindError::NoEntryForPc(_))));
     }
 
+    /// A compressed entry's top byte indexes the common table first and the
+    /// page-local table after it. `common_encoding` bounds-checks its half;
+    /// the page-local half was not checked against the page's own
+    /// `encodingsCount`, so an index past the end read whatever bytes follow
+    /// the array and returned them as a valid encoding.
+    ///
+    /// This page is followed immediately by another second-level page, so the
+    /// over-read lands inside it and yields a well-formed-looking `u32`
+    /// (`SECOND_LEVEL_REGULAR`) instead of a short read — i.e. the failure
+    /// mode is a silently wrong encoding, not a truncation error.
+    #[test]
+    fn unwind_info_compressed_page_rejects_an_out_of_range_local_encoding_index() {
+        let common = [UNWIND_ARM64_MODE_FRAME];
+        let local = [UNWIND_ARM64_MODE_DWARF | 0x40];
+        // index 0 -> common[0]; index 1 -> local[0]; index 2 -> PAST THE END.
+        let bad = compressed_page(&[(0, 2)], &local);
+        let next_page = regular_page(&[(0x9000, UNWIND_ARM64_MODE_FRAME)]);
+        let data =
+            build_unwind_info(&common, &[(0x8000, bad), (0x9000, next_page)], 0xA000);
+        let info = CompactUnwindInfo::parse(&data).unwrap();
+
+        let got = info.lookup(0x8000);
+        assert!(
+            matches!(
+                got,
+                Err(UnwindError::Truncated { what, .. })
+                    if what.contains("encodings")
+            ),
+            "an encoding index past encodingsCount must be reported, not read \
+             from the neighbouring page: {got:?}"
+        );
+
+        // The in-range indices must keep working, so the bound is not a blunt
+        // rejection of local encodings.
+        let ok = compressed_page(&[(0, 1)], &local);
+        let data = build_unwind_info(&common, &[(0x8000, ok)], 0x9000);
+        let info = CompactUnwindInfo::parse(&data).unwrap();
+        assert_eq!(info.lookup(0x8000).unwrap().encoding, local[0]);
+    }
+
     #[test]
     fn unwind_info_unknown_page_kind_is_reported() {
         let mut page = regular_page(&[(0x1000, 1)]);
@@ -2231,6 +2291,61 @@ mod tests {
         assert_eq!(next.pc, IMAGE_BASE + 0x4444);
         assert_eq!(next.sp, cfa);
         assert_eq!(next.fp, STACK_BASE + 0x300);
+    }
+
+    /// `[CFA-16]` holds the CALLER's `x29`. When that word cannot be read the
+    /// caller's frame pointer is simply unknown, and substituting the CURRENT
+    /// frame's `x29` produces a frame that is not merely incomplete but
+    /// actively wrong: the very next step walks the same frame record again
+    /// and emits a duplicate frame that passes `validate` (its pc is in an
+    /// image, its sp grew), i.e. a plausible-looking backtrace that never
+    /// happened.
+    ///
+    /// The line above reads `[CFA-8]` with `?`. This one must too — the
+    /// module's contract is a typed [`UnwindError`], not a guess.
+    #[test]
+    fn eh_frame_refuses_to_substitute_the_current_fp_when_the_caller_fp_is_unreadable() {
+        let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
+        let image = ImageUnwindTables {
+            image_base: IMAGE_BASE,
+            image_end: IMAGE_BASE + 0x10_0000,
+            compact: None,
+            eh_frame: Some(eh),
+        };
+        let unw = AppleUnwinder::new().with_order(UnwindOrder::TablesFirst).with_image(image);
+
+        // Map EXACTLY the 8 bytes at [CFA-8]: the return address is readable,
+        // the saved caller x29 one word below it is not.
+        let cfa = STACK_BASE + 0x110;
+        let mut mem = SliceMemory::new(cfa - 8, vec![0u8; 8]);
+        mem.write_u64(cfa - 8, IMAGE_BASE + 0x4444);
+
+        let regs = Arm64UnwindRegs {
+            pc: EH_FN + 0x20,
+            sp: STACK_BASE + 0x100,
+            // Aligned and above sp, so it looks entirely plausible — exactly
+            // the value that would be silently copied into the caller frame.
+            fp: STACK_BASE + 0x200,
+            lr: None,
+        };
+
+        let err = unw
+            .unwind_eh_frame(regs, 1, &mem)
+            .expect_err("an unreadable caller x29 must be an error, not the current x29");
+        assert!(
+            matches!(err, UnwindError::MemoryRead { addr, .. } if addr == cfa - 16),
+            "the failure must name the word that could not be read: {err:?}"
+        );
+
+        // And the cascade must degrade rather than hand back the bogus frame:
+        // fp is unreadable too, so every strategy has to fail.
+        let step = unw.step(regs, 1, &mem).unwrap_err();
+        let UnwindError::AllStrategiesFailed(fails) = step else { panic!("{step:?}") };
+        assert!(
+            fails.iter().any(|(p, e)| *p == FrameProvenance::EhFrame
+                && matches!(e, UnwindError::MemoryRead { addr, .. } if *addr == cfa - 16)),
+            "eh-frame must report why it could not answer: {fails:?}"
+        );
     }
 
     #[test]

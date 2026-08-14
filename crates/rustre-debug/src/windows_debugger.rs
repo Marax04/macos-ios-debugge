@@ -973,7 +973,27 @@ impl WindowsDebugger {
             // branch below skips its cleanup: writing to a dead process blocks
             // on a channel whose debug thread is gone. Measured, not assumed —
             // the first version of this fix hung a live test on exactly that.
-            let _ = self.disable_breakpoint(target).await;
+            // A failed restore is REPORTED, not discarded.
+            //
+            // The "writing to a dead process blocks" reason above is why the
+            // SIBLING branch guards its `?` with an exit check — but this
+            // branch already excludes the exit case in its own `if`, so by the
+            // time we get here the process is known to be ALIVE. The two
+            // adjacent branches were doing opposite things in the same
+            // situation.
+            //
+            // If this fails, a breakpoint the caller explicitly DISABLED is
+            // left ARMED in a live target while the step is reported as having
+            // succeeded, and the program then stops at a trap that, as far as
+            // the API is concerned, does not exist.
+            //
+            // Propagated only when `result` is itself Ok: an error already on
+            // its way to the caller says more than this one, and clobbering it
+            // would be the same defect facing the other way.
+            let restored = self.disable_breakpoint(target).await;
+            if result.is_ok() {
+                restored?;
+            }
         } else if !armed && !tracked {
             // Best-effort cleanup: the process is gone if it exited, so a
             // failed restore here shouldn't clobber a valid ProcessExit
@@ -1495,11 +1515,42 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                         }
                     }
                 }
+                // The answer is DERIVED from the syscall, not asserted.
+                //
+                // `DebugActiveProcessStop` is what actually releases the
+                // target. Its BOOL was discarded and the reply was the literal
+                // `Ok(())`, so `detach()` said "detached" whether or not
+                // anything had been — and Windows is the most expensive place
+                // to be wrong about this: a process that stays debugged is
+                // KILLED when its debugger exits, so the caller was told it had
+                // let the target go and the target died with the debugger
+                // instead.
+                //
+                // `last_os_error()` is read immediately, before `CloseHandle`,
+                // because that call would overwrite it.
+                //
+                // The handle is closed either way: it is ours and leaks if we
+                // keep it, and whether the detach succeeded says nothing about
+                // whether we still need it.
+                //
+                // A process that has already EXITED does not reach here: the
+                // event loop returns as soon as it reports the exit, so
+                // `send(Command::Detach)` fails on a dead channel long before
+                // this arm runs. There is therefore no "already gone" case to
+                // forgive on this backend, unlike the ptrace ones.
+                let stopped = unsafe { DebugActiveProcessStop(pid) };
+                let last_err = std::io::Error::last_os_error();
                 unsafe {
-                    DebugActiveProcessStop(pid);
                     CloseHandle(process_handle);
                 }
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                let result = if stopped == 0 {
+                    Err(DebugError::DetachError(format!(
+                        "DebugActiveProcessStop({pid}) failed: {last_err}"
+                    )))
+                } else {
+                    Ok(())
+                };
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
             Command::Kill => {

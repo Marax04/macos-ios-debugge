@@ -479,8 +479,11 @@ pub fn base64_encode(data: &[u8]) -> String {
 /// Base64-decode, ignoring ASCII whitespace (XML `<data>` is usually wrapped).
 ///
 /// # Errors
-/// Returns [`MuxError::Plist`] if a non-alphabet character is present or the
-/// length is not a multiple of four.
+/// Returns [`MuxError::Plist`] if a non-alphabet character is present, if a
+/// symbol follows the padding, or if the trailing quantum is not one the
+/// encoding can produce: the padding must be exactly the amount the final
+/// group of symbols calls for (0, 1 or 2 `=`), and a final group of a single
+/// symbol carries only 6 bits, so it is never a whole byte and is rejected.
 pub fn base64_decode(text: &str) -> Result<Vec<u8>, MuxError> {
     let mut symbols: Vec<u8> = Vec::with_capacity(text.len());
     let mut pad = 0usize;
@@ -510,8 +513,20 @@ pub fn base64_decode(text: &str) -> Result<Vec<u8>, MuxError> {
         };
         symbols.push(v);
     }
-    if (symbols.len() + pad) % 4 != 0 {
-        return Err(MuxError::Plist("base64 length not a multiple of 4".to_string()));
+    // The trailing group decides how much padding is legal. A group of one
+    // symbol is 6 bits and can never round out to a byte, so it is rejected
+    // outright instead of silently decoding as `symbol << 2`.
+    let quantum = symbols.len() % 4;
+    if quantum == 1 {
+        return Err(MuxError::Plist(
+            "base64 final quantum has a single symbol".to_string(),
+        ));
+    }
+    let expected_pad = if quantum == 0 { 0 } else { 4 - quantum };
+    if pad != expected_pad {
+        return Err(MuxError::Plist(format!(
+            "base64 has {pad} padding characters, expected {expected_pad}"
+        )));
     }
     let mut out = Vec::with_capacity(symbols.len() * 3 / 4);
     for chunk in symbols.chunks(4) {
@@ -1642,6 +1657,26 @@ mod tests {
         assert_eq!(base64_encode(b"M"), "TQ==");
         assert!(base64_decode("!!!!").is_err());
         assert!(base64_decode("TWF").is_err());
+    }
+
+    #[test]
+    fn base64_rejects_impossible_final_quantum() {
+        // A final quantum of a single symbol carries 6 bits: it can never be a
+        // whole byte, so no encoder produces it and it must not decode.
+        assert!(base64_decode("A===").is_err(), "1-symbol quantum, 3 pads");
+        assert!(base64_decode("TWFuA===").is_err(), "trailing 1-symbol quantum");
+        assert!(
+            base64_decode("TWFu\n A===").is_err(),
+            "whitespace must not hide a 1-symbol quantum"
+        );
+        // More than two pad characters is likewise unrepresentable.
+        assert!(base64_decode("TWFu====").is_err(), "4 pad characters");
+        assert!(base64_decode("===").is_err(), "padding only");
+        // Every legal shape still decodes.
+        assert_eq!(base64_decode("").expect("empty"), Vec::<u8>::new());
+        assert_eq!(base64_decode("TWFu").expect("no pad"), b"Man".to_vec());
+        assert_eq!(base64_decode("TWE=").expect("one pad"), b"Ma".to_vec());
+        assert_eq!(base64_decode("TQ==").expect("two pads"), b"M".to_vec());
     }
 
     #[test]

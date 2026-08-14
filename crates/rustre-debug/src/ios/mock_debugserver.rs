@@ -1187,8 +1187,10 @@ impl MockDebugserver {
                     if !self.no_ack_mode {
                         out.push(b"+".to_vec());
                     }
-                    self.packet_log.push(payload.clone());
-                    let (reply, no_reply) = self.dispatch(&payload);
+                    // The log is a human-readable trace, so it is allowed to be
+                    // lossy; the dispatcher below is NOT and gets the raw bytes.
+                    self.packet_log.push(String::from_utf8_lossy(&payload).to_string());
+                    let (reply, no_reply) = self.dispatch_raw(&payload);
                     if !no_reply {
                         self.emit(&reply, true, &mut out)?;
                     }
@@ -1292,12 +1294,28 @@ impl MockDebugserver {
         if expected != got {
             return Err(MockError::BadChecksum { expected, got });
         }
-        let unescaped = unescape(&body);
-        let payload = String::from_utf8_lossy(&unescaped).to_string();
-        Ok(Some(Frame::Packet(payload)))
+        // The payload stays RAW. `X` carries binary memory contents, and any
+        // byte that is not valid UTF-8 would be rewritten as U+FFFD (`EF BF
+        // BD`) by a lossy String conversion here — the mock would then accept a
+        // write no device would perform and hand back different bytes than the
+        // client sent. Decoding to text is the individual handler's business.
+        Ok(Some(Frame::Packet(unescape(&body))))
     }
 
     // -- command dispatch ---------------------------------------------------
+
+    /// Byte-level entry point of the dispatcher.
+    ///
+    /// Exactly one packet — `X` — carries a payload that is not text, so it is
+    /// routed here, before anything can decode the bytes as UTF-8. Every other
+    /// packet is ASCII by construction and goes on to [`Self::dispatch`].
+    fn dispatch_raw(&mut self, raw: &[u8]) -> (String, bool) {
+        if let Some(rest) = raw.strip_prefix(b"X") {
+            return (self.handle_write_memory_bin(rest), false);
+        }
+        let pkt = String::from_utf8_lossy(raw).to_string();
+        self.dispatch(&pkt)
+    }
 
     /// Returns `(reply, suppress_reply)`.
     #[allow(clippy::too_many_lines)] // A protocol dispatcher is a flat table by nature.
@@ -1306,6 +1324,14 @@ impl MockDebugserver {
         // sees a clean packet. Ignoring it per-handler is how thread-suffix
         // support silently becomes a lie.
         let (pkt, suffix_tid) = split_thread_suffix(pkt);
+        // The suffix is an EXTENSION, and extensions are negotiated. Honouring
+        // it before the client sent `QThreadSuffixSupported` lets a client that
+        // never negotiates address threads correctly here and address the
+        // current thread — silently, wrongly — on a real debugserver, which
+        // never strips a suffix it was not told to expect.
+        if suffix_tid.is_some() && !self.thread_suffix_supported {
+            return ("E01".to_string(), false);
+        }
         let target_tid = suffix_tid.unwrap_or(self.current_g_thread);
 
         if pkt == "?" {
@@ -1460,9 +1486,6 @@ impl MockDebugserver {
         if let Some(rest) = pkt.strip_prefix('M') {
             return (self.handle_write_memory_hex(rest), false);
         }
-        if let Some(rest) = pkt.strip_prefix('X') {
-            return (self.handle_write_memory_bin(rest), false);
-        }
         if pkt.starts_with('Z') || pkt.starts_with('z') {
             return (self.handle_breakpoint(pkt), false);
         }
@@ -1564,12 +1587,21 @@ impl MockDebugserver {
         let Some((head, data)) = rest.split_once(':') else {
             return "E01".to_string();
         };
-        let Some((a, _l)) = head.split_once(',') else {
+        let Some((a, l)) = head.split_once(',') else {
             return "E01".to_string();
         };
-        let (Ok(addr), Some(bytes)) = (u64::from_str_radix(a, 16), decode_hex(data)) else {
+        let (Ok(addr), Ok(declared), Some(bytes)) =
+            (u64::from_str_radix(a, 16), usize::from_str_radix(l, 16), decode_hex(data))
+        else {
             return "E01".to_string();
         };
+        // `M addr,len:` states how many bytes follow. A payload of any other
+        // length is a malformed packet, not a shorter write: accepting it hides
+        // a client that miscomputes either the length or the hex body, and the
+        // device would reject it.
+        if bytes.len() != declared {
+            return "E01".to_string();
+        }
         if let Some(remaining) = self.writes_before_failing.as_mut() {
             if *remaining == 0 {
                 return "E09".to_string();
@@ -1579,10 +1611,17 @@ impl MockDebugserver {
         if self.memory.write(addr, &bytes) { "OK".to_string() } else { "E09".to_string() }
     }
 
-    fn handle_write_memory_bin(&mut self, rest: &str) -> String {
-        let Some((head, data)) = rest.split_once(':') else {
+    /// `X addr,len:<raw bytes>` — the header is ASCII, the payload is not.
+    fn handle_write_memory_bin(&mut self, rest: &[u8]) -> String {
+        let Some(colon) = rest.iter().position(|&b| b == b':') else {
             return "E01".to_string();
         };
+        // Only the header may be decoded as text; the data after the colon is
+        // arbitrary target memory and is written through byte for byte.
+        let Ok(head) = std::str::from_utf8(&rest[..colon]) else {
+            return "E01".to_string();
+        };
+        let data = &rest[colon + 1..];
         let Some((a, _l)) = head.split_once(',') else {
             return "E01".to_string();
         };
@@ -1594,7 +1633,7 @@ impl MockDebugserver {
             // `X addr,0:` is the probe for binary-write support.
             return "OK".to_string();
         }
-        if self.memory.write(addr, data.as_bytes()) { "OK".to_string() } else { "E09".to_string() }
+        if self.memory.write(addr, data) { "OK".to_string() } else { "E09".to_string() }
     }
 
     fn handle_breakpoint(&mut self, pkt: &str) -> String {
@@ -1652,9 +1691,13 @@ impl MockDebugserver {
     }
 
     fn handle_vcont(&mut self, rest: &str) -> String {
-        // `;c`, `;s:tid`, `;C05`, `;s:1;c`
+        // `;c`, `;s:tid`, `;C05`, `;s:1;c`, `;c:2`
         let mut step_tid: Option<u32> = None;
         let mut cont = false;
+        // A `c`/`C` action may name its thread exactly like `s` does. Dropping
+        // that tid and resuming the current thread instead is invisible in a
+        // single-threaded test and wrong on every multi-threaded one.
+        let mut cont_tid: Option<u32> = None;
         for action in rest.split(';').filter(|s| !s.is_empty()) {
             let (verb, tid) = match action.split_once(':') {
                 Some((v, t)) => (v, u32::from_str_radix(t, 16).ok()),
@@ -1662,21 +1705,34 @@ impl MockDebugserver {
             };
             match verb.chars().next() {
                 Some('s' | 'S') => step_tid = tid.or(Some(self.current_c_thread)),
-                Some('c' | 'C') => cont = true,
+                Some('c' | 'C') => {
+                    cont = true;
+                    // First matching action wins, as in the vCont spec.
+                    if cont_tid.is_none() {
+                        cont_tid = tid;
+                    }
+                }
                 _ => {}
             }
         }
         if let Some(tid) = step_tid {
             self.resume(tid, true)
         } else if cont {
-            self.resume(self.current_c_thread, false)
+            self.resume(cont_tid.unwrap_or(self.current_c_thread), false)
         } else {
             "E01".to_string()
         }
     }
 
     fn handle_alloc(&mut self, rest: &str) -> String {
-        let Some((size_hex, _perms)) = rest.split_once(',') else {
+        let Some((size_hex, perms_str)) = rest.split_once(',') else {
+            return "E01".to_string();
+        };
+        // The protection the client asked for is the protection it gets. Always
+        // mapping `rw` means a client that allocates `rx` and then writes there
+        // succeeds in-process and takes EXC_BAD_ACCESS on a device — and an
+        // unparseable request is an error, not an excuse to pick a default.
+        let Some(perms) = parse_alloc_perms(perms_str) else {
             return "E01".to_string();
         };
         let Ok(size) = u64::from_str_radix(size_hex, 16) else {
@@ -1686,7 +1742,7 @@ impl MockDebugserver {
             return "E01".to_string();
         };
         let base = self.next_alloc;
-        if !self.memory.map(MemoryRegion::zeroed(base, len, Perms::rw(), "_M")) {
+        if !self.memory.map(MemoryRegion::zeroed(base, len, perms, "_M")) {
             return "E01".to_string();
         }
         // Page-align the next handout so consecutive allocations never abut in
@@ -2024,7 +2080,9 @@ impl MockDebugserver {
 }
 
 enum Frame {
-    Packet(String),
+    /// One unescaped packet payload, as RAW BYTES: `X` is binary and must not
+    /// be forced through UTF-8 on the way in.
+    Packet(Vec<u8>),
     Ack,
     Nack,
     Interrupt,
@@ -2359,6 +2417,23 @@ fn read_u32_le(b: &[u8]) -> u32 {
     u32::from_le_bytes(buf)
 }
 
+/// Parse the permission field of an `_M size,perms` allocation request.
+///
+/// `debugserver` accepts any combination of `r`, `w` and `x` (including none)
+/// and nothing else; an unrecognised character makes the packet ill-formed.
+fn parse_alloc_perms(s: &str) -> Option<Perms> {
+    let mut perms = Perms { read: false, write: false, exec: false };
+    for c in s.chars() {
+        match c {
+            'r' => perms.read = true,
+            'w' => perms.write = true,
+            'x' => perms.exec = true,
+            _ => return None,
+        }
+    }
+    Some(perms)
+}
+
 /// Split a trailing `;thread:xxxx;` suffix off a packet.
 fn split_thread_suffix(pkt: &str) -> (&str, Option<u32>) {
     if let Some(idx) = pkt.rfind(";thread:") {
@@ -2605,7 +2680,9 @@ mod tests {
 
         let g1 = one_shot(&mut srv, "g");
         assert_eq!(&g1[OFF_PC * 2..OFF_PC * 2 + 16], &hex_le_u64(0xAAAA));
-        // Thread suffix must select the other thread without an `Hg`.
+        // Thread suffix must select the other thread without an `Hg` — once it
+        // has been negotiated, which is what a real client does at handshake.
+        assert_eq!(one_shot(&mut srv, "QThreadSuffixSupported"), "OK");
         let g2 = one_shot(&mut srv, "g;thread:2;");
         assert_eq!(&g2[OFF_PC * 2..OFF_PC * 2 + 16], &hex_le_u64(0xBBBB));
     }
@@ -2997,6 +3074,137 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Feed one packet whose body is arbitrary bytes (not necessarily UTF-8)
+    /// and return the raw server output.
+    fn one_shot_bytes(srv: &mut MockDebugserver, body: &[u8]) -> String {
+        let out = srv.feed(&frame_escaped(&escape(body))).expect("connection open");
+        let s = String::from_utf8_lossy(&out).to_string();
+        let s = s.strip_prefix('+').unwrap_or(&s).to_string();
+        let body = s
+            .strip_prefix('$')
+            .and_then(|r| r.rfind('#').map(|i| r[..i].to_string()))
+            .unwrap_or_default();
+        String::from_utf8_lossy(&unescape(body.as_bytes())).to_string()
+    }
+
+    /// `X` carries RAW BYTES. Routing them through `String::from_utf8_lossy`
+    /// rewrites every non-UTF-8 byte as `EF BF BD`, so a client that writes
+    /// machine code (0xFF, lone 0x80 continuation bytes, …) sees the mock
+    /// accept a write the device would have taken verbatim — and the memory it
+    /// reads back afterwards is not what it sent.
+    #[test]
+    fn x_packet_writes_binary_bytes_verbatim() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 16, Perms::rw(), "data")));
+        // 0xFF and a lone 0x80 are both invalid UTF-8; `}`/`#`/`$`/`*` exercise
+        // the escape path on the way in.
+        let payload: Vec<u8> = vec![0xFF, 0x80, b'#', 0x00, b'}', 0xC3, b'*', 0xFE];
+        let mut pkt = format!("X4000,{:x}:", payload.len()).into_bytes();
+        pkt.extend_from_slice(&payload);
+
+        assert_eq!(one_shot_bytes(&mut srv, &pkt), "OK");
+        assert_eq!(
+            srv.memory.read(0x4000, payload.len()).expect("mapped"),
+            payload,
+            "the framer must hand the X handler raw bytes, not a lossy String"
+        );
+    }
+
+    /// The thread suffix is a NEGOTIATED extension. Honouring it before
+    /// `QThreadSuffixSupported` lets a client that never negotiates pass here
+    /// and address the wrong thread on a device, where the suffix is not
+    /// stripped at all.
+    #[test]
+    fn thread_suffix_is_only_honoured_after_negotiation() {
+        let mut srv = MockDebugserver::new(1);
+        let mut t2 = MockThread::new(2, "worker");
+        t2.regs.pc = 0xBBBB;
+        srv.add_thread(t2);
+        srv.threads[0].regs.pc = 0xAAAA;
+
+        // Not negotiated: `g;thread:2;` is not a `g` packet at all.
+        assert_eq!(
+            one_shot(&mut srv, "g;thread:2;"),
+            "E01",
+            "an un-negotiated thread suffix must not select a thread"
+        );
+
+        assert_eq!(one_shot(&mut srv, "QThreadSuffixSupported"), "OK");
+        let g2 = one_shot(&mut srv, "g;thread:2;");
+        assert_eq!(&g2[OFF_PC * 2..OFF_PC * 2 + 16], &hex_le_u64(0xBBBB));
+    }
+
+    /// `vCont;c:2` names the thread to continue. Continuing the current thread
+    /// instead makes every multi-threaded resume test agree with the mock and
+    /// disagree with the device.
+    #[test]
+    fn vcont_continue_resumes_the_thread_named_in_the_action() {
+        let base = 0x7000u64;
+        let code = vec![Arm64Interp::brk(1), Arm64Interp::brk(2)];
+        let mut srv = MockDebugserver::with_program(1, base, &code);
+        let mut t2 = MockThread::new(2, "worker");
+        t2.regs.pc = base + 4;
+        t2.regs.sp = srv.thread(1).expect("thread 1").regs.sp - 0x1000;
+        srv.add_thread(t2);
+
+        let reply = one_shot(&mut srv, "vCont;c:2");
+        assert!(reply.contains("thread:2;"), "vCont;c:2 must resume thread 2, got {reply}");
+        assert_eq!(
+            srv.thread(1).expect("thread 1").regs.pc,
+            base,
+            "thread 1 was not named and must not have executed"
+        );
+    }
+
+    /// `M addr,len:` declares how many bytes follow. A payload of a different
+    /// length is a malformed packet; accepting it hides a client that
+    /// miscomputes either half.
+    #[test]
+    fn m_packet_enforces_its_declared_length() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data")));
+
+        assert_eq!(one_shot(&mut srv, "M4000,4:dead"), "E01", "2 bytes supplied, 4 declared");
+        assert_eq!(one_shot(&mut srv, "M4000,2:deadbeef"), "E01", "4 bytes supplied, 2 declared");
+        assert_eq!(
+            one_shot(&mut srv, "m4000,4"),
+            "00000000",
+            "a rejected write must not have touched memory"
+        );
+        assert_eq!(one_shot(&mut srv, "M4000,4:deadbeef"), "OK");
+        assert_eq!(one_shot(&mut srv, "m4000,4"), "deadbeef");
+    }
+
+    /// `_M size,perms` asks for a mapping with specific protection. Handing
+    /// back `rw` whatever was requested means a client that allocates `rx` and
+    /// then writes there succeeds in-process and takes EXC_BAD_ACCESS on a
+    /// device.
+    #[test]
+    fn allocation_honours_the_requested_permissions() {
+        let mut srv = MockDebugserver::new(1);
+
+        let rx = u64::from_str_radix(&one_shot(&mut srv, "_M100,rx"), 16).expect("hex address");
+        assert!(
+            one_shot(&mut srv, &format!("qMemoryRegionInfo:{rx:x}")).contains("permissions:rx;"),
+            "an rx allocation must be reported as rx"
+        );
+
+        // Read-only really is read-only: the write must be refused.
+        let ro = u64::from_str_radix(&one_shot(&mut srv, "_M100,r"), 16).expect("hex address");
+        assert!(
+            one_shot(&mut srv, &format!("qMemoryRegionInfo:{ro:x}")).contains("permissions:r;"),
+            "an r allocation must be reported as r"
+        );
+        assert!(!srv.memory.write(ro, &[1, 2, 3, 4]), "a read-only allocation is not writable");
+
+        let rw = u64::from_str_radix(&one_shot(&mut srv, "_M100,rw"), 16).expect("hex address");
+        assert!(srv.memory.write(rw, &[1, 2, 3, 4]), "an rw allocation is writable");
+
+        // A permission string the target cannot honour is an error, not an
+        // arbitrary default.
+        assert_eq!(one_shot(&mut srv, "_M100,q"), "E01");
     }
 }
 
