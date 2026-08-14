@@ -55,6 +55,26 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Pin Python for the same reason the Rust toolchain is pinned.
+      #
+      # Measured, not guessed: the first macOS run failed here —
+      #   error: failed to run custom build command for `pyo3-ffi v0.23.5`
+      #   error: the configured Python interpreter version (3.14) is newer than
+      #          PyO3's maximum supported version (3.13)
+      # `pyo3 0.23` is a dependency of rustre-plugin-python and
+      # rustre-script-python, both of which rustre-mcp-tools pulls in, so
+      # whatever Python the runner image happens to ship decides whether this
+      # workspace builds at all. That is not a property a build should have.
+      #
+      # 3.13 is the newest version pyo3 0.23 supports. Raising this pin is
+      # blocked on upgrading pyo3, which is a source change across three crates
+      # and separate work — the pin makes the build reproducible today rather
+      # than hiding that.
+      - name: Pin Python to a version PyO3 0.23 supports
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Cache cargo registry and build
         uses: actions/cache@v4
         with:

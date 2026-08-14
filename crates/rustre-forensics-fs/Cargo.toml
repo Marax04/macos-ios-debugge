@@ -19,8 +19,21 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 bitflags = { workspace = true }
 
+[features]
+# Mounting the forensic image as a real filesystem needs FUSE, which is a
+# SYSTEM library (libfuse on Linux, macFUSE on macOS), not a crate. Declaring
+# it unconditionally made every downstream crate — rustre-mcp-tools included —
+# unbuildable on any Unix without it: measured on 2026-08-14, the macOS CI job
+# failed at `Test rustre-mcp-tools` and the same build fails on Linux with
+# `failed to run custom build command for fuser v0.14.0`.
+#
+# Off by default so the workspace builds everywhere; the capability is not
+# removed, it is opted into on a machine that actually has the library.
+default = []
+fuse-mount = ["dep:fuser"]
+
 [target.'cfg(unix)'.dependencies]
-fuser = "0.14"
+fuser = { version = "0.14", optional = true }
 libc = "0.2"
 
 [lints]

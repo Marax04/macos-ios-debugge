@@ -298,7 +298,7 @@ impl CsharpClass {
             .iter()
             .map(CsharpMethod::from_dotnet_method)
             .collect();
-        let fields: Vec<String> = t.fields.iter().map(super::super::DotnetField::format).collect();
+        let fields: Vec<String> = t.fields.iter().map(crate::DotnetField::format).collect();
         let attributes: Vec<String> = t
             .custom_attributes
             .iter()

@@ -4,6 +4,22 @@
 //! Provides ergonomic access to types, methods, fields, properties, events,
 //! generic instantiations, custom attributes, and CIL method bodies.
 
+// Declared at the TOP LEVEL, not nested inside `element_type`.
+//
+// It used to sit inside `pub mod element_type { .. }` — an INLINE module — as
+// `#[path = "../csharp_reconstructor.rs"]`. A path inside an inline module is
+// resolved relative to a directory named after it, so that string became
+// `src/element_type/../csharp_reconstructor.rs`, and `src/element_type/` does
+// not exist. Windows normalises the `..` lexically and opens the file anyway;
+// Linux and macOS resolve one component at a time and fail outright, which is
+// why the whole workspace could not be built on any Unix (measured 2026-08-14:
+// "couldn't read crates/rustre-dotnet/src/element_type/../csharp_reconstructor.rs").
+//
+// Here the default resolution finds `src/csharp_reconstructor.rs` with no
+// `#[path]` at all. The module stays wired in — it was placed inside
+// `element_type` (a module of ECMA-335 constants it has nothing to do with)
+// only to give it a parent, and nothing referenced it by that path.
+pub mod csharp_reconstructor;
 pub mod cil_control_flow;
 pub mod cil_stack_analyzer;
 pub mod clr_analysis;
@@ -3378,8 +3394,6 @@ pub const fn token_table_name(table: u8) -> &'static str {
 
 /// Element type constants (ECMA-335 §II.23.1.16).
 pub mod element_type {
-    #[path = "../csharp_reconstructor.rs"]
-    pub mod csharp_reconstructor;
     /// End-of-list marker.
     pub const END: u8 = 0x00;
     /// `void`.

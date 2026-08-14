@@ -27,7 +27,7 @@ pub mod timeline_builder;
 
 use std::path::Path;
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 
 // ─── FUSE imports (Unix only) ─────────────────────────────────────────────────
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 use fuser::{
     FileAttr, FileType, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry,
     Request,
@@ -391,7 +391,7 @@ pub fn to_export_dir(node: &MemFsNodeV2, base: &Path) -> std::io::Result<()> {
 
 // ─── FUSE implementation (Unix only) ─────────────────────────────────────────
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 /// A read-only FUSE filesystem backed by a `MemFsNodeV2` tree.
 pub struct FuseMemFs {
     root: MemFsNodeV2,
@@ -400,7 +400,7 @@ pub struct FuseMemFs {
     inode_map: HashMap<u64, Vec<u64>>,
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 impl FuseMemFs {
     /// Wrap a `MemFsNodeV2` tree in a FUSE-compatible filesystem.
     pub fn new(root: MemFsNodeV2) -> Self {
@@ -464,7 +464,7 @@ impl FuseMemFs {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 impl Filesystem for FuseMemFs {
     /// Look up a directory entry by name inside `parent`.
     fn lookup(&mut self, _req: &Request, parent: u64, name: &std::ffi::OsStr, reply: ReplyEntry) {
@@ -608,7 +608,7 @@ impl Filesystem for FuseMemFs {
 
 // ─── mount_memory_fs (Unix) ───────────────────────────────────────────────────
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "fuse-mount"))]
 /// Mount a `MemFsNodeV2` tree as a read-only FUSE filesystem at `mountpoint`.
 ///
 /// Returns a `BackgroundSession` handle; drop it to unmount.
@@ -629,7 +629,7 @@ pub fn mount_memory_fs(
 
 // ─── mount_memory_fs (non-Unix stub) ─────────────────────────────────────────
 
-#[cfg(not(unix))]
+#[cfg(not(all(unix, feature = "fuse-mount")))]
 /// FUSE filesystem mounting is not supported on this platform.
 ///
 /// # Errors
@@ -1420,7 +1420,7 @@ mod tests {
 
     // ── mount_memory_fs (non-Unix platform check) ─────────────────────────────
 
-    #[cfg(not(unix))]
+    #[cfg(not(all(unix, feature = "fuse-mount")))]
     #[test]
     fn mount_memory_fs_returns_error_on_non_unix() {
         let root = MemFsNodeV2::new_dir("root", 1);
