@@ -153,38 +153,65 @@ jobs:
       - name: Build for ${{ matrix.target }}
         run: cargo build --release -p rustre-debug --target ${{ matrix.target }}
 
-      # The 502 iOS tests are host-independent by design (see src/ios/mod.rs:
-      # nothing is gated on `cfg(target_os = "macos")`), so they already run on
-      # Windows and Linux. Running them HERE adds one fact those runs cannot
-      # give: that they also hold when compiled by the Apple toolchain for an
-      # Apple triple, where integer widths, alignment and ABI are its own.
-      - name: Test on the simulator
-        if: matrix.simulator
-        run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} -- --test-threads=1
-
-      # ── The fragile part, deliberately quarantined ─────────────────────────
+      # ── Boot FIRST. This ordering is not cosmetic ──────────────────────────
       #
-      # `continue-on-error` is used here and NOWHERE above. Booting a simulator
-      # and driving Apple's debugserver depends on Xcode's layout, on runtime
-      # images being present, and on a device that may take minutes to boot —
-      # none of which is this project's code. A flake in it must never turn a
-      # real compile or test failure green, nor the reverse.
-      - name: Boot a simulator and locate debugserver
+      # The first run of this workflow put the test step before this one and
+      # the tests failed. A test binary built for `aarch64-apple-ios-sim` is
+      # not a macOS executable: cargo cannot simply exec it, and there was no
+      # booted device to run it on either. Booting has to happen before the
+      # thing that needs a booted device.
+      #
+      # `continue-on-error` because a simulator that fails to boot is Xcode's
+      # problem, not this project's — but note what that flag does NOT do: it
+      # lets the JOB continue, it does not make later steps run if this one
+      # hard-fails in a way that stops the job. The runtime list is printed so
+      # a missing runtime image is visible in the log rather than inferred.
+      - name: Boot a simulator
+        id: sim
         if: matrix.simulator
         continue-on-error: true
         run: |
           set -x
           xcrun simctl list runtimes
-          DEVICE=$(xcrun simctl create rustre-ci "iPhone 15" || true)
-          echo "device=$DEVICE"
+          DEVICE=$(xcrun simctl create rustre-ci "iPhone 15" 2>/dev/null \
+                || xcrun simctl create rustre-ci "iPhone 14" 2>/dev/null \
+                || xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin)["devices"];print(next(iter([x["udid"] for v in d.values() for x in v]),""))')
+          echo "device=$DEVICE" | tee -a "$GITHUB_OUTPUT"
           xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b || true
-          # debugserver is what src/ios/rsp.rs speaks to. Finding it proves the
-          # counterpart of the mock exists on this machine; it does not yet
-          # prove they agree.
+
+      # `debugserver` is the counterpart of `src/ios/mock_debugserver.rs`, and
+      # the one thing the mock structurally cannot check: the mock proves we
+      # speak the protocol as WE understood it, not that Apple's implementation
+      # agrees. Locating it is the first step of ever driving the real one.
+      - name: Locate debugserver
+        if: matrix.simulator
+        continue-on-error: true
+        run: |
           find "$(xcode-select -p)" -name debugserver -type f 2>/dev/null | head -5
-          xcrun simctl shutdown "$DEVICE" || true
-          xcrun simctl delete "$DEVICE" || true
+          ls -l /Library/Developer/CoreSimulator/Profiles/Runtimes 2>/dev/null || true
+
+      # The 502 iOS tests are host-independent by design (see src/ios/mod.rs:
+      # nothing is gated on `cfg(target_os = "macos")`), so they already run on
+      # Windows and Linux. Running them HERE adds one fact those runs cannot
+      # give: that they also hold when compiled by the Apple toolchain for an
+      # Apple triple, where integer widths, alignment and ABI are its own.
+      #
+      # The runner env var is what makes that possible at all: without it cargo
+      # tries to exec an iOS-simulator binary on macOS directly, which is not a
+      # thing that can work. `simctl spawn` runs it on the booted device.
+      - name: Test on the simulator
+        if: matrix.simulator
+        env:
+          CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER: xcrun simctl spawn booted
+        run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} -- --test-threads=1
+
+      - name: Shut the simulator down
+        if: matrix.simulator && always()
+        continue-on-error: true
+        run: |
+          xcrun simctl shutdown all || true
+          xcrun simctl delete rustre-ci || true
 
   # A short summary job so the repository's badge/checks answer one question:
   # did the macOS backend run, on both architectures?
