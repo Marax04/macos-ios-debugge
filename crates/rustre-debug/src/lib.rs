@@ -6978,10 +6978,23 @@ mod tests_expanded {
                 .collect::<Vec<_>>()
                 .join("\n");
             let body = body.as_str();
+            // The classifier must CONSULT the trap encoding, and for the
+            // architecture it was built for.
+            //
+            // This assertion used to demand the literal `0xCC`, which made the
+            // guard itself carry the defect it existed to prevent: `int3` is one
+            // byte and the CPU reports the address AFTER it, while AArch64 traps
+            // with a four-byte `BRK #0` reported AT it. Both ptrace backends
+            // spelled the x86 form inline, so on arm64 neither could ever
+            // recognise its own breakpoints — every hit would be classified as a
+            // single step, silently. Fixed in iteration 546; the guard now
+            // requires the derived route and goes red if either backend returns
+            // to a hard-coded byte.
             assert!(
-                body.contains("0xCC"),
-                "{name}: its SIGTRAP classifier never inspects the byte before `rip`, so it \
-                 reports every SIGTRAP as a breakpoint at a fabricated `rip-1`"
+                body.contains("trap_at_reported_pc("),
+                "{name}: its SIGTRAP classifier does not consult `arch_breakpoint` to locate the \
+                 trap, so it is back to assuming a one-byte x86 `int3` at `pc-1` — always false \
+                 on arm64, where every breakpoint hit would be reported as a single step"
             );
             assert!(
                 body.contains("StopReason::SingleStep"),
@@ -9996,6 +10009,50 @@ mod tests_extra {
         }
     }
 
+    /// The macOS backend must recognise its own breakpoints on Apple Silicon.
+    ///
+    /// Two places decided "is this thread sitting on one of our traps?" the x86
+    /// way: take the reported PC, subtract **one**, and look for `0xCC`. That is
+    /// correct on x86, where `int3` is a single byte and the CPU reports the
+    /// address *after* it. On AArch64 it is wrong twice over — the trap is a
+    /// four-byte `BRK #0`, and the PC reported is the address *of* it, not after
+    /// it. So the test never matched:
+    ///
+    ///   * `wait_for_stop` never classified a stop as `StopReason::Breakpoint`,
+    ///     and every software breakpoint hit arrived as something else;
+    ///   * `identify_stopped_thread` never found the trapping thread and always
+    ///     fell back to "the first thread I can name".
+    ///
+    /// Both silently, and on the architecture macOS actually runs on. Found by
+    /// an adversarial reviewer during the Apple audit of 2026-08-15, who noted
+    /// that the fix shipped for the second site "is substantially ineffective on
+    /// arm64, and this is not said".
+    ///
+    /// `arch_breakpoint` already holds both facts — `trap_bytes` and
+    /// `pc_after_trap`, whose doc is exactly "program counter of the trapping
+    /// instruction, given the PC reported on trap". The rule this guard encodes
+    /// is that the backend must ASK, not assume.
+    #[test]
+    fn the_macos_backend_finds_its_traps_by_architecture_not_by_assuming_x86() {
+        let code = code_only(include_str!("macos_debugger.rs"));
+        assert!(
+            !code.contains("byte_is_int3("),
+            "macos_debugger.rs still asks `byte_is_int3`: a name that can only be true on x86, \
+             used to decide whether a thread is sitting on a breakpoint. On arm64 the trap is a \
+             four-byte BRK and the answer is always no"
+        );
+        assert!(
+            code.contains("pc_after_trap("),
+            "macos_debugger.rs no longer routes the reported PC through \
+             `arch_breakpoint::pc_after_trap`, so it is back to guessing where the trap is"
+        );
+        assert!(
+            code.contains("trap_bytes("),
+            "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
+             is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
     /// `detach` must not answer with a constant.
     ///
     /// All three backends issued their detach syscalls — `DebugActiveProcessStop`
@@ -12188,6 +12245,40 @@ fn "]);
                 "{consumer} resolves a fresh task port on every call but never releases it — \
                  repeated polling grows this process's ipc space without bound"
             );
+        }
+
+        // The two register paths, checked on ORDER and not merely on presence.
+        //
+        // These were leaking a thread send right per `GetRegisters` /
+        // `SetRegisters` — the highest-frequency calls a debugger makes, so the
+        // leak grew with every step. Fixed in the Apple audit of 2026-08-15,
+        // and this is what makes that fix survive: an adversarial reviewer
+        // pointed out that a guard asserting `release_port(` is merely PRESENT
+        // cannot tell a release on every path from a release on the happy path
+        // only, which is exactly the shape the defect comes back in.
+        //
+        // `write_thread_state` acquires, calls `thread_set_state`, releases,
+        // and only THEN inspects `kr` and may `return Err`. Move the release
+        // below that return and the error path leaks again while the guard
+        // stays green — unless the guard checks the order, which is what the
+        // index comparison below does.
+        for reg_path in ["fn read_thread_state(", "fn write_thread_state("] {
+            let body = item_body(&code, reg_path, &next);
+            assert!(
+                body.contains("thread_port_for("),
+                "guard is misanchored: `{reg_path}` no longer takes a thread port"
+            );
+            let released = body
+                .find("release_port(")
+                .unwrap_or_else(|| panic!("{reg_path} takes a thread send right and never releases it"));
+            // A `return Err` before the release is a leak on the error path.
+            if let Some(returns) = body.find("return Err(") {
+                assert!(
+                    released < returns,
+                    "{reg_path}: the thread send right is released AFTER an early `return Err`, \
+                     so every failing call leaks a Mach port right"
+                );
+            }
         }
     }
 }

@@ -1629,6 +1629,43 @@ fn byte_at(pid: libc::pid_t, addr: u64) -> Option<u8> {
     Some((word as u64 & 0xFF) as u8)
 }
 
+/// Where OUR trap is, given the PC a SIGTRAP reported — or `None` if there
+/// isn'''t one there.
+///
+/// This used to be spelled inline as `byte_at(pid, rip - 1) == Some(0xCC)`.
+/// Correct on x86, where `int3` is one byte and the CPU reports the address
+/// AFTER it; wrong twice on AArch64, where the trap is a four-byte `BRK #0`
+/// and the reported PC is the address OF it. On `aarch64-unknown-linux-gnu`
+/// that predicate can never be true, so this backend would classify every one
+/// of its own breakpoint hits as a single step.
+///
+/// Same defect, same shape, and the same fix as `macos_debugger.rs`: both
+/// facts already live in `arch_breakpoint`, so ask instead of assuming.
+///
+/// One `PEEKTEXT` suffices: it returns the eight bytes starting at `addr`,
+/// and every trap encoding this crate knows is at most four.
+fn trap_at_reported_pc(pid: libc::pid_t, pc: u64) -> Option<u64> {
+    let arch = crate::arch_breakpoint::host()?;
+    let addr = crate::arch_breakpoint::pc_after_trap(pc, arch);
+    let want = crate::arch_breakpoint::trap_bytes(arch);
+    unsafe {
+        *libc::__errno_location() = 0;
+    }
+    let word = unsafe {
+        libc::ptrace(
+            libc::PTRACE_PEEKTEXT,
+            pid,
+            addr as *mut libc::c_void,
+            std::ptr::null_mut::<libc::c_void>(),
+        )
+    };
+    if word == -1 && unsafe { *libc::__errno_location() } != 0 {
+        return None;
+    }
+    let bytes = (word as u64).to_le_bytes();
+    (bytes.get(..want.len()) == Some(want)).then_some(addr)
+}
+
 /// `true` when `RUSTRE_PTRACE_TRACE` is set — turns on the per-`waitpid`
 /// tracing in [`wait_for_stop_any`]. Kept in the shipped code on purpose:
 /// three previous attempts at multi-thread ptrace failed by *reasoning* about
@@ -1942,10 +1979,10 @@ fn classify_status(pid: libc::pid_t, tid_raw: libc::pid_t, status: libc::c_int) 
                 StopReason::Unknown { description: "SIGTRAP but GETREGS failed".into() },
                 |regs| {
                     let rip = regs.rip as u64;
-                    if byte_at(tid_raw, rip.wrapping_sub(1)) == Some(0xCC) {
+                    if let Some(trap) = trap_at_reported_pc(tid_raw, rip) {
                         StopReason::Breakpoint {
-                            address: Address(rip.wrapping_sub(1)),
-                            bp: Breakpoint::new_software(Address(rip.wrapping_sub(1))),
+                            address: Address(trap),
+                            bp: Breakpoint::new_software(Address(trap)),
                         }
                     } else if let Some((watched, kind)) = watchpoint_hit(tid_raw) {
                         // A watchpoint hit arrives as a plain SIGTRAP: only

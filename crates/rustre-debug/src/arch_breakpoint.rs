@@ -81,6 +81,33 @@ pub const fn is_aligned_for_trap(addr: u64, arch: BpArch) -> bool {
     }
 }
 
+/// The [`BpArch`] this build targets, or `None` on an architecture this crate
+/// has no trap encoding for.
+///
+/// A debugger's LOCAL backends drive processes on this machine through the
+/// local kernel interface, so the trap they will find is the one they were
+/// compiled for. Remote backends (`ios::AppleDebugger` over RSP) must not use
+/// this: they are told the target's architecture by the stub.
+///
+/// `Option`, with an explicit "anything else" arm, rather than a two-way match
+/// that quietly picks a side. This crate has already been bitten three times by
+/// a hand-written platform list that forgot an entry and compiled anyway.
+#[must_use]
+pub const fn host() -> Option<BpArch> {
+    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+    {
+        Some(BpArch::X86_64)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        Some(BpArch::Arm64)
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

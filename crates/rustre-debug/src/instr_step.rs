@@ -217,13 +217,25 @@ mod tests {
     /// survives longest.
     #[test]
     fn the_three_backends_route_step_over_through_the_arch_correct_primitive() {
-        for file in [
-            "src/windows_debugger.rs",
-            "src/linux_debugger.rs",
-            "src/macos_debugger.rs",
+        // `include_str!`, not `fs::read_to_string` — the source is embedded at
+        // COMPILE time, not looked up at run time.
+        //
+        // It used to read `"src/windows_debugger.rs"` and friends from disk by
+        // relative path, which works only when the test binary happens to run
+        // with the crate root as its working directory. It does not on the iOS
+        // Simulator, where `simctl spawn` runs the binary in its own sandbox
+        // with no repository anywhere near it:
+        //
+        //   cannot read src/windows_debugger.rs: No such file or directory
+        //
+        // Measured on the macos-14 runner, 2026-08-15, the first time this
+        // crate'''s suite was executed for an Apple triple. Every other guard in
+        // this crate already embeds its input; this one was the exception.
+        for (file, src) in [
+            ("src/windows_debugger.rs", include_str!("windows_debugger.rs")),
+            ("src/linux_debugger.rs", include_str!("linux_debugger.rs")),
+            ("src/macos_debugger.rs", include_str!("macos_debugger.rs")),
         ] {
-            let src = std::fs::read_to_string(file)
-                .unwrap_or_else(|e| panic!("cannot read {file}: {e}"));
             assert!(
                 src.contains("instr_step::step_over_return_addr(before.pc, &bytes)"),
                 "{file} does not compute its step-over return address through \

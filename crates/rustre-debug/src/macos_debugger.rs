@@ -1959,13 +1959,11 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
                     // error rustc reported once the darwin target was unblocked.
                     // Reading `__rip` unconditionally is then what stopped the
                     // crate compiling for arm64 at all.
-                    let rip = thread_pc(&regs);
-                    let prev = rip.wrapping_sub(1);
-                    let is_int3 = byte_is_int3(task, prev);
-                    if is_int3 {
+                    let pc = thread_pc(&regs);
+                    if let Some(trap) = trap_at_reported_pc(task, pc) {
                         StopReason::Breakpoint {
-                            address: Address(prev),
-                            bp: Breakpoint::new_software(Address(prev)),
+                            address: Address(trap),
+                            bp: Breakpoint::new_software(Address(trap)),
                         }
                     } else if let Some((watched, kind)) = watchpoint_hit(task, named) {
                         // A watchpoint hit arrives as a plain SIGTRAP here too:
@@ -1982,7 +1980,7 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
                             bp: Breakpoint { kind, ..Breakpoint::new_hardware(watched) },
                         }
                     } else {
-                        StopReason::SingleStep { address: Address(rip) }
+                        StopReason::SingleStep { address: Address(pc) }
                     }
                 },
             )
@@ -2017,8 +2015,25 @@ const fn thread_pc(regs: &ThreadState) -> u64 {
 /// A failed read (unmapped or unreadable page) answers `false` rather than
 /// propagating: neither caller returns a `Result`, and inventing a breakpoint
 /// address is the worse of the two wrong answers.
-fn byte_is_int3(task: task_t, addr: u64) -> bool {
-    mach_read_memory(task, addr, 1).ok().and_then(|b| b.first().copied()) == Some(0xCC)
+fn trap_at_reported_pc(task: task_t, pc: u64) -> Option<u64> {
+    // Where the trap IS, given the PC the stop reported — a different address on
+    // each architecture, and the reason this function exists.
+    //
+    // It used to be `byte_is_int3(task, pc - 1)`: subtract one, look for `0xCC`.
+    // Right on x86, where `int3` is one byte and the CPU reports the address
+    // AFTER it. Wrong twice on AArch64, where the trap is a four-byte `BRK #0`
+    // and the reported PC is the address OF it. The predicate therefore never
+    // matched on Apple Silicon, so `wait_for_stop` never classified a stop as
+    // `StopReason::Breakpoint` and `identify_stopped_thread` never found the
+    // trapping thread — silently, on the architecture macOS actually runs on.
+    //
+    // Both facts already lived in `arch_breakpoint`; this asks instead of
+    // assuming.
+    let arch = crate::arch_breakpoint::host()?;
+    let addr = crate::arch_breakpoint::pc_after_trap(pc, arch);
+    let want = crate::arch_breakpoint::trap_bytes(arch);
+    let got = mach_read_memory(task, addr, want.len()).ok()?;
+    (got == want).then_some(addr)
 }
 
 /// Which thread of `task` took the trap `waitpid` just reported, and its
@@ -2102,11 +2117,18 @@ fn identify_stopped_thread(pid: libc::pid_t, task: task_t) -> StoppedThread {
         }
         let tid = ThreadId(info.thread_id as u32);
         // Asked BEFORE `state` is handed to the candidate: `ThreadState` is
-        // `Copy` today, so the order is free, but a struct that stops being
-        // `Copy` would otherwise turn this into a borrow error at the far end
-        // of an architecture no host here compiles.
-        let at_breakpoint =
-            state.is_some_and(|regs| byte_is_int3(task, thread_pc(&regs).wrapping_sub(1)));
+        // `as_ref()`, so `state` is BORROWED here and still owned below.
+        //
+        // The previous note claimed the opposite — that checking before building
+        // the candidate protected against a future non-`Copy` state. It is the
+        // other way round: `is_some_and` CONSUMES the `Option`, so a
+        // `ThreadState` that stopped deriving `Copy` would break the
+        // `StoppedThread { state }` two lines down, and it compiles today only
+        // because `mach2` happens to derive it. Pointed out by an adversarial
+        // reviewer, 2026-08-15.
+        let at_breakpoint = state
+            .as_ref()
+            .is_some_and(|regs| trap_at_reported_pc(task, thread_pc(regs)).is_some());
         let candidate = StoppedThread { tid, named: Some(tid), state };
         if at_breakpoint {
             if trapped.is_none() {
