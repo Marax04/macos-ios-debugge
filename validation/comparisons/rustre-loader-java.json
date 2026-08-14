@@ -1,0 +1,44 @@
+{
+  "crate": "rustre-loader-java",
+  "mcp_surface": "minimal",
+  "note": "rustre-loader-java provides JVM class/JAR parsing (CAFEBABE header, constant pool, descriptors, bytecode disassembly, manifest parsing, security findings). The MCP server exposes only ONE related tool: analysis_disasm_at_path_jvm (registered in crates/rustre-mcp-tools/src/wire_tools.rs around line 7531). There are no MCP tools for is_class/is_jar, descriptor parsing (parse_field/parse_method), constant pool inspection, manifest parsing, or security analysis. The MCP disasm tool also requires a recognized container format (it routed through the loader registry which rejected raw bytecode with 'no registered loader can handle format: Unknown'), so even the one available tool cannot disassemble the same raw bytecode buffers the validator targets.",
+  "validator": "validation/validators/rustre-loader-java.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "is_class_CAFEBABE_header": true,
+    "is_jar_on_class_bytes": false,
+    "parse_field_I": {"kind": "primitive", "name": "int", "desc": "I"},
+    "parse_field_String": {"kind": "ref", "name": "java/lang/String", "desc": "Ljava/lang/String;"},
+    "parse_method_(ILjava/lang/String;)V": "ok (2 params, void return)",
+    "disasm_empty_bytecode": [],
+    "disasm_nop_bipush_ireturn": [
+      {"pc": 0, "mnemonic": "nop", "width": 1},
+      {"pc": 1, "mnemonic": "bipush", "width": 2},
+      {"pc": 3, "mnemonic": "ireturn", "width": 1}
+    ]
+  },
+  "mcp_outputs": {
+    "analysis_disasm_at_path_jvm_on_raw_bytecode": {
+      "isError": true,
+      "text": "execution failed: internal error: load failed: loader: no registered loader can handle format: Unknown"
+    }
+  },
+  "validator_outputs": {
+    "disasm_raw_bytecode": [
+      {"pc": 0, "mnemonic": "nop", "width": 1},
+      {"pc": 1, "mnemonic": "bipush", "width": 2},
+      {"pc": 3, "mnemonic": "ireturn", "width": 1}
+    ]
+  },
+  "tests": 7,
+  "mismatches": 1,
+  "mismatch_details": [
+    {
+      "test": "disasm_raw_jvm_bytecode",
+      "mcp": "error: no loader can handle Unknown format",
+      "validator": "3 instructions decoded (nop, bipush, ireturn)",
+      "cause": "MCP analysis_disasm_at_path_jvm requires a container format (.class file) recognized by the loader registry; cannot disassemble raw bytecode buffers like the validator does"
+    }
+  ],
+  "match": false
+}

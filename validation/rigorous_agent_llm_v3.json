@@ -1,0 +1,95 @@
+{
+  "category": "agent_llm",
+  "results": [
+    {
+      "tool": "agent_llm_count_tokens",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_trim_to_budget",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_extract_code_blocks",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_builtin_models",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_estimate_cost",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_message_system",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_message_user",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_message_user_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_message_assistant_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_message_assistant",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_token_counter_count_text",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_token_counter_count_messages",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_token_counter_fits_in_context",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_context_manager_build",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_llm_role_display",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_mock_provider_complete",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_lib_role_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_lib_completion_options_default",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_lib_list_model_variants",
+      "status": "PASS"
+    },
+    {
+      "tool": "agent_llm_lib_token_usage_total",
+      "status": "PASS"
+    }
+  ],
+  "mismatches": [],
+  "summary": {
+    "passed": 21,
+    "failed": 0,
+    "errors": 0
+  }
+}

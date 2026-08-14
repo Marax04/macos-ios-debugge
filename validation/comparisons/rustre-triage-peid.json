@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-triage-peid",
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP espone rustre_triage_peid:: (verifica grep su crates/rustre-mcp: zero match per 'peid', solo un'occorrenza letterale di 'triage' in tool_pipeline.rs come stringa di esempio per PipelineStep). La crate fornisce primitive PEiD (parse_peid_pattern, match_at_offset, parse_userdb, dedup/merge_signatures, scanner, Rich header, shannon_entropy, PE walker, PeidDatabase con 175+ builtin sigs) consumate internamente da rustre-triage e dal pipeline, ma non instradate via wire_tools.rs. Il validator Python rustre-triage-peid.py implementa le stesse primitive in pure stdlib per cross-check in-process Rust, non per JSON-RPC stdio. Nessun percorso MCP da confrontare.",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "integration_gap": "Per esporre questa crate via MCP servirebbe wirare tool tipo rustre_triage_peid_scan (PeidScanner::scan), rustre_triage_peid_parse_userdb, rustre_triage_peid_rich_header, rustre_triage_peid_section_analyze in crates/rustre-mcp/src/wire_tools*.rs, mappando le primitive coperte dal validator (_DISPATCH in rustre-triage-peid.py)."
+}

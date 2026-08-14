@@ -1,0 +1,147 @@
+{
+  "results": [
+    {
+      "tool": "ti_vt_mock_file_report",
+      "status": "PASS",
+      "desc": "mock_file_report: clean sha256 \u2192 no malicious results"
+    },
+    {
+      "tool": "ti_vt_mock_file_report",
+      "status": "PASS",
+      "desc": "mock_file_report: sha256 with 'bad' \u2192 malicious result"
+    },
+    {
+      "tool": "ti_vt_mock_ip_report",
+      "status": "PASS",
+      "desc": "mock_ip_report: 8.8.8.8 \u2192 malicious_count=0"
+    },
+    {
+      "tool": "ti_vt_mock_ip_report",
+      "status": "PASS",
+      "desc": "mock_ip_report: 10.0.0.1 \u2192 malicious_count>0"
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "desc": "api_key_is_valid: 64 hex chars \u2192 valid"
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "desc": "api_key_is_valid: short key \u2192 invalid"
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "desc": "analysis_stats_detection_ratio: 10/62 \u2192 '10/72', total=72"
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "desc": "analysis_stats_detection_ratio: 0 malicious \u2192 '0/0'"
+    },
+    {
+      "tool": "ti_vt_file_report_spec_stats",
+      "status": "PASS",
+      "desc": "file_report_spec_stats: clean sha256 \u2192 not malicious"
+    },
+    {
+      "tool": "ti_vt_file_report_spec_stats",
+      "status": "PASS",
+      "desc": "file_report_spec_stats: 'evil' sha256 \u2192 malicious"
+    },
+    {
+      "tool": "ti_vt_ip_report_spec_is_malicious",
+      "status": "PASS",
+      "desc": "ip_report_spec_is_malicious: malicious_count=3 \u2192 true"
+    },
+    {
+      "tool": "ti_vt_ip_report_spec_is_malicious",
+      "status": "PASS",
+      "desc": "ip_report_spec_is_malicious: malicious_count=0 \u2192 false"
+    },
+    {
+      "tool": "ti_vt_token_bucket_available",
+      "status": "PASS",
+      "desc": "token_bucket_available: rpm=10 \u2192 ~10 tokens"
+    },
+    {
+      "tool": "ti_vt_token_bucket_consume",
+      "status": "PASS",
+      "desc": "token_bucket_consume: rpm=10 \u2192 consumed=true, ~9 tokens left"
+    },
+    {
+      "tool": "ti_vt_rate_limiter_free_tier",
+      "status": "PASS",
+      "desc": "rate_limiter_free_tier: \u2192 ~4 available tokens"
+    },
+    {
+      "tool": "ti_vt_threat_signals_detection_ratio",
+      "status": "PASS",
+      "desc": "threat_signals_detection_ratio: 40/72 \u2248 0.5556"
+    },
+    {
+      "tool": "ti_vt_threat_signals_detection_ratio",
+      "status": "PASS",
+      "desc": "threat_signals_detection_ratio: 0/0 \u2192 0.0"
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "desc": "threat_level_from_score: 0 \u2192 clean"
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "desc": "threat_level_from_score: 25 \u2192 suspicious"
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "desc": "threat_level_from_score: 50 \u2192 probably_malicious"
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "desc": "threat_level_from_score: 70 \u2192 malicious"
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "desc": "threat_level_from_score: 90 \u2192 highly_malicious"
+    },
+    {
+      "tool": "ti_vt_scoring_weights_av_heavy",
+      "status": "PASS",
+      "desc": "scoring_weights_av_heavy: detection_weight=0.60, is_valid=true"
+    },
+    {
+      "tool": "ti_vt_av_result_classify",
+      "status": "PASS",
+      "desc": "av_result_classify: malicious category \u2192 is_malicious=true"
+    },
+    {
+      "tool": "ti_vt_av_result_classify",
+      "status": "PASS",
+      "desc": "av_result_classify: suspicious category \u2192 is_suspicious=true"
+    },
+    {
+      "tool": "ti_vt_sandbox_verdict_score",
+      "status": "PASS",
+      "desc": "sandbox_verdict_score: malicious, no conf \u2192 is_malicious=true, score=0.8"
+    },
+    {
+      "tool": "ti_vt_sandbox_verdict_score",
+      "status": "PASS",
+      "desc": "sandbox_verdict_score: suspicious, conf=1.0 \u2192 score=0.5"
+    },
+    {
+      "tool": "ti_vt_parse_search_response",
+      "status": "PASS",
+      "desc": "parse_search_response: empty data \u2192 results_count=0"
+    }
+  ],
+  "mismatches": [],
+  "passed": 28,
+  "failed": 0
+}

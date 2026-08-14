@@ -1,0 +1,630 @@
+{
+  "summary": {
+    "tools_hardened": 30,
+    "tools_passed": 30,
+    "tools_failed": 0,
+    "tools_skipped": 0
+  },
+  "results": [
+    {
+      "tool": "vmlift_default_isa_len",
+      "status": "PASS",
+      "expected": 9,
+      "actual": 9,
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_suggest_mnemonic_halt",
+      "status": "PASS",
+      "expected": "VHALT",
+      "actual": "VHALT",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_new_empty",
+      "status": "PASS",
+      "expected": {
+        "len": 0,
+        "is_empty": true
+      },
+      "actual": {
+        "len": 0,
+        "is_empty": true
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_handler_semantic_flags",
+      "status": "PASS",
+      "expected": [
+        {
+          "name": "Branch",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VBRANCH"
+        },
+        {
+          "name": "Call",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VCALL"
+        },
+        {
+          "name": "Ret",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VRET"
+        },
+        {
+          "name": "Halt",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VHALT"
+        },
+        {
+          "name": "Load4",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VLOAD"
+        },
+        {
+          "name": "Store4",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VSTORE"
+        },
+        {
+          "name": "PushMem",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VPUSH"
+        },
+        {
+          "name": "PopMem",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VPOP"
+        },
+        {
+          "name": "Add",
+          "is_control_flow": false,
+          "accesses_memory": false,
+          "mnemonic": "VADD"
+        },
+        {
+          "name": "Unknown",
+          "is_control_flow": false,
+          "accesses_memory": false,
+          "mnemonic": "VUNK"
+        }
+      ],
+      "actual": [
+        {
+          "name": "Branch",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VBRANCH"
+        },
+        {
+          "name": "Call",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VCALL"
+        },
+        {
+          "name": "Ret",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VRET"
+        },
+        {
+          "name": "Halt",
+          "is_control_flow": true,
+          "accesses_memory": false,
+          "mnemonic": "VHALT"
+        },
+        {
+          "name": "Load4",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VLOAD"
+        },
+        {
+          "name": "Store4",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VSTORE"
+        },
+        {
+          "name": "PushMem",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VPUSH"
+        },
+        {
+          "name": "PopMem",
+          "is_control_flow": false,
+          "accesses_memory": true,
+          "mnemonic": "VPOP"
+        },
+        {
+          "name": "Add",
+          "is_control_flow": false,
+          "accesses_memory": false,
+          "mnemonic": "VADD"
+        },
+        {
+          "name": "Unknown",
+          "is_control_flow": false,
+          "accesses_memory": false,
+          "mnemonic": "VUNK"
+        }
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_default_isa_opcodes",
+      "status": "PASS",
+      "expected": [
+        {
+          "opcode": 1,
+          "mnemonic": "VADD",
+          "operand_bytes": 2
+        },
+        {
+          "opcode": 2,
+          "mnemonic": "VSUB",
+          "operand_bytes": 2
+        },
+        {
+          "opcode": 3,
+          "mnemonic": "VPUSH",
+          "operand_bytes": 1
+        },
+        {
+          "opcode": 4,
+          "mnemonic": "VPOP",
+          "operand_bytes": 1
+        },
+        {
+          "opcode": 5,
+          "mnemonic": "VLOAD",
+          "operand_bytes": 6
+        },
+        {
+          "opcode": 6,
+          "mnemonic": "VSTORE",
+          "operand_bytes": 6
+        },
+        {
+          "opcode": 7,
+          "mnemonic": "VHALT",
+          "operand_bytes": 0
+        },
+        {
+          "opcode": 8,
+          "mnemonic": "VLOAD",
+          "operand_bytes": 5
+        },
+        {
+          "opcode": 9,
+          "mnemonic": "VPUSH",
+          "operand_bytes": 4
+        }
+      ],
+      "actual": [
+        {
+          "opcode": 1,
+          "mnemonic": "VADD",
+          "operand_bytes": 2
+        },
+        {
+          "opcode": 2,
+          "mnemonic": "VSUB",
+          "operand_bytes": 2
+        },
+        {
+          "opcode": 3,
+          "mnemonic": "VPUSH",
+          "operand_bytes": 1
+        },
+        {
+          "opcode": 4,
+          "mnemonic": "VPOP",
+          "operand_bytes": 1
+        },
+        {
+          "opcode": 5,
+          "mnemonic": "VLOAD",
+          "operand_bytes": 6
+        },
+        {
+          "opcode": 6,
+          "mnemonic": "VSTORE",
+          "operand_bytes": 6
+        },
+        {
+          "opcode": 7,
+          "mnemonic": "VHALT",
+          "operand_bytes": 0
+        },
+        {
+          "opcode": 8,
+          "mnemonic": "VLOAD",
+          "operand_bytes": 5
+        },
+        {
+          "opcode": 9,
+          "mnemonic": "VPUSH",
+          "operand_bytes": 4
+        }
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_lift_to_pseudo_il",
+      "status": "PASS",
+      "expected": [
+        "HALT"
+      ],
+      "actual": [
+        "HALT"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_lift_to_pseudo_il_complex",
+      "status": "PASS",
+      "expected": [
+        "LOAD r0, 0x2a",
+        "LOAD r1, 0xa",
+        "ADD r0, r1",
+        "PUSH r0",
+        "POP r2",
+        "STORE [r0 + 0x100], r2",
+        "HALT"
+      ],
+      "actual": [
+        "LOAD r0, 0x2a",
+        "LOAD r1, 0xa",
+        "ADD r0, r1",
+        "PUSH r0",
+        "POP r2",
+        "STORE [r0 + 0x100], r2",
+        "HALT"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_run_pass",
+      "status": "PASS",
+      "expected": {
+        "ok": true,
+        "pseudo_il": [
+          "HALT"
+        ]
+      },
+      "actual": {
+        "ok": true,
+        "pseudo_il": [
+          "HALT"
+        ]
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_lookup_opcode",
+      "status": "PASS",
+      "expected": {
+        "opcode": 7,
+        "mnemonic": "VHALT",
+        "operand_bytes": 0,
+        "found": true
+      },
+      "actual": {
+        "opcode": 7,
+        "mnemonic": "VHALT",
+        "operand_bytes": 0,
+        "found": true
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_lookup_opcode_unknown",
+      "status": "PASS",
+      "expected": {
+        "opcode": 255,
+        "found": false
+      },
+      "actual": {
+        "opcode": 255,
+        "found": false
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_extract_jump_table_entries",
+      "status": "PASS",
+      "expected": [
+        4096,
+        8192,
+        12288
+      ],
+      "actual": [
+        4096,
+        8192,
+        12288
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_disassemble_default",
+      "status": "PASS",
+      "expected": "0x0000  VHALT       ",
+      "actual": "0x0000  VHALT       ",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_disassemble_default_complex",
+      "status": "PASS",
+      "expected": "0x0000  VLOAD         0x0, 0x2a\n0x0006  VLOAD         0x1, 0xa\n0x000c  VADD          0x0, 0x1\n0x000f  VPUSH         0x0\n0x0011  VPOP          0x2\n0x0013  VSTORE        0x0, 0x2, 0x100\n0x001a  VHALT       ",
+      "actual": "0x0000  VLOAD         0x0, 0x2a\n0x0006  VLOAD         0x1, 0xa\n0x000c  VADD          0x0, 0x1\n0x000f  VPUSH         0x0\n0x0011  VPOP          0x2\n0x0013  VSTORE        0x0, 0x2, 0x100\n0x001a  VHALT       ",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_detect_dispatchers_in_bytes_empty",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_detect_dispatchers_in_bytes_patA",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_detect_and_report",
+      "status": "PASS",
+      "expected": {
+        "isa_size": 9
+      },
+      "actual": {
+        "isa_size": 9
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_full_pipeline",
+      "status": "PASS",
+      "expected": {
+        "line_count_gt_0": true,
+        "has_vhalt": true
+      },
+      "actual": {
+        "line_count": 22,
+        "has_vhalt": true
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_handler_semantic_is_control_flow",
+      "status": "PASS",
+      "expected": [
+        [
+          "Branch",
+          true
+        ],
+        [
+          "Call",
+          true
+        ],
+        [
+          "Ret",
+          true
+        ],
+        [
+          "Halt",
+          true
+        ],
+        [
+          "Unknown",
+          false
+        ]
+      ],
+      "actual": "all match",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_handler_semantic_accesses_memory",
+      "status": "PASS",
+      "expected": [
+        [
+          "Halt",
+          false
+        ],
+        [
+          "Branch",
+          false
+        ],
+        [
+          "Unknown",
+          false
+        ]
+      ],
+      "actual": "all match",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_handler_semantic_suggest_mnemonic",
+      "status": "PASS",
+      "expected": [
+        [
+          "Halt",
+          "VHALT"
+        ],
+        [
+          "Branch",
+          "VBRANCH"
+        ],
+        [
+          "Unknown",
+          "VUNK"
+        ]
+      ],
+      "actual": "all match",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_binop_display",
+      "status": "PASS",
+      "expected": [
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "And",
+        "Or",
+        "Xor",
+        "Shl",
+        "Shr",
+        "Sar",
+        "Rol",
+        "Ror"
+      ],
+      "actual": [
+        "Add",
+        "Sub",
+        "Mul",
+        "Div",
+        "And",
+        "Or",
+        "Xor",
+        "Shl",
+        "Shr",
+        "Sar",
+        "Rol",
+        "Ror"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_raw_dispatcher_kind_display",
+      "status": "PASS",
+      "expected": [
+        "indirect-indexed-jmp [reg*8+table]",
+        "computed-jmp (FF E0/E1)",
+        "call+pop+add VM stub chain"
+      ],
+      "actual": [
+        "indirect-indexed-jmp [reg*8+table]",
+        "computed-jmp (FF E0/E1)",
+        "call+pop+add VM stub chain"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_lift_instruction_count",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_sorted_opcodes",
+      "status": "PASS",
+      "expected": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "actual": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_register_and_lookup",
+      "status": "PASS",
+      "expected": {
+        "len": 1,
+        "mnemonic": "VHALT"
+      },
+      "actual": {
+        "len": 1,
+        "mnemonic": "VHALT"
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_disassemble_to_text_default",
+      "status": "PASS",
+      "expected": "0x0000  VHALT       ",
+      "actual": "0x0000  VHALT       ",
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_instruction_def_operand_bytes",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_isa_len_is_empty",
+      "status": "PASS",
+      "expected": {
+        "empty_len": 0,
+        "empty_is_empty": true,
+        "default_len": 9
+      },
+      "actual": {
+        "empty_len": 0,
+        "empty_is_empty": true,
+        "default_len": 9
+      },
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_guest_instruction_display",
+      "status": "PASS",
+      "expected": [
+        "HALT"
+      ],
+      "actual": [
+        "HALT"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "vmlift_default_isa_listing",
+      "status": "PASS",
+      "expected": {
+        "handlers": 9,
+        "listing_nonempty": true
+      },
+      "actual": {
+        "handlers": 9,
+        "listing_len": 463
+      },
+      "reason": ""
+    }
+  ],
+  "mismatches": []
+}

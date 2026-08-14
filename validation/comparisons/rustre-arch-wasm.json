@@ -1,0 +1,50 @@
+{
+  "crate": "rustre-arch-wasm",
+  "mcp_tools_relevant": [
+    "analysis_disasm_at_path_wasm",
+    "analysis_disasm_at_path (with arch=\"wasm\")"
+  ],
+  "validator_self_tests": "passed",
+  "tests_run": [
+    {
+      "name": "validator_self_tests",
+      "result": "passed",
+      "covers": [
+        "parse_module_header (valid + bad magic)",
+        "value_type_from_byte (i32, externref)",
+        "section_id_from_byte (10=code)",
+        "encode/decode_uleb128 (624485 = E5 8E 26)",
+        "decode_sleb128 (-123456 = C0 BB 78)",
+        "decode_func_type ((i32,i32)->i32)",
+        "decode_limits (min-only, min+max)",
+        "decode_global_type, decode_table_type",
+        "disassemble: i32.const, call, i32.load (memarg), return"
+      ]
+    },
+    {
+      "name": "mcp_analysis_disasm_at_path_wasm",
+      "input_path": "scratchpad/tiny.wasm",
+      "input_bytes": "0061736D 01000000 | 41 E5 8E 26 | 10 05 | 0F",
+      "address": 8,
+      "count": 3,
+      "mcp_outputs": [
+        {"addr": "0x8", "mnemonic": "i32.const", "operands": "624485", "length": 4, "bytes": "41E58E26"},
+        {"addr": "0xc", "mnemonic": "call",      "operands": "5",      "length": 2, "bytes": "1005"},
+        {"addr": "0xe", "mnemonic": "return",    "operands": "",       "length": 1, "bytes": "0F"}
+      ],
+      "validator_outputs": [
+        {"address": 8, "mnemonic": "i32.const", "operands": [624485], "size": 4, "bytes": [0x41, 0xE5, 0x8E, 0x26], "flags": []},
+        {"address": 12,"mnemonic": "call",      "operands": [5],      "size": 2, "bytes": [0x10, 0x05],             "flags": ["CALL"]},
+        {"address": 14,"mnemonic": "return",    "operands": [],       "size": 1, "bytes": [0x0F],                  "flags": ["RET"]}
+      ],
+      "comparison": "mnemonic, operand values, and instruction size MATCH across all 3 instructions. MCP output does not surface BranchFlags textually but the underlying Architecture::disassemble flags are equivalent (validator includes CALL/RET tags; MCP wire format omits them — informational only, not a semantic mismatch).",
+      "result": "match"
+    }
+  ],
+  "overlap_analysis": "analysis_disasm_at_path_wasm exercises the same WasmArch::disassemble code path the validator mirrors. Direct functional comparison was possible (unlike arm64/mips/riscv which need a loadable container) because the MCP path-disasm bypasses the loader for the wasm arch and reads bytes at the given file offset. Header/valtype/section/leb128 helpers have no MCP surface so they are covered only by the validator self-tests.",
+  "mismatches": [],
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true
+}

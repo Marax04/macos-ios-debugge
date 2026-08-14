@@ -1,0 +1,24 @@
+{
+  "category": "smali",
+  "tools_hardened": 13,
+  "tools_passed": 13,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": {
+    "mobile_smali_parse_type_descriptor": "PASS",
+    "mobile_smali_parse_method_descriptor": "PASS",
+    "mobile_smali_instruction_size_bytes": "PASS",
+    "mobile_smali_opcode_as_byte": "PASS",
+    "mobile_smali_class_mock": "PASS",
+    "mobile_smali_class_find_method": "PASS",
+    "mobile_smali_class_static_methods": "PASS",
+    "mobile_smali_method_is_constructor": "PASS",
+    "mobile_smali_instr_to_text": "PASS",
+    "mobile_smali_op_display": "PASS",
+    "mobile_smali_operand_literal_display": "PASS",
+    "mobile_smali_parse_type_descriptor_wire": "PASS",
+    "mobile_smali_parse_method_descriptor_wire": "PASS"
+  },
+  "notes": "All tools verified via Python inline reference computations against JSON-RPC live calls. One field-name discrepancy found (validator used 'as_byte', actual field is 'out') — fixed in validator, not a Rust defect."
+}

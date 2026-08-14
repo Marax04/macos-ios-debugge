@@ -1,0 +1,6 @@
+[
+  {
+    "tool": "crypto_id_function_pattern_scan",
+    "reason": "requires loaded binary analysis: TOOL_ERROR: execution failed: execution failed: invalid params: args must contain 'bytes', 'hex', or 'path'"
+  }
+]

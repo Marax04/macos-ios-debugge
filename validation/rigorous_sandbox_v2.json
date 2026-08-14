@@ -1,0 +1,421 @@
+[
+  {
+    "tool": "sandbox_vm_memory_map_mock",
+    "status": "PASS",
+    "expected": {
+      "pid": 42,
+      "region_count": 4,
+      "total_size": 18939904,
+      "rwx_region_count": 1
+    },
+    "actual": {
+      "pid": 42,
+      "region_count": 4,
+      "total_size": 18939904,
+      "rwx_region_count": 1,
+      "source": "rustre_sandbox_vm::MemoryMap::mock"
+    }
+  },
+  {
+    "tool": "sandbox_vm_qemu_build_args",
+    "status": "SKIP",
+    "note": "QMP socket path uses uuid::Uuid::new_v4() \u2014 non-deterministic"
+  },
+  {
+    "tool": "sandbox_report_severity_parse(info)",
+    "status": "PASS",
+    "expected": {
+      "input": "info",
+      "severity": "info",
+      "score": 0
+    },
+    "actual": {
+      "input": "info",
+      "severity": "info",
+      "score": 0,
+      "source": "rustre_sandbox_report::Severity::parse"
+    }
+  },
+  {
+    "tool": "sandbox_report_severity_parse(low)",
+    "status": "PASS",
+    "expected": {
+      "input": "low",
+      "severity": "low",
+      "score": 25
+    },
+    "actual": {
+      "input": "low",
+      "severity": "low",
+      "score": 25,
+      "source": "rustre_sandbox_report::Severity::parse"
+    }
+  },
+  {
+    "tool": "sandbox_report_severity_parse(medium)",
+    "status": "PASS",
+    "expected": {
+      "input": "medium",
+      "severity": "medium",
+      "score": 50
+    },
+    "actual": {
+      "input": "medium",
+      "severity": "medium",
+      "score": 50,
+      "source": "rustre_sandbox_report::Severity::parse"
+    }
+  },
+  {
+    "tool": "sandbox_report_severity_parse(high)",
+    "status": "PASS",
+    "expected": {
+      "input": "high",
+      "severity": "high",
+      "score": 75
+    },
+    "actual": {
+      "input": "high",
+      "severity": "high",
+      "score": 75,
+      "source": "rustre_sandbox_report::Severity::parse"
+    }
+  },
+  {
+    "tool": "sandbox_report_severity_parse(critical)",
+    "status": "PASS",
+    "expected": {
+      "input": "critical",
+      "severity": "critical",
+      "score": 100
+    },
+    "actual": {
+      "input": "critical",
+      "severity": "critical",
+      "score": 100,
+      "source": "rustre_sandbox_report::Severity::parse"
+    }
+  },
+  {
+    "tool": "sandbox_report_iocset_mock",
+    "status": "PASS",
+    "expected": {
+      "count_before_dedup": 6,
+      "count_after_dedup": 6,
+      "confident_count": 5,
+      "threshold": 80
+    },
+    "actual": {
+      "count_before_dedup": 6,
+      "count_after_dedup": 6,
+      "confident_count": 5,
+      "threshold": 80,
+      "iocs": [
+        {
+          "kind": "ip",
+          "value": "185.220.101.1",
+          "confidence": 95,
+          "context": "C2 beacon"
+        },
+        {
+          "kind": "domain",
+          "value": "c2server.evil",
+          "confidence": 90,
+          "context": "DNS query"
+        },
+        {
+          "kind": "filepath",
+          "value": "C:\\Windows\\Temp\\payload.exe",
+          "confidence": 100,
+          "context": "dropped file"
+        },
+        {
+          "kind": "filehash",
+          "value": "deadbeefcafe0123456789abcdef0123456789ab",
+          "confidence": 100,
+          "context": "SHA-1 of payload"
+        },
+        {
+          "kind": "registry_key",
+          "value": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+          "confidence": 85,
+          "context": "persistence"
+        },
+        {
+          "kind": "mutex",
+          "value": "Global\\MalwareMutex_v2",
+          "confidence": 70,
+          "context": "mutex seen during run"
+        }
+      ],
+      "source": "rustre_sandbox_report::IocSet::mock"
+    }
+  },
+  {
+    "tool": "sandbox_report_mock_summary",
+    "status": "PASS",
+    "expected": {
+      "sample": "malware.exe",
+      "sha256": "deadbeef0123456789abcdef0123456789abcdef",
+      "verdict": "malicious",
+      "score": 50,
+      "family": "trojan",
+      "indicator_count": 4,
+      "behavior_count": 1,
+      "ioc_count": 6,
+      "technique_count": 4
+    },
+    "actual": {
+      "sample": "malware.exe",
+      "sha256": "deadbeef0123456789abcdef0123456789abcdef",
+      "verdict": "malicious",
+      "score": 50,
+      "family": "trojan",
+      "indicator_count": 4,
+      "behavior_count": 1,
+      "ioc_count": 6,
+      "technique_count": 4,
+      "tags": [
+        "injection",
+        "c2",
+        "persistence",
+        "anti-analysis"
+      ],
+      "source": "rustre_sandbox_report::SandboxReport::mock"
+    }
+  },
+  {
+    "tool": "sandbox_report_score_engine_compute",
+    "status": "PASS",
+    "expected": {
+      "indicator_count": 4,
+      "score": 50,
+      "verdict": "suspicious",
+      "has_critical": true
+    },
+    "actual": {
+      "indicator_count": 4,
+      "score": 50,
+      "verdict": "suspicious",
+      "has_critical": true,
+      "source": "rustre_sandbox_report::ScoreEngine::compute"
+    }
+  },
+  {
+    "tool": "sandbox_report_critical_indicators",
+    "status": "PASS",
+    "expected": {
+      "count": 1
+    },
+    "actual": {
+      "count": 1,
+      "critical_indicators": [
+        {
+          "name": "Code injection",
+          "desc": "WriteProcessMemory called on external process",
+          "category": "injection",
+          "severity": "critical",
+          "technique_ids": [
+            "T1055.001"
+          ]
+        }
+      ],
+      "source": "rustre_sandbox_report::SandboxReport::critical_indicators"
+    }
+  },
+  {
+    "tool": "sandbox_policy_balanced_validate",
+    "status": "PASS",
+    "expected": {
+      "timeout_secs": 120,
+      "max_memory_mb": 1024,
+      "perms_bits": 15,
+      "valid": true
+    },
+    "actual": {
+      "timeout_secs": 120,
+      "max_memory_mb": 1024,
+      "perms_bits": 15,
+      "fs_write_paths": [
+        "/tmp",
+        "C:\\Windows\\Temp"
+      ],
+      "valid": true,
+      "source": "rustre_sandbox::SandboxPolicy::balanced"
+    }
+  },
+  {
+    "tool": "sandbox_resource_limits_check",
+    "status": "PASS",
+    "expected": {
+      "memory_exceeded": false,
+      "disk_exceeded": false,
+      "max_memory_mb": 256,
+      "max_disk_write_mb": 32,
+      "used_mb": 100,
+      "written_mb": 10
+    },
+    "actual": {
+      "used_mb": 100,
+      "written_mb": 10,
+      "memory_exceeded": false,
+      "disk_exceeded": false,
+      "max_memory_mb": 256,
+      "max_disk_write_mb": 32,
+      "source": "rustre_sandbox::ResourceLimits::tight"
+    }
+  },
+  {
+    "tool": "sandbox_resource_limits_check(exceeded)",
+    "status": "PASS",
+    "expected": {
+      "memory_exceeded": true,
+      "disk_exceeded": false,
+      "used_mb": 300,
+      "written_mb": 10
+    },
+    "actual": {
+      "used_mb": 300,
+      "written_mb": 10,
+      "memory_exceeded": true,
+      "disk_exceeded": false,
+      "max_memory_mb": 256,
+      "max_disk_write_mb": 32,
+      "source": "rustre_sandbox::ResourceLimits::tight"
+    }
+  },
+  {
+    "tool": "sandbox_report_severity_score_all_v3",
+    "status": "PASS",
+    "expected": {
+      "info": 0,
+      "low": 25,
+      "medium": 50,
+      "high": 75,
+      "critical": 100
+    },
+    "actual": {
+      "info": 0,
+      "low": 25,
+      "medium": 50,
+      "high": 75,
+      "critical": 100,
+      "source": "rustre_sandbox_report::Severity::score"
+    }
+  },
+  {
+    "tool": "sandbox_report_verdict_all_display_v3",
+    "status": "PASS",
+    "expected": {
+      "verdicts": [
+        "clean",
+        "low",
+        "suspicious",
+        "malicious",
+        "unknown"
+      ]
+    },
+    "actual": {
+      "verdicts": [
+        "clean",
+        "low",
+        "suspicious",
+        "malicious",
+        "unknown"
+      ],
+      "source": "rustre_sandbox_report::Verdict::fmt"
+    }
+  },
+  {
+    "tool": "sandbox_report_score_engine_verdict_sweep_v3",
+    "status": "PASS",
+    "expected": {
+      "s0": "clean",
+      "s15": "low",
+      "s50": "suspicious",
+      "s85": "malicious"
+    },
+    "actual": {
+      "s0": "clean",
+      "s15": "low",
+      "s50": "suspicious",
+      "s85": "malicious",
+      "source": "rustre_sandbox_report::ScoreEngine::verdict"
+    }
+  },
+  {
+    "tool": "sandbox_report_attack_mapping_from_behaviors",
+    "status": "PASS",
+    "expected": {
+      "technique_count": 2
+    },
+    "actual": {
+      "input_tags": [
+        "injection",
+        "persistence"
+      ],
+      "technique_count": 2,
+      "technique_ids": [
+        "T1055.001",
+        "T1547.001"
+      ],
+      "tactics_present": [
+        "defense_evasion",
+        "persistence"
+      ],
+      "high_confidence_count": 2,
+      "techniques": [
+        {
+          "id": "T1055.001",
+          "name": "Process Injection: Dynamic-link Library Injection",
+          "tactic": "defense_evasion",
+          "confidence": 90,
+          "evidence": [
+            "WriteProcessMemory + CreateRemoteThread observed"
+          ]
+        },
+        {
+          "id": "T1547.001",
+          "name": "Boot or Logon Autostart Execution: Registry Run Keys",
+          "tactic": "persistence",
+          "confidence": 95,
+          "evidence": [
+            "Run key set in HKCU"
+          ]
+        }
+      ],
+      "source": "rustre_sandbox_report::AttackMapping::from_behaviors"
+    }
+  },
+  {
+    "tool": "sandbox_report_ioc_is_confident(95,80)",
+    "status": "PASS",
+    "expected": {
+      "is_confident": true
+    },
+    "actual": {
+      "confidence": 95,
+      "threshold": 80,
+      "is_confident": true,
+      "source": "rustre_sandbox_report::Ioc::is_confident"
+    }
+  },
+  {
+    "tool": "sandbox_report_ioc_is_confident(50,80)",
+    "status": "PASS",
+    "expected": {
+      "is_confident": false
+    },
+    "actual": {
+      "confidence": 50,
+      "threshold": 80,
+      "is_confident": false,
+      "source": "rustre_sandbox_report::Ioc::is_confident"
+    }
+  },
+  {
+    "tool": "sandbox_behavior_record_mock_summary",
+    "status": "SKIP",
+    "note": "BehaviorRecord::mock() has complex nested state; independent Python reference would duplicate non-trivial Rust logic"
+  }
+]

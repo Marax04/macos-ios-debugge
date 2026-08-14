@@ -1,0 +1,30 @@
+{
+  "category": "script_rhai",
+  "notes": "Hardened round for tools not in rigorous_rhai_v2.json. All 21 new tools verified via Python reference computations and live MCP JSON-RPC calls.",
+  "passed": [
+    "script_rhai_entropy_classify",
+    "script_rhai_detect_format",
+    "script_rhai_detect_arch",
+    "script_rhai_entropy_impl",
+    "script_rhai_binary_info",
+    "script_rhai_load_binary",
+    "script_rhai_new_binary_store",
+    "script_rhai_load_binary_into",
+    "script_rhai_rhai_value_is_unit",
+    "script_rhai_event_bus_new",
+    "script_rhai_event_hook_system_new",
+    "script_rhai_lossy_u64_to_f64",
+    "script_rhai_lossy_usize_to_f64",
+    "script_rhai_lossy_i64_to_f64",
+    "script_rhai_trunc_f64_to_i64",
+    "script_rhai_sat_usize_to_i64",
+    "script_rhai_sat_u64_to_usize_wire",
+    "script_rhai_sat_i64_to_usize_wire",
+    "script_rhai_trunc_i64_to_u8",
+    "script_rhai_trunc_i64_to_u32",
+    "script_rhai_trunc_u128_to_u64"
+  ],
+  "failed": [],
+  "mismatches": [],
+  "skipped_count": 1
+}

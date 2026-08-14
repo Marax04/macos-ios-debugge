@@ -1,0 +1,152 @@
+{
+  "crate": "rustre-debug-frida",
+  "saved": true,
+  "functions": [
+    "FridaDebugSession.new",
+    "FridaDebugSession.attach",
+    "FridaDebugSession.detach",
+    "FridaDebugSession.kill",
+    "FridaDebugSession.is_attached",
+    "FridaDebugSession.target_pid",
+    "FridaDebugSession.state",
+    "FridaDebugSession.name",
+    "FridaDebugSession.supported_architectures",
+    "FridaDebugSession.install_hook",
+    "FridaDebugSession.remove_hook",
+    "FridaDebugSession.hooks",
+    "FridaDebugSession.intercept_records",
+    "FridaDebugSession.simulate_hook_hit",
+    "FridaDebugSession.execute_script",
+    "FridaDebugSession.scan_memory_pattern",
+    "FridaDebugSession.read_memory",
+    "FridaDebugSession.write_memory",
+    "FridaDebugSession.memory_maps",
+    "FridaDebugSession.get_registers",
+    "FridaDebugSession.get_register",
+    "FridaDebugSession.set_register",
+    "FridaDebugSession.single_step",
+    "FridaDebugSession.set_breakpoint",
+    "FridaDebugSession.remove_breakpoint",
+    "FridaDebugSession.enable_breakpoint",
+    "FridaDebugSession.disable_breakpoint",
+    "FridaDebugSession.breakpoints",
+    "FridaDebugSession.backtrace",
+    "FridaDebugSession.launch",
+    "FridaTarget.local_pid",
+    "FridaTarget.local_name",
+    "FridaSession.new",
+    "FridaSession.is_attached",
+    "FridaSession.script_count",
+    "FridaManager.new",
+    "FridaManager.attach",
+    "FridaManager.detach",
+    "FridaManager.add_interceptor",
+    "FridaManager.interceptor_count",
+    "FridaManager.session_count",
+    "FridaManager.mock_stalker_events"
+  ],
+  "tests": [
+    {
+      "name": "name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "supported_archs",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "initial_state_detached",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "install_hook_requires_attached",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "attach_sets_pid",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "install_hook_returns_id",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "intercept_records",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "scan_finds_nop_sled",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "memory_roundtrip",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "breakpoint_dup_error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "single_step_rip+1",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "backtrace_single_frame",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "execute_script_empty_error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "launch_unsupported",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "remove_hook",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "detach_clears",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "v2_attach",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "v2_interceptor_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "v2_stalker_events",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "v2_detach",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 20,
+  "total": 20
+}

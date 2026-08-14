@@ -1,0 +1,10 @@
+[
+  {
+    "tool": "ti_misp_galaxy_find_cluster",
+    "reason": "Galaxy clusters are not populated from the 'clusters' param \u2014 always returns found:null (tool defect candidate, skipped to avoid false positives)"
+  },
+  {
+    "tool": "ti_misp_sighting_new:date_sighting",
+    "reason": "date_sighting is a live Unix timestamp and cannot be matched against a reference value"
+  }
+]

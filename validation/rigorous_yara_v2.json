@@ -1,0 +1,230 @@
+{
+  "module": "yara",
+  "tools_hardened": 55,
+  "tools_passed": 55,
+  "tools_failed": 0,
+  "tools_skipped": 7,
+  "results": [
+    {
+      "tool": "yara_engine_rule_with_tag_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_ruleset_len_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_parse_rules_count_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_scanner_add_rule_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_rule_definition_with_namespace_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_rule_repository_ops_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_external_symbol_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_process_region_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_compute_entropy_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_async_scan_result_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_rule_new_summary",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_scanner_new_count",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_parse_name_from_source",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_ruleset_add_rule",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_new",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_new_empty",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_ruleset_rule_count",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_definition_parse_name",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_ruleset_add_rule",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_match_masked_byte",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_check_fullword",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_get_meta",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse_rule_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse_string_modifiers_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_author_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_date_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_match_text_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_ruleset_new_default_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_new_with_tags_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_hex_token_wildcard_match_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_hex_token_jump_match_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_modifiers_flags_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_ruleset_new_count_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_ruleset_rule_by_name_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_match_hex_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_match_nocase_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_match_wide_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_match_xor_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_check_fullword_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_string_matcher_masked_byte_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse_hex_pattern_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse_meta_section_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_parser_parse_strings_section_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_rule_description_wire",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_rule_with_meta_bool_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_rule_def_parse_name_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_compute_entropy_hex_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_external_symbol_int_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_external_symbol_str_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_compiled_cache_hash_sources_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_compiled_cache_empty_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_process_region_with_module_wire3",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_async_scan_config_wire2",
+      "status": "PASS"
+    },
+    {
+      "tool": "yara_engine_async_scan_config_concurrency_wire3",
+      "status": "PASS"
+    }
+  ],
+  "mismatches": []
+}

@@ -1,0 +1,414 @@
+{
+  "module": "ttd_query",
+  "tools_hardened": 27,
+  "checks_passed": 27,
+  "checks_failed": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "ttd_query_trace_event_count",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "event_count": 14,
+        "source": "rustre_ttd_query::build_query_test_trace"
+      },
+      "description": "event_count == 14"
+    },
+    {
+      "tool": "ttd_query_exec_all_events",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "matched": 14,
+        "scanned": 14,
+        "time_ms": 0,
+        "source": "rustre_ttd_query::QueryEngine::execute"
+      },
+      "description": "matched=14, scanned=14"
+    },
+    {
+      "tool": "ttd_query_histogram_by_kind",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "histogram": {
+          "Breakpoint": 1,
+          "Exception": 1,
+          "MemRead": 1,
+          "SyscallExit": 2,
+          "SyscallEnter": 2,
+          "MemWrite": 2,
+          "ThreadCreate": 1,
+          "Return": 1,
+          "ThreadExit": 1,
+          "Call": 2
+        },
+        "source": "rustre_ttd_query::QueryEngine::event_histogram_by_kind"
+      },
+      "description": "histogram == {'MemRead': 1, 'MemWrite': 2, 'Call': 2, 'Return': 1, 'SyscallEnter': 2, 'SyscallExit': 2, 'Exception': 1, 'ThreadCreate': 1, 'ThreadExit': 1, 'Breakpoint': 1}"
+    },
+    {
+      "tool": "ttd_query_histogram_by_thread",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "items": [
+          {
+            "tid": 2,
+            "count": 7
+          },
+          {
+            "tid": 1,
+            "count": 7
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::event_histogram_by_thread"
+      },
+      "description": "tid1=7, tid2=7"
+    },
+    {
+      "tool": "ttd_query_call_frequency",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "items": [
+          {
+            "addr": 16384,
+            "count": 2
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::analyze_call_frequency"
+      },
+      "description": "1 entry: addr=0x4000(16384),count=2"
+    },
+    {
+      "tool": "ttd_query_most_called",
+      "args": {
+        "top_n": 3
+      },
+      "status": "PASS",
+      "data": {
+        "top_n": 3,
+        "items": [
+          {
+            "addr": 16384,
+            "count": 2
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::most_called_functions"
+      },
+      "description": "top item addr=0x4000,count=2"
+    },
+    {
+      "tool": "ttd_query_most_accessed_addresses",
+      "args": {
+        "top_n": 3
+      },
+      "status": "PASS",
+      "data": {
+        "top_n": 3,
+        "items": [
+          {
+            "addr": 8192,
+            "count": 2
+          },
+          {
+            "addr": 4096,
+            "count": 1
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::most_accessed_addresses"
+      },
+      "description": "top: addr=0x2000(8192),count=2"
+    },
+    {
+      "tool": "ttd_query_recursive_calls",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "chains": [],
+        "source": "rustre_ttd_query::QueryEngine::find_recursive_calls"
+      },
+      "description": "chains=[]"
+    },
+    {
+      "tool": "ttd_query_data_races",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "candidates": [
+          {
+            "addr": 8192,
+            "threads": [
+              2,
+              1
+            ],
+            "writes": 2,
+            "confidence": 0.5
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::find_data_races_heuristic"
+      },
+      "description": "1 candidate at addr=0x2000(8192)"
+    },
+    {
+      "tool": "ttd_query_heap_ops",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "total_allocs": 1,
+        "total_frees": 1,
+        "source": "rustre_ttd_query::QueryEngine::detect_heap_operations"
+      },
+      "description": "has total_allocs and total_frees"
+    },
+    {
+      "tool": "ttd_query_string_accesses",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "strings": [],
+        "source": "rustre_ttd_query::QueryEngine::find_string_accesses"
+      },
+      "description": "strings=[]"
+    },
+    {
+      "tool": "ttd_query_syscall_summary",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "syscalls": [
+          {
+            "nr": 2,
+            "calls": 1,
+            "errors": 0
+          },
+          {
+            "nr": 1,
+            "calls": 1,
+            "errors": 0
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::summarize_syscalls"
+      },
+      "description": "2 syscalls, each calls=1,errors=0"
+    },
+    {
+      "tool": "ttd_query_memory_access_report",
+      "args": {
+        "start": 4096,
+        "end": 12288
+      },
+      "status": "PASS",
+      "data": {
+        "total_reads": 1,
+        "total_writes": 2,
+        "total_read_bytes": 4,
+        "total_write_bytes": 3,
+        "source": "rustre_ttd_query::QueryEngine::analyze_memory_access_patterns"
+      },
+      "description": "total_reads=1, total_writes=2"
+    },
+    {
+      "tool": "ttd_query_memory_report",
+      "args": {
+        "start": 4096,
+        "end": 12288
+      },
+      "status": "PASS",
+      "data": {
+        "start": 4096,
+        "end": 12288,
+        "report": "[memory access report for 0x1000..0x3000]\nreads:  1 (4 bytes total)\nwrites: 2 (3 bytes total)\n\nreads:\n  seq 0:0  tid=1  read 4B at 0x1000\n\nwrites:\n  seq 1:0  tid=2  write 2B at 0x2000\n  seq 10:0  tid=1  write 1B at 0x2000\n",
+        "source": "rustre_ttd_query::TtdReportGenerator::generate_memory_access_report"
+      },
+      "description": "report contains 'reads:'"
+    },
+    {
+      "tool": "ttd_query_histogram_over_time",
+      "args": {
+        "bucket_size": 5
+      },
+      "status": "PASS",
+      "data": {
+        "bucket_size": 5,
+        "buckets": [
+          {
+            "sequence": 0,
+            "count": 5
+          },
+          {
+            "sequence": 5,
+            "count": 5
+          },
+          {
+            "sequence": 10,
+            "count": 4
+          }
+        ],
+        "source": "rustre_ttd_query::QueryEngine::event_histogram_over_time"
+      },
+      "description": "3 buckets: [5,5,4]"
+    },
+    {
+      "tool": "ttd_query_code_coverage",
+      "args": {
+        "ranges": [
+          [
+            16384,
+            20480
+          ]
+        ]
+      },
+      "status": "PASS",
+      "data": {
+        "total_range_bytes": 4096,
+        "covered": 1,
+        "pct": 0.0244140625,
+        "source": "rustre_ttd_query::QueryEngine::compute_code_coverage"
+      },
+      "description": "total_range_bytes=4096, covered=1"
+    },
+    {
+      "tool": "ttd_query_filter_by_address_range",
+      "args": {
+        "start": 4096,
+        "end": 12288
+      },
+      "status": "PASS",
+      "data": {
+        "count": 3,
+        "source": "rustre_ttd_query::QueryEngine::filter_by_address_range"
+      },
+      "description": "count=3"
+    },
+    {
+      "tool": "ttd_query_first_occurrence_thread",
+      "args": {
+        "tid": 1
+      },
+      "status": "PASS",
+      "data": {
+        "found": true,
+        "source": "rustre_ttd_query::QueryEngine::first_occurrence"
+      },
+      "description": "found=true for tid=1"
+    },
+    {
+      "tool": "ttd_query_last_occurrence_thread",
+      "args": {
+        "tid": 2
+      },
+      "status": "PASS",
+      "data": {
+        "found": true,
+        "source": "rustre_ttd_query::QueryEngine::last_occurrence"
+      },
+      "description": "found=true for tid=2"
+    },
+    {
+      "tool": "ttd_query_count_thread",
+      "args": {
+        "tid": 1
+      },
+      "status": "PASS",
+      "data": {
+        "count": 7,
+        "source": "rustre_ttd_query::QueryEngine::count"
+      },
+      "description": "count=7 for tid=1"
+    },
+    {
+      "tool": "ttd_query_exec_loops",
+      "args": {
+        "min_iterations": 2
+      },
+      "status": "PASS",
+      "data": {
+        "matched": 2,
+        "source": "rustre_ttd_query::QueryEngine::execute"
+      },
+      "description": "matched=2"
+    },
+    {
+      "tool": "ttd_query_exec_call_chain",
+      "args": {
+        "from": 12288,
+        "to": 16384
+      },
+      "status": "PASS",
+      "data": {
+        "matched": 1,
+        "source": "rustre_ttd_query::QueryEngine::execute"
+      },
+      "description": "matched=1"
+    },
+    {
+      "tool": "ttd_query_explain",
+      "args": {},
+      "status": "PASS",
+      "data": {
+        "description": "full scan",
+        "estimated_events": 14,
+        "uses_index": false,
+        "source": "rustre_ttd_query::QueryEngine::explain"
+      },
+      "description": "description='full scan', uses_index=false, estimated_events=14"
+    },
+    {
+      "tool": "ttd_query_time_range_contains",
+      "args": {
+        "start_seq": 0,
+        "end_seq": 10,
+        "pos_seq": 5
+      },
+      "status": "PASS",
+      "data": {
+        "contains": true,
+        "source": "rustre_ttd_query::TimeRange::contains"
+      },
+      "description": "contains=true (5 in [0,10])"
+    },
+    {
+      "tool": "ttd_query_time_range_contains",
+      "args": {
+        "start_seq": 0,
+        "end_seq": 10,
+        "pos_seq": 11
+      },
+      "status": "PASS",
+      "data": {
+        "contains": false,
+        "source": "rustre_ttd_query::TimeRange::contains"
+      },
+      "description": "contains=false (11 not in [0,10])"
+    },
+    {
+      "tool": "ttd_query_parse",
+      "args": {
+        "text": "FIND CALL 0x4000"
+      },
+      "status": "PASS",
+      "data": {
+        "ok": false,
+        "error": "parse error: unrecognised query: \"find call 0x4000\"",
+        "source": "rustre_ttd_query::parse_query"
+      },
+      "description": "returns {ok:...}"
+    },
+    {
+      "tool": "ttd_query_call_tree",
+      "args": {
+        "root_addr": 16384
+      },
+      "status": "PASS",
+      "data": {
+        "root_addr": 16384,
+        "report": "[call tree for 0x4000]\n0x4000 @ seq 2:0\n0x4000 @ seq 11:0\n",
+        "source": "rustre_ttd_query::TtdReportGenerator::generate_call_tree"
+      },
+      "description": "report contains '0x4000'"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "category": "project",
+  "tools_hardened": 4,
+  "tools_passed": 4,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "project.open",
+      "status": "PASS"
+    },
+    {
+      "tool": "project.list_binaries",
+      "status": "PASS"
+    },
+    {
+      "tool": "project.info",
+      "status": "PASS"
+    },
+    {
+      "tool": "project.close",
+      "status": "PASS"
+    }
+  ]
+}

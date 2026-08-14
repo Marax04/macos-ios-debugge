@@ -1,0 +1,9 @@
+{
+  "category": "threatintel",
+  "tools_hardened": 82,
+  "tools_passed": 82,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "All 82 new tools tested and passing. All failures in first pass were validator_defect (wrong field names or wrong param names in Python reference). Corrected and re-verified."
+}

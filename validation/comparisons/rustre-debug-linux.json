@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-debug-linux",
+  "mcp_tools_exposed": [],
+  "note": "Crate rustre-debug-linux exists in workspace but is NOT wired into rustre-mcp server (no debug_linux / ProcMaps references in rustre-mcp-server/src). The crate exposes Linux-only ptrace-backed LinuxDebugger ops plus two pure parsers (ProcMapsParser, parse_proc_maps); only the parsers are testable cross-platform and they have no MCP tool surface to compare against. No JSON-RPC calls possible.",
+  "validator": {
+    "path": "validation/validators/rustre-debug-linux.py",
+    "result": "OK",
+    "self_tests": "passed"
+  },
+  "comparisons": [],
+  "tests": 0,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

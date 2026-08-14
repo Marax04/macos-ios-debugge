@@ -1,0 +1,7 @@
+{
+  "module": "flirt_apply",
+  "tools_hardened": 12,
+  "checks_passed": 21,
+  "checks_failed": 0,
+  "mismatches": []
+}

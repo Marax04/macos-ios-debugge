@@ -1,0 +1,18 @@
+{
+  "crate": "rustre-analysis-vtable",
+  "tests": 7,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "Validator is self-contained (stdlib-only) and does not call MCP. The rustre-analysis-vtable crate is not exposed via any MCP tool in wire_tools.rs (no 'vtable' tool registered on rustre-mcp). All 7 Python reference tests pass: VtableDetector.detect, MsvcRttiDecoder.demangle_msvc, demangler.demangle_itanium, ItaniumRttiDecoder.decode, VtableDatabase.link_vtable_rtti, PureVirtualDetector.annotate, VtableComparer.diff. No MCP-vs-validator comparison possible until vtable tools are wired.",
+  "mcp_tools_found": [],
+  "validator_results": {
+    "VtableDetector.detect": "ok",
+    "MsvcRttiDecoder.demangle_msvc": "ok",
+    "demangler.demangle_itanium": "ok",
+    "ItaniumRttiDecoder.decode": "ok",
+    "VtableDatabase.link_vtable_rtti": "ok",
+    "PureVirtualDetector.annotate": "ok",
+    "VtableComparer.diff": "ok"
+  }
+}

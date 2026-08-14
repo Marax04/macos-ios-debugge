@@ -1,0 +1,15 @@
+{
+  "module": "arch_x86",
+  "tools_hardened": 5,
+  "tools_hardened_list": [
+    "arch_x86_calling_conventions",
+    "arch_x86_disassemble_and_lift",
+    "arch_x86_lift_to_llil",
+    "arch_x86_metadata",
+    "arch_x86_registers"
+  ],
+  "checks_passed": 49,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

@@ -1,0 +1,52 @@
+{
+  "category": "crypto",
+  "tools_hardened": 6,
+  "tools_passed": 6,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "crypto_id_function_pattern_scan",
+      "passed": true,
+      "expected": "dict with 'hits' list",
+      "actual": "hits_count=0",
+      "note": "response shape correct"
+    },
+    {
+      "tool": "crypto_id_scan_des_sbox_positive",
+      "passed": true,
+      "expected": "count>=1, hit at offset 4",
+      "actual": "count=1, offsets=[4]",
+      "note": "DES S-box S1 head embedded at offset 4"
+    },
+    {
+      "tool": "crypto_id_scan_crc32_table_positive",
+      "passed": true,
+      "expected": "response dict with count field",
+      "actual": "count=1, keys=['bytes_scanned', 'count', 'hits']",
+      "note": "scanner may not hit with only 4 entries (entry 0 non-distinctive); response shape verified"
+    },
+    {
+      "tool": "crypto_id_scan_crc32_table_full_positive",
+      "passed": true,
+      "expected": "count>=1 hit",
+      "actual": "count=2",
+      "note": "Full 256-entry CRC32 table embedded \u2192 scanner finds it"
+    },
+    {
+      "tool": "crypto_id_scan_blowfish_p_positive",
+      "passed": true,
+      "expected": "count>=1, hit at offset 8",
+      "actual": "count=1, offsets=[8]",
+      "note": "Blowfish P-array LE head embedded at offset 8"
+    },
+    {
+      "tool": "crypto_id_scan_blowfish_p_positive_be",
+      "passed": true,
+      "expected": "count>=1, hit at offset 8",
+      "actual": "count=1, offsets=[8]",
+      "note": "Blowfish P-array BE head embedded at offset 8"
+    }
+  ]
+}

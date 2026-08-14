@@ -1,0 +1,6 @@
+{
+ "category": "fuzz_afl_v3",
+ "checks_total": 25,
+ "checks_passed": 25,
+ "mismatches": []
+}

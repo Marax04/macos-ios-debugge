@@ -1,0 +1,111 @@
+{
+  "module": "net_rules",
+  "based_on": "rigorous_net_rules.json (19 hardened) + this script",
+  "tools_hardened": 8,
+  "checks_total": 9,
+  "checks_passed": 9,
+  "checks_failed": 0,
+  "mismatches": [],
+  "tool_results": [
+    {
+      "tool": "net_rules_network_spec_any",
+      "status": "PASS",
+      "data": {
+        "matches": true,
+        "source": "rustre_net_rules::NetworkSpec::any"
+      }
+    },
+    {
+      "tool": "net_rules_ruleset_new_add_count",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "source": "rustre_net_rules::RuleSet::{new,add,count}"
+      }
+    },
+    {
+      "tool": "net_rules_ruleset_by_sid",
+      "status": "PASS",
+      "data": {
+        "sid": 42,
+        "found": true,
+        "source": "rustre_net_rules::RuleSet::by_sid"
+      }
+    },
+    {
+      "tool": "net_rules_ruleset_by_sid",
+      "status": "PASS",
+      "data": {
+        "sid": 99,
+        "found": false,
+        "source": "rustre_net_rules::RuleSet::by_sid"
+      }
+    },
+    {
+      "tool": "net_rules_specrule_sid_msg",
+      "status": "PASS",
+      "data": {
+        "sid": 7,
+        "msg": "test",
+        "source": "rustre_net_rules::SpecRule::{sid,msg}"
+      }
+    },
+    {
+      "tool": "net_rules_specrule_content_patterns",
+      "status": "PASS",
+      "data": {
+        "patterns": [
+          "GET ",
+          "HTTP"
+        ],
+        "source": "rustre_net_rules::SpecRule::content_patterns"
+      }
+    },
+    {
+      "tool": "net_rules_engine_add_remove",
+      "status": "PASS",
+      "data": {
+        "before": 1,
+        "after": 0,
+        "source": "rustre_net_rules::RuleEngine::{add_rule,remove_rule,rules}"
+      }
+    },
+    {
+      "tool": "net_rules_ruledir_display",
+      "status": "PASS",
+      "data": {
+        "dirs": [
+          "->",
+          "<>"
+        ],
+        "protos": [
+          "tcp",
+          "udp",
+          "icmp",
+          "any"
+        ],
+        "source": "rustre_net_rules::{RuleDir,RuleProtocol}::Display"
+      }
+    },
+    {
+      "tool": "net_rules_proto_display",
+      "status": "PASS",
+      "data": {
+        "protos": [
+          "tcp",
+          "udp",
+          "icmp",
+          "any"
+        ],
+        "actions": [
+          "alert",
+          "pass",
+          "drop",
+          "log",
+          "reject"
+        ],
+        "source": "rustre_net_rules::{Proto,RuleAction}::Display"
+      }
+    }
+  ]
+}

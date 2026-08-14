@@ -1,0 +1,12 @@
+{
+  "category": "smali",
+  "tools_hardened": 2,
+  "tools_passed": 2,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": {
+    "smali_reg_display": "PASS",
+    "smali_opcode_to_mnemonic": "PASS"
+  }
+}

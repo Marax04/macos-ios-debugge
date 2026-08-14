@@ -1,0 +1,5 @@
+[
+  {
+    "note": "All AVR tools (avr_encode_nop, avr_encode_ret) were already verified in rigorous_avr_v2.json with PASS status. No new tools to harden in v3."
+  }
+]

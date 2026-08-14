@@ -1,0 +1,16 @@
+{
+  "crate": "rustre-analysis-fn",
+  "tool": "analysis_fn_detect_functions_path",
+  "target": "rustre-mcp.exe",
+  "validator_pdata_entries": 20225,
+  "mcp_starts_post_fix": 37236,
+  "pdata_in_mcp": 20225,
+  "pdata_missing_from_mcp": 0,
+  "match": true,
+  "fixes_applied": [
+    "rustre-mcp-tools/src/wire_tools.rs: inject .pdata RUNTIME_FUNCTION anchors into AnalysisFnDetectFunctionsPathTool before dedup",
+    "rustre-analysis-fn/src/lib.rs: detect_functions_from_path merges boundaries_from_pdata anchors"
+  ],
+  "pre_fix_mcp_starts": 35185,
+  "pre_fix_pdata_missing": 8046
+}

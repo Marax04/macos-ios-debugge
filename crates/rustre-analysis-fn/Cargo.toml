@@ -1,0 +1,30 @@
+﻿[package]
+license.workspace = true
+name = "rustre-analysis-fn"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-analysis = { path = "../rustre-analysis" }
+rustre-loader-pe = { path = "../rustre-loader-pe" }
+rustre-loader-elf = { path = "../rustre-loader-elf" }
+rustre-core = { path = "../rustre-core" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+rustre-flirt-apply = { path = "../rustre-flirt-apply" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+petgraph = { workspace = true }
+
+[dev-dependencies]
+regex = { workspace = true }
+
+[lints]
+workspace = true

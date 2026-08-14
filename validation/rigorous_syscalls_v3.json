@@ -1,0 +1,10 @@
+{
+  "category": "syscalls",
+  "note": "All 69 syscall tools were already covered in rigorous_syscalls_v2.json (43 PASS, 26 SKIP). No new tools found in the MCP server. v3 confirms coverage is complete; no additional hardening required.",
+  "tools_hardened": 0,
+  "tools_passed": 43,
+  "tools_failed": 0,
+  "tools_skipped": 26,
+  "mismatches": [],
+  "reference": "rigorous_syscalls_v2.json"
+}

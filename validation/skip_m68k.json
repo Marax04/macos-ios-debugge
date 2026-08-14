@@ -1,0 +1,7 @@
+[
+  {
+    "tool": "m68k_decode_instr",
+    "test": "BSR.W word-disp 0",
+    "reason": "reference_unimplemented: truncated Bcc"
+  }
+]

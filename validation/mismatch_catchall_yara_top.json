@@ -1,0 +1,6 @@
+{
+ "category": "catchall_yara_top",
+ "checks_total": 30,
+ "checks_passed": 30,
+ "mismatches": []
+}

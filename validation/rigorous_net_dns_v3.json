@@ -1,0 +1,71 @@
+{
+  "category": "net_dns",
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "name": "net_dns_type_name_v2",
+      "description": "Return the name for a DNS record type (rtype u16).",
+      "reference": "RFC 1035 / well-known DNS RR type numbers; lookup table in rustre_net::dns_type_name",
+      "test_cases": [
+        {
+          "rtype": 1,
+          "expected_name": "A"
+        },
+        {
+          "rtype": 2,
+          "expected_name": "NS"
+        },
+        {
+          "rtype": 5,
+          "expected_name": "CNAME"
+        },
+        {
+          "rtype": 6,
+          "expected_name": "SOA"
+        },
+        {
+          "rtype": 12,
+          "expected_name": "PTR"
+        },
+        {
+          "rtype": 15,
+          "expected_name": "MX"
+        },
+        {
+          "rtype": 16,
+          "expected_name": "TXT"
+        },
+        {
+          "rtype": 28,
+          "expected_name": "AAAA"
+        },
+        {
+          "rtype": 33,
+          "expected_name": "SRV"
+        },
+        {
+          "rtype": 255,
+          "expected_name": "ANY"
+        },
+        {
+          "rtype": 99,
+          "expected_name": "Unknown"
+        },
+        {
+          "rtype": 0,
+          "expected_name": "Unknown"
+        }
+      ],
+      "result": "PASS",
+      "pass_count": 12,
+      "fail_count": 0
+    }
+  ],
+  "summary": {
+    "tools_hardened": 1,
+    "tools_passed": 1,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "mismatches": []
+  }
+}

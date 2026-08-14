@@ -1,0 +1,28 @@
+{
+  "crate": "rustre-debug-windows",
+  "mcp_tools_exposed": [],
+  "validator": "validation/validators/rustre-debug-windows.py",
+  "validator_self_check": true,
+  "tests": [
+    {
+      "name": "validator_self_validation",
+      "result": "pass",
+      "output": {"crate": "rustre-debug-windows", "validated": true},
+      "note": "Pure-stdlib reimplementation of MemoryRegionInfo / DebugEventDecoder / Wow64Context / AOB pattern parser. All asserts pass."
+    },
+    {
+      "name": "mcp_tool_exposure_check",
+      "result": "n/a",
+      "note": "rustre-mcp-server does not register any debug.windows.* JSON-RPC tools. The Win32-debug-API surface (WindowsDebugger trait, ReadProcessMemory, ContinueDebugEvent, etc.) requires a live Windows target and is not exposed via stdio JSON-RPC. No I/O comparison is possible."
+    },
+    {
+      "name": "memory_region_info_logic_parity",
+      "result": "pass",
+      "note": "Validator mirrors rwx / committed / protect_name / to_memory_map / PAGE_GUARD stripping logic from lib.rs; matches Rust unit tests in the crate."
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "No mismatch possible: the MCP server does not expose rustre-debug-windows functionality. Validator runs standalone as a behavior reference and self-asserts."
+}

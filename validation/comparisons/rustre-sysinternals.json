@@ -1,0 +1,35 @@
+{
+  "crate": "rustre-sysinternals",
+  "mcp_surface": "none",
+  "note": "rustre-sysinternals is a workspace library crate (process/driver/handle/network/autorun scanners, PE signature parsing, SystemMonitor trait). It is NOT exposed via the MCP server: no references to 'sysinternals' anywhere under crates/rustre-mcp-tools. JSON-RPC stdio comparison is therefore N/A.",
+  "validator": "validation/validators/rustre-sysinternals.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "all_passed": true,
+    "covers": [
+      "DriverFlags bitflags rendering",
+      "AUTORUN_CATEGORIES (15 entries)",
+      "MemoryInfo.rss_vss_ratio",
+      "ModuleInfo.contains_addr",
+      "ProcessInfo in_temp_dir/is_system32/to_json/to_csv_row/get_env",
+      "NetworkConnection new_tcp/is_listening/is_established/to_csv_row",
+      "NetworkMonitor to_csv/group_by_pid/filter_listening/filter_established",
+      "InMemorySystemMonitor add/list/snapshot",
+      "ProcessTree from_list (cycle-safe), find, count, max_depth, to_text",
+      "ProcessScanner cache + get_process error",
+      "AutorunEntry is_suspicious_path/is_unsigned",
+      "AutorunScanner filter_suspicious/filter_unsigned/diff",
+      "AutorunDiff is_clean/total_changes",
+      "CertInfo.valid_at",
+      "SignatureInfo unsigned/has_root_cert",
+      "FileSignatureChecker has_pe_signature (MZ+PE parsing)",
+      "FileSignatureChecker hash_sha256/hash_md5",
+      "SysinternalsError variants (AccessDenied/Unsupported/Io/Timeout/NotFound/InvalidData/ProcessNotFound)",
+      "SystemSnapshot.empty"
+    ]
+  },
+  "tests": 1,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

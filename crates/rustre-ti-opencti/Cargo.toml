@@ -1,0 +1,23 @@
+[package]
+license.workspace = true
+name = "rustre-ti-opencti"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-threatintel = { path = "../rustre-threatintel" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+{
+  "passed": [
+    "script_rhai_hex_encode",
+    "script_rhai_sha256_bytes",
+    "script_rhai_hex_decode",
+    "script_rhai_xor_bytes",
+    "script_rhai_rotate_bytes",
+    "script_rhai_compute_entropy_v2",
+    "script_rhai_match_pattern",
+    "script_rhai_detect_format_static",
+    "script_rhai_find_pattern",
+    "script_rhai_find_strings"
+  ],
+  "failed": [],
+  "mismatches": [],
+  "skipped_count": 24
+}

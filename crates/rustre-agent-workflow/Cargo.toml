@@ -1,0 +1,28 @@
+﻿[package]
+license.workspace = true
+name = "rustre-agent-workflow"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-agent = { path = "../rustre-agent" }
+thiserror = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+regex = "1"
+tokio = { workspace = true }
+async-trait = { workspace = true }
+rusqlite = { workspace = true }
+mysql = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

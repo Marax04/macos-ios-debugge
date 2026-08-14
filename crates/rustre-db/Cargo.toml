@@ -1,0 +1,46 @@
+[package]
+license.workspace = true
+name = "rustre-db"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+parking_lot = { workspace = true }
+
+# The workspace declares rusqlite with `features = ["bundled"]`, which makes
+# libsqlite3-sys compile the vendored sqlite3.c through the `cc` crate. That is
+# right for every target we actually build — and it is what makes
+# `cargo check --target x86_64-apple-darwin` impossible from a Windows host:
+# `cc` emits Apple flags (`-arch`, `-mmacosx-version-min`) and hands them to the
+# only C compiler present, which rejects them. The failure happens in a build
+# script, before rustc looks at a single line of Rust, so the entire macOS
+# backend of this workspace — 2200 lines of `crates/rustre-debug` behind
+# `#[cfg(target_os = "macos")]` — has never been type-checked by anything.
+# A duplicate method definition sat in it undetected until a source-level guard
+# caught it (E0592, which a compiler would have reported instantly).
+#
+# Splitting the dependency by target keeps `bundled` everywhere it is used and
+# drops only the C build for darwin, where nothing links anyway during a check.
+# Windows and Linux builds are byte-for-byte unaffected.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rusqlite = { workspace = true }
+
+# No `bundled`: without it libsqlite3-sys emits link directives only and runs no
+# compiler. Enough for `cargo check`; a real macOS BUILD would need either the
+# feature back (clang and the SDK are present there) or a system libsqlite3.
+[target.'cfg(target_os = "macos")'.dependencies]
+rusqlite = { version = "0.32" }
+
+[dev-dependencies]
+uuid = { workspace = true }
+
+[lints]
+workspace = true

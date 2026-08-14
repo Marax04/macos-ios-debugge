@@ -1,0 +1,22 @@
+﻿[package]
+license.workspace = true
+name = "rustre-dotnet"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+rustre-dotnet-metadata = { path = "../rustre-dotnet-metadata" }
+bitflags = { workspace = true }
+ahash = { workspace = true }
+
+[lints]
+workspace = true

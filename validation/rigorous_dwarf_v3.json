@@ -1,0 +1,78 @@
+{
+  "category": "dwarf",
+  "tools_hardened": 11,
+  "tools_passed": 11,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "All 11 remaining dwarf path-based tools validated. Target binary (cargo-zyphora.exe) is a Windows PE with PDB (no DWARF), so all DWARF extraction tools correctly return empty arrays (count=0). dwarf_unwinder_at_path returns {pc:0,step:null} for non-ELF binaries, which is correct.",
+  "detail": [
+    {
+      "tool": "dwarf_functions_count_path",
+      "status": "PASS",
+      "expected": {"count": 0},
+      "actual": {"count": 0, "source": "rustre_symbols_dwarf::DwarfReader::functions"}
+    },
+    {
+      "tool": "dwarf_functions_path",
+      "status": "PASS",
+      "expected": {"count": 0, "functions": []},
+      "actual": {"count": 0, "functions": []}
+    },
+    {
+      "tool": "dwarf_gimli_functions_path",
+      "status": "PASS",
+      "expected": {"count": 0, "functions": []},
+      "actual": {"count": 0, "functions": []}
+    },
+    {
+      "tool": "dwarf_gimli_line_info_path",
+      "status": "PASS",
+      "expected": {"line_info": {"entries": []}},
+      "actual": {"line_info": {"entries": []}}
+    },
+    {
+      "tool": "dwarf_gimli_types_path",
+      "status": "PASS",
+      "expected": {"count": 0, "types": []},
+      "actual": {"count": 0, "types": []}
+    },
+    {
+      "tool": "dwarf_line_info_path",
+      "status": "PASS",
+      "expected": {"count": 0, "lines": []},
+      "actual": {"count": 0, "lines": []}
+    },
+    {
+      "tool": "dwarf_symbol_set_summary_path",
+      "status": "PASS",
+      "expected": {"functions": 0, "types": 0, "line_entries": 0},
+      "actual": {"functions": 0, "types": 0, "line_entries": 0, "source": "rustre_symbols_dwarf::load_dwarf_symbols"}
+    },
+    {
+      "tool": "dwarf_types_count_path",
+      "status": "PASS",
+      "expected": {"count": 0},
+      "actual": {"count": 0, "source": "rustre_symbols_dwarf::DwarfReader::types"}
+    },
+    {
+      "tool": "dwarf_types_path",
+      "status": "PASS",
+      "expected": {"count": 0, "types": []},
+      "actual": {"count": 0, "types": []}
+    },
+    {
+      "tool": "dwarf_unwinder_at_path",
+      "status": "PASS",
+      "expected": {"pc": 0, "step": null},
+      "actual": {"pc": 0, "step": null},
+      "note": "PE binary has no .eh_frame/.debug_frame; null step is correct"
+    },
+    {
+      "tool": "dwarf_variables_path",
+      "status": "PASS",
+      "expected": {"count": 0, "variables": []},
+      "actual": {"count": 0, "variables": []}
+    }
+  ]
+}

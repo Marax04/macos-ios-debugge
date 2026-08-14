@@ -1,0 +1,25 @@
+﻿[package]
+license.workspace = true
+name = "rustre-decompiler-type"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-decompiler dependency intentionally omitted: the wiring goes the other way
+# (rustre-decompiler depends on rustre-decompiler-type). Re-adding it here would create
+# a cyclic package dependency and break workspace resolution.
+rustre-decompiler-expr = { path = "../rustre-decompiler-expr" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

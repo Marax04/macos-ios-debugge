@@ -1,0 +1,82 @@
+{
+  "category": "lua",
+  "tools_hardened": 3,
+  "tools_passed": 3,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "Round v3: covers lua_bc_header_parse (3 cases). All other lua_* tools were already covered in rigorous_lua_v2.json. The string 'lua_endian' found by pattern search is a JSON response key inside lua_loader_lua_endian_to_core, not a separate tool name.",
+  "detail": [
+    {
+      "tool": "lua_bc_header_parse[valid51]",
+      "passed": true,
+      "expected": {
+        "version": "Lua 5.1",
+        "format": 0,
+        "endian": "LE",
+        "int_size": 4,
+        "ptr_size": 8,
+        "inst_size": 4,
+        "num_size": 8,
+        "is_integer_num": false,
+        "is_official_format": true,
+        "header_end": 12
+      },
+      "actual": {
+        "version": "Lua 5.1",
+        "format": 0,
+        "endian": "LE",
+        "int_size": 4,
+        "ptr_size": 8,
+        "inst_size": 4,
+        "num_size": 8,
+        "is_integer_num": false,
+        "is_official_format": true,
+        "header_end": 12,
+        "source": "rustre_loader_lua::LuaHeader::parse"
+      },
+      "reference": "bytes 1b4c756151000104080408 00 = ESC L u a | version=0x51(5.1) | format=0x00 | endian=0x01(LE) | int_size=4 | ptr_size=8 | inst_size=4 | num_size=8 | is_integer_num=0x00(false)"
+    },
+    {
+      "tool": "lua_bc_header_parse[invalid_truncated]",
+      "passed": true,
+      "expected": {
+        "error_present": true
+      },
+      "actual": {
+        "error": "truncated data"
+      },
+      "reference": "bytes 1b4c75 (3 bytes) are too short for a full Lua header (needs >= 12 bytes)"
+    },
+    {
+      "tool": "lua_bc_header_parse[valid54]",
+      "passed": true,
+      "expected": {
+        "version": "Lua 5.4",
+        "format": 0,
+        "endian": "LE",
+        "int_size": 4,
+        "ptr_size": 8,
+        "inst_size": 4,
+        "num_size": 8,
+        "is_integer_num": false,
+        "is_official_format": true,
+        "header_end": 12
+      },
+      "actual": {
+        "version": "Lua 5.4",
+        "format": 0,
+        "endian": "LE",
+        "int_size": 4,
+        "ptr_size": 8,
+        "inst_size": 4,
+        "num_size": 8,
+        "is_integer_num": false,
+        "is_official_format": true,
+        "header_end": 12,
+        "source": "rustre_loader_lua::LuaHeader::parse"
+      },
+      "reference": "bytes 1b4c756154000104080408 00 = ESC L u a | version=0x54(5.4) | same layout as 5.1"
+    }
+  ]
+}

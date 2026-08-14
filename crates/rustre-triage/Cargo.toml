@@ -1,0 +1,25 @@
+[package]
+license.workspace = true
+name = "rustre-triage"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-pe-tools = { path = "../rustre-pe-tools" }
+rustre-loader-pe = { path = "../rustre-loader-pe" }
+rustre-crypto-id = { path = "../rustre-crypto-id" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+md-5 = { workspace = true }
+
+[lints]
+workspace = true
+

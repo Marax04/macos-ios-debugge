@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-deobf-cff",
+  "tests": 0,
+  "mismatches": 0,
+  "match": false,
+  "error": "No validator file found at validation/validators/rustre-deobf-cff.py. CFF detection in MCP is only exposed indirectly via triage_analyze (cff_detected flag derived from anti-anti hit category names containing 'flatten'/'cff'); there is no dedicated deobf_cff_* MCP tool in wire_tools.rs.",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches_detail": []
+}

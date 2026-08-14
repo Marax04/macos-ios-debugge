@@ -1,0 +1,31 @@
+﻿[package]
+license.workspace = true
+name = "rustre-flirt-apply"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-flirt = { path = "../rustre-flirt" }
+rustre-analysis-typerecov = { path = "../rustre-analysis-typerecov" }
+ahash = { workspace = true }
+aho-corasick = "1"
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rustre-demangle = { path = "../rustre-demangle" }
+rustre-symbols-pdb = { path = "../rustre-symbols-pdb" }
+rustre-pe-tools = { path = "../rustre-pe-tools" }
+
+rustre-flirt-gen = { path = "../rustre-flirt-gen" }
+tempfile = "3"
+
+[lints]
+workspace = true

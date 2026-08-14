@@ -1,0 +1,300 @@
+[
+  {
+    "tool": "sysinternals_pe_has_signature",
+    "variant": "signed_pe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_pe_has_signature",
+    "variant": "unsigned_pe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_pe_has_signature",
+    "variant": "not_a_pe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_has_pe_signature",
+    "variant": "signed_pe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_has_pe_signature",
+    "variant": "unsigned_pe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_has_pe_signature",
+    "variant": "not_a_pe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_empty_snapshot",
+    "status": "PASS",
+    "expected": {
+      "processes": 0,
+      "drivers": 0,
+      "network": 0,
+      "handles": 0
+    },
+    "actual": {
+      "processes": 0,
+      "drivers": 0,
+      "network": 0,
+      "handles": 0
+    },
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_signature_unsigned",
+    "status": "PASS",
+    "expected": {
+      "path": "C:\\some\\file.exe",
+      "is_signed": false,
+      "is_valid": false,
+      "cert_chain_len": 0,
+      "has_root_cert": false
+    },
+    "actual": {
+      "path": "C:\\some\\file.exe",
+      "is_signed": false,
+      "is_valid": false,
+      "cert_chain_len": 0,
+      "has_root_cert": false
+    },
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_memory_info_ratio",
+    "variant": "vss=1000 rss=500",
+    "status": "PASS",
+    "expected": 0.5,
+    "actual": 0.5,
+    "ref_python": 0.5,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_memory_info_ratio",
+    "variant": "vss=1000 rss=1000",
+    "status": "PASS",
+    "expected": 1.0,
+    "actual": 1.0,
+    "ref_python": 1.0,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_memory_info_ratio",
+    "variant": "vss=0 rss=500",
+    "status": "PASS",
+    "expected": 0.0,
+    "actual": 0.0,
+    "ref_python": 0.0,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_memory_info_ratio",
+    "variant": "vss=4096 rss=1024",
+    "status": "PASS",
+    "expected": 0.25,
+    "actual": 0.25,
+    "ref_python": 0.25,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "C:\\Windows\\System32\\svchost.exe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "C:\\Users\\user\\AppData\\Local\\Temp\\evil.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "C:\\tmp\\malware.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "C:\\Users\\foo\\temp\\x.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "C:\\Users\\foo\\Temp\\x.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_in_temp_dir",
+    "variant": "/tmp/evil",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Windows\\System32\\notepad.exe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Users\\user\\AppData\\Roaming\\malware.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Users\\user\\Downloads\\installer.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Users\\user\\Temp\\evil.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Users\\user\\temp\\evil.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Users\\user\\Temp\\sub\\evil.exe",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "/tmp/evil.sh",
+    "status": "PASS",
+    "expected": true,
+    "actual": true,
+    "ref_python": true,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autorun_suspicious_path",
+    "variant": "C:\\Program Files\\App\\app.exe",
+    "status": "PASS",
+    "expected": false,
+    "actual": false,
+    "ref_python": false,
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_autoruns_scan_all",
+    "status": "PASS",
+    "expected": {
+      "count": 0,
+      "entries": []
+    },
+    "actual": {
+      "count": 0,
+      "entries": []
+    },
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_network_snapshot",
+    "status": "PASS",
+    "expected": {
+      "count": 0
+    },
+    "actual": {
+      "count": 0
+    },
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_listening_ports",
+    "status": "PASS",
+    "expected": {
+      "count": 0
+    },
+    "actual": {
+      "count": 0
+    },
+    "mismatch": false
+  },
+  {
+    "tool": "sysinternals_process_scan",
+    "status": "PASS",
+    "expected": {
+      "count": 0
+    },
+    "actual": {
+      "count": 0
+    },
+    "mismatch": false
+  }
+]

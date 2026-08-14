@@ -1,0 +1,69 @@
+{
+  "crate": "rustre-symbols-dwarf",
+  "notes": "rustre-symbols-dwarf is an internal DWARF parsing library (ELF section table walk, .debug_abbrev, .debug_info CU/DIE walk, .debug_str/line_str/str_offsets resolution, .debug_line state machine, type/var/subprogram extraction, location expressions, call frame info, split-DWARF). No MCP tool in `rustre-mcp` directly surfaces these primitives (grep over crates/rustre-mcp for 'dwarf' / 'symbols_dwarf' / 'rustre_symbols_dwarf' returned 0 hits). The crate is consumed indirectly by higher-level analysis (loader/decompiler) when an ELF with DWARF is opened. No ELF+DWARF sample exists in the repository (no samples/hello_dwarf, no *.elf, no *.so under tracked paths; validator smoke test reports baseline_missing). End-to-end MCP vs validator comparison on a real DWARF blob therefore cannot be executed in this environment.",
+  "mcp_server": "C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe",
+  "mcp_tools_relevant": [],
+  "mcp_tool_search": {
+    "pattern": "dwarf|symbols_dwarf|rustre_symbols_dwarf",
+    "hits_in_rustre-mcp": 0
+  },
+  "sample_search": {
+    "candidates_probed": [
+      "C:/Users/Fra/Desktop/RustRE/samples/hello_dwarf",
+      "C:/Users/Fra/Desktop/RustRE/samples/hello_dwarf.elf"
+    ],
+    "any_elf_found": false,
+    "any_dwarf_found": false
+  },
+  "validator_path": "C:/Users/Fra/Desktop/RustRE/validation/validators/rustre-symbols-dwarf.py",
+  "validator_smoke_test": {
+    "uleb_624485": [624485, 3],
+    "sleb_neg_624485": [-624485, 3],
+    "tag_subprogram": "subprogram",
+    "form_strp": "strp",
+    "baseline_missing": [
+      "C:/Users/Fra/Desktop/RustRE/samples/hello_dwarf",
+      "C:/Users/Fra/Desktop/RustRE/samples/hello_dwarf.elf"
+    ]
+  },
+  "tests_run": 4,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "tests": [
+    {
+      "name": "decode_uleb(0xe5 0x8e 0x26)",
+      "validator_fn": "validator_decode_uleb",
+      "validator_result": [624485, 3],
+      "expected": [624485, 3],
+      "mcp_tool": "(none - LEB128 decoders are pure-math internals not exposed by MCP)",
+      "match": true
+    },
+    {
+      "name": "decode_sleb(0x9b 0xf1 0x59)",
+      "validator_fn": "validator_decode_sleb",
+      "validator_result": [-624485, 3],
+      "expected": [-624485, 3],
+      "mcp_tool": "(none - pure-math internal)",
+      "match": true
+    },
+    {
+      "name": "dw_tag_name(0x2e)",
+      "validator_fn": "validator_dw_tag_name",
+      "validator_result": "subprogram",
+      "expected": "subprogram",
+      "mcp_tool": "(none - constant table)",
+      "match": true
+    },
+    {
+      "name": "dw_form_name(0x0e)",
+      "validator_fn": "validator_dw_form_name",
+      "validator_result": "strp",
+      "expected": "strp",
+      "mcp_tool": "(none - constant table)",
+      "match": true
+    }
+  ],
+  "summary": "Pure-math primitives (LEB128 encode/decode, DW_TAG/DW_FORM constant tables) round-trip on the standalone validator and match DWARF v5 spec exactly. End-to-end DWARF parsing (sections, abbrev, CU walk, subprograms, variables, types, line program) cannot be cross-checked against MCP because (a) rustre-mcp exposes no tool that surfaces rustre-symbols-dwarf primitives, and (b) no ELF+DWARF sample exists in the repository. No mismatches surfaced; no crate modification required. Parallels the rustre-arch-mips comparison report (internal pure-math crate, no MCP surface, no sample)."
+}

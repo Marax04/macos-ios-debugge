@@ -1,0 +1,6 @@
+{
+ "category": "forensics_fs_memfs",
+ "checks_total": 9,
+ "checks_passed": 9,
+ "mismatches": []
+}

@@ -1,0 +1,33 @@
+{
+  "crate": "rustre-mobile",
+  "mcp_surface": "none",
+  "note": "rustre-mobile is a workspace hub crate: re-exports 7 primary types and 7 module aliases from rustre-mobile-{android,apktool,dyld,ios,ipa,jadx,smali}, and exposes registry::all() returning the 7 short names. It is NOT exposed via the MCP server: no references to 'mobile' in crates/rustre-mcp-tools/src/wire_tools.rs nor anywhere under rustre-mcp-tools. JSON-RPC stdio comparison against target/release/rustre-mcp.exe is therefore N/A.",
+  "validator": "validation/validators/rustre-mobile.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 10,
+    "all_passed": true,
+    "checks": [
+      "registry_all_len_eq_7",
+      "registry_all_names_match",
+      "registry_all_names_unique",
+      "registry_all_names_prefixed",
+      "registry_all_returns_fresh_vec",
+      "type_reexports_count_eq_7",
+      "module_aliases_count_eq_7",
+      "module_aliases_target_each_subcrate",
+      "type_reexports_one_per_subcrate",
+      "hub_performs_no_io"
+    ],
+    "checked_against_source": {
+      "registry::all()": "vec![rustre-mobile-{android,apktool,dyld,ios,ipa,jadx,smali}] matches crates/rustre-mobile/src/lib.rs",
+      "type_reexports": "AndroidManifest, ApktoolConfig, DyldHeader, BundleInfo, IpaPackage, DecompiledProject, SmaliClass — all 7 match lib.rs pub use lines",
+      "module_aliases": "android, apktool, dyld, ios, ipa, jadx, smali — all 7 match lib.rs `pub use ... as` lines",
+      "hub_performs_no_io": "lib.rs contains only re-exports and a const Vec builder; no I/O"
+    }
+  },
+  "tests": 10,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

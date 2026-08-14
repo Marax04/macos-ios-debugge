@@ -1,0 +1,40 @@
+[package]
+license.workspace = true
+name = "rustre-mcp"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+rustre-mcp-federation = { path = "../rustre-mcp-federation" }
+rustre-mcp-server = { path = "../rustre-mcp-server" }
+rustre-mcp-tools = { path = "../rustre-mcp-tools" }
+# opt-1: global allocator swap — reduces heap fragmentation on the MCP hot path
+mimalloc = { workspace = true }
+
+[dev-dependencies]
+
+# Binary target relocated here from `rustre-mcp-server` so the binary can pull
+# in `rustre-mcp-tools` wire-mcp handlers (registering them inside the server
+# crate itself would create a `rustre-mcp-server` -> `rustre-mcp-tools` ->
+# `rustre-mcp-server` dependency cycle).
+[[bin]]
+name = "rustre-mcp"
+path = "../rustre-mcp-server/src/bin/rustre-mcp.rs"
+
+[lints]
+workspace = true

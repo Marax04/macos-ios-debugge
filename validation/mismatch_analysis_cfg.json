@@ -1,0 +1,306 @@
+{
+  "category": "analysis_cfg",
+  "tools_in_category": 40,
+  "checks_total": 24,
+  "checks_passed": 24,
+  "checks_skipped": 0,
+  "mismatches": [],
+  "ground_truth_computations": [
+    {
+      "graph": "linear",
+      "property": "cyclomatic_complexity",
+      "value": 1,
+      "details": "3 edges - 4 nodes + 2*components"
+    },
+    {
+      "graph": "linear",
+      "property": "back_edges",
+      "value": 0,
+      "edges": [],
+      "details": "Found 0 back edges in DFS tree"
+    },
+    {
+      "graph": "linear",
+      "property": "natural_loops",
+      "value": 0,
+      "loop_sizes": [],
+      "details": "Found 0 natural loops"
+    },
+    {
+      "graph": "linear",
+      "property": "reachable_from",
+      "entry_node": 0,
+      "value": 4,
+      "reachable_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "details": "4 nodes reachable from 0"
+    },
+    {
+      "graph": "linear",
+      "property": "postorder_dfs",
+      "entry_node": 0,
+      "value": [
+        3,
+        2,
+        1,
+        0
+      ],
+      "details": "Postorder traversal from 0"
+    },
+    {
+      "graph": "linear",
+      "property": "preorder_dfs",
+      "entry_node": 0,
+      "value": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "details": "Preorder traversal from 0"
+    },
+    {
+      "graph": "diamond",
+      "property": "cyclomatic_complexity",
+      "value": 2,
+      "details": "4 edges - 4 nodes + 2*components"
+    },
+    {
+      "graph": "diamond",
+      "property": "back_edges",
+      "value": 0,
+      "edges": [],
+      "details": "Found 0 back edges in DFS tree"
+    },
+    {
+      "graph": "diamond",
+      "property": "natural_loops",
+      "value": 0,
+      "loop_sizes": [],
+      "details": "Found 0 natural loops"
+    },
+    {
+      "graph": "diamond",
+      "property": "reachable_from",
+      "entry_node": 0,
+      "value": 4,
+      "reachable_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "details": "4 nodes reachable from 0"
+    },
+    {
+      "graph": "diamond",
+      "property": "postorder_dfs",
+      "entry_node": 0,
+      "value": [
+        3,
+        1,
+        2,
+        0
+      ],
+      "details": "Postorder traversal from 0"
+    },
+    {
+      "graph": "diamond",
+      "property": "preorder_dfs",
+      "entry_node": 0,
+      "value": [
+        0,
+        1,
+        3,
+        2
+      ],
+      "details": "Preorder traversal from 0"
+    },
+    {
+      "graph": "loop",
+      "property": "cyclomatic_complexity",
+      "value": 2,
+      "details": "4 edges - 4 nodes + 2*components"
+    },
+    {
+      "graph": "loop",
+      "property": "back_edges",
+      "value": 1,
+      "edges": [
+        [
+          2,
+          1
+        ]
+      ],
+      "details": "Found 1 back edges in DFS tree"
+    },
+    {
+      "graph": "loop",
+      "property": "natural_loops",
+      "value": 1,
+      "loop_sizes": [
+        2
+      ],
+      "details": "Found 1 natural loops"
+    },
+    {
+      "graph": "loop",
+      "property": "reachable_from",
+      "entry_node": 0,
+      "value": 4,
+      "reachable_set": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "details": "4 nodes reachable from 0"
+    },
+    {
+      "graph": "loop",
+      "property": "postorder_dfs",
+      "entry_node": 0,
+      "value": [
+        3,
+        2,
+        1,
+        0
+      ],
+      "details": "Postorder traversal from 0"
+    },
+    {
+      "graph": "loop",
+      "property": "preorder_dfs",
+      "entry_node": 0,
+      "value": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "details": "Preorder traversal from 0"
+    },
+    {
+      "graph": "complex",
+      "property": "cyclomatic_complexity",
+      "value": 3,
+      "details": "9 edges - 8 nodes + 2*components"
+    },
+    {
+      "graph": "complex",
+      "property": "back_edges",
+      "value": 1,
+      "edges": [
+        [
+          5,
+          3
+        ]
+      ],
+      "details": "Found 1 back edges in DFS tree"
+    },
+    {
+      "graph": "complex",
+      "property": "natural_loops",
+      "value": 1,
+      "loop_sizes": [
+        2
+      ],
+      "details": "Found 1 natural loops"
+    },
+    {
+      "graph": "complex",
+      "property": "reachable_from",
+      "entry_node": 0,
+      "value": 8,
+      "reachable_set": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "details": "8 nodes reachable from 0"
+    },
+    {
+      "graph": "complex",
+      "property": "postorder_dfs",
+      "entry_node": 0,
+      "value": [
+        7,
+        5,
+        3,
+        6,
+        4,
+        2,
+        1,
+        0
+      ],
+      "details": "Postorder traversal from 0"
+    },
+    {
+      "graph": "complex",
+      "property": "preorder_dfs",
+      "entry_node": 0,
+      "value": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        7,
+        4,
+        6
+      ],
+      "details": "Preorder traversal from 0"
+    }
+  ],
+  "tool_names": [
+    "analysis_cfg_build_stats",
+    "analysis_cfg_dominator_tree",
+    "analysis_cfg_post_dominator_tree",
+    "analysis_cfg_find_natural_loops",
+    "analysis_cfg_find_back_edges",
+    "analysis_cfg_is_reducible",
+    "analysis_cfg_cyclomatic_complexity",
+    "analysis_cfg_to_dot",
+    "analysis_cfg_reachable_from",
+    "analysis_cfg_reverse_post_order",
+    "analysis_cfg_dominates",
+    "analysis_cfg_dominance_frontier",
+    "analysis_cfg_post_order",
+    "analysis_cfg_predecessors",
+    "analysis_cfg_successors",
+    "analysis_cfg_is_back_edge",
+    "analysis_cfg_post_dominates",
+    "analysis_cfg_immediate_dominator",
+    "analysis_cfg_block_count",
+    "analysis_cfg_edge_count",
+    "analysis_cfg_to_full_json",
+    "analysis_cfg_to_dot_annotated",
+    "analysis_cfg_strictly_dominates",
+    "analysis_cfg_dominated_by",
+    "analysis_cfg_dom_depth",
+    "analysis_cfg_stats_is_complex",
+    "analysis_cfg_metrics_compute",
+    "analysis_cfg_scc_components",
+    "analysis_cfg_scc_loops_count",
+    "analysis_cfg_reducibility_test",
+    "analysis_cfg_dominance_frontier_of",
+    "analysis_cfg_iterated_dominance_frontier",
+    "analysis_cfg_natural_loop_count",
+    "analysis_cfg_natural_loops_innermost",
+    "analysis_cfg_stats_entry_exit_blocks",
+    "analysis_cfg_reachable_count",
+    "analysis_cfg_join_branch_counts",
+    "analysis_cfg_dot_printer_render",
+    "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "analysis_cfg_flow_edge_kind_is_conditional"
+  ]
+}

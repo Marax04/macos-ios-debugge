@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-analysis",
+  "status": "no_mcp_surface",
+  "note": "Per report C:/Users/Fra/Desktop/RustRE/validation/reports/rustre-analysis.md (sezione 'Existing MCP Tools'): nessun tool MCP fa riferimento a rustre_analysis::. La crate e' framework/coordination layer consumato dalle sister crates (rustre-analysis-xref/fn/string/cfg/type/typerecov), che sono quelle effettivamente esposte via wire_tools.rs. Il validator Python (rustre-analysis.py) e' progettato per test in-process Rust (proptest/snapshot), non per cross-check via MCP JSON-RPC. Non c'e' percorso MCP da confrontare per questa crate.",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "integration_gap": "Per esporre questa crate via MCP servirebbe wirare un tool tipo rustre_analysis_pipeline_run che esponga AnalysisManager::run_pipeline (vedi report sezione 'Validator Strategy')."
+}

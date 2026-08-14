@@ -1,0 +1,407 @@
+#!/usr/bin/env python3
+"""Rigorous ground-truth validation for smali_ prefixed MCP tools."""
+import json, subprocess, sys
+
+EXE = r"C:\Users\Fra\Desktop\RustRE\target\release\rustre-mcp.exe"
+TARGET = r"C:\Users\Fra\Desktop\Zyphora\target\release\cargo-zyphora.exe"
+
+# ── MCP transport helpers ──────────────────────────────────────────────────────
+p = subprocess.Popen(
+    [EXE, "--transport=stdio"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0
+)
+
+def send(req):
+    p.stdin.write((json.dumps(req) + "\n").encode())
+    p.stdin.flush()
+
+def recv():
+    line = p.stdout.readline()
+    if not line:
+        raise RuntimeError("server died")
+    try:
+        return json.loads(line)
+    except json.JSONDecodeError:
+        return {"error": {"message": f"bad-line: {line[:100]!r}"}}
+
+def call_tool(name, args, rid):
+    send({"jsonrpc": "2.0", "id": rid, "method": "tools/call",
+          "params": {"name": name, "arguments": args}})
+    resp = recv()
+    if "error" in resp:
+        return None, f"JSONRPC_ERROR: {resp['error']}"
+    content = resp.get("result", {}).get("content", [])
+    is_err = resp.get("result", {}).get("isError", False)
+    txt = content[0].get("text", "") if content else ""
+    if is_err:
+        return None, f"TOOL_ERROR: {txt[:200]}"
+    try:
+        return json.loads(txt), None
+    except Exception:
+        return txt, None
+
+# ── Initialize ─────────────────────────────────────────────────────────────────
+send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+      "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                 "clientInfo": {"name": "rigorous_smali", "version": "1"}}})
+recv()
+send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+# Open project (required by server)
+send({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+      "params": {"name": "project.open", "arguments": {"path": TARGET}}})
+op = recv()
+op_data = json.loads(op["result"]["content"][0]["text"])
+BINARY_ID = op_data["binary_id"]
+
+# ── Python reference implementations ─────────────────────────────────────────
+
+def ref_smali_reg_display(num: int) -> str:
+    """SmaliReg Display: num < 64 → v{num}, else p{num-64}."""
+    if num < 64:
+        return f"v{num}"
+    return f"p{num - 64}"
+
+# Dalvik opcode → smali mnemonic mapping derived from rustre-mobile-smali/src/lib.rs
+# Each entry is (byte_value, mnemonic).
+_DALVIK_MNEMONICS = {
+    0x00: "nop",
+    0x01: "move",
+    0x02: "move/from16",
+    0x03: "move/16",
+    0x04: "move-wide",
+    0x05: "move-wide/from16",
+    0x06: "move-wide/16",
+    0x07: "move-object",
+    0x08: "move-object/from16",
+    0x09: "move-object/16",
+    0x0a: "move-result",
+    0x0b: "move-result-wide",
+    0x0c: "move-result-object",
+    0x0d: "move-exception",
+    0x0e: "return-void",
+    0x0f: "return",
+    0x10: "return-wide",
+    0x11: "return-object",
+    0x12: "const/4",
+    0x13: "const/16",
+    0x14: "const",
+    0x15: "const/high16",
+    0x16: "const-wide/16",
+    0x17: "const-wide/32",
+    0x18: "const-wide",
+    0x19: "const-wide/high16",
+    0x1a: "const-string",
+    0x1b: "const-string/jumbo",
+    0x1c: "const-class",
+    0x1d: "monitor-enter",
+    0x1e: "monitor-exit",
+    0x1f: "check-cast",
+    0x20: "instance-of",
+    0x21: "array-length",
+    0x22: "new-instance",
+    0x23: "new-array",
+    0x24: "filled-new-array",
+    0x25: "filled-new-array/range",
+    0x26: "fill-array-data",
+    0x27: "throw",
+    0x28: "goto",
+    0x29: "goto/16",
+    0x2a: "goto/32",
+    0x2b: "packed-switch",
+    0x2c: "sparse-switch",
+    0x2d: "cmpl-float",
+    0x2e: "cmpg-float",
+    0x2f: "cmpl-double",
+    0x30: "cmpg-double",
+    0x31: "cmp-long",
+    0x32: "if-eq",
+    0x33: "if-ne",
+    0x34: "if-lt",
+    0x35: "if-ge",
+    0x36: "if-gt",
+    0x37: "if-le",
+    0x38: "if-eqz",
+    0x39: "if-nez",
+    0x3a: "if-ltz",
+    0x3b: "if-gez",
+    0x3c: "if-gtz",
+    0x3d: "if-lez",
+    # 0x3e-0x43 unused → nop
+    **{b: "nop" for b in range(0x3e, 0x44)},
+    0x44: "aget",
+    0x45: "aget-wide",
+    0x46: "aget-object",
+    0x47: "aget-boolean",
+    0x48: "aget-byte",
+    0x49: "aget-char",
+    0x4a: "aget-short",
+    0x4b: "aput",
+    0x4c: "aput-wide",
+    0x4d: "aput-object",
+    0x4e: "aput-boolean",
+    0x4f: "aput-byte",
+    0x50: "aput-char",
+    0x51: "aput-short",
+    0x52: "iget",
+    0x53: "iget-wide",
+    0x54: "iget-object",
+    0x55: "iget-boolean",
+    0x56: "iget-byte",
+    0x57: "iget-char",
+    0x58: "iget-short",
+    0x59: "iput",
+    0x5a: "iput-wide",
+    0x5b: "iput-object",
+    0x5c: "iput-boolean",
+    0x5d: "iput-byte",
+    0x5e: "iput-char",
+    0x5f: "iput-short",
+    0x60: "sget",
+    0x61: "sget-wide",
+    0x62: "sget-object",
+    0x63: "sget-boolean",
+    0x64: "sget-byte",
+    0x65: "sget-char",
+    0x66: "sget-short",
+    0x67: "sput",
+    0x68: "sput-wide",
+    0x69: "sput-object",
+    0x6a: "sput-boolean",
+    0x6b: "sput-byte",
+    0x6c: "sput-char",
+    0x6d: "sput-short",
+    0x6e: "invoke-virtual",
+    0x6f: "invoke-super",
+    0x70: "invoke-direct",
+    0x71: "invoke-static",
+    0x72: "invoke-interface",
+    0x73: "nop",  # Unused73
+    0x74: "invoke-virtual/range",
+    0x75: "invoke-super/range",
+    0x76: "invoke-direct/range",
+    0x77: "invoke-static/range",
+    0x78: "invoke-interface/range",
+    0x79: "nop",  # Unused79
+    0x7a: "nop",  # Unused7a
+    0x7b: "neg-int",
+    0x7c: "not-int",
+    0x7d: "neg-long",
+    0x7e: "not-long",
+    0x7f: "neg-float",
+    0x80: "neg-double",
+    0x81: "int-to-long",
+    0x82: "int-to-float",
+    0x83: "int-to-double",
+    0x84: "long-to-int",
+    0x85: "long-to-float",
+    0x86: "long-to-double",
+    0x87: "float-to-int",
+    0x88: "float-to-long",
+    0x89: "float-to-double",
+    0x8a: "double-to-int",
+    0x8b: "double-to-long",
+    0x8c: "double-to-float",
+    0x8d: "int-to-byte",
+    0x8e: "int-to-char",
+    0x8f: "int-to-short",
+    0x90: "add-int",
+    0x91: "sub-int",
+    0x92: "mul-int",
+    0x93: "div-int",
+    0x94: "rem-int",
+    0x95: "and-int",
+    0x96: "or-int",
+    0x97: "xor-int",
+    0x98: "shl-int",
+    0x99: "shr-int",
+    0x9a: "ushr-int",
+    0x9b: "add-long",
+    0x9c: "sub-long",
+    0x9d: "mul-long",
+    0x9e: "div-long",
+    0x9f: "rem-long",
+    0xa0: "and-long",
+    0xa1: "or-long",
+    0xa2: "xor-long",
+    0xa3: "shl-long",
+    0xa4: "shr-long",
+    0xa5: "ushr-long",
+    0xa6: "add-float",
+    0xa7: "sub-float",
+    0xa8: "mul-float",
+    0xa9: "div-float",
+    0xaa: "rem-float",
+    0xab: "add-double",
+    0xac: "sub-double",
+    0xad: "mul-double",
+    0xae: "div-double",
+    0xaf: "rem-double",
+    # /2addr
+    0xb0: "add-int/2addr",
+    0xb1: "sub-int/2addr",
+    0xb2: "mul-int/2addr",
+    0xb3: "div-int/2addr",
+    0xb4: "rem-int/2addr",
+    0xb5: "and-int/2addr",
+    0xb6: "or-int/2addr",
+    0xb7: "xor-int/2addr",
+    0xb8: "shl-int/2addr",
+    0xb9: "shr-int/2addr",
+    0xba: "ushr-int/2addr",
+    0xbb: "add-long/2addr",
+    0xbc: "sub-long/2addr",
+    0xbd: "mul-long/2addr",
+    0xbe: "div-long/2addr",
+    0xbf: "rem-long/2addr",
+    0xc0: "and-long/2addr",
+    0xc1: "or-long/2addr",
+    0xc2: "xor-long/2addr",
+    0xc3: "shl-long/2addr",
+    0xc4: "shr-long/2addr",
+    0xc5: "ushr-long/2addr",
+    0xc6: "add-float/2addr",
+    0xc7: "sub-float/2addr",
+    0xc8: "mul-float/2addr",
+    0xc9: "div-float/2addr",
+    0xca: "rem-float/2addr",
+    0xcb: "add-double/2addr",
+    0xcc: "sub-double/2addr",
+    0xcd: "mul-double/2addr",
+    0xce: "div-double/2addr",
+    0xcf: "rem-double/2addr",
+    # /lit16
+    0xd0: "add-int/lit16",
+    0xd1: "rsub-int",
+    0xd2: "mul-int/lit16",
+    0xd3: "div-int/lit16",
+    0xd4: "rem-int/lit16",
+    0xd5: "and-int/lit16",
+    0xd6: "or-int/lit16",
+    0xd7: "xor-int/lit16",
+    # /lit8
+    0xd8: "add-int/lit8",
+    0xd9: "rsub-int/lit8",
+    0xda: "mul-int/lit8",
+    0xdb: "div-int/lit8",
+    0xdc: "rem-int/lit8",
+    0xdd: "and-int/lit8",
+    0xde: "or-int/lit8",
+    0xdf: "xor-int/lit8",
+    0xe0: "shl-int/lit8",
+    0xe1: "shr-int/lit8",
+    0xe2: "ushr-int/lit8",
+    # 0xe3-0xf9 unused → nop
+    **{b: "nop" for b in range(0xe3, 0xfa)},
+    0xfa: "invoke-polymorphic",
+    0xfb: "invoke-polymorphic/range",
+    0xfc: "invoke-custom",
+    0xfd: "invoke-custom/range",
+    0xfe: "const-method-handle",
+    0xff: "const-method-type",
+}
+
+def ref_smali_opcode_to_mnemonic(byte_val: int) -> str:
+    return _DALVIK_MNEMONICS[byte_val]
+
+# ── Test cases ─────────────────────────────────────────────────────────────────
+
+# smali_reg_display: test v0, v63 (boundary), p0 (=64), p63 (=127), p191 (=255)
+REG_TEST_CASES = [0, 1, 10, 63, 64, 65, 127, 128, 255]
+
+# smali_opcode_to_mnemonic: test representative bytes
+OPCODE_TEST_CASES = [0x00, 0x01, 0x0e, 0x12, 0x1a, 0x28, 0x32, 0x6e, 0x71,
+                     0x90, 0xb0, 0xd0, 0xd8, 0xfa, 0xfe, 0xff,
+                     0x3e, 0x73, 0xe3]  # some "unused" → nop
+
+# ── Run tests ──────────────────────────────────────────────────────────────────
+
+results = []
+mismatches = []
+rid = 100
+
+tools_hardened = 2
+tools_passed = 0
+tools_failed = 0
+tools_skipped = 0
+
+# ── smali_reg_display ─────────────────────────────────────────────────────────
+tool_name = "smali_reg_display"
+tool_pass = True
+tool_mismatch = None
+
+for num in REG_TEST_CASES:
+    rid += 1
+    actual, err = call_tool(tool_name, {"num": num}, rid)
+    if err:
+        tool_pass = False
+        tool_mismatch = {"tool": tool_name, "input": num,
+                         "expected": ref_smali_reg_display(num), "actual": err}
+        break
+    expected_display = ref_smali_reg_display(num)
+    got_display = actual.get("display") if isinstance(actual, dict) else None
+    if got_display != expected_display:
+        tool_pass = False
+        tool_mismatch = {"tool": tool_name, "input": num,
+                         "expected": expected_display, "actual": got_display}
+        break
+
+if tool_pass:
+    tools_passed += 1
+else:
+    tools_failed += 1
+    mismatches.append(tool_mismatch)
+
+# ── smali_opcode_to_mnemonic ──────────────────────────────────────────────────
+tool_name = "smali_opcode_to_mnemonic"
+tool_pass = True
+tool_mismatch = None
+
+for byte_val in OPCODE_TEST_CASES:
+    rid += 1
+    actual, err = call_tool(tool_name, {"byte": byte_val}, rid)
+    if err:
+        tool_pass = False
+        tool_mismatch = {"tool": tool_name, "input": byte_val,
+                         "expected": ref_smali_opcode_to_mnemonic(byte_val), "actual": err}
+        break
+    expected_mnemonic = ref_smali_opcode_to_mnemonic(byte_val)
+    got_mnemonic = actual.get("mnemonic") if isinstance(actual, dict) else None
+    if got_mnemonic != expected_mnemonic:
+        tool_pass = False
+        tool_mismatch = {"tool": tool_name, "input": hex(byte_val),
+                         "expected": expected_mnemonic, "actual": got_mnemonic}
+        break
+
+if tool_pass:
+    tools_passed += 1
+else:
+    tools_failed += 1
+    mismatches.append(tool_mismatch)
+
+# ── Teardown ───────────────────────────────────────────────────────────────────
+try:
+    p.stdin.close()
+    p.terminate()
+except Exception:
+    pass
+
+# ── Write results ──────────────────────────────────────────────────────────────
+output = {
+    "category": "smali",
+    "tools_hardened": tools_hardened,
+    "tools_passed": tools_passed,
+    "tools_failed": tools_failed,
+    "tools_skipped": tools_skipped,
+    "mismatches": mismatches,
+    "detail": {
+        "smali_reg_display": "PASS" if not any(m["tool"] == "smali_reg_display" for m in mismatches) else "FAIL",
+        "smali_opcode_to_mnemonic": "PASS" if not any(m["tool"] == "smali_opcode_to_mnemonic" for m in mismatches) else "FAIL",
+    }
+}
+
+OUT = r"C:\Users\Fra\Desktop\RustRE\validation\rigorous_smali_v2.json"
+with open(OUT, "w") as f:
+    json.dump(output, f, indent=2)
+
+print(json.dumps(output, indent=2))

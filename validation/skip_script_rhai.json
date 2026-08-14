@@ -1,0 +1,9 @@
+{
+  "category": "script_rhai",
+  "skipped": [
+    {
+      "tool": "script_rhai_get_info",
+      "reason": "Stateful: requires an id returned by script_rhai_load_binary, which varies per run. Cannot compute expected output independently without a stable store reference."
+    }
+  ]
+}

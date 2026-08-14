@@ -1,0 +1,12 @@
+{
+  "crate": "rustre-deobf-opaque",
+  "tests": 0,
+  "mismatches": 0,
+  "match": false,
+  "note": "No MCP tool in wire_tools.rs exposes rustre-deobf-opaque. The crate is referenced only via a heuristic comment in analyze_full (line 4560), which counts opaque hits from rustre-deobf-antianti name strings rather than invoking OpaqueDeobfPass. The sibling crate rustre-deobf-mba is exposed via 'deobf_mba_normalize' but that is a different crate. Comparison cannot be performed: no MCP surface to call.",
+  "related_tools": ["deobf_mba_normalize"],
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches_detail": [],
+  "gap": "Missing MCP tool. Suggested name 'deobf_opaque_detect' wrapping rustre_deobf_opaque::OpaqueDeobfPass::run on a SimpleBranchCfg input."
+}

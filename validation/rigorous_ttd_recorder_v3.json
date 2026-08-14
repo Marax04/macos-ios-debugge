@@ -1,0 +1,418 @@
+{
+  "category": "ttd_recorder",
+  "tools_hardened": 11,
+  "tools_passed": 11,
+  "tools_failed": 0,
+  "tools_skipped": 1,
+  "total_checks": 37,
+  "checks_passed": 37,
+  "checks_failed": 0,
+  "mismatches": [],
+  "skips": [
+    {
+      "tool": "ttd_recorder_validation_is_perfect",
+      "reason": "Requires a real .run TTD trace file on disk \u2014 no deterministic fixture available"
+    }
+  ],
+  "results": [
+    {
+      "tool": "ttd_recorder_position_new",
+      "status": "PASS",
+      "expected": {
+        "major": 0,
+        "minor": 0,
+        "display": "0:0"
+      },
+      "actual": {
+        "major": 0,
+        "minor": 0,
+        "display": "0:0"
+      },
+      "note": "(0,0)"
+    },
+    {
+      "tool": "ttd_recorder_position_new",
+      "status": "PASS",
+      "expected": {
+        "major": 5,
+        "minor": 3,
+        "display": "5:3"
+      },
+      "actual": {
+        "major": 5,
+        "minor": 3,
+        "display": "5:3"
+      },
+      "note": "(5,3)"
+    },
+    {
+      "tool": "ttd_recorder_position_new",
+      "status": "PASS",
+      "expected": {
+        "major": 100,
+        "minor": 999,
+        "display": "100:999"
+      },
+      "actual": {
+        "major": 100,
+        "minor": 999,
+        "display": "100:999"
+      },
+      "note": "(100,999)"
+    },
+    {
+      "tool": "ttd_recorder_position_is_before",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "a=(0,0) b=(0,1)"
+    },
+    {
+      "tool": "ttd_recorder_position_is_before",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "a=(1,0) b=(0,0)"
+    },
+    {
+      "tool": "ttd_recorder_position_is_before",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "a=(5,3) b=(5,4)"
+    },
+    {
+      "tool": "ttd_recorder_position_is_before",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "a=(5,4) b=(5,3)"
+    },
+    {
+      "tool": "ttd_recorder_position_is_before",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "a=(5,3) b=(5,3)"
+    },
+    {
+      "tool": "ttd_recorder_position_earliest",
+      "status": "PASS",
+      "expected": {
+        "major": 0,
+        "minor": 0
+      },
+      "actual": {
+        "major": 0,
+        "minor": 0
+      },
+      "note": "a=(0,0) b=(1,0)"
+    },
+    {
+      "tool": "ttd_recorder_position_earliest",
+      "status": "PASS",
+      "expected": {
+        "major": 3,
+        "minor": 4
+      },
+      "actual": {
+        "major": 3,
+        "minor": 4
+      },
+      "note": "a=(3,5) b=(3,4)"
+    },
+    {
+      "tool": "ttd_recorder_position_earliest",
+      "status": "PASS",
+      "expected": {
+        "major": 3,
+        "minor": 4
+      },
+      "actual": {
+        "major": 3,
+        "minor": 4
+      },
+      "note": "a=(3,4) b=(3,4)"
+    },
+    {
+      "tool": "ttd_recorder_position_earliest",
+      "status": "PASS",
+      "expected": {
+        "major": 5,
+        "minor": 0
+      },
+      "actual": {
+        "major": 5,
+        "minor": 0
+      },
+      "note": "a=(10,0) b=(5,0)"
+    },
+    {
+      "tool": "ttd_recorder_config_for_pid",
+      "status": "PASS",
+      "expected": {
+        "target": "pid:1234",
+        "compression": "default",
+        "record_heap": true,
+        "valid": true
+      },
+      "actual": {
+        "target": "pid:1234",
+        "compression": "default",
+        "record_heap": true,
+        "valid": true
+      }
+    },
+    {
+      "tool": "ttd_recorder_config_for_pid",
+      "status": "PASS",
+      "expected": {
+        "valid": false
+      },
+      "actual": {
+        "valid": false
+      },
+      "note": "empty output_dir"
+    },
+    {
+      "tool": "ttd_recorder_filter_thread_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "tid=100 inc=[] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_thread_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "tid=100 inc=[100, 200] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_thread_allowed",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "tid=300 inc=[100, 200] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_thread_allowed",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "tid=100 inc=[] exc=[100]"
+    },
+    {
+      "tool": "ttd_recorder_filter_thread_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "tid=200 inc=[] exc=[100]"
+    },
+    {
+      "tool": "ttd_recorder_filter_module_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "name=kernel32.dll inc=[] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_module_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "name=kernel32.dll inc=['kernel32.dll'] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_module_allowed",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "name=ntdll.dll inc=['kernel32.dll'] exc=[]"
+    },
+    {
+      "tool": "ttd_recorder_filter_module_allowed",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "name=kernel32.dll inc=[] exc=['kernel32.dll']"
+    },
+    {
+      "tool": "ttd_recorder_filter_module_allowed",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "name=ntdll.dll inc=[] exc=['kernel32.dll']"
+    },
+    {
+      "tool": "ttd_recorder_compression_level_display",
+      "status": "PASS",
+      "expected": [
+        {
+          "variant": "None",
+          "display": "none"
+        },
+        {
+          "variant": "Fast",
+          "display": "fast"
+        },
+        {
+          "variant": "Default",
+          "display": "default"
+        },
+        {
+          "variant": "Best",
+          "display": "best"
+        }
+      ],
+      "actual": [
+        {
+          "variant": "None",
+          "display": "none"
+        },
+        {
+          "variant": "Fast",
+          "display": "fast"
+        },
+        {
+          "variant": "Default",
+          "display": "default"
+        },
+        {
+          "variant": "Best",
+          "display": "best"
+        }
+      ]
+    },
+    {
+      "tool": "ttd_recorder_metrics_summary",
+      "status": "PASS",
+      "expected": "events=100 file=1024B elapsed=5.0s threads=3",
+      "actual": "events=100 file=1024B elapsed=5.0s threads=3",
+      "note": "ev=100 fs=1024 el=5.0 tc=3"
+    },
+    {
+      "tool": "ttd_recorder_metrics_summary",
+      "status": "PASS",
+      "expected": "events=0 file=0B elapsed=0.0s threads=0",
+      "actual": "events=0 file=0B elapsed=0.0s threads=0",
+      "note": "ev=0 fs=0 el=0.0 tc=0"
+    },
+    {
+      "tool": "ttd_recorder_metrics_summary",
+      "status": "PASS",
+      "expected": "events=999 file=512000B elapsed=1.5s threads=4",
+      "actual": "events=999 file=512000B elapsed=1.5s threads=4",
+      "note": "ev=999 fs=512000 el=1.5 tc=4"
+    },
+    {
+      "tool": "ttd_recorder_schedule_should_stop",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "max=10 elapsed=5"
+    },
+    {
+      "tool": "ttd_recorder_schedule_should_stop",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "max=10 elapsed=10"
+    },
+    {
+      "tool": "ttd_recorder_schedule_should_stop",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "max=10 elapsed=15"
+    },
+    {
+      "tool": "ttd_recorder_schedule_should_stop",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "max=0 elapsed=0"
+    },
+    {
+      "tool": "ttd_recorder_encryptor_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "roundtrip_ok": true,
+        "ciphertext_len": 44
+      },
+      "actual": {
+        "roundtrip_ok": true,
+        "ciphertext_len": 44
+      },
+      "note": "roundtrip_ok must be True; ct_len = pt_len + 28"
+    },
+    {
+      "tool": "ttd_recorder_ring_buffer_overflow",
+      "status": "PASS",
+      "expected": {
+        "len": 3,
+        "is_empty_before_clear": false,
+        "snapshot_len": 3,
+        "len_after_clear": 0
+      },
+      "actual": {
+        "len": 3,
+        "is_empty_before_clear": false,
+        "snapshot_len": 3,
+        "len_after_clear": 0
+      },
+      "note": "cap=5 push=3"
+    },
+    {
+      "tool": "ttd_recorder_ring_buffer_overflow",
+      "status": "PASS",
+      "expected": {
+        "len": 5,
+        "is_empty_before_clear": false,
+        "snapshot_len": 5,
+        "len_after_clear": 0
+      },
+      "actual": {
+        "len": 5,
+        "is_empty_before_clear": false,
+        "snapshot_len": 5,
+        "len_after_clear": 0
+      },
+      "note": "cap=5 push=5"
+    },
+    {
+      "tool": "ttd_recorder_ring_buffer_overflow",
+      "status": "PASS",
+      "expected": {
+        "len": 5,
+        "is_empty_before_clear": false,
+        "snapshot_len": 5,
+        "len_after_clear": 0
+      },
+      "actual": {
+        "len": 5,
+        "is_empty_before_clear": false,
+        "snapshot_len": 5,
+        "len_after_clear": 0
+      },
+      "note": "cap=5 push=8"
+    },
+    {
+      "tool": "ttd_recorder_ring_buffer_overflow",
+      "status": "PASS",
+      "expected": {
+        "len": 1,
+        "is_empty_before_clear": false,
+        "snapshot_len": 1,
+        "len_after_clear": 0
+      },
+      "actual": {
+        "len": 1,
+        "is_empty_before_clear": false,
+        "snapshot_len": 1,
+        "len_after_clear": 0
+      },
+      "note": "cap=1 push=10"
+    }
+  ]
+}

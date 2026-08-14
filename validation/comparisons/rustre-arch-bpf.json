@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-arch-bpf",
+  "tests": 13,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-arch-bpf (verificato in crates/rustre-mcp-tools/src/wire_tools.rs: arch disasm esposti = arm64, mips, riscv, wasm, cil, jvm; nessun *_bpf). Validator Python self-tests eseguiti con successo (13 casi: decode_insn x6, disassemble, helper_name x3, map_type_name x2, cfg_summary). Confronto MCP-vs-validator non eseguibile finche' non viene esposto un tool analysis_disasm_at_path_bpf o equivalente. Gap MCP gia' documentato in validation/reports/rustre-arch-bpf.md.",
+  "validator_output_file": "comparisons/_bpf_validator_out.json",
+  "gap": "missing_mcp_tool:analysis_disasm_at_path_bpf"
+}

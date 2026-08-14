@@ -1,0 +1,45 @@
+{
+  "summary": {
+    "tools_hardened": 0,
+    "tools_passed": 0,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "note": "All 26 vmlift_* tools are already fully covered by rigorous_vmlift_v2.json (30 test cases). No new tools found to harden in this round."
+  },
+  "coverage_audit": {
+    "total_vmlift_tools_in_server": 26,
+    "tools_covered_by_v2": 26,
+    "tools_remaining": 0,
+    "v2_test_cases": 30,
+    "tools_list": [
+      "vmlift_binop_display",
+      "vmlift_default_isa_len",
+      "vmlift_default_isa_listing",
+      "vmlift_default_isa_opcodes",
+      "vmlift_detect_and_report",
+      "vmlift_detect_dispatchers_in_bytes",
+      "vmlift_disassemble_default",
+      "vmlift_disassemble_to_text_default",
+      "vmlift_extract_jump_table_entries",
+      "vmlift_full_pipeline",
+      "vmlift_guest_instruction_display",
+      "vmlift_handler_semantic_accesses_memory",
+      "vmlift_handler_semantic_flags",
+      "vmlift_handler_semantic_is_control_flow",
+      "vmlift_handler_semantic_suggest_mnemonic",
+      "vmlift_instruction_def_operand_bytes",
+      "vmlift_isa_len_is_empty",
+      "vmlift_isa_lookup_opcode",
+      "vmlift_isa_new_empty",
+      "vmlift_isa_register_and_lookup",
+      "vmlift_isa_sorted_opcodes",
+      "vmlift_lift_instruction_count",
+      "vmlift_lift_to_pseudo_il",
+      "vmlift_raw_dispatcher_kind_display",
+      "vmlift_run_pass",
+      "vmlift_suggest_mnemonic_halt"
+    ]
+  },
+  "results": [],
+  "mismatches": []
+}

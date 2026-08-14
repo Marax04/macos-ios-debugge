@@ -1,0 +1,402 @@
+{
+  "results": [
+    {
+      "tool": "triage_entropy_shannon_bytes",
+      "input_hex": "deadbeef00112233...",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_bytes",
+      "input_hex": "0001020304050607...",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_bytes",
+      "input_hex": "0000000000000000...",
+      "expected": 0.0,
+      "actual": 0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_compute_entropy",
+      "input_hex": "deadbeef00112233...",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_compute_entropy",
+      "input_hex": "0001020304050607...",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_compute_entropy",
+      "input_hex": "0000000000000000...",
+      "expected": 0.0,
+      "actual": 0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_bytes_f32",
+      "input_hex": "deadbeef00112233...",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_bytes_f32",
+      "input_hex": "0001020304050607...",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_bytes_f32",
+      "input_hex": "0000000000000000...",
+      "expected": 0.0,
+      "actual": -0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 0.0,
+      "expected": "Empty",
+      "actual": "Empty",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 0.5,
+      "expected": "Empty",
+      "actual": "Empty",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 1.0,
+      "expected": "Text",
+      "actual": "Text",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 3.9,
+      "expected": "Text",
+      "actual": "Text",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 4.0,
+      "expected": "Code",
+      "actual": "Code",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 4.9,
+      "expected": "Code",
+      "actual": "Code",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 5.0,
+      "expected": "Data",
+      "actual": "Data",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 5.9,
+      "expected": "Data",
+      "actual": "Data",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 6.0,
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 6.9,
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 7.0,
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 7.4,
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 7.5,
+      "expected": "Random",
+      "actual": "Random",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "input_entropy": 8.0,
+      "expected": "Random",
+      "actual": "Random",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 0.0,
+      "expected": [
+        0,
+        0,
+        128
+      ],
+      "actual": [
+        0,
+        0,
+        128
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 1.9,
+      "expected": [
+        0,
+        0,
+        128
+      ],
+      "actual": [
+        0,
+        0,
+        128
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 2.0,
+      "expected": [
+        0,
+        128,
+        255
+      ],
+      "actual": [
+        0,
+        128,
+        255
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 3.9,
+      "expected": [
+        0,
+        128,
+        255
+      ],
+      "actual": [
+        0,
+        128,
+        255
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 4.0,
+      "expected": [
+        0,
+        200,
+        0
+      ],
+      "actual": [
+        0,
+        200,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 5.9,
+      "expected": [
+        0,
+        200,
+        0
+      ],
+      "actual": [
+        0,
+        200,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 6.0,
+      "expected": [
+        255,
+        200,
+        0
+      ],
+      "actual": [
+        255,
+        200,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 6.9,
+      "expected": [
+        255,
+        200,
+        0
+      ],
+      "actual": [
+        255,
+        200,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 7.0,
+      "expected": [
+        200,
+        0,
+        0
+      ],
+      "actual": [
+        200,
+        0,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "input_entropy": 8.0,
+      "expected": [
+        200,
+        0,
+        0
+      ],
+      "actual": [
+        200,
+        0,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "tool": "triage_die_find_bytes",
+      "input": {
+        "hex": "deadbeef00112233",
+        "pattern": "deadbeef"
+      },
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_find_bytes(absent)",
+      "input": {
+        "hex": "deadbeef00112233",
+        "pattern": "cafecafe"
+      },
+      "expected": null,
+      "actual": null,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_alias",
+      "input_hex": "deadbeef00112233...",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_alias",
+      "input_hex": "0001020304050607...",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "input_entropy": 0.5,
+      "expected_one_of": [
+        "VeryLow"
+      ],
+      "actual": "VeryLow",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "input_entropy": 2.0,
+      "expected_one_of": [
+        "Low"
+      ],
+      "actual": "Low",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "input_entropy": 4.0,
+      "expected_one_of": [
+        "Medium"
+      ],
+      "actual": "Medium",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "input_entropy": 6.0,
+      "expected_one_of": [
+        "High"
+      ],
+      "actual": "High",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "input_entropy": 7.5,
+      "expected_one_of": [
+        "VeryHigh"
+      ],
+      "actual": "VeryHigh",
+      "pass": true
+    }
+  ],
+  "skip": [],
+  "mismatches": [],
+  "summary": {
+    "total": 42,
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0
+  }
+}

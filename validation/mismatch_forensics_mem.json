@@ -1,0 +1,8 @@
+{
+  "category": "forensics_mem",
+  "tools_in_category": 18,
+  "checks_total": 48,
+  "checks_passed": 48,
+  "checks_skipped": 0,
+  "mismatches": []
+}

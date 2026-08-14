@@ -1,0 +1,37 @@
+{
+  "module": "trace_coverage",
+  "skipped_tools": [
+    {
+      "tool": "trace_coverage_map_wt1",
+      "reason": "Requires a live rustre_trace::CoverageMap from an instrumented binary run; no deterministic reference input available without a real trace file."
+    },
+    {
+      "tool": "trace_coverage_map_ratio",
+      "reason": "Requires a live rustre_trace::CoverageMap; nondeterministic without a real trace file."
+    },
+    {
+      "tool": "trace_coverage_map_hit_count",
+      "reason": "Requires a serialized CoverageMap in binary format not easily reproducible without the internal serializer."
+    },
+    {
+      "tool": "trace_coverage_lighthouse_from_run_v2",
+      "reason": "Returns a Lighthouse JSON blob whose exact structure depends on internal bb_hits map ordering (HashMap, nondeterministic)."
+    },
+    {
+      "tool": "trace_coverage_html_report_v2",
+      "reason": "HTML report output contains timestamps and is nondeterministic."
+    },
+    {
+      "tool": "trace_coverage_drcov_to_run_v2",
+      "reason": "Requires a real DRcov binary file; text format parsing is covered by trace_coverage_drcov_parse."
+    },
+    {
+      "tool": "trace_coverage_lighthouse_roundtrip",
+      "reason": "Lighthouse JSON roundtrip output ordering is nondeterministic (HashMap-backed)."
+    },
+    {
+      "tool": "trace_coverage_drcov_resolve",
+      "reason": "Requires a real DRcov binary file with a module table; cannot produce deterministic test input without the binary."
+    }
+  ]
+}

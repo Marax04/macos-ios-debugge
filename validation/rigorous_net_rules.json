@@ -1,0 +1,7 @@
+{
+  "module": "net_rules",
+  "tools_hardened": 19,
+  "checks_passed": 68,
+  "checks_failed": 0,
+  "mismatches": []
+}

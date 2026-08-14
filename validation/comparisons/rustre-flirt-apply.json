@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-flirt-apply",
+  "tests_run": 1,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "Validator self-test pass (CRC16/MCRF4XX, pattern parse with wildcards, confidence scoring, sliding-window scan with optional CRC check, library_marks_from_matches projection, SIG/PAT auto-detect, .pat loader). MCP espone solo flirt_apply_auto, wrapper di alto livello su rustre-flirt-apply + rustre-loader-pe: non offre superficie testabile a parita' delle primitive interne (crc16_flirt, FlirtPattern::matches, compute_confidence, scan_bytes). Confronto MCP vs validator alla stessa granularita' non possibile senza nuovi MCP tool che espongano le primitive."
+}

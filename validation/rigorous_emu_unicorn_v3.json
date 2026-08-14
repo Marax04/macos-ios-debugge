@@ -1,0 +1,596 @@
+{
+  "category": "emu_unicorn",
+  "version": "v3",
+  "generated_by": "validate_emu_unicorn_v2.py",
+  "date": "2026-07-11",
+  "summary": {
+    "total": 83,
+    "passed": 83,
+    "failed": 0,
+    "skipped": 0
+  },
+  "tests": [
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_read",
+      "description": "perm_can_read(1)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_read",
+      "description": "perm_can_read(2)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_read",
+      "description": "perm_can_read(7)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_exec",
+      "description": "perm_can_exec(4)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_exec",
+      "description": "perm_can_exec(3)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_write",
+      "description": "perm_can_write(bits=3)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_write",
+      "description": "perm_can_write(bits=5)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_exec_v2",
+      "description": "perm_can_exec_v2(7)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_can_exec_v2",
+      "description": "perm_can_exec_v2(3)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_write_bit",
+      "description": "perm_write_bit(perm=3)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_write_bit",
+      "description": "perm_write_bit(perm=1)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_read_bit",
+      "description": "perm_read_bit(1)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_read_bit",
+      "description": "perm_read_bit(6)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_exec_bit",
+      "description": "perm_exec_bit(4)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_exec_bit",
+      "description": "perm_exec_bit(3)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_constants",
+      "description": "perm_constants: read=1,write=2,exec=4",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_bitmask_encode",
+      "description": "perm_bitmask_encode(r,w)==3",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_bitmask_encode",
+      "description": "perm_bitmask_encode(r,x)==5",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_bitmask_encode",
+      "description": "perm_bitmask_encode(r,w,x)==7",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_roundtrip",
+      "description": "perm_roundtrip(7): all=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_perm_roundtrip",
+      "description": "perm_roundtrip(0): all=False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size",
+      "description": "mode_ptr_size(X86_64)==8",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size",
+      "description": "mode_ptr_size(X86_32)==4",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size",
+      "description": "mode_ptr_size(X86_16)==2",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size",
+      "description": "mode_ptr_size(Arm64Mode)==8",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size",
+      "description": "mode_ptr_size(ThumbMode)==4",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian",
+      "description": "mode_is_le(X86_64)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian",
+      "description": "mode_is_le(Mips32BE)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian",
+      "description": "mode_is_le(Sparc32)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size_v2",
+      "description": "mode_ptr_size_v2(X86_64)==8",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size_v2",
+      "description": "mode_ptr_size_v2(X86_32)==4",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size_v2",
+      "description": "mode_ptr_size_v2(Arm64Mode)==8",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_ptr_size_v2",
+      "description": "mode_ptr_size_v2(ThumbMode)==4",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian_v2",
+      "description": "mode_is_le_v2(X86_64)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian_v2",
+      "description": "mode_is_le_v2(Sparc32)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian_v2",
+      "description": "mode_is_le_v2(RiscV64)==True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_is_little_endian_v2",
+      "description": "mode_is_le_v2(Mips32BE)==False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_endian_check",
+      "description": "mode_endian_check: 18 modes",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mode_endian_check",
+      "description": "mode_endian_check: spot-check values",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_allocator_new",
+      "description": "heap_allocator_new: brk=base, allocs=0",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_zero_size_malloc",
+      "description": "heap_zero_size_malloc: is_none=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_malloc_sim",
+      "description": "heap_malloc_sim: addr==base",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_exhaustion_check",
+      "description": "heap_exhaustion_check: exhausted=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_free_invalid",
+      "description": "heap_free_invalid: freed=False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_bytes_used",
+      "description": "heap_bytes_used: malloc(16)->bytes_used=16",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_calloc_sim",
+      "description": "heap_calloc_sim: addr==base",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_calloc_zero",
+      "description": "heap_calloc_zero: None",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_realloc_same",
+      "description": "heap_realloc_same: same=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_realloc_missing",
+      "description": "heap_realloc_missing: is_none=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_realloc_grow",
+      "description": "heap_realloc_grow: realloc!=None",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_alloc_free_cycle",
+      "description": "heap_alloc_free_cycle: freed=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_free_then_alloc",
+      "description": "heap_free_then_alloc: reused=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_malloc_sequence",
+      "description": "heap_malloc_sequence(3x16): bytes_used=48",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_allocation_stats",
+      "description": "heap_allocation_stats: 2x32->used=64",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_brk_position",
+      "description": "heap_brk_position after [16,32]: brk=base+48",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_brk_frontier",
+      "description": "heap_brk_frontier after [16]: brk=base+16",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_double_free",
+      "description": "heap_double_free: free1=True, free2=False",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_realloc_shrink",
+      "description": "heap_realloc_shrink: same=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_realloc_free_addr",
+      "description": "heap_realloc_free_addr: result=None",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_heap_calloc_overflow_check",
+      "description": "heap_calloc_overflow_check: overflow=True",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_default_empty",
+      "description": "coverage_default_empty: all zero",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_single_bb",
+      "description": "coverage_single_bb: cov=1,edges=0",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_hit_count",
+      "description": "coverage_hit_count: 5 hits",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_record_seq",
+      "description": "coverage_record_seq: 3 unique BBs",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_reset_check",
+      "description": "coverage_reset_check: before=2,after=0",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_hot_block",
+      "description": "coverage_hot_block: hot=0x1000",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_most_visited",
+      "description": "coverage_most_visited: 0x1000",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_edge_walk",
+      "description": "coverage_edge_walk: 2 edges",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_reset_clears",
+      "description": "coverage_reset_clears: after_coverage=0",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_coverage_empty_report",
+      "description": "coverage_empty_report: empty",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_register_file_roundtrip",
+      "description": "register_file_roundtrip X86_64",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_hookkind_labels",
+      "description": "hookkind_labels: 5 labels",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_hook_access_kind",
+      "description": "hook_access_kind: has label",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_hook_insn_kind",
+      "description": "hook_insn_kind(SYSCALL): has label",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_options_defaults_v2",
+      "description": "emu_options_defaults_v2: expected keys",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_emu_options_custom",
+      "description": "emu_options_custom: round-trip",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mapped_region_contains",
+      "description": "mapped_region_contains: 0x1500 in [0x1000,0x2000)",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_mapped_region_contains",
+      "description": "mapped_region_contains: 0x2000 NOT in [0x1000,0x2000)",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_syscall_args_pack",
+      "description": "syscall_args_pack: fields round-trip",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_x86_64",
+      "description": "new_x86_64: returns dict",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_arm64",
+      "description": "new_arm64: returns dict",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_arm_thumb",
+      "description": "new_arm_thumb: returns dict",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_mips32",
+      "description": "new_mips32: arch=mips32",
+      "status": "PASS",
+      "verification": "independent_python_reference",
+      "reference_algorithm": "pure_python_logic"
+    }
+  ],
+  "notes": "All 83 tests use independent Python reference computations. Perm bitmask: READ=1, WRITE=2, EXEC=4. HeapAllocator: 16-byte alignment, first-fit free-list, brk advances from base. CoverageTracker: edges = N-1 for N sequential distinct BBs, reset clears all. Mode ptr_size: X86_16=2, 32-bit modes=4, 64-bit modes=8. Mode endianness: LE except Mips*BE, Sparc*, Ppc*, S390X. No mismatches found; all tools implemented correctly."
+}

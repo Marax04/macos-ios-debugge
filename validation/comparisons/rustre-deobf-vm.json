@@ -1,0 +1,37 @@
+{
+  "crate": "rustre-deobf-vm",
+  "tests": [
+    {
+      "name": "mcp_tools_list_filter",
+      "description": "Inspect wire_tools.rs for any tool exposing rustre-deobf-vm primitives (VmDetector, VmDispatcherDetector, VmLifter, VirtualMachineState, HandlerClusterer, VmBytecode, VmArch).",
+      "method": "static_inspection",
+      "mcp_result": "no tools registered matching vm_detect/vm_dispatcher/vm_lift/vm_simulate/deobf_vm; only deobf-related MCP tools are deobf_mba_normalize (rustre-deobf-mba) and AntiVmDetector embedded inside antianti scan",
+      "validator_result": "validator implements full VM analysis pipeline (VmDetector, VmDispatcherDetector signatures SIG1/SIG2, VmLifter with ALU_MAP 0x10-0x19, VirtualMachineState stack/regs/mem, HandlerClusterer, VmBytecode entropy/distinct_opcodes) but has no MCP counterpart to call via JSON-RPC",
+      "mismatch": true,
+      "notes": "Comparison N/A: rustre-deobf-vm is internal-only, not exposed via rustre-mcp. No JSON-RPC stdio test can be issued against the binary for this crate."
+    },
+    {
+      "name": "grep_vm_primitives_in_mcp_crates",
+      "description": "grep VmDispatcher|VmDetector|VmLifter|rustre_deobf_vm across rustre-mcp-tools crate.",
+      "method": "grep",
+      "mcp_result": "no matches in crates/rustre-mcp-tools/src (only sibling rustre_deobf_antianti::AntiVmDetector is wired)",
+      "validator_result": "n/a",
+      "mismatch": true
+    },
+    {
+      "name": "validator_self_test",
+      "description": "Run validators/rustre-deobf-vm.py __main__ self-test as sanity check on the Python reimplementation (no MCP comparison).",
+      "method": "python_self_test",
+      "mcp_result": "n/a (no MCP tool)",
+      "validator_result": "self-tests pass: PushImm 5 + PushImm 7 + Add -> 12; VmDispatcherDetector finds SIG1 entry=0xDEADBEEF count=16; VmDetector flags VMProtect + dispatcher_count>=1",
+      "mismatch": false
+    }
+  ],
+  "mcp_outputs": {},
+  "validator_outputs": {
+    "self_test_stdout": "rustre-deobf-vm.py: self-tests passed"
+  },
+  "mismatches": 2,
+  "match": false,
+  "summary": "rustre-deobf-vm has no MCP tool exposure in rustre-mcp (wire_tools.rs registers deobf_mba_normalize but no vm_detect/vm_dispatcher_scan/vm_lift_bytecode). The Python validator reimplements the crate's VM detection, dispatcher detection, lifter, simulator, and clustering, and its self-tests pass. There is no JSON-RPC stdio surface to compare against, so structural mismatch is recorded. To enable future comparison, expose VmDetector/VmDispatcherDetector/VmLifter through rustre-mcp as vm_detect / vm_dispatcher_scan / vm_lift_bytecode tools."
+}

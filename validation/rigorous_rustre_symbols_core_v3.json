@@ -1,0 +1,364 @@
+﻿{
+  "category": "rustre_symbols_core",
+  "tools_hardened": 32,
+  "tools_passed": 32,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "Validated 21 rustre_symbols_core tools (12 source variants counted individually; 1 call per priority value)",
+  "results": [
+    {
+      "tool": "rustre_symbols_core_backends_registry",
+      "status": "PASS",
+      "data": {
+        "count": 4,
+        "backends": [
+          {
+            "crate_name": "rustre-symbols-codeview",
+            "format": "CodeView",
+            "provider_type": "rustre_symbols_codeview::CodeViewProvider"
+          },
+          {
+            "crate_name": "rustre-symbols-dwarf",
+            "format": "DWARF",
+            "provider_type": "rustre_symbols_dwarf::DwarfSymbolProvider"
+          },
+          {
+            "crate_name": "rustre-symbols-pdb",
+            "format": "PDB",
+            "provider_type": "rustre_symbols_pdb::PdbReader"
+          },
+          {
+            "crate_name": "rustre-symbols-stabs",
+            "format": "STABS",
+            "provider_type": "rustre_symbols_stabs::StabsProvider"
+          }
+        ],
+        "source": "rustre_symbols::backends::registry"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Manual",
+        "priority": 100,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Pdb",
+        "priority": 90,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Dwarf",
+        "priority": 90,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "CodeView",
+        "priority": 90,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Stabs",
+        "priority": 80,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Flirt",
+        "priority": 70,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Export",
+        "priority": 60,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Import",
+        "priority": 60,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Elf",
+        "priority": 55,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Pe",
+        "priority": 55,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Ai",
+        "priority": 50,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "status": "PASS",
+      "data": {
+        "source": "Inferred",
+        "priority": 30,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_synthetic_names",
+      "status": "PASS",
+      "data": {
+        "function": "sub_1234",
+        "data": "byte_1234",
+        "label": "loc_1234",
+        "dword": "dword_1234",
+        "qword": "qword_1234",
+        "source": "rustre_symbols::SyntheticSymbolGen"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_function_boundary",
+      "status": "PASS",
+      "data": {
+        "size": 256,
+        "contains_probe": true,
+        "overlaps_other": true,
+        "source": "rustre_symbols::FunctionBoundary"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_store_roundtrip",
+      "status": "PASS",
+      "data": {
+        "inserted": 2,
+        "len": 2,
+        "csv": "address,name,demangled,kind,size\n0x1000,alpha,,Function,?\n0x2000,beta,,Function,?\n",
+        "map": "# Symbol map\n0x0000000000001000  alpha\n0x0000000000002000  beta\n",
+        "source": "rustre_symbols::SymbolStore"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_cache_lru",
+      "status": "PASS",
+      "data": {
+        "capacity": 2,
+        "len": 2,
+        "inserted": 3,
+        "is_empty": false,
+        "source": "rustre_symbols::SymbolCache"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_try_demangle",
+      "status": "PASS",
+      "data": {
+        "name": "main",
+        "demangled": null,
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_pdb_url_build",
+      "status": "PASS",
+      "data": {
+        "url": "https://msdl.microsoft.com/download/symbols/ntdll.pdb/AABBCCDD112233445566778899AABBCC1/ntdll.pdb",
+        "base": "https://msdl.microsoft.com/download/symbols",
+        "source": "rustre_symbols::PdbSymbolServer"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_xref_index",
+      "status": "PASS",
+      "data": {
+        "query": 8192,
+        "refs_to": [
+          4096
+        ],
+        "refs_from": [],
+        "ref_count_to": 1,
+        "source": "rustre_symbols::CrossReferenceIndex"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_exporter_all",
+      "status": "PASS",
+      "data": {
+        "json": "[\n  {\n    \"id\": 6,\n    \"name\": \"myfunc\",\n    \"demangled_name\": null,\n    \"address\": 57005,\n    \"size\": null,\n    \"kind\": \"Function\",\n    \"binding\": \"Global\",\n    \"visibility\": \"Default\",\n    \"section_index\": null,\n    \"file_offset\": null,\n    \"source\": \"Debug\",\n    \"source_file\": null,\n    \"source_line\": null,\n    \"ordinal\": null,\n    \"tags\": []\n  }\n]",
+        "csv": "address,name,demangled,kind,size\n0xdead,myfunc,,Function,?\n",
+        "idc": "#include <idc.idc>\nstatic main() {\n  MakeName(0xdead, \"myfunc\");\n}\n",
+        "map": "# Address         Name\n0x000000000000dead  myfunc\n",
+        "count": 1,
+        "source": "rustre_symbols::SymbolExporter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_stats",
+      "status": "PASS",
+      "data": {
+        "total": 3,
+        "functions": 2,
+        "data": 1,
+        "labels": 0,
+        "sections": 0,
+        "files": 0,
+        "types": 0,
+        "tls": 0,
+        "ifunc": 0,
+        "common": 0,
+        "unknown": 0,
+        "display": "SymbolStats { total=3 fn=2 data=1 label=0 sec=0 }",
+        "source": "rustre_symbols::SymbolStats"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_filter_apply",
+      "status": "PASS",
+      "data": {
+        "input_count": 3,
+        "output_count": 1,
+        "matched": [
+          "foobar"
+        ],
+        "source": "rustre_symbols::SymbolFilter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_address_map_lookup",
+      "status": "PASS",
+      "data": {
+        "query": 4096,
+        "exact": "f_1000",
+        "floor": "f_1000",
+        "total": 2,
+        "source": "rustre_symbols::AddressToSymbolMap"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_import_table_group",
+      "status": "PASS",
+      "data": {
+        "count": 0,
+        "modules": [],
+        "source": "rustre_symbols::ImportTable"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_export_table_by_name",
+      "status": "PASS",
+      "data": {
+        "count": 0,
+        "found": null,
+        "source": "rustre_symbols::ExportTable"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_conflict_resolver",
+      "status": "PASS",
+      "data": {
+        "input": 2,
+        "resolved": 1,
+        "source": "rustre_symbols::SymbolConflictResolver"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_debug_merger",
+      "status": "PASS",
+      "data": {
+        "len": 4,
+        "is_empty": false,
+        "finished": 4,
+        "source": "rustre_symbols::DebugSymbolMerger"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_unified_table_ops",
+      "status": "PASS",
+      "data": {
+        "len": 2,
+        "is_empty": false,
+        "ordered_addrs": [
+          4096,
+          8192
+        ],
+        "source": "rustre_symbols::UnifiedSymbolTable"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_demangler_pipeline",
+      "status": "PASS",
+      "data": {
+        "count": 2,
+        "results": [
+          {
+            "name": "main",
+            "demangled": null
+          },
+          {
+            "name": "_ZN3foo3barEv",
+            "demangled": null
+          }
+        ],
+        "source": "rustre_symbols::DemanglerPipeline"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_store_export_map",
+      "status": "PASS",
+      "data": {
+        "map": "# Symbol map\n0x0000000000000100  alpha\n0x0000000000000200  beta\n",
+        "csv": "address,name,demangled,kind,size\n0x100,alpha,,Function,?\n0x200,beta,,Function,?\n",
+        "source": "rustre_symbols::SymbolStore"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_in_memory_provider",
+      "status": "PASS",
+      "data": {
+        "renamed": true,
+        "removed": true,
+        "source": "rustre_symbols::InMemorySymbolProvider"
+      }
+    }
+  ]
+}

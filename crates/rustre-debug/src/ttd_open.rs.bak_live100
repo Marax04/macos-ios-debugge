@@ -1,0 +1,202 @@
+//! Auto-detection and opening of TTD traces.
+//!
+//! [`open_trace`] examines a path and returns the appropriate
+//! [`TtdBackend`] implementation:
+//!
+//! - If the path ends with `.run` or `.idx`, or a sibling `.idx` file exists
+//!   next to a `.run`, it opens a [`WinDbgTtdBackend`].
+//! - If the path is a directory containing `version` or `events`, it opens an
+//!   [`RrBackend`] (requires `rr` on `PATH`).
+//!
+//! The returned backend is boxed as `Box<dyn TtdBackend>` so it can be attached
+//! directly to a [`TtdSession`].
+
+use std::path::Path;
+
+use crate::rr_backend::RrBackend;
+use crate::time_travel_debug::{TtdBackend, TtdError};
+use crate::windbg_ttd_backend::WinDbgTtdBackend;
+
+/// The kind of trace detected at a path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TraceKind {
+    /// WinDbg TTD `.run` + `.idx` pair.
+    WinDbgTtd,
+    /// Mozilla `rr` trace directory.
+    Rr,
+}
+
+/// Detect the kind of trace at `path` without opening it.
+///
+/// Returns `None` if the path is not a recognised trace format.
+#[must_use]
+pub fn detect_trace_kind(path: &Path) -> Option<TraceKind> {
+    if WinDbgTtdBackend::is_ttd_trace(path) {
+        return Some(TraceKind::WinDbgTtd);
+    }
+    if RrBackend::is_rr_trace(path) {
+        return Some(TraceKind::Rr);
+    }
+    None
+}
+
+/// Open a trace at `path` and return a boxed [`TtdBackend`].
+///
+/// Detection order:
+/// 1. WinDbg TTD (`.run` / `.idx` extension or sibling files).
+/// 2. rr trace directory (`version` / `events` sentinel files).
+///
+/// # Errors
+///
+/// Returns `TtdError::Unsupported` if the path format is not recognised, or
+/// the appropriate backend error if opening fails.
+pub fn open_trace(path: &Path) -> Result<Box<dyn TtdBackend>, TtdError> {
+    match detect_trace_kind(path) {
+        Some(TraceKind::WinDbgTtd) => {
+            let backend = WinDbgTtdBackend::open(path)?;
+            Ok(Box::new(backend))
+        }
+        Some(TraceKind::Rr) => {
+            let backend = RrBackend::open(path)?;
+            Ok(Box::new(backend))
+        }
+        None => Err(TtdError::Unsupported(format!(
+            "unrecognised trace format at: {}",
+            path.display()
+        ))),
+    }
+}
+
+/// Open a trace at `path`, falling back to a [`MockTtdBackend`] when the real
+/// backend fails to open.
+///
+/// Returns `(backend, live)` where `live` is `false` when the mock was used.
+/// The mock backend always returns `TtdState::default()` from every operation,
+/// with `stop_reason` set to `"mock:live=false:<reason>"` so callers can see
+/// why the real backend failed.
+#[must_use]
+pub fn open_trace_or_mock(path: &Path) -> (Box<dyn TtdBackend>, bool) {
+    match open_trace(path) {
+        Ok(b) => (b, true),
+        Err(e) => {
+            let reason = e.to_string();
+            tracing::warn!("TTD backend failed to open ({reason}); using mock backend (live=false)");
+            (Box::new(MockTtdBackend::new(reason)), false)
+        }
+    }
+}
+
+// ── MockTtdBackend ───────────────────────────────────────────────────────────
+
+use crate::time_travel_debug::{TtdState, TracePosition};
+
+/// A no-op [`TtdBackend`] that returns placeholder states with `live=false`
+/// hints, used when a real backend cannot be opened (file not found, rr not
+/// installed, etc.).
+#[derive(Debug)]
+pub struct MockTtdBackend {
+    reason: String,
+}
+
+impl MockTtdBackend {
+    /// Create a mock backend with a human-readable `reason` explaining why
+    /// the real backend could not be opened.
+    #[must_use]
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self { reason: reason.into() }
+    }
+}
+
+impl TtdBackend for MockTtdBackend {
+    fn name(&self) -> &str {
+        "mock"
+    }
+
+    fn trace_extent(&self) -> (TracePosition, TracePosition) {
+        (TracePosition::START, TracePosition::START)
+    }
+
+    fn seek(&mut self, position: TracePosition) -> Result<TtdState, TtdError> {
+        let mut s = TtdState::new(position, 0, 0);
+        s.stop_reason = format!("mock:live=false:{}", self.reason);
+        Ok(s)
+    }
+
+    fn step_forward(&mut self, current: TracePosition) -> Result<TtdState, TtdError> {
+        self.seek(current)
+    }
+
+    fn step_backward(&mut self, current: TracePosition) -> Result<TtdState, TtdError> {
+        self.seek(current)
+    }
+
+    fn reverse_continue(
+        &mut self,
+        from: TracePosition,
+        _stop_at: &[u64],
+    ) -> Result<TtdState, TtdError> {
+        self.seek(from)
+    }
+
+    fn reverse_step_over(&mut self, current: TracePosition) -> Result<TtdState, TtdError> {
+        self.seek(current)
+    }
+
+    fn run_to_previous_call(&mut self, current: TracePosition) -> Result<TtdState, TtdError> {
+        self.seek(current)
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn detect_windbg_by_extension() {
+        // Detection is by extension — the file doesn't need to exist.
+        assert_eq!(
+            detect_trace_kind(Path::new("foo.run")),
+            Some(TraceKind::WinDbgTtd)
+        );
+        assert_eq!(
+            detect_trace_kind(Path::new("foo.idx")),
+            Some(TraceKind::WinDbgTtd)
+        );
+    }
+
+    #[test]
+    fn detect_rr_trace_directory() {
+        let tmp = std::env::temp_dir().join("ttd_open_rr_detect");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        fs::write(tmp.join("version"), b"86").unwrap();
+
+        assert_eq!(detect_trace_kind(&tmp), Some(TraceKind::Rr));
+    }
+
+    #[test]
+    fn detect_unknown_returns_none() {
+        assert_eq!(detect_trace_kind(Path::new("foo.exe")), None);
+    }
+
+    #[test]
+    fn open_trace_windbg_missing_files_errors() {
+        let tmp = std::env::temp_dir().join("ttd_open_windbg_missing");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        // .run exists but .idx does not → backend error.
+        let run = tmp.join("ghost.run");
+        fs::write(&run, b"").unwrap();
+        let err = open_trace(&run).unwrap_err();
+        assert!(matches!(err, TtdError::Backend(_)));
+    }
+
+    #[test]
+    fn open_trace_unknown_format_errors() {
+        let err = open_trace(Path::new("no_extension_no_dir")).unwrap_err();
+        assert!(matches!(err, TtdError::Unsupported(_)));
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "category": "gdb_packet",
+  "tools_in_category": 29,
+  "checks_total": 14,
+  "checks_passed": 14,
+  "checks_skipped": 14,
+  "mismatches": []
+}

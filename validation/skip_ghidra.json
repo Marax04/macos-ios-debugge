@@ -1,0 +1,12 @@
+{
+  "skipped": [
+    {
+      "tool": "ghidra_varnode_classify_batch",
+      "reason": "TOOL_NOT_FOUND: tool not found: ghidra_varnode_classify_batch"
+    },
+    {
+      "tool": "ghidra_bridge",
+      "reason": "TOOL_NOT_FOUND: tool not found: ghidra_bridge"
+    }
+  ]
+}

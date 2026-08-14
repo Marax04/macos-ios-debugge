@@ -1,0 +1,6 @@
+[
+  {
+    "tool": "symbols_stabs_parse_from_elf",
+    "reason": "Needs ELF binary with .stab section; target is PE \u2014 no .stab section present, result is always empty and non-verifiable independently."
+  }
+]

@@ -1,0 +1,26 @@
+﻿[package]
+license.workspace = true
+name = "rustre-arch-x86"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+# Hub crate: provides hub-side types (DecodeError, EncodeError, LiftError,
+# DisasmCache, ArchMetadata, etc.) re-exported below. No cycle: `rustre-arch`
+# no longer path-deps on sub-arch crates (aggregation moved to
+# `rustre-arch-registry`).
+rustre-arch = { path = "../rustre-arch" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+rustre-il-lift = { path = "../rustre-il-lift" }
+iced-x86 = "1.21"
+
+[dev-dependencies]
+insta = "1"
+proptest = "1"

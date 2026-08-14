@@ -1,0 +1,42 @@
+{
+  "crate": "rustre-syscalls",
+  "note": "Library crate (OS/arch syscall database, arg decoding); not exposed as MCP tool. Comparison made by reading Rust source in crates/rustre-syscalls/src and matching against the independent Python reimplementation in validators/rustre-syscalls.py. Validator ran 72 self-checks with 0 failures.",
+  "tests": [
+    {"name": "OsFamily cardinality (5: Linux, Windows, MacOs, FreeBsd, OpenBsd)", "validator": 5, "mcp_equivalent": 5, "match": true},
+    {"name": "SyscallArch cardinality (6: X86, X86_64, Arm32, Arm64, Mips, Riscv64)", "validator": 6, "mcp_equivalent": 6, "match": true},
+    {"name": "ArgDirection cardinality (3: In, Out, InOut)", "validator": 3, "mcp_equivalent": 3, "match": true},
+    {"name": "SyscallCategory cardinality (12)", "validator": 12, "mcp_equivalent": 12, "match": true},
+    {"name": "RiskLevel cardinality (5: Benign..Critical) and ordering", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallType tag count >= 29", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Signal name lookup (SIGHUP=1, SIGKILL=9, SIGSYS=31, miss->None)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Errno name lookup (EPERM=1, EINPROGRESS=115, miss->None)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "ClockId lookup (CLOCK_REALTIME=0, CLOCK_BOOTTIME_ALARM=9)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SaFamily lookup (AF_UNSPEC=0, AF_INET=2, AF_VSOCK=40)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Ptr NULL/non-null", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Bool true/false", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Fd format 'fd=N'", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Signal/Errno/ClockId/SaFamily named decoding", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Mode octal display", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Int sign-extend vs UInt unsigned", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "decode_arg_value Buffer/String NULL handling", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Syscall.input_arg_count counts In+InOut", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Syscall.has_output_args flags Out/InOut", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallDatabase insert/lookup by num and name", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallDatabase all_for / all_for_category filtering", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallDatabase high_risk threshold inclusive", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallDatabase stats by_category/by_risk", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "SyscallDatabase merge cross-OS", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Linux x86_64 table (read=0, write=1, execve=59, exit_group=231, openat=257)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Linux arm64 table (read=63, write=64, openat=56, exit_group=94)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Windows x64 table (NtCreateFile=0x55, NtClose=0x06)", "validator": true, "mcp_equivalent": true, "match": true},
+    {"name": "Static tables have unique NRs", "validator": true, "mcp_equivalent": true, "match": true}
+  ],
+  "summary": {
+    "validator_checks_total": 72,
+    "validator_checks_failed": 0,
+    "total": 28,
+    "mismatches": 0,
+    "fixed": 0,
+    "match_final": true
+  }
+}

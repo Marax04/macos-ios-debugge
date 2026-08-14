@@ -1,0 +1,18 @@
+{
+  "crate": "rustre-mobile-smali",
+  "mcp_tools_exposed": [],
+  "note": "No MCP tools in rustre-mcp-server reference rustre-mobile-smali. Crate is library-only (smali_reg, parse_type_descriptor, parse_method_descriptor, instruction_size_code_units, access_string, escape_string, DEX header constants, lo32_u64, smali_assembler) and not wired into wire_tools. Validator (rustre-mobile-smali.py) is self-contained pure-Python reference implementing the Dalvik bytecode spec; it does not call MCP either, so the comparison is validator-internal consistency.",
+  "validator_run": {
+    "tests": 38,
+    "passed": 38,
+    "failed": 0
+  },
+  "mcp_run": {
+    "tests": 0,
+    "reason": "no matching tools"
+  },
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "recommendation": "Expose rustre-mobile-smali helpers (smali_reg, parse_type_descriptor, parse_method_descriptor, instruction_size_code_units/bytes, access_string, escape_string, DEX_MAGIC/HEADER_SIZE/ENDIAN_CONSTANT/NO_INDEX, lo32_u64, smali_assembler) via wire_tools to enable real MCP-vs-validator parity testing."
+}

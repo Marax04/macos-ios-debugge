@@ -1,0 +1,12 @@
+[
+  {
+    "tool": "noreturn_infer",
+    "feature": "propagation_pass",
+    "reason": "Pass 4 (propagation) requires callee address lists, but the MCP wire schema for noreturn_infer only exposes {address, name, body_hex} per function. The 'callees' field is not in the input schema, so caller propagation cannot be triggered via JSON-RPC."
+  },
+  {
+    "tool": "noreturn_infer",
+    "feature": "tail_call_pass",
+    "reason": "Pass 3 (tail-call) requires rec.callees to be populated, which the MCP wire schema does not expose. Even if body bytes end with JMP rel32, the pass cannot identify the target callee without a callees list."
+  }
+]

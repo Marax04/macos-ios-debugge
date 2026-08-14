@@ -1,0 +1,352 @@
+{
+  "module": "codeview_v3",
+  "tools_hardened": 14,
+  "tools_list": [
+    "codeview_parse_symbols",
+    "codeview_signature_from_bytes",
+    "codeview_signature_as_str",
+    "codeview_primitive_type",
+    "codeview_magic_detect",
+    "codeview_magic_label",
+    "codeview_sym_kind_is_named_address",
+    "codeview_type_kind_from_u16",
+    "codeview_guid_to_string",
+    "codeview_proc32_parse",
+    "codeview_public32_parse",
+    "codeview_data32_parse",
+    "codeview_frameproc_parse",
+    "codeview_symbol_stream_count"
+  ],
+  "checks_run": 54,
+  "checks_passed": 54,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "codeview_parse_symbols",
+      "label": "empty => count=0",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_parse_symbols",
+      "label": "one S_PUB32 => count=1",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_from_bytes",
+      "label": "NB09 => detected=true sig=NB09(CV4.1)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_from_bytes",
+      "label": "NB10 => Cv50 / NB10(CV5.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_from_bytes",
+      "label": "Micr => Pdb70 / RSDS(PDB7.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_from_bytes",
+      "label": "CV8 magic => detected=true sig=CV8",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_from_bytes",
+      "label": "unknown => detected=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "cv41=>NB09 (CV 4.1)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "cv50=>NB10 (CV 5.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "cv70=>NB11 (CV 7.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "pdb70=>RSDS (PDB 7.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "cv8=>CV8",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_signature_as_str",
+      "label": "bogus variant => label=null, error set",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_primitive_type",
+      "label": "index=0 => Void in type_info",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_primitive_type",
+      "label": "index=0x12 => Int in type_info",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_primitive_type",
+      "label": "index=0x40 => Float in type_info",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_detect",
+      "label": "NB09 => NB09(CodeView4.1)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_detect",
+      "label": "RSDS => RSDS(PDB7.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_detect",
+      "label": "unknown => magic=null",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_detect",
+      "label": "NB11 => NB11(CodeView5.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_label",
+      "label": "cv41 => NB09(CodeView4.1)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_label",
+      "label": "cv50 => NB11(CodeView5.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_magic_label",
+      "label": "unknown variant => Cv70 RSDS(PDB7.0)",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_sym_kind_is_named_address",
+      "label": "0x1009=Pub32 named=true func=false data=true",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_sym_kind_is_named_address",
+      "label": "0x1110=GProc32 named=true func=true data=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_sym_kind_is_named_address",
+      "label": "0x0006=End named=false func=false data=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_sym_kind_is_named_address",
+      "label": "0xAAAA=Unknown is_named_address=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1001=>Modifier",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1002=>Pointer",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1003=>Array",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1004=>Class",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1005=>Structure",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1006=>Union",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1007=>Enum",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1008=>Procedure",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1201=>Arglist",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1203=>FieldList",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x1205=>Bitfield",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_type_kind_from_u16",
+      "label": "tag=0x9999=>Unknown",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_guid_to_string",
+      "label": "known 16 bytes => {03020100-0504-0706-0809-0A0B0C0D0E0F}",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_guid_to_string",
+      "label": "all-zero => {00000000-0000-0000-0000-000000000000}",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_proc32_parse",
+      "label": "valid proc32 => parsed=true name=func offset=0x5678",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_proc32_parse",
+      "label": "proc32 too short => parsed=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_public32_parse",
+      "label": "valid pub32 => parsed=true is_function=true",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_public32_parse",
+      "label": "pub32 flags=0 => is_function=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_public32_parse",
+      "label": "pub32 too short => parsed=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_data32_parse",
+      "label": "valid data32 => parsed=true name=data_sym offset=0x1000",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_data32_parse",
+      "label": "data32 too short => parsed=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_frameproc_parse",
+      "label": "valid frameproc => parsed=true has_alloca=true has_async_eh=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_frameproc_parse",
+      "label": "frameproc flags=0x200 => has_async_eh=true has_alloca=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_frameproc_parse",
+      "label": "frameproc too short => parsed=false",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_symbol_stream_count",
+      "label": "empty => count=0",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_symbol_stream_count",
+      "label": "one minimal record => count=1",
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "codeview_symbol_stream_count",
+      "label": "two minimal records => count=2",
+      "status": "PASS",
+      "note": ""
+    }
+  ]
+}

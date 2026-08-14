@@ -1,0 +1,8 @@
+{
+  "module": "dotnet_metadata_v3",
+  "tools_hardened": 28,
+  "checks_passed": 73,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

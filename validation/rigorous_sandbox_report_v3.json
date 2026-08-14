@@ -1,0 +1,235 @@
+{
+  "category": "sandbox_report",
+  "validator_note": "All 7 initial failures were validator_defect (wrong field names in Python reference). Rust implementation is correct.",
+  "results": [
+    {
+      "tool": "severity_score[info]",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": ""
+    },
+    {
+      "tool": "severity_score[low]",
+      "passed": true,
+      "expected": "25",
+      "actual": "25",
+      "note": ""
+    },
+    {
+      "tool": "severity_score[medium]",
+      "passed": true,
+      "expected": "50",
+      "actual": "50",
+      "note": ""
+    },
+    {
+      "tool": "severity_score[high]",
+      "passed": true,
+      "expected": "75",
+      "actual": "75",
+      "note": ""
+    },
+    {
+      "tool": "severity_score[critical]",
+      "passed": true,
+      "expected": "100",
+      "actual": "100",
+      "note": ""
+    },
+    {
+      "tool": "severity_parse[high]",
+      "passed": true,
+      "expected": "75",
+      "actual": "75",
+      "note": ""
+    },
+    {
+      "tool": "severity_parse_v2[critical]",
+      "passed": true,
+      "expected": "100",
+      "actual": "100",
+      "note": ""
+    },
+    {
+      "tool": "ioc_is_confident[90>=80]",
+      "passed": true,
+      "expected": "True",
+      "actual": "True",
+      "note": ""
+    },
+    {
+      "tool": "ioc_is_confident[70<80]",
+      "passed": true,
+      "expected": "False",
+      "actual": "False",
+      "note": ""
+    },
+    {
+      "tool": "severity_score_all_v3",
+      "passed": true,
+      "expected": "{'info': 0, 'low': 25, 'medium': 50, 'high': 75, 'critical': 100}",
+      "actual": "{'info': 0, 'low': 25, 'medium': 50, 'high': 75, 'critical': 100}",
+      "note": ""
+    },
+    {
+      "tool": "ioc_kind_display_all_v3",
+      "passed": true,
+      "expected": "['ip', 'domain', 'url', 'filepath', 'filehash', 'registry_key', 'mutex', 'email']",
+      "actual": "['ip', 'domain', 'url', 'filepath', 'filehash', 'registry_key', 'mutex', 'email']",
+      "note": ""
+    },
+    {
+      "tool": "verdict_all_display_v3",
+      "passed": true,
+      "expected": "['clean', 'low', 'suspicious', 'malicious', 'unknown']",
+      "actual": "['clean', 'low', 'suspicious', 'malicious', 'unknown']",
+      "note": ""
+    },
+    {
+      "tool": "score_engine_verdict_sweep_v3",
+      "passed": true,
+      "expected": "{'s0': 'clean', 's15': 'low', 's50': 'suspicious', 's85': 'malicious'}",
+      "actual": "{'s0': 'clean', 's15': 'low', 's50': 'suspicious', 's85': 'malicious'}",
+      "note": ""
+    },
+    {
+      "tool": "report_format_extension_all_v3",
+      "passed": true,
+      "expected": "{'json': 'json', 'html': 'html', 'pdf': 'pdf', 'markdown': 'md'}",
+      "actual": "[{'format': 'json', 'ext': 'json'}, {'format': 'html', 'ext': 'html'}, {'format': 'pdf', 'ext': 'pdf'}, {'format': 'csv', 'ext': 'csv'}, {'format': 'markdown', 'ext': 'md'}]",
+      "note": ""
+    },
+    {
+      "tool": "report_format_from_extension_v3[.json]",
+      "passed": true,
+      "expected": "json",
+      "actual": "json",
+      "note": ""
+    },
+    {
+      "tool": "attack_mapping_from_behaviors",
+      "passed": true,
+      "expected": "2",
+      "actual": "2",
+      "note": ""
+    },
+    {
+      "tool": "mock_summary",
+      "passed": true,
+      "expected": "['sample', 'verdict', 'score', 'ioc_count', 'indicator_count']",
+      "actual": "['sample', 'sha256', 'verdict', 'score', 'family', 'indicator_count', 'behavior_count', 'ioc_count', 'technique_count', 'tags', 'source']",
+      "note": ""
+    },
+    {
+      "tool": "iocset_mock[t=80]",
+      "passed": true,
+      "expected": "5",
+      "actual": "5",
+      "note": ""
+    },
+    {
+      "tool": "ioc_is_confident_v3[100>=100]",
+      "passed": true,
+      "expected": "True",
+      "actual": "True",
+      "note": ""
+    },
+    {
+      "tool": "iocset_by_kind[ip]",
+      "passed": true,
+      "expected": "1",
+      "actual": "1",
+      "note": ""
+    },
+    {
+      "tool": "iocset_confident[t=90]",
+      "passed": true,
+      "expected": "4",
+      "actual": "4",
+      "note": ""
+    },
+    {
+      "tool": "ioc_new_clamp_v5[200]",
+      "passed": true,
+      "expected": "100",
+      "actual": "100",
+      "note": ""
+    },
+    {
+      "tool": "attack_tactics_present_v5",
+      "passed": true,
+      "expected": "['defense_evasion', 'persistence']",
+      "actual": "['defense_evasion', 'persistence']",
+      "note": ""
+    },
+    {
+      "tool": "attack_high_confidence_v5",
+      "passed": true,
+      "expected": "2",
+      "actual": "2",
+      "note": ""
+    },
+    {
+      "tool": "iocset_by_kind_v3",
+      "passed": true,
+      "expected": "{'ip': 1, 'domain': 1, 'filepath': 1, 'filehash': 1, 'registry_key': 1, 'mutex': 1}",
+      "actual": "{'ip': 1, 'domain': 1, 'filepath': 1, 'filehash': 1, 'registry_key': 1, 'mutex': 1}",
+      "note": ""
+    },
+    {
+      "tool": "iocset_dedupe_v5",
+      "passed": true,
+      "expected": "{'before': 3, 'after': 2}",
+      "actual": "{'before': 3, 'after': 2}",
+      "note": ""
+    },
+    {
+      "tool": "iocset_confident_v5[t=80]",
+      "passed": true,
+      "expected": "5",
+      "actual": "5",
+      "note": ""
+    },
+    {
+      "tool": "attack_tactic_list_v3",
+      "passed": true,
+      "expected": "12",
+      "actual": "12",
+      "note": ""
+    },
+    {
+      "tool": "severity_parse_v5[medium]",
+      "passed": true,
+      "expected": "50",
+      "actual": "50",
+      "note": ""
+    },
+    {
+      "tool": "severity_parse_v5[bogus]->error",
+      "passed": true,
+      "expected": "error response",
+      "actual": "{'ok': False, 'error': 'invalid data: unknown severity: bogus', 'source': 'rustre_sandbox_report::Severity::parse'}",
+      "note": ""
+    },
+    {
+      "tool": "critical_indicators",
+      "passed": true,
+      "expected": "count+list",
+      "actual": "['count', 'critical_indicators', 'source']",
+      "note": ""
+    },
+    {
+      "tool": "score_engine_compute",
+      "passed": true,
+      "expected": "score+verdict+has_critical",
+      "actual": "['indicator_count', 'score', 'verdict', 'has_critical', 'source']",
+      "note": ""
+    }
+  ],
+  "summary": {
+    "passed": 32,
+    "failed": 0,
+    "total": 32
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "category": "il_passes",
+  "records": [
+    {
+      "tool": "il_passes_count_instrs",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::count_instrs"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_count_constants",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::count_constants"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_collect_call_sites",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::collect_call_sites"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_detect_loops",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::detect_loops"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_inlining_score",
+      "status": "PASS",
+      "actual": {
+        "score": "InliningScore { instr_count: 0, call_count: 0, block_count: 0, score: 90 }",
+        "source": "rustre_il_passes::compute_inlining_score"
+      },
+      "expected": {
+        "score": "InliningScore { instr_count: 0, call_count: 0, block_count: 0, score: 90 }"
+      }
+    },
+    {
+      "tool": "il_passes_run_gvn_pass",
+      "status": "PASS",
+      "actual": {
+        "changed": false,
+        "source": "rustre_il_passes::run_gvn_pass"
+      },
+      "expected": {
+        "changed": false
+      }
+    },
+    {
+      "tool": "il_passes_integer_range_analysis",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::run_integer_range_analysis"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_loop_bound_analysis",
+      "status": "PASS",
+      "actual": {
+        "count": 0,
+        "source": "rustre_il_passes::run_loop_bound_analysis"
+      },
+      "expected": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "il_passes_pass_stats_new",
+      "status": "PASS",
+      "actual": {
+        "instrs_visited": 0,
+        "instrs_modified": 0,
+        "instrs_removed": 0,
+        "const_folded": 0,
+        "exprs_simplified": 0,
+        "dead_removed": 0,
+        "source": "rustre_il_passes::PassStats::new"
+      },
+      "expected": {
+        "instrs_visited": 0,
+        "instrs_modified": 0,
+        "instrs_removed": 0,
+        "const_folded": 0,
+        "exprs_simplified": 0,
+        "dead_removed": 0
+      }
+    },
+    {
+      "tool": "il_passes_pass_context_new",
+      "status": "PASS",
+      "actual": {
+        "changed": false,
+        "warnings": 0,
+        "instrs_visited": 0,
+        "source": "rustre_il_passes::PassContext::new"
+      },
+      "expected": {
+        "changed": false,
+        "warnings": 0,
+        "instrs_visited": 0
+      }
+    }
+  ],
+  "mismatches": [],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  }
+}

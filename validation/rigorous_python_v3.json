@@ -1,0 +1,176 @@
+[
+  {
+    "tool": "script_python_pyscriptvalue_type_name",
+    "status": "PASS",
+    "note": "Tool returns all PyScriptValue type names; NoneType is first entry",
+    "expected": { "names_contains": "NoneType", "count": 7 },
+    "actual": { "names": ["NoneType","bool","int","float","str","list","dict"], "count": 7 }
+  },
+  {
+    "tool": "script_python_pyvalue_is_truthy",
+    "status": "PASS",
+    "note": "None value -> is_truthy=false (key is 'is_truthy', not 'truthy')",
+    "expected": { "is_truthy": false },
+    "actual": { "is_truthy": false, "type_name": "NoneType" }
+  },
+  {
+    "tool": "script_python_pyvalue_len",
+    "status": "PASS",
+    "expected": { "len": 3 },
+    "actual": { "len": 3, "is_empty": false, "type_name": "list" }
+  },
+  {
+    "tool": "script_python_pyvalue_as_int",
+    "status": "PASS",
+    "note": "Return key is 'as_int', not 'int'",
+    "expected": { "as_int": 42 },
+    "actual": { "as_int": 42, "type_name": "int" }
+  },
+  {
+    "tool": "script_python_pyscriptvalue_display",
+    "status": "PASS",
+    "expected": { "display": "123" },
+    "actual": { "display": "123", "type_name": "int", "is_none": false }
+  },
+  {
+    "tool": "script_python_pyscope_output_text",
+    "status": "PASS",
+    "note": "Key is 'output_text', not 'text'; lines joined by \\n",
+    "expected": { "output_text": "hello\nworld", "line_count": 2 },
+    "actual": { "output_text": "hello\nworld", "line_count": 2 }
+  },
+  {
+    "tool": "script_python_pyscope_set_get",
+    "status": "PASS",
+    "note": "Key is 'stored' (int) and 'readback' (string repr); set name='x' value=99",
+    "expected": { "name": "x", "stored": 99, "readback": "99" },
+    "actual": { "name": "x", "stored": 99, "readback": "99" }
+  },
+  {
+    "tool": "script_python_pyscope_builtin_count",
+    "status": "PASS",
+    "note": "Key is 'total'; 26 builtins (23 functions + 3 constants)",
+    "expected": { "total": 26 },
+    "actual": { "total": 26, "functions": 23 }
+  },
+  {
+    "tool": "script_python_pure_execute_print",
+    "status": "PASS",
+    "expected": { "ok": true, "output": "hello" },
+    "actual": { "ok": true, "output": "hello", "step_count": 3 }
+  },
+  {
+    "tool": "script_python_pyvalue_type_names",
+    "status": "PASS",
+    "note": "Returns 10 types including tuple, bytes, function beyond the core 7",
+    "expected": { "count": 10, "names_contains": ["NoneType","int","str","list"] },
+    "actual": { "count": 10, "names": ["NoneType","bool","int","float","str","list","dict","tuple","bytes","function"] }
+  },
+  {
+    "tool": "script_python_stubs_standard_names",
+    "status": "PASS",
+    "expected": { "count": 7, "names_contains": "BinaryView" },
+    "actual": { "count": 7, "names": ["BinaryView","Function","load_binary","get_function_at","compute_entropy","RUSTRE_VERSION","Address"] }
+  },
+  {
+    "tool": "script_python_stubs_generate_standard",
+    "status": "PASS",
+    "note": "Returns pyi field (not 'stub'); module_name echoed; 7 stubs generated",
+    "expected": { "stub_count": 7, "pyi_contains": "from __future__ import annotations" },
+    "actual_excerpt": "{'module_name': 're', 'stub_count': 7, 'pyi': '# Auto-generated type stubs...'}"
+  },
+  {
+    "tool": "plugin_python_stub_signature",
+    "status": "PASS",
+    "expected": { "signature": "def my_func():" },
+    "actual": { "signature": "def my_func():" }
+  },
+  {
+    "tool": "plugin_python_module_counts",
+    "status": "PASS",
+    "note": "Empty module returns function_count=0, class_count=0",
+    "expected": { "function_count": 0, "class_count": 0 },
+    "actual": { "function_count": 0, "class_count": 0 }
+  },
+  {
+    "tool": "plugin_python_generate_stub",
+    "status": "PASS",
+    "note": "stub field contains module name",
+    "expected": { "stub_contains": "mymod" },
+    "actual_excerpt": "{'stub': \"# Stub for module 'mymod'\"}"
+  },
+  {
+    "tool": "plugin_python_class_methods_tagged",
+    "status": "PASS",
+    "note": "Empty class returns matches=[]",
+    "expected": { "matches": [] },
+    "actual": { "matches": [] }
+  },
+  {
+    "tool": "plugin_python_format_error",
+    "status": "PASS",
+    "note": "error_display = 'RuntimeError: division by zero'",
+    "expected": { "error_display": "RuntimeError: division by zero" },
+    "actual_excerpt": "{'kind': 'RuntimeError', 'message': 'division by zero', 'error_display': 'RuntimeError: division by zero'}"
+  },
+  {
+    "tool": "script_python_marshal_to_address",
+    "status": "PASS",
+    "expected": { "address": 4096, "address_hex": "0x1000" },
+    "actual": { "input": "0x1000", "address": 4096, "address_hex": "0x1000" }
+  },
+  {
+    "tool": "script_python_marshal_to_bytes",
+    "status": "PASS",
+    "note": "UTF-8 bytes of 'hello' = 68656c6c6f",
+    "expected": { "hex": "68656c6c6f", "len": 5 },
+    "actual": { "input": "hello", "len": 5, "hex": "68656c6c6f" }
+  },
+  {
+    "tool": "script_python_pure_execute",
+    "status": "PASS",
+    "expected": { "result_type": "NoneType", "step_count_gte": 1 },
+    "actual": { "output": "", "result": "None", "result_type": "NoneType", "step_count": 4 }
+  },
+  {
+    "tool": "script_python_pure_parse",
+    "status": "PASS",
+    "expected": { "ok": true, "top_level_stmt_count": 1 },
+    "actual": { "top_level_stmt_count": 1, "ok": true }
+  },
+  {
+    "tool": "script_python_pure_eval_int",
+    "status": "PASS",
+    "note": "Python: 2+3=5",
+    "expected": { "value": 5, "found_int": true },
+    "actual": { "value": 5, "found_int": true, "type": "int" }
+  },
+  {
+    "tool": "script_python_pure_value_classify",
+    "status": "PASS",
+    "note": "Returns type_name/is_truthy/display; no 'kind' field",
+    "expected": { "type_name": "int", "is_truthy": true, "display": "42" },
+    "actual": { "type_name": "int", "is_truthy": true, "len": null, "is_empty": true, "display": "42" }
+  },
+  {
+    "tool": "script_python_stub_builtin_names",
+    "status": "PASS",
+    "note": "26 builtins including print, range, len etc.",
+    "expected": { "count": 26, "names_contains": ["print","len","range"] },
+    "actual": { "count": 26, "names": ["False","None","True","abs","bool","bytes","dict","enumerate","float","hex","input","int","len","list","max","min","print","range","repr","reversed","sorted","str","sum","tuple","type","zip"] }
+  },
+  {
+    "tool": "script_python_pure_step_cost",
+    "status": "PASS",
+    "note": "Key is 'step_count', not 'steps'; 'x = 1 + 1' costs 4 steps",
+    "expected": { "step_count": 4, "ok": true },
+    "actual": { "step_count": 4, "ok": true }
+  },
+  {
+    "tool": "script_python_pure_collect_locals",
+    "status": "PASS",
+    "note": "Returns list of {name,value,type} objects including builtins; x=42 and y=hello present",
+    "expected": { "count_gte": 2, "locals_has_x": true, "locals_has_y": true },
+    "actual_excerpt": "count=28, includes {name:'x',value:'42',type:'int'} and {name:'y',value:'hello',type:'str'}"
+  }
+]

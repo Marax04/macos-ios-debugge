@@ -1,0 +1,20 @@
+{
+  "binary_built_ok": true,
+  "server_started_ok": true,
+  "project_open_ok": true,
+  "functions_detected": 2335,
+  "decompile_calls_ok": 8,
+  "decompile_calls_error": 0,
+  "avg_decompile_ms": 18.315762281417847,
+  "typed_vars": 82,
+  "unknown_vars": 11,
+  "c_output_sample": "__int64 __fastcall sub_140001000(size_t a1, __int64 *a2, size_t a3, size_t *a4) {\n    int v_20;\n    int v_28;\n    int v_30;\n    int v_40;\n    int v_68;\n    int v_70;\n    int v_90;\n    int v_a8;\n    int v_ac;\n    int v_d0;\n    int v_d8;\n    __int64 i;\n    __int64 result;\n    __int64 src;\n    __int64 i2;\n    __int64 v7;\n    __int64 v6;\n    __int64 v5;\n    __int64 v4;\n    __m128i xmm0;\n    __int64 v9;\n\n    if (result == 115) {\n        if (v5 >= v7) {\n            v_20 = 5;\n            if (v5 > v7) {\n                a4 = &off_140111388;\n                i = v7;\n                sub_1400F2A00(0, a1, v5, a3, a4);\n                v_20 = 7;\n                result = a4;\n                sub_140026AD0();\n                i = a2;\n                result = rsp + 32;\n                sub_1400F5340(10, a1, a2)",
+  "quality_signals": {
+    "has_types": true,
+    "has_casts": false,
+    "has_function_names": true,
+    "has_control_flow": true
+  },
+  "verdict": "WORKING",
+  "notes": "functions_detected=2335; decompile ok=8/8; avg_ms=18.3; unresolved_exprs=11"
+}

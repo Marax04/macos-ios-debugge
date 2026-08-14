@@ -1,0 +1,25 @@
+[package]
+license.workspace = true
+name = "rustre-il-lift"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-il = { path = "../rustre-il" }
+rustre-core = { path = "../rustre-core" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+parking_lot = { workspace = true }
+iced-x86 = "1.21"
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true

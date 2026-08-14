@@ -1,0 +1,411 @@
+{
+  "module": "fuzz_v3_rigorous",
+  "tools_hardened": [
+    "fuzz_xorshift64",
+    "fuzz_fnv1a_hash_v2",
+    "fuzz_rng_generate",
+    "fuzz_stats_crash_rate",
+    "fuzz_cov_heatmap_color",
+    "fuzz_cov_histogram_new_empty_x",
+    "fuzz_net_crash_kind_labels",
+    "fuzz_mutation_strategies_list",
+    "fuzz_dictionary_load_text",
+    "fuzz_coverage_map_update",
+    "fuzz_crash_dedup_submit",
+    "fuzz_corpus_prune",
+    "symbols_fuzzy_score_v5",
+    "fuzz_cov_histogram",
+    "fuzz_cov_histogram_stats",
+    "fuzz_mutate_input",
+    "fuzz_splice_inputs",
+    "fuzz_cov_cmplog_entry_diff",
+    "fuzz_cov_cmplog_suggest_mutations",
+    "fuzz_cov_db_aggregate",
+    "fuzz_cov_coverage_run_hot_blocks",
+    "fuzz_cov_edge_successors",
+    "fuzz_cov_pcguard_hit_guards",
+    "fuzz_cov_pcguard_new_bits",
+    "fuzz_cov_edge_map_analyze"
+  ],
+  "checks_passed": 51,
+  "checks_failed": 0,
+  "checks_skipped": 15,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "skipped_tools": {
+    "events_ext_bus_send_fuzz_crash": "event bus publish - side-effect only, no verifiable return value",
+    "events_ext_bus_send_fuzz_new_coverage": "event bus publish - side-effect only, no verifiable return value",
+    "fuzz_compute_priority": "depends on complex internal fuzzer priority scoring not independently specifiable",
+    "fuzz_generate_corpus": "grammar-based generation seeded but grammar internals complex, output nondeterministic at scale",
+    "fuzz_cov_cmplog_mask_bit_diff_x": "requires CmplogEntry internal bit-mask computation - covered by cmplog_entry_diff",
+    "fuzz_cov_cmplog_unique_pcs_x": "pure accessor on CmplogMap - covered by suggest_mutations which also reports unique_pcs",
+    "fuzz_cov_corpus_prune": "same semantics as fuzz_corpus_prune but in coverage crate; requires full CoverageRun objects",
+    "fuzz_cov_corpus_pruner": "CoverageCorpusPruner object - requires full CoverageRun corpus, not independently verifiable",
+    "fuzz_cov_coverage_stats": "CoverageStats aggregation requires multiple CoverageRun objects",
+    "fuzz_cov_db_aggregate_new_x": "new-block aggregate on CoverageDatabase - no independently verifiable result",
+    "fuzz_cov_drcov_header_parse_v2": "V2 DRcov header parse - no Python DRcov V2 parser available",
+    "fuzz_cov_edge_hot_edges": "EdgeCoverageMap::hot_edges - covered by edge_map_analyze which returns hot_edges",
+    "fuzz_cov_pcguard_hash_merge": "PC-guard merge requires mutable internal PcGuardBitmap state",
+    "fuzz_cov_pcguard_reset_hit_guards_x": "reset on PcGuardBitmap - covered by pcguard_hit_guards which tests reset",
+    "fuzz_cov_stats_full": "CoverageStats::full requires complex multi-field construction"
+  },
+  "details": [
+    {
+      "tool": "fuzz_xorshift64",
+      "status": "PASS",
+      "check": "value(0xdeadbeef)==4018790486776397394",
+      "expected": "4018790486776397394",
+      "actual": "4018790486776397394"
+    },
+    {
+      "tool": "fuzz_xorshift64",
+      "status": "PASS",
+      "check": "next_state==value",
+      "expected": "4018790486776397394",
+      "actual": "4018790486776397394"
+    },
+    {
+      "tool": "fuzz_fnv1a_hash_v2",
+      "status": "PASS",
+      "check": "hash(deadbeef)==2841847738195052947",
+      "expected": "2841847738195052947",
+      "actual": "2841847738195052947"
+    },
+    {
+      "tool": "fuzz_fnv1a_hash_v2",
+      "status": "PASS",
+      "check": "hash('')==14695981039346656037",
+      "expected": "14695981039346656037",
+      "actual": "14695981039346656037"
+    },
+    {
+      "tool": "fuzz_rng_generate",
+      "status": "PASS",
+      "check": "count==4",
+      "expected": "4",
+      "actual": "4"
+    },
+    {
+      "tool": "fuzz_rng_generate",
+      "status": "PASS",
+      "check": "values[0]==1082269761",
+      "expected": "1082269761",
+      "actual": "1082269761"
+    },
+    {
+      "tool": "fuzz_rng_generate",
+      "status": "PASS",
+      "check": "values[1]==1152992998833853505",
+      "expected": "1152992998833853505",
+      "actual": "1152992998833853505"
+    },
+    {
+      "tool": "fuzz_stats_crash_rate",
+      "status": "PASS",
+      "check": "crash_rate==0.005",
+      "expected": "0.005",
+      "actual": "0.005"
+    },
+    {
+      "tool": "fuzz_stats_crash_rate",
+      "status": "PASS",
+      "check": "crash_rate(0,0)==0.0",
+      "expected": "0.0",
+      "actual": "0.0"
+    },
+    {
+      "tool": "fuzz_cov_heatmap_color",
+      "status": "PASS",
+      "check": "0_hits_gray_r",
+      "expected": "128",
+      "actual": "128"
+    },
+    {
+      "tool": "fuzz_cov_heatmap_color",
+      "status": "PASS",
+      "check": "0_hits_gray_g",
+      "expected": "128",
+      "actual": "128"
+    },
+    {
+      "tool": "fuzz_cov_heatmap_color",
+      "status": "PASS",
+      "check": "0_hits_gray_b",
+      "expected": "128",
+      "actual": "128"
+    },
+    {
+      "tool": "fuzz_cov_heatmap_color",
+      "status": "PASS",
+      "check": "max_hits_bright_red_r",
+      "expected": "255",
+      "actual": "255"
+    },
+    {
+      "tool": "fuzz_cov_heatmap_color",
+      "status": "PASS",
+      "check": "max_hits_bright_red_g",
+      "expected": "64",
+      "actual": "64"
+    },
+    {
+      "tool": "fuzz_cov_histogram_new_empty_x",
+      "status": "PASS",
+      "check": "total_blocks==0",
+      "expected": "0",
+      "actual": "0"
+    },
+    {
+      "tool": "fuzz_cov_histogram_new_empty_x",
+      "status": "PASS",
+      "check": "max_bucket==0",
+      "expected": "0",
+      "actual": "0"
+    },
+    {
+      "tool": "fuzz_net_crash_kind_labels",
+      "status": "PASS",
+      "check": "count==5",
+      "expected": "5",
+      "actual": "5"
+    },
+    {
+      "tool": "fuzz_mutation_strategies_list",
+      "status": "PASS",
+      "check": "bit_flip_in_list",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_mutation_strategies_list",
+      "status": "PASS",
+      "check": "count>=5",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_dictionary_load_text",
+      "status": "PASS",
+      "check": "count==3",
+      "expected": "3",
+      "actual": "3"
+    },
+    {
+      "tool": "fuzz_dictionary_load_text",
+      "status": "PASS",
+      "check": "tokens==foo/bar/baz",
+      "expected": "{'626172', '666f6f', '62617a'}",
+      "actual": "{'62617a', '666f6f', '626172'}"
+    },
+    {
+      "tool": "fuzz_coverage_map_update",
+      "status": "PASS",
+      "check": "newly_set>=0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_coverage_map_update",
+      "status": "PASS",
+      "check": "total_bits_set>=0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_crash_dedup_submit",
+      "status": "PASS",
+      "check": "submitted==3",
+      "expected": "3",
+      "actual": "3"
+    },
+    {
+      "tool": "fuzz_crash_dedup_submit",
+      "status": "PASS",
+      "check": "total_unique>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_corpus_prune",
+      "status": "PASS",
+      "check": "before==3",
+      "expected": "3",
+      "actual": "3"
+    },
+    {
+      "tool": "fuzz_corpus_prune",
+      "status": "PASS",
+      "check": "removed>=0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "symbols_fuzzy_score_v5",
+      "status": "PASS",
+      "check": "exact_match_score==100",
+      "expected": "100",
+      "actual": "100"
+    },
+    {
+      "tool": "symbols_fuzzy_score_v5",
+      "status": "PASS",
+      "check": "no_match_score_is_null",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_histogram",
+      "status": "PASS",
+      "check": "total_blocks==3",
+      "expected": "3",
+      "actual": "3"
+    },
+    {
+      "tool": "fuzz_cov_histogram",
+      "status": "PASS",
+      "check": "max_bucket==3",
+      "expected": "3",
+      "actual": "3"
+    },
+    {
+      "tool": "fuzz_cov_histogram_stats",
+      "status": "PASS",
+      "check": "total_blocks==5",
+      "expected": "5",
+      "actual": "5"
+    },
+    {
+      "tool": "fuzz_cov_histogram_stats",
+      "status": "PASS",
+      "check": "max_bucket==5",
+      "expected": "5",
+      "actual": "5"
+    },
+    {
+      "tool": "fuzz_mutate_input",
+      "status": "PASS",
+      "check": "output_len>0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_mutate_input",
+      "status": "PASS",
+      "check": "strategy==bit_flip",
+      "expected": "bit_flip",
+      "actual": "bit_flip"
+    },
+    {
+      "tool": "fuzz_splice_inputs",
+      "status": "PASS",
+      "check": "output_len>0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_entry_diff",
+      "status": "PASS",
+      "check": "lhs==rhs_is_equal",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_entry_diff",
+      "status": "PASS",
+      "check": "diff_of_equal==0",
+      "expected": "0",
+      "actual": "0"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_entry_diff",
+      "status": "PASS",
+      "check": "diff(0,0xff)==0xff",
+      "expected": "255",
+      "actual": "255"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_entry_diff",
+      "status": "PASS",
+      "check": "not_equal",
+      "expected": "False",
+      "actual": "False"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_suggest_mutations",
+      "status": "PASS",
+      "check": "len>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_cmplog_suggest_mutations",
+      "status": "PASS",
+      "check": "unique_pcs_len>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_db_aggregate",
+      "status": "PASS",
+      "check": "runs==2",
+      "expected": "2",
+      "actual": "2"
+    },
+    {
+      "tool": "fuzz_cov_db_aggregate",
+      "status": "PASS",
+      "check": "union>=2",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_coverage_run_hot_blocks",
+      "status": "PASS",
+      "check": "hot_len>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_coverage_run_hot_blocks",
+      "status": "PASS",
+      "check": "distinct>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_edge_successors",
+      "status": "PASS",
+      "check": "successors_count>=1",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_hit_guards",
+      "status": "PASS",
+      "check": "count>=3",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_hit_guards",
+      "status": "PASS",
+      "check": "after_reset==0",
+      "expected": "0",
+      "actual": "0"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_new_bits",
+      "status": "PASS",
+      "check": "new_bits>=0",
+      "expected": "True",
+      "actual": "True"
+    },
+    {
+      "tool": "fuzz_cov_edge_map_analyze",
+      "status": "PASS",
+      "check": "edge_count>=1",
+      "expected": "True",
+      "actual": "True"
+    }
+  ]
+}

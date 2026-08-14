@@ -1,0 +1,57 @@
+{
+  "crate": "rustre-decompiler-expr",
+  "validator": {
+    "match_final": true,
+    "mismatches": 0,
+    "pub_fns": 330,
+    "pub_types": 99,
+    "pub_consts": 17,
+    "pub_aliases": 1,
+    "missing_modules": [],
+    "checks": {
+      "pub_fns_>=80": true,
+      "pub_types_>=60": true,
+      "pub_consts_>=2": true,
+      "pub_aliases_>=1": true
+    }
+  },
+  "mcp_tests": [
+    {
+      "name": "project.open",
+      "tool": "project.open",
+      "args": {"path": "C:/Users/Fra/Desktop/RustRE/target/release/zyphora.exe"},
+      "ok": true,
+      "binary_id": "bin-0001"
+    },
+    {
+      "name": "tools_list_filter",
+      "expr_decompile_tools": [
+        "decompile.function",
+        "decompile.rename_variable",
+        "decompile.set_type",
+        "decompiler_core_batch_decompile",
+        "decompiler_recover_structs",
+        "decompiler_stack_frame_report",
+        "decompile_function_path"
+      ],
+      "ok": true
+    },
+    {
+      "name": "decompile.function@0x140001000",
+      "tool": "decompile.function",
+      "args": {"binary_id": "bin-0001", "address": "0x140001000"},
+      "ok": false,
+      "error": "not found: no function detected at 0x140001000",
+      "note": "expected: requires prior function detection; the expr crate itself is a backend library not directly exposed; MCP error is well-formed (non-crashing)"
+    }
+  ],
+  "comparison": {
+    "validator_match": true,
+    "mcp_layer_responsive": true,
+    "mismatch_real": false,
+    "notes": "rustre-decompiler-expr is a backend library used by decompile.function. Structural validator (modules + public surface) passes cleanly. MCP server lists 7 decompile/expr-related tools and responds correctly; the only failure is a legitimate 'no function at address' for an unanalyzed binary, not a crate-level mismatch."
+  },
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

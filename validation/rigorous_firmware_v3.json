@@ -1,0 +1,44 @@
+{
+  "category": "firmware",
+  "tools_hardened": 3,
+  "tools_passed": 27,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "Covers loader_firmware_detect_kind (14 cases), loader_firmware_detect_binary_arch (4 invariant checks), loader_firmware_detect_rtos (9 cases). Initial validator had wrong lowercase/abbreviated RTOS names; corrected to match RtosKind::Display strings from rustre-loader-firmware/src/lib.rs (validator_defect, no Rust change needed).",
+  "detail": {
+    "loader_firmware_detect_kind": [
+      {"desc": "gzip",     "status": "PASS", "kind": "tar.gz"},
+      {"desc": "bzip2",    "status": "PASS", "kind": "bzip2"},
+      {"desc": "xz",       "status": "PASS", "kind": "xz"},
+      {"desc": "lzma",     "status": "PASS", "kind": "lzma"},
+      {"desc": "intel-hex","status": "PASS", "kind": "intel-hex"},
+      {"desc": "srec",     "status": "PASS", "kind": "srec"},
+      {"desc": "uf2",      "status": "PASS", "kind": "uf2"},
+      {"desc": "uboot",    "status": "PASS", "kind": "uboot-legacy"},
+      {"desc": "fit",      "status": "PASS", "kind": "uboot-fit"},
+      {"desc": "squashfs", "status": "PASS", "kind": "squashfs"},
+      {"desc": "jffs2",    "status": "PASS", "kind": "jffs2"},
+      {"desc": "cramfs",   "status": "PASS", "kind": "cramfs"},
+      {"desc": "unknown",  "status": "PASS", "kind": "unknown"},
+      {"desc": "raw-short","status": "PASS", "kind": "raw"}
+    ],
+    "loader_firmware_detect_binary_arch": [
+      {"desc": "short<16",    "status": "PASS", "arch": "unknown"},
+      {"desc": "zeros",       "status": "PASS", "arch": "unknown"},
+      {"desc": "x86-prologue","status": "PASS", "arch": "x86"},
+      {"desc": "arm-be",      "status": "PASS", "arch": "arm-aarch32"}
+    ],
+    "loader_firmware_detect_rtos": [
+      {"desc": "no-rtos", "status": "PASS", "rtos": null},
+      {"desc": "FreeRTOS","status": "PASS", "rtos": "FreeRTOS"},
+      {"desc": "VxWorks", "status": "PASS", "rtos": "VxWorks"},
+      {"desc": "ThreadX", "status": "PASS", "rtos": "ThreadX"},
+      {"desc": "RTEMS",   "status": "PASS", "rtos": "RTEMS"},
+      {"desc": "QNX",     "status": "PASS", "rtos": "QNX Neutrino"},
+      {"desc": "Zephyr",  "status": "PASS", "rtos": "Zephyr"},
+      {"desc": "NuttX",   "status": "PASS", "rtos": "NuttX"},
+      {"desc": "RIOT-OS", "status": "PASS", "rtos": "RIOT OS"}
+    ]
+  }
+}

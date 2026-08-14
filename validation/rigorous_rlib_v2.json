@@ -1,0 +1,708 @@
+[
+  {
+    "tool": "rlib_dec_symbol_map_ops",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "name": "main"
+    },
+    "expected": "{'len': 1, 'is_empty': False, 'resolved': 'main'}",
+    "actual": "{'len': 1, 'is_empty': False, 'resolved': 'main'}"
+  },
+  {
+    "tool": "rlib_dec_symbol_map_from_flirt_pairs",
+    "status": "PASS",
+    "args": {
+      "pairs": [
+        {
+          "addr": 5368771180,
+          "name": "main"
+        }
+      ]
+    },
+    "expected": "{'len': 1, 'input_count': 1}",
+    "actual": "{'len': 1, 'input_count': 1}"
+  },
+  {
+    "tool": "rlib_dec_function_name_generator",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180
+    },
+    "expected": "{'name': 'sub_14000f26c', 'count': 1}",
+    "actual": "{'name': 'sub_14000f26c', 'count': 1}"
+  },
+  {
+    "tool": "rlib_dec_function_name_generator",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "hint": "MyFunc"
+    },
+    "expected": "{'name': 'MyFunc', 'count': 0}",
+    "actual": "{'name': 'MyFunc', 'count': 0}"
+  },
+  {
+    "tool": "rlib_dec_typeprop_set_get",
+    "status": "PASS",
+    "args": {
+      "var": "x",
+      "ty": "int"
+    },
+    "expected": "{'got': 'int', 'count': 1}",
+    "actual": "{'got': 'int', 'count': 1}"
+  },
+  {
+    "tool": "rlib_dec_typeprop_propagate_add",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'result': 'int*'}",
+    "actual": "{'result': 'int*'}"
+  },
+  {
+    "tool": "rlib_dec_typeprop_propagate_add",
+    "status": "PASS",
+    "args": {
+      "lhs": "x",
+      "lhs_type": "int",
+      "rhs_is_const": false
+    },
+    "expected": "{'result': None}",
+    "actual": "{'result': None}"
+  },
+  {
+    "tool": "rlib_dec_calling_convention_from_arch",
+    "status": "PASS",
+    "args": {
+      "arch": "x86_64"
+    },
+    "expected": "{'cc': 'SysV AMD64', 'param_regs': ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']}",
+    "actual": "{'cc': 'SysV AMD64', 'param_regs': ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']}"
+  },
+  {
+    "tool": "rlib_dec_calling_convention_from_arch",
+    "status": "PASS",
+    "args": {
+      "arch": "x86_64-windows"
+    },
+    "expected": "{'cc': 'Windows x64', 'param_regs': ['rcx', 'rdx', 'r8', 'r9']}",
+    "actual": "{'cc': 'Windows x64', 'param_regs': ['rcx', 'rdx', 'r8', 'r9']}"
+  },
+  {
+    "tool": "rlib_dec_calling_convention_from_arch",
+    "status": "PASS",
+    "args": {
+      "arch": "aarch64"
+    },
+    "expected": "{'cc': 'ARM64'}",
+    "actual": "{'cc': 'ARM64'}"
+  },
+  {
+    "tool": "rlib_dec_var_recovery_stack_var_name",
+    "status": "PASS",
+    "args": {
+      "offset": 0
+    },
+    "expected": "{'name': 'arg_0', 'total_vars': 1}",
+    "actual": "{'name': 'arg_0', 'total_vars': 1}"
+  },
+  {
+    "tool": "rlib_dec_var_recovery_stack_var_name",
+    "status": "PASS",
+    "args": {
+      "offset": -8
+    },
+    "expected": "{'name': 'local_8', 'total_vars': 1}",
+    "actual": "{'name': 'local_8', 'total_vars': 1}"
+  },
+  {
+    "tool": "rlib_dec_var_recovery_fresh_var",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'names': ['v0', 'v1', 'v2']}",
+    "actual": "{'names': ['v0', 'v1', 'v2']}"
+  },
+  {
+    "tool": "rlib_dec_var_recovery_fresh_var",
+    "status": "PASS",
+    "args": {
+      "n": 5
+    },
+    "expected": "{'names': ['v0', 'v1', 'v2', 'v3', 'v4']}",
+    "actual": "{'names': ['v0', 'v1', 'v2', 'v3', 'v4']}"
+  },
+  {
+    "tool": "rlib_dec_expr_recovery_known_count",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'count': 1, 'return_type': 'int'}",
+    "actual": "{'count': 1, 'return_type': 'int'}"
+  },
+  {
+    "tool": "rlib_dec_cache_hit_rate",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'len': 0, 'is_empty': True, 'hit_rate': 0.0}",
+    "actual": "{'len': 0, 'is_empty': True, 'hit_rate': 0.0}"
+  },
+  {
+    "tool": "rlib_dec_cfs_fresh_goto_label",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'labels': ['label_0', 'label_1', 'label_2']}",
+    "actual": "{'labels': ['label_0', 'label_1', 'label_2']}"
+  },
+  {
+    "tool": "rlib_dec_cfs_fresh_goto_label",
+    "status": "PASS",
+    "args": {
+      "n": 5
+    },
+    "expected": "{'labels': ['label_0', 'label_1', 'label_2', 'label_3', 'label_4']}",
+    "actual": "{'labels': ['label_0', 'label_1', 'label_2', 'label_3', 'label_4']}"
+  },
+  {
+    "tool": "rlib_dec_cfs_detect_loop",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "loop:",
+        "  body();",
+        "  jmp loop"
+      ]
+    },
+    "expected": "{'detected': True}",
+    "actual": "{'detected': True}"
+  },
+  {
+    "tool": "rlib_dec_cfs_detect_loop",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "x = 1;",
+        "y = 2;"
+      ]
+    },
+    "expected": "{'detected': False}",
+    "actual": "{'detected': False}"
+  },
+  {
+    "tool": "rlib_dec_cfs_make_if_else",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'flattened': 'if (x) {\\n}'}",
+    "actual": "{'flattened': 'if (x) {\\n}'}"
+  },
+  {
+    "tool": "rlib_dec_quality_from_source",
+    "status": "PASS",
+    "args": {
+      "src": "int x = 1;\nreturn x;"
+    },
+    "expected": "has expression_density and readability_score (numeric)",
+    "actual": "{'expression_density': 0.5, 'readability_score': 100.0, 'source': 'rustre_decompiler::QualityMetrics'}"
+  },
+  {
+    "tool": "rlib_dec_stats_success_rate",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'success_rate': 0.0, 'avg_time_ms': 0.0}",
+    "actual": "{'success_rate': 0.0, 'avg_time_ms': 0.0}"
+  },
+  {
+    "tool": "rlib_dec_symbol_map_set_xref",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "count": 5
+    },
+    "expected": "{'xref_count': 5}",
+    "actual": "{'xref_count': 5}"
+  },
+  {
+    "tool": "rlib_dec_symbol_map_extend_pairs",
+    "status": "PASS",
+    "args": {
+      "pairs": [
+        {
+          "addr": 5368771180,
+          "name": "f"
+        }
+      ]
+    },
+    "expected": "{'len': 1, 'input': 1}",
+    "actual": "{'len': 1, 'input': 1}"
+  },
+  {
+    "tool": "rlib_dec_symbol_map_enable_demangling",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "name": "main"
+    },
+    "expected": "{'resolved': 'main'}",
+    "actual": "{'resolved': 'main'}"
+  },
+  {
+    "tool": "rlib_dec_typeprop_get_type",
+    "status": "PASS",
+    "args": {
+      "var": "x",
+      "ty": "int"
+    },
+    "expected": "{'get': 'int'}",
+    "actual": "{'get': 'int'}"
+  },
+  {
+    "tool": "rlib_dec_typeprop_count_all",
+    "status": "PASS",
+    "args": {
+      "map": {
+        "x": "int",
+        "y": "int*"
+      }
+    },
+    "expected": "{'count': 2}",
+    "actual": "{'count': 2}"
+  },
+  {
+    "tool": "rlib_dec_annotation_store_ops",
+    "status": "PASS",
+    "args": {
+      "start": 5368771180,
+      "end": 5368771196,
+      "text": "note"
+    },
+    "expected": "{'len_after_add': 1, 'empty_after_add': False, 'len_after_clear': 0}",
+    "actual": "{'len_after_add': 1, 'empty_after_add': False, 'len_after_clear': 0}"
+  },
+  {
+    "tool": "rlib_dec_cache_ops",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180
+    },
+    "expected": "{'len': 1, 'hits': 1}",
+    "actual": "{'len': 1, 'hits': 1}"
+  },
+  {
+    "tool": "rlib_dec_cache_evict_one",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180
+    },
+    "expected": "{'before': 1, 'after_evict': 0, 'after_clear': 0}",
+    "actual": "{'before': 1, 'after_evict': 0, 'after_clear': 0}"
+  },
+  {
+    "tool": "rlib_dec_pass_registry_ops",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'len': 0, 'is_empty': True, 'names': []}",
+    "actual": "{'len': 0, 'is_empty': True, 'names': []}"
+  },
+  {
+    "tool": "rlib_dec_function_name_gen_counter",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180
+    },
+    "expected": "{'n1': 'sub_14000f26c', 'n2': 'sub_14000f27c', 'count': 2}",
+    "actual": "{'n1': 'sub_14000f26c', 'n2': 'sub_14000f27c', 'count': 2, 'source': 'rustre_decompiler::FunctionNameGenerator::count'}"
+  },
+  {
+    "tool": "rlib_dec_result_errors",
+    "status": "PASS",
+    "args": {
+      "msg": "test error"
+    },
+    "expected": "{'errors': 1, 'has_errors': True, 'total_lines': 2}",
+    "actual": "{'errors': 1, 'has_errors': True, 'total_lines': 2}"
+  },
+  {
+    "tool": "rlib_dec2_variable_new",
+    "status": "PASS",
+    "args": {},
+    "expected": "has display and is_parameter",
+    "actual": "{'display': 'local int v0 @ reg:rax', 'is_parameter': False, 'source': 'rustre_decompiler::DecompVariable'}"
+  },
+  {
+    "tool": "rlib_dec2_function_new",
+    "status": "PASS",
+    "args": {},
+    "expected": "has lines and address",
+    "actual": "{'lines': 1, 'confidence': 50, 'address': 4096, 'source': 'rustre_decompiler::DecompiledFunction::new'}"
+  },
+  {
+    "tool": "rlib_dec2_function_with_confidence",
+    "status": "PASS",
+    "args": {
+      "confidence": 80
+    },
+    "expected": "{'confidence': 80, 'high': True}",
+    "actual": "{'confidence': 80, 'high': True}"
+  },
+  {
+    "tool": "rlib_dec2_stats_success_rate",
+    "status": "PASS",
+    "args": {
+      "functions_decompiled": 8,
+      "functions_failed": 2,
+      "total_time_ms": 100
+    },
+    "expected": "{'success_rate': 80.0}",
+    "actual": "{'success_rate': 80.0}"
+  },
+  {
+    "tool": "rlib_dec2_ir_level_display",
+    "status": "PASS",
+    "args": {},
+    "expected": "levels contains HLIL",
+    "actual": "{'levels': ['LLIL', 'MLIL/SSA', 'HLIL', 'PseudoC'], 'source': 'rustre_decompiler::IrLevel'}"
+  },
+  {
+    "tool": "rlib_dec2_var_storage_display",
+    "status": "PASS",
+    "args": {},
+    "expected": "displays has >=4 entries",
+    "actual": "{'displays': ['reg:rax', 'stack[-8]', 'global:0x400000', 'imm:0x2a'], 'source': 'rustre_decompiler::VarStorage'}"
+  },
+  {
+    "tool": "rlib_dec2_typeprop_all_typed",
+    "status": "PASS",
+    "args": {},
+    "expected": "has typed and count",
+    "actual": "{'typed': 3, 'count': 3, 'source': 'rustre_decompiler::TypePropagation::all_typed'}"
+  },
+  {
+    "tool": "rlib_dec2_cfs_flatten",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "a;",
+        "b;"
+      ]
+    },
+    "expected": "{'flattened': 'a;\\nb;'}",
+    "actual": "{'flattened': 'a;\\nb;'}"
+  },
+  {
+    "tool": "rlib_dec2_cfs_make_for",
+    "status": "PASS",
+    "args": {},
+    "expected": "flattened contains 'for'",
+    "actual": "{'flattened': 'for (i=0; i<10; i++) {\\n}', 'source': 'rustre_decompiler::ControlFlowStructuring::make_for'}"
+  },
+  {
+    "tool": "rlib_dec2_cfs_make_switch",
+    "status": "PASS",
+    "args": {},
+    "expected": "flattened contains 'switch'",
+    "actual": "{'flattened': 'switch (x) {\\n  case 0:\\n    a;\\n  case 1:\\n    b;\\n}', 'source': 'rustre_decompiler::ControlFlowStructuring::make_switch'}"
+  },
+  {
+    "tool": "rlib_dec2_quality_expression_density",
+    "status": "PASS",
+    "args": {
+      "src": "x + y * z"
+    },
+    "expected": "has operators key",
+    "actual": "{'lines': 1, 'statements': 0, 'operators': 2, 'density': 0.0, 'source': 'rustre_decompiler::QualityMetrics::expression_density'}"
+  },
+  {
+    "tool": "rlib_dec2_quality_readability_score",
+    "status": "PASS",
+    "args": {
+      "src": "x = 1;\nreturn x;"
+    },
+    "expected": "has score (numeric)",
+    "actual": "{'score': 100.0, 'gotos': 0, 'nesting': 0, 'controls': 0, 'source': 'rustre_decompiler::QualityMetrics::readability_score'}"
+  },
+  {
+    "tool": "rlib_dec2_inlining_pass_is_candidate",
+    "status": "PASS",
+    "args": {},
+    "expected": "has candidate (bool)",
+    "actual": "{'candidate': True, 'source': 'rustre_decompiler::InliningPass::is_candidate'}"
+  },
+  {
+    "tool": "rlib_dec2_decompilation_result_is_success",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'ok': True, 'fail': False}",
+    "actual": "{'ok': True, 'fail': False}"
+  },
+  {
+    "tool": "rlib_dec2_cache_insert_get",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'after_insert': 1, 'hit': True, 'after_evict': 0, 'is_empty': True}",
+    "actual": "{'after_insert': 1, 'hit': True, 'after_evict': 0, 'is_empty': True}"
+  },
+  {
+    "tool": "rlib_dec2_plugin_manager_count",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'count': 0, 'passes': 0}",
+    "actual": "{'count': 0, 'passes': 0}"
+  },
+  {
+    "tool": "rlib_dec2_timing_hook_total",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'passes': 0, 'total_ms': 0}",
+    "actual": "{'passes': 0, 'total_ms': 0}"
+  },
+  {
+    "tool": "rlib_dec2_multibackend_stats",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'backends': 0, 'success_rate': 0.0}",
+    "actual": "{'backends': 0, 'success_rate': 0.0}"
+  },
+  {
+    "tool": "rlib_dec2_infer_sign_hints",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'hint_count': 0}",
+    "actual": "{'hint_count': 0}"
+  },
+  {
+    "tool": "rlib_dec2_default_pipeline_standard",
+    "status": "PASS",
+    "args": {},
+    "expected": "pass_count >= 1",
+    "actual": "{'pass_count': 8, 'pass_names': ['call_sites', 'variable_collection', 'struct_field_recovery', 'constant_propagation', 'dead_code_elimination', 'disassembly', 'function_header', 'function_body'], 'sou"
+  },
+  {
+    "tool": "rlib_dec2_default_pipeline_disasm",
+    "status": "PASS",
+    "args": {},
+    "expected": "pass_count >= 1",
+    "actual": "{'pass_count': 2, 'pass_names': ['call_sites', 'disassembly'], 'source': 'rustre_decompiler::DefaultPipelineFactory::disassembly_only'}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_comment",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "text": "hello"
+    },
+    "expected": "{'covers': True, 'text': 'hello'}",
+    "actual": "{'covers': True, 'text': 'hello', 'source': 'rustre_decompiler::DecompilerAnnotation::comment'}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_type_info",
+    "status": "PASS",
+    "args": {
+      "start": 0,
+      "end": 16,
+      "text": "int"
+    },
+    "expected": "{'start': 0, 'end': 16, 'text': 'int'}",
+    "actual": "{'start': 0, 'end': 16, 'text': 'int'}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_symbol_name",
+    "status": "PASS",
+    "args": {
+      "addr": 5368771180,
+      "text": "main"
+    },
+    "expected": "{'text': 'main'}",
+    "actual": "{'text': 'main'}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_store_add_len",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'added': 3, 'is_empty_after_clear': True}",
+    "actual": "{'added': 3, 'is_empty_after_clear': True}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_store_at_address",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'hits': 1}",
+    "actual": "{'hits': 1}"
+  },
+  {
+    "tool": "rlib_dec2_annotation_store_by_category",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'comments': 1, 'types': 1}",
+    "actual": "{'comments': 1, 'types': 1}"
+  },
+  {
+    "tool": "rlib_dec2_pass_registry_ops",
+    "status": "PASS",
+    "args": {},
+    "expected": "{'len': 0, 'is_empty': True, 'names': []}",
+    "actual": "{'len': 0, 'is_empty': True, 'names': []}"
+  },
+  {
+    "tool": "rlib_dec_annotation_at_address",
+    "status": "PASS",
+    "args": {
+      "start": 5368771180,
+      "end": 5368771196,
+      "probe": 5368771180
+    },
+    "expected": "{'covers': True, 'hits': 1}",
+    "actual": "{'covers': True, 'hits': 1}"
+  },
+  {
+    "tool": "rlib_dec_annotation_by_category",
+    "status": "PASS",
+    "args": {
+      "start": 5368771180,
+      "end": 5368771196
+    },
+    "expected": "{'comments': 1, 'types': 1}",
+    "actual": "{'comments': 1, 'types': 1}"
+  },
+  {
+    "tool": "rlib_dec_annotation_type_info",
+    "status": "PASS",
+    "args": {
+      "start": 5368771180,
+      "end": 5368771196,
+      "text": "int"
+    },
+    "expected": "has type_info_cat and symbol_cat",
+    "actual": "{'type_info_cat': 'TypeInfo', 'symbol_cat': 'SymbolName', 'source': 'rustre_decompiler::DecompilerAnnotation'}"
+  },
+  {
+    "tool": "rlib_dec_diagnostic_new",
+    "status": "PASS",
+    "args": {
+      "msg": "oops",
+      "addr": 5368771180,
+      "pass": "p"
+    },
+    "expected": "{'error_sev': 'Error', 'warn_sev': 'Warning'}",
+    "actual": "{'error_sev': 'Error', 'error_addr': 5368771180, 'error_pass': 'p', 'warn_sev': 'Warning', 'source': 'rustre_decompiler::DecompilerDiagnostic'}"
+  },
+  {
+    "tool": "rlib_dec_var_recovery_ops",
+    "status": "PASS",
+    "args": {
+      "offset": 0,
+      "reg": "rax"
+    },
+    "expected": "total >= 2",
+    "actual": "{'total': 2, 'source': 'rustre_decompiler::VariableRecovery::total_vars'}"
+  },
+  {
+    "tool": "rlib_dec_cfs_flatten",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "a;",
+        "b;"
+      ]
+    },
+    "expected": "{'out': 'a;\\nb;'}",
+    "actual": "{'out': 'a;\\nb;'}"
+  },
+  {
+    "tool": "rlib_dec_cfs_structure_count_emit",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "x = 1;"
+      ]
+    },
+    "expected": "{'count': 1}",
+    "actual": "{'count': 1}"
+  },
+  {
+    "tool": "rlib_dec_cfs_make_for",
+    "status": "PASS",
+    "args": {},
+    "expected": "emit contains 'for'",
+    "actual": "{'emit': ['for (; ; ) {', '}'], 'source': 'rustre_decompiler::ControlFlowStructuring::make_for'}"
+  },
+  {
+    "tool": "rlib_dec_cfs_make_switch",
+    "status": "PASS",
+    "args": {
+      "expr": "x",
+      "cases": [
+        {
+          "label": "0",
+          "body": [
+            "a;"
+          ]
+        }
+      ]
+    },
+    "expected": "emit contains 'switch'",
+    "actual": "{'emit': ['switch (x) {', '  case 0:', '    a;', '}'], 'source': 'rustre_decompiler::ControlFlowStructuring::make_switch'}"
+  },
+  {
+    "tool": "rlib_dec_expr_recovery_register_fn",
+    "status": "PASS",
+    "args": {
+      "name": "foo",
+      "ret": "void"
+    },
+    "expected": "{'count': 1, 'return_type': 'void'}",
+    "actual": "{'count': 1, 'return_type': 'void'}"
+  },
+  {
+    "tool": "rlib_dec_cf_structure_emit_lines",
+    "status": "PASS",
+    "args": {
+      "lines": [
+        "a;",
+        "b;"
+      ],
+      "indent": 0
+    },
+    "expected": "{'emit': ['a;', 'b;']}",
+    "actual": "{'emit': ['a;', 'b;'], 'source': 'rustre_decompiler::CfStructure::emit_lines'}"
+  },
+  {
+    "tool": "rlib_dec2_cfs_add_structure",
+    "status": "PASS",
+    "args": {},
+    "expected": "count >= 1",
+    "actual": "{'count': 1, 'emit': ['a;', 'b;'], 'source': 'rustre_decompiler::ControlFlowStructuring::emit'}"
+  },
+  {
+    "tool": "rlib_dec2_function_parameters",
+    "status": "PASS",
+    "args": {},
+    "expected": "has params and locals",
+    "actual": "{'params': 2, 'locals': 3, 'source': 'rustre_decompiler::DecompiledFunction::parameters'}"
+  },
+  {
+    "tool": "rlib_dec2_function_with_call_site",
+    "status": "PASS",
+    "args": {},
+    "expected": "has call_sites",
+    "actual": "{'call_sites': 0, 'source': 'rustre_decompiler::DecompiledFunction::with_call_site'}"
+  },
+  {
+    "tool": "rlib_dec2_var_recovery_add_reg_param",
+    "status": "PASS",
+    "args": {},
+    "expected": "total_vars >= 1",
+    "actual": "{'total_vars': 2, 'source': 'rustre_decompiler::VariableRecovery'}"
+  },
+  {
+    "tool": "rlib_dec2_symbol_map_extend_pairs",
+    "status": "PASS",
+    "args": {
+      "pairs": [
+        {
+          "addr": 5368771180,
+          "name": "main"
+        }
+      ]
+    },
+    "expected": "len >= 1",
+    "actual": "{'len': 1, 'source': 'rustre_decompiler::SymbolMap::extend_pairs'}"
+  }
+]

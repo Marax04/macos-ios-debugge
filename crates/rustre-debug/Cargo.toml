@@ -1,0 +1,94 @@
+[package]
+license.workspace = true
+name = "rustre-debug"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-mem  = { path = "../rustre-mem" }
+rustre-symbols = { path = "../rustre-symbols" }
+# Instruction-length decoding only (`length::instr_length`), used by the live
+# Windows/Linux `Debugger` backends to place a temporary return-address
+# breakpoint for `step_over`/`step_out`. Not a debugger crate, so this does not
+# violate the "no dependency on other debugger implementations" rule.
+rustre-arch-x86 = { path = "../rustre-arch-x86" }
+# `ios` backend (ex-`rustre-debug-apple`): Swift/ObjC names read out of live
+# runtime metadata are mangled, and the canonical demangler for the whole
+# workspace lives here — it must not be reimplemented.
+rustre-demangle = { path = "../rustre-demangle" }
+# `ios` backend: the workspace's only real Mach-O container parser
+# (nlist/fat/segment decoding) — the static half of symbolication.
+rustre-loader-macho = { path = "../rustre-loader-macho" }
+anyhow = { workspace = true }
+# NOTE: this hub crate MUST NOT depend on any `rustre-debug-*` sub-crate
+# (even optionally) — every sub-crate already depends on this hub, so a
+# path-dep back to them creates a workspace cycle that Cargo refuses to
+# resolve regardless of feature activation. Aggregation now lives in the
+# sibling `rustre-debug-registry` crate.
+async-trait = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+rayon = { workspace = true }
+# opt-2: SIMD-accelerated byte search via memchr (AVX2/SSE4.2/NEON at runtime)
+memchr = { workspace = true }
+# opt-1: bump-arena for trace-event string allocation
+bumpalo = { version = "3", features = ["collections"] }
+# opt-4: memory-map large session-snapshot files
+memmap2 = "0.9"
+# opt-5: roaring bitmap for high-density tracepoint hit counting
+roaring = "0.10"
+# opt-7: LRU cache for hot CodeView type-index lookups
+lru = "0.12"
+# safety: zeroize register snapshots to prevent sensitive data leaks
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "hot_paths"
+harness = false
+
+# 360° suite: query/eval/record scaling across the whole crate, not just the
+# four leaf functions `hot_paths` covers. See the module docs in the file for
+# what is deliberately excluded (anything needing a live process).
+[[bench]]
+name = "full_coverage"
+harness = false
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "debugapi", "processthreadsapi", "memoryapi", "handleapi", "winbase",
+    "winnt", "errhandlingapi", "tlhelp32", "psapi", "synchapi",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Mach kernel API bindings (task_for_pid/mach_vm_read_overwrite/mach_vm_write/
+# thread_get_state/thread_set_state/task_threads/mach_vm_deallocate/task_info/
+# mach_vm_region_recurse) — used only by `macos_debugger`, mirroring winapi's
+# Windows-only scoping above. Pinned to "0.5" (not "0.4"): task_threads/
+# mach_vm_deallocate/task_info/mach_vm_region_recurse/thread_get_state/
+# thread_set_state are only in the crate's public API from 0.5 onward — 0.4
+# didn't expose them, which is why `macos_debugger.rs` originally hand-
+# declared `unsafe extern "C"` bindings for all six (verified against the
+# real 0.5.0 source, cached locally even without a macOS host, then swapped
+# to the real crate functions to eliminate that hand-declaration risk).
+mach2 = "0.5"
+
+[lints]
+workspace = true

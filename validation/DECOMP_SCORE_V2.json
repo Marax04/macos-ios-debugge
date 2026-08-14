@@ -1,0 +1,16 @@
+{
+  "score": 7.966666666666667,
+  "sample_size": 30,
+  "breakdown": {
+    "1_signature": 30,
+    "2_braces": 30,
+    "3_control_flow": 3,
+    "4_var_names": 30,
+    "5_call_resolve": 2,
+    "6_return": 30,
+    "7_multi_stmt": 28,
+    "8_no_raw_asm": 30,
+    "9_types": 26,
+    "10_meta": 30
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "crate": "rustre-arch-dex",
+  "mcp_tools_exposed": [],
+  "note": "No MCP tools in rustre-mcp-server/src/lib.rs reference rustre-arch-dex. Crate is library-only (dex_lifter, smali_generator, dalvik_type_system, etc.) and not wired into wire_tools. Validator (rustre-arch-dex.py) is self-contained pure-Python reference: it does not call MCP either, so the comparison is validator-internal consistency.",
+  "validator_run": {
+    "tests": 22,
+    "passed": 22,
+    "failed": 0
+  },
+  "mcp_run": {
+    "tests": 0,
+    "reason": "no matching tools"
+  },
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "recommendation": "Expose rustre-arch-dex helpers (dex_param_count, dex_internal_to_java_name, java_name_to_dex_descriptor, dex_simple_class_name, packed/sparse_switch_payload_size, smali_reg, DEX_* constants) via wire_tools to enable real MCP-vs-validator parity testing."
+}

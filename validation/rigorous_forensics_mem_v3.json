@@ -1,0 +1,251 @@
+{
+  "category": "forensics_mem",
+  "tools_hardened": 18,
+  "tools_passed": 48,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "total_checks": 48,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=0 -> Initialized",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=1 -> Ready",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=2 -> Running",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=3 -> Standby",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=4 -> Terminated",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=5 -> Wait",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=6 -> Transition",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=7 -> DeferredReady",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "description": "thread_state byte=255 -> Unknown",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=1 -> Listen",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=2 -> SynSent",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=3 -> SynReceived",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=5 -> Established",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=6 -> FinWait1",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=7 -> FinWait2",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=8 -> CloseWait",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=9 -> LastAck",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=11 -> TimeWait",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=12 -> Closed",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=0 -> Unknown",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=4 -> Unknown",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "description": "conn_state byte=10 -> Unknown",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_net_protocol_as_str",
+      "description": "net_protocol index=0 -> TCPv4",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_net_protocol_as_str",
+      "description": "net_protocol index=1 -> TCPv6",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_net_protocol_as_str",
+      "description": "net_protocol index=2 -> UDPv4",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_net_protocol_as_str",
+      "description": "net_protocol index=3 -> UDPv6",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_windows_version_display",
+      "description": "windows_version 10.0.19041",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_windows_version_display",
+      "description": "windows_version 6.1.7601",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_windows_version_display",
+      "description": "windows_version 5.1.2600",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_windows_version_display",
+      "description": "windows_version 10.0.22621",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "description": "proc_name_matches 'notepad.exe' contains 'notepad.exe' -> True",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "description": "proc_name_matches 'notepad.exe' contains 'note' -> True",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "description": "proc_name_matches 'notepad.exe' contains 'word.exe' -> False",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "description": "proc_name_matches 'EXPLORER.EXE' contains 'explorer' -> True",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "description": "proc_name_matches 'calc.exe' contains 'notepad' -> False",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_registry_hive_parse_key",
+      "description": "hive_parse_key HKLM\\Software -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_find_unicode_strings",
+      "description": "find_unicode_strings Hello UTF-16 -> count>0",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_scan_pe_headers",
+      "description": "scan_pe_headers MZ header -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_scan_stack_canaries",
+      "description": "scan_stack_canaries -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_scan_heap_allocations",
+      "description": "scan_heap_allocations -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_win_find_processes_mock",
+      "description": "forensics_mem_win_find_processes_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_win_find_modules_mock",
+      "description": "forensics_mem_win_find_modules_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_win_find_network_connections_mock",
+      "description": "forensics_mem_win_find_network_connections_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_win_extract_registry_hives_mock",
+      "description": "forensics_mem_win_extract_registry_hives_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_win_find_kernel_info_mock",
+      "description": "forensics_mem_win_find_kernel_info_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_linux_find_processes_mock",
+      "description": "forensics_mem_linux_find_processes_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_linux_find_modules_mock",
+      "description": "forensics_mem_linux_find_modules_mock mock -> structured response",
+      "pass": true
+    },
+    {
+      "tool": "forensics_mem_linux_find_sockets_mock",
+      "description": "forensics_mem_linux_find_sockets_mock mock -> structured response",
+      "pass": true
+    }
+  ]
+}

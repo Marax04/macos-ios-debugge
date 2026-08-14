@@ -1,0 +1,1776 @@
+﻿
+## Iteration 1 (see filesystem mtime)
+Batch: rustre-amf, rustre-archetype-def, rustre-audio-config, rustre-binary-cache, rustre-binary-formats, rustre-build-export, rustre-cache, rustre-channel-config, rustre-cli, rustre-cli-driver, rustre-clip-anim, rustre-cloth, rustre-cluster-runner, rustre-codegen, rustre-collision, rustre-collision-bound, rustre-collision-bvh, rustre-collision-decompose, rustre-collision-export, rustre-collision-import, rustre-collision-mesh, rustre-collision-poly, rustre-collision-primitive, rustre-collision-query, rustre-collision-shape, rustre-collision-test, rustre-common, rustre-compression, rustre-config, rustre-content
+Counts: 15 raw / 11 confirmed / 0 fixed
+Confirmed bugs:
+- fail_fast leaves remaining jobs in Pending state instead of Skipped â€” crates/rustre-cli/src/batch_mode.rs:347-349
+- ParallelBatch concurrency limit is silently ignored â€” crates/rustre-cli/src/batch_mode.rs:414-444
+- expect_value rejects negative numeric option values â€” crates/rustre-cli/src/lib.rs:263-269
+- Default-config file load silently swallows parse errors â€” crates/rustre-cli/src/lib.rs:1132-1139
+- Hex literals in config values silently downgraded to String â€” crates/rustre-cli/src/lib.rs:639-658
+- parse_short cannot handle combined short option with value â€” crates/rustre-cli/src/lib.rs:352-365
+- fmt_addr falls back to 64-bit width for any non-{16,32} bits value â€” crates/rustre-cli/src/lib.rs:1252-1258
+- ProgressBar.advance silently caps current to total, hiding overflow â€” crates/rustre-cli/src/lib.rs:702-705
+- Table::set_align panics on out-of-bounds column â€” src/lib.rs:792
+- PE parser potential usize arithmetic overflow on 32-bit targets â€” src/lib.rs:2158
+- Mutex held across loop and never poisoned-recovered (low risk) â€” src/batch_mode.rs:415
+
+## Iteration 1
+- Batch: rustre-arch-avr, rustre-arch-bpf, rustre-arch-cil, rustre-arch-dex, rustre-arch-jvm, rustre-arch-lua, rustre-arch-luajit, rustre-arch-mips, rustre-arch-msp430, rustre-arch-ppc, rustre-arch-riscv, rustre-arch-sparc, rustre-arch-wasm, rustre-arch-x86, rustre-arch-z80, rustre-bin, rustre-cli, rustre-core, rustre-crypto-id, rustre-crypto-oracle
+- Findings: 108, Confirmed: 99, Fixed: 24
+- Optimizations applied on crates: rustre-arch-avr, rustre-arch-bpf, rustre-arch-cil, rustre-arch-dex, rustre-arch-jvm, rustre-arch-lua, rustre-arch-luajit, rustre-arch-mips, rustre-arch-msp430, rustre-arch-ppc
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-arch-avr src/lib.rs:493 â€” LDD Y+q misdecoded when d>=16
+  - [high] rustre-arch-avr src/lib.rs:504 â€” LDD Z+q misdecoded when d>=16
+  - [medium] rustre-arch-avr src/lib.rs:311 â€” BSET/BCLR shadowed by SEC/CLC etc.
+  - [medium] rustre-arch-avr src/lib.rs:725 â€” JMP/CALL absolute target multiplied by 2
+  - [medium] rustre-arch-avr src/lib.rs:919 â€” Branch target parsed without bounding to program memory
+  - [low] rustre-arch-avr src/lib.rs:899 â€” `bytes[..dec.size.min(bytes.len())]` masks truncation
+  - [medium] rustre-arch-bpf src/bpf_analysis.rs:481 â€” Backward-jump loop detector misses self-loop
+  - [high] rustre-arch-bpf src/bpf_verifier.rs:119 â€” Bounds check casts negative base/offset to u64
+  - [high] rustre-arch-bpf src/bpf_verifier.rs:648 â€” Jump target cast from i64 to usize without negative check
+  - [medium] rustre-arch-bpf src/bpf_co_re.rs:662 â€” Field reloc ignores access string and always uses members[0]
+  - [high] rustre-arch-cil src/exception_handlers.rs:230 â€” Fat section data_size u24 decoded with wrong byte placement
+  - [medium] rustre-arch-cil src/cil_metadata.rs:176 â€” Stream header loop indexes `data[off..]` without bounds check
+  - [medium] rustre-arch-cil src/cil_metadata.rs:207 â€” stream_data computes `start + size` without checked_add
+  - [low] rustre-arch-cil src/cil_metadata.rs:72 â€” `16 + version_len` may overflow usize on 32-bit when version_len is attacker-controlled u32
+  - [low] rustre-arch-cil src/exception_handlers.rs:247 â€” Small-format data_size read as single u8 but spec is u8
+  - [low] rustre-arch-cil src/cil_metadata.rs:183 â€” `raw: data.to_vec()` clones entire input buffer on every parse
+  - [high] rustre-arch-cil crates/rustre-arch-cil/src/exception_handlers.rs:230 â€” Fat EH section data_size u24 decoded with wrong byte placement
+  - [medium] rustre-arch-cil crates/rustre-arch-cil/src/cil_metadata.rs:207 â€” stream_data uses unchecked start + size for slice end
+  - [medium] rustre-arch-cil crates/rustre-arch-cil/src/cil_metadata.rs:72 â€” version_end = 16 + version_len uses untrusted u32 without checked_add
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/exception_handlers.rs:247 â€” Small-format clause_count uses saturating_sub on data_size
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/cil_metadata.rs:183 â€” CilMetadataReader::parse clones the entire input buffer into self.raw
+  - [high] rustre-arch-jvm src/lib.rs:604 â€” tableswitch high-low+1 can overflow i32
+  - [high] rustre-arch-jvm src/wide_opcodes.rs:220 â€” tableswitch count arithmetic overflows i32
+  - [high] rustre-arch-jvm src/lib.rs:907 â€” get_branches mis-reads goto_w/jsr_w/switch targets
+  - [medium] rustre-arch-jvm src/wide_opcodes.rs:271 â€” lookupswitch npairs*8 can overflow usize
+  - [high] rustre-arch-lua src/lib.rs:923 â€” make_iabc silently truncates out-of-range operands
+  - [high] rustre-arch-lua src/lib.rs:168 â€” Legacy field layout comment contradicts implementation
+  - [medium] rustre-arch-lua src/lib.rs:835 â€” Branch target multiplication can panic in debug
+  - [medium] rustre-arch-lua src/lib.rs:931 â€” make_iasbx has no sBx range validation
+  - [medium] rustre-arch-lua src/lua54_decoder.rs:255 â€” Jump target cast to usize hides negative targets
+  - [low] rustre-arch-lua src/lua54_decoder.rs:470 â€” make_shri/make_shli silently mis-encode out-of-range C
+  - [critical] rustre-arch-luajit crates/rustre-arch-luajit/src/lib.rs:1011 â€” num_bc * 4 multiplication can overflow usize
+  - [high] rustre-arch-luajit crates/rustre-arch-luajit/src/lib.rs:1063 â€” KGC string ktype==5 case is dead and drops zero-length strings
+  - [high] rustre-arch-luajit crates/rustre-arch-luajit/src/luajit_assembler.rs:410 â€” Jump offset truncated to u16 without range check
+  - [medium] rustre-arch-luajit crates/rustre-arch-luajit/src/lib.rs:1011 â€” Addition `p + bc_bytes` may wrap
+  - [low] rustre-arch-luajit crates/rustre-arch-luajit/src/luajit21_compat.rs:294 â€” `LJ_NAMES.get(op as usize).copied().unwrap_or` is fine but surrounding `decode(...).unwrap()` in tests/lib paths can panic
+  - [critical] rustre-arch-mips src/mips_analysis.rs:266 â€” LE decode of MIPS instruction words
+  - [high] rustre-arch-mips src/mips_analysis.rs:377 â€” DelaySlotAnalyzer assumes little-endian
+  - [high] rustre-arch-mips src/mips_fpu.rs:60 â€” FCC shift can overflow
+  - [medium] rustre-arch-mips src/mips_fpu.rs:596 â€” CVT.W produces float, not integer bits
+  - [medium] rustre-arch-mips src/mips_analysis.rs:198 â€” branch_target signed overflow on kernel PCs
+  - [low] rustre-arch-mips src/mips_abi_analysis.rs:345 â€” Wrong stack slot growth for O32 overflow args
+  - [critical] rustre-arch-msp430 src/emulator.rs:660 â€” IndirectAutoInc on PC with byte mode increments by 1
+  - [high] rustre-arch-msp430 src/decoder.rs:513 â€” Invalid Op1 opcode silently decoded as RETI
+  - [high] rustre-arch-msp430 src/emulator.rs:722 â€” write_operand silently drops writes for Indexed/Indirect single-op destinations
+  - [medium] rustre-arch-msp430 src/emulator.rs:574 â€” DADD implemented as binary ADDC instead of BCD
+  - [medium] rustre-arch-msp430 src/decoder.rs:550 â€” Missing-extension-word truncation masked by unwrap_or(0)
+  - [critical] rustre-arch-ppc src/lib.rs:92 â€” Absolute branch target not sign-extended on 64-bit
+  - [high] rustre-arch-ppc src/lib.rs:558 â€” xo=536 wrongly decoded as SRW
+  - [high] rustre-arch-ppc src/lib.rs:562 â€” xo=27 misdecoded as MULHW
+  - [high] rustre-arch-ppc src/lib.rs:391 â€” xo=18 misdecoded as RFI
+  - [medium] rustre-arch-ppc src/lib.rs:319 â€” BC AA bit ignored in mnemonic
+  - [medium] rustre-arch-ppc src/lib.rs:386 â€” BCLR always flagged RET regardless of condition/LK
+  - [critical] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1471 â€” c_swsp_imm reads wrong bit fields
+  - [critical] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1477 â€” c_sdsp_imm swaps high/low immediate fields
+  - [critical] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1381 â€” c_lw_imm extracts wrong bits
+  - [high] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:935 â€” c.fld decode uses doubled +8 and wrong rs1 field
+  - [high] rustre-arch-riscv crates/rustre-arch-riscv/src/riscv_analysis.rs:259 â€” C.LW/C.SW immediate uses (raw>>10)&3 (2 bits) instead of 3
+  - [medium] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:10149 â€” decode_word_full panics on raw.len()<4
+  - [critical] rustre-arch-sparc src/sparc_emulator.rs:521 â€” SLL/SRL/SRA use wrong op3 encodings
+  - [high] rustre-arch-sparc src/sparc_emulator.rs:418 â€” Bicc condition table swapped between LE and LEU
+  - [high] rustre-arch-sparc src/sparc_decoder.rs:380 â€” Bicc annul/condition bits decoded from wrong field positions
+  - [high] rustre-arch-sparc src/sparc_emulator.rs:447 â€” exec_call signed shift overflow
+  - [medium] rustre-arch-sparc src/sparc_emulator.rs:143 â€” read_u32/write_u32 use non-wrapping add on u32 addresses
+  - [critical] rustre-arch-x86 src/length.rs:97 â€” VEX/EVEX tail decode treats opcode byte as ModRM
+  - [critical] rustre-arch-x86 src/length.rs:102 â€” 3-byte VEX (C4) length misses opcode byte
+  - [critical] rustre-arch-x86 src/length.rs:107 â€” EVEX length misses opcode byte
+  - [high] rustre-arch-x86 src/branch.rs:482 â€” Unary negation panics on i32::MIN displacement
+  - [medium] rustre-arch-x86 src/branch.rs:501 â€” Same i32::MIN negation panic in BasePlusIndex display
+  - [medium] rustre-arch-x86 src/branch.rs:508 â€” Same i32::MIN negation panic in RipRelative display
+  - [high] rustre-arch-z80 src/z80_emulator.rs:1064 â€” NEG PV flag overwritten by parity
+  - [medium] rustre-arch-z80 src/z80_emulator.rs:420 â€” R register single-increment for prefixed ops
+  - [medium] rustre-arch-z80 src/z80_emulator.rs:1280 â€” execute_index fallback recurses on prefix bytes
+  - [medium] rustre-arch-z80 src/z80_emulator.rs:243 â€” set_s uses redundant `v & true` mask
+  - [low] rustre-arch-z80 src/z80_emulator.rs:979 â€” DAA always clears H flag
+  - [low] rustre-arch-z80 src/z80_emulator.rs:49 â€” Z80Memory::load silently truncates and may overflow usize
+  - [medium] rustre-bin crates/rustre-bin/src/config.rs:171 â€” Single quote char panics in parse_value
+  - [high] rustre-bin crates/rustre-bin/src/subcommands.rs:512 â€” ELF machine read as fixed little-endian
+  - [medium] rustre-bin crates/rustre-bin/src/subcommands.rs:528 â€” Mach-O 32-bit magic mislabeled bits/arch
+  - [low] rustre-bin crates/rustre-bin/src/main.rs:1351 â€” u64 length cast to usize
+  - [low] rustre-bin crates/rustre-bin/src/subcommands.rs:329 â€” Disasm address addition can overflow
+  - [low] rustre-bin crates/rustre-bin/src/subcommands.rs:507 â€” ELF bits detection ignores invalid EI_CLASS
+  - [medium] rustre-bin crates/rustre-bin/src/config.rs:171 â€” Single quote char panics in parse_value
+  - [high] rustre-bin crates/rustre-bin/src/subcommands.rs:512 â€” ELF e_machine always read little-endian
+  - [medium] rustre-bin crates/rustre-bin/src/subcommands.rs:528 â€” Mach-O 32-bit magic mislabels arch
+  - [low] rustre-bin crates/rustre-bin/src/main.rs:1351 â€” u64 length cast to usize
+  - [low] rustre-bin crates/rustre-bin/src/subcommands.rs:329 â€” Disasm address arithmetic can overflow
+  - [low] rustre-bin crates/rustre-bin/src/subcommands.rs:507 â€” ELF bits detection accepts any non-2 as 32-bit
+  - [medium] rustre-cli crates/rustre-cli/src/lib.rs:1130 â€” Tilde in default config path not expanded
+  - [medium] rustre-cli crates/rustre-cli/src/lib.rs:1029 â€” terminal_supports_color disables color on Windows by default
+  - [medium] rustre-cli crates/rustre-cli/src/batch_mode.rs:414 â€” fail_fast does not abort remaining jobs within current chunk
+  - [low] rustre-cli crates/rustre-cli/src/lib.rs:737 â€” Progress bar width subtraction can underflow
+  - [low] rustre-cli crates/rustre-cli/src/config_file.rs:111 â€” String values like "inf"/"nan"/"1e5" silently parsed as Float
+  - [medium] rustre-core crates/rustre-core/src/address.rs:184 â€” `Sub<Address> for Address` silently saturates on underflow
+  - [medium] rustre-core crates/rustre-core/src/binary_view.rs:65 â€” `Memory::read` returns SegmentFault for in-range addresses past data length
+  - [low] rustre-core crates/rustre-core/src/loader.rs:335 â€” `has_magic_at` computes `offset + needle.len()` unchecked
+  - [low] rustre-core crates/rustre-core/src/endian.rs:169 â€” EndianRead for [u8] computes `offset + N` without checked add
+  - [medium] rustre-core crates/rustre-core/src/patches.rs:215 â€” `Patch::read_patched` zero-fills non-overlap bytes inside the requested window
+  - [low] rustre-core crates/rustre-core/src/binary_view_impl.rs:52 â€” `BinaryUri::parse` performs no validation or normalization of scheme/path
+
+## Iteration 2
+- Batch: rustre-crypto-whitebox, rustre-daemon, rustre-debug, rustre-debug-frida, rustre-debug-gdb, rustre-debug-kgdb, rustre-debug-linux, rustre-debug-macos, rustre-debug-unicorn, rustre-debug-windbg, rustre-debug-windows, rustre-decompiler, rustre-decompiler-c, rustre-decompiler-cfs, rustre-decompiler-expr, rustre-decompiler-ghidra, rustre-decompiler-type, rustre-demangle, rustre-deobf, rustre-deobf-antianti
+- Findings: 90, Confirmed: 79, Fixed: 25
+- Optimizations applied on crates: rustre-crypto-whitebox, rustre-daemon, rustre-debug, rustre-debug-frida, rustre-debug-gdb, rustre-debug-kgdb, rustre-debug-linux, rustre-debug-macos, rustre-debug-unicorn, rustre-debug-windbg
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-debug crates/rustre-debug/src/cross_platform_debug.rs:606 â€” MemoryRegion::contains can overflow
+  - [high] rustre-debug crates/rustre-debug/src/cross_platform_debug.rs:656 â€” MemoryInspector::read addr+size unchecked
+  - [medium] rustre-debug crates/rustre-debug/src/cross_platform_debug.rs:691 â€” read_u64_le unwraps try_into
+  - [high] rustre-debug crates/rustre-debug/src/lib.rs:1038 â€” MockDebugger::read_memory silently truncates
+  - [high] rustre-debug crates/rustre-debug/src/lib.rs:1044 â€” MockDebugger::write_memory is a no-op that reports success
+  - [medium] rustre-debug crates/rustre-debug/src/lib.rs:355 â€” DebugEvent timestamp truncates u128 nanos to u64
+  - [critical] rustre-debug-gdb src/lib.rs:933 â€” Binary memory write payload corrupted by UTF-8 lossy conversion
+  - [high] rustre-debug-gdb src/lib.rs:1116 â€” is_connected defaults to true on lock contention
+  - [high] rustre-debug-gdb src/lib.rs:1307 â€” step_over PC+5 can wrap u64
+  - [medium] rustre-debug-gdb src/lib.rs:1679 â€” Backtrace fp+16 can wrap u64
+  - [medium] rustre-debug-gdb src/lib.rs:1504 â€” memory-map qXfer length capped at 0xfff bytes
+  - [medium] rustre-debug-gdb src/lib.rs:649 â€” All-0xFF register chunk misidentified as "unavailable"
+  - [critical] rustre-debug-kgdb src/kd_protocol.rs:342 â€” return_status overlaps processor field
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:250 â€” from_bytes panics on truncated packet
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:195 â€” byte_count truncates data.len() to u16
+  - [medium] rustre-debug-kgdb src/kd_protocol.rs:471 â€” parse_recv re-parses already-consumed bytes after short packet
+  - [low] rustre-debug-kgdb src/kd_protocol.rs:472 â€” O(n) remove(0) on malformed stream
+  - [high] rustre-debug-macos src/mach_vm.rs:502 â€” Unchecked address+size in map overlap check
+  - [high] rustre-debug-macos src/mach_vm.rs:508 â€” Unbounded allocation from caller-controlled size
+  - [medium] rustre-debug-macos src/mach_vm.rs:538 â€” read() silently zero-pads past region end
+  - [medium] rustre-debug-macos src/mach_vm.rs:169 â€” VmRegionInfo::end() overflows on high addresses
+  - [low] rustre-debug-macos src/mach_vm.rs:387 â€” cpsr truncated via `as u32` without check
+  - [high] rustre-debug-unicorn src/memory_map_builder.rs:235 â€” page_align overflows on large values
+  - [high] rustre-debug-unicorn src/memory_map_builder.rs:242 â€” add_section size arithmetic can underflow/overflow
+  - [high] rustre-debug-unicorn src/unicorn_debugger.rs:637 â€” read_memory bounds check overflows
+  - [high] rustre-debug-unicorn src/unicorn_debugger.rs:629 â€” map_memory allows overlapping regions silently
+  - [medium] rustre-debug-unicorn src/unicorn_extended.rs:707 â€” MappedRegion::contains overflows on large base
+  - [medium] rustre-debug-unicorn src/unicorn_debugger.rs:739 â€” run() increments pc without checking overflow
+  - [high] rustre-debug-windows src/lib.rs:1417 â€” launch command line concatenation lacks arg quoting
+  - [high] rustre-debug-windows src/lib.rs:298 â€” access-violation write flag hardcoded to false
+  - [medium] rustre-debug-windows src/lib.rs:173 â€” PAGE_GUARD regions reported as readable
+  - [medium] rustre-debug-windows src/lib.rs:461 â€” read_process_memory allocates attacker-controlled size with no cap
+  - [medium] rustre-debug-windows src/lib.rs:704 â€” process/module enumeration silently truncates at 1024 entries
+  - [low] rustre-debug-windows src/lib.rs:363 â€” decode_unload_dll discards the actual DLL path
+  - [high] rustre-decompiler src/ast_builder.rs:262 â€” Unescaped string literal in CExpr Display
+  - [medium] rustre-decompiler src/variable_recovery.rs:170 â€” Negative offset cast i64 to u32 truncates
+  - [medium] rustre-decompiler src/variable_recovery.rs:208 â€” frame_size negates i64 to u64 unchecked
+  - [medium] rustre-decompiler src/ast_builder.rs:691 â€” Recursive convert_block has no depth bound
+  - [medium] rustre-decompiler src/control_flow_recovery.rs:192 â€” Recursive dfs_post on CFG
+  - [low] rustre-decompiler src/ast_builder.rs:741 â€” Switch cases labeled by successor index, not real case value
+  - [high] rustre-decompiler-c src/c_simplifier.rs:50 â€” UIntLit u64 cast to i64 corrupts constant folding
+  - [high] rustre-decompiler-c src/c_simplifier.rs:327 â€” Signed div/mod applied to unsigned constants
+  - [medium] rustre-decompiler-c src/c_simplifier.rs:466 â€” Dead-assignment elimination drops initializers with side effects
+  - [medium] rustre-decompiler-c src/c_simplifier.rs:332 â€” fold_int_op accepts shift amount >= 64 producing wrong result
+  - [medium] rustre-decompiler-c src/c_simplifier.rs:87 â€” IntLit unconditionally typed as int32 makes (long)42 look redundant
+  - [low] rustre-decompiler-c src/lib.rs:2987 â€” Byte indexing with `as char` misclassifies multibyte chars as ident chars
+  - [high] rustre-decompiler-cfs src/switch_recovery.rs:119 â€” JumpTable::validate ignores function range
+  - [high] rustre-decompiler-cfs src/switch_recovery.rs:192 â€” Unchecked address arithmetic in jump table read
+  - [high] rustre-decompiler-cfs src/loop_detector.rs:1286 â€” Trip count cast loses precision and may panic
+  - [medium] rustre-decompiler-cfs src/loop_detector.rs:1290 â€” AtMost trip count uses wrong formula
+  - [medium] rustre-decompiler-cfs src/lib.rs:438 â€” Recursive DFS for back-edges can blow stack
+  - [critical] rustre-decompiler-expr src/lib.rs:720 â€” is_safe_to_inline allows inlining side-effecting expr at single use
+  - [high] rustre-decompiler-expr src/lib.rs:1464 â€” size*8 overflows u8 for large loads
+  - [high] rustre-decompiler-expr src/lib.rs:1618 â€” ExprRewriter does not recurse into Call/Load/Ternary/Index/FieldAccess children
+  - [medium] rustre-decompiler-expr src/lib.rs:991 â€” Width information lost in simplifier identity rules
+  - [medium] rustre-decompiler-expr src/lib.rs:1497 â€” print_const renders negative signed constants as 64-bit hex
+  - [medium] rustre-decompiler-expr src/lib.rs:1366 â€” count_shared ignores Call/Load/Ternary/Index nodes
+  - [critical] rustre-decompiler-ghidra src/ghidra_client.rs:484 â€” Empty pool acquire panics
+  - [high] rustre-decompiler-ghidra src/pcode_lifter.rs:352 â€” IntCarryLow/High mnemonics not parseable
+  - [medium] rustre-decompiler-ghidra src/pcode_analysis.rs:262 â€” Dominator computation uses min(addr) merge
+  - [medium] rustre-decompiler-ghidra src/pcode_lifter.rs:817 â€” PcodeBlock end set to addr+1
+  - [low] rustre-decompiler-ghidra src/pcode_lifter.rs:699 â€” Stack offset cast u64 as i64
+  - [high] rustre-decompiler-type src/lib.rs:543 â€” Left shift can panic/overflow on attacker-controlled scale
+  - [high] rustre-decompiler-type src/lib.rs:533 â€” Negative multiplier cast to huge u64 scale
+  - [medium] rustre-decompiler-type src/lib.rs:137 â€” Unchecked `inner.byte_size()? * n` for arrays
+  - [medium] rustre-decompiler-type src/lib.rs:72 â€” `field_at` matches zero-size field at any offset >= its start
+  - [medium] rustre-decompiler-type src/lib.rs:1414 â€” `TypeUnifier::find` uses unbounded recursion
+  - [critical] rustre-demangle src/lib.rs:418 â€” byte-to-char cast corrupts non-ASCII
+  - [medium] rustre-demangle src/lib.rs:1278 â€” base-36 substitution accepts lowercase
+  - [low] rustre-demangle src/lib.rs:485 â€” backref cap silently drops names
+  - [high] rustre-demangle src/lib.rs:873 â€” unchecked i + len in swift heuristic
+  - [high] rustre-demangle src/lib.rs:481 â€” name.push of byte-as-char yields mojibake
+  - [medium] rustre-demangle src/lib.rs:1278 â€” S<id>_ accepts lowercase base-36 digits
+  - [medium] rustre-demangle src/lib.rs:1298 â€” substitution idx + 1 can wrap
+  - [low] rustre-demangle src/lib.rs:485 â€” name_backrefs capped at 10 drops valid entries
+  - [critical] rustre-deobf src/lib.rs:752 â€” Base64 decode skips final quartet
+  - [high] rustre-deobf src/lib.rs:121 â€” Patch::apply may panic when original longer than patched
+  - [medium] rustre-deobf src/lib.rs:1564 â€” Section entropy truncated via `as u32` cast
+  - [low] rustre-deobf src/lib.rs:368 â€” elapsed_ms cast u128 to u64
+
+## Iteration 3
+- Batch: rustre-deobf-cff, rustre-deobf-iadl, rustre-deobf-mba, rustre-deobf-mhcde, rustre-deobf-opaque, rustre-deobf-smc, rustre-deobf-string, rustre-deobf-vm, rustre-deobf-vmlift, rustre-diff, rustre-diff-bindiff, rustre-diff-semantic, rustre-dotnet, rustre-dotnet-decompile, rustre-dotnet-edit, rustre-dotnet-metadata, rustre-emu, rustre-emu-qiling, rustre-emu-shellcode, rustre-emu-unicorn
+- Findings: 72, Confirmed: 58, Fixed: 21
+- Optimizations applied on crates: rustre-deobf-cff, rustre-deobf-iadl, rustre-deobf-mba, rustre-deobf-mhcde, rustre-deobf-opaque, rustre-deobf-smc, rustre-deobf-string, rustre-deobf-vm, rustre-deobf-vmlift, rustre-diff
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-deobf-iadl src/adversarial_loop.rs:352 â€” Passes that change length are silently dropped
+  - [high] rustre-deobf-iadl src/adversarial_loop.rs:340 â€” Perturbation resets no_progress before retrying
+  - [medium] rustre-deobf-iadl src/perturbation.rs:235 â€” partial_cmp().unwrap() panics on NaN quality_delta
+  - [medium] rustre-deobf-iadl src/lib.rs:1434 â€” Hash-constant heuristic ignores endianness
+  - [high] rustre-deobf-mhcde crates/rustre-deobf-mhcde/src/lib.rs:1929 â€” partial_cmp unwrap panics on NaN scores
+  - [high] rustre-deobf-mhcde crates/rustre-deobf-mhcde/src/lib.rs:700 â€” Negative jump target cast to usize wraps
+  - [medium] rustre-deobf-mhcde crates/rustre-deobf-mhcde/src/lib.rs:1090 â€” step_by(0) panics when window_size is 1
+  - [medium] rustre-deobf-mhcde crates/rustre-deobf-mhcde/src/lib.rs:1504 â€” offset+length addition may overflow usize
+  - [critical] rustre-deobf-opaque src/lib.rs:1432 â€” enumerate_values has no combinatorial cap
+  - [high] rustre-deobf-opaque src/lib.rs:1446 â€” Signed test domain never reaches negative values
+  - [high] rustre-deobf-opaque src/lib.rs:1433 â€” bits.min(16) silently truncates configured width
+  - [medium] rustre-deobf-opaque src/lib.rs:207 â€” Shl/Shr accepts u8 shift but wrapping_shl masks to 6 bits
+  - [medium] rustre-deobf-opaque src/lib.rs:1391 â€” classify returns Unknown when all assignments evaluate to None
+  - [low] rustre-deobf-opaque src/lib.rs:216 â€” wrapping_abs of i64::MIN yields i64::MIN
+  - [high] rustre-deobf-smc src/lib.rs:254 â€” XOR-loop region size derived from wrong byte
+  - [high] rustre-deobf-smc src/lib.rs:121 â€” Rol/Ror algorithm dispatch swapped
+  - [medium] rustre-deobf-smc src/lib.rs:343 â€” extract_key_from_block mask is wrong
+  - [medium] rustre-deobf-smc src/lib.rs:274 â€” ADD-loop opcode mask too loose
+  - [medium] rustre-deobf-smc src/lib.rs:572 â€” Negative jump cast wraps to huge usize
+  - [low] rustre-deobf-smc src/lib.rs:769 â€” reconstruct() can overflow base_addr+i
+  - [high] rustre-deobf-smc src/lib.rs:254 â€” XOR-loop region size derived from wrong byte
+  - [high] rustre-deobf-smc src/lib.rs:121 â€” Rol/Ror dispatch swapped
+  - [medium] rustre-deobf-smc src/lib.rs:343 â€” XOR opcode-extension mask wrong in extract_key_from_block
+  - [medium] rustre-deobf-smc src/lib.rs:274 â€” ADD-loop ModR/M mask too loose
+  - [medium] rustre-deobf-smc src/lib.rs:572 â€” JNZ relative jump cast wraps usize on negative result
+  - [low] rustre-deobf-smc src/lib.rs:769 â€” reconstruct() unchecked address arithmetic
+  - [critical] rustre-deobf-string src/chacha20.rs:471 â€” Poly1305 process_block uses wrong limb stride
+  - [high] rustre-deobf-string src/chacha20.rs:251 â€” Off-by-one in scan_constants loop on tiny inputs
+  - [high] rustre-deobf-string src/chacha20.rs:254 â€” Big-endian word matched against same constant list causes spurious detections
+  - [medium] rustre-deobf-string src/chacha20.rs:268 â€” `saturating_sub(64)` excludes the final valid 64-byte window
+  - [high] rustre-diff crates/rustre-diff/src/lib.rs:99 â€” FNV hash collision treated as identical
+  - [high] rustre-diff crates/rustre-diff/src/lib.rs:452 â€” Hash-only function matching trusts non-cryptographic FNV
+  - [high] rustre-diff crates/rustre-diff/src/lib.rs:382 â€” lcs_similarity silently caps inputs at 512 bytes
+  - [medium] rustre-diff crates/rustre-diff/src/basic_block_diff.rs:35 â€” instr_count set to byte length
+  - [medium] rustre-diff crates/rustre-diff/src/basic_block_diff.rs:49 â€” Unchecked end-start subtraction in const size()
+  - [medium] rustre-diff crates/rustre-diff/src/instruction_diff.rs:37 â€” Instruction size cast to u8 truncates
+  - [medium] rustre-diff-bindiff src/lib.rs:1281 â€” md_index wrapping_mul produces near-random u64
+  - [medium] rustre-diff-bindiff src/lib.rs:291 â€” unwrap_or(&0) hides missing call-graph node weight
+  - [medium] rustre-diff-bindiff src/prime_product_hash.rs:88 â€” jz/jne/jnz all assigned prime 211
+  - [medium] rustre-diff-bindiff src/lib.rs:1281 â€” md_index prime exponentiation wraps to near-random u64
+  - [medium] rustre-diff-bindiff src/prime_product_hash.rs:87 â€” duplicate prime 211 for jne/jz/jnz
+  - [medium] rustre-diff-bindiff src/lib.rs:291 â€” unwrap_or(&0) silently returns address 0 for missing node weight
+  - [low] rustre-diff-bindiff src/prime_product_hash.rs:807 â€” partial_cmp NaN treated as Equal in max_by
+  - [low] rustre-diff-bindiff src/prime_product_hash.rs:674 â€” matched_count = matches.len() - identical is fragile
+  - [low] rustre-diff-bindiff src/lib.rs:817 â€” propagate_matches only fires when both sides have exactly one callee
+  - [high] rustre-diff-semantic src/lib.rs:100 â€” Loop detection uses branch source vs prev instruction
+  - [high] rustre-diff-semantic src/lib.rs:247 â€” NormalizedFunction reads u32 LE but compares against u64 64-bit address
+  - [medium] rustre-diff-semantic src/lib.rs:1252 â€” CFG branch destination computed via i64 then truncated to u32
+  - [low] rustre-diff-semantic src/lib.rs:245 â€” While loop advances by 1 on mismatch causing O(n) overlapping rescans
+  - [high] rustre-dotnet-edit src/il_editor_extended.rs:122 â€” Overlap check uses new_bytes len but revert uses original_bytes len
+  - [medium] rustre-dotnet-edit src/il_editor_extended.rs:137 â€” Silent patch drop on out-of-bounds
+  - [medium] rustre-dotnet-edit src/cil_injector.rs:241 â€” Hardcoded offset increments produce invalid CIL offsets
+  - [low] rustre-dotnet-edit src/il_recompile.rs:177 â€” ReplaceRange ignores new instruction offsets
+  - [critical] rustre-dotnet-metadata src/metadata_resolver.rs:359 â€” ImplMap import_scope=0 underflow
+  - [high] rustre-dotnet-metadata src/metadata_resolver.rs:316 â€” ForwardedType ignores Implementation coded tag
+  - [high] rustre-dotnet-metadata src/metadata_resolver.rs:208 â€” resolve_method_token ignores table tag
+  - [medium] rustre-dotnet-metadata src/lib.rs:289 â€” UserString silently drops trailing odd byte
+  - [medium] rustre-dotnet-metadata src/lib.rs:1209 â€” Stream end computed without overflow check
+
+## Iteration 4
+- Batch: rustre-events, rustre-flirt, rustre-flirt-apply, rustre-flirt-gen, rustre-forensics, rustre-forensics-fs, rustre-forensics-mem, rustre-forensics-plugins, rustre-fuzz, rustre-fuzz-afl, rustre-fuzz-cov, rustre-fuzz-libfuzzer, rustre-fuzz-net, rustre-fuzz-sanitizers, rustre-graph, rustre-hex, rustre-hex-pattern, rustre-hex-template, rustre-hex-view, rustre-il-hlil
+- Findings: 79, Confirmed: 68, Fixed: 25
+- Optimizations applied on crates: rustre-events, rustre-flirt, rustre-flirt-apply, rustre-flirt-gen, rustre-forensics, rustre-forensics-fs, rustre-forensics-mem, rustre-forensics-plugins, rustre-fuzz, rustre-fuzz-afl
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-events crates/rustre-events/src/lib.rs:1858 â€” SpecEventLogger::spawn panics if called twice
+  - [high] rustre-events crates/rustre-events/src/bus_impl.rs:580 â€” RwLock unwrap will panic on poison
+  - [medium] rustre-events crates/rustre-events/src/lib.rs:702 â€” event_count linear scan instead of HashMap lookup
+  - [low] rustre-events crates/rustre-events/src/bus_impl.rs:510 â€” RingBuf::new panics on huge capacity
+  - [high] rustre-flirt crates/rustre-flirt/src/lib.rs:513 â€” Magic-bytes comparison wrong length
+  - [high] rustre-flirt crates/rustre-flirt/src/lib.rs:525 â€” Header length check off-by-two
+  - [medium] rustre-flirt crates/rustre-flirt/src/signature_matcher.rs:289 â€” Silent CRC truncation accepts short buffers
+  - [medium] rustre-flirt crates/rustre-flirt/src/signature_matcher.rs:289 â€” Unchecked addition of attacker-controlled lengths
+  - [low] rustre-flirt crates/rustre-flirt/src/flirt_library_database.rs:674 â€” `partial_cmp().unwrap()` on f64 confidence
+  - [critical] rustre-flirt-apply src/apply_engine.rs:81 â€” Wrong CRC polynomial vs lib.rs crc16_flirt
+  - [high] rustre-flirt-apply src/apply_engine.rs:196 â€” Inconsistent CRC region offset calculation
+  - [high] rustre-flirt-apply src/lib.rs:446 â€” CRC check silently skipped when buffer too short
+  - [medium] rustre-flirt-apply src/lib.rs:1488 â€” expect() in public library function build_ac_index
+  - [medium] rustre-flirt-apply src/lib.rs:1132 â€” Unchecked mask/bytes length mismatch in WildcardPattern::from_signature
+  - [high] rustre-fuzz-afl src/lib.rs:1112 â€” compute_favorites uses coverage_bits as bit-index proxy
+  - [medium] rustre-fuzz-afl src/lib.rs:42 â€” next_usize truncates u64 to usize on 32-bit before modulo
+  - [medium] rustre-fuzz-afl src/lib.rs:778 â€” ForkServer.next_pid increments without wrap check
+  - [medium] rustre-fuzz-afl src/lib.rs:1054 â€” select_sequential asserts non-empty queue
+  - [low] rustre-fuzz-afl src/lib.rs:351 â€” Dictionary load_afl_format mishandles quoted strings with escapes
+  - [low] rustre-fuzz-afl src/lib.rs:1038 â€” AflQueue.next_id increments without overflow check
+  - [critical] rustre-fuzz-cov src/lib.rs:230 â€” Wrong nth() index parsing BB count
+  - [critical] rustre-fuzz-cov src/lib.rs:245 â€” Inconsistent DRcov BB on-disk layout vs V2 parser
+  - [high] rustre-fuzz-cov src/lib.rs:1242 â€” CRLF breaks DrcovHeader byte-offset accounting
+  - [medium] rustre-fuzz-cov src/lib.rs:307 â€” locate_binary_start misses last position
+  - [medium] rustre-fuzz-cov src/lib.rs:1364 â€” absolute_addr can wrap on high module bases
+  - [critical] rustre-fuzz-libfuzzer src/lib.rs:982 â€” fuzz() force-pushes 4-byte zero seed when queue empty
+  - [high] rustre-fuzz-libfuzzer src/lib.rs:174 â€” CrashSignalHandler uses expect("mutex poisoned") on every accessor
+  - [high] rustre-fuzz-libfuzzer src/lib.rs:1809 â€” fuzz_iteration panics with divide-by-zero/modulo-zero if corpus is empty
+  - [medium] rustre-fuzz-libfuzzer src/lib.rs:443 â€” StructuredInput::serialize silently truncates field lengths >65535 via `as u16`
+  - [medium] rustre-fuzz-libfuzzer src/lib.rs:753 â€” InputSplicer::splice truncates 64-bit RNG to usize before modulo on 32-bit targets
+  - [medium] rustre-fuzz-libfuzzer src/lib.rs:904 â€” run_one derives "coverage" from fnv1a hash of input not real coverage
+  - [critical] rustre-fuzz-sanitizers src/sanitizer_runtime.rs:535 â€” memcpy bound check underflows on n=0
+  - [high] rustre-fuzz-sanitizers src/sanitizer_runtime.rs:547 â€” strcpy size check can overflow usize
+  - [high] rustre-fuzz-sanitizers src/shadow_memory.rs:233 â€” poison range computation overflows on high addrs
+  - [high] rustre-fuzz-sanitizers src/shadow_memory.rs:232 â€” hardcoded granule ignores configured scale_shift
+  - [high] rustre-fuzz-sanitizers src/lib.rs:317 â€” UAF early-return misfires on reallocated address
+  - [medium] rustre-fuzz-sanitizers src/lib.rs:344 â€” heap access bound math can wrap u64
+  - [critical] rustre-hex src/hex_editor_core.rs:393 â€” Redo clears its own stack via inner write/insert/delete
+  - [high] rustre-hex src/lib.rs:1660 â€” kmp_search empty-needle returns n+1 zero-length matches
+  - [high] rustre-hex src/lib.rs:1515 â€” read_exact `offset + len` can overflow usize
+  - [high] rustre-hex src/hex_editor_core.rs:715 â€” find_hex_pattern slices token by byte index
+  - [medium] rustre-hex src/hex_editor_core.rs:976 â€” select(start,end) inverts range when end==start
+  - [medium] rustre-hex src/lib.rs:1465 â€” annotations_overlapping `offset+len` can overflow
+  - [high] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_evaluator.rs:619 â€” Negative offset cast wraps to huge usize
+  - [high] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_evaluator.rs:627 â€” Unchecked add can overflow
+  - [medium] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_language.rs:617 â€” Wrong alignment formula for non-power-of-two sizes
+  - [medium] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_language.rs:474 â€” sizeof array multiplication overflows silently
+  - [medium] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_language.rs:760 â€” read_builtin offset+size overflow
+  - [low] rustre-hex-pattern crates/rustre-hex-pattern/src/pattern_import.rs:426 â€” Array field with missing size silently treated as 1
+  - [medium] rustre-hex-template template_engine.rs:249 â€” array count parse defaults to 1 silently swallowing parse errors
+  - [medium] rustre-hex-template template_engine.rs:563 â€” offset += size as u64 can wrap on pathological size_t but more importantly `self.offset as usize + size` truncates on 32-bit hosts
+  - [low] rustre-hex-template template_engine.rs:678 â€” format_printf substitutes %s/%d in wrong order
+  - [high] rustre-hex-template template_engine.rs:563 â€” usize cast of u64 offset truncates on 32-bit targets
+  - [medium] rustre-hex-template template_engine.rs:249 â€” array size parse error silently becomes count=1
+  - [medium] rustre-hex-template template_library.rs:422 â€” remove() rebuilds index without clearing it first
+  - [low] rustre-hex-template template_engine.rs:675 â€” format_printf substitutes %s/%d positionally not by arg type
+  - [low] rustre-hex-template template_engine.rs:547 â€” str::from_utf8 unwrap in hex-chunk parsing
+  - [high] rustre-hex-view src/transform_ops.rs:427 â€” CompressionTransform undo silently corrupts data
+  - [medium] rustre-hex-view src/transform_ops.rs:176 â€” RotTransform inverse panics on i8::MIN
+  - [medium] rustre-hex-view src/lib.rs:1064 â€” Unbounded iteration over annotation range
+  - [medium] rustre-hex-view src/lib.rs:1273 â€” Stale entropy cache when bytes_per_row changes
+  - [low] rustre-hex-view src/transform_ops.rs:277 â€” b64_decode silently drops trailing partial chunk
+  - [high] rustre-il-hlil crates/rustre-il-hlil/src/hlil_decompiler.rs:304 â€” DivU/ModU emitted with signed C operator
+  - [high] rustre-il-hlil crates/rustre-il-hlil/src/hlil_decompiler.rs:318 â€” Sar emitted identically to Shr
+  - [medium] rustre-il-hlil crates/rustre-il-hlil/src/hlil_decompiler.rs:291 â€” Const printed without respecting unsigned type
+  - [medium] rustre-il-hlil crates/rustre-il-hlil/src/hlil_optimization.rs:93 â€” ConstantFolding ignores second operand width
+  - [medium] rustre-il-hlil crates/rustre-il-hlil/src/hlil_optimization.rs:193 â€” Mask computation underflows when bits==0
+  - [low] rustre-il-hlil crates/rustre-il-hlil/src/lib.rs:4288 â€” usize change count cast to u32
+
+## Iteration 5
+- Batch: rustre-il-lift, rustre-il-llil, rustre-il-mlil, rustre-il-passes, rustre-loader, rustre-loader-android, rustre-loader-console, rustre-loader-dotnet, rustre-loader-elf, rustre-loader-firmware, rustre-loader-java, rustre-loader-lua, rustre-loader-luajit, rustre-loader-macho, rustre-loader-ole, rustre-loader-pdf, rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation
+- Findings: 54, Confirmed: 41, Fixed: 20
+- Optimizations applied on crates: rustre-il-lift, rustre-il-llil, rustre-il-mlil, rustre-il-passes, rustre-loader, rustre-loader-android, rustre-loader-console, rustre-loader-dotnet, rustre-loader-elf, rustre-loader-firmware
+- Build issues remaining: 5
+- Confirmed bug titles:
+  - [medium] rustre-il-lift src/z80_lifter.rs:1047 â€” SRA modelled as logical Shr
+  - [medium] rustre-il-lift src/x86_eval.rs:586 â€” ROR CF when count==0 reads wrong bit
+  - [low] rustre-il-lift src/arm_lifter.rs:136 â€” Byte slice on potentially non-ASCII mnemonic
+  - [low] rustre-il-lift src/wasm_lifter.rs:113 â€” Silent `as u8` truncation of align
+  - [low] rustre-il-lift src/z80_lifter.rs:973 â€” Unwrap after match guard is redundant but fragile
+  - [critical] rustre-il-llil llil_interpreter.rs:830 â€” Rol/Ror shift-by-bit-width panic
+  - [high] rustre-il-llil llil_interpreter.rs:152 â€” Memory read addr+i can overflow u64
+  - [high] rustre-il-llil llil_builder.rs:294 â€” alloc_addr unchecked add
+  - [medium] rustre-il-llil llil_builder.rs:114 â€” Length-to-size widening loses precision intent
+  - [medium] rustre-il-llil llil_interpreter.rs:167 â€” Page mask assumes power-of-two page_size
+  - [medium] rustre-il-llil llil_builder.rs:179 â€” BlockBuilder.end set to start address
+  - [high] rustre-il-mlil src/mlil_ssa.rs:351 â€” Dominance-frontier walks through u32::MAX
+  - [medium] rustre-il-mlil src/mlil_ssa.rs:539 â€” Shl/Shr ignore operand Size
+  - [medium] rustre-il-mlil src/mlil_optimizer.rs:417 â€” Const-fold Shl masks shift by 63 regardless of Size
+  - [medium] rustre-il-mlil src/mlil_optimizer.rs:268 â€” CSE keyed on Debug formatting
+  - [low] rustre-il-mlil src/mlil_ssa.rs:464 â€” Worklist value unused in const-prop
+  - [critical] rustre-loader src/format_detector.rs:662 â€” elf_arch_hint OOB index
+  - [high] rustre-loader src/format_detector.rs:527 â€” ext2 magic check off-by-one
+  - [high] rustre-loader src/relocation_engine.rs:297 â€” unchecked base+offset add
+  - [medium] rustre-loader src/relocation_engine.rs:374 â€” MipsHi16 unchecked add
+  - [low] rustre-loader src/binary_view.rs:114 â€” unchecked file_offset+delta
+  - [high] rustre-loader-elf src/gnu_hash.rs:173 â€” GnuHashTable::lookup panics when nbuckets is 0
+  - [high] rustre-loader-elf src/gnu_hash.rs:65-66 â€” GnuBloomFilter::might_contain panics if word_bits is 0
+  - [medium] rustre-loader-elf src/sections.rs:333 â€” get_section_name_table can overflow on 32-bit usize
+  - [medium] rustre-loader-elf src/sections.rs:230 â€” Shdr32/64::parse_all overflows on attacker-controlled e_shoff/e_shnum
+  - [high] rustre-loader-lua src/lib.rs:401 â€” num_size silently defaults when truncated
+  - [high] rustre-loader-lua src/lib.rs:1460 â€” integer overflow in offset+n_bytes bounds check
+  - [high] rustre-loader-lua src/lib.rs:313 â€” read_lua_string slen cast u64â†’usize on 32-bit
+  - [high] rustre-loader-lua src/lib.rs:921 â€” unbounded recursion in parse_51_52/parse_53_54
+  - [medium] rustre-loader-lua src/lib.rs:168 â€” LuaEndian::from_byte treats every non-zero as LE
+  - [medium] rustre-loader-lua src/lib.rs:322 â€” VersionReport endianness wrong default
+  - [high] rustre-loader-macho src/lib.rs:1196 â€” Fat binary nfat endianness inverted
+  - [medium] rustre-loader-macho src/lib.rs:1110 â€” read_u32_le off+4 can panic
+  - [medium] rustre-loader-macho src/macho_objc.rs:413 â€” parse_method_list hard-codes little-endian
+  - [low] rustre-loader-macho src/macho_objc.rs:441 â€” Relative-method selector base address wrong
+  - [low] rustre-loader-macho src/lib.rs:1132 â€” read_cstr `off + max_len` can overflow usize
+  - [high] rustre-loader-pdf crates/rustre-loader-pdf/src/parser.rs:494 â€” endstream-not-found silently treated as zero-length
+  - [medium] rustre-loader-pdf crates/rustre-loader-pdf/src/lib.rs:667 â€” /Length match collides with /Length1, /Length2
+  - [low] rustre-loader-pdf crates/rustre-loader-pdf/src/parser.rs:152 â€” hex escape in name skipped at EOF
+  - [high] rustre-mcp-federation src/mcp_router.rs:358 â€” Weighted policy ignores weights
+  - [medium] rustre-mcp-federation src/lib.rs:1428 â€” block_on inside async-capable runtime
+
+## Iteration 6
+- Batch: rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android, rustre-mobile-apktool, rustre-mobile-dyld, rustre-mobile-ios, rustre-mobile-ipa, rustre-mobile-jadx, rustre-mobile-smali, rustre-net, rustre-net-dissect, rustre-net-pcap, rustre-net-proxy, rustre-net-rules, rustre-pe-editor, rustre-pe-rebuild, rustre-pe-tools, rustre-plugin-api, rustre-plugin-host
+- Findings: 103, Confirmed: 94, Fixed: 24
+- Optimizations applied on crates: rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android, rustre-mobile-apktool, rustre-mobile-dyld, rustre-mobile-ios, rustre-mobile-ipa, rustre-mobile-jadx, rustre-mobile-smali
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [critical] rustre-mcp-tools src/lib.rs:1225 â€” PatchBytesTool offset+patch.len() can overflow usize
+  - [high] rustre-mcp-tools src/lib.rs:1648 â€” SectionDumpTool off+len wraps before bounds check
+  - [high] rustre-mcp-tools src/lib.rs:571 â€” HexDumpTool off+len overflow before .min()
+  - [medium] rustre-mcp-tools src/lib.rs:1721 â€” XorDecryptTool silently truncates 64-bit key to u8
+  - [medium] rustre-mcp-tools src/lib.rs:395 â€” demangle_simple slices &s[..n] on UTF-8 boundaries
+  - [low] rustre-mcp-tools src/lib.rs:2096 â€” base64_decode silently drops trailing partial chunks
+  - [critical] rustre-mem src/search.rs:73 â€” BMH skip table unsound for masked pattern bytes
+  - [high] rustre-mem src/sparse.rs:158 â€” Unchecked u64 address+offset arithmetic in read/write
+  - [high] rustre-mem src/sparse.rs:132 â€” `span()` panics or wraps when max key is u64::MAX
+  - [high] rustre-mem src/file_memory.rs:74 â€” Offset cast u64â†’usize loses bits on 32-bit targets
+  - [medium] rustre-mem src/helpers.rs:32 â€” Indexing assumes provider returned exact length
+  - [medium] rustre-mem src/cache.rs:246 â€” `current += bytes_this_page` can wrap u64 near address space end
+  - [critical] rustre-mobile-dyld src/slide_info.rs:462 â€” V2 PAGE_USE_EXTRA uses page_idx as extras index
+  - [high] rustre-mobile-dyld src/slide_info.rs:492 â€” V2 apply omits value_add when rebuilding pointer
+  - [high] rustre-mobile-dyld src/slide_info.rs:474 â€” V2 EXTRA_END loop continuation inverted
+  - [high] rustre-mobile-dyld src/slide_info.rs:498 â€” V2 chain stride uses *4 for 64-bit pointers
+  - [medium] rustre-mobile-dyld src/mappings.rs:120 â€” va_to_file_offset uses non-saturating add
+  - [medium] rustre-mobile-dyld src/mappings.rs:319 â€” read_at_va integer overflow in slice index
+  - [high] rustre-mobile-jadx src/lib.rs:2969 â€” Fmt22x truncates 16-bit register vBBBB to 8 bits
+  - [high] rustre-mobile-jadx src/lib.rs:3033 â€” Fmt32x truncates 16-bit registers vAAAA/vBBBB to 8 bits
+  - [medium] rustre-mobile-jadx src/lib.rs:3085 â€” Fmt3rc register-range computation can panic on overflow
+  - [medium] rustre-mobile-jadx src/lib.rs:2948 â€” fill-array-data size can overflow usize on 32-bit
+  - [medium] rustre-mobile-jadx src/lib.rs:3855 â€” descriptor_to_type panics on multibyte UTF-8 after '['
+  - [low] rustre-mobile-jadx src/lib.rs:3549 â€” block_at_offset misses bytes within the last instruction of a block
+  - [high] rustre-mobile-smali crates/rustre-mobile-smali/src/disassembler.rs:496 â€” 30t/31t branch offsets zero-extend high word
+  - [high] rustre-mobile-smali crates/rustre-mobile-smali/src/parser.rs:432 â€” F11n-style literal decode is dead/wrong
+  - [medium] rustre-mobile-smali crates/rustre-mobile-smali/src/parser.rs:303 â€” `.locals` treated as `.registers`
+  - [medium] rustre-mobile-smali crates/rustre-mobile-smali/src/parser.rs:404 â€” Register numbers above 255 silently truncated
+  - [critical] rustre-net crates/rustre-net/src/packet_builder.rs:433 â€” TCP checksum includes stale checksum field
+  - [critical] rustre-net crates/rustre-net/src/packet_builder.rs:492 â€” UDP checksum includes stale checksum field
+  - [high] rustre-net crates/rustre-net/src/protocol_dissector.rs:353 â€” Ipv4 dissector panics when ihl exceeds packet length
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:412 â€” TcpSegment::to_bytes_no_checksum panics for data_offset < 5
+  - [medium] rustre-net crates/rustre-net/src/protocol_dissector.rs:378 â€” TCP next_protocol set to dst_port not application protocol
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:469 â€” UDP length silently truncated to u16::MAX for oversize payload
+  - [high] rustre-net-dissect src/lib.rs:1348 â€” IPv4 parse slice OOB when total_len < ihl
+  - [high] rustre-net-dissect src/stream_reassembler.rs:541 â€” TCP seq number compared with raw `<` ignores wrap
+  - [medium] rustre-net-dissect src/stream_reassembler.rs:478 â€” "Evict oldest stream" picks arbitrary HashMap key
+  - [medium] rustre-net-dissect src/stream_reassembler.rs:555 â€” Reassembled bytes duplicated and buffer never freed
+  - [medium] rustre-net-dissect src/stream_reassembler.rs:122 â€” GapDetector ignores 32-bit seq wrap when merging ranges
+  - [low] rustre-net-dissect src/application_protocols.rs:317 â€” HTTP/2 frame length cast `length as usize` then silently clamped
+  - [critical] rustre-net-pcap src/lib.rs:1423 â€” LenLt(0) underflows on `*n - 1`
+  - [high] rustre-net-pcap src/pcap_filter_engine.rs:186 â€” Net mask `!0u32 << (32 - prefix)` panics when prefix > 32
+  - [high] rustre-net-pcap src/pcap_filter_engine.rs:442 â€” FilterCompiler Net mask shift panics when prefix > 32
+  - [high] rustre-net-pcap src/pcap_writer.rs:194 â€” `ts_usec * 1000` can overflow u32 in Duration::new
+  - [medium] rustre-net-pcap src/lib.rs:223 â€” `read_u16/u32/i32` index without bounds checks
+  - [medium] rustre-net-pcap src/lib.rs:1287 â€” BPF VM `LenGt/LenLt` loads `u32::MAX` constant instead of packet length
+  - [critical] rustre-net-pcap src/lib.rs:1423 â€” LenLt(0) panics on unsigned subtract
+  - [high] rustre-net-pcap src/pcap_filter_engine.rs:186 â€” Net mask shift panics for prefix>32
+  - [high] rustre-net-pcap src/pcap_filter_engine.rs:442 â€” FilterCompiler Net mask shift panics for prefix>32
+  - [high] rustre-net-pcap src/lib.rs:1414 â€” BPF length filters never load packet length
+  - [high] rustre-net-pcap src/pcap_writer.rs:194 â€” `ts_usec * 1000` overflows u32 in Duration::new
+  - [high] rustre-net-rules src/lib.rs:514 â€” Pcre silently treats non-UTF8 payload as empty
+  - [medium] rustre-net-rules src/lib.rs:534 â€” Depth condition can overflow usize
+  - [medium] rustre-net-rules src/lib.rs:520 â€” DSize comparison saturates payload size to u32::MAX
+  - [low] rustre-net-rules src/lib.rs:1478 â€” State count cast `goto.len() as u32` truncates before panic check
+  - [medium] rustre-net-rules src/lib.rs:854 â€” parse_content_value byte-slices quoted UTF-8 string
+  - [high] rustre-net-rules src/lib.rs:1369 â€” SpecRuleEngine treats unparseable port string as no-match instead of error
+  - [high] rustre-net-rules crates/rustre-net-rules/src/lib.rs:514 â€” Pcre check drops non-UTF8 payloads
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:534 â€” Depth offset arithmetic can overflow usize
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:520 â€” DSize saturates payload length to u32::MAX
+  - [low] rustre-net-rules crates/rustre-net-rules/src/lib.rs:1478 â€” AhoCorasick state index truncates via `as u32` before documented panic
+  - [high] rustre-net-rules crates/rustre-net-rules/src/lib.rs:1369 â€” Unparseable rule port silently never matches
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:876 â€” dsize "<>" min parse failure silently becomes 0
+  - [high] rustre-net-rules crates/rustre-net-rules/src/lib.rs:514 â€” PCRE check drops non-UTF8 payloads
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:534 â€” Depth offset arithmetic unchecked
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:520 â€” DSize saturates payload length to u32::MAX
+  - [high] rustre-net-rules crates/rustre-net-rules/src/lib.rs:1369 â€” Unparseable port string silently disables rule
+  - [medium] rustre-net-rules crates/rustre-net-rules/src/lib.rs:876 â€” dsize range min parse error swallowed with `unwrap_or(0)`
+  - [high] rustre-pe-editor crates/rustre-pe-editor/src/lib.rs:1183 â€” Patch offset+len addition can wrap usize
+  - [high] rustre-pe-editor crates/rustre-pe-editor/src/lib.rs:581 â€” Named import thunk RVA placeholder never resolved
+  - [medium] rustre-pe-editor crates/rustre-pe-editor/src/lib.rs:1343 â€” set_nx documented as NO_SEH but uses NX_COMPAT flag
+  - [medium] rustre-pe-editor crates/rustre-pe-editor/src/lib.rs:1077 â€” cert_rva truncates pe_data.len() via `as u32`
+  - [medium] rustre-pe-editor crates/rustre-pe-editor/src/lib.rs:411 â€” section_raw_range silently substitutes zero on conversion failure
+  - [high] rustre-pe-rebuild src/lib.rs:448 â€” IAT pointer uses RVA as address
+  - [high] rustre-pe-rebuild src/lib.rs:443 â€” IAT applied at RVA as file offset
+  - [high] rustre-pe-rebuild src/lib.rs:448 â€” Unchecked u64 add can wrap
+  - [medium] rustre-pe-rebuild src/lib.rs:1097 â€” Overlay raw_off+raw_size unchecked
+  - [medium] rustre-pe-rebuild src/lib.rs:1423 â€” `align_up` can overflow
+  - [medium] rustre-pe-rebuild src/lib.rs:651 â€” Reloc delta truncated to i32
+  - [high] rustre-pe-tools src/pe_patcher.rs:78 â€” NopPatch bounds check can wrap usize
+  - [high] rustre-pe-tools src/pe_patcher.rs:136 â€” JmpPatch end calc can wrap usize
+  - [high] rustre-pe-tools src/pe_patcher.rs:210 â€” BytePatch end calc can wrap usize
+  - [medium] rustre-pe-tools src/pe_patcher.rs:413 â€” PatchList overlap math can wrap
+  - [high] rustre-plugin-host src/plugin_ipc.rs:264 â€” Division by zero possible
+  - [medium] rustre-plugin-host src/plugin_ipc.rs:353 â€” bytes_received tracks plugin sends not receives
+  - [medium] rustre-plugin-host src/plugin_ipc.rs:355 â€” plugin_send increments messages_sent not received
+  - [medium] rustre-plugin-host src/dynamic_loader.rs:376 â€” silent unwrap_or on UTF-8 + JSON parse
+  - [high] rustre-plugin-host src/dynamic_loader.rs:86 â€” Unexpanded %APPDATA% literal in search path
+  - [medium] rustre-plugin-host src/plugin_ipc.rs:195 â€” usize-to-u32 cast on frame length
+  - [high] rustre-plugin-host crates/rustre-plugin-host/src/plugin_ipc.rs:353 â€” plugin_send mislabels bytes as received
+  - [high] rustre-plugin-host crates/rustre-plugin-host/src/dynamic_loader.rs:86 â€” Unexpanded %APPDATA% in Windows search path
+  - [medium] rustre-plugin-host crates/rustre-plugin-host/src/plugin_ipc.rs:195 â€” usizeâ†’u32 frame length truncation
+  - [medium] rustre-plugin-host crates/rustre-plugin-host/src/plugin_ipc.rs:355 â€” plugin_send increments messages_sent not received
+  - [low] rustre-plugin-host crates/rustre-plugin-host/src/dynamic_loader.rs:376 â€” silent fallback on invalid manifest bytes
+
+## Iteration 7
+- Batch: rustre-project, rustre-sandbox, rustre-sandbox-extract, rustre-sandbox-monitor, rustre-sandbox-report, rustre-sandbox-vm, rustre-script, rustre-script-lua, rustre-script-python, rustre-script-rhai, rustre-symb, rustre-symb-engine, rustre-symb-taint, rustre-symb-z3, rustre-symbols, rustre-symbols-codeview, rustre-symbols-dwarf, rustre-symbols-pdb, rustre-symbols-stabs, rustre-syscalls
+- Findings: 66, Confirmed: 60, Fixed: 25
+- Optimizations applied on crates: rustre-project, rustre-sandbox, rustre-sandbox-extract, rustre-sandbox-monitor, rustre-sandbox-report, rustre-sandbox-vm, rustre-script, rustre-script-lua, rustre-script-python, rustre-script-rhai
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [critical] rustre-sandbox-vm src/lib.rs:872 â€” Windows QMP transport mismatch
+  - [high] rustre-sandbox-vm src/lib.rs:991 â€” wait_for_qmp_ready ignores QEMU exit
+  - [medium] rustre-sandbox-vm src/lib.rs:1451 â€” revert is a no-op
+  - [medium] rustre-sandbox-vm src/lib.rs:1463 â€” delete_snapshot orphans children
+  - [medium] rustre-sandbox-vm src/lib.rs:1196 â€” Unbounded event loop in send_command
+  - [critical] rustre-script src/script_stdlib.rs:594 â€” JSON array split on raw comma breaks nested objects/strings
+  - [high] rustre-script src/script_stdlib.rs:600 â€” JSON object parser is a silent stub
+  - [high] rustre-script src/script_stdlib.rs:611 â€” JSON string serialization escapes only quote
+  - [high] rustre-script src/script_stdlib.rs:194 â€” base64_decode silently accepts truncated input
+  - [medium] rustre-script src/script_stdlib.rs:705 â€” pattern_find_all missing empty-pattern guard
+  - [medium] rustre-script src/script_stdlib.rs:643 â€” glob_match has exponential backtracking
+  - [critical] rustre-script-lua crates/rustre-script-lua/src/lib.rs:32 â€” Unrestricted file read in store_load_binary
+  - [high] rustre-script-lua crates/rustre-script-lua/src/lib.rs:1075 â€” i64::MIN % -1 panics
+  - [high] rustre-script-lua crates/rustre-script-lua/src/lua_rustre_api.rs:118 â€” Unchecked start+len in get_bytes
+  - [medium] rustre-script-lua crates/rustre-script-lua/src/lib.rs:1078 â€” Pow exponent truncated to i32
+  - [low] rustre-script-lua crates/rustre-script-lua/src/lua_stdlib_rustre.rs:107 â€” is_complete true for zero-total progress
+  - [critical] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:49 â€” Segment::empty `start_ea + size` can overflow u64
+  - [high] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:50 â€” `vec![0u8; size as usize]` truncates u64 size on 32-bit and may attempt huge allocation
+  - [high] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:67 â€” `read_word`/`read_dword`/`read_qword` add to `ea` without overflow check
+  - [high] rustre-script-python crates/rustre-script-python/src/lib.rs:3793 â€” `read_u32_le`/`read_u64_le` panic on short buffers in library API
+  - [medium] rustre-script-python crates/rustre-script-python/src/lib.rs:3812 â€” `patch_bytes` bound check `offset + patch_bytes.len()` can overflow usize
+  - [medium] rustre-script-python crates/rustre-script-python/src/lib.rs:3917 â€” UTF-16 string scanner truncates surrogate-pair code units silently
+  - [high] rustre-symb crates/rustre-symb/src/lib.rs:391 â€” Symbol id lookup uses last underscore segment
+  - [medium] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:372 â€” alias_check end-address can overflow u64
+  - [medium] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:192 â€” as_u32_le accepts >4 bytes and silently truncates
+  - [medium] rustre-symb crates/rustre-symb/src/lib.rs:423 â€” AShr of negative value by oversized shift returns 0 not -1
+  - [low] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:266 â€” load_bytes/write/memset can overflow base+i near u64::MAX
+  - [low] rustre-symb crates/rustre-symb/src/lib.rs:321 â€” Extract with lo > hi silently yields width 1
+  - [critical] rustre-symb-z3 src/lib.rs:962 â€” SignExt mask shift overflow
+  - [high] rustre-symb-z3 src/lib.rs:626 â€” Shr emits bvlshr instead of arithmetic shift
+  - [high] rustre-symb-z3 src/lib.rs:1201 â€” Heuristic SAT treats unknown as satisfied
+  - [medium] rustre-symb-z3 src/lib.rs:879 â€” Shl evaluator does not mask result to bit width
+  - [medium] rustre-symb-z3 src/lib.rs:955 â€” SignExt sign-bit computation panics on zero-width
+  - [critical] rustre-symbols-codeview src/cv_stream_parser.rs:707 â€” Broken file-name resolution always picks index 0
+  - [high] rustre-symbols-codeview src/cv_stream_parser.rs:655 â€” sub_len addition can overflow usize on 32-bit
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:137 â€” SProc32::end_addr u32 addition wraps
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:199 â€” SBlock32::end_addr u32 addition wraps
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:47 â€” SymKind::from_u16 missing Regrel32/Proc32Id/LabelAnnot variants
+  - [low] rustre-symbols-codeview src/cv_stream_parser.rs:673 â€” VA computation `image_base + code_offset + entry.offset` lacks overflow check
+  - [high] rustre-symbols-dwarf src/lib.rs:1176 â€” line_range divisor not checked
+  - [high] rustre-symbols-dwarf src/lib.rs:1193 â€” special opcode divides by line_range
+  - [high] rustre-symbols-dwarf src/lib.rs:363 â€” shstrtab slice index can panic
+  - [medium] rustre-symbols-dwarf src/lib.rs:503 â€” block read desyncs offset on truncation
+  - [medium] rustre-symbols-dwarf src/lib.rs:873 â€” low_pc + high_pc_raw can overflow
+  - [medium] rustre-symbols-dwarf src/lib.rs:703 â€” unbounded recursion in DIE parser
+  - [critical] rustre-symbols-pdb src/stream_reader.rs:58 â€” `skip` lacks overflow check on `self.pos + n`
+  - [high] rustre-symbols-pdb src/stream_reader.rs:218 â€” Unknown numeric leaf silently returns 0 and skips only 4 bytes
+  - [high] rustre-symbols-pdb src/lib.rs:166 â€” `read_cstring` returns `pos+1` even when no NUL was found before end-of-data
+  - [high] rustre-symbols-pdb src/lib.rs:192 â€” `num_dir_bytes.div_ceil(block_size)` panics when `block_size == 0`
+  - [medium] rustre-symbols-pdb src/lib.rs:329 â€” Module loop can stall when aligned record size is 0
+  - [high] rustre-symbols-stabs src/lib.rs:1107 â€” N_SLINE address uses image_base instead of function base
+  - [medium] rustre-symbols-stabs src/lib.rs:669 â€” Struct field bit offset divided by 8 truncates bitfields
+  - [medium] rustre-symbols-stabs src/lib.rs:936 â€” fp_offset cast from u32 to i32 silently wraps
+  - [low] rustre-symbols-stabs src/lib.rs:588 â€” "Su" branch unreachable after starts_with('s')
+  - [low] rustre-symbols-stabs src/lib.rs:565 â€” parse_descriptor strips type-code prefix before pointer/array check
+  - [critical] rustre-syscalls src/syscall_emulator.rs:543 â€” unbounded allocation in WriteHandler
+  - [high] rustre-syscalls src/syscall_emulator.rs:219 â€” addr+len overflow in EmulatedMemory::map
+  - [high] rustre-syscalls src/syscall_emulator.rs:128 â€” off + data.len() can overflow usize on 32-bit and wraps
+  - [medium] rustre-syscalls src/lib.rs:428 â€” i32::MIN negation overflow in errno decode
+  - [medium] rustre-syscalls src/syscall_emulator.rs:654 â€” mmap_hint advances by byte length, not page-aligned size
+
+## Iteration 7
+- Batch: rustre-project, rustre-sandbox, rustre-sandbox-extract, rustre-sandbox-monitor, rustre-sandbox-report, rustre-sandbox-vm, rustre-script, rustre-script-lua, rustre-script-python, rustre-script-rhai, rustre-symb, rustre-symb-engine, rustre-symb-taint, rustre-symb-z3, rustre-symbols, rustre-symbols-codeview, rustre-symbols-dwarf, rustre-symbols-pdb, rustre-symbols-stabs, rustre-syscalls
+- Findings: 66, Confirmed: 60, Fixed: 25
+- Optimizations applied on crates: rustre-project, rustre-sandbox, rustre-sandbox-extract, rustre-sandbox-monitor, rustre-sandbox-report, rustre-sandbox-vm, rustre-script, rustre-script-lua, rustre-script-python, rustre-script-rhai
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [critical] rustre-sandbox-vm src/lib.rs:872 - Windows QMP transport mismatch
+  - [high] rustre-sandbox-vm src/lib.rs:991 - wait_for_qmp_ready ignores QEMU exit
+  - [medium] rustre-sandbox-vm src/lib.rs:1451 - revert is a no-op
+  - [medium] rustre-sandbox-vm src/lib.rs:1463 - delete_snapshot orphans children
+  - [medium] rustre-sandbox-vm src/lib.rs:1196 - Unbounded event loop in send_command
+  - [critical] rustre-script src/script_stdlib.rs:594 - JSON array split on raw comma breaks nested objects/strings
+  - [high] rustre-script src/script_stdlib.rs:600 - JSON object parser is a silent stub
+  - [high] rustre-script src/script_stdlib.rs:611 - JSON string serialization escapes only quote
+  - [high] rustre-script src/script_stdlib.rs:194 - base64_decode silently accepts truncated input
+  - [medium] rustre-script src/script_stdlib.rs:705 - pattern_find_all missing empty-pattern guard
+  - [medium] rustre-script src/script_stdlib.rs:643 - glob_match has exponential backtracking
+  - [critical] rustre-script-lua crates/rustre-script-lua/src/lib.rs:32 - Unrestricted file read in store_load_binary
+  - [high] rustre-script-lua crates/rustre-script-lua/src/lib.rs:1075 - i64::MIN % -1 panics
+  - [high] rustre-script-lua crates/rustre-script-lua/src/lua_rustre_api.rs:118 - Unchecked start+len in get_bytes
+  - [medium] rustre-script-lua crates/rustre-script-lua/src/lib.rs:1078 - Pow exponent truncated to i32
+  - [low] rustre-script-lua crates/rustre-script-lua/src/lua_stdlib_rustre.rs:107 - is_complete true for zero-total progress
+  - [critical] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:49 - Segment::empty start_ea + size can overflow u64
+  - [high] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:50 - vec[0u8; size as usize] truncates u64 size on 32-bit
+  - [high] rustre-script-python crates/rustre-script-python/src/ida_compat_api.rs:67 - read_word/read_dword/read_qword add without overflow check
+  - [high] rustre-script-python crates/rustre-script-python/src/lib.rs:3793 - read_u32_le/read_u64_le panic on short buffers
+  - [medium] rustre-script-python crates/rustre-script-python/src/lib.rs:3812 - patch_bytes bound check can overflow usize
+  - [medium] rustre-script-python crates/rustre-script-python/src/lib.rs:3917 - UTF-16 string scanner truncates surrogate-pair code units silently
+  - [high] rustre-symb crates/rustre-symb/src/lib.rs:391 - Symbol id lookup uses last underscore segment
+  - [medium] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:372 - alias_check end-address can overflow u64
+  - [medium] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:192 - as_u32_le accepts >4 bytes and silently truncates
+  - [medium] rustre-symb crates/rustre-symb/src/lib.rs:423 - AShr of negative value by oversized shift returns 0 not -1
+  - [low] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:266 - load_bytes/write/memset can overflow base+i near u64::MAX
+  - [low] rustre-symb crates/rustre-symb/src/lib.rs:321 - Extract with lo > hi silently yields width 1
+  - [critical] rustre-symb-z3 src/lib.rs:962 - SignExt mask shift overflow
+  - [high] rustre-symb-z3 src/lib.rs:626 - Shr emits bvlshr instead of arithmetic shift
+  - [high] rustre-symb-z3 src/lib.rs:1201 - Heuristic SAT treats unknown as satisfied
+  - [medium] rustre-symb-z3 src/lib.rs:879 - Shl evaluator does not mask result to bit width
+  - [medium] rustre-symb-z3 src/lib.rs:955 - SignExt sign-bit computation panics on zero-width
+  - [critical] rustre-symbols-codeview src/cv_stream_parser.rs:707 - Broken file-name resolution always picks index 0
+  - [high] rustre-symbols-codeview src/cv_stream_parser.rs:655 - sub_len addition can overflow usize on 32-bit
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:137 - SProc32::end_addr u32 addition wraps
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:199 - SBlock32::end_addr u32 addition wraps
+  - [medium] rustre-symbols-codeview src/cv_symbols.rs:47 - SymKind::from_u16 missing Regrel32/Proc32Id/LabelAnnot variants
+  - [low] rustre-symbols-codeview src/cv_stream_parser.rs:673 - VA computation lacks overflow check
+  - [high] rustre-symbols-dwarf src/lib.rs:1176 - line_range divisor not checked
+  - [high] rustre-symbols-dwarf src/lib.rs:1193 - special opcode divides by line_range
+  - [high] rustre-symbols-dwarf src/lib.rs:363 - shstrtab slice index can panic
+  - [medium] rustre-symbols-dwarf src/lib.rs:503 - block read desyncs offset on truncation
+  - [medium] rustre-symbols-dwarf src/lib.rs:873 - low_pc + high_pc_raw can overflow
+  - [medium] rustre-symbols-dwarf src/lib.rs:703 - unbounded recursion in DIE parser
+  - [critical] rustre-symbols-pdb src/stream_reader.rs:58 - skip lacks overflow check
+  - [high] rustre-symbols-pdb src/stream_reader.rs:218 - Unknown numeric leaf silently returns 0 and skips only 4 bytes
+  - [high] rustre-symbols-pdb src/lib.rs:166 - read_cstring returns pos+1 when no NUL
+  - [high] rustre-symbols-pdb src/lib.rs:192 - div_ceil panics when block_size == 0
+  - [medium] rustre-symbols-pdb src/lib.rs:329 - Module loop can stall when aligned record size is 0
+  - [high] rustre-symbols-stabs src/lib.rs:1107 - N_SLINE address uses image_base instead of function base
+  - [medium] rustre-symbols-stabs src/lib.rs:669 - Struct field bit offset divided by 8 truncates bitfields
+  - [medium] rustre-symbols-stabs src/lib.rs:936 - fp_offset cast from u32 to i32 silently wraps
+  - [low] rustre-symbols-stabs src/lib.rs:588 - Su branch unreachable
+  - [low] rustre-symbols-stabs src/lib.rs:565 - parse_descriptor strips type-code prefix before check
+  - [critical] rustre-syscalls src/syscall_emulator.rs:543 - unbounded allocation in WriteHandler
+  - [high] rustre-syscalls src/syscall_emulator.rs:219 - addr+len overflow in EmulatedMemory::map
+  - [high] rustre-syscalls src/syscall_emulator.rs:128 - off + data.len() can overflow usize on 32-bit and wraps
+  - [medium] rustre-syscalls src/lib.rs:428 - i32::MIN negation overflow in errno decode
+  - [medium] rustre-syscalls src/syscall_emulator.rs:654 - mmap_hint advances by byte length, not page-aligned size
+
+## Iteration 8
+- Batch: rustre-syscalls-linux, rustre-syscalls-windows, rustre-sysinternals, rustre-threatintel, rustre-ti-correlate, rustre-ti-malpedia, rustre-ti-misp, rustre-ti-vt, rustre-trace, rustre-trace-coresight, rustre-trace-coverage, rustre-trace-navigate, rustre-trace-pt, rustre-triage, rustre-triage-die, rustre-triage-entropy, rustre-triage-peid, rustre-triage-yara, rustre-ttd, rustre-ttd-query
+- Findings: 109, Confirmed: 99, Fixed: 25
+- Optimizations applied on crates: rustre-syscalls-linux, rustre-syscalls-windows, rustre-sysinternals, rustre-threatintel, rustre-ti-correlate, rustre-ti-malpedia, rustre-ti-misp, rustre-ti-vt, rustre-trace, rustre-trace-coresight
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-syscalls-linux crates/rustre-syscalls-linux/src/lib.rs:6278 - Out-of-bounds index when arg_count exceeds args length
+  - [medium] rustre-syscalls-linux crates/rustre-syscalls-linux/src/lib.rs:6250 - Unary negation overflow on i64::MIN retval
+  - [medium] rustre-syscalls-linux crates/rustre-syscalls-linux/src/ptrace_tracer.rs:132 - Same i64::MIN negation overflow in SyscallExit::errno
+  - [medium] rustre-syscalls-linux crates/rustre-syscalls-linux/src/lib.rs:7251 - ChildTracker::len()/is_empty broken
+  - [low] rustre-syscalls-linux crates/rustre-syscalls-linux/src/syscall_intercept.rs:69 - NumberRange does not validate lo<=hi
+  - [critical] rustre-syscalls-windows src/nt_syscalls.rs:259 - Duplicate SSN 0x55 for NtCreateFile collides with NtCreateTimer
+  - [high] rustre-syscalls-windows src/nt_syscalls.rs:347 - NTSTATUS success check uses wrong bit shift
+  - [high] rustre-syscalls-windows src/nt_syscalls.rs:391 - next_seq can panic on overflow in debug or wrap silently
+  - [medium] rustre-syscalls-windows src/api_monitor.rs:179 - ApiHookRule.matches is case-sensitive on function despite doc claim
+  - [medium] rustre-syscalls-windows src/windows_events.rs:77 - EventProviderGuid Display emits non-standard GUID format
+  - [low] rustre-syscalls-windows src/nt_syscalls.rs:48 - SysEnterPattern.matches accepts trailing bytes silently
+  - [high] rustre-sysinternals src/lib.rs:831 - Unbounded recursion in attach_children self-cycle
+  - [high] rustre-sysinternals src/file_search.rs:262 - walk_dir follows symlinks with no loop or symlink-cycle protection
+  - [medium] rustre-sysinternals src/file_search.rs:286 - content_contains reads entire file into memory
+  - [medium] rustre-sysinternals src/lib.rs:1295 - PE pe_offset + 4 > data.len() can overflow on attacker-controlled input
+  - [medium] rustre-sysinternals src/file_search.rs:226 - Glob matcher has exponential backtracking
+  - [high] rustre-ti-correlate src/lib.rs:431 - parent_domain mishandles multi-label TLDs
+  - [high] rustre-ti-correlate src/lib.rs:421 - ip_prefix_24 accepts non-numeric octets
+  - [medium] rustre-ti-correlate src/campaign_correlation.rs:414 - Temporal overlap reports 1 day even when windows don't actually intersect
+  - [low] rustre-ti-correlate src/behavioral_clustering.rs:258 - Clamp on similarity_threshold is ineffective because field is pub
+  - [critical] rustre-ti-misp src/client.rs:553 - MispRawClient sends API key over plaintext TCP for https URLs
+  - [high] rustre-ti-misp src/client.rs:544 - parse_host_port misparses URLs containing a path
+  - [high] rustre-ti-misp src/export.rs:75 - STIX pattern built by unescaped string interpolation
+  - [medium] rustre-ti-misp src/cache.rs:89 - event.id (u64) cast to i64 wraps for ids > i64::MAX
+  - [medium] rustre-ti-misp src/client.rs:605 - read_response uses from_utf8_lossy on HTTP body
+  - [medium] rustre-trace src/lib.rs:613 - slice reports wrong len on SliceOutOfBounds
+  - [medium] rustre-trace src/lib.rs:619 - slice only validates start>end, not out-of-range bounds
+  - [medium] rustre-trace src/lib.rs:1200 - TraceIndex::total_indexed always returns 0
+  - [medium] rustre-trace src/lib.rs:953 - TraceDiff::compute ignores seq/thread when keying events
+  - [critical] rustre-trace-coresight src/etm_packets.rs:343 - Branch packet terminator byte never consumed
+  - [high] rustre-trace-coresight src/etm_packets.rs:360 - Branch address reconstruction includes header bits
+  - [high] rustre-trace-coresight src/etm_packets.rs:507 - Wrong bit field for ETM4 exception EL
+  - [medium] rustre-trace-coresight src/etm_packets.rs:526 - ULEB128 shift can exceed 63 silently
+  - [medium] rustre-trace-coresight src/etm_packets.rs:538 - F1..F3 atom decoder ignores count zero
+  - [low] rustre-trace-coresight src/etm_packets.rs:447 - Reserved ETM4 extension subtype silently consumed
+  - [medium] rustre-trace-coverage crates/rustre-trace-coverage/src/drcov_import.rs:464 - Bidirectional suffix match in ModuleBase::get
+  - [medium] rustre-trace-coverage crates/rustre-trace-coverage/src/drcov_import.rs:379 - Silent u64 to u32 cast of BB offset
+  - [medium] rustre-trace-coverage crates/rustre-trace-coverage/src/drcov_import.rs:476 - Unchecked u64 add when rebasing module end
+  - [medium] rustre-trace-coverage crates/rustre-trace-coverage/src/drcov_import.rs:631 - is_all_text heuristic misclassifies binary BB tables
+  - [medium] rustre-trace-coverage crates/rustre-trace-coverage/src/coverage_merge.rs:145 - Edges always union-merged regardless of strategy
+  - [low] rustre-trace-coverage crates/rustre-trace-coverage/src/coverage_merge.rs:78 - coverage_ratio always returns 1.0
+  - [critical] rustre-trace-navigate src/lib.rs:2263 - DRcov address resolution can overflow u64
+  - [high] rustre-trace-navigate src/lib.rs:2259 - DRcov module id u32 truncated to u16
+  - [high] rustre-trace-navigate src/lib.rs:422 - idx_for_tsc binary search broken when tsc is None
+  - [medium] rustre-trace-navigate src/lib.rs:1503 - get_value_at_tick excludes write AT tick
+  - [medium] rustre-trace-navigate src/lib.rs:1046 - NavigationHistory uses Vec::remove(0) for eviction
+  - [low] rustre-trace-navigate src/lib.rs:2082 - LoopDetector misses non-decreasing back-edges
+  - [high] rustre-trace-pt src/lib.rs:702 - Short TNT count uses u32 leading_zeros cast to u8 without masking
+  - [high] rustre-trace-pt src/lib.rs:496 - Long TNT stop_bit underflow when raw payload is zero
+  - [medium] rustre-trace-pt src/lib.rs:675 - PIP packet decoded with wrong opcode byte
+  - [medium] rustre-trace-pt src/lib.rs:988 - Module range check can overflow u64
+  - [medium] rustre-trace-pt src/lib.rs:557 - CYC extension silently drops high bits past 63
+  - [high] rustre-triage-die src/heuristic_detector.rs:805 - virt_addr + virt_size.max(raw_size) u32 addition can overflow
+  - [high] rustre-triage-die src/heuristic_detector.rs:279 - virt_addr + virt_size.max(1) u32 addition can overflow on crafted PE
+  - [medium] rustre-triage-die src/die_extended.rs:174 - data[pos..pos + end] may exceed data.len() causing panic
+  - [medium] rustre-triage-die src/die_extended.rs:192 - Go-version slice can exceed data.len() causing panic
+  - [medium] rustre-triage-die src/lib.rs:543 - raw_off + offset can overflow usize on 32-bit
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:279 - u32 add virt_addr+virt_size can wrap on crafted PE
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:805 - u32 add in rva_to_file_offset overflows
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:675 - usize add raw_off+raw_size unchecked
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/die_extended.rs:174 - slice index pos+end may exceed data.len()
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/die_extended.rs:192 - Go version slice can exceed buffer
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/lib.rs:543 - EP file offset add unchecked
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:279 - EP section bounds use unchecked u32 add
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:805 - rva_to_file_offset adds u32 without checked_add
+  - [high] rustre-triage-die crates/rustre-triage-die/src/heuristic_detector.rs:675 - compute_overlay_size sums raw_off+raw_size unchecked
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/die_extended.rs:174 - rustc version slice can index past end
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/die_extended.rs:192 - Go version slice can index past end
+  - [medium] rustre-triage-die crates/rustre-triage-die/src/lib.rs:543 - EP file offset uses unchecked add
+  - [medium] rustre-triage-entropy crates/rustre-triage-entropy/src/shannon.rs:216 - Unchecked off + size addition in entropy_per_section
+  - [medium] rustre-triage-entropy crates/rustre-triage-entropy/src/file_entropy_report.rs:156 - Unchecked offset+size in SectionEntropyTable::from_sections
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/file_entropy_report.rs:185 - min_entropy returns 8.0 for empty table
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/randomness.rs:64 - monte_carlo_pi_error conflates valid 0.0 estimate with too short
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/classify.rs:286 - i + radius + 1 can overflow in detect_entropy_anomalies
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/anomaly.rs:272 - Casting unbounded f64 confidence to u8 may wrap
+  - [medium] rustre-triage-entropy crates/rustre-triage-entropy/src/shannon.rs:216 - Unchecked off+size in entropy_per_section can wrap
+  - [medium] rustre-triage-entropy crates/rustre-triage-entropy/src/file_entropy_report.rs:156 - Unchecked offset+size in SectionEntropyTable::from_sections
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/file_entropy_report.rs:185 - min_entropy returns 8.0 for empty entries
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/randomness.rs:64 - monte_carlo_pi_error treats valid 0.0 estimate as too-short sentinel
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/classify.rs:286 - i + radius + 1 lacks saturation in detect_entropy_anomalies
+  - [low] rustre-triage-entropy crates/rustre-triage-entropy/src/anomaly.rs:382 - entropy_confidence returns 0 when max<=threshold but callers pass fixed 8.0
+  - [critical] rustre-triage-yara crates/rustre-triage-yara/src/scanner.rs:488 - parallel_batch_scan ignores template session rules
+  - [high] rustre-triage-yara crates/rustre-triage-yara/src/scanner.rs:404 - match_to_verdict thresholds disagree with YaraVerdict::from_score
+  - [medium] rustre-triage-yara crates/rustre-triage-yara/src/scanner.rs:286 - Unknown severity scores higher than info
+  - [medium] rustre-triage-yara crates/rustre-triage-yara/src/verdict.rs:446 - let-chain in VerdictPolicy::apply requires recent Rust
+  - [medium] rustre-triage-yara crates/rustre-triage-yara/src/scanner.rs:371 - SessionPool unwraps poisoned Mutex
+  - [low] rustre-triage-yara crates/rustre-triage-yara/src/verdict.rs:149 - FamilyAttribution confidence multiplies u32 without saturation
+  - [high] rustre-ttd crates/rustre-ttd/src/lib.rs:1495 - Watchpoint overlap math can overflow u64
+  - [high] rustre-ttd crates/rustre-ttd/src/replay_position.rs:691 - Untrusted length field enables unbounded allocation/overflow
+  - [medium] rustre-ttd crates/rustre-ttd/src/lib.rs:199 - read_u16/u32/u64_le adds to addr without checked_add
+  - [medium] rustre-ttd crates/rustre-ttd/src/nirvana_format.rs:53 - TTD magic constant bytes do not match the documented string
+  - [medium] rustre-ttd crates/rustre-ttd/src/lib.rs:1320 - O(n^2) thread-id dedup in TraceStats::compute
+  - [low] rustre-ttd crates/rustre-ttd/src/lib.rs:686 - step_forward uses .expect in library code
+  - [critical] rustre-ttd-query src/lib.rs:795 - DataFlow query checks source-write position against sink-write set
+  - [high] rustre-ttd-query src/lib.rs:762 - CallChain ignores temporal order between from and to
+  - [high] rustre-ttd-query src/lib.rs:1124 - Heap alloc/free classified by event index parity
+  - [high] rustre-ttd-query src/lib.rs:1290 - Unchecked subtraction in coverage range size
+  - [medium] rustre-ttd-query src/lib.rs:836 - Sequence matcher never resets on mismatch mid-sequence
+  - [medium] rustre-ttd-query src/lib.rs:1008 - Memory access pattern analysis ignores access length
+
+## Iteration 9
+- Batch: rustre-ttd-recorder, rustre-ttd-replay, rustre-ttd-replayer, rustre-yara, rustre-yara-engine, rustre-yara-rules, rustre-adb, rustre-agent, rustre-agent-llm, rustre-agent-prompts, rustre-agent-workflow, rustre-analysis, rustre-analysis-callconv, rustre-analysis-cfg, rustre-analysis-dataflow, rustre-analysis-fn, rustre-analysis-string, rustre-analysis-type, rustre-analysis-vsa, rustre-analysis-vtable
+- Findings: 102, Confirmed: 88, Fixed: 23
+- Optimizations applied on crates: rustre-ttd-recorder, rustre-ttd-replay, rustre-ttd-replayer, rustre-yara, rustre-yara-engine, rustre-adb, rustre-agent, rustre-agent-llm, rustre-agent-prompts
+- Build issues remaining: 1
+- Confirmed bug titles:
+  - [critical] rustre-ttd-recorder src/lib.rs:929 — Nonce-counter wraparound check happens after use
+  - [high] rustre-ttd-recorder src/lib.rs:1609 — PerfEventCounter::read ignores short reads
+  - [high] rustre-ttd-recorder src/lib.rs:1831 — read_memory can fault past requested length
+  - [medium] rustre-ttd-recorder src/lib.rs:674 — Checkpoint counter silently saturates
+  - [medium] rustre-ttd-recorder src/lib.rs:895 — Nanosecond timestamp truncated to u64
+  - [low] rustre-ttd-recorder src/lib.rs:625 — Output path built by string concatenation
+  - [high] rustre-ttd-replay src/ttd_format.rs:171 — RunFileHeader::SIZE=72 but doc says 64 and parser only reads 64 bytes
+  - [medium] rustre-ttd-replay src/ttd_format.rs:73 — SequenceId::next can panic on overflow
+  - [medium] rustre-ttd-replay src/memory_snapshot.rs:350 — mark_writes loses prior dirty bits and mishandles lower base
+  - [medium] rustre-ttd-replay src/memory_snapshot.rs:336 — mark_writes computes end_page with unchecked add
+  - [low] rustre-ttd-replay src/memory_snapshot.rs:485 — bytes_added not counted for new zero-filled pages
+  - [critical] rustre-ttd-replayer src/lib.rs:12 — Inner doc comments after items
+  - [high] rustre-ttd-replayer src/lib.rs:778 — Premature break assumes sorted events
+  - [high] rustre-ttd-replayer src/lib.rs:801 — Same unsorted-events break in find_last_write_range_before
+  - [medium] rustre-ttd-replayer src/lib.rs:666 — current_tick set past replayed state
+  - [medium] rustre-ttd-replayer src/lib.rs:371 — Duplicate-tick events lose index entry
+  - [low] rustre-ttd-replayer src/lib.rs:821 — Unnecessary clone of entire event
+  - [high] rustre-yara-engine src/lib.rs:518 — StringCount condition ignores count value
+  - [high] rustre-yara-engine src/lib.rs:899 — parse_string_value panics on short/non-ASCII text
+  - [medium] rustre-yara-engine src/lib.rs:943 — Condition parser has inverted operator precedence
+  - [medium] rustre-yara-engine src/lib.rs:1186 — Recursive directory walk follows symlinks
+  - [medium] rustre-yara-engine src/lib.rs:1381 — scan_directory loads every file fully into RAM
+  - [medium] rustre-agent src/reasoning_engine.rs:661 — partial_cmp().unwrap() panics on NaN confidence
+  - [medium] rustre-agent src/reasoning_engine.rs:670 — top_hypothesis panics on NaN confidence
+  - [low] rustre-agent src/agent_loop.rs:201 — usize→u32 token estimate truncates on large histories
+  - [critical] rustre-agent-prompts src/chain_of_thought.rs:271 — Unchecked byte-slice on user content can panic
+  - [high] rustre-agent-prompts src/chain_of_thought.rs:270 — find("}}") returns position relative to start of content, not after `{{`
+  - [medium] rustre-agent-prompts src/lib.rs:218 — usize→i64 cast on `limit` can wrap on 128-bit-style overflows / negative interpretation
+  - [low] rustre-agent-prompts src/prompt_optimizer.rs:626 — f64→u32 cast saturates silently
+  - [low] rustre-agent-prompts src/lib.rs:4061 — Rate-limiter purge only trims contiguous old entries from front
+  - [critical] rustre-agent-workflow src/lib.rs:419 — run_id collision under concurrent runs
+  - [high] rustre-agent-workflow src/parallel_workflow.rs:399 — critical-path marks only longest endpoints
+  - [high] rustre-agent-workflow src/lib.rs:530 — Rollback returns RollbackFailed on successful rollback
+  - [medium] rustre-agent-workflow src/lib.rs:349 — apply_output silently masks unknown keys
+  - [medium] rustre-agent-workflow src/lib.rs:430 — Persistence errors silently discarded
+  - [medium] rustre-analysis-callconv src/lib.rs:903 — Hardcoded 4-byte stack slot width
+  - [high] rustre-analysis-callconv src/abi_analyzer.rs:178-238 — MS x64 unreachable due to subset arg-register match
+  - [low] rustre-analysis-callconv src/lib.rs:250 — Misleading score comment vs behavior
+  - [low] rustre-analysis-callconv src/heuristics.rs:273 — Redundant unsigned_abs after clamp(0,100)
+  - [critical] rustre-analysis-cfg cfg_reconstruction.rs:525 — LinearSweep ignores entry_addr leader
+  - [high] rustre-analysis-cfg cfg_reconstruction.rs:318 — Recursive dfs_post can blow the stack
+  - [high] rustre-analysis-cfg cfg_reconstruction.rs:962 — CycleDetector::dfs recursive without depth bound
+  - [medium] rustre-analysis-cfg cfg_reconstruction.rs:725 — RecursiveDescent drops CallDest successors
+  - [medium] rustre-analysis-cfg jump_table.rs:110 — read_uint off+size may overflow usize
+  - [medium] rustre-analysis-cfg jump_table.rs:163 — decode_absolute_table index arithmetic can overflow
+  - [critical] rustre-analysis-cfg cfg_reconstruction.rs:525 — LinearSweep ignores entry_addr when seeding first block
+  - [high] rustre-analysis-cfg cfg_reconstruction.rs:318 — Recursive dfs_post has no depth bound
+  - [high] rustre-analysis-cfg cfg_reconstruction.rs:962 — CycleDetector::dfs is unbounded recursion
+  - [medium] rustre-analysis-cfg cfg_reconstruction.rs:691 — CallDest terminator drops fall-through and ignores follow_calls config
+  - [medium] rustre-analysis-cfg jump_table.rs:110 — read_uint bounds check can wrap
+  - [low] rustre-analysis-cfg jump_table.rs:163 — decode_*_table index arithmetic unchecked
+  - [medium] rustre-analysis-dataflow ssa.rs:293 — SSA phi-arg fills wrong predecessor slot on CFG mismatch
+  - [medium] rustre-analysis-dataflow ssa.rs:235 — Recursive dominator-tree walk can stack-overflow
+  - [low] rustre-analysis-dataflow cfg_dom.rs:163 — Recursive preorder_walk can stack-overflow on deep dom trees
+  - [low] rustre-analysis-dataflow value_range.rs:387 — Induction-var stride computed without overflow check
+  - [medium] rustre-analysis-fn src/function_discovery.rs:440 — partial_cmp unwrap on f32 confidence
+  - [high] rustre-analysis-fn src/heuristics.rs:441 — ClangSanitizerHeuristic accepts any 0x48 byte
+  - [medium] rustre-analysis-fn src/heuristics.rs:388-390 — GCC canary heuristic reports wrong function start
+  - [low] rustre-analysis-fn src/heuristics.rs:264 — window_end saturating_add masks overflow as cluster
+  - [medium] rustre-analysis-fn src/function_discovery.rs:418-432 — OverlapDetector::find_overlaps assumes sorted input but does not verify
+  - [low] rustre-analysis-fn src/function_discovery.rs:643-646 — min_function_size leaves boundary end unset instead of dropping
+  - [medium] rustre-analysis-fn src/function_discovery.rs:440 — partial_cmp unwrap on NaN confidence
+  - [high] rustre-analysis-fn src/heuristics.rs:441 — Sanitizer heuristic matches any 0x48 byte
+  - [medium] rustre-analysis-fn src/heuristics.rs:388 — GCC canary reports wrong function entry
+  - [low] rustre-analysis-fn src/heuristics.rs:264 — saturating_add masks overflow into bogus cluster
+  - [medium] rustre-analysis-fn src/function_discovery.rs:425 — find_overlaps silently relies on sorted input
+  - [low] rustre-analysis-fn src/function_discovery.rs:644 — sub-min-size boundary emitted with end=None
+  - [high] rustre-analysis-string src/decrypt.rs:223 — Multibyte XOR key extraction drops 0x00 bytes
+  - [high] rustre-analysis-string src/stackstring.rs:55 — StackStore::bytes panics when size > 8
+  - [medium] rustre-analysis-string src/encoding_detect.rs:498 — base64_decode accepts truncated input
+  - [low] rustre-analysis-string src/decrypt.rs:185 — XOR key extraction ignores key=0x00 candidate
+  - [high] rustre-analysis-type src/vtable.rs:347 — Wrong offset for __si_class_type_info base typeinfo
+  - [medium] rustre-analysis-type src/vtable.rs:441 — Unchecked u64 add in section scan loop
+  - [medium] rustre-analysis-type src/vtable.rs:458 — Slot scan walks past section end
+  - [low] rustre-analysis-type src/vtable.rs:218 — Misleading variable `type_desc_rva` holds absolute address
+  - [low] rustre-analysis-type src/lib.rs:350 — `max_id = v.0 + 1` can overflow u32
+  - [low] rustre-analysis-type src/vtable.rs:322 — read failure silently treated as leaf typeinfo
+  - [high] rustre-analysis-vsa src/strided_intervals.rs:172 — meet uses wrong base for adjusted_hi
+  - [medium] rustre-analysis-vsa src/strided_intervals.rs:151 — join recomputes hi using stride truncation that can produce hi < input hi
+  - [medium] rustre-analysis-vsa src/strided_intervals.rs:255 — unwrap on iter min/max in si_mul
+  - [medium] rustre-analysis-vsa src/jumptable.rs:168 — read accepts entry_size > 8 and silently truncates
+  - [low] rustre-analysis-vsa src/strided_intervals.rs:317 — si_shr stride right-shift loses precision and uses .max(1) hiding zero
+  - [medium] rustre-analysis-vtable src/msvc_rtti.rs:491 — Base class array stride wrong for 64-bit RTTI
+  - [medium] rustre-analysis-vtable src/msvc_rtti.rs:524 — num_contained offset uses ptr_size
+  - [low] rustre-analysis-vtable src/msvc_rtti.rs:600 — COL skip stride too small
+  - [low] rustre-analysis-vtable src/msvc_rtti.rs:268 — ImageSection::end can overflow
+  - [low] rustre-analysis-vtable src/vtable_recovery.rs:121 — unwrap on try_into in scan
+  - [low] rustre-analysis-vtable src/vtable_recovery.rs:197 — Validator below-threshold path can falsely validate
+
+## Iteration 10
+- Batch: rustre-analysis-xref, rustre-arch, rustre-arch-6502, rustre-arch-68k, rustre-arch-arm, rustre-arch-arm64, rustre-arch-avr, rustre-arch-bpf, rustre-arch-cil, rustre-arch-dex, rustre-arch-jvm, rustre-arch-lua, rustre-arch-luajit, rustre-arch-mips, rustre-arch-msp430, rustre-arch-ppc, rustre-arch-riscv, rustre-arch-sparc, rustre-arch-wasm, rustre-arch-x86
+- Findings: 131, Confirmed: 110, Fixed: 21
+- Optimizations applied on crates: rustre-analysis-xref, rustre-arch, rustre-arch-6502, rustre-arch-68k, rustre-arch-arm, rustre-arch-arm64, rustre-arch-avr, rustre-arch-bpf, rustre-arch-cil, rustre-arch-dex
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [critical] rustre-analysis-xref crates/rustre-analysis-xref/src/xref_heuristics.rs:325 — Relative jump-table target computation truncates high addresses
+  - [high] rustre-analysis-xref crates/rustre-analysis-xref/src/extract.rs:104 — read_ptr_le bounds check can wrap on huge offset
+  - [high] rustre-analysis-xref crates/rustre-analysis-xref/src/extract.rs:123 — code_base + offset can wrap on high bases
+  - [medium] rustre-analysis-xref crates/rustre-analysis-xref/src/extract.rs:137 — Linear scan re-decodes displacement bytes as opcodes
+  - [medium] rustre-analysis-xref crates/rustre-analysis-xref/src/xref_heuristics.rs:485 — Abstract virtual detection only flags null slots
+  - [low] rustre-analysis-xref crates/rustre-analysis-xref/src/xref_heuristics.rs:208 — is_likely_tail_call accepts sites past function end
+  - [critical] rustre-arch src/arch_meta.rs:418 — apply_fixups subtracts base from fixup.offset without bounds check
+  - [high] rustre-arch src/calling_conv.rs:281 — Default analyze_call_site caps register args at 4
+  - [high] rustre-arch src/calling_conv.rs:784 — AAPCS32 float arg name is literal "sN" instead of actual register
+  - [medium] rustre-arch src/calling_conv.rs:1352 — aapcs64_ninth_arg_is_stack uses bare matches! without assert
+  - [medium] rustre-arch src/arch_registry_full.rs:359 — PE lfanew bounds check `lfanew + 6 <= buf.len()` can overflow on 32-bit
+  - [medium] rustre-arch src/arch_registry_full.rs:368 — Mach-O probe unwraps buf[0..4].try_into() with only a 4-byte minimum
+  - [critical] rustre-arch-6502 crates/rustre-arch-6502/src/emulator.rs:410 — SBC binary mode underflows u16 in debug
+  - [high] rustre-arch-6502 crates/rustre-arch-6502/src/lifter.rs:276 — BRL target masks away PBR bits incorrectly
+  - [medium] rustre-arch-6502 crates/rustre-arch-6502/src/emulator.rs:243 — ADC BCD overflow flag computed from wrong bin_result
+  - [medium] rustre-arch-6502 crates/rustre-arch-6502/src/lifter.rs:374 — Direct-page address adds 8-bit Const8 instead of widening
+  - [critical] rustre-arch-6502 crates/rustre-arch-6502/src/emulator.rs:410 — SBC binary mode underflows u16 in debug builds
+  - [high] rustre-arch-6502 crates/rustre-arch-6502/src/emulator.rs:607 — Branch target cast next_pc as i16 wraps for high PCs
+  - [high] rustre-arch-6502 crates/rustre-arch-6502/src/lifter.rs:276 — BRL ignores program bank when computing target
+  - [medium] rustre-arch-6502 crates/rustre-arch-6502/src/emulator.rs:243 — ADC BCD overflow flag XORs truncated bin_result
+  - [medium] rustre-arch-6502 crates/rustre-arch-6502/src/lifter.rs:175 — IndirectY zero-page high byte read without page wrap
+  - [critical] rustre-arch-68k src/lib.rs:1345 — FBcc displacement zero-extended and reads wrong bytes
+  - [high] rustre-arch-68k src/lib.rs:1346 — FBcc target computed without including high displacement word
+  - [high] rustre-arch-68k src/lib.rs:380 — EA mode 6 brief extension index register field uses 3 bits instead of 4
+  - [medium] rustre-arch-68k src/lib.rs:816 — EXT mask 0xFEB8 mismatches 68k encoding
+  - [low] rustre-arch-68k src/lib.rs:991 — MOVEQ formats negative immediate as unsigned byte
+  - [high] rustre-arch-arm crates/rustre-arch-arm/src/lib.rs:1115 — ARM disassembler ignores configured big-endian mode
+  - [high] rustre-arch-arm crates/rustre-arch-arm/src/lib.rs:1129 — Thumb disassembler hard-codes little-endian halfword read
+  - [high] rustre-arch-arm crates/rustre-arch-arm/src/armv7_full.rs:192 — Wrong mask for Thumb-2 DP-modimm S bit
+  - [medium] rustre-arch-arm crates/rustre-arch-arm/src/armv7_full.rs:1012 — BX rN lifted as Branch with target 0
+  - [critical] rustre-arch-arm64 src/lib.rs:17 — aarch64_system module missing from lib.rs
+  - [high] rustre-arch-arm64 src/aarch64_sve.rs:610 — Inverted is_store flag in SVE load/store decode
+  - [high] rustre-arch-arm64 src/aarch64_sve.rs:656 — Dead match arm in SVE arithmetic decode
+  - [medium] rustre-arch-arm64 src/lib.rs:593 — SVE group filter accepts wrong encoding range
+  - [low] rustre-arch-arm64 src/aarch64_sve.rs:765 — decode_all uses non-wrapping base+offset
+  - [high] rustre-arch-avr src/avr_emulator.rs:404 — RET uses pushed word-address as byte-address
+  - [high] rustre-arch-avr src/avr_emulator.rs:350 — service_interrupt pushes byte PC instead of word PC
+  - [medium] rustre-arch-avr src/avr_emulator.rs:66 — Timer0 TOV0 flag only set when TCNT0 ends at 0
+  - [medium] rustre-arch-avr src/avr_emulator.rs:211 — load_flash panics when base > FLASH_SIZE
+  - [medium] rustre-arch-avr src/avr_emulator.rs:798 — LDS/STS reads flash without bounds check
+  - [low] rustre-arch-avr src/avr_emulator.rs:531 — SUBI/SUB/CPI omit the SREG H (half-carry) flag
+  - [high] rustre-arch-avr src/avr_emulator.rs:404 — RET reads pushed word-address as byte PC
+  - [high] rustre-arch-avr src/avr_emulator.rs:350 — service_interrupt pushes byte PC instead of word PC
+  - [medium] rustre-arch-avr src/avr_emulator.rs:66 — Timer0 TOV0 only fires when TCNT0 lands on zero
+  - [medium] rustre-arch-avr src/avr_emulator.rs:211 — load_flash panics when base exceeds FLASH_SIZE
+  - [medium] rustre-arch-avr src/avr_emulator.rs:798 — LDS/STS reads flash[pc+2/+3] without bounds or wrap
+  - [low] rustre-arch-avr src/avr_emulator.rs:531 — SUBI/SUB/CPI never update SREG H (half-carry)
+  - [high] rustre-arch-bpf src/lib.rs:339 — wide_imm sign-extension corruption
+  - [high] rustre-arch-bpf src/bpf_analysis.rs:169 — parse_insns ignores 16-byte LDDW
+  - [medium] rustre-arch-bpf src/bpf_verifier.rs:523 — trace raw word sign-extends imm
+  - [medium] rustre-arch-bpf src/bpf_verifier.rs:491 — visited set keyed on PC only
+  - [low] rustre-arch-bpf src/bpf_verifier.rs:537 — Jmp32 class not excluded from uninit check
+  - [medium] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:1880 — MethodHeader::decode accepts garbage as Fat header without checking flag bits
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:621 — switch decode multiplies attacker-controlled u32 count by 4 in usize without checked_mul
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/cil_metadata.rs:137 — StreamHeader::parse scans the entire remaining buffer for a NUL terminator
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:4374 — decode_compressed_uint returns Truncated for invalid prefix bytes
+  - [medium] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:1880 — MethodHeader::decode accepts arbitrary bytes as a Fat header
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:621 — switch instruction computes `5 + n * 4` without checked arithmetic
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/cil_metadata.rs:137 — StreamHeader::parse has no upper bound on the name scan
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/lib.rs:4374 — decode_compressed_uint reports invalid prefixes as `Truncated`
+  - [low] rustre-arch-cil crates/rustre-arch-cil/src/cil_analyzer.rs:96 — StackDepthAnalysis::analyze adds deltas with unchecked i32 arithmetic
+  - [critical] rustre-arch-lua crates/rustre-arch-lua/src/lib.rs:1198 — conditional fall-through leader only added when branches exist
+  - [high] rustre-arch-lua crates/rustre-arch-lua/src/lib.rs:1103 — parse_chunk_header misreads Lua 5.4 header
+  - [high] rustre-arch-lua crates/rustre-arch-lua/src/lib.rs:1009 — TEST/TESTSET not flagged BRANCH in lua54_fmt
+  - [medium] rustre-arch-lua crates/rustre-arch-lua/src/lib.rs:835 — signed offset * 4 may panic on overflow
+  - [medium] rustre-arch-lua crates/rustre-arch-lua/src/lib.rs:923 — make_iabc lacks operand bounds masking
+  - [low] rustre-arch-lua crates/rustre-arch-lua/src/lua54_decoder.rs:255 — jump_targets cast to usize can wrap on negative target
+  - [high] rustre-arch-mips src/lib.rs:1240 — INS msb computation underflow
+  - [medium] rustre-arch-mips src/lib.rs:254 — decode_word slices raw[..4] without bounds check
+  - [high] rustre-arch-mips src/mips_analysis.rs:198 — branch_target overflow at kseg0 addresses
+  - [medium] rustre-arch-mips src/mips_analysis.rs:326 — scan_mips_strings unwrap on None run_start
+  - [medium] rustre-arch-mips src/mips_fpu.rs:729 — Lwc1/Ldc1 lose FP bit pattern via f32->f64 cast
+  - [low] rustre-arch-mips src/mips_fpu.rs:728 — FPU load/store hardcoded little-endian
+  - [high] rustre-arch-msp430 src/lib.rs:937 — alu_xor sets wrong carry flag
+  - [high] rustre-arch-msp430 src/emulator.rs:718 — write_operand silently drops memory writes
+  - [medium] rustre-arch-msp430 src/emulator.rs:260 — Msp430State::load truncates index to u16
+  - [high] rustre-arch-msp430 src/lib.rs:937 — alu_xor sets carry from src sign bit instead of NOT Zero
+  - [high] rustre-arch-msp430 src/emulator.rs:718 — write_operand silently drops Indexed/Absolute/Indirect writes
+  - [medium] rustre-arch-msp430 src/emulator.rs:260 — Msp430State::load uses `addr.wrapping_add(i as u16)`
+  - [medium] rustre-arch-msp430 src/lib.rs:1022 — FlatMemory::load uses `addr.wrapping_add(i as u16)`
+  - [high] rustre-arch-ppc src/lib.rs:386 — BCLRL incorrectly flagged as RET
+  - [high] rustre-arch-ppc src/lib.rs:397 — BCCTRL flagged as BRANCH instead of CALL
+  - [medium] rustre-arch-ppc src/lib.rs:91-93 — Absolute branch target not sign-extended on PPC64
+  - [low] rustre-arch-ppc src/lib.rs:1304 — Address+offset cast may truncate on 32-bit hosts
+  - [low] rustre-arch-ppc src/lib.rs:1200 — Branch target parsing stops at non-hex but accepts partial
+  - [high] rustre-arch-ppc src/lib.rs:386 — BCLRL incorrectly flagged as RET
+  - [high] rustre-arch-ppc src/lib.rs:397 — BCCTRL flagged as BRANCH not CALL
+  - [medium] rustre-arch-ppc src/lib.rs:92 — Absolute branch target zero-extended on PPC64
+  - [medium] rustre-arch-ppc src/lib.rs:391 — RFI returns RET for both xo=18 and xo=50
+  - [low] rustre-arch-ppc src/lib.rs:1308 — Linear disassembler advances 4 on any error even with <4 bytes left
+  - [critical] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:935 — c.fld uses wrong base register
+  - [high] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1368 — c.addi4spn nzuimm samples wrong bits
+  - [high] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1378 — c.lw immediate decoded from wrong bits
+  - [medium] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:1761 — disassemble rejects 16-bit compressed instructions
+  - [low] rustre-arch-riscv crates/rustre-arch-riscv/src/lib.rs:557 — branch target sign-extension via i32-to-u64 cast
+  - [high] rustre-arch-sparc src/sparc_emulator.rs:447 — CALL displacement sign-extension wrong
+  - [high] rustre-arch-sparc src/sparc_emulator.rs:523 — SLL/SRL/SRA opcodes wrong
+  - [medium] rustre-arch-sparc src/sparc_emulator.rs:611 — Half/word loads can overflow address arithmetic
+  - [medium] rustre-arch-sparc src/sparc_emulator.rs:611 — LDUH/LD ignore alignment
+  - [low] rustre-arch-sparc src/sparc_emulator.rs:116 — SparcMemory::load is O(n) per byte
+  - [high] rustre-arch-wasm src/lib.rs:156 — br_table label count untrusted allocation
+  - [medium] rustre-arch-wasm src/lib.rs:63 — SLEB128 left-shift overflow
+  - [low] rustre-arch-wasm src/lib.rs:36 — ULEB128 high-bit accepted at shift 63
+  - [low] rustre-arch-wasm src/lib.rs:698 — disassemble may slice past returned size
+  - [critical] rustre-arch-x86 crates/rustre-arch-x86/src/branch.rs:88 — classify_branch hardcodes is_64bit=true
+  - [high] rustre-arch-x86 crates/rustre-arch-x86/src/modrm.rs:210 — disp32 absolute reported as RipRelative in 32-bit mode
+  - [high] rustre-arch-x86 crates/rustre-arch-x86/src/prefix.rs:268 — EVEX map field masked with 0x07 includes reserved bit
+  - [medium] rustre-arch-x86 crates/rustre-arch-x86/src/prefix.rs:267 — EvexPrefix.b_prime decoded from a reserved bit
+  - [medium] rustre-arch-x86 crates/rustre-arch-x86/src/length.rs:170 — VEX/EVEX tail length ignores imm8 for many opcodes
+  - [medium] rustre-arch-x86 crates/rustre-arch-x86/src/length.rs:243 — Far-pointer length uses operand-size immz instead of fixed offset
+
+## Iteration 11
+- Batch: rustre-arch-z80, rustre-bin, rustre-cli, rustre-core, rustre-crypto-id, rustre-crypto-oracle, rustre-crypto-whitebox, rustre-daemon, rustre-debug, rustre-debug-frida, rustre-debug-gdb, rustre-debug-kgdb, rustre-debug-linux, rustre-debug-macos, rustre-debug-unicorn, rustre-debug-windbg, rustre-debug-windows, rustre-decompiler, rustre-decompiler-c, rustre-decompiler-cfs
+- Findings: 108, Confirmed: 92, Fixed: 25
+- Optimizations applied on crates: rustre-arch-z80, rustre-bin, rustre-cli, rustre-core, rustre-crypto-id, rustre-crypto-whitebox, rustre-daemon, rustre-debug, rustre-debug-frida
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-arch-z80 src/lib.rs:1602 — extract_hex_target misparses conditional branch operands
+  - [medium] rustre-arch-z80 src/lib.rs:1188 — opcode_cycles default arm returns 4 for prefix opcodes
+  - [medium] rustre-arch-z80 src/z80_emulator.rs:49 — Z80Memory::load can underflow on empty bytes at boundary
+  - [low] rustre-arch-z80 src/z80_emulator.rs:243 — set_s uses bitand with literal true
+  - [high] rustre-bin crates/rustre-bin/src/main.rs:1351 — length cast u64->usize truncates on 32-bit
+  - [low] rustre-bin crates/rustre-bin/src/main.rs:1506 — `f.read(&mut buf)` return value ignored, magic detected from possibly-uninitialized prefix
+  - [low] rustre-bin crates/rustre-bin/src/main.rs:1664 — `if let Ok(_) =` ignores the TcpStream and leaks it until drop; also racy status check
+  - [medium] rustre-cli src/lib.rs:346 — Unknown long flags silently become config overrides
+  - [medium] rustre-cli src/lib.rs:321 — Long-flag matcher accepts single-letter aliases
+  - [low] rustre-cli src/lib.rs:1130 — Tilde in default config path not expanded
+  - [low] rustre-cli src/lib.rs:379 — `version` shorthand collides with `-v` verbose
+  - [medium] rustre-cli src/lib.rs:346 — Unknown `--key=value` silently stored as config override
+  - [medium] rustre-cli src/lib.rs:321 — Long-option parser accepts `--v`/`--h`/`--q`/`--V`/`--f`/`--c` as aliases
+  - [low] rustre-cli src/lib.rs:1130 — Tilde not expanded in default config path search
+  - [low] rustre-cli src/lib.rs:379 — Positional `v` maps to Version subcommand
+  - [low] rustre-cli src/lib.rs:594 — Config loader allows duplicate keys silently
+  - [high] rustre-core src/patches.rs:219 — read_patched returns zero for bytes outside patch
+  - [medium] rustre-core src/binary_view_impl.rs:928 — apply_to_buf unchecked u64 add
+  - [medium] rustre-core src/binary_view.rs:48 — Memory::read wraps current_addr near u64::MAX
+  - [low] rustre-core src/address.rs:84 — align_down divides by user-supplied align
+  - [critical] rustre-debug src/expression_evaluator.rs:1504 — Shift overflow with Size::B16 in pretty_print
+  - [critical] rustre-debug src/expression_evaluator.rs:1372 — Shift overflow in apply_cast sign extension for B16
+  - [high] rustre-debug src/expression_evaluator.rs:260 — MemoryProvider default reads index without length check
+  - [high] rustre-debug src/expression_evaluator.rs:749 — Parser::advance panics on empty token stream
+  - [medium] rustre-debug src/expression_evaluator.rs:1409 — Pointer arithmetic uses unchecked add/sub/mul
+  - [medium] rustre-debug src/expression_evaluator.rs:1422 — Shl does not mask shift amount but Shr does
+  - [medium] rustre-debug-frida src/lib.rs:535 — read_memory base+len u64 overflow in range check
+  - [medium] rustre-debug-frida src/lib.rs:291 — scan_memory_pattern address arithmetic can overflow
+  - [medium] rustre-debug-frida src/lib.rs:559 — write_memory to unmapped address inserts page at raw addr unaligned
+  - [low] rustre-debug-frida src/lib.rs:435 — single_step increments rip by 1 byte
+  - [low] rustre-debug-frida src/lib.rs:316 — timestamp u128→u64 lossy cast
+  - [high] rustre-debug-gdb gdb_client.rs:241 — read_byte uses Vec::pop() (LIFO) for a byte queue
+  - [high] rustre-debug-gdb gdb_client.rs:70 — ChecksumMismatch fields swapped
+  - [high] rustre-debug-gdb gdb_rsp_extensions.rs:107 — escape() casts raw byte to char producing multi-byte UTF-8
+  - [medium] rustre-debug-gdb gdb_rsp_extensions.rs:378 — parse_vfile_open cannot parse negative errno responses
+  - [low] rustre-debug-gdb gdb_client.rs:709 — set_thread treats empty reply as success
+  - [critical] rustre-debug-kgdb src/kd_protocol.rs:196 — new_data panics on oversize payload
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:454 — Packet ID not advanced after connect reset
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:359 — build_read_virtual_memory header layout mismatches parser
+  - [medium] rustre-debug-kgdb src/kd_protocol.rs:337 — HEADER_SIZE 12 contradicts doc comment "8-byte header"
+  - [medium] rustre-debug-kgdb src/kd_protocol.rs:251 — byte_count cast to usize without validation
+  - [low] rustre-debug-kgdb src/kd_protocol.rs:490 — parse_recv resync skips 1 byte after failed packet
+  - [critical] rustre-debug-kgdb src/kd_protocol.rs:196 — new_data panics on oversize payload
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:447 — connect() reuses next_id without advancing
+  - [high] rustre-debug-kgdb src/kd_protocol.rs:359 — build_read_virtual_memory layout inconsistent with parser
+  - [medium] rustre-debug-kgdb src/kd_protocol.rs:332 — payload doc says "after 8-byte header" but code uses 12
+  - [low] rustre-debug-kgdb src/kd_protocol.rs:490 — parse_recv resync advances only 1 byte on failure
+  - [critical] rustre-debug-linux src/coredump.rs:646 — PT_LOAD end address can overflow u64
+  - [high] rustre-debug-linux src/ptrace_engine.rs:525 — wifsignaled cast to i8 truncates and mis-detects signaled status
+  - [high] rustre-debug-linux src/coredump.rs:279 — pr_sid parsed from wrong offset with arbitrary wrapping_sub(16)
+  - [high] rustre-debug-linux src/coredump.rs:474 — NT_FILE path_end+1 can index past data.len()
+  - [medium] rustre-debug-linux src/ptrace_engine.rs:649 — read bounds check uses unchecked addition
+  - [critical] rustre-debug-macos src/exception_ports.rs:231 — ExceptionType::as_mask shift overflow
+  - [high] rustre-debug-macos src/mach_debugger.rs:741 — ARM64 breakpoint fallback corrupts original bytes
+  - [high] rustre-debug-macos src/mach_vm.rs:546 — read offset+size can overflow usize
+  - [medium] rustre-debug-macos src/mach_debugger.rs:686 — read_memory address+size addition can wrap
+  - [medium] rustre-debug-macos src/mach_vm.rs:599 — find_region_mut uses unchecked add
+  - [critical] rustre-debug-unicorn src/lib.rs:548 — attach never sets running flag
+  - [high] rustre-debug-unicorn src/lib.rs:273 — map_memory overlap check can overflow
+  - [high] rustre-debug-unicorn src/lib.rs:362 — emulate PC increment can overflow and skip until
+  - [high] rustre-debug-unicorn src/lib.rs:293 — write_memory_direct length math can wrap
+  - [medium] rustre-debug-unicorn src/lib.rs:1153 — v2 emulate infinite-loops on misaligned end
+  - [medium] rustre-debug-unicorn src/memory_map_builder.rs:90 — end_address can overflow
+  - [critical] rustre-debug-windows src/lib.rs:1417 — Command-line built without quoting allows argument injection
+  - [high] rustre-debug-windows src/windows_internals.rs:242 — CriticalSection parsed with x64 offsets unconditionally
+  - [high] rustre-debug-windows src/lib.rs:448 — FormatMessageW length used without clamping to buffer
+  - [medium] rustre-debug-windows src/windows_internals.rs:202 — walk_heap can emit entries that overrun the buffer
+  - [medium] rustre-debug-windows src/lib.rs:704 — enumerate_processes silently truncates at 1024 PIDs
+  - [low] rustre-debug-windows src/windows_internals.rs:193 — HeapEntry::end_address can overflow u64
+  - [critical] rustre-decompiler src/ast_builder.rs:691 — Diamond CFG emits goto into sibling branch scope
+  - [high] rustre-decompiler src/ast_builder.rs:528 — Switch emitted without break statements
+  - [high] rustre-decompiler src/lib.rs:1164 — Inconsistent parameter classification at stack offset 0
+  - [medium] rustre-decompiler src/lib.rs:1646 — Cache with capacity 0 still stores entries
+  - [medium] rustre-decompiler src/lib.rs:1078 — Dead-code elimination scans all lines, not subsequent ones
+  - [low] rustre-decompiler src/lib.rs:1368 — fresh_var counter can panic on overflow
+  - [critical] rustre-decompiler crates/rustre-decompiler/src/ast_builder.rs:691 — Diamond/join CFG emits goto into sibling branch scope
+  - [high] rustre-decompiler crates/rustre-decompiler/src/ast_builder.rs:528 — Switch printer omits break between cases
+  - [high] rustre-decompiler crates/rustre-decompiler/src/lib.rs:1164 — Inconsistent parameter classification at stack offset 0
+  - [medium] rustre-decompiler crates/rustre-decompiler/src/lib.rs:1646 — Capacity-0 cache still stores entries and evicts by lowest address
+  - [medium] rustre-decompiler crates/rustre-decompiler/src/lib.rs:1054 — Dead-code pass builds use-set from all lines instead of subsequent ones
+  - [low] rustre-decompiler crates/rustre-decompiler/src/lib.rs:1367 — VariableRecovery::fresh_var can panic on counter overflow
+  - [critical] rustre-decompiler-c src/c_simplifier.rs:327 — i64::MIN / -1 panics in fold_int_op
+  - [high] rustre-decompiler-c src/c_simplifier.rs:332 — Shift fold accepts r >= 64 producing wrong constant
+  - [high] rustre-decompiler-c src/c_simplifier.rs:263 — `p != 0 → p` rewrite ignores boolean context
+  - [medium] rustre-decompiler-c src/c_simplifier.rs:50 — `UIntLit(u64) as i64` silently wraps to negative
+  - [medium] rustre-decompiler-c src/lib.rs:568 — Negative i64 constant printed as huge unsigned hex
+  - [low] rustre-decompiler-c src/lib.rs:2810 — `indented.len() as u32` truncates on >4GiB lines
+  - [high] rustre-decompiler-cfs src/lib.rs:743 — switch case values are indices not constants
+  - [high] rustre-decompiler-cfs src/lib.rs:396 — unbounded recursion on deep CFGs
+  - [medium] rustre-decompiler-cfs src/lib.rs:438 — recursive dfs_back_edges may stack overflow
+  - [medium] rustre-decompiler-cfs src/lib.rs:302 — block_id panics on unknown NodeIndex
+  - [low] rustre-decompiler-cfs src/lib.rs:173 — flatten unwrap on Sequence pop
+
+## Iteration 12
+- Batch: rustre-decompiler-expr, rustre-decompiler-ghidra, rustre-decompiler-type, rustre-demangle, rustre-deobf, rustre-deobf-antianti, rustre-deobf-cff, rustre-deobf-iadl, rustre-deobf-mba, rustre-deobf-mhcde, rustre-deobf-opaque, rustre-deobf-smc, rustre-deobf-string, rustre-deobf-vm, rustre-deobf-vmlift, rustre-diff, rustre-diff-bindiff, rustre-diff-semantic, rustre-dotnet, rustre-dotnet-decompile
+- Findings: 107, Confirmed: 87, Fixed: 22
+- Optimizations applied on crates: rustre-decompiler-expr, rustre-decompiler-ghidra, rustre-decompiler-type, rustre-demangle, rustre-deobf, rustre-deobf-cff, rustre-deobf-iadl, rustre-deobf-mba, rustre-deobf-mhcde
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [critical] rustre-decompiler-expr src/lib.rs:1125 — Cast constant folding does not mask to target width
+  - [high] rustre-decompiler-expr src/lib.rs:990 — Sub/Div/Mod/And/Or/Xor x==x simplification ignores side-effects
+  - [high] rustre-decompiler-expr src/lib.rs:1618 — ExprRewriter::rewrite skips most node kinds
+  - [medium] rustre-decompiler-expr src/lib.rs:1498 — print_const emits garbage hex for small negative constants
+  - [medium] rustre-decompiler-expr src/lib.rs:1172 — Shift folding casts i64 count via `as u32` without range check
+  - [high] rustre-decompiler-ghidra src/ghidra_client.rs:482 — Pool acquire panics on empty pool
+  - [medium] rustre-decompiler-ghidra src/ghidra_client.rs:400 — seq number overflow on max address
+  - [medium] rustre-decompiler-ghidra src/pcode_analysis.rs:266 — Dominator computation uses min instead of intersect
+  - [medium] rustre-decompiler-ghidra src/pcode_lifter.rs:817 — Block end is set to addr+1 ignoring instruction size
+  - [low] rustre-decompiler-ghidra src/pcode_lifter.rs:255 — INT_NEGATE mnemonic maps to bitwise-NOT variant
+  - [low] rustre-decompiler-ghidra src/pcode_lifter.rs:699 — Stack offset cast to i64 truncates sign
+  - [critical] rustre-decompiler-type struct_recovery.rs:157 — negative offset cast to usize
+  - [high] rustre-decompiler-type struct_recovery.rs:208 — padding capped at 8 bytes leaves real gaps
+  - [high] rustre-decompiler-type struct_recovery.rs:178 — recompute_size overflows on negative or large offsets
+  - [medium] rustre-decompiler-type type_reconstruction.rs:60 — unchecked array size multiplication
+  - [medium] rustre-decompiler-type pointer_analysis.rs:345 — worklist solver may miss updates
+  - [low] rustre-decompiler-type struct_recovery.rs:312 — access_count truncation
+  - [high] rustre-demangle src/lib.rs:370 — MSVC empty parens underflow
+  - [high] rustre-demangle src/lib.rs:459 — MSVC name backref limited to digits 0-9
+  - [medium] rustre-demangle src/lib.rs:485 — Backref table desync on duplicates
+  - [medium] rustre-demangle src/lib.rs:1298 — Substitution base-36 off-by-one risk
+  - [medium] rustre-demangle src/lib.rs:244 — Itanium args parsing breaks on nested parens
+  - [critical] rustre-deobf crates/rustre-deobf/src/lib.rs:112 — `Patch::apply` offset+len can overflow usize and bypasses bounds when original.len() > patched.len()
+  - [high] rustre-deobf crates/rustre-deobf/src/lib.rs:173 — `apply_patches` patch.offset+len arithmetic can overflow
+  - [high] rustre-deobf crates/rustre-deobf/src/lib.rs:688 — `build_substitution_table` does not swap, producing non-bijective table
+  - [medium] rustre-deobf crates/rustre-deobf/src/lib.rs:1538 — `partial_cmp(...).unwrap()` on f64 entropy panics on NaN
+  - [medium] rustre-deobf crates/rustre-deobf/src/lib.rs:735 — Base-64 decoder silently truncates inputs whose length isn't a multiple of 4
+  - [low] rustre-deobf crates/rustre-deobf/src/cfg_normalizer.rs:449 — Block merge adds successor length without verifying address adjacency
+  - [critical] rustre-deobf crates/rustre-deobf/src/lib.rs:112 — Patch::apply offset arithmetic can overflow and skips original-length bound check
+  - [high] rustre-deobf crates/rustre-deobf/src/lib.rs:173 — apply_patches uses unchecked offset+len addition
+  - [high] rustre-deobf crates/rustre-deobf/src/lib.rs:688 — build_substitution_table produces non-bijective table
+  - [medium] rustre-deobf crates/rustre-deobf/src/lib.rs:735 — Base64Decoder::decode silently drops trailing 1-3 chars on non-multiple-of-4 input
+  - [medium] rustre-deobf crates/rustre-deobf/src/lib.rs:1538 — max_entropy_region uses partial_cmp().unwrap() on f64
+  - [low] rustre-deobf crates/rustre-deobf/src/cfg_normalizer.rs:449 — Block merge assumes successor is address-adjacent
+  - [high] rustre-deobf-mhcde src/lib.rs:606 — Indirect-jmp detection has broken operator precedence
+  - [high] rustre-deobf-mhcde src/lib.rs:80 — Bounds checks use strict `<` instead of `<=`, dropping the last valid pattern position
+  - [medium] rustre-deobf-mhcde src/lib.rs:638 — find_block_start treats CALL/JMP rel as 1-byte instructions
+  - [medium] rustre-deobf-mhcde src/lib.rs:682 — find_block_end stops at CALL (0xE8) as a terminator
+  - [low] rustre-deobf-mhcde src/deobf_oracle.rs:603 — FNV-1a 64-bit hash used as cache key advertised as SHA-256
+  - [medium] rustre-deobf-opaque src/lib.rs:226 — Abs uses checked_abs while other ops use wrapping, inconsistent overflow handling
+  - [high] rustre-deobf-opaque src/lib.rs:790 — Pattern square_ge_zero unsound under wrapping multiplication
+  - [medium] rustre-deobf-opaque src/lib.rs:329 — Shl/Shr simplify accepts n>=64 while eval rejects it
+  - [low] rustre-deobf-opaque src/lib.rs:1443 — eprintln warning printed from library code
+  - [medium] rustre-deobf-opaque src/lib.rs:1450 — TruthTableChecker silently caps domain at 16 bits
+  - [low] rustre-deobf-opaque src/lib.rs:1458 — `n as u32` truncates variable count in checked_pow
+  - [critical] rustre-deobf-smc key_recovery.rs:178 — freq counter u8 overflow
+  - [high] rustre-deobf-smc emulation_harness.rs:227 — page alignment assumes power-of-two page_size
+  - [high] rustre-deobf-smc emulation_harness.rs:233 — unchecked subtraction in map
+  - [medium] rustre-deobf-smc smc_detector.rs:446 — usize cast and add of u64 region.start
+  - [low] rustre-deobf-smc smc_monitor.rs:400 — unchecked end address
+  - [high] rustre-deobf-smc crates/rustre-deobf-smc/src/emulation_harness.rs:227 — page alignment assumes power-of-two page_size
+  - [high] rustre-deobf-smc crates/rustre-deobf-smc/src/emulation_harness.rs:233 — unchecked subtraction in `VirtualMemory::map`
+  - [medium] rustre-deobf-smc crates/rustre-deobf-smc/src/lib.rs:259 — unchecked u64 address add in detect_xor_loop
+  - [medium] rustre-deobf-smc crates/rustre-deobf-smc/src/smc_detector.rs:445 — u64-to-usize truncation before bounds check
+  - [low] rustre-deobf-smc crates/rustre-deobf-smc/src/smc_monitor.rs:400 — unchecked end address in WriteBeforeExec
+  - [critical] rustre-deobf-string src/chacha20.rs:268 — AllFourConstants window misses last 64 bytes
+  - [medium] rustre-deobf-string src/chacha20.rs:251 — Unchecked `data.len()-3` arithmetic
+  - [high] rustre-deobf-vm crates/rustre-deobf-vm/src/lib.rs:52 — Slice unwrap after length check is fine but assumes try_into infallible
+  - [high] rustre-deobf-vm crates/rustre-deobf-vm/src/lib.rs:146 — mem_read_u32 addr+1..+3 can overflow u64
+  - [high] rustre-deobf-vm crates/rustre-deobf-vm/src/vm_state_tracker.rs:602 — read_mem_u32/write_mem_u32 unchecked addr+N arithmetic
+  - [medium] rustre-deobf-vm crates/rustre-deobf-vm/src/lib.rs:1584 — jump-table scan strides only every 8 bytes
+  - [high] rustre-diff crates/rustre-diff/src/instruction_diff.rs:37 — `bytes.len() as u8` truncates size silently
+  - [medium] rustre-diff crates/rustre-diff/src/basic_block_diff.rs:49 — `end_addr - start_addr` panics/wraps if end < start
+  - [medium] rustre-diff crates/rustre-diff/src/binary_diff.rs:381 — `window_diff` emits Replace for tail-only input instead of Insert/Delete
+  - [low] rustre-diff crates/rustre-diff/src/lib.rs:182 — `(similarity * 100.0) as u8` produces 0 for NaN and saturates silently
+  - [low] rustre-diff crates/rustre-diff/src/binary_diff.rs:290 — `EmptyInputA`/`EmptyInputB` variants are defined but never returned; only `BothEmpty` is checked
+  - [high] rustre-diff-bindiff src/prime_product_hash.rs:86 — Duplicate primes for distinct mnemonics
+  - [medium] rustre-diff-bindiff src/prime_product_hash.rs:1573 — LCS silently truncates inputs to 256
+  - [medium] rustre-diff-bindiff src/lib.rs:817 — call_targets duplicates break single-callee check
+  - [medium] rustre-diff-bindiff src/lib.rs:756 — Name uniqueness comment contradicts code
+  - [low] rustre-diff-bindiff src/lib.rs:1281 — md_index exponentiation can wrap silently
+  - [high] rustre-diff-semantic src/lib.rs:247 — NormalizedFunction misses 64-bit address relocations
+  - [high] rustre-diff-semantic src/lib.rs:1252 — Branch target computed as `(i as i64 + advance as i64 + i64::from(rel)) as u32`
+  - [medium] rustre-diff-semantic src/lib.rs:464 — Mnemonic count truncated to u8
+  - [critical] rustre-diff-semantic src/lib.rs:247 — NormalizedFunction fails on 64-bit absolute addresses
+  - [high] rustre-diff-semantic src/lib.rs:1252 — Branch destination cast i64 → u32 wraps on backward jumps
+  - [high] rustre-diff-semantic src/lib.rs:464 — Mnemonic histogram count truncated to u8
+  - [medium] rustre-diff-semantic src/patch_analysis.rs:357 — `by_name(name).unwrap()` in library code
+  - [medium] rustre-diff-semantic src/lib.rs:661 — `estimate_jaccard` silently returns 0.0 on length mismatch
+  - [low] rustre-diff-semantic src/lib.rs:709 — LSH partial-tail band uses shorter key
+  - [high] rustre-dotnet src/il_decoder.rs:935 — Switch targets never resolved to absolute offsets
+  - [low] rustre-dotnet src/clr_loader.rs:75 — to_hex fold reallocates instead of pre-sizing String
+  - [medium] rustre-dotnet-decompile src/lib.rs:3783 — Switch operand count*4 can overflow usize
+  - [medium] rustre-dotnet-decompile src/lib.rs:3771 — Negative branch target wraps to huge u32
+  - [medium] rustre-dotnet-decompile src/linq_recovery.rs:720 — extract_generic_arg returns wrong inner for nested generics
+  - [low] rustre-dotnet-decompile src/linq_recovery.rs:583 — recover_capture_name strips digits for hoisted locals
+  - [medium] rustre-dotnet-decompile src/async_recovery.rs:594 — extract_case_block assumes case_labels are ascending
+
+## Iteration 13
+- Batch: rustre-dotnet-edit, rustre-dotnet-metadata, rustre-emu, rustre-emu-qiling, rustre-emu-shellcode, rustre-emu-unicorn, rustre-events, rustre-flirt, rustre-flirt-apply, rustre-flirt-gen, rustre-forensics, rustre-forensics-fs, rustre-forensics-mem, rustre-forensics-plugins, rustre-fuzz, rustre-fuzz-afl, rustre-fuzz-cov, rustre-fuzz-libfuzzer, rustre-fuzz-net, rustre-fuzz-sanitizers
+- Findings: 84, Confirmed: 69, Fixed: 21
+- Optimizations applied on crates: rustre-dotnet-edit, rustre-dotnet-metadata, rustre-emu, rustre-emu-qiling, rustre-emu-unicorn, rustre-events, rustre-flirt, rustre-flirt-apply, rustre-flirt-gen
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-dotnet-edit crates/rustre-dotnet-edit/src/lib.rs:583 — RVA section bound check can overflow u32
+  - [high] rustre-dotnet-edit crates/rustre-dotnet-edit/src/lib.rs:1244 — serialize_to_bytes discards all metadata edits
+  - [medium] rustre-dotnet-edit crates/rustre-dotnet-edit/src/lib.rs:467 — EditTransaction::rollback does not undo table mutations
+  - [medium] rustre-dotnet-edit crates/rustre-dotnet-edit/src/lib.rs:307 — encode_sig truncates parameter count to u8
+  - [medium] rustre-dotnet-edit crates/rustre-dotnet-edit/src/lib.rs:887 — ChangeMethodFlags/FieldFlags truncate u32 to u16
+  - [high] rustre-events src/event_replay.rs:757 — Replay duration subtraction can underflow
+  - [high] rustre-events src/bus_impl.rs:1011 — EventStream ignores max_drain limit
+  - [medium] rustre-events src/bus_impl.rs:911 — subscriber_count never decremented
+  - [medium] rustre-events src/bus_impl.rs:934 — replay_to only rewinds, doesn't replay
+  - [medium] rustre-events src/bus_impl.rs:851 — Publish holds persist_writer mutex during blocking file I/O
+  - [low] rustre-events src/bus_impl.rs:510 — RingBuf capacity fallback allocates 2^63 slots
+  - [high] rustre-events src/event_replay.rs:757 — Replay duration subtraction can underflow
+  - [high] rustre-events src/bus_impl.rs:1011 — EventStream ignores max_drain
+  - [medium] rustre-events src/bus_impl.rs:909 — subscriber_count never decremented
+  - [medium] rustre-events src/bus_impl.rs:934 — replay_to does not replay EventLog
+  - [medium] rustre-events src/bus_impl.rs:853 — Publish holds persist mutex across blocking file I/O
+  - [low] rustre-events src/bus_impl.rs:510 — RingBuf fallback allocates 2^(BITS-1) slots
+  - [critical] rustre-flirt crates/rustre-flirt/src/flirt_engine.rs:461 — crc_verified hardcoded true
+  - [high] rustre-flirt crates/rustre-flirt/src/flirt_engine.rs:459 — seen HashSet drops multi-pattern matches
+  - [high] rustre-flirt-apply crates/rustre-flirt-apply/src/apply_engine.rs:71 — CRC poly mismatches documented CRC-16/ARC
+  - [medium] rustre-flirt-apply crates/rustre-flirt-apply/src/apply_engine.rs:97 — match_pattern_at panics on out-of-range offset
+  - [medium] rustre-flirt-apply crates/rustre-flirt-apply/src/apply_engine.rs:196 — Unchecked add in CRC offset computation
+  - [medium] rustre-flirt-apply crates/rustre-flirt-apply/src/sig_parser.rs:320 — read_bit_value silently zero-pads truncated input
+  - [low] rustre-flirt-apply crates/rustre-flirt-apply/src/apply_engine.rs:223 — MatchCandidate.total_len populated with crc_len
+  - [low] rustre-flirt-apply crates/rustre-flirt-apply/src/sig_parser.rs:252 — v8+ cpu_name silently skipped on truncation
+  - [high] rustre-flirt-gen src/pat_sig_format.rs:536 — Odd-length hex pattern panics in pat_records_to_sig
+  - [high] rustre-flirt-gen src/sig_generator.rs:401 — Verifier pairs deduped patterns with original samples by index
+  - [medium] rustre-flirt-gen src/sig_generator.rs:576 — Verification silently skipped after optimization changes length
+  - [low] rustre-flirt-gen src/pat_sig_format.rs:117 — Multi-space names in pat lines collapse on parse
+  - [medium] rustre-flirt-gen src/pat_sig_format.rs:280 — Library name parse misreads 64-byte name field when no terminator
+  - [high] rustre-flirt-gen src/pat_sig_format.rs:536 — Odd-length hex pattern panics in pat_records_to_sig
+  - [high] rustre-flirt-gen src/sig_generator.rs:401 — Verifier pairs deduped patterns with samples by index
+  - [medium] rustre-flirt-gen src/sig_generator.rs:576 — Verification silently skipped whenever optimization changes count
+  - [medium] rustre-flirt-gen src/pat_sig_format.rs:92 — crc_len cast to u8 silently truncates
+  - [medium] rustre-flirt-gen src/pat_sig_format.rs:280 — Missing null terminator in lib_name accepted silently
+  - [low] rustre-flirt-gen src/pat_sig_format.rs:117 — Pat line name parsing collapses whitespace runs
+  - [high] rustre-forensics-mem src/lib.rs:501 — Off-by-one in find_kernel_info bounds check
+  - [medium] rustre-forensics-mem src/lib.rs:481 — parse_hive_header forges 'regf' signature unconditionally
+  - [medium] rustre-forensics-mem src/lib.rs:757 — write_process truncates name to 15 of 16 bytes
+  - [low] rustre-forensics-mem src/lib.rs:431 — bytes_to_ip emits non-standard IPv6 representation
+  - [low] rustre-forensics-mem src/lib.rs:903 — scan_stack_canaries uses unwrap on try_into
+  - [high] rustre-fuzz src/lib.rs:345 — CoverageMap allocates size*8 hit_counts without overflow check
+  - [high] rustre-fuzz src/lib.rs:372 — total_set u32 accumulation can wrap
+  - [high] rustre-fuzz src/lib.rs:466 — InputQueue::next_id increments without checking overflow
+  - [medium] rustre-fuzz src/lib.rs:499 — InputQueue::select asserts on empty queue
+  - [low] rustre-fuzz src/lib.rs:1213 — FuzzRng::next_usize uses modulo causing biased distribution
+  - [high] rustre-fuzz-cov crates/rustre-fuzz-cov/src/lib.rs:251 — DRcov BB serialize/parse byte order mismatch
+  - [high] rustre-fuzz-cov crates/rustre-fuzz-cov/src/lib.rs:823 — PcGuardBitmap::merge uses saturating_add instead of OR
+  - [medium] rustre-fuzz-cov crates/rustre-fuzz-cov/src/lib.rs:803 — PcGuardBitmap::record_hit can panic on out-of-range index
+  - [medium] rustre-fuzz-cov crates/rustre-fuzz-cov/src/lib.rs:540 — CoverageDatabase::stats coverage_pct always 100%
+  - [medium] rustre-fuzz-cov crates/rustre-fuzz-cov/src/coverage_statistics.rs:593 — CoverageStatistics::merge silently drops growth curve
+  - [medium] rustre-fuzz-cov crates/rustre-fuzz-cov/src/edge_coverage.rs:367 — min_edges_per_run permanently stuck at 0 after empty first run
+  - [high] rustre-fuzz-libfuzzer src/mutator.rs:518 — DictEntryMutator panic when pos==input.len()
+  - [high] rustre-fuzz-libfuzzer src/mutator.rs:515 — DictEntryMutator end-pos underflow on small max_size
+  - [high] rustre-fuzz-net src/lib.rs:1418 — Same unbounded length issue in decode_frame_u32_be
+  - [medium] rustre-fuzz-net src/lib.rs:266 — Integer underflow in Random field mutation when max < min
+  - [medium] rustre-fuzz-net src/lib.rs:151 — serialise wastefully recomputes fields and SizeOf measures placeholder bytes for nested SizeOf
+  - [low] rustre-fuzz-net src/lib.rs:1578 — MutationHistory::push uses Vec::remove(0) which is O(n)
+  - [high] rustre-fuzz-net src/lib.rs:1402 — Untrusted u32 length enables unbounded alloc in decode_frame_u32_le
+  - [medium] rustre-fuzz-net src/lib.rs:266 — Integer underflow in Random field mutation when max<min
+  - [medium] rustre-fuzz-net src/lib.rs:167 — SizeOf length is wrong for nested/composite targets
+  - [low] rustre-fuzz-net src/lib.rs:250 — String serialise allocates max_len bytes unchecked
+  - [low] rustre-fuzz-net src/lib.rs:1578 — MutationHistory::push uses Vec::remove(0) which is O(n)
+  - [high] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/shadow_memory.rs:369 — Heap redzone apply underflows when user_addr < left_redzone
+  - [high] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/shadow_memory.rs:233 — poison/unpoison/is_access_valid overflow on addr+size near u64::MAX
+  - [medium] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/shadow_memory.rs:331 — violation_rate truncates u64 counters to u32 producing wrong ratio
+  - [medium] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/shadow_memory.rs:206 — granule_index hardcodes /8 ignoring ShadowMap.scale_shift
+  - [medium] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/msan_model.rs:148 — UninitRegion::contains/overlaps overflow on base+len near u64::MAX
+  - [medium] rustre-fuzz-sanitizers crates/rustre-fuzz-sanitizers/src/msan_model.rs:401 — ShadowMap mark_init/mark_uninit/is_init overflow on addr+i
+
+## Iteration 14
+- Batch: rustre-graph, rustre-hex, rustre-hex-pattern, rustre-hex-template, rustre-hex-view, rustre-il-hlil, rustre-il-lift, rustre-il-llil, rustre-il-mlil, rustre-il-passes, rustre-loader, rustre-loader-android, rustre-loader-console, rustre-loader-dotnet, rustre-loader-elf, rustre-loader-firmware, rustre-loader-java, rustre-loader-lua, rustre-loader-luajit, rustre-loader-macho
+- Findings: 89, Confirmed: 64, Fixed: 24
+- Optimizations applied on crates: rustre-graph, rustre-hex, rustre-hex-pattern, rustre-hex-template, rustre-hex-view, rustre-il-hlil, rustre-il-lift, rustre-il-llil, rustre-il-mlil, rustre-il-passes
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [medium] rustre-graph crates/rustre-graph/src/db.rs:54 — f64 silently truncated to f32 in MySQL Real param
+  - [medium] rustre-graph crates/rustre-graph/src/db.rs:577 — MySQL last_insert_id u64→i64 cast can wrap
+  - [medium] rustre-graph crates/rustre-graph/src/graph_persistence.rs:931 — Corrupted node properties JSON silently dropped
+  - [medium] rustre-graph crates/rustre-graph/src/graph_persistence.rs:946 — Corrupted edge properties JSON silently dropped
+  - [low] rustre-graph crates/rustre-graph/src/graph_persistence.rs:985 — now_unix returns 0 if clock is before UNIX_EPOCH
+  - [low] rustre-graph crates/rustre-graph/src/graph_persistence.rs:603 — list_backups does not filter to files
+  - [high] rustre-hex src/hex_editor_core.rs:976 — select(start,end) produces wrong selection for empty/zero range
+  - [medium] rustre-hex src/lib.rs:1515 — read_exact `offset+len` can overflow usize
+  - [medium] rustre-hex src/lib.rs:1465 — annotations_overlapping `offset+len` and `a.offset+a.size` can overflow
+  - [medium] rustre-hex src/hex_editor_core.rs:716 — find_hex_pattern slices token at byte index 1 without UTF-8 boundary check
+  - [critical] rustre-hex-pattern src/lib.rs:305 — search_with_captures slice OOB panic
+  - [high] rustre-hex-pattern src/lib.rs:238 — offset+bytes.len() can wrap on 32-bit/huge offset
+  - [medium] rustre-hex-pattern src/lib.rs:1028 — SQL LIKE wildcard injection in search_by_name
+  - [medium] rustre-hex-pattern src/lib.rs:627 — read_u16le/read_u32le bounds check can overflow
+  - [low] rustre-hex-pattern src/pattern_evaluator.rs:546 — Shl/Shr cast i64 shift count to u32
+  - [high] rustre-hex-template src/template_engine.rs:228 — local variable initializer dropped when spaces surround `=`
+  - [medium] rustre-hex-template src/template_engine.rs:214 — Assert message containing comma is truncated
+  - [medium] rustre-hex-template src/template_library.rs:281 — author filter case-sensitivity mismatch
+  - [medium] rustre-hex-template src/template_engine.rs:451 — Printf args silently dropped
+  - [low] rustre-hex-template src/template_engine.rs:249 — array count parse failure silently defaults to 1
+  - [low] rustre-hex-template src/template_engine.rs:552 — `offset as usize + size` may overflow before bounds check on 32-bit
+  - [low] rustre-hex-view crates/rustre-hex-view/src/lib.rs:429 — Annotation::range can overflow
+  - [medium] rustre-hex-view crates/rustre-hex-view/src/lib.rs:1064 — Annotation iteration unbounded
+  - [medium] rustre-hex-view crates/rustre-hex-view/src/lib.rs:1409 — ensure_cursor_visible underflow when visible_rows=0
+  - [low] rustre-hex-view crates/rustre-hex-view/src/lib.rs:688 — DiffHighlightMap offset+len overflow
+  - [low] rustre-hex-view crates/rustre-hex-view/src/lib.rs:1483 — selected_bytes panics if sel.start>sel.end
+  - [critical] rustre-il-hlil src/optimizer.rs:356 — Division overflow panic in const fold
+  - [critical] rustre-il-hlil src/optimizer.rs:364 — Modulo overflow panic in const fold
+  - [medium] rustre-il-hlil src/optimizer.rs:434 — Unreachable duplicate Add match arm
+  - [medium] rustre-il-lift crates/rustre-il-lift/src/lib.rs:4193 — Sign flag hardcoded to 64-bit width
+  - [low] rustre-il-lift crates/rustre-il-lift/src/dex_lifter.rs:126 — wide_high u32 add can overflow
+  - [low] rustre-il-lift crates/rustre-il-lift/src/x86_eval.rs:580 — ROL count mod uses operand width but x86 masks by 5/6 bits
+  - [critical] rustre-il-llil src/llil_interpreter.rs:162 — Non-wrapping add in Memory::write byte loop
+  - [high] rustre-il-llil src/llil_builder.rs:298 — alloc_addr increments without overflow check
+  - [medium] rustre-il-llil src/llil_builder.rs:434 — Unchecked `unwrap` on `block.instrs.last()`
+  - [medium] rustre-il-llil src/llil_builder.rs:114 — Length stored as u8 silently truncated into size: usize
+  - [high] rustre-il-mlil crates/rustre-il-mlil/src/mlil_optimizer.rs:420 — Shl/Shr const-fold uses `b % bits` instead of saturating to 0
+  - [high] rustre-il-mlil crates/rustre-il-mlil/src/mlil_optimizer.rs:420 — Shift count cast `b as u32` truncates 64-bit value
+  - [high] rustre-il-mlil crates/rustre-il-mlil/src/lib.rs:1466 — Trivial-PHI elimination only handles len==1
+  - [low] rustre-il-mlil crates/rustre-il-mlil/src/mlil_ssa.rs:290 — Dominator entry assumed to be blocks[0] despite doc saying "lowest id"
+  - [high] rustre-il-passes crates/rustre-il-passes/src/constant_propagation.rs:426 — Shift mask is 127 instead of operand bit-width
+  - [high] rustre-il-passes crates/rustre-il-passes/src/constant_propagation.rs:640 — PHI uses positional zip of preds and srcs
+  - [high] rustre-il-passes crates/rustre-il-passes/src/constant_propagation.rs:205 — `block`/`block_mut` panic on missing BB
+  - [high] rustre-loader src/multi_arch_loader.rs:400 — Mach-O byte-swapped magic reads cpu type little-endian
+  - [high] rustre-loader src/multi_arch_loader.rs:435 — Fat Mach-O slice offset/size never validated against data length
+  - [medium] rustre-loader src/section_analysis.rs:588 — CALL rel32 scan skips final valid offset
+  - [medium] rustre-loader src/relocation_engine.rs:355 — AArch64 Call26 silently truncates out-of-range branch
+  - [medium] rustre-loader src/multi_arch_loader.rs:387 — PE entry-point sum `image_base + entry` can overflow u64
+  - [critical] rustre-loader-elf crates/rustre-loader-elf/src/notes.rs:619 — Untrusted count multiplied without check
+  - [high] rustre-loader-elf crates/rustre-loader-elf/src/gnu_hash.rs:138 — Unbounded allocation from bloom_size
+  - [medium] rustre-loader-elf crates/rustre-loader-elf/src/compression.rs:49 — offset + SIZE bounds check can wrap
+  - [low] rustre-loader-elf crates/rustre-loader-elf/src/gnu_hash.rs:229 — sym_idx u32 increment can overflow
+  - [high] rustre-loader-luajit src/lib.rs:954 — KN double constant flag bit not cleared before shift
+  - [medium] rustre-loader-luajit src/lib.rs:1000 — Unchecked u32 add of first_line+line
+  - [medium] rustre-loader-luajit src/bytecode_format.rs:1046 — Unchecked usize addition for proto end
+  - [low] rustre-loader-luajit src/lib.rs:1582 — Negative jump target wraps to huge usize
+  - [high] rustre-loader-luajit src/lib.rs:954 — KN double constant flag bit not cleared before shift
+  - [medium] rustre-loader-luajit src/lib.rs:1000 — Unchecked u32 add of first_line+line offset
+  - [medium] rustre-loader-luajit src/bytecode_format.rs:1046 — Unchecked usize add for proto end offset
+  - [critical] rustre-loader-macho src/lib.rs:1196 — Fat header nfat read with wrong endianness
+  - [high] rustre-loader-macho src/lib.rs:1133 — read_cstr off+max_len can overflow usize
+  - [high] rustre-loader-macho src/lib.rs:2034 — Symtab base index can overflow
+  - [medium] rustre-loader-macho src/lib.rs:1882 — Lazy bind entries not flagged as lazy
+  - [medium] rustre-loader-macho src/lib.rs:2109 — All imports attributed to dylibs[0]
+
+## Iteration 15
+- Batch: rustre-loader-ole, rustre-loader-pdf, rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android, rustre-mobile-apktool, rustre-mobile-dyld, rustre-mobile-ios, rustre-mobile-ipa, rustre-mobile-jadx, rustre-mobile-smali, rustre-net, rustre-net-dissect, rustre-net-pcap, rustre-net-proxy
+- Findings: 84, Confirmed: 67, Fixed: 23
+- Optimizations applied on crates: rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-loader-ole src/lib.rs:1208 — Unchecked left shift on attacker-controlled mini_sector_size_exp
+  - [high] rustre-loader-ole src/lib.rs:1417 — sector_slice_raw offset multiplication can wrap
+  - [medium] rustre-loader-ole src/fat.rs:89 — FAT sector offset uses unchecked multiplication
+  - [medium] rustre-loader-ole src/lib.rs:265 — size_hi used unconditionally for v3 files
+  - [medium] rustre-loader-ole src/lib.rs:1299 — mini_stream_start assumes dir_entries[0] is root
+  - [high] rustre-loader-pe src/headers.rs:203 — e_res2 read from wrong offset
+  - [medium] rustre-loader-pe src/headers.rs:1024 — read_rva integer overflow on off+size
+  - [medium] rustre-loader-pe src/headers.rs:1012 — RVA mapping uses max(vsize,raw_size)
+  - [low] rustre-loader-pe src/headers.rs:187 — try_into.unwrap_or hides truncated reads
+  - [critical] rustre-loader-wasm src/wasm_module_loader.rs:54 — LEB128 u32 5th-byte high bits silently truncated
+  - [high] rustre-loader-wasm src/wasm_security.rs:136 — memory.grow scan treats immediates as opcodes
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:499 — parse_global silently accepts unterminated init expr
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:461 — Invalid table elem type silently coerced to FuncRef
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:649 — Relocator silently wraps on overflow
+  - [high] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:744 — InitializeParams uses snake_case without camelCase rename
+  - [medium] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:748 — initialize sets Ready even when params fail to parse
+  - [medium] rustre-mcp crates/rustre-mcp/src/federation.rs:578 — Holding proxy_handlers read lock across user handler call
+  - [medium] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:558 — min_length cast u64->usize truncates on 32-bit
+  - [low] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:329 — max=0 silently yields zero xrefs without error
+  - [high] rustre-mcp-federation src/lib.rs:1438 — probe uses GET instead of MCP JSON-RPC POST
+  - [medium] rustre-mcp-federation src/lib.rs:270 — exponential glob backtracking enables DoS
+  - [medium] rustre-mcp-federation src/lib.rs:1687 — parse_http_addr drops port for URLs with paths but no port
+  - [high] rustre-mcp-tools src/lib.rs:867 — XrefsTool truncates 64-bit address to low 32 bits
+  - [high] rustre-mcp-tools src/lib.rs:818 — AnalyzeCfgTool gives wrong size for RET imm16 (0xC2)
+  - [medium] rustre-mcp-tools src/lib.rs:821 — Conditional-jump detection only covers JZ/JNZ (0x74/0x75)
+  - [medium] rustre-mcp-tools src/lib.rs:580 — HexDump offset/length u64-to-usize cast unchecked
+  - [critical] rustre-mem crates/rustre-mem/src/sparse.rs:221 — LargeWindowProvider cache offset wraps on addr below base
+  - [high] rustre-mem crates/rustre-mem/src/sparse.rs:298 — LargeWindowProvider cache hit silently truncates read
+  - [high] rustre-mem crates/rustre-mem/src/trace_memory.rs:264 — `addr + len as u64` overflows in read_from_snapshot
+  - [medium] rustre-mem crates/rustre-mem/src/virtual_memory.rs:183 — `wrapping_add` masks end-address overflow in write
+  - [medium] rustre-mem crates/rustre-mem/src/file_memory.rs:66 — `end_addr()` can overflow
+  - [high] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:462 — V2 USE_EXTRA branch always reads extras index 0
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/dyld_symbol_table.rs:158 — end_address can overflow on large counts
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:209 — hash mask assumes power-of-two capacity without check
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/subcaches.rs:245 — read_at_va can panic via off+len overflow
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:498 — chain ptr_off advance can wrap or escape page
+  - [low] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:158 — resolve uses signed-to-unsigned cast that wraps
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:252 — FAT magic read with wrong endianness
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:259 — FAT nfat_arch/offset/size read little-endian
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:364 — Shift overflow on attacker-controlled page_size
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:227 — Unchecked `count * 8` in SuperBlob index
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:486 — Unchecked `(i+1)*hash_sz` multiplication
+  - [critical] rustre-mobile-jadx src/lib.rs:2937 — packed-switch payload size off-by-4
+  - [high] rustre-mobile-jadx src/lib.rs:2968 — Fmt22x register truncated from 16-bit to 8-bit
+  - [high] rustre-mobile-jadx src/lib.rs:3032 — Fmt32x both 16-bit registers truncated to u8
+  - [high] rustre-mobile-jadx src/lib.rs:3084 — Fmt3rc starting register truncated to u8
+  - [low] rustre-mobile-jadx src/lib.rs:2985 — Fmt21h opcode discrimination wrong for long-hi
+  - [high] rustre-mobile-smali src/lib.rs:1945 — Out-of-bounds slice in decode_invoke_35c-like
+  - [high] rustre-mobile-smali src/lib.rs:1980 — Same OOB slice in decode_invoke_35c
+  - [high] rustre-mobile-smali src/assembler.rs:515 — Empty/missing-paren signature panics
+  - [medium] rustre-mobile-smali src/disassembler.rs:432 — F11n sign-extension is wrong
+  - [medium] rustre-mobile-smali src/disassembler.rs:533 — F35c register count not clamped
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:423 — TcpSegment::to_bytes panics when data_offset < 5
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:613 — PacketCraft::build never updates IPv4 total_length/checksum after stacking
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:235 — Ipv4Header::new can overflow total_length
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:418 — TCP data_offset field silently truncated
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:469 — UdpDatagram::new silently caps length at u16::MAX
+  - [high] rustre-net-dissect stream_reassembler.rs:478 — HashMap eviction picks arbitrary stream, not oldest
+  - [high] rustre-net-dissect stream_reassembler.rs:397 — HTTP PDU extractor silently mis-splits responses without Content-Length
+  - [medium] rustre-net-dissect stream_reassembler.rs:130 — GapDetector merge ignores TCP sequence-number wraparound
+  - [medium] rustre-net-dissect protocol_stats.rs:423 — TimeSeriesData.record only checks the last bucket
+  - [medium] rustre-net-dissect protocol_stats.rs:313 — current_bps over-counts by including the first sample in the numerator
+  - [high] rustre-net-pcap src/lib.rs:1423 — LenLt(0) subtracts 1 from u32 zero
+  - [high] rustre-net-pcap src/lib.rs:687 — parse_pcapng_block underflows on block_len<4
+  - [high] rustre-net-pcap src/lib.rs:1414 — BPF LenGt/LenLt never uses packet length
+  - [high] rustre-net-pcap src/lib.rs:1429 — BPF And/Or just concatenates programs
+  - [medium] rustre-net-pcap src/tcp_reassembly.rs:263 — StreamBuffer.insert drops new data on duplicate seq
+
+## Iteration 15
+- Batch: rustre-loader-ole, rustre-loader-pdf, rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android, rustre-mobile-apktool, rustre-mobile-dyld, rustre-mobile-ios, rustre-mobile-ipa, rustre-mobile-jadx, rustre-mobile-smali, rustre-net, rustre-net-dissect, rustre-net-pcap, rustre-net-proxy
+- Findings: 84, Confirmed: 67, Fixed: 23
+- Optimizations applied on crates: rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-loader-ole src/lib.rs:1208 — Unchecked left shift on attacker-controlled mini_sector_size_exp
+  - [high] rustre-loader-ole src/lib.rs:1417 — sector_slice_raw offset multiplication can wrap
+  - [medium] rustre-loader-ole src/fat.rs:89 — FAT sector offset uses unchecked multiplication
+  - [medium] rustre-loader-ole src/lib.rs:265 — size_hi used unconditionally for v3 files
+  - [medium] rustre-loader-ole src/lib.rs:1299 — mini_stream_start assumes dir_entries[0] is root
+  - [high] rustre-loader-pe src/headers.rs:203 — e_res2 read from wrong offset
+  - [medium] rustre-loader-pe src/headers.rs:1024 — read_rva integer overflow on off+size
+  - [medium] rustre-loader-pe src/headers.rs:1012 — RVA mapping uses max(vsize,raw_size)
+  - [low] rustre-loader-pe src/headers.rs:187 — try_into.unwrap_or hides truncated reads
+  - [critical] rustre-loader-wasm src/wasm_module_loader.rs:54 — LEB128 u32 5th-byte high bits silently truncated
+  - [high] rustre-loader-wasm src/wasm_security.rs:136 — memory.grow scan treats immediates as opcodes
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:499 — parse_global silently accepts unterminated init expr
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:461 — Invalid table elem type silently coerced to FuncRef
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:649 — Relocator silently wraps on overflow
+  - [high] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:744 — InitializeParams uses snake_case without camelCase rename
+  - [medium] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:748 — initialize sets Ready even when params fail to parse
+  - [medium] rustre-mcp crates/rustre-mcp/src/federation.rs:578 — Holding proxy_handlers read lock across user handler call
+  - [medium] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:558 — min_length cast u64->usize truncates on 32-bit
+  - [low] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:329 — max=0 silently yields zero xrefs without error
+  - [high] rustre-mcp-federation src/lib.rs:1438 — probe uses GET instead of MCP JSON-RPC POST
+  - [medium] rustre-mcp-federation src/lib.rs:270 — exponential glob backtracking enables DoS
+  - [medium] rustre-mcp-federation src/lib.rs:1687 — parse_http_addr drops port for URLs with paths but no port
+  - [high] rustre-mcp-tools src/lib.rs:867 — XrefsTool truncates 64-bit address to low 32 bits
+  - [high] rustre-mcp-tools src/lib.rs:818 — AnalyzeCfgTool gives wrong size for RET imm16 (0xC2)
+  - [medium] rustre-mcp-tools src/lib.rs:821 — Conditional-jump detection only covers JZ/JNZ (0x74/0x75)
+  - [medium] rustre-mcp-tools src/lib.rs:580 — HexDump offset/length u64-to-usize cast unchecked
+  - [critical] rustre-mem crates/rustre-mem/src/sparse.rs:221 — LargeWindowProvider cache offset wraps on addr below base
+  - [high] rustre-mem crates/rustre-mem/src/sparse.rs:298 — LargeWindowProvider cache hit silently truncates read
+  - [high] rustre-mem crates/rustre-mem/src/trace_memory.rs:264 — `addr + len as u64` overflows in read_from_snapshot
+  - [medium] rustre-mem crates/rustre-mem/src/virtual_memory.rs:183 — `wrapping_add` masks end-address overflow in write
+  - [medium] rustre-mem crates/rustre-mem/src/file_memory.rs:66 — `end_addr()` can overflow
+  - [high] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:462 — V2 USE_EXTRA branch always reads extras index 0
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/dyld_symbol_table.rs:158 — end_address can overflow on large counts
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:209 — hash mask assumes power-of-two capacity without check
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/subcaches.rs:245 — read_at_va can panic via off+len overflow
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:498 — chain ptr_off advance can wrap or escape page
+  - [low] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:158 — resolve uses signed-to-unsigned cast that wraps
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:252 — FAT magic read with wrong endianness
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:259 — FAT nfat_arch/offset/size read little-endian
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:364 — Shift overflow on attacker-controlled page_size
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:227 — Unchecked `count * 8` in SuperBlob index
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:486 — Unchecked `(i+1)*hash_sz` multiplication
+  - [critical] rustre-mobile-jadx src/lib.rs:2937 — packed-switch payload size off-by-4
+  - [high] rustre-mobile-jadx src/lib.rs:2968 — Fmt22x register truncated from 16-bit to 8-bit
+  - [high] rustre-mobile-jadx src/lib.rs:3032 — Fmt32x both 16-bit registers truncated to u8
+  - [high] rustre-mobile-jadx src/lib.rs:3084 — Fmt3rc starting register truncated to u8
+  - [low] rustre-mobile-jadx src/lib.rs:2985 — Fmt21h opcode discrimination wrong for long-hi
+  - [high] rustre-mobile-smali src/lib.rs:1945 — Out-of-bounds slice in decode_invoke_35c-like
+  - [high] rustre-mobile-smali src/lib.rs:1980 — Same OOB slice in decode_invoke_35c
+  - [high] rustre-mobile-smali src/assembler.rs:515 — Empty/missing-paren signature panics
+  - [medium] rustre-mobile-smali src/disassembler.rs:432 — F11n sign-extension is wrong
+  - [medium] rustre-mobile-smali src/disassembler.rs:533 — F35c register count not clamped
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:423 — TcpSegment::to_bytes panics when data_offset < 5
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:613 — PacketCraft::build never updates IPv4 total_length/checksum after stacking
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:235 — Ipv4Header::new can overflow total_length
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:418 — TCP data_offset field silently truncated
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:469 — UdpDatagram::new silently caps length at u16::MAX
+  - [high] rustre-net-dissect stream_reassembler.rs:478 — HashMap eviction picks arbitrary stream, not oldest
+  - [high] rustre-net-dissect stream_reassembler.rs:397 — HTTP PDU extractor silently mis-splits responses without Content-Length
+  - [medium] rustre-net-dissect stream_reassembler.rs:130 — GapDetector merge ignores TCP sequence-number wraparound
+  - [medium] rustre-net-dissect protocol_stats.rs:423 — TimeSeriesData.record only checks the last bucket
+  - [medium] rustre-net-dissect protocol_stats.rs:313 — current_bps over-counts by including the first sample in the numerator
+  - [high] rustre-net-pcap src/lib.rs:1423 — LenLt(0) subtracts 1 from u32 zero
+  - [high] rustre-net-pcap src/lib.rs:687 — parse_pcapng_block underflows on block_len<4
+  - [high] rustre-net-pcap src/lib.rs:1414 — BPF LenGt/LenLt never uses packet length
+  - [high] rustre-net-pcap src/lib.rs:1429 — BPF And/Or just concatenates programs
+  - [medium] rustre-net-pcap src/tcp_reassembly.rs:263 — StreamBuffer.insert drops new data on duplicate seq
+
+## Iteration 15
+- Batch: rustre-loader-ole, rustre-loader-pdf, rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android, rustre-mobile-apktool, rustre-mobile-dyld, rustre-mobile-ios, rustre-mobile-ipa, rustre-mobile-jadx, rustre-mobile-smali, rustre-net, rustre-net-dissect, rustre-net-pcap, rustre-net-proxy
+- Findings: 84, Confirmed: 67, Fixed: 23
+- Optimizations applied on crates: rustre-loader-pe, rustre-loader-wasm, rustre-mcp, rustre-mcp-federation, rustre-mcp-server, rustre-mcp-tools, rustre-mem, rustre-mobile-android
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-loader-ole src/lib.rs:1208 - Unchecked left shift on attacker-controlled mini_sector_size_exp
+  - [high] rustre-loader-ole src/lib.rs:1417 - sector_slice_raw offset multiplication can wrap
+  - [medium] rustre-loader-ole src/fat.rs:89 - FAT sector offset uses unchecked multiplication
+  - [medium] rustre-loader-ole src/lib.rs:265 - size_hi used unconditionally for v3 files
+  - [medium] rustre-loader-ole src/lib.rs:1299 - mini_stream_start assumes dir_entries[0] is root
+  - [high] rustre-loader-pe src/headers.rs:203 - e_res2 read from wrong offset
+  - [medium] rustre-loader-pe src/headers.rs:1024 - read_rva integer overflow on off+size
+  - [medium] rustre-loader-pe src/headers.rs:1012 - RVA mapping uses max(vsize,raw_size)
+  - [low] rustre-loader-pe src/headers.rs:187 - try_into.unwrap_or hides truncated reads
+  - [critical] rustre-loader-wasm src/wasm_module_loader.rs:54 - LEB128 u32 5th-byte high bits silently truncated
+  - [high] rustre-loader-wasm src/wasm_security.rs:136 - memory.grow scan treats immediates as opcodes
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:499 - parse_global silently accepts unterminated init expr
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:461 - Invalid table elem type silently coerced to FuncRef
+  - [medium] rustre-loader-wasm src/wasm_module_loader.rs:649 - Relocator silently wraps on overflow
+  - [high] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:744 - InitializeParams uses snake_case without camelCase rename
+  - [medium] rustre-mcp crates/rustre-mcp/src/mcp_protocol.rs:748 - initialize sets Ready even when params fail to parse
+  - [medium] rustre-mcp crates/rustre-mcp/src/federation.rs:578 - Holding proxy_handlers read lock across user handler call
+  - [medium] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:558 - min_length cast u64->usize truncates on 32-bit
+  - [low] rustre-mcp crates/rustre-mcp/src/tool_handlers.rs:329 - max=0 silently yields zero xrefs without error
+  - [high] rustre-mcp-federation src/lib.rs:1438 - probe uses GET instead of MCP JSON-RPC POST
+  - [medium] rustre-mcp-federation src/lib.rs:270 - exponential glob backtracking enables DoS
+  - [medium] rustre-mcp-federation src/lib.rs:1687 - parse_http_addr drops port for URLs with paths but no port
+  - [high] rustre-mcp-tools src/lib.rs:867 - XrefsTool truncates 64-bit address to low 32 bits
+  - [high] rustre-mcp-tools src/lib.rs:818 - AnalyzeCfgTool gives wrong size for RET imm16 (0xC2)
+  - [medium] rustre-mcp-tools src/lib.rs:821 - Conditional-jump detection only covers JZ/JNZ (0x74/0x75)
+  - [medium] rustre-mcp-tools src/lib.rs:580 - HexDump offset/length u64-to-usize cast unchecked
+  - [critical] rustre-mem crates/rustre-mem/src/sparse.rs:221 - LargeWindowProvider cache offset wraps on addr below base
+  - [high] rustre-mem crates/rustre-mem/src/sparse.rs:298 - LargeWindowProvider cache hit silently truncates read
+  - [high] rustre-mem crates/rustre-mem/src/trace_memory.rs:264 - addr + len as u64 overflows in read_from_snapshot
+  - [medium] rustre-mem crates/rustre-mem/src/virtual_memory.rs:183 - wrapping_add masks end-address overflow in write
+  - [medium] rustre-mem crates/rustre-mem/src/file_memory.rs:66 - end_addr() can overflow
+  - [high] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:462 - V2 USE_EXTRA branch always reads extras index 0
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/dyld_symbol_table.rs:158 - end_address can overflow on large counts
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:209 - hash mask assumes power-of-two capacity without check
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/subcaches.rs:245 - read_at_va can panic via off+len overflow
+  - [medium] rustre-mobile-dyld crates/rustre-mobile-dyld/src/slide_info.rs:498 - chain ptr_off advance can wrap or escape page
+  - [low] rustre-mobile-dyld crates/rustre-mobile-dyld/src/objc_optimizer.rs:158 - resolve uses signed-to-unsigned cast that wraps
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:252 - FAT magic read with wrong endianness
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/fairplay.rs:259 - FAT nfat_arch/offset/size read little-endian
+  - [high] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:364 - Shift overflow on attacker-controlled page_size
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:227 - Unchecked count * 8 in SuperBlob index
+  - [medium] rustre-mobile-ios crates/rustre-mobile-ios/src/codesign.rs:486 - Unchecked (i+1)*hash_sz multiplication
+  - [critical] rustre-mobile-jadx src/lib.rs:2937 - packed-switch payload size off-by-4
+  - [high] rustre-mobile-jadx src/lib.rs:2968 - Fmt22x register truncated from 16-bit to 8-bit
+  - [high] rustre-mobile-jadx src/lib.rs:3032 - Fmt32x both 16-bit registers truncated to u8
+  - [high] rustre-mobile-jadx src/lib.rs:3084 - Fmt3rc starting register truncated to u8
+  - [low] rustre-mobile-jadx src/lib.rs:2985 - Fmt21h opcode discrimination wrong for long-hi
+  - [high] rustre-mobile-smali src/lib.rs:1945 - Out-of-bounds slice in decode_invoke_35c-like
+  - [high] rustre-mobile-smali src/lib.rs:1980 - Same OOB slice in decode_invoke_35c
+  - [high] rustre-mobile-smali src/assembler.rs:515 - Empty/missing-paren signature panics
+  - [medium] rustre-mobile-smali src/disassembler.rs:432 - F11n sign-extension is wrong
+  - [medium] rustre-mobile-smali src/disassembler.rs:533 - F35c register count not clamped
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:423 - TcpSegment::to_bytes panics when data_offset < 5
+  - [high] rustre-net crates/rustre-net/src/packet_builder.rs:613 - PacketCraft::build never updates IPv4 total_length/checksum after stacking
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:235 - Ipv4Header::new can overflow total_length
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:418 - TCP data_offset field silently truncated
+  - [medium] rustre-net crates/rustre-net/src/packet_builder.rs:469 - UdpDatagram::new silently caps length at u16::MAX
+  - [high] rustre-net-dissect stream_reassembler.rs:478 - HashMap eviction picks arbitrary stream, not oldest
+  - [high] rustre-net-dissect stream_reassembler.rs:397 - HTTP PDU extractor silently mis-splits responses without Content-Length
+  - [medium] rustre-net-dissect stream_reassembler.rs:130 - GapDetector merge ignores TCP sequence-number wraparound
+  - [medium] rustre-net-dissect protocol_stats.rs:423 - TimeSeriesData.record only checks the last bucket
+  - [medium] rustre-net-dissect protocol_stats.rs:313 - current_bps over-counts by including the first sample in the numerator
+  - [high] rustre-net-pcap src/lib.rs:1423 - LenLt(0) subtracts 1 from u32 zero
+  - [high] rustre-net-pcap src/lib.rs:687 - parse_pcapng_block underflows on block_len<4
+  - [high] rustre-net-pcap src/lib.rs:1414 - BPF LenGt/LenLt never uses packet length
+  - [high] rustre-net-pcap src/lib.rs:1429 - BPF And/Or just concatenates programs
+  - [medium] rustre-net-pcap src/tcp_reassembly.rs:263 - StreamBuffer.insert drops new data on duplicate seq
+
+## Iteration 16
+- Batch: rustre-net-rules, rustre-pe-editor, rustre-pe-rebuild, rustre-pe-tools, rustre-plugin-api, rustre-plugin-host, rustre-project, rustre-sandbox, rustre-sandbox-extract, rustre-sandbox-monitor, rustre-sandbox-report, rustre-sandbox-vm, rustre-script, rustre-script-lua, rustre-script-python, rustre-script-rhai, rustre-symb, rustre-symb-engine, rustre-symb-taint, rustre-symb-z3
+- Findings: 72, Confirmed: 57, Fixed: 21
+- Optimizations applied on crates: rustre-net-rules, rustre-pe-editor, rustre-pe-tools, rustre-plugin-api, rustre-plugin-host, rustre-project
+- Build issues remaining: 0
+- Confirmed bug titles:
+  - [high] rustre-net-rules src/lib.rs:1478 — AhoCorasick state count truncates silently
+  - [medium] rustre-net-rules src/lib.rs:534 — Depth/Within/Distance usize addition can panic
+  - [medium] rustre-net-rules src/lib.rs:514 — PCRE check silently skipped on non-UTF8 payload
+  - [medium] rustre-net-rules src/lib.rs:1377 — SpecRuleEngine compares IPs as strings
+  - [low] rustre-net-rules src/lib.rs:770 — msg/pcre trim_matches strips arbitrary quote runs
+  - [low] rustre-net-rules src/lib.rs:1884 — ThresholdType::Both panics on count==0
+  - [critical] rustre-pe-rebuild src/lib.rs:808 — ExportRebuilder::build underflows ordinal_base
+  - [high] rustre-pe-rebuild src/lib.rs:448 — apply_to_image image_base+rva can overflow
+  - [high] rustre-pe-rebuild src/lib.rs:1097 — OverlayHandler::detect raw_off+raw_size unchecked
+  - [medium] rustre-pe-rebuild src/lib.rs:1423 — align_up overflows near u32::MAX
+  - [medium] rustre-pe-rebuild src/lib.rs:1218 — apply_fixups DataDirectory index unvalidated
+  - [critical] rustre-pe-tools src/lib.rs:1143 — Export parser uses usize::MAX sentinel then adds offset
+  - [high] rustre-pe-tools src/lib.rs:1214 — section_at_rva unchecked u32 add
+  - [high] rustre-pe-tools src/lib.rs:1222 — rva_to_offset arithmetic can overflow
+  - [medium] rustre-pe-tools src/lib.rs:1556 — PE checksum computation fails open on malformed input
+  - [low] rustre-pe-tools src/lib.rs:1184 — Export ordinal lookup truncates index to u16::MAX
+  - [high] rustre-plugin-host src/dynamic_loader.rs:86 — Unexpanded %APPDATA% in Windows search path
+  - [high] rustre-plugin-host src/plugin_ipc.rs:353 — plugin_send increments bytes_received not bytes_sent
+  - [high] rustre-plugin-host src/plugin_ipc.rs:376 — ping/pong RTT and pending_acks never reconciled
+  - [medium] rustre-plugin-host src/dynamic_loader.rs:376 — Invalid UTF-8 manifest silently becomes "{}"
+  - [medium] rustre-plugin-host src/hot_reload_engine.rs:118 — Duration::as_millis() as u64 truncates u128 without check
+  - [high] rustre-project crates/rustre-project/src/lib.rs:1594 — PE header offset add can overflow usize
+  - [medium] rustre-project crates/rustre-project/src/workspace.rs:346 — create_project skips canonicalize causing duplicate keys
+  - [medium] rustre-project crates/rustre-project/src/session_management.rs:419 — Snapshot index collides after pruning
+  - [low] rustre-project crates/rustre-project/src/workspace.rs:318 — canonicalize error silently falls back to raw path
+  - [low] rustre-project crates/rustre-project/src/lib.rs:1098 — MAX_VERSION_SNAPSHOTS prune uses unchecked i64-to-usize cast
+  - [medium] rustre-script host_api.rs:390 — get_memory_bytes ignores address when memory empty
+  - [medium] rustre-script host_api.rs:382 — get_function_at matches unbounded for size==0
+  - [low] rustre-script script_runner.rs:551 — UTF-8 boundary slice panic in snippet
+  - [low] rustre-script script_stdlib.rs:150 — base64_encode_internal indexes chunk[0] on empty input is fine but div_ceil capacity computation can overflow
+  - [high] rustre-script-lua src/lib.rs:759 — For-loop step uses non-wrapping `i += step_val`
+  - [high] rustre-script-lua src/lib.rs:235 — PE machine read uses `pe_off + 6 < data.len()` but indexes `data[pe_off..pe_off+4]` without verifying `pe_off` isn't huge
+  - [medium] rustre-script-lua src/lib.rs:1488 — `parse_add_expr` unconditionally consumes `-`, but comment says it shouldn't if part of negative number literal
+  - [medium] rustre-script-lua src/lib.rs:343 — `as_int` uses saturating `*f as i64` for NaN/Inf
+  - [low] rustre-script-lua src/lib.rs:911 — `tonumber` doesn't parse strings, only extracts numbers from numeric values
+  - [high] rustre-script-python ida_compat_api.rs:34 — Segment::new can overflow on start_ea+data.len()
+  - [high] rustre-script-python ida_compat_api.rs:67 — read_word/dword/qword saturate at u64::MAX duplicating last byte
+  - [medium] rustre-script-python lib.rs:1399 — FloorDiv uses div_euclid instead of Python floor semantics
+  - [medium] rustre-script-python lib.rs:1405 — Mod uses rem_euclid instead of Python modulo
+  - [medium] rustre-script-python lib.rs:2605 — Unbalanced closing bracket underflows depth counter
+  - [medium] rustre-script-rhai src/rhai_stdlib.rs:98 — read_u64_le offset+8 can overflow usize
+  - [medium] rustre-script-rhai src/rhai_stdlib.rs:110 — read_u32_be offset+4 can overflow usize
+  - [high] rustre-script-rhai src/rhai_stdlib.rs:165 — XOR with empty key panics
+  - [medium] rustre-script-rhai src/rhai_rustre_api.rs:409 — hex_decode panics on non-ASCII input
+  - [low] rustre-script-rhai src/rhai_full_api.rs:186 — read_mem returns fake data instead of erroring
+  - [high] rustre-symb crates/rustre-symb/src/memory_model.rs:295 — write_word_concrete panics for size>8
+  - [high] rustre-symb crates/rustre-symb/src/path_explorer.rs:410 — xorshift dead with seed 0
+  - [medium] rustre-symb crates/rustre-symb/src/symbolic_memory_model.rs:266 — Unchecked u64 address overflow
+  - [high] rustre-symb-z3 src/lib.rs:901 — AShr cutoff uses >=63 instead of >=64
+  - [medium] rustre-symb-z3 src/lib.rs:149 — Extract bit_width underflows if hi<lo
+  - [medium] rustre-symb-z3 src/lib.rs:875 — Shift amount cast u64 as u32 loses high bits
+  - [medium] rustre-symb-z3 src/lib.rs:955 — SignExt panics when inner bit_width is 0
+  - [high] rustre-symb-z3 src/lib.rs:916 — Rol/Ror shift-by-width panic
+  - [high] rustre-symb-z3 src/lib.rs:901 — AShr threshold is >=63 instead of >=64
+  - [medium] rustre-symb-z3 src/lib.rs:149 — Extract bit_width assumes hi>=lo
+  - [medium] rustre-symb-z3 src/lib.rs:875 — Shift amount truncated from u64 to u32
+  - [medium] rustre-symb-z3 src/lib.rs:955 — SignExt eval panics when inner width is 0
+
+## Iteration 17
+- Batch (start=154): rustre-symbols, rustre-symbols-codeview, rustre-symbols-dwarf, rustre-symbols-pdb, rustre-symbols-stabs, rustre-syscalls, rustre-syscalls-linux, rustre-syscalls-windows, rustre-sysinternals, rustre-threatintel, rustre-ti-correlate, rustre-ti-malpedia, rustre-ti-misp, rustre-ti-vt, rustre-trace, rustre-trace-coresight, rustre-trace-coverage, rustre-trace-navigate, rustre-trace-pt, rustre-triage
+- Findings: 175 raw / 148 confirmed / 27 fixed
+- Clippy clean: rustre-symbols, rustre-symbols-codeview, rustre-symbols-dwarf, rustre-symbols-pdb, rustre-symbols-stabs, rustre-syscalls, rustre-syscalls-linux, rustre-syscalls-windows, rustre-sysinternals, rustre-ti-correlate, rustre-ti-malpedia
+- Build issues: 24 (final: CLEAN)
+- Confirmed bugs:
+  - [medium] rustre-symbols lib.rs:687 — SymbolCache::insert double-moves entry
+  - [high] rustre-symbols pdb_provider.rs:458 — PDB parse reads age from wrong offset
+  - [medium] rustre-symbols dwarf_provider.rs:291 — function_size treats high_pc==low_pc as length zero instead of detecting offset-form
+  - [low] rustre-symbols elf_provider.rs:421 — SymtabParser::read_u16/read_u32/read_u64 panic on out-of-bounds without bounds check
+  - [low] rustre-symbols symbol_merger.rs:343 — conflict logging inverted when equal-priority sources collide
+  - [low] rustre-symbols lib.rs:1749 — demangle_itanium_heuristic strips leading underscores before checking _Z prefix
+  - [high] rustre-symbols-codeview cv_function_info.rs:41 — S_REGREL32 constant collides with S_LPROC32
+  - [medium] rustre-symbols-codeview cv_stream_parser.rs:703-712 — "second pass" file resolution always picks index 0
+  - [medium] rustre-symbols-codeview lib.rs:736-749 — LF_ARRAY size parsed from wrong offset
+  - [medium] rustre-symbols-codeview lib.rs:874 — TypeInfo::Array count field set to raw byte size, not element count
+  - [medium] rustre-symbols-codeview cv_stream_parser.rs:475-489 — SectionContribution record stride assumes 16 bytes but spec is 28 bytes
+  - [medium] rustre-symbols-codeview lib.rs:515-526 — S_GPROC32/S_LPROC32 field offsets inconsistent with CvProc32
+  - [low] rustre-symbols-codeview lib.rs:886-887 — primitive_type extracts mode from wrong bit range
+  - [low] rustre-symbols-codeview cv_stream_parser.rs:816-830 — parse_file_checksums_local ignores checksum_kind byte at pos+5
+  - [medium] rustre-symbols-dwarf lib.rs:503 — BLOCK1 advances offset past end without bounds check
+  - [medium] rustre-symbols-dwarf lib.rs:326-329 — shstrtab index in 32-bit ELF section loop not bounds-checked
+  - [medium] rustre-symbols-dwarf lib.rs:363-366 — shstrtab index in 64-bit ELF section loop not bounds-checked
+  - [medium] rustre-symbols-dwarf lib.rs:228-232 — shift can reach exactly 64 before the overflow check fires
+  - [low] rustre-symbols-dwarf split_dwarf.rs:419 — DWO ID read uses hardcoded offset 8, wrong for 64-bit DWARF CU headers
+  - [low] rustre-symbols-dwarf lib.rs:1096-1098 — DW_LNE_set_address always reads 8 bytes as u64-LE regardless of address_size
+  - [low] rustre-symbols-dwarf dwarf_type_decoder.rs:696 — Enumerator value read from wrong field (data_member_location instead of const_value)
+  - [medium] rustre-symbols-pdb tpi_types.rs:489-490 — EnumData field_list_ti reads same offset as underlying_ti
+  - [medium] rustre-symbols-pdb lib.rs:196-199 — block_map offset computed with unchecked usize multiplication
+  - [medium] rustre-symbols-pdb lib.rs:358-358 — wrong payload slice end in parse_symbols_from_stream
+  - [medium] rustre-symbols-pdb lib.rs:244-245 — stream content Vec allocated with unchecked sz cast
+  - [low] rustre-symbols-pdb lib.rs:166-167 — read_cstring returns pos+1 even when NUL was not found
+  - [low] rustre-symbols-pdb stream_reader.rs:218-220 — unknown numeric leaf silently skips 4 bytes and returns 0
+  - [low] rustre-symbols-pdb tpi_types.rs:457-458 — StructData::parse reads name at fixed offset 14 ignoring variable-width numeric leaf
+  - [medium] rustre-symbols-stabs lib.rs:619-623 — array count cast truncates large ranges
+  - [medium] rustre-symbols-stabs stabs_types.rs:146-153 — StabsArrayType::count() casts i64 difference to usize unchecked
+  - [low] rustre-symbols-stabs lib.rs:413 — parse_type_ref for negative type numbers uses unsigned_abs losing sign information
+  - [low] rustre-symbols-stabs lib.rs:667 — struct field byte-offset truncates bit fields
+  - [low] rustre-symbols-stabs stabs_types.rs:667 — StabsTypeDb::resolve can infinite-loop on alias cycles
+  - [medium] rustre-syscalls syscall_emulator.rs:517 — count saturates to usize::MAX then allocates huge buffer
+  - [medium] rustre-syscalls syscall_emulator.rs:542 — write also allocates attacker-controlled count bytes
+  - [medium] rustre-syscalls lib.rs:428 — errno display wrong for -1 return
+  - [low] rustre-syscalls syscall_emulator.rs:128 — write can silently skip data when off+len overflows usize
+  - [low] rustre-syscalls syscall_emulator.rs:654 — mmap page-rounding addition can overflow u64
+  - [low] rustre-syscalls lib.rs:2465-2466 — SQLite path is used verbatim without validation
+  - [medium] rustre-syscalls-linux syscall_intercept.rs:83 — assert! panic in library code for invalid NumberRange
+  - [medium] rustre-syscalls-linux syscall_statistics.rs:93 — total_elapsed_ns can silently overflow u64
+  - [low] rustre-syscalls-linux lib.rs:130 — O(n) linear scan for every lookup
+  - [low] rustre-syscalls-linux ptrace_tracer.rs:207-211 — on_exit increments syscall_count even with no matching entry
+  - [low] rustre-syscalls-linux ptrace_tracer.rs:519-528 — all_events is not sorted despite comment implying it should be
+  - [medium] rustre-syscalls-linux syscall_intercept.rs:83 — assert! in matches() panics on inverted NumberRange
+  - [medium] rustre-syscalls-linux syscall_intercept.rs:83 — assert! panics in library matches() on inverted NumberRange
+  - [medium] rustre-syscalls-linux syscall_statistics.rs:93 — total_elapsed_ns accumulates with unchecked += and can wrap
+  - [low] rustre-syscalls-linux ptrace_tracer.rs:210 — syscall_count incremented on exit with no matching pending entry
+  - [low] rustre-syscalls-linux ptrace_tracer.rs:521-527 — all_events returns events in non-deterministic HashMap order
+  - [low] rustre-syscalls-linux lib.rs:130 — O(n) linear lookup used on every hot-path syscall resolution
+  - [medium] rustre-syscalls-windows nt_syscalls.rs:166,258 — Duplicate NtAcceptConnectPort key in win10_x64 table
+  - [medium] rustre-syscalls-windows lib.rs:628 — SSN read as u16 silently truncates SSNs above 0xFFFF
+  - [high] rustre-syscalls-windows lib.rs:640 — Trampoline target computed from absolute 0 not stub VA
+  - [medium] rustre-syscalls-windows lib.rs:406 — UnicodeString length wrong for non-ASCII input
+  - [medium] rustre-syscalls-windows lib.rs:910 — NtQueryInformationProcess and NtQuerySystemInformation share identical SSNs for XP and Vista
+  - [low] rustre-syscalls-windows lib.rs:5075 — jmp_patch_bytes silently truncates out-of-range rel32
+  - [low] rustre-syscalls-windows lib.rs:10343 — e_lfanew cast from u32 to usize without overflow check on 32-bit
+  - [high] rustre-sysinternals lib.rs:1367 — SHA-256 bit-length overflow on huge inputs
+  - [high] rustre-sysinternals lib.rs:1320 — Wrong security-directory offset for PE32+
+  - [high] rustre-sysinternals process_monitor.rs:481 — O(n) Vec::remove(0) used as a ring-buffer eviction inside hot event loop
+  - [medium] rustre-sysinternals lib.rs:1653 — O(n) Vec::remove(0) used as ring-buffer eviction in ResourceUsageMonitor
+  - [medium] rustre-sysinternals event_log.rs:626 — ISO-8601 timestamp approximation ignores leap years and uses 30-day months
+  - [medium] rustre-sysinternals lib.rs:1284 — FileSignatureChecker::check reads entire file into memory with no size limit
+  - [medium] rustre-sysinternals file_search.rs:331 — FileHasher::sha256/md5 read entire file into memory with no size limit
+  - [low] rustre-sysinternals lib.rs:399 — ProcessInfo::to_csv_row does not escape commas or quotes in string fields
+  - [medium] rustre-threatintel store.rs:162 — unwrap_or(0) silently returns 0 for negative last_insert_rowid
+  - [medium] rustre-threatintel virustotal.rs:464 — confidence cast may overflow u8
+  - [medium] rustre-threatintel threat_correlation.rs:338 — average confidence cast truncates via u32 division
+  - [low] rustre-threatintel misp_client.rs:283-285 — reqwest::Client::builder().build().unwrap_or_default() silently falls back to non-insecure client
+  - [low] rustre-threatintel store.rs:75-79 — unvalidated path passed directly to rusqlite::Connection::open
+  - [low] rustre-threatintel ioc_extractor.rs:265-271 — SHA-512 prefix-collision filter is incomplete for SHA-256
+  - [low] rustre-threatintel malwarebazaar.rs:114 — confidence() truncates f64->u8 without rounding
+  - [medium] rustre-ti-correlate campaign_correlation.rs:581 — ip_prefix_24 does not validate octet values
+  - [medium] rustre-ti-correlate actor_attribution.rs:125 — recompute_confidence divides by evidence count not weight sum
+  - [medium] rustre-ti-correlate campaign_analysis.rs:263 — gap_ms cast from u64 difference can silently overflow i64
+  - [medium] rustre-ti-correlate clustering.rs:513 — DBSCAN uses usize::MAX as noise sentinel conflating with legitimate cluster IDs
+  - [low] rustre-ti-correlate attribution.rs:166 — from_evidence confidence caps raw sum at 100 not 100%
+  - [low] rustre-ti-correlate lib.rs:1883 — source_factor uses natural log normalisation instead of log2 as documented
+  - [low] rustre-ti-correlate campaign_correlation.rs:414 — overlap_days adds 1 unconditionally when overlap_end==overlap_start
+  - [high] rustre-ti-malpedia client.rs:169 — Plaintext TCP to port 443 without TLS
+  - [high] rustre-ti-malpedia client.rs:171 — API key injected into HTTP header without sanitisation
+  - [high] rustre-ti-malpedia client.rs:175-183 — HTTP body read loop may hang indefinitely
+  - [medium] rustre-ti-malpedia lib.rs:863-864 — get_sample normalises to lowercase but insert_sample uses the original case key
+  - [medium] rustre-ti-malpedia yara_download.rs:321 — TTL comparison uses integer seconds with sub-second truncation
+  - [low] rustre-ti-malpedia lib.rs:631 — count() as u32 silently truncates keyword match count on >4 billion keywords
+  - [medium] rustre-ti-misp client.rs:172 — Unsanitized filter value interpolated into URL path
+  - [medium] rustre-ti-misp client.rs:647 — Same path-injection in MispRawClient::search_events
+  - [medium] rustre-ti-misp cache.rs:89 — Wrong byte-level reinterpretation of u64 as i64
+  - [low] rustre-ti-misp cache.rs:129 — Signed/unsigned TTL comparison allows stale entries
+  - [low] rustre-ti-misp misp_automation.rs:113 — ThreatLevelAtLeast condition has reversed comparison
+  - [low] rustre-ti-misp client.rs:838 — unsafe env-var mutation in parallel tests
+  - [medium] rustre-ti-misp client.rs:172 — Unencoded filter value injected into URL path
+  - [medium] rustre-ti-misp client.rs:647 — Same path-injection in MispRawClient::search_events
+  - [medium] rustre-ti-misp cache.rs:89 — u64->i64 reinterpretation via to_ne_bytes corrupts large IDs
+  - [medium] rustre-ti-misp cache.rs:125 — Signed cached_at cast to u64 for TTL comparison accepts negative timestamps
+  - [low] rustre-ti-misp misp_automation.rs:113 — ThreatLevelAtLeast comparison is inverted relative to MISP semantics
+  - [low] rustre-ti-misp client.rs:838 — Unsynchronised unsafe env-var mutation in parallel unit tests
+  - [low] rustre-ti-misp export.rs:35 — STIX indicator confidence can exceed 100
+  - [low] rustre-ti-misp misp_enrichment.rs:535 — is_valid_ipv6 accepts any string containing a colon of length >=2
+  - [high] rustre-ti-vt lib.rs:169 — Token bucket time stolen on rate-limit failure
+  - [medium] rustre-ti-vt lib.rs:130 — is_valid unreachable second condition
+  - [medium] rustre-ti-vt cache.rs:99 — Negative cached_at cast to u64 silently wraps
+  - [medium] rustre-ti-vt cache.rs:127 — purge_expired cutoff cast may silently truncate
+  - [medium] rustre-ti-vt vt_reputation.rs:262 — community_score formula inverted for clean files
+  - [medium] rustre-ti-vt client.rs:399 — Silent u64->u32 truncation for large ASNs
+  - [medium] rustre-ti-vt vt_reputation.rs:511-514 — O(n) Vec::remove(0) for history pruning causes quadratic performance
+  - [low] rustre-ti-vt lib.rs:191-196 — wait_time reads stale token count without refilling
+  - [medium] rustre-trace lib.rs:1414 — JSON length cast to u32 silently truncates
+  - [medium] rustre-trace lib.rs:1876 — SQLite stores u64 address as i64, read back reinterprets sign bits
+  - [medium] rustre-trace lib.rs:1927-1950 — row_to_record silently drops deserialization errors
+  - [low] rustre-trace lib.rs:1299 — InMemoryTraceProvider::stop drains pre_recorded but session is cloned
+  - [low] rustre-trace lib.rs:613 — TraceSession::slice error reports len=0 for empty session on valid start==end==0
+  - [low] rustre-trace lib.rs:492-504 — event_primary_addr maps Syscall.number as an address
+  - [low] rustre-trace trace_database.rs:171 — TraceSearch pc_range upper bound is inclusive instead of exclusive
+  - [medium] rustre-trace-coresight lib.rs:839 — Context packet EL bits extracted from wrong position
+  - [medium] rustre-trace-coresight lib.rs:999 — Unknown packet bytes silently mapped to Overflow instead of error/skip
+  - [medium] rustre-trace-coresight lib.rs:1744 — ROM table offset sign-extension applied to unsigned 32-bit field
+  - [medium] rustre-trace-coresight etm_packets.rs:326 — I-Sync length check requires 9 bytes but consumes only 8
+  - [low] rustre-trace-coresight etm_packets.rs:523 — read_uleb128 in Etm4Decoder silently substitutes 0 on empty buffer
+  - [low] rustre-trace-coresight lib.rs:824 — Cycle-count ULEB128 failure silently replaced with 0
+  - [low] rustre-trace-coresight etm_packets.rs:459 — Address byte-count computed from wrong header bits for ETM4 address packets
+  - [medium] rustre-trace-coverage lib.rs:670 — start_offset truncation silently narrows u64 to u32
+  - [medium] rustre-trace-coverage drcov_import.rs:379 — BB offset cast from u64 to u32 loses high bits
+  - [medium] rustre-trace-coverage lib.rs:1268 — export_lcov pseudo-line collision
+  - [low] rustre-trace-coverage coverage_merge.rs:78 — coverage_ratio always returns 1.0
+  - [low] rustre-trace-coverage lib.rs:220 — coverage_ratio returns 1.0 for empty bitmap
+  - [low] rustre-trace-coverage drcov_import.rs:425 — auto-detect always takes text path when BB Table absent
+  - [low] rustre-trace-coverage bb_heatmap.rs:250 — HottestFunctions::attribute ignores bb_addr for deduplication
+  - [medium] rustre-trace-navigate tenet_navigation.rs:258 — step_forward clamps then re-checks against unclamped bound
+  - [medium] rustre-trace-navigate tenet_navigation.rs:286 — step_backward does not validate index before indexing
+  - [medium] rustre-trace-navigate lib.rs:1045 — NavigationHistory::push uses Vec::remove(0) for eviction
+  - [low] rustre-trace-navigate lib.rs:1396 — step_over_forward calls rebuild_to on every loop iteration
+  - [low] rustre-trace-navigate backward_nav.rs:322 — find_caller heuristic accepts any CALL where current_pc >= target
+  - [low] rustre-trace-navigate lib.rs:432 — idx_for_tsc assumes entries are sorted by TSC
+  - [low] rustre-trace-navigate time_travel_search.rs:915 — TimeTravelSearch::undo restores cursor to the found index, not the prior index
+  - [medium] rustre-trace-pt lib.rs:496 — TntLong stop-bit search crashes on zero payload
+  - [medium] rustre-trace-pt lib.rs:539 — CYC check excludes 0x03 but not all conflicting bytes
+  - [medium] rustre-trace-pt lib.rs:675 — PIP opcode check uses wrong second byte
+  - [medium] rustre-trace-pt lib.rs:2271 — exclude_kernel flag placed at wrong bit offset
+  - [medium] rustre-trace-pt lib.rs:2449 — AUX ring-buffer drain ignores monotonic head wrap
+  - [low] rustre-trace-pt lib.rs:2724 — Jcc rel8 fallthrough computed from binary offset not virtual IP
+  - [low] rustre-trace-pt lib.rs:386 — read_ip returns Some(0) for IpCompression::Zero without updating last_ip
+  - [medium] rustre-triage lib.rs:548 — PE optional-header offset off by 4
+  - [high] rustre-triage lib.rs:447 — ThreatScorer u32->u8 silent truncation
+  - [medium] rustre-triage lib.rs:1094 — ELF shstrtab overflow: sh_off + sh_strndx * sh_entsize can overflow usize
+  - [high] rustre-triage lib.rs:1587 — Mach-O LC_LOAD_DYLIB name slice can read past command boundary
+  - [medium] rustre-triage malware_classification.rs:127 — MalwareFamily::_FancyBear and _CozyBear are const Unknown(String::new()) used as canonical values
+  - [low] rustre-triage analyzer_registry.rs:240 — catch_unwind used with AssertUnwindSafe without verifying thread safety
+
+## Iteration 18
+- Batch (start=174): rustre-triage-die, rustre-triage-entropy, rustre-triage-peid, rustre-triage-yara, rustre-ttd, rustre-ttd-query, rustre-ttd-recorder, rustre-ttd-replay, rustre-ttd-replayer, rustre-yara, rustre-yara-engine, rustre-yara-rules, rustre-adb, rustre-agent, rustre-agent-llm, rustre-agent-prompts, rustre-agent-workflow, rustre-analysis, rustre-analysis-callconv, rustre-analysis-cfg
+- Findings: 137 raw / 39 confirmed / 0 fixed
+- Clippy clean: none
+- Build issues: 0 (final: has errors)
+- Confirmed bugs:
+  - [medium] rustre-triage-die lib.rs:398 — section count truncated from u16 to u8 silently
+  - [medium] rustre-triage-die lib.rs:805 — overlay end computed without bounding by raw_size
+  - [medium] rustre-triage-die lib.rs:858 — manifest detection false-positive via byte scan
+  - [medium] rustre-triage-die lib.rs:867 — wide-string case comparison on UTF-16 bytes is incorrect
+  - [medium] rustre-triage-die lib.rs:544 — entry-point section range uses virt_size.max(1) not raw_size
+  - [medium] rustre-triage-die detector_engine.rs:164 — confidence formula ignores per-signature weight
+  - [medium] rustre-triage-entropy lib.rs:385 — block offset u64 truncation in analyze_blocks
+  - [medium] rustre-triage-entropy heatmap_data.rs:375 — same usize-overflow in BlockHeatmap::build
+  - [medium] rustre-triage-entropy lib.rs:608 — e_lfanew read uses wrong field offsets
+  - [medium] rustre-triage-entropy section_entropy.rs:170 — Welford stddev update stores RMS not stddev
+  - [medium] rustre-triage-entropy section_entropy.rs:322 — running average of merged block entropy is wrong
+  - [low] rustre-triage-entropy lib.rs:729 — import count heuristic double-counts overlapping ".dll"/".DLL"
+  - [medium] rustre-triage-peid peid_extended.rs:408 — Rich search panics on short e_lfanew
+  - [medium] rustre-triage-peid peid_extended.rs:739 — u32 wrapping in section RVA comparison
+  - [medium] rustre-triage-peid peid_extended.rs:719-728 — opt_off+20 not bounds-checked before EP RVA read
+  - [low] rustre-triage-peid peid_db.rs:169-172 — full-file scan only checks at offset 0
+  - [low] rustre-triage-peid linker_detector.rs:400 — `search_end.min(pe_data.len())` still allows 0x80 panic
+  - [low] rustre-triage-peid userdb_parser.rs:219 — EmptyDatabase error for valid file with empty patterns
+  - [medium] rustre-triage-yara match_report.rs:35 — MatchOffset preview uses entire data slice instead of match bytes
+  - [medium] rustre-ttd lib.rs:703 — step_back returns wrong position
+  - [medium] rustre-ttd lib.rs:1496 — Watchpoint overlap check can overflow
+  - [medium] rustre-ttd lib.rs:1751 — TtdSequenceId::from(TracePosition) silently truncates step
+  - [medium] rustre-ttd nirvana_format.rs:1041 — decode_events silently drops trailing data on unknown tag
+  - [low] rustre-ttd nirvana_format.rs:393 — TtdModuleList::read allocates up to 4096 entries without validating count against stream
+  - [high] rustre-ttd-query lib.rs:795 — DataFlow query never matches anything
+  - [high] rustre-ttd-query lib.rs:1124 — Heap alloc/free classification by index parity
+  - [medium] rustre-ttd-query lib.rs:762 — CallChain ignores ordering — reports false positives
+  - [medium] rustre-ttd-query lib.rs:634 — `as u64` cast on `elapsed().as_millis()` silently truncates
+  - [medium] rustre-ttd-query lib.rs:828 — Sequence matcher never resets on mismatch — skips overlapping matches
+  - [medium] rustre-ttd-query lib.rs:2038 — Syscall number silently truncated from u64 to u32
+  - [medium] rustre-ttd-query query_optimizer.rs:443 — And-plan always joins qs[0] with qs[1] even for >2 sub-queries
+  - [medium] rustre-ttd-recorder lib.rs:942 — fetch_update closure stores pre-increment value
+  - [medium] rustre-ttd-recorder lib.rs:904 — u128 nanoseconds cast silently truncates high bits
+  - [low] rustre-ttd-recorder lib.rs:619 — `memory_events` metric uses integer division losing remainder
+  - [low] rustre-ttd-recorder lib.rs:625 — output path constructed from unvalidated `output_dir` string
+  - [low] rustre-ttd-recorder trace_writer.rs:144 — `payload.len() as u32` silently wraps for payloads > 4 GiB
+  - [low] rustre-ttd-recorder recording_policy.rs:735 — `notify_event` always passes `tid=0` to `should_record`
+  - [high] rustre-ttd-replay lib.rs:986-989 — run_forward_to_position rejects valid forward seek
+  - [high] rustre-ttd-replay lib.rs:1535 — metadata length silently truncated to u32

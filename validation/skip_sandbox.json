@@ -1,0 +1,10 @@
+[
+  {
+    "tool": "sandbox_vm_qemu_build_args",
+    "reason": "QMP socket path uses uuid::Uuid::new_v4() \u2014 non-deterministic"
+  },
+  {
+    "tool": "sandbox_behavior_record_mock_summary",
+    "reason": "BehaviorRecord::mock() has complex nested state; independent Python reference would duplicate non-trivial Rust logic"
+  }
+]

@@ -1,0 +1,76 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 158
+expression: "render_corpus(\"data movement (64-bit)\", 64, corpus)"
+---
+# data movement (64-bit)
+
+== mov rax, rbx (bits=64) ==
+-- mov rax,rbx [48 89 d8]
+   0x1000: rax.8 = rbx.8
+
+== mov eax, 0x12345678 (bits=64) ==
+-- mov eax,12345678h [b8 78 56 34 12]
+   0x1000: rax.8 = zx(0x12345678.4, 4->8)
+
+== mov rax, 0x1122334455667788 (bits=64) ==
+-- mov rax,1122334455667788h [48 b8 88 77 66 55 44 33 22 11]
+   0x1000: rax.8 = 0x1122334455667788.8
+
+== mov rax, [rbx] (bits=64) ==
+-- mov rax,[rbx] [48 8b 03]
+   0x1000: rax.8 = [rbx.8].8
+
+== mov [rbx+8], rax (bits=64) ==
+-- mov [rbx+8],rax [48 89 43 08]
+   0x1000: [(rbx.8 + 0x8.8).8].8 = rax.8
+
+== mov eax, [rbx+rcx*4+0x10] (bits=64) ==
+-- mov eax,[rbx+rcx*4+10h] [8b 44 8b 10]
+   0x1000: rax.8 = zx([((rbx.8 + (rcx.8 * 0x4.8).8).8 + 0x10.8).8].4, 4->8)
+
+== movzx eax, bl (bits=64) ==
+-- movzx eax,bl [0f b6 c3]
+   0x1000: rax.8 = zx(zx(bl.1, 1->4), 4->8)
+
+== movzx eax, word [rbx] (bits=64) ==
+-- movzx eax,word ptr [rbx] [0f b7 03]
+   0x1000: rax.8 = zx(zx([rbx.8].2, 2->4), 4->8)
+
+== movsx rax, bl (bits=64) ==
+-- movsx rax,bl [48 0f be c3]
+   0x1000: rax.8 = sx(bl.1, 1->8)
+
+== movsxd rax, ecx (bits=64) ==
+-- movsxd rax,ecx [48 63 c1]
+   0x1000: rax.8 = sx(low(rcx.8, 4), 4->8)
+
+== lea rax, [rbx+rcx*4+8] (bits=64) ==
+-- lea rax,[rbx+rcx*4+8] [48 8d 44 8b 08]
+   0x1000: rax.8 = ((rbx.8 + (rcx.8 * 0x4.8).8).8 + 0x8.8).8
+
+== lea rax, [rip+0x100] (bits=64) ==
+-- lea rax,[1107h] [48 8d 05 00 01 00 00]
+   0x1000: rax.8 = 0x1107.8
+
+== xchg rax, rbx (bits=64) ==
+-- xchg rbx,rax [48 87 d8]
+   0x1000: tmp0.8 = rax.8
+   0x1000: rax.8 = rbx.8
+   0x1000: rbx.8 = tmp0.8
+
+== push rax (bits=64) ==
+-- push rax [50]
+   0x1000: push.8 rax.8
+
+== push 0x55 (bits=64) ==
+-- push 55h [6a 55]
+   0x1000: push.8 0x55.8
+
+== pop rbx (bits=64) ==
+-- pop rbx [5b]
+   0x1000: rbx.8 = pop
+
+== push qword [rax] (bits=64) ==
+-- push qword ptr [rax] [ff 30]
+   0x1000: push.8 [rax.8].8

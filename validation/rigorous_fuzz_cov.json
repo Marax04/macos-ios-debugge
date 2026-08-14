@@ -1,0 +1,28 @@
+{
+  "module": "fuzz_cov",
+  "tools_hardened": [
+    "fuzz_cov_coverage_diff",
+    "fuzz_cov_coverage_fraction",
+    "fuzz_cov_coverage_run_merge",
+    "fuzz_cov_coverage_run_was_hit_x",
+    "fuzz_cov_diff_jaccard",
+    "fuzz_cov_drcov_basic_block_abs_addr_x",
+    "fuzz_cov_drcov_entry_end_addr",
+    "fuzz_cov_drcov_module_contains",
+    "fuzz_cov_drcov_module_to_offset_x",
+    "fuzz_cov_drcov_module_v2_contains_x",
+    "fuzz_cov_drcov_module_v2_size",
+    "fuzz_cov_edge_map_has_edge_x",
+    "fuzz_cov_lcov_aggregate_by_file",
+    "fuzz_cov_lcov_fully_covered_x",
+    "fuzz_cov_lcov_line_pct",
+    "fuzz_cov_lcov_parse",
+    "fuzz_cov_pcguard_density",
+    "fuzz_cov_pcguard_hash",
+    "fuzz_cov_rle_encode",
+    "fuzz_cov_rle_is_beneficial"
+  ],
+  "checks_passed": 37,
+  "checks_failed": 0,
+  "mismatches": []
+}

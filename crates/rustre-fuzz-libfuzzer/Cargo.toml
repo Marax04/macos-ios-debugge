@@ -1,0 +1,29 @@
+[package]
+name = "rustre-fuzz-libfuzzer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-fuzz = { path = "../rustre-fuzz" }
+# rustre-fuzz dependency intentionally omitted: rustre-fuzz is the umbrella crate
+# that aggregates the fuzz backends, so it depends on us, not the other way.
+rustre-fuzz-afl = { path = "../rustre-fuzz-afl" }
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+rayon.workspace = true
+bitflags = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

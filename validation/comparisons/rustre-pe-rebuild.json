@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-pe-rebuild",
+  "tests": 0,
+  "mismatches": 0,
+  "match": false,
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "notes": "No MCP wire tools expose rustre-pe-rebuild functionality. Searched crates/rustre-mcp-tools/src/wire_tools.rs, rustre-mcp-tools and rustre-mcp-server: zero matches for 'pe_rebuild', 'pe-rebuild', 'PeRebuild'. The Python validator (validation/validators/rustre-pe-rebuild.py) is a stdlib-only reference implementation of the documented public API (PeRebuilder, RelocationTableBuilder, IatFixer, OepDetector, ExportRebuilder, etc.) and exposes no CLI/JSON interface (only an `if __name__ == \"__main__\":` smoke test that prints 'OK'). Comparison is not executable until MCP wire tools for the pe-rebuild crate are added.",
+  "mismatches_detail": []
+}

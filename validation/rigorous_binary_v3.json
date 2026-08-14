@@ -1,0 +1,22 @@
+{
+  "category": "binary",
+  "note": "All binary.* tools were already hardened in rigorous_binary_v2.json. No remaining tools found with the binary.* prefix. Non-binary.* tools that contain 'binary' in their name belong to other categories (crypto_id, patch, trace_coverage, etc.) and are out of scope for this file.",
+  "tools_hardened": 0,
+  "tools_passed": 0,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [],
+  "prior_coverage": {
+    "file": "rigorous_binary_v2.json",
+    "tools": [
+      "binary.info",
+      "binary.hexdump",
+      "binary.read",
+      "binary.entropy",
+      "binary.search_bytes",
+      "binary.search_strings"
+    ],
+    "all_passed": true
+  }
+}

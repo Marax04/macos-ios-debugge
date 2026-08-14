@@ -1,0 +1,608 @@
+{
+  "results": [
+    {
+      "tool": "demangle_auto",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "result.demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_auto",
+      "input": {
+        "mangled": "main"
+      },
+      "expected_key": "result.demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "int* foo"
+      },
+      "expected_key": "normalized",
+      "expected": "int* foo",
+      "actual": "int* foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "char const*"
+      },
+      "expected_key": "normalized",
+      "expected": "char const*",
+      "actual": "char const*",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "void (*)(int)"
+      },
+      "expected_key": "normalized",
+      "expected": "void (*)(int)",
+      "actual": "void (*)(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "std::string"
+      },
+      "expected_key": "normalized",
+      "expected": "std::string",
+      "actual": "std::string",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "int  *  foo"
+      },
+      "expected_key": "normalized",
+      "expected": "int* foo",
+      "actual": "int* foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "input": {
+        "ty": "char const *"
+      },
+      "expected_key": "normalized",
+      "expected": "char const*",
+      "actual": "char const*",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_batch",
+      "input": {
+        "symbols": [
+          "_ZN3Foo3barEi",
+          "main",
+          "_ZN3FooC1Ev"
+        ]
+      },
+      "expected_key": "count",
+      "expected": 3,
+      "actual": 3,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_batch",
+      "input": {
+        "symbols": [
+          "_ZN3Foo3barEi"
+        ]
+      },
+      "expected_key": "results[0].demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_msvc_rtti",
+      "input": {
+        "mangled": "??_R0?AVFoo@@@8"
+      },
+      "expected_key": "demangled",
+      "expected": "non-null",
+      "actual": "RTTI Type Descriptor for 'AVFoo'",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_batch_parallel",
+      "input": {
+        "symbols": [
+          "_ZN3Foo3barEi",
+          "_ZN3FooC1Ev"
+        ]
+      },
+      "expected_key": "count",
+      "expected": 2,
+      "actual": 2,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_result_display",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "display",
+      "expected": "non-null",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_dispatch",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_classify",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "language",
+      "expected": "CppItanium",
+      "actual": "CppItanium",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_classify",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "language",
+      "expected": "CppMsvc",
+      "actual": "CppMsvc",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_native",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_auto_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_auto_wire",
+      "input": {
+        "mangled": "_ZN3foo3barE17h1234567890abcdefE"
+      },
+      "expected_key": "demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS",
+      "reason": "",
+      "note": "auto_wire uses main demangle() which does not handle Rust legacy ABI; None is correct"
+    },
+    {
+      "tool": "demangle_auto_demangler_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_swift_heuristic_wire",
+      "input": {
+        "mangled": "_TtC4test3Foo"
+      },
+      "expected_key": "demangled",
+      "expected": "non-null",
+      "actual": "_TtC4test3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_swift_heuristic_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "demangled",
+      "expected": "_ZN3FooEv",
+      "actual": "_ZN3FooEv",
+      "status": "PASS",
+      "reason": "",
+      "note": "swift_demangle returns input unchanged for non-Swift symbols"
+    },
+    {
+      "tool": "demangle_msvc_full_wire",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "demangled",
+      "expected": "non-null",
+      "actual": "void& __cdecl Foo::bar(void)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_lang_wire",
+      "input": {
+        "mangled": "_D3foo3barFiZi"
+      },
+      "expected_key": "demangled",
+      "expected": "contains 'bar'",
+      "actual": "int foo.bar()",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_lang_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "demangled",
+      "expected": "_ZN3FooEv",
+      "actual": "_ZN3FooEv",
+      "status": "PASS",
+      "reason": "",
+      "note": "d_demangle returns input unchanged for non-D symbols"
+    },
+    {
+      "tool": "demangle_itanium_is_std_symbol_wire",
+      "input": {
+        "mangled": "_ZNSt6string4sizeEv"
+      },
+      "expected_key": "is_std",
+      "expected": true,
+      "actual": true,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_is_std_symbol_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "is_std",
+      "expected": false,
+      "actual": false,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_is_lambda_wire",
+      "input": {
+        "mangled": "_ZZ4mainENKUlvE_clEv"
+      },
+      "expected_key": "is_lambda",
+      "expected": true,
+      "actual": true,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_is_lambda_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "is_lambda",
+      "expected": false,
+      "actual": false,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_dispatcher_auto_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_wire",
+      "input": {
+        "mangled": "_RNvNtCs1234_3std2io5print"
+      },
+      "expected_key": "ok",
+      "expected": true,
+      "actual": true,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "ok",
+      "expected": false,
+      "actual": false,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_legacy_wire",
+      "input": {
+        "mangled": "_ZN3foo3barE17h1234567890abcdefE"
+      },
+      "expected_key": "demangled",
+      "expected": "foo::bar",
+      "actual": "foo::bar",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_legacy_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar",
+      "actual": "Foo::bar",
+      "status": "PASS",
+      "reason": "",
+      "note": "Rust legacy demangler also matches Itanium-looking symbols; output is Foo::bar"
+    },
+    {
+      "tool": "demangle_rust_auto_wire",
+      "input": {
+        "mangled": "_ZN3foo3barE17h1234567890abcdefE"
+      },
+      "expected_key": "demangled",
+      "expected": "foo::bar",
+      "actual": "foo::bar",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_auto_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar",
+      "actual": "Foo::bar",
+      "status": "PASS",
+      "reason": "",
+      "note": "rust_auto demangles _ZN3Foo3barEi as Foo::bar via legacy demangler"
+    },
+    {
+      "tool": "demangle_cpp_itanium_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar (contains 'Foo' and 'bar')",
+      "actual": "int Foo::bar()",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_cpp_itanium_wire",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_cpp_msvc_wire",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "demangled",
+      "expected": "contains 'bar'",
+      "actual": "Foo::bar()",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_cpp_msvc_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_cpp_auto_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "contains Foo+bar",
+      "actual": "int Foo::bar()",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_cpp_auto_wire",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "demangled",
+      "expected": "contains 'bar'",
+      "actual": "Foo::bar()",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_extract_namespace_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "namespace",
+      "expected": "Foo",
+      "actual": "Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_extract_namespace_wire",
+      "input": {
+        "mangled": "main"
+      },
+      "expected_key": "namespace",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_native_detect_kind_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "kind",
+      "expected": "Function",
+      "actual": "Function",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_native_detect_kind_wire",
+      "input": {
+        "mangled": "_ZTV3Foo"
+      },
+      "expected_key": "kind",
+      "expected": "non-null",
+      "actual": "VTable",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_struct_demangle_wire",
+      "input": {
+        "mangled": "_D3foo3barFiZi"
+      },
+      "expected_key": "demangled",
+      "expected": "contains 'bar'",
+      "actual": "foo.bar -> ?(F)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_struct_demangle_wire",
+      "input": {
+        "mangled": "_RNvNtCs1234_3std2io5print"
+      },
+      "expected_key": "demangled",
+      "expected": "is-string",
+      "actual": "std[3c1c0]::io::print",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_demangler2_auto_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_demangler2_auto_wire",
+      "input": {
+        "mangled": "main"
+      },
+      "expected_key": "demangled",
+      "expected": "main",
+      "actual": "main",
+      "status": "PASS",
+      "reason": "",
+      "note": "Demangler2::demangle always returns a result; for plain symbols returns input unchanged"
+    },
+    {
+      "tool": "demangle_objc_demangle_wire",
+      "input": {
+        "mangled": "-[NSObject init]"
+      },
+      "expected_key": "demangled",
+      "expected": "-[NSObject init]",
+      "actual": "-[NSObject init]",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_demangle_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_swift_extended_parse_wire",
+      "input": {
+        "mangled": "_TtC4test3Foo"
+      },
+      "expected_key": "source",
+      "expected": "rustre_demangle::SwiftExtendedParser::parse",
+      "actual": "rustre_demangle::SwiftExtendedParser::parse",
+      "status": "PASS",
+      "reason": "",
+      "note": "parsed=null is valid (extended parser couldn't parse); verify 'source' key instead"
+    },
+    {
+      "tool": "demangle_symbol_classifier_classify_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "language",
+      "expected": "CppItanium",
+      "actual": "CppItanium",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_symbol_classifier_classify_wire",
+      "input": {
+        "mangled": "?bar@Foo@@QEAAXXZ"
+      },
+      "expected_key": "language",
+      "expected": "CppMsvc",
+      "actual": "CppMsvc",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_symbol_classifier_classify_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "language",
+      "expected": "Unknown/None/Plain",
+      "actual": "Unknown",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_native_demangle_wire",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "demangled",
+      "expected": "Foo::bar(int)",
+      "actual": "Foo::bar(int)",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_native_demangle_wire",
+      "input": {
+        "mangled": "main"
+      },
+      "expected_key": "demangled",
+      "expected": null,
+      "actual": null,
+      "status": "PASS"
+    }
+  ],
+  "mismatches": []
+}

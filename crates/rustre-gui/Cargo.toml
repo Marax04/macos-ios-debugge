@@ -1,0 +1,141 @@
+[package]
+license.workspace = true
+name = "zyphora"
+version = "0.1.0"
+edition = "2021"
+authors = ["Zyphora Reversing Dev Team"]
+description = "Zyphora Reversing — professional reverse-engineering workstation, powered by GPUI"
+build = "build.rs"
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "zyphora"
+path  = "src/main.rs"
+
+# ─────────────────────────────────────────────
+#  Core UI framework
+# ─────────────────────────────────────────────
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", package = "gpui_platform" }
+
+# ─────────────────────────────────────────────
+#  Utility / async / data
+# ─────────────────────────────────────────────
+serde             = { version = "1.0",  features = ["derive"] }
+serde_json        = "1.0"
+log               = "0.4"
+env_logger        = "0.11"
+once_cell         = "1.19"
+parking_lot       = "0.12"
+crossbeam-channel = "0.5"
+rayon             = "1.10"
+indexmap          = { version = "2.2", features = ["serde"] }
+rustc-hash        = "2.0"
+lru               = "0.12"
+regex             = "1.10"
+hex               = "0.4"
+byteorder         = "1.5"
+memmap2           = "0.9"
+object            = { version = "0.36", features = ["all"] }
+capstone          = "0.12"
+thiserror         = "2.0"
+anyhow            = "1.0"
+uuid              = { version = "1.8",  features = ["v4"] }
+chrono            = { version = "0.4",  features = ["serde"] }
+dirs              = "5.0"
+smallvec          = { version = "1.13", features = ["serde"] }
+bitflags          = { version = "2.5", features = ["serde"] }
+rusqlite          = { workspace = true }
+include_dir       = "0.7"
+
+# Backend IL crates for decompiler IL-level switching, pass pipeline control,
+# and MLIL type recovery surfaced in the types panel.
+rustre-il-mlil    = { path = "../rustre-il-mlil" }
+
+# Function-detection backend used by the load-binary linear sweep + prologue
+# scan pass (the same crate the MCP tool `analysis.fn.detect_functions` wraps).
+rustre-core         = { path = "../rustre-core" }
+rustre-analysis-fn  = { path = "../rustre-analysis-fn" }
+
+# Backend decompiler crates wired into the Decompiler tab to lift
+# CFG + instructions to pseudo-C (control flow, calls, returns,
+# conditional structures) instead of emitting only variable stubs.
+rustre-decompiler      = { path = "../rustre-decompiler" }
+rustre-decompiler-c    = { path = "../rustre-decompiler-c" }
+rustre-decompiler-cfs  = { path = "../rustre-decompiler-cfs" }
+rustre-decompiler-type = { path = "../rustre-decompiler-type" }
+
+# Backend YARA crates wired into the YARA panel: pure-Rust rule parser
+# (rustre-yara), yara-x backed scanner (rustre-yara-engine), and the curated
+# rule repository / built-in rule library (rustre-yara-rules).
+rustre-yara         = { path = "../rustre-yara" }
+rustre-yara-engine  = { path = "../rustre-yara-engine" }
+rustre-yara-rules   = { path = "../rustre-yara-rules" }
+
+# Backend FLIRT crates surfaced in the FLIRT signature-database panel
+# (`ui/panels/flirt_panel.rs`): pattern model + matcher (rustre-flirt),
+# scanner/applier against a `.sig`/`.pat` corpus (rustre-flirt-apply), and
+# library/sig writer used by the catalog-builder workflow (rustre-flirt-gen).
+rustre-flirt        = { path = "../rustre-flirt" }
+rustre-flirt-apply  = { path = "../rustre-flirt-apply" }
+rustre-flirt-gen    = { path = "../rustre-flirt-gen" }
+
+# Three additional naming sources combined with the FLIRT pass:
+#   1) PDB sidecar reader (Microsoft CodeView)
+#   2) Microsoft Symbol Server downloader (for system DLLs)
+#   3) Demangler for residual mangled names recovered from PDB/exports
+rustre-symbols-pdb  = { path = "../rustre-symbols-pdb" }
+rustre-symbols-dwarf = { path = "../rustre-symbols-dwarf" }
+reqwest             = { workspace = true }
+tokio               = { workspace = true }
+
+# Backend triage crates wired into entropy_view + overview: entropy/packer
+# stats (rustre-triage-entropy), PEiD-style fingerprint database
+# (rustre-triage-peid), and DIE-style detection rules (rustre-triage-die).
+rustre-triage          = { path = "../rustre-triage" }
+rustre-triage-entropy  = { path = "../rustre-triage-entropy" }
+rustre-triage-peid     = { path = "../rustre-triage-peid" }
+rustre-triage-die      = { path = "../rustre-triage-die" }
+
+# Backend network crates wired into network_panel: high-level wrapper
+# (rustre-net) and protocol dissector (rustre-net-dissect).
+rustre-net            = { path = "../rustre-net" }
+rustre-net-dissect    = { path = "../rustre-net-dissect" }
+rustre-net-pcap       = { path = "../rustre-net-pcap" }
+
+# Backend debugger hub wired into memory_search panel and the future
+# debugger UI: the trait crate (`rustre-debug`) re-exports `rustre-mem`
+# and registers every backend sub-crate (linux/windows/macos/gdb/kgdb/
+# windbg/frida/unicorn). The panel calls into `rustre_debug::memory_search`
+# for pattern / integer / string searches over attached-process memory.
+rustre-debug          = { path = "../rustre-debug" }
+
+# PE-format-specific symbol extraction: drives the PE export/import/Codeview
+# branches of `BinaryLoader::symbols()` so Rust-mangled functions show up in
+# the symbol panel even when the `object` crate sees no COFF symbol table.
+rustre-loader-pe       = { path = "../rustre-loader-pe" }
+# rustre-symbols-codeview absorbed into rustre-debug::codeview (2026-07-12).
+rustre-demangle        = { path = "../rustre-demangle" }
+
+# Hashing crates used by the overview panel to compute MD5 / SHA-1 / SHA-256
+# digests of the loaded binary buffer.
+sha1                  = "0.10"
+sha2                  = "0.10"
+md-5                  = "0.10"
+
+# Backend MCP tool registry/executor surfaced in the right-side "MCP Chat"
+# panel (`ui/panels/mcp_panel.rs`), and the LLM backend surfaced in the
+# right-side "AI Annotations" panel (`ui/panels/ai_panel.rs`).
+rustre-mcp-tools      = { path = "../rustre-mcp-tools" }
+rustre-agent-llm      = { path = "../rustre-agent-llm" }
+
+# ─────────────────────────────────────────────
+#  Build
+# ─────────────────────────────────────────────
+[build-dependencies]
+winres = "0.1"
+

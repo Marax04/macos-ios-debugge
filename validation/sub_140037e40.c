@@ -1,0 +1,112 @@
+__int64 sub_140028050();
+__int64 sub_1400281E0();
+__int64 sub_1400F1D90();
+__int64 sub_1400F2808();
+__int64 sub_140037FEF();
+__int64 sub_1400380CB();
+__int64 off_1401081B8();
+__int64 off_140108060();
+extern __int64 off_140112008;
+extern __int64 off_140038230;
+extern __int64 off_1401081A8;
+extern __int64 off_1401081B0;
+
+__int64 __fastcall sub_140037E40() {
+    __int64 rsp;
+    int arg_1000;
+    int arg_1004;
+    int arg_1008;
+    int arg_1010;
+    int arg_fb0;
+    int arg_fc0;
+    __int64 arg_fc8;
+    int arg_fd8;
+    int arg_fe0;
+    int arg_ffc;
+    int v_10;
+    int v_20;
+    int v_28;
+    int v_30;
+    int v_38;
+    int v_4;
+    int v_40;
+    int v_8;
+    char *str;
+    __int64 v9;
+    __int64 v6;
+    __m128i xmm0;
+    __int64 v3;
+    __int64 v4;
+    int v1;
+    __m128i xmm6;
+    __int64 v7;
+    __int64 v8;
+    __int64 v5;
+    __int64 v2;
+
+    v9 = rsp + 96;
+    v_8 = 0;
+    v_4 = 0;
+    v6 = &off_140112008;
+    v_40 = v6;
+    v_38 = 1;
+    v_30 = 8;
+    xmm0 = _mm_setzero_si128();
+    _mm_storeu_si128((__m128i *)&v_28, xmm0);
+    v3 = v9 - 8;
+    v4 = v9 - 64;
+    sub_140028050(v3, v4);
+    v_10 = v6;
+    v3 = v9 - 16;
+    sub_1400281E0(v3);
+    /* int $41 */;
+    v1 = 0x10A8;
+    sub_1400F1D90(7);
+    v9 = rsp + 128;
+    _mm_store_si128((__m128i *)&arg_1010, xmm6);
+    arg_1008 = -2;
+    arg_fd8 = v4;
+    arg_fe0 = v3;
+    v3 = v9 - 80;
+    sub_1400F2808(v3, 0, 0x1000);
+    xmm6 = _mm_setzero_si128();
+    v7 = &off_140038230;
+    v8 = off_1401081A8;
+    v5 = off_1401081B0;
+    arg_ffc = 0;
+    _mm_store_si128((__m128i *)&arg_fb0, xmm6);
+    arg_fc0 = 0;
+    arg_fc8 = (__int64)str;
+    v_20 = v7;
+    v3 = arg_fe0;
+    v4 = v9 - 80;
+    off_1401081B8(v3, v4, 0x1000);
+    if (v1 == 0) {
+        off_140108060(v3);
+        v2 = v1;
+        v2 <<= 32;
+        v2 |= 2;
+        v3 = v2;
+    } else {
+        do {
+            ((__int64 (*)())v5)(0xFFFFFFFF, 1);
+        } while (arg_ffc != 1);
+        v1 = arg_1000;
+        v2 = arg_1004;
+        v3 = v6;
+        v3 <<= 32;
+        v3 |= 2;
+        if (v1 != 0) v2 = v3;
+        if (v1 == 0) {
+            return sub_140037FEF();
+        }
+    }
+    v1 = v3;
+    v1 &= 3;
+    v3 >>= 32;
+    if (v1 == 2) JUMPOUT(0x140037fe0);
+    v1 = 0;
+    if (v3 == 11) v2 = v6;
+    if (v3 == 11) JUMPOUT(0x140037fef);
+    return sub_1400380CB();
+}

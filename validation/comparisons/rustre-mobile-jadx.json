@@ -1,0 +1,22 @@
+{
+  "crate": "rustre-mobile-jadx",
+  "mcp_surface": "none",
+  "note": "rustre-mobile-jadx is a workspace library crate (Dalvik opcode table, JADX CLI wrapper, FQCN/source path mapping, DecompiledProject stats). It is NOT exposed via the MCP server: no references to 'jadx' or 'mobile_jadx' under crates/rustre-mcp-tools. JSON-RPC stdio comparison against C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe is therefore N/A.",
+  "validator": "validation/validators/rustre-mobile-jadx.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 5,
+    "all_passed": true,
+    "checked_against_report": {
+      "DALVIK_OPCODES": "21 entries; 0x0e=return-void, 0x1a=const-string, 0x6e=invoke-virtual, 0x71=invoke-static, 0x90=add-int, 0x37=if-le, 0xff=None",
+      "fqcn_to_source_path": "out + 'sources/' + fqcn.replace('.','/') + '.java' verified for simple/inner/root",
+      "build_jadx_argv": "minimal/deobf/all_flags produce expected argv with --output-dir, --deobf, --show-bad-code, --no-res, --threads-count",
+      "success_rate": "0/0=0.0, 10/0=1.0, 10/5=0.5, 7/7=0.0",
+      "find_jadx_order": "no env -> PATH candidates first (21 entries); with JADX_PATH -> env first then PATH"
+    }
+  },
+  "tests": 5,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

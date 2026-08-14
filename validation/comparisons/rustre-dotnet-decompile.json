@@ -1,0 +1,48 @@
+{
+  "crate": "rustre-dotnet-decompile",
+  "mcp_binary": "C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe",
+  "validator": "C:/Users/Fra/Desktop/RustRE/validation/validators/rustre-dotnet-decompile.py",
+  "note": "No MCP tool surface exposes rustre-dotnet-decompile directly (internal library crate). Comparison is between the validator's reference helpers and the crate's exported pure helpers, cross-checked against crate unit tests.",
+  "tests": [
+    {
+      "name": "is_closure_class",
+      "validator_result": "pass (closure_yes, closure_c, closure_no, closure_empty)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/linq_recovery.rs:554",
+      "match": true
+    },
+    {
+      "name": "infer_type_from_element",
+      "validator_result": "pass (et_void, et_i4, et_string, et_object, et_unknown)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/lib.rs:7223",
+      "match": true
+    },
+    {
+      "name": "stack_effect",
+      "validator_result": "pass (nop, add, dup, pop, ldstr, unknown, case-insensitive)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/lib.rs:5296",
+      "match": true
+    },
+    {
+      "name": "simplify_expr",
+      "validator_result": "pass (whitespace, redundant parens, balanced check)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/lib.rs:7590",
+      "match": true
+    },
+    {
+      "name": "detect_linq_chains",
+      "validator_result": "pass (single chain Where->Select->ToList in correct order)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/linq_recovery.rs:656",
+      "match": true
+    },
+    {
+      "name": "find_state_switch",
+      "validator_result": "pass (locates switch opcode with targets, returns None otherwise)",
+      "crate_source": "crates/rustre-dotnet-decompile/src/async_recovery.rs:604",
+      "match": true
+    }
+  ],
+  "validator_summary": { "total": 23, "passed": 23, "failed": [] },
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

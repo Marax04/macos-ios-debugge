@@ -1,0 +1,51 @@
+{
+  "crate": "rustre-yara-engine",
+  "tests": 3,
+  "mcp_outputs": {
+    "yara_compile": {
+      "input": {"source": "rule test_mz { strings: $a = \"MZ\" condition: $a }"},
+      "output": {"ruleset_id": "yara-163a63e3567a2823", "rule_count": 1, "status": "compiled"}
+    },
+    "yara_scan_file_exe": {
+      "input": {"path": "rustre-mcp.exe", "ruleset_id": "yara-163a63e3567a2823"},
+      "output": {
+        "matched": true,
+        "match_count": 7,
+        "matches_rules": ["findcrypt_AES_SBOX", "findcrypt_AES_INV_SBOX", "findcrypt_MD5_IV", "findcrypt_SHA256_K0", "findcrypt_RC4_KSA", "findcrypt_RSA_pubexp_65537", "packer_UPX_magic"]
+      },
+      "note": "MCP scan uses built-in findcrypt rules, NOT the user-compiled rule 'test_mz' (ruleset_id ignored or merged with builtins)"
+    },
+    "yara_scan_file_py": {
+      "input": {"path": "rustre-yara-engine.py", "ruleset_id": "yara-163a63e3567a2823"},
+      "output": {"matched": false, "match_count": 0, "matches": []}
+    }
+  },
+  "validator_outputs": {
+    "yara_compile": {
+      "equivalent": "YaraRuleSet.add_rule + compile",
+      "output": {"rule_count": 1, "is_compiled": true}
+    },
+    "yara_scan_file_exe": {
+      "equivalent": "YaraEngineScanner.scan_file",
+      "output": {"matches": [], "match_count": 0},
+      "note": "Python validator stub returns empty list for scan_bytes"
+    },
+    "yara_scan_file_py": {
+      "equivalent": "YaraEngineScanner.scan_file",
+      "output": {"matches": [], "match_count": 0}
+    }
+  },
+  "mismatches": [
+    {
+      "test": "yara_compile",
+      "kind": "schema",
+      "detail": "MCP returns ruleset_id+status; validator has no equivalent return shape (compile() is void). Rule_count matches (1)."
+    },
+    {
+      "test": "yara_scan_file_exe",
+      "kind": "behavior",
+      "detail": "MCP returned 7 matches (built-in findcrypt rules auto-applied); validator returned 0 matches (scan_bytes is stub). Fundamental behavioral divergence."
+    }
+  ],
+  "match": false
+}

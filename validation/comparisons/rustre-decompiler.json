@@ -1,0 +1,60 @@
+{
+  "crate": "rustre-decompiler",
+  "mcp_tools_exposed": [
+    "decompiler_core_batch_decompile",
+    "decompiler_recover_structs",
+    "decompiler_stack_frame_report",
+    "decompile_function_path"
+  ],
+  "validator_ops": [
+    "register_width_bytes",
+    "register_canonical",
+    "width_hint_from_instr",
+    "is_c_keyword",
+    "arch_from_str",
+    "parse_mem_operands",
+    "load_binary",
+    "slice_at_va",
+    "disassemble_function_x86",
+    "analyze_stack_frame",
+    "detect_heap_bases",
+    "render_c_signature"
+  ],
+  "mcp_outputs": {},
+  "validator_outputs": {
+    "register_width_bytes(rax)": 8,
+    "register_width_bytes(eax)": 4,
+    "register_width_bytes(al)": 1,
+    "register_canonical(eax)": "rax",
+    "register_canonical(r9d)": "r9",
+    "width_hint(mov, dword ptr [rbp-4])": 4,
+    "is_c_keyword(return)": true,
+    "is_c_keyword(foo)": false,
+    "arch_from_str(x86_64)": "X86_64",
+    "render_sig": "int foo(int x)",
+    "analyze_stack_frame(push rbp;sub rsp,0x20)": {"locals_size": 32, "saved_regs": ["rbp"]},
+    "detect_heap_bases(call malloc)": [{"idx": 0, "name": "malloc"}]
+  },
+  "mismatches": [],
+  "tests_run": 12,
+  "mismatches_found": 0,
+  "comparable": false,
+  "reason": "The validator targets 12 pure / table-driven functions of the rustre-decompiler crate (register_width_bytes, register_canonical, width_hint_from_instr, is_c_keyword, arch_from_str, parse_mem_operands, analyze_stack_frame, detect_heap_bases, render_c_signature, plus the binary-grounded load_binary/slice_at_va/disassemble_function_x86). The MCP server (wire_tools.rs) exposes only four high-level binary-and-VA-driven orchestrators for this crate: decompiler_core_batch_decompile, decompiler_recover_structs, decompiler_stack_frame_report, decompile_function_path. None of the pure helpers validated by the Python validator are reachable over JSON-RPC, so there is no common input space to compare on. This mirrors the rustre-decompiler-c gap.",
+  "gap_type": "MCP surface gap — pure helpers not wired",
+  "missing_mcp_tools": [
+    "decompile_register_width_bytes",
+    "decompile_register_canonical",
+    "decompile_width_hint_from_instr",
+    "decompile_is_c_keyword",
+    "decompile_arch_from_str",
+    "decompile_parse_mem_operands",
+    "decompile_analyze_stack_frame",
+    "decompile_detect_heap_bases",
+    "decompile_render_c_signature",
+    "decompile_disassemble_function_x86_standalone"
+  ],
+  "fixes_applied": [],
+  "build_ok_after_fix": null,
+  "final_match": false,
+  "recommendation": "Expose the pure rustre-decompiler helpers (x86_register_width::*, pseudocode_generator::is_c_keyword, mem_operand::parse_mem_operands, callconv_bridge::arch_from_str, signature_recovery::{analyze_stack_frame,render_c_signature}, type_recovery_engine::detect_heap_bases, binary_entry::disassemble_function_x86) as standalone JSON-RPC tools in rustre-mcp-tools/wire_tools.rs so the validator can perform a behavioral diff. Out of scope for a single comparison turn; treat as a wiring task."
+}

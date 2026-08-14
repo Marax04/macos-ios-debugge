@@ -1,0 +1,22 @@
+{
+  "crate": "rustre-debug-windbg",
+  "mcp_tools_exposed": [],
+  "validator": "validation/validators/rustre-debug-windbg.py",
+  "validator_self_check": true,
+  "tests": [
+    {
+      "name": "validator_self_validation",
+      "result": "pass",
+      "output": {"crate": "rustre-debug-windbg", "validated": true}
+    },
+    {
+      "name": "mcp_tool_exposure_check",
+      "result": "n/a",
+      "note": "Crate rustre-debug-windbg is not exposed via rustre-mcp.exe; no debug.windbg.* JSON-RPC tools registered. Validator is a self-contained simulation of the crate's expected behavior, not a comparison target for MCP I/O."
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "No mismatch possible: the MCP server does not expose rustre-debug-windbg functionality. Validator runs standalone and self-asserts."
+}

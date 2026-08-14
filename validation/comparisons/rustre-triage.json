@@ -1,0 +1,20 @@
+{
+  "crate": "rustre-triage",
+  "binary": "target/release/rustre-cli.exe",
+  "tools_tested": ["triage_entropy_packing_indicators", "survey_binary"],
+  "tests": 10,
+  "mismatches": 0,
+  "match": true,
+  "results": [
+    {"test": "file_kind",        "mcp": "Pe64",                                                              "python": "Pe64",                                                              "match": true},
+    {"test": "sha256",           "mcp": "add24a11020f82f544e7258b4994ddc42ec8569429799d838600887f9d07e22e", "python": "add24a11020f82f544e7258b4994ddc42ec8569429799d838600887f9d07e22e", "match": true},
+    {"test": "md5",              "mcp": "4a37923eae5260989db9bfc86019b3ba",                                 "python": "4a37923eae5260989db9bfc86019b3ba",                                 "match": true},
+    {"test": "entropy_rating",   "mcp": "High",                                                              "python": "High",                                                              "match": true},
+    {"test": "block_count",      "mcp": 63,                                                                  "python": 63,                                                                  "match": true},
+    {"test": "top_block_offset", "mcp": 200704,                                                              "python": 200704,                                                              "match": true},
+    {"test": "section_count",    "mcp": 5,                                                                   "python": 5,                                                                   "match": true},
+    {"test": "is_likely_packed", "mcp": false,                                                               "python": false,                                                               "match": true},
+    {"test": "findcrypt_hits",   "mcp": 0,                                                                   "python": 0,                                                                   "match": true},
+    {"test": "suspicious_imports","mcp": 0,                                                                  "python": 0,                                                                   "match": true}
+  ]
+}

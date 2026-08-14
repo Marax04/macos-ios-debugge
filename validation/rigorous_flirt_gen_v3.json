@@ -1,0 +1,254 @@
+{
+  "module": "flirt_gen",
+  "version": "v3",
+  "tools_hardened": 26,
+  "checks_passed": 26,
+  "checks_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "tool_results": [
+    {
+      "tool": "flirt_gen_crc16_sig_header_empty_wire",
+      "status": "PASS",
+      "data": {
+        "crc16": 65535,
+        "source": "rustre_flirt_gen::crc16_sig_header"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_empty_wire",
+      "status": "PASS",
+      "data": {
+        "count": 0,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_call_rel32_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_offset": 1,
+        "first_size": 4,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_pattern_generator_default_wire",
+      "status": "PASS",
+      "data": {
+        "initial_length": 32,
+        "crc_length": 16,
+        "source": "rustre_flirt_gen::PatternGenerator::default"
+      }
+    },
+    {
+      "tool": "flirt_gen_generate_batch_wire",
+      "status": "PASS",
+      "data": {
+        "count": 2,
+        "source": "rustre_flirt_gen::PatternGenerator::generate_batch"
+      }
+    },
+    {
+      "tool": "flirt_gen_generate_from_ranges_wire",
+      "status": "PASS",
+      "data": {
+        "initial_len": 32,
+        "pattern_length": 40,
+        "source": "rustre_flirt_gen::PatternGenerator::generate_from_ranges"
+      }
+    },
+    {
+      "tool": "flirt_gen_pattern_quality_as_str_wire",
+      "status": "PASS",
+      "data": {
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+        "source": "rustre_flirt_gen::PatternQuality::as_str"
+      }
+    },
+    {
+      "tool": "flirt_gen_library_builder_dedup_wire",
+      "status": "PASS",
+      "data": {
+        "pattern_count": 1,
+        "duplicates_removed": 1,
+        "source": "rustre_flirt_gen::LibraryBuilder::dedup_patterns"
+      }
+    },
+    {
+      "tool": "flirt_gen_sig_writer_build_empty_wire",
+      "status": "PASS",
+      "data": {
+        "len": 105,
+        "magic_ok": true,
+        "version": 9,
+        "source": "rustre_flirt_gen::SigWriter::build"
+      }
+    },
+    {
+      "tool": "flirt_gen_elf_parse_reject_short_wire",
+      "status": "PASS",
+      "data": {
+        "is_err": true,
+        "source": "rustre_flirt_gen::ElfObjectParser::parse"
+      }
+    },
+    {
+      "tool": "flirt_gen_sig_trie_node_encode_leaf_wire",
+      "status": "PASS",
+      "data": {
+        "len": 15,
+        "prefix_len": 4,
+        "flag_byte": 1,
+        "source": "rustre_flirt_gen::SigTrieNode::encode"
+      }
+    },
+    {
+      "tool": "flirt_gen_write_sig_file_wire",
+      "status": "PASS",
+      "data": {
+        "ok": true,
+        "magic_ok": true,
+        "source": "rustre_flirt_gen::write_sig_file"
+      }
+    },
+    {
+      "tool": "flirt_gen_generate_no_relocs_wire",
+      "status": "PASS",
+      "data": {
+        "initial_len": 32,
+        "pattern_length": 50,
+        "crc_length": 16,
+        "source": "rustre_flirt_gen::PatternGenerator::generate"
+      }
+    },
+    {
+      "tool": "flirt_gen_generate_with_relocs_wire",
+      "status": "PASS",
+      "data": {
+        "initial_len": 32,
+        "pattern_length": 40,
+        "source": "rustre_flirt_gen::PatternGenerator::generate"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_jmp_rel32_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_offset": 1,
+        "first_size": 4,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_jcc_rel32_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_offset": 2,
+        "first_size": 4,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_jmp_rel8_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_size": 1,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_mov_imm64_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_size": 8,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_scan_x86_masks_rip_relative_wire",
+      "status": "PASS",
+      "data": {
+        "count": 1,
+        "first_size": 4,
+        "source": "rustre_flirt_gen::scan_x86_masks"
+      }
+    },
+    {
+      "tool": "flirt_gen_crc16_sig_header_known_wire",
+      "status": "PASS",
+      "data": {
+        "crc16": 14315,
+        "deterministic": true,
+        "source": "rustre_flirt_gen::crc16_sig_header"
+      }
+    },
+    {
+      "tool": "flirt_gen_pattern_generator_custom_wire",
+      "status": "PASS",
+      "data": {
+        "initial_len": 8,
+        "crc_length": 4,
+        "source": "rustre_flirt_gen::PatternGenerator::generate"
+      }
+    },
+    {
+      "tool": "flirt_gen_library_builder_skipped_wire",
+      "status": "PASS",
+      "data": {
+        "functions_processed": 1,
+        "patterns_generated": 0,
+        "patterns_skipped": 1,
+        "source": "rustre_flirt_gen::LibraryBuilder"
+      }
+    },
+    {
+      "tool": "flirt_gen_relocation_entry_wire",
+      "status": "PASS",
+      "data": {
+        "offset": 4,
+        "size": 4,
+        "source": "rustre_flirt_gen::RelocationEntry"
+      }
+    },
+    {
+      "tool": "flirt_gen_sig_trie_branch_encode_wire",
+      "status": "PASS",
+      "data": {
+        "len": 4,
+        "prefix_len": 1,
+        "prefix_byte": 85,
+        "child_sentinel": 0,
+        "end_sentinel": 0,
+        "source": "rustre_flirt_gen::SigTrieNode::encode"
+      }
+    },
+    {
+      "tool": "flirt_gen_sig_writer_i386_wire",
+      "status": "PASS",
+      "data": {
+        "arch_byte": 0,
+        "version": 9,
+        "source": "rustre_flirt_gen::SigWriter::build"
+      }
+    },
+    {
+      "tool": "flirt_gen_generation_stats_default_wire",
+      "status": "PASS",
+      "data": {
+        "functions_processed": 0,
+        "patterns_generated": 0,
+        "patterns_skipped": 0,
+        "duplicates_removed": 0,
+        "source": "rustre_flirt_gen::GenerationStats::default"
+      }
+    }
+  ]
+}

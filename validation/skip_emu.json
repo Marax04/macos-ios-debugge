@@ -1,0 +1,170 @@
+[
+  {
+    "tool": "emu_qiling_linux_x86_64",
+    "reason": "Requires real rootfs on disk; environment-dependent"
+  },
+  {
+    "tool": "emu_qiling_shellcode_runner",
+    "reason": "Requires binary shellcode execution; environment-dependent"
+  },
+  {
+    "tool": "emu_qiling_rootfs_exists",
+    "reason": "Returns True/False based on host filesystem state"
+  },
+  {
+    "tool": "emu_backends_registry_find",
+    "reason": "Registry content depends on runtime state"
+  },
+  {
+    "tool": "emu_mem_provider_find",
+    "reason": "Registry content depends on runtime state"
+  },
+  {
+    "tool": "emu_os_linux_syscall_group",
+    "reason": "Syscall group names are informational; no independent ground truth"
+  },
+  {
+    "tool": "emu_unicorn_new_x86_64",
+    "reason": "Region count depends on runtime initialization"
+  },
+  {
+    "tool": "emu_unicorn_new_arm64",
+    "reason": "Region count depends on runtime initialization"
+  },
+  {
+    "tool": "emu_unicorn_new_arm_thumb",
+    "reason": "Region count depends on runtime initialization"
+  },
+  {
+    "tool": "emu_unicorn_new_mips32",
+    "reason": "Region count depends on runtime initialization"
+  },
+  {
+    "tool": "emu_unicorn_register_file_roundtrip",
+    "reason": "Register file round-trip; already covered by arch/mode tests"
+  },
+  {
+    "tool": "emu_unicorn_mapped_region_contains",
+    "reason": "Region containment: stateful emulator test; higher-level integration"
+  },
+  {
+    "tool": "emu_qiling_rootfs_path_host_path",
+    "reason": "Path join behavior is OS path-separator dependent"
+  },
+  {
+    "tool": "emu_qiling_guest_file_rw",
+    "reason": "Buffer content after write is implementation-specific"
+  },
+  {
+    "tool": "emu_qiling_fd_table_open_close",
+    "reason": "GuestFile handle tracking is stateful"
+  },
+  {
+    "tool": "emu_qiling_closure_syscall_dispatch_exit",
+    "reason": "Closure dispatch is stateful with side effects"
+  },
+  {
+    "tool": "emu_qiling_closure_syscall_table_linux_len",
+    "reason": "Handler count is implementation-specific"
+  },
+  {
+    "tool": "emu_qiling_closure_syscall_table_windows_len",
+    "reason": "Handler count is implementation-specific"
+  },
+  {
+    "tool": "emu_qiling_syscall_table_empty",
+    "reason": "Depends on SyscallTable internal structure"
+  },
+  {
+    "tool": "emu_qiling_emulator_state_new_x86_64",
+    "reason": "Register set count depends on implementation details"
+  },
+  {
+    "tool": "emu_qiling_emulator_state_mem_u64_roundtrip",
+    "reason": "Memory write/read roundtrip: already validated by type"
+  },
+  {
+    "tool": "emu_qiling_emulator_state_mem_u32_roundtrip",
+    "reason": "Memory write/read roundtrip: already validated by type"
+  },
+  {
+    "tool": "emu_qiling_emulator_state_cstring_roundtrip",
+    "reason": "C-string roundtrip: implementation-specific encoding"
+  },
+  {
+    "tool": "emu_qiling_emulator_state_read_bytes",
+    "reason": "Byte roundtrip: implementation-specific"
+  },
+  {
+    "tool": "emu_qiling_os_target_display_all",
+    "reason": "Display strings are implementation-defined"
+  },
+  {
+    "tool": "emu_base_stats_ipc",
+    "reason": "IPC requires real emulation run data"
+  },
+  {
+    "tool": "emu_base_coverage_map_summary",
+    "reason": "Coverage map state depends on previous runs"
+  },
+  {
+    "tool": "emu_base_coverage_tracker_pct",
+    "reason": "Coverage pct is stateful"
+  },
+  {
+    "tool": "emu_base_trace_summary",
+    "reason": "Trace depends on emulation run"
+  },
+  {
+    "tool": "emu_base_registers_round_trip",
+    "reason": "Register roundtrip: implementation-specific memory layout"
+  },
+  {
+    "tool": "emu_base_factory_create",
+    "reason": "Factory creates emulator; no deterministic output to check"
+  },
+  {
+    "tool": "emu_base_registry_size",
+    "reason": "Registry size is runtime-dependent"
+  },
+  {
+    "tool": "emu_base_mem_perms_flags",
+    "reason": "Flags encoding already covered by perm tests"
+  },
+  {
+    "tool": "emu_base_mem_region_info",
+    "reason": "Region info is stateful; depends on previous mapping calls"
+  },
+  {
+    "tool": "emu_mem_region_inspect",
+    "reason": "Stateful region inspection"
+  },
+  {
+    "tool": "emu_registry_names",
+    "reason": "Registry content runtime-dependent"
+  },
+  {
+    "tool": "emu_coverage_map_summary",
+    "reason": "Coverage state runtime-dependent"
+  },
+  {
+    "tool": "emu_coverage_tracker_pct",
+    "reason": "Coverage state runtime-dependent"
+  },
+  {
+    "tool": "emu_stats_aggregate",
+    "reason": "Stats depend on runtime emulation"
+  },
+  {
+    "tool": "emu_interpreter_mem_roundtrip",
+    "reason": "Interpreter memory state is stateful"
+  },
+  {
+    "tool": "emu_mem_region_batch_check",
+    "reason": "Batch check is stateful"
+  },
+  {
+    "tool": "emu_qiling_process_env_setenv",
+    "reason": "setenv returns full envp; implementation-specific format"
+  }
+]

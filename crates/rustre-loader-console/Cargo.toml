@@ -1,0 +1,30 @@
+[package]
+license.workspace = true
+name = "rustre-loader-console"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# NOTE: this crate must NOT depend on `rustre-loader` — that creates a
+# workspace cycle (rustre-loader already lists us as a sub-loader).
+# Use rustre-core for shared loader traits/types instead.
+rustre-core = { path = "../rustre-core" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+bytecount = { workspace = true }
+serde-big-array = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

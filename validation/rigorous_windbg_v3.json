@@ -1,0 +1,436 @@
+{
+  "category": "windbg",
+  "tools_hardened": 4,
+  "tools_passed": 27,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "results": [
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "g"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "g"
+      },
+      "actual": {
+        "display": "g"
+      },
+      "description": "parse 'g'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "t"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "t"
+      },
+      "actual": {
+        "display": "t"
+      },
+      "description": "parse 't'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "p"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "p"
+      },
+      "actual": {
+        "display": "p"
+      },
+      "description": "parse 'p'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "k"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "k"
+      },
+      "actual": {
+        "display": "k"
+      },
+      "description": "parse 'k'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "!analyze"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "!analyze"
+      },
+      "actual": {
+        "display": "!analyze"
+      },
+      "description": "parse '!analyze'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "!analyze -v"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "!analyze -v"
+      },
+      "actual": {
+        "display": "!analyze -v"
+      },
+      "description": "parse '!analyze -v'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "db 0x1000 L10"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "db 0x1000 L10"
+      },
+      "actual": {
+        "display": "db 0x1000 L10"
+      },
+      "description": "parse 'db 0x1000 L10'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "dq 0xdeadbeef"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "dq 0xdeadbeef L1"
+      },
+      "actual": {
+        "display": "dq 0xdeadbeef L1"
+      },
+      "description": "parse 'dq 0xdeadbeef'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "bp 0x401000"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "bp 0x401000"
+      },
+      "actual": {
+        "display": "bp 0x401000"
+      },
+      "description": "parse 'bp 0x401000'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_command_parser_parse",
+      "args": {
+        "input": "somecommand"
+      },
+      "status": "PASS",
+      "expected": {
+        "display": "somecommand"
+      },
+      "actual": {
+        "display": "somecommand"
+      },
+      "description": "parse 'somecommand'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "0x1000"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 4096
+      },
+      "actual": {
+        "value": 4096
+      },
+      "description": "eval '0x1000'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "0"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 0
+      },
+      "actual": {
+        "value": 0
+      },
+      "description": "eval '0'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "ff"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 255
+      },
+      "actual": {
+        "value": 255
+      },
+      "description": "eval 'ff'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "0x100+0x10"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 272
+      },
+      "actual": {
+        "value": 272
+      },
+      "description": "eval '0x100+0x10'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "0x100-0x10"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 240
+      },
+      "actual": {
+        "value": 240
+      },
+      "description": "eval '0x100-0x10'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "@rax",
+        "registers": {
+          "rax": 42
+        }
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 42
+      },
+      "actual": {
+        "value": 42
+      },
+      "description": "eval '@rax'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "@rax+0x10",
+        "registers": {
+          "rax": 256
+        }
+      },
+      "status": "PASS",
+      "expected": {
+        "value": 272
+      },
+      "actual": {
+        "value": 272
+      },
+      "description": "eval '@rax+0x10'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_expr_evaluator_evaluate",
+      "args": {
+        "expr": "xyz"
+      },
+      "status": "PASS",
+      "expected": {
+        "value": null
+      },
+      "actual": {
+        "value": null
+      },
+      "description": "eval 'xyz'",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_module_list_parse_lm",
+      "args": {
+        "text": "start             end                 module name\n00007ff9`7c1a0000 00007ff9`7c3a3000   ntdll      (pdb symbols)\n00007ff9`79900000 00007ff9`799ac000   apphelp    (deferred)"
+      },
+      "status": "PASS",
+      "expected": {
+        "count": 2
+      },
+      "actual": {
+        "count": 2
+      },
+      "description": "parse lm output 2 modules",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_module_list_parse_lm",
+      "args": {
+        "text": "00007ff6`12340000 00007ff6`1234f000   myapp      (deferred)"
+      },
+      "status": "PASS",
+      "expected": {
+        "count": 1
+      },
+      "actual": {
+        "count": 1
+      },
+      "description": "parse lm output 1 module",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_module_list_parse_lm",
+      "args": {
+        "text": ""
+      },
+      "status": "PASS",
+      "expected": {
+        "count": 0
+      },
+      "actual": {
+        "count": 0
+      },
+      "description": "parse lm output empty",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_module_list_parse_lm",
+      "args": {
+        "text": "00007ffa`11000000 00007ffa`1108f000   ntdll      (pdb symbols)          ntdll.dll"
+      },
+      "status": "PASS",
+      "expected": {
+        "count": 1
+      },
+      "actual": {
+        "count": 1
+      },
+      "description": "parse lm output with dll path",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_module_list_parse_lm",
+      "args": {
+        "text": "start             end                 module name\n00007ff9`7c1a0000 00007ff9`7c3a3000   ntdll      (pdb symbols)\n00007ff9`79900000 00007ff9`799ac000   apphelp    (deferred)"
+      },
+      "status": "PASS",
+      "expected": {
+        "entries[0].start": 140709505662976,
+        "entries[0].name": "ntdll",
+        "entries[1].name": "apphelp"
+      },
+      "actual": {
+        "entries[0].start": 140709505662976,
+        "entries[0].name": "ntdll",
+        "entries[1].name": "apphelp"
+      },
+      "description": "verify lm entries content"
+    },
+    {
+      "tool": "windbg_parsed_dbg_output_key_values",
+      "args": {
+        "text": "Process: 1234\nBase: 0x1000\nStatus: running"
+      },
+      "status": "PASS",
+      "expected": {
+        "fields": {
+          "Process": "1234",
+          "Base": "0x1000",
+          "Status": "running"
+        }
+      },
+      "actual": {
+        "fields": {
+          "Process": "1234",
+          "Base": "0x1000",
+          "Status": "running"
+        }
+      },
+      "description": "parse colon key=value pairs",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_parsed_dbg_output_key_values",
+      "args": {
+        "text": "rax=deadbeef\nrbx=0"
+      },
+      "status": "PASS",
+      "expected": {
+        "fields": {
+          "rax": "deadbeef",
+          "rbx": "0"
+        }
+      },
+      "actual": {
+        "fields": {
+          "rbx": "0",
+          "rax": "deadbeef"
+        }
+      },
+      "description": "parse equals key=value pairs",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_parsed_dbg_output_key_values",
+      "args": {
+        "text": ""
+      },
+      "status": "PASS",
+      "expected": {
+        "fields": {}
+      },
+      "actual": {
+        "fields": {}
+      },
+      "description": "parse empty text",
+      "mismatches": []
+    },
+    {
+      "tool": "windbg_parsed_dbg_output_key_values",
+      "args": {
+        "text": "ImageBase: deadbeef"
+      },
+      "status": "PASS",
+      "expected": {
+        "addresses.ImageBase": 3735928559
+      },
+      "actual": {
+        "addresses.ImageBase": 3735928559
+      },
+      "description": "hex value parsed into addresses map"
+    }
+  ]
+}

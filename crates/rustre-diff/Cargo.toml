@@ -1,0 +1,22 @@
+﻿[package]
+license.workspace = true
+name = "rustre-diff"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = { workspace = true }
+crc32fast = "1"
+ahash = { workspace = true }
+
+[lints]
+workspace = true

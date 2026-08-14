@@ -1,0 +1,92 @@
+{
+  "module": "yara_engine",
+  "note": "v3 covers 14 remaining tools not in rigorous_yara.json or rigorous_yara_v2.json",
+  "tools_hardened": 8,
+  "tools_passed": 8,
+  "tools_failed": 0,
+  "tools_skipped": 6,
+  "results": [
+    {
+      "tool": "yara_engine_builtin_rules_count_wire2",
+      "status": "PASS",
+      "reference": "is_empty == (len == 0); len == enabled_count (invariant check)",
+      "actual": {"len": 10, "enabled_count": 10, "is_empty": false}
+    },
+    {
+      "tool": "yara_error_display",
+      "status": "PASS",
+      "reference": "Python: f'parse error at line {line}: {message}' with line=1, message='hello'",
+      "expected": "parse error at line 1: hello",
+      "actual_contains": "parse error at line 1: hello"
+    },
+    {
+      "tool": "yara_engine_scan_bytes",
+      "status": "PASS",
+      "reference": "Scanning 'deadbeef001122334455667788990011' for string 'hello' yields 0 matches (bytes contain no ASCII 'hello')",
+      "expected_matches": 0,
+      "actual_matches": 0
+    },
+    {
+      "tool": "yara_engine_pe_module_from_bytes_wire3",
+      "status": "PASS",
+      "reference": "Python: bytes.fromhex('deadbeef...')[0:2] != b'MZ' => is_pe=false",
+      "expected_is_pe": false,
+      "actual_is_pe": false
+    },
+    {
+      "tool": "yara_engine_elf_module_from_bytes_wire3",
+      "status": "PASS",
+      "reference": "Python: bytes.fromhex('deadbeef...')[0:4] != b'\x7fELF' => is_elf=false",
+      "expected_is_elf": false,
+      "actual_is_elf": false
+    },
+    {
+      "tool": "yara.compile",
+      "status": "PASS",
+      "reference": "Compiling 1 YARA rule yields rule_count=1",
+      "expected_rule_count": 1,
+      "actual_rule_count": 1
+    },
+    {
+      "tool": "yara_engine_parse_rule",
+      "status": "PASS",
+      "reference": "Parsing 'rule detect_test { ... }' yields name='detect_test', namespace='default', tags=[]",
+      "expected_name": "detect_test",
+      "actual": {"name": "detect_test", "namespace": "default", "tags": [], "strings": 1}
+    },
+    {
+      "tool": "yara_parser_parse_condition_section_wire",
+      "status": "PASS",
+      "reference": "Parsing 'condition: any of them' yields ok=true",
+      "expected_ok": true,
+      "actual_ok": true
+    },
+  ],
+  "skipped": [
+    {
+      "tool": "yara.scan_file",
+      "reason": "depends on actual PE file content scanning with YARA rules; match results are binary-dependent and not independently computable"
+    },
+    {
+      "tool": "yara.scan_memory",
+      "reason": "requires a loaded memory image; returns no_image_loaded in test context; no independent reference"
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_text",
+      "reason": "builds YARA text from arbitrary struct fields; output is a template instantiation with no independent reference computation"
+    },
+    {
+      "tool": "ti_malpedia_client_get_yara_rules",
+      "reason": "returns internal mock rule list; no independent reference computation possible"
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_new",
+      "reason": "creates internal struct; output is a passthrough of input fields; no independent computation needed"
+    },
+    {
+      "tool": "agent_prompt_gen_yara",
+      "reason": "AI prompt generation via template; output is a string template with no independent mathematical reference"
+    }
+  ],
+  "mismatches": []
+}

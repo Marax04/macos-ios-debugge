@@ -1,0 +1,240 @@
+{
+  "crate": "rustre-fuzz-cov",
+  "crate_dir": "C:\\Users\\Fra\\Desktop\\RustRE\\crates\\rustre-fuzz-cov",
+  "fixed": 49,
+  "mismatches": 9,
+  "details": [
+    {
+      "level": "ok",
+      "msg": "Cargo.toml package name"
+    },
+    {
+      "level": "mismatch",
+      "msg": "Cargo.toml: missing dependency 'thiserror'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "Cargo.toml: missing dependency 'serde'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "Cargo.toml: missing dependency 'serde_json'"
+    },
+    {
+      "level": "ok",
+      "msg": "dep:serde_bytes"
+    },
+    {
+      "level": "mismatch",
+      "msg": "Cargo.toml: missing dependency 'rayon'"
+    },
+    {
+      "level": "ok",
+      "msg": "lint: unsafe_code allow"
+    },
+    {
+      "level": "ok",
+      "msg": "lint: unused_must_use deny"
+    },
+    {
+      "level": "ok",
+      "msg": "module:casts"
+    },
+    {
+      "level": "ok",
+      "msg": "module:block_coverage_tracker"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_diff"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_diff_reporter"
+    },
+    {
+      "level": "ok",
+      "msg": "module:edge_coverage"
+    },
+    {
+      "level": "ok",
+      "msg": "module:edge_coverage_tracker"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_feedback"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_guide"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_minimizer"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_persistence"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_statistics"
+    },
+    {
+      "level": "ok",
+      "msg": "module:coverage_map_merger"
+    },
+    {
+      "level": "ok",
+      "msg": "module:lcov_export"
+    },
+    {
+      "level": "ok",
+      "msg": "module:pt_integration"
+    },
+    {
+      "level": "ok",
+      "msg": "module:qemu_tcg_cov"
+    },
+    {
+      "level": "ok",
+      "msg": "module:sancov_instrumentation"
+    },
+    {
+      "level": "ok",
+      "msg": "module:source_coverage_tracker"
+    },
+    {
+      "level": "ok",
+      "msg": "module:source_coverage_mapper"
+    },
+    {
+      "level": "ok",
+      "msg": "enum:CovError"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovModule"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovEntry"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovFile"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovHeader"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovBasicBlock"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovModuleV2"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:DrcovFileV2"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CoverageRun"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CoverageDiff"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CoverageStats"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CoverageDatabase"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:LcovRecord"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:LcovParser"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:PcGuardBitmap"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:EdgeCoverageMap"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CmplogEntry"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CmplogMap"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CorpusPruner"
+    },
+    {
+      "level": "ok",
+      "msg": "struct:CoverageHistogram"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+parse\\s*\\(\\s*[^)]*&\\s*\\[\\"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+serialize\\s*\\(\\s*&\\s*self"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+jaccard\\b"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+prune\\b"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+suggest_mutations\\b"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+record_hit\\b"
+    },
+    {
+      "level": "ok",
+      "msg": "fn:fn\\s+hot_edges\\b"
+    },
+    {
+      "level": "mismatch",
+      "msg": "CovError missing variant 'Parse'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "CovError missing variant 'Io'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "CovError missing variant 'UnsupportedVersion'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "CovError missing variant 'Overflow'"
+    },
+    {
+      "level": "mismatch",
+      "msg": "CovError missing variant 'EmptyInput'"
+    }
+  ]
+}

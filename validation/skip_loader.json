@@ -1,0 +1,96 @@
+{
+  "skipped": [
+    {
+      "tool": "loader_pe_is_signed",
+      "reason": "Authenticode chain; no stdlib equivalent for independent verification"
+    },
+    {
+      "tool": "loader_pe_pdb_path",
+      "reason": "PE debug directory parsing; file-specific"
+    },
+    {
+      "tool": "loader_pe_parse_info",
+      "reason": "Requires PE binary; parse output is file-specific"
+    },
+    {
+      "tool": "loader_pe_entry_points",
+      "reason": "Requires PE binary"
+    },
+    {
+      "tool": "loader_pe_imports_from_dll",
+      "reason": "Requires PE binary"
+    },
+    {
+      "tool": "loader_wasm_parse",
+      "reason": "Requires WASM binary file; none available"
+    },
+    {
+      "tool": "loader_wasm_stats",
+      "reason": "Requires WASM binary file"
+    },
+    {
+      "tool": "loader_elf_info_summary",
+      "reason": "Requires ELF binary; output is file-specific"
+    },
+    {
+      "tool": "loader_elf_parse_info",
+      "reason": "Requires ELF binary"
+    },
+    {
+      "tool": "loader_elf_plt_entries",
+      "reason": "Requires ELF binary"
+    },
+    {
+      "tool": "loader_macho_parse",
+      "reason": "Requires Mach-O binary"
+    },
+    {
+      "tool": "loader_macho_parse_fat",
+      "reason": "Requires Mach-O fat binary"
+    },
+    {
+      "tool": "loader_macho_parse_summary",
+      "reason": "Requires Mach-O binary"
+    },
+    {
+      "tool": "loader_android_verify_dex_checksum",
+      "reason": "Requires structurally valid DEX file with correct header"
+    },
+    {
+      "tool": "loader_console_detect_format",
+      "reason": "Algorithm internals not exposed; partially magic-byte driven"
+    },
+    {
+      "tool": "loader_console_is_nes",
+      "reason": "Requires iNES ROM (NES\\x1a magic); trivial but covered by magic-byte pattern \u2014 low value"
+    },
+    {
+      "tool": "loader_lua_opcode_name",
+      "reason": "Opcode tables are Lua-version-specific; no authoritative Python table"
+    },
+    {
+      "tool": "loader_lua_read_string",
+      "reason": "Requires full Lua bytecode stream context"
+    },
+    {
+      "tool": "loader_luajit_is_luajit",
+      "reason": "Requires LuaJIT bytecode with versioned magic"
+    },
+    {
+      "tool": "loader_java_parse_class",
+      "reason": "Requires valid Java class file"
+    },
+    {
+      "tool": "loader_java_is_jar",
+      "reason": "Requires valid JAR with .class entries"
+    },
+    {
+      "tool": "loader_ole_list_streams",
+      "reason": "Requires valid OLE2 compound file"
+    },
+    {
+      "tool": "loader_ole_extract_macros",
+      "reason": "Requires valid OLE2 with VBA streams"
+    }
+  ]
+}

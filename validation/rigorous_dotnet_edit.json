@@ -1,0 +1,22 @@
+{
+  "module": "dotnet_edit",
+  "tools_hardened": [
+    "dotnet_edit_encode_instructions",
+    "dotnet_edit_ilbuilder_brfalse_s",
+    "dotnet_edit_ilbuilder_brtrue_s",
+    "dotnet_edit_ilbuilder_call",
+    "dotnet_edit_ilbuilder_callvirt",
+    "dotnet_edit_ilbuilder_ldstr",
+    "dotnet_edit_ilbuilder_newobj",
+    "dotnet_edit_ilbuilder_nop",
+    "dotnet_edit_ilbuilder_ret",
+    "dotnet_edit_nop_fill_range",
+    "dotnet_edit_opcode_byte_size",
+    "dotnet_edit_recompute_offsets",
+    "dotnet_edit_renumber_offsets",
+    "dotnet_edit_token_remapper_remap"
+  ],
+  "checks_passed": 30,
+  "checks_failed": 0,
+  "mismatches": []
+}

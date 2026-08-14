@@ -1,0 +1,209 @@
+{
+  "module": "arch_multi",
+  "tools_hardened": 10,
+  "checks_total": 18,
+  "checks_passed": 18,
+  "checks_failed": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "arch_jvm_decode",
+      "pass": true,
+      "expected": {
+        "mnemonic": "nop",
+        "operands": "",
+        "size": 1
+      },
+      "actual": {
+        "mnemonic": "nop",
+        "operands": "",
+        "size": 1
+      }
+    },
+    {
+      "tool": "arch_jvm_decode_at",
+      "pass": true,
+      "expected": {
+        "mnemonic": "nop",
+        "operands": "",
+        "size": 1
+      },
+      "actual": {
+        "mnemonic": "nop",
+        "size": 1
+      }
+    },
+    {
+      "tool": "arch_sparc_encode_nop",
+      "pass": true,
+      "expected": {
+        "word": 16777216,
+        "hex": "0x01000000"
+      },
+      "actual": {
+        "word": 16777216,
+        "hex": "0x01000000"
+      }
+    },
+    {
+      "tool": "arch_sparc_encode_call",
+      "pass": true,
+      "expected": {
+        "word": 1073741825,
+        "hex": "0x40000001"
+      },
+      "actual": {
+        "word": 1073741825,
+        "hex": "0x40000001"
+      }
+    },
+    {
+      "tool": "arch_cil_decode_compressed_uint_1byte",
+      "pass": true,
+      "expected": {
+        "value": 5,
+        "consumed": 1
+      },
+      "actual": {
+        "value": 5,
+        "consumed": 1
+      }
+    },
+    {
+      "tool": "arch_cil_decode_compressed_uint_2byte",
+      "pass": true,
+      "expected": {
+        "value": 1,
+        "consumed": 2
+      },
+      "actual": {
+        "value": 1,
+        "consumed": 2
+      }
+    },
+    {
+      "tool": "arch_cil_max_local_slot",
+      "pass": true,
+      "expected": {
+        "max_slot": 3
+      },
+      "actual": {
+        "max_slot": 3
+      }
+    },
+    {
+      "tool": "arch_dex_vreg",
+      "pass": true,
+      "expected": {
+        "name": "v5"
+      },
+      "actual": {
+        "name": "v5"
+      }
+    },
+    {
+      "tool": "arch_dex_preg",
+      "pass": true,
+      "expected": {
+        "name": "p3"
+      },
+      "actual": {
+        "name": "p3"
+      }
+    },
+    {
+      "tool": "arch_lua_get_bx54",
+      "pass": true,
+      "expected": {
+        "bx": 16
+      },
+      "actual": {
+        "bx": 16
+      }
+    },
+    {
+      "tool": "arch_lua_get_ax54",
+      "pass": true,
+      "expected": {
+        "ax": 8
+      },
+      "actual": {
+        "ax": 8
+      }
+    },
+    {
+      "tool": "arch_jvm_decode_iconst_0",
+      "pass": true,
+      "expected": {
+        "mnemonic": "iconst_0",
+        "size": 1
+      },
+      "actual": {
+        "mnemonic": "iconst_0",
+        "size": 1
+      }
+    },
+    {
+      "tool": "arch_sparc_encode_call_disp8",
+      "pass": true,
+      "expected": {
+        "word": 1073741826
+      },
+      "actual": {
+        "word": 1073741826
+      }
+    },
+    {
+      "tool": "arch_dex_vreg_0",
+      "pass": true,
+      "expected": {
+        "name": "v0"
+      },
+      "actual": {
+        "name": "v0"
+      }
+    },
+    {
+      "tool": "arch_dex_preg_0",
+      "pass": true,
+      "expected": {
+        "name": "p0"
+      },
+      "actual": {
+        "name": "p0"
+      }
+    },
+    {
+      "tool": "arch_lua_get_bx54_zero",
+      "pass": true,
+      "expected": {
+        "bx": 0
+      },
+      "actual": {
+        "bx": 0
+      }
+    },
+    {
+      "tool": "arch_lua_get_ax54_0x80",
+      "pass": true,
+      "expected": {
+        "ax": 1
+      },
+      "actual": {
+        "ax": 1
+      }
+    },
+    {
+      "tool": "arch_cil_decode_compressed_uint_4byte",
+      "pass": true,
+      "expected": {
+        "value": 1,
+        "consumed": 4
+      },
+      "actual": {
+        "value": 1,
+        "consumed": 4
+      }
+    }
+  ]
+}

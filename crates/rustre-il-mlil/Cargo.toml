@@ -1,0 +1,28 @@
+[package]
+license.workspace = true
+name = "rustre-il-mlil"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-il = { path = "../rustre-il" }
+rustre-core = { path = "../rustre-core" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+rustre-il-lift = { path = "../rustre-il-lift" }
+ahash = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true

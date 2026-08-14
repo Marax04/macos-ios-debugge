@@ -1,0 +1,209 @@
+{
+  "target": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+  "stages": {
+    "1_project_open": {
+      "elapsed_s": 0.08,
+      "ok": true,
+      "response_excerpt": "{'project_id': 'proj-0001', 'binary_id': 'bin-0001', 'path': 'C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe', 'status': 'loaded'}"
+    },
+    "2_detect": {
+      "elapsed_s": 0.21,
+      "functions_detected": 2336,
+      "sample_first_100": [
+        "0x140000000",
+        "0x14000040a",
+        "0x140000750",
+        "0x140000757",
+        "0x140000960",
+        "0x140000967",
+        "0x140000c70",
+        "0x140000c7c",
+        "0x140001c80",
+        "0x140001c87"
+      ]
+    },
+    "3_decompile": {
+      "elapsed_s": 0.21,
+      "sample_size": 20,
+      "successful": 20,
+      "sample_results": [
+        {
+          "addr": "0x140000000",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 178,
+          "code_preview": "__int64 __fastcall sub_140000000() {     v3 = pop();     *dst = *dst + al;     *dst2 = *dst2 + al;  "
+        },
+        {
+          "addr": "0x14000040a",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 510,
+          "code_preview": "__int64 __fastcall sub_14000040a(__int64 a1, __int64 a2) {     void * v_0;     void * r_rsp;     voi"
+        },
+        {
+          "addr": "0x140000750",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 761,
+          "code_preview": "__int64 __fastcall __xmm@3f3e3d3c3b3a39383736353433323130(__int64 a1, __int64 a2) {     void * v_0; "
+        },
+        {
+          "addr": "0x140000757",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 736,
+          "code_preview": "__int64 __fastcall sub_140000757(__int64 a1, __int64 a2) {     void * v_0;     void * r_rsp;     voi"
+        },
+        {
+          "addr": "0x140000960",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 413,
+          "code_preview": "__int64 __fastcall __xmm@94d049bb133111eb94d049bb133111eb(__int64 a1, __int64 a2) {     void * r_r10"
+        },
+        {
+          "addr": "0x140000967",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 388,
+          "code_preview": "__int64 __fastcall sub_140000967(__int64 a1, __int64 a2) {     void * r_rsi;     void * r_r11;     v"
+        },
+        {
+          "addr": "0x140000c70",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 356,
+          "code_preview": "__int64 __fastcall sub_140000c70(__int64 a1, __int64 a2) {     void * r_r15;     void * r_r9;     vo"
+        },
+        {
+          "addr": "0x140000c7c",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 356,
+          "code_preview": "__int64 __fastcall sub_140000c7c(__int64 a1, __int64 a2) {     void * r_rsi;     void * r_rbx;     v"
+        },
+        {
+          "addr": "0x140001c80",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 1048,
+          "code_preview": "__int64 __fastcall sub_140001c80(char *a1, __int64 a2, char *a3) {     void * v_0;     void * r_rdi;"
+        },
+        {
+          "addr": "0x140001c87",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 1048,
+          "code_preview": "__int64 __fastcall sub_140001c87(char *a1, __int64 a2, char *a3) {     void * v_0;     void * r_r8; "
+        },
+        {
+          "addr": "0x140002340",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 154,
+          "code_preview": "void __fastcall sub_140002340(__int64 a1, __int64 a2, __int64 a3) {     void * r_rsi;     void * r_r"
+        },
+        {
+          "addr": "0x14000234c",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 154,
+          "code_preview": "void __fastcall sub_14000234c(__int64 a1, __int64 a2, __int64 a3) {     void * r_rsp;     void * r_r"
+        },
+        {
+          "addr": "0x140002710",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 274,
+          "code_preview": "__int64 __fastcall sub_140002710(__int64 a1, __int64 a2, __int64 a3) {     void * r_r9;     void * r"
+        },
+        {
+          "addr": "0x140002711",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 274,
+          "code_preview": "__int64 __fastcall sub_140002711(__int64 a1, __int64 a2, __int64 a3) {     void * r_rsp;     void * "
+        },
+        {
+          "addr": "0x140002820",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 137,
+          "code_preview": "__int64 __fastcall sub_140002820(__int64 *a1, __int64 a2, size_t a3) {     void * r_rax;     void * "
+        },
+        {
+          "addr": "0x140002821",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 137,
+          "code_preview": "__int64 __fastcall sub_140002821(__int64 *a1, __int64 a2, size_t a3) {     void * r_rsp;     void * "
+        },
+        {
+          "addr": "0x140002901",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 628,
+          "code_preview": "__int64 __fastcall sub_140002901() {     void * v_0;     void * r_rdi;     void * r_eax;     void * "
+        },
+        {
+          "addr": "0x14000290c",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 628,
+          "code_preview": "__int64 __fastcall sub_14000290c() {     void * v_0;     void * r_rbp;     void * r_r15d;     void *"
+        },
+        {
+          "addr": "0x140005e95",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 670,
+          "code_preview": "__int64 __fastcall sub_140005e95(__int64 a1) {     void * v_0;     void * r_r14;     void * r_rcx;  "
+        },
+        {
+          "addr": "0x1400080b6",
+          "ok": true,
+          "confidence": 50,
+          "code_len": 660,
+          "code_preview": "__int64 __fastcall sub_1400080b6(__int64 a1, __int64 a2) {     void * v_0;     void * r_rbp;     voi"
+        }
+      ]
+    },
+    "4_pdb": {
+      "elapsed_s": 0.03,
+      "pdb_symbols_found": 488,
+      "ida_baseline_named": 395,
+      "gap_vs_ida": -93
+    },
+    "5_xrefs": {
+      "elapsed_s": 0.01,
+      "total_xrefs": 18198
+    },
+    "6_findcrypt": {
+      "elapsed_s": 0.05,
+      "hits": 328,
+      "ida_baseline_hits": 43,
+      "gap_vs_ida": -285
+    },
+    "7_imports": {
+      "elapsed_s": 0.0,
+      "imports": 106,
+      "ida_baseline": 106
+    }
+  },
+  "ida_baseline": {
+    "funcs": 1456,
+    "named": 395,
+    "findcrypt": 43,
+    "imports": 106
+  },
+  "total_elapsed_s": 1.04,
+  "summary": {
+    "functions_ratio": "2336/1456 (IDA)",
+    "pdb_names_ratio": "488/395 (IDA)",
+    "findcrypt_ratio": "328/43 (IDA)",
+    "imports_ratio": "106/106 (IDA)",
+    "decompile_success_rate": "20/20",
+    "xrefs_extracted": 18198
+  }
+}

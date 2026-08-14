@@ -1,0 +1,51 @@
+{
+  "crate": "rustre-project",
+  "summary": "MCP server exposes only 4 project.* tools (open/close/info/list_binaries/save). Validator tests pure helpers (sha256_hex, shannon_entropy, classify_binary, get_migrations, unix_to_iso8601, version_snapshot_pruning) NONE of which are exposed via MCP. Direct output comparison only possible for project.info / project.list_binaries on an empty state.",
+  "mcp_outputs": {
+    "project.open(dir=testproj2)": {
+      "isError": true,
+      "text": "execution failed: cannot read .../testproj2: Accesso negato. (os error 5)",
+      "note": "MCP project.open expects a binary FILE path, not a project directory; mismatches doc which says 'open a project'"
+    },
+    "project.info": {
+      "isError": false,
+      "json": {"binary_count": 0, "binaries": [], "mcp_version": "2024-11-05", "server": "rustre", "filter": null}
+    },
+    "project.list_binaries": {
+      "isError": false,
+      "json": {"count": 0, "binaries": []}
+    }
+  },
+  "validator_outputs": {
+    "sha256_hex_empty": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256_hex_abc": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "entropy_empty": 0.0,
+    "entropy_aaaa": 0.0,
+    "entropy_ab": 1.0,
+    "classify_PE_x64": ["PE", "x86_64"],
+    "classify_ELF_x64": ["ELF", "x86_64"],
+    "classify_WASM": ["WASM", "wasm32"],
+    "classify_DEX": ["DEX", "dalvik"],
+    "classify_macho64": ["MachO", "unknown"],
+    "migrations": {"count": 4, "versions": [1, 2, 3, 4], "current_schema_version": 4},
+    "iso_0": "1970-01-01T00:00:00+00:00",
+    "prune_12_kept": 10
+  },
+  "mismatches": [
+    {
+      "kind": "coverage_gap",
+      "detail": "Pure helpers sha256_hex, shannon_entropy, classify_binary, get_migrations, unix_to_iso8601, version_snapshot_pruning are not exposed via any MCP tool — cannot be cross-checked at runtime.",
+      "fix_required": false
+    },
+    {
+      "kind": "api_contract",
+      "detail": "project.open description says 'Open a binary project from a filesystem path' but the implementation rejects directory paths and requires a binary file, whereas Project::new/open in rustre-project takes a directory. Tool description is misleading.",
+      "fix_required": false
+    }
+  ],
+  "tests": 3,
+  "mismatches_count": 2,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "Validator self-tests all pass against reference values; the 2 mismatches are coverage/contract observations, not numerical disagreements between MCP and validator on shared inputs. No code fix attempted because no shared input/output pair produced divergent results."
+}

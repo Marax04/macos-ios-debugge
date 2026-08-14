@@ -1,0 +1,379 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rustre-adb",
+    "crates/rustre-agent",
+    "crates/rustre-agent-llm",
+    "crates/rustre-agent-prompts",
+    "crates/rustre-agent-workflow",
+    "crates/rustre-analysis",
+    "crates/rustre-analysis-callconv",
+    "crates/rustre-analysis-cfg",
+    "crates/rustre-analysis-dataflow",
+    "crates/rustre-analysis-fn",
+    "crates/rustre-analysis-string",
+    "crates/rustre-analysis-type",
+    "crates/rustre-analysis-vsa",
+    "crates/rustre-analysis-vtable",
+    "crates/rustre-analysis-xref",
+    "crates/rustre-arch",
+    "crates/rustre-arch-registry",
+    "crates/rustre-arch-6502",
+    "crates/rustre-arch-68k",
+    "crates/rustre-arch-arm",
+    "crates/rustre-arch-arm64",
+    "crates/rustre-arch-avr",
+    "crates/rustre-arch-bpf",
+    "crates/rustre-arch-cil",
+    "crates/rustre-arch-dex",
+    "crates/rustre-arch-jvm",
+    "crates/rustre-arch-lua",
+    "crates/rustre-arch-luajit",
+    "crates/rustre-arch-mips",
+    "crates/rustre-arch-msp430",
+    "crates/rustre-arch-ppc",
+    "crates/rustre-arch-riscv",
+    "crates/rustre-arch-sparc",
+    "crates/rustre-arch-wasm",
+    "crates/rustre-arch-x86",
+    "crates/rustre-arch-z80",
+    "crates/rustre-bin",
+    "crates/rustre-cli",
+    "crates/rustre-core",
+    "crates/rustre-crypto-id",
+    "crates/rustre-crypto-oracle",
+    "crates/rustre-crypto-whitebox",
+    "crates/rustre-daemon",
+    "crates/rustre-debug",
+    # [DISABLED 2026-07-12] rustre-debug-frida — Frida instrumentation wrapper temporarily
+    # disabled to eliminate external native dependencies (frida-gum-sys auto-download).
+    # See crates/rustre-debug-frida/src/lib.rs top-of-file comment.
+    # "crates/rustre-debug-frida",
+    # [DISABLED 2026-07-12] rustre-debug-gdb — GDB remote-serial-protocol backend; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-gdb",
+    # [DISABLED 2026-07-12] rustre-debug-kgdb — KGDB kernel-debug backend; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-kgdb",
+    # [DISABLED 2026-07-12] rustre-debug-linux — Linux ptrace/procfs backend; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-linux",
+    # [DISABLED 2026-07-12] rustre-debug-macos — macOS Mach-port task backend; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-macos",
+    # [DISABLED 2026-07-12] rustre-debug-unicorn — Unicorn-CPU emulation debug shim; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-unicorn",
+    # [DISABLED 2026-07-12] rustre-debug-windbg — WinDbg/DbgEng COM wrapper; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-windbg",
+    # [DISABLED 2026-07-12] rustre-debug-windows — Win32 debug-event loop backend; replaced by rustre-debug internal modules.
+    # "crates/rustre-debug-windows",
+    # [DISABLED 2026-07-12] rustre-debug-registry — Debug-backend registry aggregator; replaced by rustre-debug internal dispatch.
+    # "crates/rustre-debug-registry",
+    "crates/rustre-decompiler",
+    "crates/rustre-decompiler-c",
+    "crates/rustre-decompiler-cfs",
+    "crates/rustre-decompiler-expr",
+    # [DISABLED 2026-07-12] rustre-decompiler-ghidra — Ghidra headless + P-Code lifter
+    # bridge temporarily disabled to eliminate external Ghidra runtime dependency.
+    # See crates/rustre-decompiler-ghidra/src/lib.rs top-of-file comment.
+    # "crates/rustre-decompiler-ghidra",
+    "crates/rustre-decompiler-type",
+    "crates/rustre-demangle",
+    "crates/rustre-deobf",
+    "crates/rustre-deobf-antianti",
+    "crates/rustre-deobf-cff",
+    "crates/rustre-deobf-iadl",
+    "crates/rustre-deobf-mba",
+    "crates/rustre-deobf-mhcde",
+    "crates/rustre-deobf-opaque",
+    "crates/rustre-deobf-smc",
+    "crates/rustre-deobf-string",
+    "crates/rustre-deobf-vm",
+    "crates/rustre-deobf-vmlift",
+    "crates/rustre-diff",
+    "crates/rustre-diff-bindiff",
+    "crates/rustre-diff-semantic",
+    "crates/rustre-dotnet",
+    "crates/rustre-dotnet-decompile",
+    "crates/rustre-dotnet-edit",
+    "crates/rustre-dotnet-metadata",
+    "crates/rustre-emu",
+    # [DISABLED 2026-07-12] rustre-emu-qiling — Qiling framework wrapper temporarily
+    # disabled. Qiling is Python-based; keeps external dep footprint clean.
+    # See crates/rustre-emu-qiling/src/lib.rs top-of-file comment.
+    # "crates/rustre-emu-qiling",
+    "crates/rustre-emu-shellcode",
+    # [DISABLED 2026-07-12] rustre-emu-unicorn — Unicorn CPU emulator FFI wrapper
+    # temporarily disabled. Removing to avoid future native libunicorn build burden.
+    # See crates/rustre-emu-unicorn/src/lib.rs top-of-file comment.
+    # "crates/rustre-emu-unicorn",
+    "crates/rustre-events",
+    "crates/rustre-flirt",
+    "crates/rustre-flirt-apply",
+    "crates/rustre-flirt-gen",
+    "crates/rustre-forensics",
+    "crates/rustre-forensics-fs",
+    "crates/rustre-forensics-mem",
+    "crates/rustre-forensics-plugins",
+    "crates/rustre-fuzz",
+    "crates/rustre-fuzz-afl",
+    "crates/rustre-fuzz-cov",
+    "crates/rustre-fuzz-libfuzzer",
+    "crates/rustre-fuzz-net",
+    "crates/rustre-fuzz-sanitizers",
+    "crates/rustre-graph",
+    "crates/rustre-gui",
+    # "crates/rustre-gui-docking",  # crate removed from project
+    # "crates/rustre-gui-themes",   # crate removed from project
+    # "crates/rustre-gui-views",    # crate removed from project
+    "crates/rustre-hex",
+    "crates/rustre-hex-pattern",
+    "crates/rustre-hex-template",
+    "crates/rustre-hex-view",
+    "crates/rustre-il",
+    "crates/rustre-il-hlil",
+    "crates/rustre-il-lift",
+    "crates/rustre-il-llil",
+    "crates/rustre-il-mlil",
+    "crates/rustre-il-passes",
+    "crates/rustre-loader",
+    "crates/rustre-loader-android",
+    "crates/rustre-loader-console",
+    "crates/rustre-loader-dotnet",
+    "crates/rustre-loader-elf",
+    "crates/rustre-loader-firmware",
+    "crates/rustre-loader-java",
+    "crates/rustre-loader-lua",
+    "crates/rustre-loader-luajit",
+    "crates/rustre-loader-macho",
+    "crates/rustre-loader-ole",
+    "crates/rustre-loader-pdf",
+    "crates/rustre-loader-pe",
+    "crates/rustre-loader-registry",
+    "crates/rustre-loader-wasm",
+    "crates/rustre-mcp",
+    "crates/rustre-mcp-federation",
+    "crates/rustre-mcp-server",
+    "crates/rustre-mcp-tools",
+    "crates/rustre-mem",
+    "crates/rustre-mobile-android",
+    "crates/rustre-mobile-apktool",
+    "crates/rustre-mobile-dyld",
+    "crates/rustre-mobile-ios",
+    "crates/rustre-mobile-ipa",
+    "crates/rustre-mobile-jadx",
+    "crates/rustre-mobile-smali",
+    "crates/rustre-mobile",
+    "crates/rustre-net",
+    "crates/rustre-net-dissect",
+    "crates/rustre-net-pcap",
+    "crates/rustre-net-proxy",
+    "crates/rustre-net-rules",
+    "crates/rustre-pe-editor",
+    "crates/rustre-pe-rebuild",
+    "crates/rustre-pe-tools",
+    "crates/rustre-project",
+    "crates/rustre-plugin-api",
+    "crates/rustre-plugin-host",
+    "crates/rustre-plugin-loader",
+    "crates/rustre-plugin-native",
+    "crates/rustre-plugin-lua",
+    "crates/rustre-plugin-python",
+    "crates/rustre-sandbox",
+    "crates/rustre-sandbox-extract",
+    "crates/rustre-sandbox-monitor",
+    "crates/rustre-sandbox-report",
+    "crates/rustre-sandbox-vm",
+    "crates/rustre-script",
+    "crates/rustre-script-lua",
+    "crates/rustre-script-python",
+    "crates/rustre-script-rhai",
+    "crates/rustre-symb",
+    "crates/rustre-symb-engine",
+    "crates/rustre-symbols",
+    "crates/rustre-symbols-codeview", # re-enabled temporarily for hardening tests 2026-07-20
+    "crates/rustre-symbols-dwarf",
+    "crates/rustre-symbols-pdb",
+    "crates/rustre-symbols-stabs",
+    "crates/rustre-symb-taint",
+    # [DISABLED 2026-07-12] rustre-symb-z3 — Z3 SMT solver wrapper temporarily
+    # disabled to eliminate external Z3 native library dependency.
+    # See crates/rustre-symb-z3/src/lib.rs top-of-file comment.
+    # "crates/rustre-symb-z3",
+    "crates/rustre-syscalls",
+    "crates/rustre-syscalls-linux",
+    "crates/rustre-syscalls-windows",
+    "crates/rustre-sysinternals",
+    "crates/rustre-threatintel",
+    "crates/rustre-ti-correlate",
+    "crates/rustre-ti-malpedia",
+    "crates/rustre-ti-misp",
+    "crates/rustre-ti-opencti",
+    "crates/rustre-ti-otx",
+    "crates/rustre-ti-shodan",
+    "crates/rustre-ti-vt",
+    "crates/rustre-trace",
+    "crates/rustre-trace-coresight",
+    "crates/rustre-trace-coverage",
+    "crates/rustre-trace-navigate",
+    "crates/rustre-trace-pt",
+    "crates/rustre-triage",
+    "crates/rustre-triage-die",
+    "crates/rustre-triage-entropy",
+    "crates/rustre-triage-peid",
+    "crates/rustre-triage-yara",
+    "crates/rustre-ttd",
+    "crates/rustre-ttd-query",
+    "crates/rustre-ttd-recorder",
+    "crates/rustre-ttd-replay",
+    "crates/rustre-ttd-replayer",
+    "crates/rustre-yara",
+    "crates/rustre-yara-engine",
+    "crates/rustre-yara-rules",
+    "crates/rustre-db",
+    "crates/rustre-knowledge",
+    "crates/rustre-patch",
+    "crates/rustre-analysis-typerecov",
+    "tests/integration_pipeline"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "RustRE — modular reverse engineering platform in Rust"
+repository = "https://github.com/rustre/rustre"
+readme = "README.md"
+keywords = ["reverse-engineering", "disassembler", "decompiler", "binary-analysis", "security"]
+categories = ["development-tools", "command-line-utilities"]
+authors = ["RustRE Contributors"]
+
+[workspace.dependencies]
+md5 = { package = "md-5", version = "0.10" }
+ahash = { version = "0.8", features = ["serde"] }
+bytecount = "0.6"
+anyhow = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+thiserror = "2"
+tokio = { version = "=1.40.0", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = { version = "0.7" }
+tracing = "0.1"
+async-trait = "0.1"
+bitflags = { version = "2", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+petgraph = "0.6"
+libloading = "0.8"
+num-traits = "0.2"
+parking_lot = "0.12"
+serde_json = "1"
+subtle = "2"
+bincode = "1"
+tempfile = "3"
+mysql = "25"
+dashmap = "6"
+rayon = "1"
+mimalloc = { version = "0.1", default-features = false }
+memchr = "2"
+uuid = { version = "1", features = ["v4"] }
+iced-x86 = "1.21"
+capstone = "0.13"
+bad64 = "0.4"
+goblin = "0.9"
+pelite = "0.10"
+gimli = "0.31"
+object = "0.36"
+nix = { version = "0.29", features = ["ptrace", "signal", "process", "user"] }
+# unicorn-engine requires CMake + C toolchain; add locally per-crate when needed.
+# unicorn-engine = "2"
+# [DISABLED 2026-07-12] z3 — external Z3 SMT solver, disabled with rustre-symb-z3.
+# z3 = { version = "0.12", features = ["static-link-z3"] }
+yara-x = "0.9"
+mlua = { version = "0.10", features = ["lua54", "vendored"] }
+pyo3 = { version = "0.23", features = ["auto-initialize"] }
+rmcp = { package = "rmcp", version = "0.1", features = ["server", "client", "transport-io", "transport-sse-server"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "multipart"], default-features = false }
+clap = { version = "4", features = ["derive"] }
+nucleo = "0.5"
+plotters = "0.3"
+zip = "2"
+flate2 = "1"
+lz4_flex = "0.11"
+zstd = "0.13"
+xz2 = "0.1"
+smallvec = "1"
+indexmap = "2"
+rustc-hash = "2"
+hex = "0.4"
+sha2 = "0.10"
+md-5 = "0.10"
+blake2 = "0.10"
+aes = "0.8"
+chacha20poly1305 = "0.10"
+windows-sys = { version = "0.59", features = ["Win32_System_Diagnostics_Debug", "Win32_System_Threading", "Win32_Foundation", "Win32_Security", "Win32_System_Memory"] }
+mach2 = "0.4"
+libc = "0.2"
+cpp_demangle = "0.4"
+rustc-demangle = "0.1"
+regex = "1"
+once_cell = "1"
+crossbeam-channel = "0.5"
+futures = "0.3"
+bytes = "1"
+wasmparser = "0.221"
+pdb = "0.8"
+addr2line = "0.22"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+serde_yaml = "0.9"
+rcgen = "0.13"
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pemfile = "2"
+tokio-rustls = "0.26"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+fuser = "0.14"
+# [DISABLED 2026-07-12] frida-gum — Frida native instrumentation, disabled with rustre-debug-frida.
+# frida-gum = { version = "0.14", features = ["auto-download"] }
+aho-corasick = "1"
+zeroize = { version = "1", features = ["derive"] }
+lapper = "1"
+siphasher = "1"
+toml = "0.8"
+serde-big-array = "0.5"
+
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+panic         = "abort"
+strip         = true
+
+# Faster-than-release profile: same as release but skips fat-LTO for quick
+# iteration builds.  Use with `cargo build --profile release-fast`.
+[profile.release-fast]
+inherits      = "release"
+lto           = "thin"
+codegen-units = 4
+
+[profile.dev]
+opt-level = 1
+debug     = true
+
+# [patch.crates-io] section intentionally left empty; z3-sys vendor path removed
+# along with rustre-symb-z3 on 2026-07-12 (vendor/z3-sys directory absent).
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+# These crates have multiple major versions coexisting as transitive dependencies
+# from third-party crates (e.g. syn 1.x pulled by older proc-macro crates alongside
+# syn 2.x; thiserror 1.x pulled by older ecosystem crates alongside our thiserror 2;
+# ahash 0.7 pulled by older hashbrown; getrandom/r-efi/base64/core-foundation split
+# across minor/major boundaries by indirect deps). Unifying these requires upstream
+# crate updates outside this workspace.
+multiple_crate_versions = "allow"

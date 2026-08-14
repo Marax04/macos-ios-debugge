@@ -1,0 +1,8 @@
+{
+  "category": "yara_engine",
+  "tools_in_category": 29,
+  "checks_total": 15,
+  "checks_passed": 15,
+  "checks_skipped": 8,
+  "mismatches": []
+}

@@ -1,0 +1,2000 @@
+{
+  "category": "il",
+  "tools_hardened": 272,
+  "tools_passed": 272,
+  "tools_failed": 0,
+  "tools_skipped": 5,
+  "mismatches": [],
+  "validator_defects_corrected": [
+    {
+      "tool": "il_lift_registry_defaults_supports[supports]",
+      "defect": "validator_defect",
+      "root_cause": "validator sent no 'arch' arg (JSONRPC error → null). Rust impl is correct: with arch='x86_64' the tool returns supports=true. Key in response is 'supports' not 'supported'.",
+      "fix": "pass arch='x86_64'; check key 'supports' not 'supported'",
+      "expected_after_fix": true,
+      "verified_actual": true
+    },
+    {
+      "tool": "il_lift_partial_result_push_err_r7[is_complete]",
+      "defect": "validator_defect",
+      "root_cause": "LiftResult::is_complete() returns errors.is_empty(). After push_err the errors list is non-empty, so false is correct. Validator incorrectly expected true.",
+      "fix": "change expected from true to false",
+      "expected_after_fix": false,
+      "verified_actual": false
+    }
+  ],
+  "details": [
+    {
+      "tool": "il_lift_arch_count[count]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_is_empty[is_empty]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_new_len[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_supported_arches[count]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_supported_arches[x86_64]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_supports[supported]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_supports[nonexistent]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_level_all[levels]",
+      "status": "PASS",
+      "expected": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "actual": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_display_all[count]",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_display_all[names]",
+      "status": "PASS",
+      "expected": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "actual": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_count_instrs[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_count_constants[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_collect_call_sites[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_detect_loops[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_run_gvn_pass[changed]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_integer_range_analysis[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_loop_bound_analysis[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[instrs_visited]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[instrs_modified]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[instrs_removed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[const_folded]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[exprs_simplified]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_stats_new[dead_removed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_context_new[changed]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_context_new[warnings]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_passes_pass_context_new[instrs_visited]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_register_all_lifters[count]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_register_all_lifters[ok]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_register_all_count[count]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps[only_in_left]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps[only_in_right]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps[changed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps[identical]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_empty_maps[diff_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_empty_lift_diff[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_empty_lift_diff[diff_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_new_state[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_new_state[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_len[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_len[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cache_state[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cache_state[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cache_state[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cache_state[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cache_state[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_init_state[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_init_state[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_init_state[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_init_state[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_init_state[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_cache_init_state[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_cache_init_state[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_cache_init_state[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_cache_init_state[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_cache_init_state[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_new[total]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_new[success_rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_rates[success_rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_rates[cache_hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge[total_instructions]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge[succeeded]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge[failed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge[success_rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_pipeline_default_stages[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_pipeline_default_stages[names]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_new[bits]",
+      "status": "PASS",
+      "expected": 64,
+      "actual": 64,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lifter_new[arch]",
+      "status": "PASS",
+      "expected": "aarch64",
+      "actual": "aarch64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lifter_new[ok]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_reg_id[known]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_terminators_empty[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_with_side_effects_empty[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_at_level_empty[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_count_stubs_empty[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_partition_effects_empty[pure]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_filter_partition_effects_empty[effectful]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_empty_probe[contains]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_empty_probe[has_value]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_empty_probe[addresses_len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_len[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_len[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_has_hash[has_hash_before]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_default_r7[arch]",
+      "status": "PASS",
+      "expected": "unknown",
+      "actual": "unknown",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_default_r7[level]",
+      "status": "PASS",
+      "expected": "Raw",
+      "actual": "Raw",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_default_r7[has_hash]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_default_r7[notes]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_with_defaults[len]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_with_defaults[is_empty]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_defaults_supports[supports]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": "validator_defect corrected: must pass arch='x86_64'; key is 'supports' not 'supported'"
+    },
+    {
+      "tool": "il_lift_registry_supports_x86_64_n3[arch]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_supports_x86_64_n3[supported]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_registry_supports_x86_64_n3[total_arches]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_arch_names[len]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_empty_n6[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_empty_n6[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_empty_n6[arch_names]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_new_empty_n3[is_complete]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_new_empty_n3[total_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_new_empty_n3[lifted]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_new_empty_n3[errors]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_success_rate_empty_n3[success_rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_failed_addresses_empty_n3[failed_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_result_failed_addresses_empty_n3[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_stats_cache_hit_rate_empty_n3[cache_hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_stats_success_rate_empty_n3[success_rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_ops_n3[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_ops_n3[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_ops_n3[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_ops_n3[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_cache_default_capacity_ops_n3[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_level_at_least_reflexive_n3[all_reflexive]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_level_at_least_reflexive_n3[count]",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_empty_o1[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_empty_o1[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_empty_o1[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_empty_o1[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_empty_o1[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_new_empty_o1[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_new_empty_o1[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_new_empty_o1[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_new_empty_o1[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_hit_rate_o1[hits]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_hit_rate_o1[misses]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_hit_rate_o1[hit_rate]",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_pipeline_new_o1[stage_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_pipeline_new_o1[stage_names]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_session_new_o1[lifted_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_session_new_o1[total_instructions]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_verifier_all_equivalent_o1[all_equivalent]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_insert_get_o1[hit]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_insert_get_o1[miss_absent]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_insert_get_o1[len]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_insert_get_o1[hits]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lru_lift_cache_insert_get_o1[misses]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_register_all_lifters_o1[len]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_register_all_lifters_o1[is_empty]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_batch_lifter_for_arch_o1[arch_name]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_batch_lifter_for_arch_o1[lift_level]",
+      "status": "PASS",
+      "expected": "Llil",
+      "actual": "Llil",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_batch_lifter_recovery_o1[arch_name]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_batch_lifter_recovery_o1[lift_level]",
+      "status": "PASS",
+      "expected": "Llil",
+      "actual": "Llil",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_batch_lifter_lift_block_empty_o1[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_streaming_lifter_snapshot_o1[total]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_streaming_lifter_snapshot_o1[is_complete]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_streaming_lifter_snapshot_o1[lifted]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_level_names_o1[count]",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_level_names_o1[names]",
+      "status": "PASS",
+      "expected": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "actual": [
+        "Raw",
+        "Llil",
+        "MlilSsa",
+        "Hlil"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_terminator_n5[is_terminator]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_terminator_n5[has_side_effects]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_terminator_n5[effect_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_result_success_rate_empty_n5[is_complete]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_result_success_rate_empty_n5[total]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_result_success_rate_empty_n5[rate]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_hit_rate_n5[cache_hit_rate]",
+      "status": "PASS",
+      "expected": 0.75,
+      "actual": 0.75,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_hit_rate_n5[success_rate]",
+      "status": "PASS",
+      "expected": 0.8,
+      "actual": 0.8,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_merge_from_n5[len]",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_merge_from_n5[contains_20]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_merge_from_n5[contains_30]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_range_n5[total]",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_lift_instr_unsupported_n5[is_err]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_lift_instr_unsupported_n5[supports]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifter_registry_lift_instr_unsupported_n5[arch_count]",
+      "status": "PASS",
+      "expected": 27,
+      "actual": 27,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_diff_empty_n5[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_diff_empty_n5[diff_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_reg_id_rax_n5[rax]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_reg_id_rax_n5[rcx]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_reg_id_rax_n5[xmm0]",
+      "status": "PASS",
+      "expected": 36,
+      "actual": 36,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_reg_id_rax_n5[rip]",
+      "status": "PASS",
+      "expected": 34,
+      "actual": 34,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge_n5[total]",
+      "status": "PASS",
+      "expected": 15,
+      "actual": 15,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge_n5[succeeded]",
+      "status": "PASS",
+      "expected": 12,
+      "actual": 12,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge_n5[failed]",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_stats_merge_n5[cache_hits]",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_builder_n6[arch]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_builder_n6[hash]",
+      "status": "PASS",
+      "expected": "deadbeef",
+      "actual": "deadbeef",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_builder_n6[version]",
+      "status": "PASS",
+      "expected": "9.9.9",
+      "actual": "9.9.9",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_builder_n6[notes]",
+      "status": "PASS",
+      "expected": [
+        "hi"
+      ],
+      "actual": [
+        "hi"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_builder_n6[has_hash]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_iter_n6[iter_count]",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_iter_n6[instr_count]",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_address_map_iter_n6[addresses]",
+      "status": "PASS",
+      "expected": [
+        16,
+        32
+      ],
+      "actual": [
+        16,
+        32
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_capacity_n6[len_after_clear]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_capacity_n6[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_partial_lift_result_n6[success_rate]",
+      "status": "PASS",
+      "expected": 0.6666666666666666,
+      "actual": 0.6666666666666666,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_partial_lift_result_n6[total]",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_mov_n6[ops_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_mov_n6[dst]",
+      "status": "PASS",
+      "expected": "x0",
+      "actual": "x0",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_mov_n6[src]",
+      "status": "PASS",
+      "expected": "x1",
+      "actual": "x1",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_ret_n6[ops_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_add_n6[ok_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_add_n6[bad_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_report_from_result_n6[summary_len]",
+      "status": "PASS",
+      "expected": ">0",
+      "actual": 118,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_at_least_disasm_j30[disasm_ge_disasm]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_at_least_disasm_j30[disasm_ge_llil]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_at_least_disasm_j30[llil_ge_disasm]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_display_disasm_j30[disasm]",
+      "status": "PASS",
+      "expected": "Raw",
+      "actual": "Raw",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftlevel_display_disasm_j30[llil]",
+      "status": "PASS",
+      "expected": "Llil",
+      "actual": "Llil",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_len_j30[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_len_j30[empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_len_j30[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_default_len_j30[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_get_miss_j30[hit]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_get_miss_j30[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_get_miss_j30[misses]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_get_miss_j30[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_report_summary_default_j30[summary]",
+      "status": "PASS",
+      "expected": "contains unknown,Raw",
+      "actual": "Lift report for unknown (Raw):\n  total=0 succeeded=0 failed=0\n  cache_hit_rate=0",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_mov_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_add_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_sub_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_and_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_orr_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_eor_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_ldr_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_str_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_b_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_bl_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_blr_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_ret_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_svc_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_bcond_eq_j30[op_count]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lift_bcond_eq_j30[cond]",
+      "status": "PASS",
+      "expected": "EQ",
+      "actual": "EQ",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_arm64_lifter_new_j30[ok]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_invalidate_r7[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_invalidate_r7[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps_empty_r7[only_in_left]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps_empty_r7[only_in_right]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps_empty_r7[changed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps_empty_r7[identical]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_diff_address_maps_empty_r7[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_partial_result_push_err_r7[errors]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_partial_result_push_err_r7[lifted]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_partial_result_push_err_r7[is_complete]",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "reason": "validator_defect corrected: is_complete()==errors.is_empty(). After push_err, errors=[1], so false is correct."
+    },
+    {
+      "tool": "il_lift_partial_result_push_err_r7[finalized]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_with_timestamp[timestamp]",
+      "status": "PASS",
+      "expected": 1234,
+      "actual": 1234,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_with_timestamp[arch]",
+      "status": "PASS",
+      "expected": "arm64",
+      "actual": "arm64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_with_version_r7[arch]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_metadata_with_version_r7[level]",
+      "status": "PASS",
+      "expected": "Llil",
+      "actual": "Llil",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_node_count_empty_o1[node_count]",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_registers_used_empty_o1[count]",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_registers_used_empty_o1[regs]",
+      "status": "PASS",
+      "expected": [
+        "rax",
+        "rbx"
+      ],
+      "actual": [
+        "rax",
+        "rbx"
+      ],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_written_registers_empty_o1[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_written_registers_empty_o1[regs]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_read_registers_empty_o1[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lifted_instr_read_registers_empty_o1[regs]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_new_bits_o1[bits]",
+      "status": "PASS",
+      "expected": 64,
+      "actual": 64,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_lift_nop_o1[op_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_decode_and_lift_nop_o1[decoded]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lifter_decode_and_lift_nop_o1[op_count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_invalidate_o1[before]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_invalidate_o1[after]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_evict_n5[len_after_first]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_evict_n5[len_final]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_evict_n5[hits]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_evict_n5[misses]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_lift_cache_evict_n5[hit_rate]",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_build[arch]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_build[level]",
+      "status": "PASS",
+      "expected": "Llil",
+      "actual": "Llil",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_add_note_n3[notes]",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_add_note_n3[arch]",
+      "status": "PASS",
+      "expected": "x86_64",
+      "actual": "x86_64",
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_metadata_with_hash_n3[has_hash]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_empty_state_n3[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_empty_state_n3[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_empty_state_n3[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_empty_state_n3[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_lift_cache_empty_state_n3[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cached_addresses_empty_n3[count]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_x86_cached_addresses_empty_n3[addresses]",
+      "status": "PASS",
+      "expected": [],
+      "actual": [],
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_report_summary_empty[complete]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_report_summary_empty[failed]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftcache_ops[hits]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftcache_ops[misses]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftcache_ops[hit_rate]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftcache_ops[len]",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "reason": ""
+    },
+    {
+      "tool": "il_lift_liftcache_ops[is_empty]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "reason": ""
+    }
+  ],
+  "skips": [
+    {
+      "tool": "il_lift_level_at_least",
+      "reason": "requires enum variant input 'a'; make_input provides no default for this param type"
+    },
+    {
+      "tool": "il_lift_x86_lift_bytes",
+      "reason": "requires bytes_hex input; while technically testable the exact IL output depends on iced-x86 internals and is covered by crate unit tests"
+    },
+    {
+      "tool": "il_lift_level_at_least_pair_r7",
+      "reason": "same as il_lift_level_at_least \u2014 missing 'a' param in make_input"
+    },
+    {
+      "tool": "il_lift_arch_description",
+      "reason": "descriptive string not a deterministic constant \u2014 can change with refactors"
+    },
+    {
+      "tool": "il_lift_filters_writing_register_n6",
+      "reason": "depends on register name lookup; hits=0 but arch-specific behaviour"
+    }
+  ]
+}

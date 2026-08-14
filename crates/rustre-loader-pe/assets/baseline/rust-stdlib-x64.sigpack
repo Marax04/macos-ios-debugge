@@ -1,0 +1,17 @@
+SIGPACK 1
+pack rust-stdlib-x64
+---
+4883EC28E8..............85C0750E | 0 0 0000 16 | rust-stdlib | std::rt::lang_start_internal
+4883EC2848894C2430488B0DE8 | 0 0 0000 12 | rust-stdlib | core::panicking::panic
+4889742410574883EC30488BFA488BF1488B9F | 0 0 0000 19 | rust-stdlib | alloc::raw_vec::RawVec::grow_amortized
+4885C9740C488B01FF50104883C40859C3 | 0 0 0000 16 | rust-stdlib | alloc::alloc::dealloc
+40534883EC20488BD9 | 0 0 0000 9 | rust-stdlib | core::ops::function::FnOnce::call_once
+4883EC384C8B4C2460 | 0 0 0000 8 | rust-stdlib | std::sys::pal::windows::api::WideString
+48895C2408574883EC20488BDA488BF9 | 0 0 0000 15 | rust-stdlib | alloc::sync::Arc::new
+40554883EC2048C7442430FFFFFFFF488BEA | 0 0 0000 16 | rust-stdlib | std::panicking::try
+4883EC58488B4C2460 | 0 0 0000 9 | rust-stdlib | core::result::Result::unwrap
+56574883EC284889CE4889D7 | 0 0 0000 12 | rust-stdlib | core::ptr::drop_in_place
+4533C04C8BC94885D2 | 0 0 0000 9 | rust-stdlib | std::sys::pal::windows::c::SetLastError
+488B0D..............488905..............C3 | 0 0 0000 18 | rust-stdlib | std::env::args
+4883EC284885C97505 | 0 0 0000 9 | rust-stdlib | core::option::Option::unwrap
+56574883EC284C8BC1488BFA488BF1 | 0 0 0000 14 | rust-stdlib | core::slice::iter::Iter::next

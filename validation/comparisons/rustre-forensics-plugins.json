@@ -1,0 +1,55 @@
+{
+  "crate": "rustre-forensics-plugins",
+  "tests": 5,
+  "mismatches": 2,
+  "match": false,
+  "mcp_tools": [
+    "forensics.list_plugins",
+    "forensics.open_dump",
+    "forensics.run_plugin"
+  ],
+  "python_validator": "validation/validators/rustre-forensics-plugins.py",
+  "python_fn_count": 201,
+  "note": "Python validator covers 201 pure-logic functions across the crate; MCP exposes only 3 forensics tools. Comparison performed on MCP tool behavior vs Python validator equivalents.",
+  "results": [
+    {
+      "name": "list_plugins.count",
+      "mcp": 12,
+      "python": 8,
+      "match": false,
+      "note": "MCP returns 12 plugins (pslist,psscan,pstree,dlllist,netscan,malfind,hollowfind,apihooks,hashdump,cmdline,privs,svcscan); Python validator default_registry has 8 (pslist,pstree,netstat,vadinfo,driverscan,malfind,hivelist,strings)"
+    },
+    {
+      "name": "list_plugins.default_names_present",
+      "mcp_plugins": ["apihooks","cmdline","dlllist","hashdump","hollowfind","malfind","netscan","privs","pslist","psscan","pstree","svcscan"],
+      "python_defaults": ["pslist","pstree","netstat","vadinfo","driverscan","malfind","hivelist","strings"],
+      "overlap": ["pslist","pstree","malfind"],
+      "match": false,
+      "note": "Only 3/8 Python default plugin names present in MCP result; plugin sets diverge"
+    },
+    {
+      "name": "run_plugin.pslist_no_image_graceful_error",
+      "mcp_is_error": true,
+      "mcp_text": "execution failed: not found: image 1 not loaded",
+      "python_behavior": "returns {plugin, result:[]} for known plugins",
+      "match": true,
+      "note": "Both return error/empty result when no memory image is loaded"
+    },
+    {
+      "name": "run_plugin.unknown_plugin_error",
+      "mcp_is_error": true,
+      "mcp_text": "execution failed: not found: image 1 not loaded",
+      "python_behavior": "returns {error: \"plugin 'NOTEXIST' not found\"}",
+      "match": true,
+      "note": "Both return an error for unknown/missing plugin or missing image"
+    },
+    {
+      "name": "open_dump.nonexistent_file_error",
+      "mcp_is_error": true,
+      "mcp_text": "execution failed: cannot read nonexistent.bin: os error 2",
+      "python_behavior": "DumpParser_detect_format returns DUMP_FORMAT_UNKNOWN for short/invalid data",
+      "match": true,
+      "note": "Both handle nonexistent/invalid file gracefully with an error"
+    }
+  ]
+}

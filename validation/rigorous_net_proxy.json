@@ -1,0 +1,7 @@
+{
+  "module": "net_proxy",
+  "tools_hardened": 15,
+  "checks_passed": 36,
+  "checks_failed": 0,
+  "mismatches": []
+}

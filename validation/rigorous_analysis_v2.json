@@ -1,0 +1,219 @@
+[
+  {
+    "tool": "analysis_cache_compute_hash",
+    "status": "PASS",
+    "args": {
+      "hex": "deadbeef",
+      "bytes": [
+        222,
+        173,
+        190,
+        239
+      ]
+    }
+  },
+  {
+    "tool": "analysis_string_shannon_entropy_wire2",
+    "status": "PASS",
+    "args": {
+      "value": ""
+    }
+  },
+  {
+    "tool": "analysis_string_shannon_entropy_wire2",
+    "status": "PASS",
+    "args": {
+      "value": "AAAA"
+    }
+  },
+  {
+    "tool": "analysis_string_shannon_entropy_wire2",
+    "status": "PASS",
+    "args": {
+      "value": "AB"
+    }
+  },
+  {
+    "tool": "analysis_cfg_cyclomatic_complexity",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": []
+    }
+  },
+  {
+    "tool": "analysis_cfg_cyclomatic_complexity",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_block_count",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_edge_count",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_is_reducible",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": []
+    }
+  },
+  {
+    "tool": "analysis_cfg_is_reducible",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_find_back_edges",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_xref_kind_all",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_xref_parse_kind",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeCall"
+    }
+  },
+  {
+    "tool": "analysis_xref_parse_kind",
+    "status": "PASS",
+    "args": {
+      "kind": ""
+    }
+  },
+  {
+    "tool": "analysis_type_list_builtin_types",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_type_lookup_builtin_type",
+    "status": "PASS",
+    "args": {
+      "name": "HANDLE"
+    }
+  },
+  {
+    "tool": "analysis_type_lookup_builtin_type",
+    "status": "PASS",
+    "args": {
+      "name": "NotAType_xyz"
+    }
+  },
+  {
+    "tool": "analysis_dataflow_compute_liveness",
+    "status": "PASS",
+    "args": {
+      "cfg_nodes": []
+    }
+  },
+  {
+    "tool": "analysis_dataflow_compute_reaching_defs",
+    "status": "PASS",
+    "args": {
+      "cfg_nodes": []
+    }
+  },
+  {
+    "tool": "analysis_fn_detect_extra",
+    "status": "PASS",
+    "args": {
+      "pdata": [],
+      "text": [],
+      "text_base": 0,
+      "image_base": 0
+    }
+  }
+]

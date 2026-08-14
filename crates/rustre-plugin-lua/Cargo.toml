@@ -1,0 +1,27 @@
+[package]
+license.workspace = true
+name = "rustre-plugin-lua"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+# The `send` feature makes `mlua::Lua` implement Send + Sync, which is required
+# because LuaStateManager wraps states in Arc and guards them with parking_lot
+# Mutex — a design intended for multi-threaded use.
+mlua = { workspace = true, features = ["send"] }
+parking_lot = { workspace = true }
+
+[lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

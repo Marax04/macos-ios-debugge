@@ -1,0 +1,42 @@
+{
+  "crate": "rustre-knowledge",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "No MCP-vs-validator comparison possible. The validator covers pure in-process semantics of rustre-knowledge (KnowledgeGraph add_node/add_edge/outgoing/incoming, export_to_json/import_from_json round-trip, merge_graphs, snapshot query helpers, EventLog replay). These functions are NOT exposed as MCP tools. The MCP kg_* surface (kg_query [raw SQL], kg_search [FTS], kg_annotate, kg_list_functions, kg_get_function, kg_set_function_name, kg_set_comment) operates on a SQL-backed runtime KG keyed by binary_id and does not wrap the in-process KnowledgeGraph/EntitySnapshot APIs. Per report line 98: 'These do NOT currently invoke rustre-knowledge -- gap: real wiring missing.' The semantic surfaces do not overlap 1:1, so no per-test mismatch can be produced. Validator self-test passes (graph primitives, round-trip, merge, snapshot queries, replay all green).",
+  "validator_selftest": {
+    "node_count": 2,
+    "edge_count": 2,
+    "outgoing_a": 2,
+    "incoming_b": 2,
+    "roundtrip_nodes": 2,
+    "roundtrip_edges": 2,
+    "merge_node_count": 3,
+    "merge_conflicts": 1,
+    "merge_right_wins": 1,
+    "find_sym_addr": true,
+    "fn_containing": true,
+    "count_symbols": 1,
+    "replay_symbol_count": 1
+  },
+  "mcp_tools_available": [
+    "kg_query", "kg_search", "kg_annotate",
+    "kg_list_functions", "kg_get_function",
+    "kg_set_function_name", "kg_set_comment"
+  ],
+  "validator_functions": [
+    "add_node", "add_edge", "node_count", "edge_count", "outgoing", "incoming",
+    "export_to_json", "import_from_json", "minimal_graph_json", "filter_import",
+    "merge_graphs", "merge_many",
+    "find_symbol_by_addr", "find_symbol_by_name", "symbols_in_range",
+    "find_function_by_entry", "function_containing", "functions_in_range",
+    "find_type_by_name", "comments_at", "comments_at_scope",
+    "xrefs_to", "xrefs_from", "xrefs_of_kind",
+    "patches_at", "applied_patches", "bookmarks_at",
+    "traces_in_window", "traces_at", "tags_for", "tags_with_key",
+    "count", "replay"
+  ],
+  "integration_gap": "rustre-mcp kg_* tools should be re-wired to delegate into rustre-knowledge::KnowledgeStore (in_memory/open_json) and KnowledgeGraph import/export/merge APIs so the validator's ground truth becomes testable end-to-end. Recommended follow-up task -- not a defect inside crates/rustre-knowledge."
+}

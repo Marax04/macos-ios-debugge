@@ -1,0 +1,133 @@
+{
+  "summary": {
+    "tools_hardened": 24,
+    "tools_passed": 24,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "notes": "New emu_ tools not covered in rigorous_emu_v2.json. 3 validator_defects fixed inline (wrong field names: second_free_result->free2, count->allocs, found->getenv)."
+  },
+  "results": [
+    {"tool": "emu_unicorn_perm_can_write", "status": "PASS", "field": "can_write", "expected": true, "actual": true},
+    {"tool": "emu_unicorn_perm_can_write", "status": "PASS", "field": "can_write", "expected": false, "actual": false},
+    {"tool": "emu_unicorn_perm_can_write", "status": "PASS", "field": "can_write", "expected": true, "actual": true},
+    {"tool": "emu_unicorn_perm_can_exec_v2", "status": "PASS", "field": "can_exec", "expected": true, "actual": true},
+    {"tool": "emu_unicorn_perm_can_exec_v2", "status": "PASS", "field": "can_exec", "expected": false, "actual": false},
+    {"tool": "emu_unicorn_perm_can_exec_v2", "status": "PASS", "field": "can_exec", "expected": true, "actual": true},
+    {
+      "tool": "emu_unicorn_perm_roundtrip",
+      "status": "PASS",
+      "expected": {"can_read": true, "can_write": true, "can_exec": true},
+      "actual": {"can_read": true, "can_write": true, "can_exec": true}
+    },
+    {
+      "tool": "emu_unicorn_perm_roundtrip",
+      "status": "PASS",
+      "expected": {"can_read": false, "can_write": false, "can_exec": false},
+      "actual": {"can_read": false, "can_write": false, "can_exec": false}
+    },
+    {
+      "tool": "emu_unicorn_mode_endian_check",
+      "status": "PASS",
+      "description": "returns 18-entry mode endian map; X86_64 is LE ptr_size=8, Mips32BE is BE ptr_size=4",
+      "actual": {"count": 18, "sample_X86_64": {"ptr_size": 8, "is_le": true}, "sample_Mips32BE": {"ptr_size": 4, "is_le": false}}
+    },
+    {"tool": "emu_unicorn_heap_brk_frontier", "status": "PASS", "field": "brk", "expected": 4192, "actual": 4192},
+    {
+      "tool": "emu_unicorn_heap_double_free",
+      "status": "PASS",
+      "description": "validator_defect fixed: field is 'free2' not 'second_free_result'",
+      "field": "free2",
+      "expected": false,
+      "actual": false
+    },
+    {"tool": "emu_unicorn_heap_realloc_shrink", "status": "PASS", "field": "same", "expected": true, "actual": true},
+    {
+      "tool": "emu_unicorn_coverage_empty_report",
+      "status": "PASS",
+      "expected": {"coverage": 0, "edges": 0, "hot": null},
+      "actual": {"coverage": 0, "edges": 0, "hot": null}
+    },
+    {"tool": "emu_unicorn_hook_access_kind", "status": "PASS", "field": "label", "expected": "mem", "actual": "mem"},
+    {"tool": "emu_unicorn_hook_insn_kind", "status": "PASS", "field": "label", "expected": "insn", "actual": "insn"},
+    {
+      "tool": "emu_unicorn_emu_options_custom",
+      "status": "PASS",
+      "expected": {"timeout_us": 1000, "max_instructions": 500, "stop_on_unmapped": true, "stop_on_invalid_insn": false},
+      "actual": {"timeout_us": 1000, "max_instructions": 500, "stop_on_unmapped": true, "stop_on_invalid_insn": false}
+    },
+    {
+      "tool": "emu_unicorn_heap_malloc_sequence",
+      "status": "PASS",
+      "description": "validator_defect fixed: field is 'allocs' not 'count'",
+      "field": "allocs",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "emu_unicorn_register_file_mask",
+      "status": "PASS",
+      "description": "Mode=X86_64; pc=0xDEADBEEF, sp=0xCAFEBABE returned unmasked (64-bit mask = identity)",
+      "actual": {"pc": 3735928559, "sp": 3405691582}
+    },
+    {
+      "tool": "emu_unicorn_mapped_region_read_roundtrip",
+      "status": "PASS",
+      "field": "read_hex",
+      "expected": "deadbeef",
+      "actual": "deadbeef"
+    },
+    {"tool": "emu_qiling_guest_file_is_eof", "status": "PASS", "field": "is_eof", "expected": true, "actual": true},
+    {"tool": "emu_qiling_guest_file_is_eof", "status": "PASS", "field": "is_eof", "expected": false, "actual": false},
+    {"tool": "emu_qiling_guest_file_remaining", "status": "PASS", "field": "remaining", "expected": 3, "actual": 3},
+    {"tool": "emu_qiling_guest_file_remaining", "status": "PASS", "field": "remaining", "expected": 0, "actual": 0},
+    {"tool": "emu_qiling_fd_table_open_fds", "status": "PASS", "field": "open_fds", "expected": [0, 1, 2], "actual": [0, 1, 2]},
+    {
+      "tool": "emu_qiling_fd_table_len",
+      "status": "PASS",
+      "expected": {"len": 3, "is_empty": false},
+      "actual": {"len": 3, "is_empty": false}
+    },
+    {
+      "tool": "emu_qiling_fd_table_len",
+      "status": "PASS",
+      "expected": {"len": 0, "is_empty": true},
+      "actual": {"len": 0, "is_empty": true}
+    },
+    {
+      "tool": "emu_qiling_syscall_ctx_args",
+      "status": "PASS",
+      "expected": {"arg0": 1, "arg1": 2, "arg2": 3, "arg3": 4, "arg4": 5, "arg5": 6},
+      "actual": {"arg0": 1, "arg1": 2, "arg2": 3, "arg3": 4, "arg4": 5, "arg5": 6}
+    },
+    {"tool": "emu_qiling_syscall_result_not_impl_retval", "status": "PASS", "field": "retval", "expected": 42, "actual": 42},
+    {"tool": "emu_qiling_syscall_result_not_impl_retval", "status": "PASS", "field": "retval", "expected": -38, "actual": -38},
+    {
+      "tool": "emu_qiling_default_linux_x86_64_table_len",
+      "status": "PASS",
+      "description": "len=16, is_empty=false, os=linux, arch=X86_64",
+      "actual": {"len": 16, "is_empty": false, "os": "linux", "arch": "X86_64"}
+    },
+    {
+      "tool": "emu_qiling_process_env_setenv_check",
+      "status": "PASS",
+      "description": "validator_defect fixed: field is 'getenv' not 'found'; getenv=hello confirms round-trip",
+      "field": "getenv",
+      "expected": "hello",
+      "actual": "hello"
+    },
+    {
+      "tool": "emu_qiling_raw_binary_loader_format_name",
+      "status": "PASS",
+      "expected": {"format_name": "RAW", "can_load": true},
+      "actual": {"format_name": "RAW", "can_load": true}
+    },
+    {"tool": "emu_qiling_elf_loader_stub_format_name", "status": "PASS", "field": "can_load", "description": "ELF magic -> can_load=true", "expected": true, "actual": true},
+    {"tool": "emu_qiling_elf_loader_stub_format_name", "status": "PASS", "field": "can_load", "description": "MZ magic -> can_load=false", "expected": false, "actual": false}
+  ],
+  "mismatches": [],
+  "validator_defects_fixed": [
+    {"tool": "emu_unicorn_heap_double_free", "wrong_field": "second_free_result", "correct_field": "free2", "resolution": "validator_defect"},
+    {"tool": "emu_unicorn_heap_malloc_sequence", "wrong_field": "count", "correct_field": "allocs", "resolution": "validator_defect"},
+    {"tool": "emu_qiling_process_env_setenv_check", "wrong_field": "found", "correct_field": "getenv", "resolution": "validator_defect"}
+  ]
+}

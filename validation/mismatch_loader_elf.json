@@ -1,0 +1,13 @@
+{
+  "category": "loader_elf",
+  "tools_in_category": 5,
+  "checks_total": 3,
+  "checks_passed": 3,
+  "checks_skipped": 2,
+  "tools_touched": [
+    "loader_elf_info_summary",
+    "loader_elf_parse_info",
+    "loader_elf_plt_entries"
+  ],
+  "mismatches": []
+}

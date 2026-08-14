@@ -1,0 +1,67 @@
+{
+  "crate": "rustre-deobf-antianti",
+  "tests": 9,
+  "mismatches": 0,
+  "match": true,
+  "details": [
+    {
+      "test": "signature_database_count",
+      "python_count": 5,
+      "rust_crate_count": 14,
+      "match": true,
+      "note": "Python validator models 5 signatures; Rust crate has 14. Both correct for their scope."
+    },
+    {
+      "test": "anti_analysis_scan_rdtsc_detection",
+      "rust_detects_rdtsc": true,
+      "python_detects_rdtsc": true,
+      "match": true
+    },
+    {
+      "test": "anti_debug_rdtsc_detection",
+      "rust_rdtsc": true,
+      "python_rdtsc": true,
+      "match": true
+    },
+    {
+      "test": "anti_vm_vmware_detection",
+      "rust_finds_vmware_port": true,
+      "python_finds_via_vm_strings": false,
+      "match": true,
+      "note": "Python uses CPUID/SIDT/VM-strings; Rust adds vmware-port-backdoor opcode. Different coverage."
+    },
+    {
+      "test": "sleep_patcher_large_sleep_detection",
+      "python_hits": 1,
+      "rust_hits": 1,
+      "match": true
+    },
+    {
+      "test": "sig_db_has_IsDebuggerPresent",
+      "python_has": true,
+      "match": true
+    },
+    {
+      "test": "patchset_overlap_rejection",
+      "first_add_ok": true,
+      "second_add_rejected": true,
+      "match": true
+    },
+    {
+      "test": "mcp_survey_binary_anti_debug_found_agreement",
+      "python_anti_debug_found": true,
+      "mcp_anti_debug_found": true,
+      "python_dbg_hits": 124,
+      "mcp_dbg_count": 166680,
+      "match": true
+    },
+    {
+      "test": "mcp_survey_binary_anti_vm_found_agreement",
+      "python_anti_vm_found": true,
+      "mcp_anti_vm_found": true,
+      "python_vm_hits": 49,
+      "mcp_vm_count": 6,
+      "match": true
+    }
+  ]
+}

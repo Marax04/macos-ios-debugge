@@ -1,0 +1,23 @@
+[package]
+license.workspace = true
+name = "rustre-forensics-plugins"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-forensics = { path = "../rustre-forensics" }
+rustre-core = { path = "../rustre-core" }
+rustre-forensics-mem = { path = "../rustre-forensics-mem" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+subtle = { workspace = true }
+
+[lints]
+workspace = true

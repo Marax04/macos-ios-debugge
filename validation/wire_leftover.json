@@ -1,0 +1,342 @@
+{
+  "keep_in_wire_tools": [
+    "rs_sym_core_extra_handlers",
+    "all_wire_handlers",
+    "wire_into_server"
+  ],
+  "move_to_misc": [],
+  "move_to_prefix_module": [
+    {
+      "item": "DeobfXorEntropyToolV2",
+      "prefix": "Deobf",
+      "module": "tools/deobf.rs",
+      "line_range": [
+        22271,
+        22271
+      ]
+    },
+    {
+      "item": "DeobfAdler32ChecksumToolV2",
+      "prefix": "Deobf",
+      "module": "tools/deobf.rs",
+      "line_range": [
+        22309,
+        22309
+      ]
+    },
+    {
+      "item": "SandboxReportSeverityParseToolV2",
+      "prefix": "Sandbox",
+      "module": "tools/sandbox.rs",
+      "line_range": [
+        31272,
+        31272
+      ]
+    },
+    {
+      "item": "SandboxReportIocsetMockToolV2",
+      "prefix": "Sandbox",
+      "module": "tools/sandbox.rs",
+      "line_range": [
+        31308,
+        31308
+      ]
+    },
+    {
+      "item": "EmuUnicornPermCanExecToolV2",
+      "prefix": "Emu",
+      "module": "tools/emu.rs",
+      "line_range": [
+        33820,
+        33820
+      ]
+    },
+    {
+      "item": "ScriptReadU8ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        33979,
+        33979
+      ]
+    },
+    {
+      "item": "ScriptReadU16ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        33994,
+        33994
+      ]
+    },
+    {
+      "item": "ScriptReadU32BeToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34009,
+        34009
+      ]
+    },
+    {
+      "item": "ScriptReadU64ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34024,
+        34024
+      ]
+    },
+    {
+      "item": "ScriptWriteU8ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34056,
+        34056
+      ]
+    },
+    {
+      "item": "ScriptWriteU16ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34071,
+        34071
+      ]
+    },
+    {
+      "item": "ScriptWriteU32ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34086,
+        34086
+      ]
+    },
+    {
+      "item": "ScriptWriteU64ToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34101,
+        34101
+      ]
+    },
+    {
+      "item": "ScriptValueTypeofToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34116,
+        34116
+      ]
+    },
+    {
+      "item": "ScriptValueLenToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34131,
+        34131
+      ]
+    },
+    {
+      "item": "ScriptValueToStringToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34148,
+        34148
+      ]
+    },
+    {
+      "item": "ScriptValueIsTruthyToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34165,
+        34165
+      ]
+    },
+    {
+      "item": "ScriptBuiltinFunctionsListToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34180,
+        34180
+      ]
+    },
+    {
+      "item": "ScriptSandboxPolicyPresetToolNew",
+      "prefix": "Script",
+      "module": "tools/script.rs",
+      "line_range": [
+        34197,
+        34197
+      ]
+    },
+    {
+      "item": "FuzzNetDecodeFrameU32BeToolExt",
+      "prefix": "Fuzz",
+      "module": "tools/fuzz.rs",
+      "line_range": [
+        34241,
+        34241
+      ]
+    },
+    {
+      "item": "SymbSymSubConstToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34281,
+        34281
+      ]
+    },
+    {
+      "item": "SymbSymMulConstToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34304,
+        34304
+      ]
+    },
+    {
+      "item": "SymbSymAndConstToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34327,
+        34327
+      ]
+    },
+    {
+      "item": "SymbSymOrConstToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34350,
+        34350
+      ]
+    },
+    {
+      "item": "SymbSymNotConstToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34373,
+        34373
+      ]
+    },
+    {
+      "item": "SymbSymTypeWidthToolV2",
+      "prefix": "Symb",
+      "module": "tools/symb.rs",
+      "line_range": [
+        34395,
+        34395
+      ]
+    },
+    {
+      "item": "DecompTypeIntByteSizeWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36801,
+        36801
+      ]
+    },
+    {
+      "item": "DecompTypePtrWidthWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36802,
+        36802
+      ]
+    },
+    {
+      "item": "DecompTypeArraySizeWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36803,
+        36803
+      ]
+    },
+    {
+      "item": "DecompStructFieldAtWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36804,
+        36804
+      ]
+    },
+    {
+      "item": "DecompTypeEnvSetGetWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36805,
+        36805
+      ]
+    },
+    {
+      "item": "DecompTypeEnvStructNamedWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36806,
+        36806
+      ]
+    },
+    {
+      "item": "DecompTypeQualifierBuilderWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36807,
+        36807
+      ]
+    },
+    {
+      "item": "DecompRenamerRenameWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36808,
+        36808
+      ]
+    },
+    {
+      "item": "DecompRenamerVariablesWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36809,
+        36809
+      ]
+    },
+    {
+      "item": "DecompTypedEmitterEmitWireTool",
+      "prefix": "Decomp",
+      "module": "tools/decomp.rs",
+      "line_range": [
+        36810,
+        36810
+      ]
+    }
+  ],
+  "stats": {
+    "total_lines": 36922,
+    "impl_tool_blocks": 831,
+    "impl_toolhandler_blocks": 831,
+    "keep_count": 3,
+    "misc_count": 0,
+    "prefix_count": 36
+  }
+}

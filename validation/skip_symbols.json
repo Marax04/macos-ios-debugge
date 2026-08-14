@@ -1,0 +1,248 @@
+{
+  "skipped": [
+    {
+      "tool": "symbols_pdb_parse_info",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_from_bytes",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_symbols_list",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_symbols_count_by_kind",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_symbols_filter_functions",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_symbols_with_segment",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_types_by_kind",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_reader_guid",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_reader_modules",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_reader_symbols_count",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_reader_types",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_stream_info_signature",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_stream_names",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_public_scan",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_module_proc_count",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_module_proc_symbols",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_pdb_guid_format",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_discover_pdb_for_binary",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_backends_registry",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_backends_registry_v2",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_stabs_parse_from_elf",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_demangle_auto_v5",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_demangle_swift_v5",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_stabs_type_parser_parse_descriptor",
+      "reason": "requires file/PDB/complex-internal-state \u2014 not independently verifiable"
+    },
+    {
+      "tool": "symbols_v6_symkind_display_all",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_source_priority_all",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_synthetic_names_all",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_function_boundary_ops",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_pdb_url_build",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_addr_map_lookup",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_conflict_resolve",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_unified_table_ops",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_try_demangle_batch",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v6_demangle_all_table",
+      "reason": "already covered by validators_rigorous_symbols_v6.py"
+    },
+    {
+      "tool": "symbols_v7_binding_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_conflict_strategies_all",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_debug_merger_finish",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_demangler_pipeline_order",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_export_table_lookup",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_import_table_group",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_in_memory_provider_ops",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_legacy_source_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_pdb_server_msdl",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_section_symbols_count",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_source_priority_all",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symkind_classify",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symkind_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_cache_lru",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_contains",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_exporter_all",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_new_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_stats_from_names",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symbol_store_ops",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_symkind_display_all",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_unified_symbol_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_unified_table_ops",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_visibility_display",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_v7_xref_index_ops",
+      "reason": "loose/nondeterministic display tools \u2014 no stable independent ground truth"
+    },
+    {
+      "tool": "symbols_exporter_to_idc",
+      "reason": "format-specific output validated separately or nondeterministic ordering"
+    },
+    {
+      "tool": "symbols_exporter_to_map",
+      "reason": "format-specific output validated separately or nondeterministic ordering"
+    },
+    {
+      "tool": "symbols_exporter_to_json",
+      "reason": "format-specific output validated separately or nondeterministic ordering"
+    }
+  ]
+}

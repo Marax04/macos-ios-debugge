@@ -1,0 +1,28 @@
+{
+  "crate": "rustre-trace",
+  "tests": [
+    {
+      "name": "trace_umbrella_summary",
+      "py": {
+        "backends": [],
+        "backend_count": 0,
+        "trace_count": 0,
+        "event_count": 0,
+        "total_blocks": 0,
+        "covered_blocks": 0,
+        "block_coverage_pct": 0.0,
+        "total_functions": 0,
+        "covered_functions": 0,
+        "function_coverage_pct": 0.0,
+        "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace.json"
+      },
+      "mcp": {
+        "note": "rustre-mcp exposes no umbrella trace tool; trace_data_flow / analysis_trace_data_flow_path are xref slicers, not execution-trace aggregators (PT/coresight/coverage/navigate)"
+      },
+      "mismatch": false,
+      "reason": "no MCP equivalent for umbrella trace crate — validator-only"
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

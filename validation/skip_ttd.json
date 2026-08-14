@@ -1,0 +1,26 @@
+[
+  {
+    "tool": "ttd_recorder_validate_trace",
+    "reason": "Requires a real .run TTD trace file on disk \u2014 no deterministic fixture available"
+  },
+  {
+    "tool": "ttd_recorder_validation_is_perfect",
+    "reason": "Requires a real .run TTD trace file on disk"
+  },
+  {
+    "tool": "ttd_replayer_find_root_cause",
+    "reason": "Nondeterministic: depends on live trace state"
+  },
+  {
+    "tool": "ttd_replayer_step_forward",
+    "reason": "Stateful: requires open replay session"
+  },
+  {
+    "tool": "ttd_replayer_goto",
+    "reason": "Stateful: requires open replay session"
+  },
+  {
+    "tool": "ttd_recorder_check_platform_support",
+    "reason": "Platform-dependent: true only on Windows with TTD kernel module installed"
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "tool": "llm_token_count_estimate",
+      "status": "PASS",
+      "passed": 9,
+      "failed": 0,
+      "total": 9
+    },
+    {
+      "tool": "llm_compress_message",
+      "status": "PASS",
+      "passed": 4,
+      "failed": 0,
+      "total": 4
+    },
+    {
+      "tool": "llm_trim_to_budget",
+      "status": "PASS",
+      "passed": 6,
+      "failed": 0,
+      "total": 6
+    }
+  ],
+  "mismatches": []
+}

@@ -1,0 +1,1654 @@
+{
+  "binary": "C:\\Users\\Fra\\Desktop\\RustRE\\graphify-out\\fa2\\target\\release\\fa2.exe",
+  "tests": [
+    {
+      "address": 5368713216,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368713872,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715094,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715174,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715222,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715302,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715398,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 2,
+        "edges": 1,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 2
+      },
+      "mcp": {
+        "idom_size": 2,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368715472,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368716694,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368716774,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368716822,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368716902,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368716998,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 2,
+        "edges": 1,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 2
+      },
+      "mcp": {
+        "idom_size": 2,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368717072,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 4,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 4
+      },
+      "mcp": {
+        "idom_size": 4,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368717952,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 6,
+        "edges": 7,
+        "loops": 1,
+        "back_edges": 1,
+        "idom_size": 6
+      },
+      "mcp": {
+        "idom_size": 6,
+        "loops": 1,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368718096,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 2,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368719496,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 6,
+        "edges": 6,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 6
+      },
+      "mcp": {
+        "idom_size": 6,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368720288,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 5,
+        "edges": 4,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 5
+      },
+      "mcp": {
+        "idom_size": 5,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368720656,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 5,
+        "edges": 4,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 5
+      },
+      "mcp": {
+        "idom_size": 5,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368721264,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 4,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 4
+      },
+      "mcp": {
+        "idom_size": 4,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368721840,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 5,
+        "edges": 5,
+        "loops": 1,
+        "back_edges": 1,
+        "idom_size": 5
+      },
+      "mcp": {
+        "idom_size": 5,
+        "loops": 1,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722016,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 6,
+        "edges": 7,
+        "loops": 1,
+        "back_edges": 1,
+        "idom_size": 6
+      },
+      "mcp": {
+        "idom_size": 6,
+        "loops": 1,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722256,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 5,
+        "edges": 5,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 5
+      },
+      "mcp": {
+        "idom_size": 5,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722727,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722759,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 2,
+        "edges": 1,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 2
+      },
+      "mcp": {
+        "idom_size": 2,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722839,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368722864,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368724038,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368724246,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 4,
+        "edges": 5,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 4
+      },
+      "mcp": {
+        "idom_size": 4,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368724470,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368724721,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368724977,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368733233,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368756678,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368756902,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368757174,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368757430,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368757686,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368757942,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 3,
+        "edges": 3,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 3
+      },
+      "mcp": {
+        "idom_size": 3,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    },
+    {
+      "address": 5368758182,
+      "mcp_cfg_keys": [
+        "path",
+        "entry_va",
+        "entry_block_id",
+        "exit_block_ids",
+        "block_count",
+        "blocks"
+      ],
+      "py": {
+        "blocks": 1,
+        "edges": 0,
+        "loops": 0,
+        "back_edges": 0,
+        "idom_size": 1
+      },
+      "mcp": {
+        "idom_size": 1,
+        "loops": 0,
+        "dom_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "rpo",
+          "idom",
+          "dom_children"
+        ],
+        "loops_keys": [
+          "path",
+          "entry_va",
+          "block_count",
+          "loop_count",
+          "loops",
+          "sccs"
+        ]
+      },
+      "diffs": []
+    }
+  ],
+  "tool_count": 119,
+  "cfg_tools": [
+    "analyze.basic_block",
+    "analysis_basic_blocks_path",
+    "analysis_fn_cfg_path",
+    "analysis_dominators_path",
+    "analysis_loops_path"
+  ],
+  "project_open_keys": [
+    "raw"
+  ],
+  "fn_resp_keys": [
+    "path",
+    "arch",
+    "bits",
+    "format",
+    "image_base",
+    "function_count",
+    "raw_detection_count",
+    "pdb_names_applied",
+    "pdb_path",
+    "returned",
+    "functions"
+  ],
+  "fn_count": 1275,
+  "fn_sample_keys": [
+    "start",
+    "end",
+    "confidence",
+    "source",
+    "name"
+  ],
+  "fn_sample": {
+    "start": 5368713216,
+    "end": 5368713235,
+    "confidence": "Medium",
+    "source": "ProloguePattern",
+    "name": null
+  },
+  "picked": [
+    5368713216,
+    5368713872,
+    5368715094,
+    5368715174,
+    5368715222,
+    5368715302,
+    5368715398,
+    5368715472,
+    5368716694,
+    5368716774,
+    5368716822,
+    5368716902,
+    5368716998,
+    5368717072,
+    5368717952,
+    5368718096,
+    5368719496,
+    5368720288,
+    5368720656,
+    5368721264,
+    5368721840,
+    5368722016,
+    5368722256,
+    5368722727,
+    5368722759,
+    5368722839,
+    5368722864,
+    5368724038,
+    5368724246,
+    5368724470,
+    5368724721,
+    5368724977,
+    5368733233,
+    5368756678,
+    5368756902,
+    5368757174,
+    5368757430,
+    5368757686,
+    5368757942,
+    5368758182
+  ],
+  "summary": {
+    "crate": "rustre-analysis-cfg",
+    "tests_run": 40,
+    "mismatches_found": 0,
+    "fixes_applied": [],
+    "build_ok_after_fix": null,
+    "final_match": true
+  }
+}

@@ -1,0 +1,1414 @@
+[
+  {
+    "tool": "project.open",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: cannot read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "project.close",
+    "status": "WORKING",
+    "sample_input": {
+      "project_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"project_id\": \"test\",\n  \"binary_id\": \"bin-test\",\n  \"closed\": false\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "project.list_binaries",
+    "status": "WORKING",
+    "sample_input": {
+      "project_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"count\": 0,\n  \"binaries\": []\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "project.info",
+    "status": "WORKING",
+    "sample_input": {
+      "project_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"binary_count\": 0,\n  \"binaries\": [],\n  \"mcp_version\": \"2024-11-05\",\n  \"server\": \"rustre\",\n  \"filter\": null\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "binary.info",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "binary.hexdump",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000",
+      "len": 16
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "binary.read",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000",
+      "len": 16
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "binary.search_bytes",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "pattern": "main",
+      "mask": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "binary.search_strings",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "min_len": 16,
+      "regex": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "binary.entropy",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "section": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.full",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "depth": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.function",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.basic_block",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.cross_refs",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.call_graph",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "root": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.strings",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.imports",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analyze.exports",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "disasm.at",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000",
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: invalid params: missing 'address'",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "disasm.function",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "decompile.function",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "decompile.rename_variable",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "func_addr": "0x140001000",
+      "old_name": "main",
+      "new_name": "main"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "decompile.set_type",
+    "status": "WORKING",
+    "sample_input": {
+      "binary_id": "test",
+      "func_addr": "0x140001000",
+      "var_name": "0x140001000",
+      "type_str": "test"
+    },
+    "sample_output_excerpt": "{\n  \"binary_id\": \"test\",\n  \"addr\": \"0x0\",\n  \"type_str\": \"test\",\n  \"var_name\": \"0x140001000\",\n  \"annotated\": \"test 0x140001000\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.launch",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "args": [
+        "main"
+      ],
+      "env": {}
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "debug.attach",
+    "status": "WORKING",
+    "sample_input": {
+      "pid": 1
+    },
+    "sample_output_excerpt": "{\n  \"session_id\": \"dbg-0001\",\n  \"pid\": 1,\n  \"binary_path\": \"\",\n  \"status\": \"attached\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.continue",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "session_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: debug session test not found",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "debug.step_into",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"session_id\": \"test\",\n  \"step_type\": \"debug.step_into\",\n  \"status\": \"stepped\",\n  \"note\": \"static analysis mode\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.step_over",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"session_id\": \"test\",\n  \"step_type\": \"debug.step_over\",\n  \"status\": \"stepped\",\n  \"note\": \"static analysis mode\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.set_breakpoint",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test",
+      "addr": "0x140001000",
+      "condition": "test"
+    },
+    "sample_output_excerpt": "{\n  \"bp_id\": \"bp-140001000\",\n  \"address\": \"0x140001000\",\n  \"type\": \"software\",\n  \"set\": true\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.remove_breakpoint",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "session_id": "test",
+      "bp_id": 1
+    },
+    "sample_output_excerpt": "execution failed: invalid params: missing 'bp_id'",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "debug.read_registers",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test",
+      "thread_id": 5368713216
+    },
+    "sample_output_excerpt": "{\n  \"registers\": {\n    \"rip\": \"0x0000000140001000\",\n    \"rsp\": \"0x00007fff0000f8d0\",\n    \"rbp\": \"0x0000000000000000\",\n    \"rax\": \"0x0000000000000000\",\n    \"rbx\": \"0x0000000000000000\",\n    \"rcx\": \"0x0000000000000000\",\n    \"rdx\": \"0x0000000000000000\",\n    \"rsi\": \"0x0000000000000000\",\n    \"rdi\": \"0x000",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.read_memory",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "session_id": "test",
+      "addr": "0x140001000",
+      "len": 16
+    },
+    "sample_output_excerpt": "execution failed: invalid params: missing 'binary_id'",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "debug.write_memory",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "session_id": "test",
+      "addr": "0x140001000",
+      "data_base64": "test"
+    },
+    "sample_output_excerpt": "execution failed: invalid params: missing 'binary_id'",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "debug.backtrace",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test"
+    },
+    "sample_output_excerpt": "{\n  \"session_id\": \"test\",\n  \"frames\": [\n    {\n      \"frame\": 0,\n      \"addr\": \"0x0\",\n      \"name\": \"?\"\n    }\n  ]\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "debug.evaluate",
+    "status": "WORKING",
+    "sample_input": {
+      "session_id": "test",
+      "expression": "test"
+    },
+    "sample_output_excerpt": "{\n  \"expression\": \"test\",\n  \"result\": \"<test>\",\n  \"type\": \"integer\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "yara.scan_file",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "ruleset_id": "rule t { strings: $a = \"MZ\" condition: $a }"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "yara.compile",
+    "status": "WORKING",
+    "sample_input": {
+      "source": "test"
+    },
+    "sample_output_excerpt": "{\n  \"ruleset_id\": \"yara-657d4c8881d0869f\",\n  \"rule_count\": 1,\n  \"status\": \"compiled\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "yara.scan_memory",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "image_id": "test",
+      "ruleset_id": "rule t { strings: $a = \"MZ\" condition: $a }"
+    },
+    "sample_output_excerpt": "execution failed: not found: image test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "forensics.open_dump",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: cannot read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "forensics.run_plugin",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "image_id": "test",
+      "plugin": "test",
+      "args": {}
+    },
+    "sample_output_excerpt": "execution failed: not found: image test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "forensics.list_plugins",
+    "status": "WORKING",
+    "sample_input": {},
+    "sample_output_excerpt": "{\n  \"count\": 12,\n  \"plugins\": [\n    {\n      \"name\": \"pslist\",\n      \"description\": \"List processes via EPROCESS linked list\"\n    },\n    {\n      \"name\": \"psscan\",\n      \"description\": \"Scan for EPROCESS structures\"\n    },\n    {\n      \"name\": \"pstree\",\n      \"description\": \"Display process tree\"\n    }",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "kg.query",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "sql": "test",
+      "params": []
+    },
+    "sample_output_excerpt": "execution failed: invalid params: Only SELECT statements are allowed in kg.query",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "kg.annotate",
+    "status": "WORKING",
+    "sample_input": {
+      "entity_type": "test",
+      "entity_id": "test",
+      "key": "test",
+      "value": "0x140001000"
+    },
+    "sample_output_excerpt": "{\n  \"binary_id\": \"\",\n  \"entity_type\": \"test\",\n  \"entity_id\": \"test\",\n  \"key\": \"test\",\n  \"value\": \"0x140001000\",\n  \"annotated\": true\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "kg.search",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "text": "main"
+    },
+    "sample_output_excerpt": "execution failed: invalid params: missing 'query'",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "kg.set_function_name",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000",
+      "name": "main"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "kg.set_comment",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000",
+      "text": "main"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "kg.get_function",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "addr": "0x140001000"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "kg.list_functions",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test",
+      "filter": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "diff.compare",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "a_id": "test",
+      "b_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "crypto.identify",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "triage.analyze",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "binary_id": "test"
+    },
+    "sample_output_excerpt": "execution failed: not found: binary test not loaded",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_pe_security_summary",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: pe_security_summary: io error reading C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_patch_find_code_caves",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "min_size": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: find_code_caves: io error reading C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "loader_core_md5",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef"
+    },
+    "sample_output_excerpt": "{\n  \"md5\": \"55a54008ad1ba589aa210d2629c1df41\",\n  \"bytes\": 1,\n  \"source\": \"rustre_loader::md5\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "infer_types_path",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "addresses": [
+        1
+      ]
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "type_propagate_path",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "addresses": [
+        1
+      ]
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "struct_field_at_path",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "addr": 5368713216,
+      "offset": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "type_infer",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "addresses": [
+        1
+      ]
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "type_query",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "kind": "test",
+      "name_contains": "main",
+      "min_size": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "type_inspect",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "name": "main"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "type_apply_batch",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "assignments": []
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "declare_type",
+    "status": "WORKING",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "name": "main",
+      "decl": "test",
+      "size": 16
+    },
+    "sample_output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\RustRE\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"name\": \"main\",\n  \"kind\": \"typedef\",\n  \"size\": 16,\n  \"stored_in\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\RustRE\\\\target\\\\release\\\\cargo-zyphora.rustre-types.json\",\n  \"total_declared\": 1\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_call_graph",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "x86"
+    },
+    "sample_output_excerpt": "{\n  \"node_count\": 0,\n  \"edge_count\": 0,\n  \"nodes\": [],\n  \"edges\": [],\n  \"total_xrefs\": 0,\n  \"truncated\": false,\n  \"thunk_entries\": 0,\n  \"indirect_resolved\": 0,\n  \"root\": null,\n  \"max_depth\": 4,\n  \"max_nodes\": 256,\n  \"max_edges\": 1024,\n  \"max_edges_per_func\": 32\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_callees",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "x86",
+      "addr": 5368713216
+    },
+    "sample_output_excerpt": "{\n  \"addr\": 5368713216,\n  \"raw_count\": 0,\n  \"unique_count\": 0,\n  \"callees\": [],\n  \"thunks_folded\": 0\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "trace_data_flow",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "x86",
+      "addr": 5368713216
+    },
+    "sample_output_excerpt": "{\n  \"root\": 5368713216,\n  \"direction\": \"forward\",\n  \"max_depth\": 6,\n  \"max_nodes\": 512,\n  \"include_data\": true,\n  \"node_count\": 1,\n  \"edge_count\": 0,\n  \"nodes\": [\n    {\n      \"addr\": 5368713216,\n      \"depth\": 0\n    }\n  ],\n  \"edges\": [],\n  \"truncated\": false\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_get_xrefs_to",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "test",
+      "addr": 5368713216
+    },
+    "sample_output_excerpt": "{\n  \"addr\": 5368713216,\n  \"count\": 0,\n  \"xrefs\": [],\n  \"callers\": []\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_get_xrefs_from",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "test",
+      "addr": 5368713216
+    },
+    "sample_output_excerpt": "{\n  \"addr\": 5368713216,\n  \"count\": 0,\n  \"xrefs\": [],\n  \"callees\": []\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_to_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_xref_from_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_xref_call_graph_root_functions",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "x86",
+      "function_entries": [
+        1
+      ]
+    },
+    "sample_output_excerpt": "{\n  \"roots\": [\n    1\n  ],\n  \"count\": 1,\n  \"function_entries_count\": 1\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_xref_string_ref_counts",
+    "status": "WORKING",
+    "sample_input": {
+      "bytes": [
+        1
+      ],
+      "hex": "deadbeef",
+      "base": 1,
+      "arch": "x86",
+      "string_addrs": [
+        1
+      ]
+    },
+    "sample_output_excerpt": "{\n  \"counts\": {\n    \"1\": 0\n  },\n  \"total_refs\": 0,\n  \"string_count\": 1\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "analysis_fn_detect_extra",
+    "status": "WORKING",
+    "sample_input": {
+      "pdata": [
+        1
+      ],
+      "pdata_hex": "deadbeef",
+      "text": [
+        1
+      ],
+      "text_hex": "deadbeef",
+      "text_base": 1,
+      "image_base": 1
+    },
+    "sample_output_excerpt": "{\n  \"extras\": [],\n  \"stats\": {\n    \"gaps_scanned\": 0,\n    \"prologue_matches\": 0,\n    \"candidates_validated\": 0,\n    \"pdata_count\": 0\n  }\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "decompiler_core_batch_decompile",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "out_dir": "test",
+      "threads": 5368713216,
+      "max_functions": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: batch decompile failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "flirt_apply_auto",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "min_confidence": 1
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "function_list_by_kind",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "kind": "library",
+      "lib_name": "main",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "noreturn_infer",
+    "status": "WORKING",
+    "sample_input": {
+      "functions": [],
+      "arch": "x86_64",
+      "propagation_threshold": 1
+    },
+    "sample_output_excerpt": "{\n  \"noreturn_count\": 0,\n  \"noreturn_addresses\": [],\n  \"propagation_threshold\": 1.0\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "decompiler_recover_structs",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "addr": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: decompile failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_recover_structs_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "max_functions": 16,
+      "min_fields": 1
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "decompiler_stack_frame_report",
+    "status": "WORKING",
+    "sample_input": {
+      "function_addr": 5368713216,
+      "instructions": [],
+      "arch": "test"
+    },
+    "sample_output_excerpt": "{\n  \"status\": \"ok\",\n  \"data\": {\n    \"function_addr\": \"0x140001000\",\n    \"frame_size\": 0,\n    \"saved_regs\": [],\n    \"prologue\": null,\n    \"epilogue\": null,\n    \"locals\": [],\n    \"struct_candidates\": []\n  }\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "survey_binary",
+    "status": "ERROR",
+    "sample_input": {
+      "session_id": "test",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_bytes",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "va": 5368713216,
+      "bytes": "test",
+      "dry_run": false
+    },
+    "sample_output_excerpt": "execution failed: execution failed: invalid params: bytes: invalid hex byte string: invalid digit found in string",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_nop_range",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "va": 5368713216,
+      "length": 16,
+      "dry_run": false
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: patch_nop_range: io error on C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_xor_region",
+    "status": "INPUT_DEPENDENT",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "va": 5368713216,
+      "length": 16,
+      "key": "test"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: invalid params: key: invalid hex byte string: invalid digit found in string",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_asm",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "va": 5368713216,
+      "asm": "test",
+      "dry_run": false
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: patch_asm: unsupported asm mnemonic: test",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "patch_pe_set_security",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "aslr": false,
+      "dep": false,
+      "cfg": false
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: patch_pe_set_security: io error reading C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "triage_entropy_packing_indicators",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: packing_indicators: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_fn_detect_functions_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_callgraph_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "root_address": 5368713216,
+      "max_depth": 16,
+      "node_limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_callees_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "function_address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_string_scan_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "min_length": 16,
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_crypto_scan_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "min_confidence": 1,
+      "bignum_min_zeros": 1,
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "count": 16,
+      "bits": 1
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_arm64",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_mips",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_riscv",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_wasm",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_cil",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_disasm_at_path_jvm",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "addr": 5368713216,
+      "count": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_basic_blocks_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "function_address": 5368713216,
+      "address": 5368713216,
+      "max_instructions": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_fn_cfg_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_dominators_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_loops_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_infer_types_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "function_address": 5368713216
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: decompile failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "deobf_mba_normalize",
+    "status": "WORKING",
+    "sample_input": {
+      "expression": "test"
+    },
+    "sample_output_excerpt": "{\n  \"normalized\": \"test\",\n  \"simplified\": \"test\",\n  \"complexity_before\": 1,\n  \"complexity_after\": 1,\n  \"rules_applied\": [],\n  \"verified\": true,\n  \"converged\": true\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_demangle_auto",
+    "status": "WORKING",
+    "sample_input": {
+      "mangled": "test"
+    },
+    "sample_output_excerpt": "{\n  \"mangled\": \"test\",\n  \"demangled\": \"test\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_demangle_rust",
+    "status": "WORKING",
+    "sample_input": {
+      "mangled": "test"
+    },
+    "sample_output_excerpt": "{\n  \"mangled\": \"test\",\n  \"demangled\": \"test\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_demangle_msvc",
+    "status": "WORKING",
+    "sample_input": {
+      "mangled": "test"
+    },
+    "sample_output_excerpt": "{\n  \"mangled\": \"test\",\n  \"demangled\": \"test\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_demangle_itanium",
+    "status": "WORKING",
+    "sample_input": {
+      "mangled": "test"
+    },
+    "sample_output_excerpt": "{\n  \"mangled\": \"test\",\n  \"demangled\": \"test\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_demangle_swift",
+    "status": "WORKING",
+    "sample_input": {
+      "mangled": "test"
+    },
+    "sample_output_excerpt": "{\n  \"mangled\": \"test\",\n  \"demangled\": \"test\"\n}",
+    "sanity_pass": true,
+    "notes": "ok"
+  },
+  {
+    "tool": "symbols_pdb_load",
+    "status": "ERROR",
+    "sample_input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "decompile_function_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "name": "main"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "crypto_xor_decode",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "length": 16,
+      "key_hex": "deadbeef"
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "analysis_trace_data_flow_path",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "address": 5368713216,
+      "direction": "backward",
+      "max_depth": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "diff_compare",
+    "status": "ERROR",
+    "sample_input": {
+      "path_a": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path_b": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed for C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "diff_bindiff",
+    "status": "ERROR",
+    "sample_input": {
+      "path_a": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path_b": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed for C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "diff_minhash",
+    "status": "ERROR",
+    "sample_input": {
+      "path_a": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path_b": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "n": 1
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed for C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "fingerprint_compute",
+    "status": "ERROR",
+    "sample_input": {
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed for C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "fingerprint_match",
+    "status": "ERROR",
+    "sample_input": {
+      "path_a": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path_b": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load failed for C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  },
+  {
+    "tool": "diff_semantic",
+    "status": "ERROR",
+    "sample_input": {
+      "path_a": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path_b": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "path": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe",
+      "limit": 16
+    },
+    "sample_output_excerpt": "execution failed: execution failed: internal error: load_a: read C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\cargo-zyphora.exe: Impossibile trovare il file specificato. (os error 2)",
+    "sanity_pass": false,
+    "notes": "isError=true"
+  }
+]

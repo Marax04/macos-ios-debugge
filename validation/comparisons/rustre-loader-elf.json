@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-elf",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Per validation/reports/rustre-loader-elf.md (sezione 'Existing MCP tools for this crate'): nessun tool MCP ELF-specifico esiste in crates/rustre-mcp-tools/src/wire_tools.rs (grep per loader_elf, ElfLoader, ElfInfo, gnu_hash, parse_verdef, parse_note_section: 0 match).",
+    "Il validator (validation/validators/rustre-loader-elf.py) dichiara esplicitamente 'NO MCP calls' e testa funzioni interne del crate (gnu_hash, ElfInfo::parse, plt_entries, ...). Nessuna di queste e' esposta come endpoint MCP.",
+    "ELF e' integrato indirettamente: project.open usa ElfLoader per produrre un BinaryView, dopodiche' i tool generici (binary/analysis/disasm/decompile) operano sul view senza esporre le API ELF-specifiche (gnu_hash, build_id, soname, needed_libs, plt_entries, ...).",
+    "Conclusione: confronto MCP vs validator NON applicabile a questo crate. Nessun mismatch da registrare, nessun fix sul crate da applicare.",
+    "Nota collaterale (non un bug del crate): l'assert hardcoded nel self-test del validator a riga 281 ('gnu_hash_printf == 0x156B932') e' errato. Il valore canonico GNU-hash di 'printf' (h=5381; h=h*33+b) e' 0x156b2bb8, e l'implementazione Rust in crates/rustre-loader-elf/src/gnu_hash.rs:14 produce esattamente 0x156b2bb8. Il crate e' corretto; e' la costante di test nel validator a essere sbagliata (probabile typo: cifre droppate). Non fixato perche' il task vieta di modificare il validator e non c'e' bug nel crate."
+  ]
+}

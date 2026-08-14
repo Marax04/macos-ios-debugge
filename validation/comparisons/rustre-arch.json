@@ -1,0 +1,13 @@
+{
+  "crate": "rustre-arch",
+  "tests": 19,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": [
+    "Validator is pure-logic (stdlib only): mirrors rustre-arch internal behaviors (ELF/PE/Mach-O detection, LiftContext caps, ArchMetadata, InstrStats).",
+    "No direct MCP tool exposes detect_arch_from_bytes; rustre-arch is consumed internally by disasm/analysis tools. Comparison is performed against rustre-arch Rust unit tests (371 passed) which exercise the same constants and dispatch.",
+    "Validator self-tests: 19/19 ok (detect_elf_x86_64, detect_elf_arm64, detect_elf_riscv64, detect_elf_riscv32, detect_pe_x86_64, detect_macho_arm64, detect_macho_ppc, dispatch_elf/pe/macho/unknown, lift_overflow_at_4096, lift_pop_saturates, lift_warn_cap_4096, meta_fixed, meta_variable, stats_total, stats_branches, stats_density, stats_empty_density).",
+    "Rust side: cargo test -p rustre-arch --release --lib -> 371 passed, 0 failed."
+  ]
+}

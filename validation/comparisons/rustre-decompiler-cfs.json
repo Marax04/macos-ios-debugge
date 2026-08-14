@@ -1,0 +1,29 @@
+{
+  "crate": "rustre-decompiler-cfs",
+  "note": "No MCP wire tool exposes rustre-decompiler-cfs functionality. Per the report and a grep of crates/rustre-mcp-tools/src for 'cfs', 'decompiler_cfs', 'ControlFlowStructurer', 'StructuredAst' -> 0 matches. The crate is internal, consumed only by rustre-decompiler. No MCP-vs-validator comparison is possible.",
+  "mcp_outputs": [],
+  "validator_outputs": {
+    "self_test_ok": true,
+    "results": {
+      "block_id_display": true,
+      "flatten_collapse": true,
+      "flatten_idempotent": true,
+      "goto_count": true,
+      "node_count": true,
+      "alg_dream": true,
+      "alg_sailr": true,
+      "region_blocks": true,
+      "region_is_loop_outer": true,
+      "region_is_loop_inner": true,
+      "dom_path": true,
+      "dom_dominates": true,
+      "dom_not": true,
+      "scc": true,
+      "empty": true,
+      "missing": true,
+      "linear": true,
+      "while": true
+    }
+  },
+  "mismatches": []
+}

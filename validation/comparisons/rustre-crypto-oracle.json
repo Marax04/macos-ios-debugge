@@ -1,0 +1,96 @@
+{
+  "crate": "rustre-crypto-oracle",
+  "mcp_tools_tested": ["crypto_xor_decode"],
+  "validator_script": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\validators\\rustre-crypto-oracle.py",
+  "date": "2026-06-30",
+  "tests": 3,
+  "mismatches": 1,
+  "match": false,
+  "notes": "The validator covers pure-computation functions (PKCS7, AES key schedule, RSA, LFSR, hash, side-channel stats) with no matching MCP tool surface. The only MCP tool for this crate is crypto_xor_decode (file+VA based). Three XOR-decode tests were run: (1) single-byte explicit key -> PASS, (2) auto-detect on 13-byte sample chose key 0x40 instead of 0x42 (both yield fully-printable output, printable-ratio heuristic is ambiguous on short input) -> MISMATCH, (3) multi-byte 2-byte key 'DEAD' 46 bytes -> PASS. The pure-computation validator functions (sha1, expand_aes128, berlekamp_massey, wiener_attack, pearson_correlation, etc.) have no corresponding MCP tool and cannot be compared via JSON-RPC.",
+  "test_cases": [
+    {
+      "id": "test_xor_explicit_single_byte",
+      "tool": "crypto_xor_decode",
+      "input": {
+        "path": "<scratchpad>/test_xor.bin",
+        "address": "0x400",
+        "length": 13,
+        "key_hex": "42"
+      },
+      "mcp_output": {
+        "decoded_utf8_lossy": "Hello, World!",
+        "decoded_hex": "48656C6C6F2C20576F726C6421",
+        "key_hex": "42",
+        "auto_detected": false,
+        "confidence": 1.0
+      },
+      "python_expected": {
+        "decoded_utf8_lossy": "Hello, World!",
+        "decoded_hex": "48656c6c6f2c20576f726c6421"
+      },
+      "result": "PASS"
+    },
+    {
+      "id": "test_xor_auto_detect_short",
+      "tool": "crypto_xor_decode",
+      "input": {
+        "path": "<scratchpad>/test_xor.bin",
+        "address": "0x400",
+        "length": 13,
+        "auto": true
+      },
+      "mcp_output": {
+        "decoded_utf8_lossy": "Jgnnm.\"Umpnf#",
+        "decoded_hex": "4A676E6E6D2E22556D706E6623",
+        "key_hex": "40",
+        "auto_detected": true,
+        "confidence": 1.0
+      },
+      "python_expected": {
+        "decoded_utf8_lossy": "Hello, World!",
+        "decoded_hex": "48656c6c6f2c20576f726c6421",
+        "key_hex": "42"
+      },
+      "result": "MISMATCH",
+      "reason": "Auto-detect printable-ratio heuristic is ambiguous on 13-byte samples: key 0x40 yields 100% printable output just like key 0x42. Both are technically valid; heuristic picks first maximum. Not a correctness bug — a fundamental limitation of single-metric brute-force on short input."
+    },
+    {
+      "id": "test_xor_explicit_multi_byte",
+      "tool": "crypto_xor_decode",
+      "input": {
+        "path": "<scratchpad>/test_xor3.bin",
+        "address": "0x400",
+        "length": 46,
+        "key_hex": "dead"
+      },
+      "mcp_output": {
+        "decoded_utf8_lossy": "Secret message for testing multi-byte XOR key!",
+        "decoded_hex": "536563726574206D65737361676520666F722074657374696E67206D756C74692D6279746520584F52206B657921",
+        "key_hex": "DEAD",
+        "key_len": 2,
+        "auto_detected": false,
+        "confidence": 1.0
+      },
+      "python_expected": {
+        "decoded_utf8_lossy": "Secret message for testing multi-byte XOR key!",
+        "decoded_hex": "536563726574206d65737361676520666f722074657374696e67206d756c74692d6279746520584f52206b657921"
+      },
+      "result": "PASS"
+    }
+  ],
+  "pure_computation_coverage": {
+    "tested_by_python_validator_only": [
+      "validate_pkcs7", "strip_pkcs7", "add_pkcs7", "pkcs7_validate",
+      "check_ecb_in_ciphertext", "detect_block_size_from_pairs",
+      "attack_nonce_reuse", "detect_counter_iv", "predict_next_iv",
+      "rsa_small_exponent", "fermat_factor", "wiener_attack",
+      "expand_aes128", "expand_aes256", "expand_rc4", "verify_aes128_expansion",
+      "sha1", "sha256", "md5", "sha512", "md_padding", "extend_sha256",
+      "power_trace_mean", "power_trace_variance", "pearson_correlation",
+      "berlekamp_massey", "detect_lfsr", "welch_t_test", "remove_outliers",
+      "sbox_is_linear", "sbox_is_affine", "wht_compute_nonlinearity",
+      "gf2_solve", "field_flags_from_tuple", "infer_fields"
+    ],
+    "note": "All Python validator self-tests passed (sha1_empty, sha256_empty, md5_empty, verify_aes128, fermat_factor(3233)=[53,61], bm_length=8, gf2_solve=[0,1]). No MCP counterpart exists for these pure functions."
+  }
+}

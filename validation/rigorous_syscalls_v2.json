@@ -1,0 +1,495 @@
+{
+  "category": "syscalls",
+  "tools_hardened": 69,
+  "tools_passed": 43,
+  "tools_failed": 0,
+  "tools_skipped": 26,
+  "total_checks": 401,
+  "total_passes": 401,
+  "mismatches": [],
+  "tool_results": [
+    {
+      "tool": "syscalls_linux_x86_64_name",
+      "status": "PASS",
+      "checks": 43,
+      "passes": 43,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_x86_64_nr",
+      "status": "PASS",
+      "checks": 43,
+      "passes": 43,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_aarch64_name",
+      "status": "SKIP",
+      "checks": 23,
+      "passes": 23,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_aarch64_nr",
+      "status": "PASS",
+      "checks": 27,
+      "passes": 27,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_signal_name",
+      "status": "PASS",
+      "checks": 20,
+      "passes": 20,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_signal_name_lookup",
+      "status": "PASS",
+      "checks": 19,
+      "passes": 19,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_signal_name_lookup_wire",
+      "status": "PASS",
+      "checks": 19,
+      "passes": 19,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_errno_name",
+      "status": "PASS",
+      "checks": 18,
+      "passes": 18,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_errno_name_lookup",
+      "status": "PASS",
+      "checks": 18,
+      "passes": 18,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_errno_name_lookup_wire",
+      "status": "PASS",
+      "checks": 18,
+      "passes": 18,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_ia32_to_x86_64_nr",
+      "status": "PASS",
+      "checks": 7,
+      "passes": 7,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_clock_id_name_v2",
+      "status": "PASS",
+      "checks": 8,
+      "passes": 8,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_sa_family_name_v2",
+      "status": "PASS",
+      "checks": 8,
+      "passes": 8,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_decode_open_flags",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_decode_mmap_prot",
+      "status": "PASS",
+      "checks": 7,
+      "passes": 7,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_decode_mmap_flags",
+      "status": "PASS",
+      "checks": 4,
+      "passes": 4,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_format_ntstatus",
+      "status": "PASS",
+      "checks": 10,
+      "passes": 10,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_format_ntstatus_wire_v3",
+      "status": "PASS",
+      "checks": 10,
+      "passes": 10,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_decode_file_access",
+      "status": "PASS",
+      "checks": 4,
+      "passes": 4,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_decode_alloc_type",
+      "status": "PASS",
+      "checks": 6,
+      "passes": 6,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_nt_to_win32_path",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_system_path",
+      "status": "PASS",
+      "checks": 4,
+      "passes": 4,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_system_path_wire_v2",
+      "status": "PASS",
+      "checks": 4,
+      "passes": 4,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_dangerous_privilege",
+      "status": "PASS",
+      "checks": 10,
+      "passes": 10,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_detect_ia32_mechanism",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_decode_arg_signal_v2",
+      "status": "PASS",
+      "checks": 19,
+      "passes": 19,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_format_retval",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_format_signal_delivery",
+      "status": "PASS",
+      "checks": 2,
+      "passes": 2,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_cross_arch_table",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_lookup_cross_arch",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_number_to_name",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_name_to_number",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_max_number_x86_64_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_security_severity",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_category",
+      "status": "PASS",
+      "checks": 4,
+      "passes": 4,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_categorize_by_name",
+      "status": "PASS",
+      "checks": 3,
+      "passes": 3,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_nt_to_win32_reg_path",
+      "status": "PASS",
+      "checks": 2,
+      "passes": 2,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_persistence_registry_key",
+      "status": "PASS",
+      "checks": 6,
+      "passes": 6,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_clean_x64_stub",
+      "status": "PASS",
+      "checks": 6,
+      "passes": 6,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_linux_x86_64_list",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_linux_arm64_list",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_table_windows_x64_list",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_arch_list",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_version_list",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_win10_22h2_syscalls",
+      "status": "PASS",
+      "checks": 1,
+      "passes": 1,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_database_stats",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_database_empty_stats_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_trace_empty_error_rate_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_param_new",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_error_not_found_display",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_hex_dump_ext",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_format_mmap_args",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_format_open_flags",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_format_exit_event",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_linux_lookup_x86_64_entry",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_build_version_ssn_table",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_detect_hook_type",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_clean_x86_stub",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_is_clean_stub_dual",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_lookup_win32_api",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_windows_apis_by_module",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_estimate_risk",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_seccomp_policy_evaluate_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_call_prefix_flags_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_formatter_format_arg_fd_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_decode_arg_fd_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_decode_arg_ip_addr_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_builder_build_open_v2",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    },
+    {
+      "tool": "syscalls_format_cross_arch_table",
+      "status": "SKIP",
+      "checks": 0,
+      "passes": 0,
+      "mismatches": []
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "category": "loader_macho",
+  "tools_in_category": 5,
+  "checks_total": 4,
+  "checks_passed": 4,
+  "checks_skipped": 1,
+  "mismatches": [],
+  "tools_found": [
+    "loader_macho_parse",
+    "loader_macho_parse_fat",
+    "loader_macho_arch_from_cputype",
+    "loader_macho_subtype_name",
+    "loader_macho_parse_summary"
+  ]
+}

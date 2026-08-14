@@ -1,0 +1,23 @@
+[package]
+license.workspace = true
+name = "rustre-adb"
+version = "0.1.0"
+edition = "2024"
+description = "Android Debug Bridge (ADB) protocol client"
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+tokio     = { workspace = true }
+serde     = { workspace = true }
+bytes     = { workspace = true }
+bitflags  = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

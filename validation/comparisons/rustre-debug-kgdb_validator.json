@@ -1,0 +1,81 @@
+{
+  "crate": "rustre-debug-kgdb",
+  "saved": true,
+  "functions": [
+    {
+      "name": "bytes_to_hex",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "hex_to_bytes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "u32_to_hex_le",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "u64_to_hex_le",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "hex_le_to_u64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rsp_encode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rsp_decode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "rsp_checksum",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "gdb_z_command_insert_sw",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "gdb_z_command_remove_hw_write",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "describe_dr7",
+      "ok": true,
+      "detail": "['DR0 L=1 G=0 RW=W LEN=4']"
+    },
+    {
+      "name": "parse_kallsyms",
+      "ok": true,
+      "detail": "[{\"addr\": 18446744071578845184, \"type\": \"T\", \"name\": \"_stext\", \"module\": null}, {\"addr\": 18446744071578845440, \"type\": \"t\", \"name\": \"local_fn\", \"module\": null}, {\"addr\": 18446744071578845696, \"type\": \"T\", \"name\": \"mod_fn\", \"module\": \"mymod\"}]"
+    },
+    {
+      "name": "kaslr_slide",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "parse_iomem",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "kd_parse_header",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

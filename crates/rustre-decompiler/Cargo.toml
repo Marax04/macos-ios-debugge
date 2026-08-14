@@ -1,0 +1,53 @@
+﻿[package]
+license.workspace = true
+name = "rustre-decompiler"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-decompiler-cfs = { path = "../rustre-decompiler-cfs" }
+rustre-decompiler-c = { path = "../rustre-decompiler-c" }
+rustre-decompiler-type = { path = "../rustre-decompiler-type" }
+rustre-analysis-typerecov = { path = "../rustre-analysis-typerecov" }
+rustre-analysis-type = { path = "../rustre-analysis-type" }
+rustre-loader = { path = "../rustre-loader" }
+# #5220: i binari Rust/MSVC tengono i simboli in un `.pdb` affiancato, che il
+# loader NON legge — da cui zero nomi recuperati e 4 funzioni classificate
+# `NOT_EMITTED`. Usato solo dietro il gate `RUSTRE_PDB`.
+rustre-symbols-pdb = { path = "../rustre-symbols-pdb" }
+rustre-analysis-fn = { path = "../rustre-analysis-fn" }
+rustre-analysis-callconv = { path = "../rustre-analysis-callconv" }
+rustre-analysis-dataflow = { path = "../rustre-analysis-dataflow" }
+rustre-analysis-cfg = { path = "../rustre-analysis-cfg" }
+rustre-analysis-vsa = { path = "../rustre-analysis-vsa" }
+rustre-analysis-xref = { path = "../rustre-analysis-xref" }
+rustre-analysis-vtable = { path = "../rustre-analysis-vtable", optional = true }
+rustre-arch-x86 = { path = "../rustre-arch-x86" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+rustre-il-mlil = { path = "../rustre-il-mlil" }
+rustre-il-hlil = { path = "../rustre-il-hlil" }
+rustre-il-passes = { path = "../rustre-il-passes" }
+rustre-il = { path = "../rustre-il" }
+rustre-decompiler-expr = { path = "../rustre-decompiler-expr" }
+rustre-flirt-apply = { path = "../rustre-flirt-apply" }
+rustre-demangle = { path = "../rustre-demangle" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }
+rayon = { workspace = true }
+
+[features]
+default = ["cpp"]
+cpp = ["rustre-analysis-vtable"]
+
+[lints]
+workspace = true

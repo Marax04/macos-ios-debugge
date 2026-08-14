@@ -1,0 +1,8 @@
+{
+  "skipped": [
+    {
+      "tool": "events_global_bus_publish",
+      "reason": "Nondeterministic: publishes to a shared global_bus whose history_len accumulates across all tool calls within the same process lifetime."
+    }
+  ]
+}

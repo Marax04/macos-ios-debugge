@@ -1,0 +1,1900 @@
+//! GDB Remote Serial Protocol (RSP) client, wire layer.
+//!
+//! This module is deliberately byte-in / byte-out and free of any
+//! `cfg(target_os)`: the whole Apple debugging story (debugserver on
+//! macOS/iOS speaks RSP with lldb extensions) has to be exercised from a
+//! Windows development host, so the protocol is separated from the socket by
+//! the [`RspTransport`] trait and every test drives an in-memory transport.
+//!
+//! Why the framing lives in a [`RspFramer`] instead of a single `read()`:
+//! debugserver replies are routinely split across TCP segments (a `g` packet
+//! for ARM64 is >1 KiB, `qXfer` responses are paginated), and it also emits
+//! *asynchronous notifications* (`%Stop:…#xx`) interleaved with command
+//! replies. A one-shot read cannot express either, and silently truncates.
+//!
+//! Layering of a packet on the wire, outermost first:
+//!
+//! ```text
+//! $ <run-length-encoded( escaped( payload ) )> # <checksum-hex>
+//! ```
+//!
+//! so decoding is: verify checksum over the raw body → RLE-expand → unescape.
+//! The checksum is computed over the *encoded* body, which is why it must be
+//! validated before any transformation.
+
+use std::collections::VecDeque;
+use std::io::{self, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
+
+/// Bytes that must never appear literally inside a packet body.
+const ESCAPE_BYTE: u8 = b'}';
+const ESCAPE_XOR: u8 = 0x20;
+
+/// Errors produced by the wire layer.
+///
+/// Every variant is explicit: a corrupt packet is never silently downgraded to
+/// an empty reply, because "the target answered nothing" and "we failed to
+/// understand the target" lead to opposite debugging decisions.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RspError {
+    /// Checksum in the trailer did not match the body.
+    #[error("RSP checksum mismatch: expected {expected:#04x}, computed {computed:#04x}")]
+    BadChecksum { expected: u8, computed: u8 },
+    /// Packet did not start with `$`/`%`, or the trailer was malformed.
+    #[error("RSP framing error: {0}")]
+    Framing(String),
+    /// The buffer ended before a complete packet was available.
+    #[error("RSP packet truncated")]
+    Truncated,
+    /// A `}` escape or `*` run-length prefix was not followed by a byte.
+    #[error("RSP encoding error: {0}")]
+    Encoding(String),
+    /// Non-hexadecimal input where hex was required.
+    #[error("invalid hex in RSP payload: {0}")]
+    Hex(String),
+    /// Transport failure (socket closed, timeout, …).
+    #[error("RSP transport error: {0}")]
+    Transport(String),
+    /// The remote replied `Exx` to a command.
+    #[error("remote returned error code {0:#04x}")]
+    Remote(u8),
+    /// The remote replied with an empty packet, i.e. "command unsupported".
+    #[error("remote does not support command {0}")]
+    Unsupported(String),
+    /// `m` returned fewer bytes than were asked for.
+    ///
+    /// The protocol permits this — a stub that can only read part of a region
+    /// answers with what it got — but every caller in this crate assumes the
+    /// full length, so the shortfall has to be visible rather than silently
+    /// handed back as if it were the whole read. The concrete damage: the
+    /// software-breakpoint fallback saves the original word before patching
+    /// `BRK #0`, and a short save means the restore writes back fewer bytes
+    /// than it overwrote, leaving part of the `BRK` in the target's code.
+    #[error("short read at {addr:#x}: asked for {requested} bytes, got {returned}")]
+    ShortRead {
+        addr: u64,
+        requested: usize,
+        returned: usize,
+    },
+}
+
+impl RspError {
+    /// `true` when the failure means "we could not trust what came back",
+    /// as opposed to "the target said no".
+    ///
+    /// Retransmission is the protocol's own answer to a garbled packet, and a
+    /// garbled packet can surface as a bad checksum, a non-hex checksum digit,
+    /// or a broken escape/run-length sequence — all of them the same event on
+    /// the wire, so all of them must retry. Treating only `BadChecksum` as
+    /// retryable made a single flipped bit fatal.
+    #[must_use]
+    pub const fn is_retryable(&self) -> bool {
+        matches!(
+            self,
+            Self::BadChecksum { .. }
+                | Self::Encoding(_)
+                | Self::Hex(_)
+                | Self::Framing(_)
+                | Self::Truncated
+        )
+    }
+}
+
+impl From<io::Error> for RspError {
+    fn from(e: io::Error) -> Self {
+        Self::Transport(e.to_string())
+    }
+}
+
+/// Result alias for this module.
+pub type RspResult<T> = Result<T, RspError>;
+
+// ---------------------------------------------------------------------------
+// checksum / hex
+// ---------------------------------------------------------------------------
+
+/// Modulo-256 sum of the packet body, exactly as the GDB protocol defines it.
+#[must_use]
+pub fn checksum(body: &[u8]) -> u8 {
+    body.iter().fold(0u8, |acc, b| acc.wrapping_add(*b))
+}
+
+/// Lowercase hex digit for a nibble. Panics never: input is masked by callers.
+const fn nibble_to_hex(n: u8) -> u8 {
+    match n & 0x0f {
+        d @ 0..=9 => b'0' + d,
+        d => b'a' + (d - 10),
+    }
+}
+
+const fn hex_to_nibble(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
+    }
+}
+
+/// Encode bytes as lowercase hex, the representation used by `m`/`M`/`g`/`G`.
+#[must_use]
+pub fn hex_encode(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len() * 2);
+    for b in data {
+        out.push(nibble_to_hex(b >> 4));
+        out.push(nibble_to_hex(*b));
+    }
+    out
+}
+
+/// Decode a hex string into bytes.
+///
+/// # Errors
+/// Returns [`RspError::Hex`] on odd length or non-hex digits.
+pub fn hex_decode(data: &[u8]) -> RspResult<Vec<u8>> {
+    if data.len() % 2 != 0 {
+        return Err(RspError::Hex(format!("odd length {}", data.len())));
+    }
+    let mut out = Vec::with_capacity(data.len() / 2);
+    for pair in data.chunks_exact(2) {
+        let (hi, lo) = (hex_to_nibble(pair[0]), hex_to_nibble(pair[1]));
+        match (hi, lo) {
+            (Some(h), Some(l)) => out.push((h << 4) | l),
+            _ => {
+                return Err(RspError::Hex(String::from_utf8_lossy(pair).into_owned()));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Parse an unsigned hex integer (as used for addresses/lengths).
+///
+/// # Errors
+/// Returns [`RspError::Hex`] if empty, non-hex, or wider than 64 bits.
+pub fn parse_hex_u64(s: &[u8]) -> RspResult<u64> {
+    if s.is_empty() {
+        return Err(RspError::Hex("empty".to_string()));
+    }
+    let mut v: u64 = 0;
+    for c in s {
+        let n = hex_to_nibble(*c).ok_or_else(|| RspError::Hex((*c as char).to_string()))?;
+        v = v
+            .checked_mul(16)
+            .and_then(|x| x.checked_add(u64::from(n)))
+            .ok_or_else(|| RspError::Hex("overflow".to_string()))?;
+    }
+    Ok(v)
+}
+
+/// Format an unsigned integer as bare lowercase hex, no `0x`, no padding.
+#[must_use]
+pub fn fmt_hex_u64(v: u64) -> String {
+    format!("{v:x}")
+}
+
+// ---------------------------------------------------------------------------
+// escaping and run-length encoding
+// ---------------------------------------------------------------------------
+
+/// Escape the four reserved bytes as `}` followed by `byte ^ 0x20`.
+#[must_use]
+pub fn escape(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len());
+    for b in data {
+        if matches!(*b, b'#' | b'$' | b'}' | b'*') {
+            out.push(ESCAPE_BYTE);
+            out.push(*b ^ ESCAPE_XOR);
+        } else {
+            out.push(*b);
+        }
+    }
+    out
+}
+
+/// Reverse [`escape`].
+///
+/// # Errors
+/// Returns [`RspError::Encoding`] on a trailing `}` with no following byte.
+pub fn unescape(data: &[u8]) -> RspResult<Vec<u8>> {
+    let mut out = Vec::with_capacity(data.len());
+    let mut it = data.iter().copied();
+    while let Some(b) = it.next() {
+        if b == ESCAPE_BYTE {
+            let n = it
+                .next()
+                .ok_or_else(|| RspError::Encoding("dangling '}' escape".to_string()))?;
+            out.push(n ^ ESCAPE_XOR);
+        } else {
+            out.push(b);
+        }
+    }
+    Ok(out)
+}
+
+/// Expand GDB run-length encoding: `X*<n>` repeats `X` an extra `n - 29` times.
+///
+/// The repeat count is a printable character biased by 29; counts of 6 and 7
+/// are impossible on the wire because they would encode `#` and `$`.
+///
+/// # Errors
+/// Returns [`RspError::Encoding`] for a leading `*`, a dangling `*`, or a
+/// count character outside the printable range.
+pub fn rle_decode(data: &[u8]) -> RspResult<Vec<u8>> {
+    let mut out: Vec<u8> = Vec::with_capacity(data.len());
+    let mut i = 0usize;
+    while i < data.len() {
+        let b = data[i];
+        if b == b'*' {
+            let last = *out
+                .last()
+                .ok_or_else(|| RspError::Encoding("run-length prefix with no data".to_string()))?;
+            let count_ch = *data
+                .get(i + 1)
+                .ok_or_else(|| RspError::Encoding("dangling run-length prefix".to_string()))?;
+            if !(29..=126).contains(&count_ch) {
+                return Err(RspError::Encoding(format!(
+                    "run-length count {count_ch:#04x} out of range"
+                )));
+            }
+            let repeat = usize::from(count_ch - 29);
+            out.extend(std::iter::repeat_n(last, repeat));
+            i += 2;
+        } else {
+            out.push(b);
+            i += 1;
+        }
+    }
+    Ok(out)
+}
+
+/// Compress runs of an identical byte using GDB run-length encoding.
+///
+/// Only runs long enough to actually shrink the stream are encoded, and the
+/// count is clamped so it never lands on `#` or `$` — emitting either would
+/// desynchronise the receiver's framer.
+#[must_use]
+pub fn rle_encode(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len());
+    let mut i = 0usize;
+    while i < data.len() {
+        let b = data[i];
+        let mut run = 1usize;
+        while i + run < data.len() && data[i + run] == b && run < 97 {
+            run += 1;
+        }
+        out.push(b);
+        // `run - 1` further copies remain; encoding is only a win at >= 4.
+        let mut extra = run - 1;
+        if extra >= 3 {
+            // 6 and 7 map to '#'/'$'; back off to 5 so the count stays legal.
+            if extra == 6 || extra == 7 {
+                extra = 5;
+            }
+            let count_ch = u8::try_from(extra + 29).unwrap_or(126);
+            out.push(b'*');
+            out.push(count_ch);
+            i += 1 + extra;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// packets
+// ---------------------------------------------------------------------------
+
+/// A decoded packet payload (escaping and RLE already removed).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RspPacket {
+    pub data: Vec<u8>,
+}
+
+impl RspPacket {
+    /// Build a packet from a logical payload.
+    #[must_use]
+    pub fn new(data: impl Into<Vec<u8>>) -> Self {
+        Self { data: data.into() }
+    }
+
+    /// Payload as a lossy string, for logs and matching on textual replies.
+    #[must_use]
+    pub fn as_str(&self) -> std::borrow::Cow<'_, str> {
+        String::from_utf8_lossy(&self.data)
+    }
+
+    /// `true` for the `OK` reply.
+    #[must_use]
+    pub fn is_ok(&self) -> bool {
+        self.data == b"OK"
+    }
+
+    /// `true` for the empty reply, which means "command not supported".
+    #[must_use]
+    pub fn is_empty_reply(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Error code of an `Exx` reply, if this is one.
+    #[must_use]
+    pub fn error_code(&self) -> Option<u8> {
+        if self.data.len() == 3 && self.data[0] == b'E' {
+            hex_decode(&self.data[1..]).ok().and_then(|v| v.first().copied())
+        } else {
+            None
+        }
+    }
+
+    /// Turn `Exx` / empty replies into typed errors; pass anything else through.
+    ///
+    /// # Errors
+    /// [`RspError::Remote`] for `Exx`, [`RspError::Unsupported`] for empty.
+    pub fn ok_or_err(self, cmd: &str) -> RspResult<Self> {
+        if let Some(code) = self.error_code() {
+            return Err(RspError::Remote(code));
+        }
+        if self.data.is_empty() {
+            return Err(RspError::Unsupported(cmd.to_string()));
+        }
+        Ok(self)
+    }
+
+    /// Encode as a full on-the-wire packet, `$…#xx`.
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        self.encode_inner(b'$', false)
+    }
+
+    /// Encode with run-length compression applied to the escaped body.
+    #[must_use]
+    pub fn encode_compressed(&self) -> Vec<u8> {
+        self.encode_inner(b'$', true)
+    }
+
+    fn encode_inner(&self, lead: u8, compress: bool) -> Vec<u8> {
+        let escaped = escape(&self.data);
+        let body = if compress { rle_encode(&escaped) } else { escaped };
+        let sum = checksum(&body);
+        let mut out = Vec::with_capacity(body.len() + 4);
+        out.push(lead);
+        out.extend_from_slice(&body);
+        out.push(b'#');
+        out.push(nibble_to_hex(sum >> 4));
+        out.push(nibble_to_hex(sum));
+        out
+    }
+
+    /// Decode one complete packet, verifying the checksum.
+    ///
+    /// Accepts both command packets (`$…`) and asynchronous notifications
+    /// (`%…`). Leading `+`/`-` acknowledgements are skipped.
+    ///
+    /// # Errors
+    /// See [`RspError`]; a bad checksum is always reported, never ignored.
+    pub fn decode(raw: &[u8]) -> RspResult<Self> {
+        let start = raw
+            .iter()
+            .position(|b| *b == b'$' || *b == b'%')
+            .ok_or_else(|| RspError::Framing("no packet start marker".to_string()))?;
+        let rest = &raw[start + 1..];
+        let hash = rest
+            .iter()
+            .position(|b| *b == b'#')
+            .ok_or(RspError::Truncated)?;
+        let body = &rest[..hash];
+        let sum_hex = rest.get(hash + 1..hash + 3).ok_or(RspError::Truncated)?;
+        let expected = hex_decode(sum_hex)?[0];
+        let computed = checksum(body);
+        if expected != computed {
+            return Err(RspError::BadChecksum { expected, computed });
+        }
+        let expanded = rle_decode(body)?;
+        Ok(Self {
+            data: unescape(&expanded)?,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// incremental framer
+// ---------------------------------------------------------------------------
+
+/// One item pulled out of the byte stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RspIncoming {
+    /// `+` — the peer accepted our last packet.
+    Ack,
+    /// `-` — the peer wants a retransmission.
+    Nack,
+    /// A normal `$…#xx` reply.
+    Packet(RspPacket),
+    /// An asynchronous `%…#xx` notification (debugserver stop events).
+    Notification(RspPacket),
+}
+
+/// Largest partial packet the framer will hold before giving up.
+///
+/// The peer is not trusted: a stub that streams bytes and never sends the
+/// terminating `#` would otherwise grow this buffer without bound, because
+/// [`RspClient::read_reply`] keeps reading until a complete item appears.
+/// 8 MiB is far above any real reply (`m` reads are chunked well below the
+/// stub's advertised `PacketSize`) and far below anything that could exhaust
+/// the debugger.
+pub const RSP_MAX_BUFFERED: usize = 8 * 1024 * 1024;
+
+/// Incremental, restartable packet reassembler.
+///
+/// Feed it whatever arrived from the socket with [`RspFramer::push`] and pull
+/// complete items with [`RspFramer::next_item`]. Partial packets stay buffered
+/// across calls, which is the entire reason this type exists.
+#[derive(Debug, Default)]
+pub struct RspFramer {
+    buf: VecDeque<u8>,
+}
+
+impl RspFramer {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Append freshly read bytes.
+    pub fn push(&mut self, bytes: &[u8]) {
+        self.buf.extend(bytes.iter().copied());
+    }
+
+    /// Bytes currently buffered but not yet forming a complete item.
+    #[must_use]
+    pub fn buffered(&self) -> usize {
+        self.buf.len()
+    }
+
+    /// Drop everything buffered (used after a reconnect).
+    pub fn reset(&mut self) {
+        self.buf.clear();
+    }
+
+    /// Pull the next complete item.
+    ///
+    /// Returns `None` when more bytes are needed. A malformed packet yields
+    /// `Some(Err(..))` **and is consumed**, so a caller looping on this can
+    /// never spin forever on the same garbage.
+    pub fn next_item(&mut self) -> Option<RspResult<RspIncoming>> {
+        loop {
+            let first = *self.buf.front()?;
+            match first {
+                b'+' => {
+                    self.buf.pop_front();
+                    return Some(Ok(RspIncoming::Ack));
+                }
+                b'-' => {
+                    self.buf.pop_front();
+                    return Some(Ok(RspIncoming::Nack));
+                }
+                b'$' | b'%' => break,
+                // Anything else is noise between packets (e.g. a stray 0x03
+                // interrupt echo); drop one byte and re-examine.
+                _ => {
+                    self.buf.pop_front();
+                }
+            }
+        }
+
+        let lead = *self.buf.front()?;
+        // Find '#' and make sure two checksum digits follow it.
+        let Some(hash) = self.buf.iter().position(|b| *b == b'#') else {
+            // No terminator yet. Wait for more bytes, but only up to a cap:
+            // the peer is untrusted and could otherwise stream forever.
+            if self.buf.len() > RSP_MAX_BUFFERED {
+                let n = self.buf.len();
+                self.buf.clear();
+                return Some(Err(RspError::Framing(format!(
+                    "no packet terminator within {n} buffered bytes (cap {RSP_MAX_BUFFERED})"
+                ))));
+            }
+            return None;
+        };
+        if self.buf.len() < hash + 3 {
+            return None;
+        }
+        let raw: Vec<u8> = self.buf.iter().copied().take(hash + 3).collect();
+        self.buf.drain(..hash + 3);
+        let decoded = RspPacket::decode(&raw);
+        Some(decoded.map(|p| {
+            if lead == b'%' {
+                RspIncoming::Notification(p)
+            } else {
+                RspIncoming::Packet(p)
+            }
+        }))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// command builders
+// ---------------------------------------------------------------------------
+
+/// Typed constructors for the packets this client sends.
+///
+/// These return the *logical* payload; escaping, checksum and framing are
+/// added by [`RspPacket::encode`].
+pub mod commands {
+    use super::{fmt_hex_u64, hex_encode};
+
+    /// `?` — why did the target stop?
+    #[must_use]
+    pub fn halt_reason() -> Vec<u8> {
+        b"?".to_vec()
+    }
+
+    /// `g` — read all registers.
+    #[must_use]
+    pub fn read_registers() -> Vec<u8> {
+        b"g".to_vec()
+    }
+
+    /// `G<hex>` — write all registers.
+    #[must_use]
+    pub fn write_registers(raw: &[u8]) -> Vec<u8> {
+        let mut v = vec![b'G'];
+        v.extend_from_slice(&hex_encode(raw));
+        v
+    }
+
+    /// `p<n>` — read one register.
+    #[must_use]
+    pub fn read_register(n: u32) -> Vec<u8> {
+        format!("p{n:x}").into_bytes()
+    }
+
+    /// `P<n>=<hex>` — write one register.
+    #[must_use]
+    pub fn write_register(n: u32, raw: &[u8]) -> Vec<u8> {
+        let mut v = format!("P{n:x}=").into_bytes();
+        v.extend_from_slice(&hex_encode(raw));
+        v
+    }
+
+    /// `m<addr>,<len>` — read memory.
+    #[must_use]
+    pub fn read_memory(addr: u64, len: usize) -> Vec<u8> {
+        format!("m{},{:x}", fmt_hex_u64(addr), len).into_bytes()
+    }
+
+    /// `M<addr>,<len>:<hex>` — write memory (hex form, always safe).
+    #[must_use]
+    pub fn write_memory(addr: u64, data: &[u8]) -> Vec<u8> {
+        let mut v = format!("M{},{:x}:", fmt_hex_u64(addr), data.len()).into_bytes();
+        v.extend_from_slice(&hex_encode(data));
+        v
+    }
+
+    /// `X<addr>,<len>:<binary>` — write memory in binary form.
+    ///
+    /// The payload is left raw here; [`super::escape`] handles the reserved
+    /// bytes when the packet is encoded.
+    #[must_use]
+    pub fn write_memory_binary(addr: u64, data: &[u8]) -> Vec<u8> {
+        let mut v = format!("X{},{:x}:", fmt_hex_u64(addr), data.len()).into_bytes();
+        v.extend_from_slice(data);
+        v
+    }
+
+    /// `c` / `c<addr>` — continue.
+    #[must_use]
+    pub fn cont(addr: Option<u64>) -> Vec<u8> {
+        addr.map_or_else(|| b"c".to_vec(), |a| format!("c{}", fmt_hex_u64(a)).into_bytes())
+    }
+
+    /// `s` / `s<addr>` — single step.
+    #[must_use]
+    pub fn step(addr: Option<u64>) -> Vec<u8> {
+        addr.map_or_else(|| b"s".to_vec(), |a| format!("s{}", fmt_hex_u64(a)).into_bytes())
+    }
+
+    /// `vCont?` — which resume actions does the stub support?
+    #[must_use]
+    pub fn vcont_query() -> Vec<u8> {
+        b"vCont?".to_vec()
+    }
+
+    /// `vCont;<action>[:<tid>]…`
+    ///
+    /// Actions are given as `("c" | "s" | "C05" | "S05", Some(tid))`. A thread
+    /// id of `None` applies the action to all threads.
+    #[must_use]
+    pub fn vcont(actions: &[(&str, Option<u64>)]) -> Vec<u8> {
+        let mut s = String::from("vCont");
+        for (action, tid) in actions {
+            s.push(';');
+            s.push_str(action);
+            if let Some(t) = tid {
+                s.push(':');
+                s.push_str(&fmt_hex_u64(*t));
+            }
+        }
+        s.into_bytes()
+    }
+
+    /// Breakpoint kinds understood by `Z`/`z`.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ZKind {
+        /// `Z0` — software breakpoint (stub patches the instruction).
+        Software,
+        /// `Z1` — hardware breakpoint (debug register / `DBGBVR`).
+        Hardware,
+        /// `Z2` — write watchpoint.
+        WriteWatch,
+        /// `Z3` — read watchpoint.
+        ReadWatch,
+        /// `Z4` — access watchpoint.
+        AccessWatch,
+    }
+
+    impl ZKind {
+        /// Numeric type code used in the packet.
+        #[must_use]
+        pub const fn code(self) -> u8 {
+            match self {
+                Self::Software => 0,
+                Self::Hardware => 1,
+                Self::WriteWatch => 2,
+                Self::ReadWatch => 3,
+                Self::AccessWatch => 4,
+            }
+        }
+    }
+
+    /// `Z<t>,<addr>,<kind>` — insert breakpoint/watchpoint.
+    ///
+    /// `kind` is the instruction length in bytes on ARM64/x86 (4 for A64) or
+    /// the watched region size for watchpoints.
+    #[must_use]
+    pub fn insert_breakpoint(kind: ZKind, addr: u64, size: u32) -> Vec<u8> {
+        format!("Z{},{},{:x}", kind.code(), fmt_hex_u64(addr), size).into_bytes()
+    }
+
+    /// `z<t>,<addr>,<kind>` — remove breakpoint/watchpoint.
+    #[must_use]
+    pub fn remove_breakpoint(kind: ZKind, addr: u64, size: u32) -> Vec<u8> {
+        format!("z{},{},{:x}", kind.code(), fmt_hex_u64(addr), size).into_bytes()
+    }
+
+    /// `qSupported:<features>` — feature negotiation.
+    #[must_use]
+    pub fn q_supported(features: &[&str]) -> Vec<u8> {
+        if features.is_empty() {
+            b"qSupported".to_vec()
+        } else {
+            format!("qSupported:{}", features.join(";")).into_bytes()
+        }
+    }
+
+    /// `QStartNoAckMode` — stop exchanging `+`/`-` after this is acknowledged.
+    #[must_use]
+    pub fn start_no_ack_mode() -> Vec<u8> {
+        b"QStartNoAckMode".to_vec()
+    }
+
+    /// Which class of operation a `H` packet selects a thread for.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum HOp {
+        /// `Hg` — subsequent register/memory operations.
+        General,
+        /// `Hc` — subsequent step/continue (legacy; superseded by `vCont`).
+        Continue,
+    }
+
+    /// `H<op><tid>` — select the thread for following operations.
+    ///
+    /// `tid` of `None` encodes `-1`, i.e. "all threads"; `Some(0)` means
+    /// "any thread", which is what most stubs want at handshake time.
+    #[must_use]
+    pub fn set_thread(op: HOp, tid: Option<u64>) -> Vec<u8> {
+        let c = match op {
+            HOp::General => 'g',
+            HOp::Continue => 'c',
+        };
+        match tid {
+            Some(t) => format!("H{c}{}", fmt_hex_u64(t)).into_bytes(),
+            None => format!("H{c}-1").into_bytes(),
+        }
+    }
+
+    /// `qfThreadInfo` — start enumerating threads.
+    #[must_use]
+    pub fn q_first_thread_info() -> Vec<u8> {
+        b"qfThreadInfo".to_vec()
+    }
+
+    /// `qsThreadInfo` — continue enumerating threads.
+    #[must_use]
+    pub fn q_next_thread_info() -> Vec<u8> {
+        b"qsThreadInfo".to_vec()
+    }
+
+    /// `D` — detach, leaving the process running.
+    #[must_use]
+    pub fn detach() -> Vec<u8> {
+        b"D".to_vec()
+    }
+
+    /// `k` — kill the target.
+    #[must_use]
+    pub fn kill() -> Vec<u8> {
+        b"k".to_vec()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// stop replies
+// ---------------------------------------------------------------------------
+
+/// Parsed `S`/`T`/`W`/`X` stop reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StopReply {
+    /// `Snn` — stopped with signal `nn`, no extra detail.
+    Signal { signal: u8 },
+    /// `Tnn key:value;…` — stopped with signal and register/thread detail.
+    SignalWithInfo {
+        signal: u8,
+        thread: Option<u64>,
+        pairs: Vec<(String, String)>,
+    },
+    /// `Wnn` — process exited with status `nn`.
+    Exited { status: u8 },
+    /// `Xnn` — process terminated by signal `nn`.
+    Terminated { signal: u8 },
+}
+
+impl StopReply {
+    /// Parse a stop reply payload.
+    ///
+    /// # Errors
+    /// [`RspError::Framing`] if the leading character is not one of `S T W X`
+    /// or the signal byte is not two hex digits.
+    pub fn parse(data: &[u8]) -> RspResult<Self> {
+        let kind = *data
+            .first()
+            .ok_or_else(|| RspError::Framing("empty stop reply".to_string()))?;
+        let sig_hex = data
+            .get(1..3)
+            .ok_or_else(|| RspError::Framing("stop reply too short".to_string()))?;
+        let sig = hex_decode(sig_hex)?[0];
+        match kind {
+            b'S' => Ok(Self::Signal { signal: sig }),
+            b'W' => Ok(Self::Exited { status: sig }),
+            b'X' => Ok(Self::Terminated { signal: sig }),
+            b'T' => {
+                let mut pairs = Vec::new();
+                let mut thread = None;
+                for field in data[3..].split(|b| *b == b';') {
+                    if field.is_empty() {
+                        continue;
+                    }
+                    let Some(colon) = field.iter().position(|b| *b == b':') else {
+                        continue;
+                    };
+                    let key = String::from_utf8_lossy(&field[..colon]).into_owned();
+                    let val = String::from_utf8_lossy(&field[colon + 1..]).into_owned();
+                    if key == "thread" {
+                        // debugserver may use `p<pid>.<tid>`; the tid is what matters.
+                        let tid_part = val.rsplit('.').next().unwrap_or(&val);
+                        thread = parse_hex_u64(tid_part.trim_start_matches('p').as_bytes()).ok();
+                    }
+                    pairs.push((key, val));
+                }
+                Ok(Self::SignalWithInfo {
+                    signal: sig,
+                    thread,
+                    pairs,
+                })
+            }
+            other => Err(RspError::Framing(format!(
+                "unknown stop reply kind {:?}",
+                other as char
+            ))),
+        }
+    }
+
+    /// `true` if the process is gone.
+    #[must_use]
+    pub const fn is_exit(&self) -> bool {
+        matches!(self, Self::Exited { .. } | Self::Terminated { .. })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// transport
+// ---------------------------------------------------------------------------
+
+/// Byte pipe to a remote stub.
+///
+/// Synchronous by design: RSP framing is stateful, and interleaving two
+/// requests on one connection corrupts it. Async lives one layer up, in the
+/// adapter that implements `crate::Debugger`.
+pub trait RspTransport: Send {
+    /// Write all bytes.
+    ///
+    /// # Errors
+    /// Propagates the underlying I/O failure.
+    fn send(&mut self, data: &[u8]) -> io::Result<()>;
+
+    /// Read at most `buf.len()` bytes; `Ok(0)` means the peer closed.
+    ///
+    /// # Errors
+    /// Propagates the underlying I/O failure.
+    fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize>;
+
+    /// Human-readable description, for diagnostics.
+    fn description(&self) -> String {
+        "rsp-transport".to_string()
+    }
+}
+
+/// TCP transport, the shape debugserver is normally reached through.
+#[derive(Debug)]
+pub struct TcpTransport {
+    stream: TcpStream,
+    peer: String,
+}
+
+impl TcpTransport {
+    /// Connect to `addr`, applying a read/write timeout.
+    ///
+    /// # Errors
+    /// Propagates connect/setsockopt failures.
+    pub fn connect<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<Self> {
+        let stream = TcpStream::connect(addr)?;
+        stream.set_nodelay(true)?;
+        stream.set_read_timeout(timeout)?;
+        stream.set_write_timeout(timeout)?;
+        let peer = stream
+            .peer_addr()
+            .map_or_else(|_| "<unknown>".to_string(), |a| a.to_string());
+        Ok(Self { stream, peer })
+    }
+}
+
+impl RspTransport for TcpTransport {
+    fn send(&mut self, data: &[u8]) -> io::Result<()> {
+        self.stream.write_all(data)?;
+        self.stream.flush()
+    }
+
+    fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.stream.read(buf)
+    }
+
+    fn description(&self) -> String {
+        format!("tcp:{}", self.peer)
+    }
+}
+
+/// Deterministic fault injection for the in-memory transport.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MockFaults {
+    /// Deliver at most this many bytes per `recv` (0 = unlimited). Simulates
+    /// TCP segmentation, which is what breaks single-`read()` clients.
+    pub chunk_size: usize,
+    /// Corrupt the checksum digits of the Nth queued response (0-based).
+    pub corrupt_checksum_at: Option<usize>,
+    /// Close the connection after N responses have been delivered.
+    pub close_after: Option<usize>,
+}
+
+/// In-memory transport: scripted responses in, sent bytes recorded.
+///
+/// This is what makes the Apple protocol testable on a Windows host — no
+/// socket, no debugserver, no `cfg(target_os)`.
+#[derive(Debug, Default)]
+pub struct MockTransport {
+    outgoing: Vec<u8>,
+    incoming: VecDeque<u8>,
+    responses_delivered: usize,
+    queued: usize,
+    faults: MockFaults,
+    closed: bool,
+}
+
+impl MockTransport {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Configure fault injection.
+    #[must_use]
+    pub const fn with_faults(mut self, faults: MockFaults) -> Self {
+        self.faults = faults;
+        self
+    }
+
+    /// Queue raw bytes to be handed back by `recv`.
+    pub fn push_raw(&mut self, bytes: &[u8]) {
+        self.incoming.extend(bytes.iter().copied());
+    }
+
+    /// Queue a properly framed reply (plus a leading `+` ack).
+    pub fn push_reply(&mut self, payload: &[u8]) {
+        let mut encoded = RspPacket::new(payload.to_vec()).encode();
+        if self.faults.corrupt_checksum_at == Some(self.queued) {
+            let n = encoded.len();
+            // Flip to a *different but still valid* hex digit as well as an
+            // outright invalid one across runs; here we keep it hex so the
+            // failure is specifically a checksum mismatch.
+            encoded[n - 1] = if encoded[n - 1] == b'0' { b'1' } else { b'0' };
+        }
+        self.queued += 1;
+        self.incoming.push_back(b'+');
+        self.incoming.extend(encoded);
+    }
+
+    /// Queue an asynchronous notification.
+    pub fn push_notification(&mut self, payload: &[u8]) {
+        let p = RspPacket::new(payload.to_vec());
+        let mut wire = p.encode();
+        wire[0] = b'%';
+        // The checksum covers only the body, so re-leading with '%' is safe.
+        self.incoming.extend(wire);
+    }
+
+    /// Everything the client has written so far.
+    #[must_use]
+    pub fn sent(&self) -> &[u8] {
+        &self.outgoing
+    }
+
+    /// Sent bytes as a string, for assertions.
+    #[must_use]
+    pub fn sent_str(&self) -> String {
+        String::from_utf8_lossy(&self.outgoing).into_owned()
+    }
+
+    /// Forget recorded traffic (keeps queued responses).
+    pub fn clear_sent(&mut self) {
+        self.outgoing.clear();
+    }
+}
+
+impl RspTransport for MockTransport {
+    fn send(&mut self, data: &[u8]) -> io::Result<()> {
+        if self.closed {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "mock transport closed",
+            ));
+        }
+        self.outgoing.extend_from_slice(data);
+        Ok(())
+    }
+
+    fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.closed || buf.is_empty() {
+            return Ok(0);
+        }
+        if let Some(limit) = self.faults.close_after
+            && self.responses_delivered >= limit
+        {
+            self.closed = true;
+            return Ok(0);
+        }
+        let mut cap = buf.len();
+        if self.faults.chunk_size > 0 {
+            cap = cap.min(self.faults.chunk_size);
+        }
+        let n = cap.min(self.incoming.len());
+        if n == 0 {
+            return Ok(0);
+        }
+        for (i, slot) in buf.iter_mut().enumerate().take(n) {
+            *slot = self.incoming.pop_front().unwrap_or(0);
+            let _ = i;
+        }
+        // Count a delivered response each time a trailing checksum leaves the
+        // queue; approximate but enough for `close_after` scenarios.
+        self.responses_delivered += 1;
+        Ok(n)
+    }
+
+    fn description(&self) -> String {
+        "mock".to_string()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// client
+// ---------------------------------------------------------------------------
+
+/// Request/response client over any [`RspTransport`].
+#[derive(Debug)]
+pub struct RspClient<T: RspTransport> {
+    transport: T,
+    framer: RspFramer,
+    /// While `true` we send `+` after each received packet and expect one back.
+    ack_mode: bool,
+    /// Notifications received while waiting for a command reply.
+    notifications: VecDeque<RspPacket>,
+    max_retries: u32,
+}
+
+impl<T: RspTransport> RspClient<T> {
+    /// Wrap a transport. Ack mode starts enabled, as the protocol requires.
+    #[must_use]
+    pub fn new(transport: T) -> Self {
+        Self {
+            transport,
+            framer: RspFramer::new(),
+            ack_mode: true,
+            notifications: VecDeque::new(),
+            max_retries: 3,
+        }
+    }
+
+    /// Borrow the transport (tests inspect the mock through this).
+    pub const fn transport(&self) -> &T {
+        &self.transport
+    }
+
+    /// Mutably borrow the transport.
+    pub const fn transport_mut(&mut self) -> &mut T {
+        &mut self.transport
+    }
+
+    /// Whether `+`/`-` acknowledgements are still in use.
+    #[must_use]
+    pub const fn ack_mode(&self) -> bool {
+        self.ack_mode
+    }
+
+    /// Pop an asynchronous notification observed so far, if any.
+    pub fn take_notification(&mut self) -> Option<RspPacket> {
+        self.notifications.pop_front()
+    }
+
+    /// Send a payload and wait for the matching reply.
+    ///
+    /// Retries on `-` (nack) up to a fixed bound; notifications arriving in
+    /// between are queued rather than mistaken for the reply.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn request(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
+        let wire = RspPacket::new(payload.to_vec()).encode();
+        let mut attempt = 0u32;
+        loop {
+            self.transport.send(&wire)?;
+            match self.read_reply() {
+                Ok(Some(pkt)) => {
+                    if self.ack_mode {
+                        self.transport.send(b"+")?;
+                    }
+                    return Ok(pkt);
+                }
+                Ok(None) => self.retry(&mut attempt)?,
+                Err(e) if e.is_retryable() => {
+                    self.retry(&mut attempt)?;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// Shared nack/give-up bookkeeping for [`Self::request`].
+    fn retry(&mut self, attempt: &mut u32) -> RspResult<()> {
+        // Nack, or we could not trust what came back: ask again.
+        *attempt += 1;
+        if *attempt > self.max_retries {
+            return Err(RspError::Transport(format!(
+                "no valid reply after {} attempts on {}",
+                attempt,
+                self.transport.description()
+            )));
+        }
+        if self.ack_mode {
+            self.transport.send(b"-")?;
+        }
+        Ok(())
+    }
+
+    /// `Ok(None)` means "the peer nacked, resend".
+    fn read_reply(&mut self) -> RspResult<Option<RspPacket>> {
+        let mut buf = [0u8; 4096];
+        loop {
+            while let Some(item) = self.framer.next_item() {
+                match item? {
+                    RspIncoming::Ack => {}
+                    RspIncoming::Nack => return Ok(None),
+                    RspIncoming::Notification(p) => self.notifications.push_back(p),
+                    RspIncoming::Packet(p) => return Ok(Some(p)),
+                }
+            }
+            let n = self.transport.recv(&mut buf)?;
+            if n == 0 {
+                return Err(RspError::Transport(format!(
+                    "connection closed by {}",
+                    self.transport.description()
+                )));
+            }
+            self.framer.push(&buf[..n]);
+        }
+    }
+
+    /// Perform the standard handshake: `qSupported`, then disable ack mode if
+    /// the stub agrees. Returns the raw feature string.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn handshake(&mut self, features: &[&str]) -> RspResult<String> {
+        let reply = self.request(&commands::q_supported(features))?;
+        let supported = reply.as_str().into_owned();
+        if supported.contains("QStartNoAckMode+") {
+            let r = self.request(&commands::start_no_ack_mode())?;
+            if r.is_ok() {
+                self.ack_mode = false;
+            }
+        }
+        Ok(supported)
+    }
+
+    /// `m` — read `len` bytes at `addr`.
+    ///
+    /// # Errors
+    /// See [`RspError`]; `Exx` from the stub becomes [`RspError::Remote`].
+    pub fn read_memory(&mut self, addr: u64, len: usize) -> RspResult<Vec<u8>> {
+        let reply = self
+            .request(&commands::read_memory(addr, len))?
+            .ok_or_err("m")?;
+        let bytes = hex_decode(&reply.data)?;
+        // A shortfall is data loss, not data — see `RspError::ShortRead`.
+        if bytes.len() != len {
+            return Err(RspError::ShortRead {
+                addr,
+                requested: len,
+                returned: bytes.len(),
+            });
+        }
+        Ok(bytes)
+    }
+
+    /// `M` — write memory, returning the number of bytes accepted.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> RspResult<usize> {
+        let reply = self
+            .request(&commands::write_memory(addr, data))?
+            .ok_or_err("M")?;
+        if reply.is_ok() {
+            Ok(data.len())
+        } else {
+            Err(RspError::Framing(format!(
+                "unexpected reply to M: {}",
+                reply.as_str()
+            )))
+        }
+    }
+
+    /// `g` — read the raw register block.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn read_registers(&mut self) -> RspResult<Vec<u8>> {
+        let reply = self.request(&commands::read_registers())?.ok_or_err("g")?;
+        hex_decode(&reply.data)
+    }
+
+    /// `G` — write the raw register block.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn write_registers(&mut self, raw: &[u8]) -> RspResult<()> {
+        let reply = self
+            .request(&commands::write_registers(raw))?
+            .ok_or_err("G")?;
+        if reply.is_ok() {
+            Ok(())
+        } else {
+            Err(RspError::Framing(format!(
+                "unexpected reply to G: {}",
+                reply.as_str()
+            )))
+        }
+    }
+
+    /// `?` — current stop reason.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn halt_reason(&mut self) -> RspResult<StopReply> {
+        let reply = self.request(&commands::halt_reason())?.ok_or_err("?")?;
+        StopReply::parse(&reply.data)
+    }
+
+    /// Insert a breakpoint via `Z`.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn insert_breakpoint(
+        &mut self,
+        kind: commands::ZKind,
+        addr: u64,
+        size: u32,
+    ) -> RspResult<()> {
+        let reply = self
+            .request(&commands::insert_breakpoint(kind, addr, size))?
+            .ok_or_err("Z")?;
+        if reply.is_ok() {
+            Ok(())
+        } else {
+            Err(RspError::Framing(format!(
+                "unexpected reply to Z: {}",
+                reply.as_str()
+            )))
+        }
+    }
+
+    /// Remove a breakpoint via `z`.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn remove_breakpoint(
+        &mut self,
+        kind: commands::ZKind,
+        addr: u64,
+        size: u32,
+    ) -> RspResult<()> {
+        let reply = self
+            .request(&commands::remove_breakpoint(kind, addr, size))?
+            .ok_or_err("z")?;
+        if reply.is_ok() {
+            Ok(())
+        } else {
+            Err(RspError::Framing(format!(
+                "unexpected reply to z: {}",
+                reply.as_str()
+            )))
+        }
+    }
+
+    /// Resume with `vCont` and parse the resulting stop reply.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn vcont(&mut self, actions: &[(&str, Option<u64>)]) -> RspResult<StopReply> {
+        let reply = self.request(&commands::vcont(actions))?.ok_or_err("vCont")?;
+        StopReply::parse(&reply.data)
+    }
+
+    /// `H` — select the thread for subsequent operations.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn set_thread(&mut self, op: commands::HOp, tid: Option<u64>) -> RspResult<()> {
+        let reply = self
+            .request(&commands::set_thread(op, tid))?
+            .ok_or_err("H")?;
+        if reply.is_ok() {
+            Ok(())
+        } else {
+            Err(RspError::Framing(format!(
+                "unexpected reply to H: {}",
+                reply.as_str()
+            )))
+        }
+    }
+
+    /// Enumerate thread ids via `qfThreadInfo`/`qsThreadInfo`.
+    ///
+    /// # Errors
+    /// See [`RspError`].
+    pub fn thread_ids(&mut self) -> RspResult<Vec<u64>> {
+        let mut out = Vec::new();
+        let mut payload = commands::q_first_thread_info();
+        loop {
+            let reply = self.request(&payload)?;
+            let s = reply.as_str().into_owned();
+            if s.is_empty() || s.starts_with('l') {
+                break;
+            }
+            let list = s.strip_prefix('m').unwrap_or(&s);
+            for tid in list.split(',').filter(|t| !t.is_empty()) {
+                let bare = tid.rsplit('.').next().unwrap_or(tid);
+                if let Ok(v) = parse_hex_u64(bare.trim_start_matches('p').as_bytes()) {
+                    out.push(v);
+                }
+            }
+            payload = commands::q_next_thread_info();
+        }
+        Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    /// Truncation + mutation sweep over every parser that touches bytes from
+    /// the target.
+    ///
+    /// This is the most exposed surface in the whole iOS backend: a
+    /// `debugserver` is a REMOTE process on a device we do not control, and
+    /// every byte it sends reaches `RspPacket::decode` first. The crate's
+    /// parsers for local formats (minidump, PE, MSF) were swept this way in
+    /// iters 235-236; these never were.
+    ///
+    /// The bar is simply: malformed input must produce `Err`, never a panic.
+    #[test]
+    fn rsp_parsers_never_panic_on_truncated_or_mutated_input() {
+        // A realistic, well-formed stop reply as the seed.
+        let seed = RspPacket::new(b"T05thread:1a2b;name:main;reason:breakpoint;".to_vec()).encode();
+
+        for len in 0..=seed.len() {
+            let _ = RspPacket::decode(&seed[..len]);
+        }
+        for i in 0..seed.len() {
+            for probe in [0x00u8, b'#', b'$', b'*', b'}', b'+', 0x7F, 0xFF] {
+                let mut m = seed.clone();
+                m[i] = probe;
+                let _ = RspPacket::decode(&m);
+            }
+        }
+
+        // The payload parsers, reached once a packet has been framed.
+        let payload = b"T05thread:1a2b;name:main;reason:breakpoint;";
+        for len in 0..=payload.len() {
+            let slice = &payload[..len];
+            let _ = StopReply::parse(slice);
+            let _ = hex_decode(slice);
+            let _ = rle_decode(slice);
+            let _ = parse_hex_u64(slice);
+        }
+        for i in 0..payload.len() {
+            for probe in [0x00u8, b'*', b'}', b':', b';', b'x', 0xFF] {
+                let mut m = payload.to_vec();
+                m[i] = probe;
+                let _ = StopReply::parse(&m);
+                let _ = hex_decode(&m);
+                let _ = rle_decode(&m);
+                let _ = parse_hex_u64(&m);
+            }
+        }
+
+        // Run-length encoding is the one construct that can EXPAND input, so
+        // it gets its own adversarial shapes: a repeat with nothing to
+        // repeat, and the largest count the encoding can express.
+        for hostile in [
+            b"*".to_vec(),
+            b"*~".to_vec(),
+            vec![b'}'],                        // escape with nothing after it
+            vec![b'A', b'*', 0xFF],            // maximal repeat count
+            vec![b'A', b'*', b' '],            // count that decodes to zero
+            vec![b'}', 0x00],
+        ] {
+            let _ = rle_decode(&hostile);
+            let _ = hex_decode(&hostile);
+        }
+    }
+    use super::commands::{HOp, ZKind};
+    use super::*;
+
+    // ---- checksum / hex -------------------------------------------------
+
+    #[test]
+    fn checksum_matches_gdb_definition() {
+        assert_eq!(checksum(b"OK"), 0x9a);
+        assert_eq!(checksum(b""), 0);
+        // Wrapping is modulo 256, never a panic.
+        assert_eq!(checksum(&[0xff, 0xff]), 0xfe);
+    }
+
+    #[test]
+    fn hex_roundtrip() {
+        let data = [0x00u8, 0x7f, 0x80, 0xff, 0x10];
+        let enc = hex_encode(&data);
+        assert_eq!(enc, b"007f80ff10");
+        assert_eq!(hex_decode(&enc).unwrap(), data);
+    }
+
+    #[test]
+    fn hex_decode_rejects_malformed() {
+        assert!(matches!(hex_decode(b"abc"), Err(RspError::Hex(_))));
+        assert!(matches!(hex_decode(b"zz"), Err(RspError::Hex(_))));
+        assert!(hex_decode(b"").unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_hex_u64_bounds() {
+        assert_eq!(parse_hex_u64(b"ffffffffffffffff").unwrap(), u64::MAX);
+        assert!(parse_hex_u64(b"1ffffffffffffffff").is_err());
+        assert!(parse_hex_u64(b"").is_err());
+        assert!(parse_hex_u64(b"xyz").is_err());
+    }
+
+    // ---- escaping / RLE -------------------------------------------------
+
+    #[test]
+    fn escape_roundtrip_covers_all_reserved_bytes() {
+        let raw = b"a#b$c}d*e";
+        let esc = escape(raw);
+        assert!(!esc[1..].contains(&b'#'));
+        assert_eq!(unescape(&esc).unwrap(), raw);
+    }
+
+    #[test]
+    fn unescape_rejects_dangling_escape() {
+        assert!(matches!(unescape(b"abc}"), Err(RspError::Encoding(_))));
+    }
+
+    #[test]
+    fn rle_decode_expands() {
+        // '0' followed by *" (0x22 = 34 -> 5 extra copies)
+        assert_eq!(rle_decode(b"0*\"").unwrap(), b"000000");
+        assert_eq!(rle_decode(b"abc").unwrap(), b"abc");
+    }
+
+    #[test]
+    fn rle_decode_rejects_malformed_without_panicking() {
+        assert!(matches!(rle_decode(b"*a"), Err(RspError::Encoding(_))));
+        assert!(matches!(rle_decode(b"a*"), Err(RspError::Encoding(_))));
+        assert!(matches!(rle_decode(b"a*\x01"), Err(RspError::Encoding(_))));
+    }
+
+    #[test]
+    fn rle_encode_roundtrips_and_avoids_illegal_counts() {
+        for len in 1usize..200 {
+            let data = vec![b'x'; len];
+            let enc = rle_encode(&data);
+            assert!(!enc.contains(&b'#'), "len {len} produced '#'");
+            assert!(!enc.contains(&b'$'), "len {len} produced '$'");
+            assert_eq!(rle_decode(&enc).unwrap(), data, "len {len}");
+        }
+    }
+
+    #[test]
+    fn rle_encode_roundtrips_mixed_data() {
+        let data = b"aaaaaaaabbbcdddddddddddddddddddde".to_vec();
+        assert_eq!(rle_decode(&rle_encode(&data)).unwrap(), data);
+    }
+
+    // ---- packets --------------------------------------------------------
+
+    #[test]
+    fn packet_encode_shape() {
+        assert_eq!(RspPacket::new(b"OK".to_vec()).encode(), b"$OK#9a");
+        assert_eq!(RspPacket::new(Vec::new()).encode(), b"$#00");
+    }
+
+    #[test]
+    fn packet_decode_verifies_checksum() {
+        assert_eq!(RspPacket::decode(b"$OK#9a").unwrap().data, b"OK");
+        assert!(matches!(
+            RspPacket::decode(b"$OK#9b"),
+            Err(RspError::BadChecksum {
+                expected: 0x9b,
+                computed: 0x9a
+            })
+        ));
+    }
+
+    #[test]
+    fn packet_decode_skips_leading_acks() {
+        assert_eq!(RspPacket::decode(b"++-$OK#9a").unwrap().data, b"OK");
+    }
+
+    #[test]
+    fn packet_decode_handles_truncated_and_garbage_without_panicking() {
+        for bad in [
+            &b""[..],
+            b"$",
+            b"$OK",
+            b"$OK#",
+            b"$OK#9",
+            b"garbage",
+            b"#9a",
+            b"$}",
+            b"$*a#00",
+        ] {
+            let _ = RspPacket::decode(bad);
+        }
+    }
+
+    #[test]
+    fn packet_roundtrip_with_reserved_bytes_and_rle() {
+        let payload: Vec<u8> = (0u8..=255).collect();
+        for wire in [
+            RspPacket::new(payload.clone()).encode(),
+            RspPacket::new(payload.clone()).encode_compressed(),
+        ] {
+            assert_eq!(RspPacket::decode(&wire).unwrap().data, payload);
+        }
+    }
+
+    #[test]
+    fn packet_classification_helpers() {
+        assert!(RspPacket::new(b"OK".to_vec()).is_ok());
+        assert!(RspPacket::new(Vec::new()).is_empty_reply());
+        assert_eq!(RspPacket::new(b"E01".to_vec()).error_code(), Some(1));
+        assert_eq!(RspPacket::new(b"Exx".to_vec()).error_code(), None);
+        assert!(matches!(
+            RspPacket::new(b"E05".to_vec()).ok_or_err("m"),
+            Err(RspError::Remote(5))
+        ));
+        assert!(matches!(
+            RspPacket::new(Vec::new()).ok_or_err("qFoo"),
+            Err(RspError::Unsupported(_))
+        ));
+    }
+
+    // ---- framer ---------------------------------------------------------
+
+    #[test]
+    fn framer_reassembles_across_byte_sized_chunks() {
+        let wire = RspPacket::new(b"T05thread:1;".to_vec()).encode();
+        let mut f = RspFramer::new();
+        let mut got = None;
+        for b in &wire {
+            f.push(&[*b]);
+            while let Some(item) = f.next_item() {
+                if let RspIncoming::Packet(p) = item.unwrap() {
+                    got = Some(p);
+                }
+            }
+        }
+        assert_eq!(got.unwrap().data, b"T05thread:1;");
+        assert_eq!(f.buffered(), 0);
+    }
+
+    #[test]
+    fn framer_yields_acks_and_notifications() {
+        let mut f = RspFramer::new();
+        let mut wire = RspPacket::new(b"Stop:T05".to_vec()).encode();
+        wire[0] = b'%';
+        f.push(b"+-");
+        f.push(&wire);
+        f.push(&RspPacket::new(b"OK".to_vec()).encode());
+        assert_eq!(f.next_item().unwrap().unwrap(), RspIncoming::Ack);
+        assert_eq!(f.next_item().unwrap().unwrap(), RspIncoming::Nack);
+        assert!(matches!(
+            f.next_item().unwrap().unwrap(),
+            RspIncoming::Notification(_)
+        ));
+        assert!(matches!(
+            f.next_item().unwrap().unwrap(),
+            RspIncoming::Packet(_)
+        ));
+        assert!(f.next_item().is_none());
+    }
+
+    #[test]
+    fn framer_consumes_corrupt_packet_so_the_loop_terminates() {
+        let mut f = RspFramer::new();
+        f.push(b"$OK#00$OK#9a");
+        assert!(matches!(
+            f.next_item().unwrap(),
+            Err(RspError::BadChecksum { .. })
+        ));
+        // The good packet behind the bad one is still recoverable.
+        assert!(matches!(
+            f.next_item().unwrap().unwrap(),
+            RspIncoming::Packet(_)
+        ));
+    }
+
+    #[test]
+    fn framer_caps_a_packet_that_never_terminates() {
+        let mut f = RspFramer::new();
+        // A peer that opens a packet and streams payload forever.
+        f.push(b"$");
+        let chunk = vec![b'A'; 64 * 1024];
+        let mut errored = false;
+        for _ in 0..(RSP_MAX_BUFFERED / chunk.len() + 2) {
+            f.push(&chunk);
+            match f.next_item() {
+                None => {}
+                Some(Err(RspError::Framing(_))) => {
+                    errored = true;
+                    break;
+                }
+                other => panic!("unexpected item {other:?}"),
+            }
+            assert!(
+                f.buffered() <= RSP_MAX_BUFFERED + chunk.len(),
+                "buffer grew past the cap: {}",
+                f.buffered()
+            );
+        }
+        assert!(errored, "framer never reported the overlong packet");
+        // The buffer is released, not retained, so a resync starts clean.
+        assert_eq!(f.buffered(), 0);
+    }
+
+    #[test]
+    fn framer_never_panics_on_arbitrary_input() {
+        let inputs: [&[u8]; 7] = [
+            b"$$$$",
+            b"####",
+            b"$}#",
+            b"%",
+            b"$*\x00#00",
+            b"\x00\x01\x02$OK#9a",
+            b"$OK#zz",
+        ];
+        for inp in inputs {
+            let mut f = RspFramer::new();
+            f.push(inp);
+            let mut guard = 0;
+            while let Some(_item) = f.next_item() {
+                guard += 1;
+                assert!(guard < 64, "framer failed to make progress on {inp:?}");
+            }
+        }
+    }
+
+    // ---- commands -------------------------------------------------------
+
+    #[test]
+    fn command_shapes() {
+        assert_eq!(commands::halt_reason(), b"?");
+        assert_eq!(commands::read_memory(0x1000, 16), b"m1000,10");
+        assert_eq!(commands::write_memory(0x20, &[0xde, 0xad]), b"M20,2:dead");
+        assert_eq!(commands::read_register(31), b"p1f");
+        assert_eq!(commands::write_register(0, &[0x01]), b"P0=01");
+        assert_eq!(commands::cont(None), b"c");
+        assert_eq!(commands::cont(Some(0x40)), b"c40");
+        assert_eq!(commands::step(None), b"s");
+        assert_eq!(
+            commands::vcont(&[("s", Some(2)), ("c", None)]),
+            b"vCont;s:2;c"
+        );
+        assert_eq!(
+            commands::insert_breakpoint(ZKind::Software, 0x1000, 4),
+            b"Z0,1000,4"
+        );
+        assert_eq!(
+            commands::remove_breakpoint(ZKind::Hardware, 0x1000, 4),
+            b"z1,1000,4"
+        );
+        assert_eq!(
+            commands::q_supported(&["multiprocess+", "swbreak+"]),
+            b"qSupported:multiprocess+;swbreak+"
+        );
+        assert_eq!(commands::q_supported(&[]), b"qSupported");
+        assert_eq!(commands::set_thread(HOp::General, Some(0)), b"Hg0");
+        assert_eq!(commands::set_thread(HOp::Continue, None), b"Hc-1");
+        assert_eq!(commands::detach(), b"D");
+        assert_eq!(commands::kill(), b"k");
+    }
+
+    #[test]
+    fn binary_write_is_escaped_at_encode_time() {
+        let payload = commands::write_memory_binary(0, &[b'$', b'#', b'}', b'*']);
+        let wire = RspPacket::new(payload.clone()).encode();
+        assert_eq!(RspPacket::decode(&wire).unwrap().data, payload);
+    }
+
+    // ---- stop replies ---------------------------------------------------
+
+    #[test]
+    fn stop_reply_parsing() {
+        assert_eq!(
+            StopReply::parse(b"S05").unwrap(),
+            StopReply::Signal { signal: 5 }
+        );
+        assert_eq!(
+            StopReply::parse(b"W00").unwrap(),
+            StopReply::Exited { status: 0 }
+        );
+        assert!(StopReply::parse(b"W00").unwrap().is_exit());
+        let t = StopReply::parse(b"T05thread:1a3;metype:6;medata:1;").unwrap();
+        match t {
+            StopReply::SignalWithInfo {
+                signal,
+                thread,
+                pairs,
+            } => {
+                assert_eq!(signal, 5);
+                assert_eq!(thread, Some(0x1a3));
+                assert!(pairs.iter().any(|(k, v)| k == "metype" && v == "6"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stop_reply_rejects_garbage_without_panicking() {
+        for bad in [&b""[..], b"Q", b"T", b"T0", b"Tzz", b"S"] {
+            assert!(StopReply::parse(bad).is_err());
+        }
+    }
+
+    // ---- client over the mock transport ---------------------------------
+
+    fn client_with(replies: &[&[u8]]) -> RspClient<MockTransport> {
+        let mut t = MockTransport::new();
+        for r in replies {
+            t.push_reply(r);
+        }
+        RspClient::new(t)
+    }
+
+    #[test]
+    fn request_response_and_ack_traffic() {
+        let mut c = client_with(&[b"OK"]);
+        let reply = c.request(b"?").unwrap();
+        assert!(reply.is_ok());
+        let sent = c.transport().sent_str();
+        assert!(sent.starts_with("$?#3f"), "sent: {sent}");
+        assert!(sent.ends_with('+'), "ack not sent: {sent}");
+    }
+
+    #[test]
+    fn memory_read_write_roundtrip() {
+        let mut c = client_with(&[b"cafe", b"OK"]);
+        assert_eq!(c.read_memory(0x1000, 2).unwrap(), vec![0xca, 0xfe]);
+        assert_eq!(c.write_memory(0x1000, &[0x01, 0x02]).unwrap(), 2);
+        assert!(c.transport().sent_str().contains("M1000,2:0102"));
+    }
+
+    #[test]
+    fn remote_error_is_typed_not_swallowed() {
+        let mut c = client_with(&[b"E05"]);
+        assert!(matches!(
+            c.read_memory(0x1000, 4),
+            Err(RspError::Remote(0x05))
+        ));
+    }
+
+    #[test]
+    fn empty_reply_means_unsupported() {
+        let mut c = client_with(&[b""]);
+        assert!(matches!(
+            c.read_registers(),
+            Err(RspError::Unsupported(ref s)) if s == "g"
+        ));
+    }
+
+    #[test]
+    fn handshake_disables_ack_mode_when_offered() {
+        let mut c = client_with(&[b"PacketSize=1000;QStartNoAckMode+", b"OK"]);
+        let feats = c.handshake(&["multiprocess+"]).unwrap();
+        assert!(feats.contains("QStartNoAckMode+"));
+        assert!(!c.ack_mode());
+    }
+
+    #[test]
+    fn handshake_keeps_ack_mode_when_not_offered() {
+        let mut c = client_with(&[b"PacketSize=1000"]);
+        c.handshake(&[]).unwrap();
+        assert!(c.ack_mode());
+    }
+
+    #[test]
+    fn fragmented_delivery_is_reassembled() {
+        let mut t = MockTransport::new().with_faults(MockFaults {
+            chunk_size: 1,
+            ..MockFaults::default()
+        });
+        t.push_reply(&hex_encode(&[0xaa; 64]));
+        let mut c = RspClient::new(t);
+        assert_eq!(c.read_memory(0, 64).unwrap(), vec![0xaa; 64]);
+    }
+
+    #[test]
+    fn corrupt_checksum_triggers_retry_then_succeeds() {
+        let mut t = MockTransport::new().with_faults(MockFaults {
+            corrupt_checksum_at: Some(0),
+            ..MockFaults::default()
+        });
+        t.push_reply(b"OK"); // corrupted
+        t.push_reply(b"OK"); // clean retransmission
+        let mut c = RspClient::new(t);
+        assert!(c.request(b"?").unwrap().is_ok());
+        assert!(c.transport().sent_str().contains('-'), "no nack was sent");
+    }
+
+    #[test]
+    fn non_hex_checksum_digit_is_retried_not_fatal() {
+        // A flipped bit can land on the checksum digit itself, producing a
+        // non-hex character rather than a checksum mismatch. Both are the same
+        // wire event and both must retransmit.
+        let mut t = MockTransport::new();
+        t.push_raw(b"+$OK#9`");
+        t.push_reply(b"OK");
+        let mut c = RspClient::new(t);
+        assert!(c.request(b"?").unwrap().is_ok());
+    }
+
+    #[test]
+    fn retryable_classification_is_explicit() {
+        assert!(RspError::Truncated.is_retryable());
+        assert!(RspError::Hex("x".into()).is_retryable());
+        assert!(!RspError::Remote(5).is_retryable());
+        assert!(!RspError::Unsupported("g".into()).is_retryable());
+        assert!(!RspError::Transport("closed".into()).is_retryable());
+    }
+
+    #[test]
+    fn persistent_corruption_gives_up_with_an_explicit_error() {
+        let mut t = MockTransport::new();
+        // Four corrupt replies: more than max_retries.
+        for _ in 0..4 {
+            t.push_raw(b"+$OK#00");
+        }
+        let mut c = RspClient::new(t);
+        assert!(matches!(c.request(b"?"), Err(RspError::Transport(_))));
+    }
+
+    #[test]
+    fn closed_connection_is_reported_not_hung() {
+        let mut c = RspClient::new(MockTransport::new());
+        assert!(matches!(c.request(b"?"), Err(RspError::Transport(_))));
+    }
+
+    #[test]
+    fn notifications_do_not_get_mistaken_for_replies() {
+        let mut t = MockTransport::new();
+        t.push_notification(b"Stop:T05thread:1;");
+        t.push_reply(b"OK");
+        let mut c = RspClient::new(t);
+        assert!(c.request(b"?").unwrap().is_ok());
+        let n = c.take_notification().expect("notification was dropped");
+        assert_eq!(n.data, b"Stop:T05thread:1;");
+        assert!(c.take_notification().is_none());
+    }
+
+    #[test]
+    fn breakpoint_and_vcont_flow() {
+        let mut c = client_with(&[b"OK", b"T05thread:2;", b"OK"]);
+        c.insert_breakpoint(ZKind::Software, 0x1_0000, 4).unwrap();
+        let stop = c.vcont(&[("c", None)]).unwrap();
+        assert!(matches!(
+            stop,
+            StopReply::SignalWithInfo {
+                signal: 5,
+                thread: Some(2),
+                ..
+            }
+        ));
+        c.remove_breakpoint(ZKind::Software, 0x1_0000, 4).unwrap();
+        let sent = c.transport().sent_str();
+        assert!(sent.contains("Z0,10000,4"));
+        assert!(sent.contains("z0,10000,4"));
+    }
+
+    #[test]
+    fn thread_enumeration_paginates() {
+        let mut c = client_with(&[b"m1,2", b"m3", b"l"]);
+        assert_eq!(c.thread_ids().unwrap(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn register_block_roundtrip() {
+        let mut c = client_with(&[&hex_encode(&[0x11; 8]), b"OK"]);
+        assert_eq!(c.read_registers().unwrap(), vec![0x11; 8]);
+        c.write_registers(&[0x22; 8]).unwrap();
+        assert!(c.transport().sent_str().contains("G2222222222222222"));
+    }
+}

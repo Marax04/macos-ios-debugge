@@ -1,0 +1,26 @@
+[
+  {
+    "tool": "avr_encode_nop",
+    "status": "PASS",
+    "expected": {
+      "word": 0,
+      "hex": "0000"
+    },
+    "actual": {
+      "word": 0,
+      "hex": "0000"
+    }
+  },
+  {
+    "tool": "avr_encode_ret",
+    "status": "PASS",
+    "expected": {
+      "word": 38152,
+      "hex": "9508"
+    },
+    "actual": {
+      "word": 38152,
+      "hex": "9508"
+    }
+  }
+]

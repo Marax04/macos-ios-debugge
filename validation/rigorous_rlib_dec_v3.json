@@ -1,0 +1,158 @@
+{
+  "category": "rlib_dec",
+  "tools_hardened": 37,
+  "tools_passed": 37,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "rlib_dec_symbol_map_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_symbol_map_from_flirt_pairs",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_function_name_generator",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_typeprop_set_get",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_typeprop_propagate_add",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_calling_convention_from_arch",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_var_recovery_stack_var_name",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_var_recovery_fresh_var",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_expr_recovery_known_count",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cache_hit_rate",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_fresh_goto_label",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_detect_loop",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_make_if_else",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_quality_from_source",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_stats_success_rate",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_symbol_map_set_xref",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_symbol_map_extend_pairs",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_symbol_map_enable_demangling",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_typeprop_get_type",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_typeprop_count_all",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_annotation_store_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_annotation_at_address",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_annotation_by_category",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_annotation_type_info",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_diagnostic_new",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_var_recovery_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_flatten",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_structure_count_emit",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_make_for",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cfs_make_switch",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cache_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cache_evict_one",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_pass_registry_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_function_name_gen_counter",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_expr_recovery_register_fn",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_cf_structure_emit_lines",
+      "status": "PASS"
+    },
+    {
+      "tool": "rlib_dec_result_errors",
+      "status": "PASS"
+    }
+  ]
+}

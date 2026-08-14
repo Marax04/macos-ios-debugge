@@ -1,0 +1,451 @@
+{
+  "module": "kgdb_v2",
+  "tools_hardened": 27,
+  "tools_passed": 27,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "kgdb_bytes_to_hex_v2",
+      "label": "kgdb_bytes_to_hex_v2 [de,ad,be,ef]",
+      "status": "PASS",
+      "expected": "deadbeef",
+      "actual": "deadbeef"
+    },
+    {
+      "tool": "kgdb_bytes_to_hex_v2",
+      "label": "kgdb_bytes_to_hex_v2 boundary bytes",
+      "status": "PASS",
+      "expected": "00017fff",
+      "actual": "00017fff"
+    },
+    {
+      "tool": "kgdb_hex_to_bytes_v2",
+      "label": "kgdb_hex_to_bytes_v2 len=4",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "kgdb_hex_to_bytes_v2",
+      "label": "kgdb_hex_to_bytes_v2 values",
+      "status": "PASS",
+      "expected": [
+        0,
+        1,
+        127,
+        255
+      ],
+      "actual": [
+        0,
+        1,
+        127,
+        255
+      ]
+    },
+    {
+      "tool": "kgdb_rsp_checksum",
+      "label": "kgdb_rsp_checksum 'OK'",
+      "status": "PASS",
+      "expected": 154,
+      "actual": 154
+    },
+    {
+      "tool": "kgdb_rsp_checksum",
+      "label": "kgdb_rsp_checksum 'qSupported'",
+      "status": "PASS",
+      "expected": 55,
+      "actual": 55
+    },
+    {
+      "tool": "kgdb_rsp_checksum",
+      "label": "kgdb_rsp_checksum empty",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "kgdb_rsp_checksum_bytes",
+      "label": "kgdb_rsp_checksum_bytes b'OK'",
+      "status": "PASS",
+      "expected": 154,
+      "actual": 154
+    },
+    {
+      "tool": "kgdb_rsp_checksum_bytes",
+      "label": "kgdb_rsp_checksum_bytes zeros",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "kgdb_u64_to_hex_le",
+      "label": "kgdb_u64_to_hex_le 0x0102030405060708",
+      "status": "PASS",
+      "expected": "0807060504030201",
+      "actual": "0807060504030201"
+    },
+    {
+      "tool": "kgdb_u64_to_hex_le",
+      "label": "kgdb_u64_to_hex_le 0",
+      "status": "PASS",
+      "expected": "0000000000000000",
+      "actual": "0000000000000000"
+    },
+    {
+      "tool": "kgdb_u64_to_hex_le",
+      "label": "kgdb_u64_to_hex_le max",
+      "status": "PASS",
+      "expected": "ffffffffffffffff",
+      "actual": "ffffffffffffffff"
+    },
+    {
+      "tool": "kgdb_u32_to_hex_le",
+      "label": "kgdb_u32_to_hex_le 0x01020304",
+      "status": "PASS",
+      "expected": "04030201",
+      "actual": "04030201"
+    },
+    {
+      "tool": "kgdb_u32_to_hex_le",
+      "label": "kgdb_u32_to_hex_le 0",
+      "status": "PASS",
+      "expected": "00000000",
+      "actual": "00000000"
+    },
+    {
+      "tool": "kgdb_hex_le_to_u64",
+      "label": "kgdb_hex_le_to_u64 round-trip",
+      "status": "PASS",
+      "expected": 72623859790382856,
+      "actual": 72623859790382856
+    },
+    {
+      "tool": "kgdb_hex_le_to_u64",
+      "label": "kgdb_hex_le_to_u64 zero",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "kgdb_read_u64_le_hex",
+      "label": "kgdb_read_u64_le_hex",
+      "status": "PASS",
+      "expected": 72623859790382856,
+      "actual": 72623859790382856
+    },
+    {
+      "tool": "kgdb_is_kernel_address",
+      "label": "kgdb_is_kernel_address kernel VA",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "kgdb_is_kernel_address",
+      "label": "kgdb_is_kernel_address user VA",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "kgdb_is_kernel_address",
+      "label": "kgdb_is_kernel_address boundary",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "kgdb_page_align",
+      "label": "kgdb_page_align down",
+      "status": "PASS",
+      "expected": 18446744071578849280,
+      "actual": 18446744071578849280
+    },
+    {
+      "tool": "kgdb_page_align",
+      "label": "kgdb_page_align up",
+      "status": "PASS",
+      "expected": 18446744071578853376,
+      "actual": 18446744071578853376
+    },
+    {
+      "tool": "kgdb_page_align",
+      "label": "kgdb_page_align already-aligned down",
+      "status": "PASS",
+      "expected": 4096,
+      "actual": 4096
+    },
+    {
+      "tool": "kgdb_page_align",
+      "label": "kgdb_page_align already-aligned up",
+      "status": "PASS",
+      "expected": 4096,
+      "actual": 4096
+    },
+    {
+      "tool": "kgdb_kvirt_to_phys",
+      "label": "kgdb_kvirt_to_phys direct-map address",
+      "status": "PASS",
+      "expected": 305419896,
+      "actual": 305419896
+    },
+    {
+      "tool": "kgdb_kvirt_to_phys",
+      "label": "kgdb_kvirt_to_phys user address -> None",
+      "status": "PASS",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "kgdb_gdb_packet_to_wire",
+      "label": "kgdb_gdb_packet_to_wire 'OK'",
+      "status": "PASS",
+      "expected": "$OK#9a",
+      "actual": "$OK#9a"
+    },
+    {
+      "tool": "kgdb_gdb_packet_to_wire",
+      "label": "kgdb_gdb_packet_to_wire 'qSupported'",
+      "status": "PASS",
+      "expected": "$qSupported#37",
+      "actual": "$qSupported#37"
+    },
+    {
+      "tool": "kgdb_gdb_packet_to_wire",
+      "label": "kgdb_gdb_packet_to_wire ''",
+      "status": "PASS",
+      "expected": "$#00",
+      "actual": "$#00"
+    },
+    {
+      "tool": "kgdb_gdb_packet_to_wire",
+      "label": "kgdb_gdb_packet_to_wire 'T05'",
+      "status": "PASS",
+      "expected": "$T05#b9",
+      "actual": "$T05#b9"
+    },
+    {
+      "tool": "kgdb_gdb_packet_parse",
+      "label": "kgdb_gdb_packet_parse 'OK'",
+      "status": "PASS",
+      "expected": "OK",
+      "actual": "OK"
+    },
+    {
+      "tool": "kgdb_gdb_packet_parse",
+      "label": "kgdb_gdb_packet_parse 'qSupported'",
+      "status": "PASS",
+      "expected": "qSupported",
+      "actual": "qSupported"
+    },
+    {
+      "tool": "kgdb_gdb_packet_parse",
+      "label": "kgdb_gdb_packet_parse 'T05'",
+      "status": "PASS",
+      "expected": "T05",
+      "actual": "T05"
+    },
+    {
+      "tool": "kgdb_verify_rsp_checksum",
+      "label": "kgdb_verify_rsp_checksum good packet",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "kgdb_verify_rsp_checksum",
+      "label": "kgdb_verify_rsp_checksum bad checksum",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "kgdb_rsp_verify_checksum_bytes",
+      "label": "kgdb_rsp_verify_checksum_bytes correct",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "kgdb_rsp_verify_checksum_bytes",
+      "label": "kgdb_rsp_verify_checksum_bytes wrong cs",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "kgdb_rsp_encode_packet_bytes",
+      "label": "kgdb_rsp_encode_packet_bytes b'OK'",
+      "status": "PASS",
+      "expected": [
+        36,
+        79,
+        75,
+        35,
+        57,
+        97
+      ],
+      "actual": [
+        36,
+        79,
+        75,
+        35,
+        57,
+        97
+      ]
+    },
+    {
+      "tool": "kgdb_encode_hex_buf",
+      "label": "kgdb_encode_hex_buf",
+      "status": "PASS",
+      "expected": "deadbeef00ff",
+      "actual": "deadbeef00ff"
+    },
+    {
+      "tool": "kgdb_decode_hex_buf",
+      "label": "kgdb_decode_hex_buf round-trip",
+      "status": "PASS",
+      "expected": [
+        222,
+        173,
+        190,
+        239,
+        0,
+        255
+      ],
+      "actual": [
+        222,
+        173,
+        190,
+        239,
+        0,
+        255
+      ]
+    },
+    {
+      "tool": "kgdb_rsp_escape",
+      "label": "kgdb_rsp_escape special chars",
+      "status": "PASS",
+      "expected": [
+        65,
+        125,
+        3,
+        125,
+        4,
+        125,
+        93,
+        66
+      ],
+      "actual": [
+        65,
+        125,
+        3,
+        125,
+        4,
+        125,
+        93,
+        66
+      ]
+    },
+    {
+      "tool": "kgdb_rsp_escape",
+      "label": "kgdb_rsp_escape no special chars",
+      "status": "PASS",
+      "expected": [
+        65,
+        66
+      ],
+      "actual": [
+        65,
+        66
+      ]
+    },
+    {
+      "tool": "kgdb_rsp_unescape",
+      "label": "kgdb_rsp_unescape",
+      "status": "PASS",
+      "expected": [
+        35,
+        36,
+        125
+      ],
+      "actual": [
+        35,
+        36,
+        125
+      ]
+    },
+    {
+      "tool": "kgdb_rle_encode",
+      "label": "kgdb_rle_encode short no-run",
+      "status": "PASS",
+      "expected": "ab",
+      "actual": "ab"
+    },
+    {
+      "tool": "kgdb_rle_encode",
+      "label": "rle_encode 'aaa'",
+      "status": "PASS",
+      "expected": "aaa",
+      "actual": "aaa"
+    },
+    {
+      "tool": "kgdb_rle_decode",
+      "label": "kgdb_rle_decode passthrough",
+      "status": "PASS",
+      "expected": "ab",
+      "actual": "ab"
+    },
+    {
+      "tool": "kgdb_rle_decode",
+      "label": "rle round-trip 'aaabbc'",
+      "status": "PASS",
+      "expected": "aaabbc",
+      "actual": "aaabbc"
+    },
+    {
+      "tool": "kgdb_target_xml_x86_64",
+      "label": "target_xml_x86_64 contains arch markers",
+      "status": "PASS",
+      "expected": "xml contains x86/eax/rax/feature",
+      "actual": "<?xml version=\"1.0\"?>\n<!DOCTYPE target SYSTEM \"gdb-target.dtd\">\n<target version=\"1.0\">\n  <architecture>i386:x86-64</arch"
+    },
+    {
+      "tool": "kgdb_target_xml_arm64",
+      "label": "target_xml_arm64 contains arch markers",
+      "status": "PASS",
+      "expected": "xml contains arm/aarch64/x0/feature",
+      "actual": "<?xml version=\"1.0\"?>\n<!DOCTYPE target SYSTEM \"gdb-target.dtd\">\n<target version=\"1.0\">\n  <architecture>aarch64</architec"
+    },
+    {
+      "tool": "kgdb_parse_qsupported",
+      "label": "parse_qsupported count",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "kgdb_parse_thread_list",
+      "label": "parse_thread_list 'm1,2,3'",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "kgdb_parse_thread_list",
+      "label": "parse_thread_list 'l'",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "kgdb_parse_kernel_callstack",
+      "label": "parse_kernel_callstack count (expected=2)",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2
+    }
+  ]
+}

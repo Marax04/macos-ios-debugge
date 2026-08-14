@@ -1,0 +1,168 @@
+{
+  "crate": "rustre-ttd-recorder",
+  "saved": true,
+  "functions": [
+    {
+      "name": "position_ordering",
+      "ok": true,
+      "result": {
+        "start": "0:0",
+        "a_before_b": true,
+        "b_before_a": false,
+        "a_before_c": true,
+        "equal_before": false,
+        "earliest": "0:0"
+      }
+    },
+    {
+      "name": "compression_levels",
+      "ok": true,
+      "result": {
+        "levels": [
+          "None",
+          "Fast",
+          "Default",
+          "Best"
+        ],
+        "count": 4
+      }
+    },
+    {
+      "name": "config_for_pid_and_validate",
+      "ok": true,
+      "result": {
+        "config": {
+          "target_process": {
+            "ProcessId": 1234
+          },
+          "output_dir": "C:/traces",
+          "max_recording_size_mb": 1024,
+          "compression": "Default",
+          "encrypt": false,
+          "ring_buffer_mb": 256,
+          "timeout_secs": 0,
+          "follow_children": false,
+          "record_heap": false,
+          "full_heap": false
+        },
+        "validate_ok": true,
+        "validate_no_outdir": "output_dir must not be empty",
+        "validate_zero_size": "max_recording_size_mb must be > 0",
+        "validate_zero_ring": "ring_buffer_mb must be > 0"
+      }
+    },
+    {
+      "name": "filter_pass_all",
+      "ok": true,
+      "result": {
+        "thread_42": true,
+        "module_kernel32": true
+      }
+    },
+    {
+      "name": "filter_include_exclude",
+      "ok": true,
+      "result": {
+        "tid_1": true,
+        "tid_2": false,
+        "tid_4": false,
+        "mod_a": true,
+        "mod_b": false,
+        "mod_c": false
+      }
+    },
+    {
+      "name": "ring_buffer",
+      "ok": true,
+      "result": {
+        "len": 3,
+        "snapshot": [
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "capacity": 3,
+        "cleared_empty": true
+      }
+    },
+    {
+      "name": "schedule",
+      "ok": true,
+      "result": {
+        "all_should_stop_at_100s": false,
+        "dur_stop_at_9": false,
+        "dur_stop_at_10": true,
+        "dur_stop_at_11": true,
+        "pos_before": false,
+        "pos_equal": true,
+        "pos_after": true
+      }
+    },
+    {
+      "name": "trace_extension",
+      "ok": true,
+      "result": {
+        "ok_run": true,
+        "ok_ttd": true,
+        "bad_txt": false,
+        "bad_none": false
+      }
+    },
+    {
+      "name": "nonce_layout",
+      "ok": true,
+      "result": {
+        "nonce_len": 12,
+        "n0_hex": "aaaaaaaaaaaaaaaa00000000",
+        "n1_hex": "aaaaaaaaaaaaaaaa01000000",
+        "n_big_hex": "aaaaaaaaaaaaaaaa04030201"
+      }
+    },
+    {
+      "name": "metrics_summary",
+      "ok": true,
+      "result": {
+        "summary": "events=100 size=4096B compressed=1024B elapsed=5s insns=9999 mem_events=42 threads=3"
+      }
+    },
+    {
+      "name": "recording_status_variants",
+      "ok": true,
+      "result": {
+        "variants": [
+          "Initializing",
+          "Injecting",
+          "Recording",
+          "Paused",
+          "Stopping",
+          "Stopped",
+          "Error"
+        ]
+      }
+    },
+    {
+      "name": "error_variants",
+      "ok": true,
+      "result": {
+        "TtdRecordError": [
+          "NotAvailable",
+          "ProcessNotFound",
+          "InsufficientPrivileges",
+          "OutputPathError",
+          "CompressionError",
+          "RecordingFailed",
+          "Io"
+        ],
+        "RecorderError": [
+          "AlreadyRecording",
+          "NotRecording",
+          "SpawnError",
+          "TraceWriteError",
+          "Io",
+          "InvalidConfig",
+          "Serde"
+        ]
+      }
+    }
+  ]
+}

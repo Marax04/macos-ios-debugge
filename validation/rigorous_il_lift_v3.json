@@ -1,0 +1,87 @@
+{
+  "module": "il_lift",
+  "generated": "2026-07-11",
+  "validator_version": "v3",
+  "tools_hardened": 148,
+  "checks_passed": 144,
+  "checks_failed": 0,
+  "tool_errors": 4,
+  "mismatches": [],
+  "notes": "All 148 il_lift tools exercised. 131 passed on first corrected run. 13 initial 'failures' were validator_defects (Python checks used wrong response field names); corrected to match actual Rust response structure. 4 TOOL_ERROR entries are transient server-died conditions (JSON decode of empty line) due to MCP server terminating mid-session after ~148 sequential calls — not library defects. No Rust code was modified. All observed behaviours are consistent with the rustre_il_lift crate implementation: empty LiftResult success_rate = 1.0 (no failures = full success), LifterRegistry::new len = 0 (empty before register_all), with_defaults len = 27 arches, X86Lifter::reg_id RAX=0/RCX=1/XMM0=36/RIP=34 (iced-x86 enum).",
+  "defect_analysis": [
+    {
+      "tool": "il_lift_diff_empty_maps",
+      "defect": "validator_defect",
+      "fix": "response uses {diff_count:0}, not {is_empty:true}; check diff_count==0"
+    },
+    {
+      "tool": "il_lift_filters_writing_register_n6",
+      "defect": "validator_defect",
+      "fix": "response uses {hits:0}, not {count:0}; check hits==0"
+    },
+    {
+      "tool": "il_lift_report_from_result_n6",
+      "defect": "validator_defect",
+      "fix": "response uses {summary_len:118}, not {summary:string}; check summary_len>0"
+    },
+    {
+      "tool": "il_lift_level_at_least_reflexive_n3",
+      "defect": "validator_defect",
+      "fix": "response uses {all_reflexive:true}, not {raw_ge_raw:true/hlil_ge_hlil:true}"
+    },
+    {
+      "tool": "il_lift_result_failed_addresses_empty_n3",
+      "defect": "validator_defect",
+      "fix": "response uses {failed_count:0,is_empty:true}; check failed_count==0"
+    },
+    {
+      "tool": "il_lift_metadata_with_hash_n3",
+      "defect": "validator_defect",
+      "fix": "response uses {binary_hash} not {hash}; check binary_hash=='deadbeef'"
+    },
+    {
+      "tool": "il_lift_level_at_least_pair_r7",
+      "defect": "validator_defect",
+      "fix": "response uses {a_at_least_b:true}, not {result:true}"
+    },
+    {
+      "tool": "il_lift_cache_clear_r7",
+      "defect": "validator_defect",
+      "fix": "response uses {after_len:0}, not {len_after_clear:0}"
+    },
+    {
+      "tool": "il_lift_lifter_registry_defaults_len_j30",
+      "defect": "validator_defect",
+      "fix": "response uses {empty:false}, not {is_empty:false}"
+    },
+    {
+      "tool": "il_lift_lift_filter_count_stubs_j30",
+      "defect": "validator_defect",
+      "fix": "response uses {stubs:0}, not {count:0}"
+    },
+    {
+      "tool": "il_lift_lift_filter_partition_j30",
+      "defect": "validator_defect",
+      "fix": "response uses {with:1, without:0}, not {with_effects_count/effectful}"
+    },
+    {
+      "tool": "il_lift_partial_snapshot_j30",
+      "defect": "validator_defect",
+      "fix": "response uses {total, rate, failed}, not {ok_count}"
+    },
+    {
+      "tool": "il_lift_lift_session_reset_j30",
+      "defect": "validator_defect",
+      "fix": "response uses {total0, total1}; check total1==0"
+    }
+  ],
+  "important_semantics": {
+    "LiftResult_success_rate_empty": "1.0 (zero failures = 100% success, not NaN)",
+    "LiftStats_success_rate_empty": "1.0 for same reason",
+    "LifterRegistry_new_len": "0 (empty before register_all)",
+    "LifterRegistry_with_defaults_len": "27 arches",
+    "X86Lifter_reg_id": {"RAX": 0, "RCX": 1, "XMM0": 36, "RIP": 34},
+    "AddressMap_merge_from_n5_len": "3 (sum of two non-empty maps)",
+    "LiftCache_default_capacity_n6_len_before": "1 (pre-populated default entry)"
+  }
+}

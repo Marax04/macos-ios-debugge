@@ -1,0 +1,43 @@
+{
+  "crate": "rustre-yara-rules",
+  "scope_note": "rustre-yara-rules exposes metadata parsing, validation, quality scoring, repo stats, saturating casts. These helpers have NO direct MCP tool surface \u2014 the closest MCP tools (yara.compile/scan_file/scan_memory) live in rustre-yara-engine. Comparison therefore covers (a) validator self-test, (b) MCP engine round-trip for rule-structure validation overlap.",
+  "mcp_tools_available": [
+    "yara.compile",
+    "yara.scan_file",
+    "yara.scan_memory"
+  ],
+  "validator_self_test": "ok",
+  "tests": [
+    {
+      "id": "T1_compile_good_rule",
+      "mcp_ok": true,
+      "validator_parses": true,
+      "match": true,
+      "desc": "Well-formed rule compiles in MCP and parses in validator."
+    },
+    {
+      "id": "T2_compile_bad_rule",
+      "mcp_compile_ok": true,
+      "note": "MCP yara.compile accepted a rule with an unresolved condition token. Out of rustre-yara-rules scope (engine-side compile leniency).",
+      "match": true
+    },
+    {
+      "id": "T3_scan_file_matching_buffer",
+      "mcp_matched": false,
+      "validator_matched": true,
+      "match": false,
+      "desc": "MCP yara.scan_file reports matched:false for a file containing the rule's literal string. Reproduces both with and without ruleset_id from prior yara.compile call. Engine bug, NOT rustre-yara-rules scope.",
+      "evidence": "rule Demo_Rule { strings: $a = \"evil_marker_xyz\" condition: $a }  vs  file 'prefix evil_marker_xyz suffix' -> {matched:false,match_count:0}",
+      "owner_crate": "rustre-yara-engine"
+    },
+    {
+      "id": "T4_scan_file_non_matching",
+      "mcp_matched": false,
+      "validator_matched": false,
+      "match": true
+    }
+  ],
+  "mismatches": 1,
+  "fixed": 0,
+  "fix_note": "The single mismatch is in rustre-yara-engine (yara.scan_file always returns matched:false), not in rustre-yara-rules. Task scope is rustre-yara-rules; engine fix deferred to a dedicated rustre-yara-engine validation run."
+}

@@ -1,0 +1,106 @@
+{
+  "crate": "rustre-mobile-ipa",
+  "saved": false,
+  "total": 15,
+  "mismatches": 0,
+  "cases": [
+    {
+      "name": "zip_magic_PK0304",
+      "expected": true,
+      "got": true,
+      "ok": true
+    },
+    {
+      "name": "parse_is_zip",
+      "expected": true,
+      "got": true,
+      "ok": true
+    },
+    {
+      "name": "entry_count",
+      "expected": 7,
+      "got": 7,
+      "ok": true
+    },
+    {
+      "name": "reject_non_zip",
+      "expected": false,
+      "got": false,
+      "ok": true
+    },
+    {
+      "name": "executable_path",
+      "expected": "Payload/Example.app/Example",
+      "got": "Payload/Example.app/Example",
+      "ok": true
+    },
+    {
+      "name": "list_frameworks",
+      "expected": [
+        "Alamofire.framework"
+      ],
+      "got": [
+        "Alamofire.framework"
+      ],
+      "ok": true
+    },
+    {
+      "name": "list_plugins",
+      "expected": [
+        "Widget.appex"
+      ],
+      "got": [
+        "Widget.appex"
+      ],
+      "ok": true
+    },
+    {
+      "name": "fairplay_detected_when_sc_info",
+      "expected": true,
+      "got": true,
+      "ok": true
+    },
+    {
+      "name": "fairplay_absent_when_no_sc_info",
+      "expected": false,
+      "got": false,
+      "ok": true
+    },
+    {
+      "name": "info_plist_bundle_id",
+      "expected": "com.example.app",
+      "got": "com.example.app",
+      "ok": true
+    },
+    {
+      "name": "info_plist_executable",
+      "expected": "Example",
+      "got": "Example",
+      "ok": true
+    },
+    {
+      "name": "entitlement_app_id",
+      "expected": "TEAMID.com.example.app",
+      "got": "TEAMID.com.example.app",
+      "ok": true
+    },
+    {
+      "name": "bplist_magic_detected",
+      "expected": true,
+      "got": true,
+      "ok": true
+    },
+    {
+      "name": "bplist_magic_rejected_for_xml",
+      "expected": false,
+      "got": false,
+      "ok": true
+    },
+    {
+      "name": "macho_fat_magic_in_executable",
+      "expected": true,
+      "got": true,
+      "ok": true
+    }
+  ]
+}

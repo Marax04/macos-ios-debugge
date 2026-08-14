@@ -1,0 +1,42 @@
+{
+  "crate": "rustre-deobf-string",
+  "mcp_binary": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\rustre-mcp.exe",
+  "target_binary": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\rustre-mcp.exe",
+  "tools_compared": [
+    "crypto_xor_decode (MCP)",
+    "rustre-deobf-string.py (validator)"
+  ],
+  "note": "MCP exposes crypto_xor_decode (path+VA-based). Validator XorDecryptor reimplements XOR primitives. Tests use a known plaintext string discovered via analysis_string_scan_path.",
+  "tests": [
+    {
+      "test": "crypto_xor_decode_identity (key 0x00)",
+      "va": "0x14000105a",
+      "length": 24,
+      "encoding": "Utf16Le",
+      "mcp_bytes_hex": "004989ce31c94889f2e808587a004889c34885c00f849506",
+      "validator_bytes_hex": "004989ce31c94889f2e808587a004889c34885c00f849506",
+      "match": true,
+      "note": "MCP read+XOR(0)=raw bytes; validator XOR(raw,0)=raw; trivial roundtrip"
+    },
+    {
+      "test": "crypto_xor_decode_key0x55",
+      "va": "0x14000105a",
+      "length": 24,
+      "mcp_bytes_hex": "551cdc9b649c1ddca7bd5d0d2f551ddc961dd0955ad1c053",
+      "validator_bytes_hex": "551cdc9b649c1ddca7bd5d0d2f551ddc961dd0955ad1c053",
+      "match": true
+    },
+    {
+      "test": "crypto_xor_decode_cyclic_DEAD",
+      "va": "0x14000105a",
+      "length": 24,
+      "key_hex": "DEAD",
+      "mcp_bytes_hex": "dee45763ef6496242c45d6f5a4ad96241de55b6dd1294bab",
+      "validator_bytes_hex": "dee45763ef6496242c45d6f5a4ad96241de55b6dd1294bab",
+      "match": true
+    }
+  ],
+  "test_count": 3,
+  "mismatches": 0,
+  "match_final": true
+}

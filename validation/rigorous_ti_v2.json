@@ -1,0 +1,1702 @@
+{
+  "results": [
+    {
+      "tool": "ti_opencti_graphql_url",
+      "status": "PASS",
+      "args": {
+        "base_url": "https://opencti.example.com"
+      },
+      "actual": {
+        "graphql_url": "https://opencti.example.com/graphql"
+      },
+      "expected_checks": {
+        "graphql_url": "https://opencti.example.com/graphql"
+      }
+    },
+    {
+      "tool": "ti_opencti_graphql_url",
+      "status": "PASS",
+      "args": {
+        "base_url": "https://opencti.example.com/"
+      },
+      "actual": {
+        "graphql_url": "https://opencti.example.com/graphql"
+      },
+      "expected_checks": {
+        "graphql_url": "https://opencti.example.com/graphql"
+      }
+    },
+    {
+      "tool": "ti_opencti_graphql_url",
+      "status": "PASS",
+      "args": {
+        "base_url": "http://localhost:8080"
+      },
+      "actual": {
+        "graphql_url": "http://localhost:8080/graphql"
+      },
+      "expected_checks": {
+        "graphql_url": "http://localhost:8080/graphql"
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "actual": {
+        "value": 0,
+        "is_high": false
+      },
+      "expected_checks": {
+        "value": 0,
+        "is_high": false
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 50
+      },
+      "actual": {
+        "value": 50,
+        "is_high": false
+      },
+      "expected_checks": {
+        "value": 50,
+        "is_high": false
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 74
+      },
+      "actual": {
+        "value": 74,
+        "is_high": false
+      },
+      "expected_checks": {
+        "value": 74,
+        "is_high": false
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 75
+      },
+      "actual": {
+        "value": 75,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 75,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 100
+      },
+      "actual": {
+        "value": 100,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 100,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 150
+      },
+      "actual": {
+        "value": 100,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 100,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_clamp",
+      "status": "PASS",
+      "args": {
+        "value": 255
+      },
+      "actual": {
+        "value": 100,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 100,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_is_high",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "actual": {
+        "value": 0,
+        "is_high": false
+      },
+      "expected_checks": {
+        "value": 0,
+        "is_high": false
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_is_high",
+      "status": "PASS",
+      "args": {
+        "value": 74
+      },
+      "actual": {
+        "value": 74,
+        "is_high": false
+      },
+      "expected_checks": {
+        "value": 74,
+        "is_high": false
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_is_high",
+      "status": "PASS",
+      "args": {
+        "value": 75
+      },
+      "actual": {
+        "value": 75,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 75,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_is_high",
+      "status": "PASS",
+      "args": {
+        "value": 100
+      },
+      "actual": {
+        "value": 100,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 100,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_opencti_confidence_is_high",
+      "status": "PASS",
+      "args": {
+        "value": 200
+      },
+      "actual": {
+        "value": 100,
+        "is_high": true
+      },
+      "expected_checks": {
+        "value": 100,
+        "is_high": true
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "actual": {
+        "input": 0,
+        "level": "unknown",
+        "severity": 0,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "unknown",
+        "severity": 0
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 1
+      },
+      "actual": {
+        "input": 1,
+        "level": "low",
+        "severity": 1,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "low",
+        "severity": 1
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 2
+      },
+      "actual": {
+        "input": 2,
+        "level": "medium",
+        "severity": 2,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "medium",
+        "severity": 2
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 3
+      },
+      "actual": {
+        "input": 3,
+        "level": "high",
+        "severity": 3,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "high",
+        "severity": 3
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 4
+      },
+      "actual": {
+        "input": 4,
+        "level": "critical",
+        "severity": 4,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "critical",
+        "severity": 4
+      }
+    },
+    {
+      "tool": "ti_otx_threat_level",
+      "status": "PASS",
+      "args": {
+        "value": 5
+      },
+      "actual": {
+        "input": 5,
+        "level": "unknown",
+        "severity": 0,
+        "source": "rustre_ti_otx::ThreatLevel"
+      },
+      "expected_checks": {
+        "level": "unknown",
+        "severity": 0
+      }
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "actual": {
+        "is_valid": true
+      },
+      "expected_checks": {
+        "is_valid": true
+      }
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "deadbeef"
+      },
+      "actual": {
+        "is_valid": false
+      },
+      "expected_checks": {
+        "is_valid": false
+      }
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+      },
+      "actual": {
+        "is_valid": false
+      },
+      "expected_checks": {
+        "is_valid": false
+      }
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "actual": {
+        "is_valid": false
+      },
+      "expected_checks": {
+        "is_valid": false
+      }
+    },
+    {
+      "tool": "ti_vt_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+      },
+      "actual": {
+        "is_valid": true
+      },
+      "expected_checks": {
+        "is_valid": true
+      }
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "malicious": 5,
+        "suspicious": 0,
+        "undetected": 65,
+        "harmless": 0
+      },
+      "actual": {
+        "ratio": "5/70",
+        "total": 70
+      },
+      "expected_checks": {
+        "ratio": "5/70",
+        "total": 70
+      }
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "malicious": 0,
+        "suspicious": 0,
+        "undetected": 0,
+        "harmless": 0
+      },
+      "actual": {
+        "ratio": "0/0",
+        "total": 0
+      },
+      "expected_checks": {
+        "ratio": "0/0",
+        "total": 0
+      }
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "malicious": 10,
+        "suspicious": 3,
+        "undetected": 50,
+        "harmless": 7
+      },
+      "actual": {
+        "ratio": "10/70",
+        "total": 70
+      },
+      "expected_checks": {
+        "ratio": "10/70",
+        "total": 70
+      }
+    },
+    {
+      "tool": "ti_vt_analysis_stats_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "malicious": 1
+      },
+      "actual": {
+        "ratio": "1/1",
+        "total": 1
+      },
+      "expected_checks": {
+        "ratio": "1/1",
+        "total": 1
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 0
+      },
+      "actual": {
+        "level": "clean"
+      },
+      "expected_checks": {
+        "level": "clean"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 15
+      },
+      "actual": {
+        "level": "clean"
+      },
+      "expected_checks": {
+        "level": "clean"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 16
+      },
+      "actual": {
+        "level": "suspicious"
+      },
+      "expected_checks": {
+        "level": "suspicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 35
+      },
+      "actual": {
+        "level": "suspicious"
+      },
+      "expected_checks": {
+        "level": "suspicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 36
+      },
+      "actual": {
+        "level": "probably_malicious"
+      },
+      "expected_checks": {
+        "level": "probably_malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 60
+      },
+      "actual": {
+        "level": "probably_malicious"
+      },
+      "expected_checks": {
+        "level": "probably_malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 61
+      },
+      "actual": {
+        "level": "malicious"
+      },
+      "expected_checks": {
+        "level": "malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 80
+      },
+      "actual": {
+        "level": "malicious"
+      },
+      "expected_checks": {
+        "level": "malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 81
+      },
+      "actual": {
+        "level": "highly_malicious"
+      },
+      "expected_checks": {
+        "level": "highly_malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_threat_level_from_score",
+      "status": "PASS",
+      "args": {
+        "score": 100
+      },
+      "actual": {
+        "level": "highly_malicious"
+      },
+      "expected_checks": {
+        "level": "highly_malicious"
+      }
+    },
+    {
+      "tool": "ti_vt_scoring_weights_av_heavy",
+      "status": "PASS",
+      "args": {},
+      "actual": {
+        "detection_weight": 0.6,
+        "community_weight": 0.05,
+        "sandbox_weight": 0.15,
+        "file_type_weight": 0.05,
+        "age_weight": 0.05,
+        "threat_intel_weight": 0.1,
+        "is_valid": true
+      },
+      "expected_checks": {
+        "detection_weight": 0.6,
+        "community_weight": 0.05,
+        "sandbox_weight": 0.15,
+        "file_type_weight": 0.05,
+        "age_weight": 0.05,
+        "threat_intel_weight": 0.1,
+        "is_valid": true
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "actual": {
+        "value": 0,
+        "recognised": true,
+        "level": "Organisation only",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 0,
+        "recognised": true,
+        "level": "Organisation only"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 1
+      },
+      "actual": {
+        "value": 1,
+        "recognised": true,
+        "level": "Community",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 1,
+        "recognised": true,
+        "level": "Community"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 2
+      },
+      "actual": {
+        "value": 2,
+        "recognised": true,
+        "level": "Connected communities",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 2,
+        "recognised": true,
+        "level": "Connected communities"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 3
+      },
+      "actual": {
+        "value": 3,
+        "recognised": true,
+        "level": "All communities",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 3,
+        "recognised": true,
+        "level": "All communities"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 4
+      },
+      "actual": {
+        "value": 4,
+        "recognised": true,
+        "level": "Sharing group",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 4,
+        "recognised": true,
+        "level": "Sharing group"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 5
+      },
+      "actual": {
+        "value": 5,
+        "recognised": true,
+        "level": "No distribution",
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 5,
+        "recognised": true,
+        "level": "No distribution"
+      }
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 6
+      },
+      "actual": {
+        "value": 6,
+        "recognised": false,
+        "level": null,
+        "source": "rustre_ti_misp::MispDistributionLevel::from_value"
+      },
+      "expected_checks": {
+        "value": 6,
+        "recognised": false,
+        "level": null
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "actual": {
+        "value": 0,
+        "recognised": false,
+        "threat_level": null,
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 0,
+        "recognised": false,
+        "threat_level": null
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 1
+      },
+      "actual": {
+        "value": 1,
+        "recognised": true,
+        "threat_level": "High",
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 1,
+        "recognised": true,
+        "threat_level": "High"
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 2
+      },
+      "actual": {
+        "value": 2,
+        "recognised": true,
+        "threat_level": "Medium",
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 2,
+        "recognised": true,
+        "threat_level": "Medium"
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 3
+      },
+      "actual": {
+        "value": 3,
+        "recognised": true,
+        "threat_level": "Low",
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 3,
+        "recognised": true,
+        "threat_level": "Low"
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 4
+      },
+      "actual": {
+        "value": 4,
+        "recognised": true,
+        "threat_level": "Undefined",
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 4,
+        "recognised": true,
+        "threat_level": "Undefined"
+      }
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "args": {
+        "value": 5
+      },
+      "actual": {
+        "value": 5,
+        "recognised": false,
+        "threat_level": null,
+        "source": "rustre_ti_misp::MispThreatLevelId::from_value"
+      },
+      "expected_checks": {
+        "value": 5,
+        "recognised": false,
+        "threat_level": null
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "md5"
+      },
+      "actual": {
+        "input": "md5",
+        "misp_str": "md5",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "md5"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "sha1"
+      },
+      "actual": {
+        "input": "sha1",
+        "misp_str": "sha1",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "sha1"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "sha256"
+      },
+      "actual": {
+        "input": "sha256",
+        "misp_str": "sha256",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "sha256"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "ip-src"
+      },
+      "actual": {
+        "input": "ip-src",
+        "misp_str": "ip-src",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "ip-src"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "ip-dst"
+      },
+      "actual": {
+        "input": "ip-dst",
+        "misp_str": "ip-dst",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "ip-dst"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "domain"
+      },
+      "actual": {
+        "input": "domain",
+        "misp_str": "domain",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "domain"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "url"
+      },
+      "actual": {
+        "input": "url",
+        "misp_str": "url",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "url"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "uri"
+      },
+      "actual": {
+        "input": "uri",
+        "misp_str": "url",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "url"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "email-src"
+      },
+      "actual": {
+        "input": "email-src",
+        "misp_str": "email-src",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "email-src"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "yara"
+      },
+      "actual": {
+        "input": "yara",
+        "misp_str": "yara",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "yara"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "vulnerability"
+      },
+      "actual": {
+        "input": "vulnerability",
+        "misp_str": "vulnerability",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "vulnerability"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "btc"
+      },
+      "actual": {
+        "input": "btc",
+        "misp_str": "btc",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "btc"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "regkey"
+      },
+      "actual": {
+        "input": "regkey",
+        "misp_str": "regkey",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "regkey"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "regkey|value"
+      },
+      "actual": {
+        "input": "regkey|value",
+        "misp_str": "regkey",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "regkey"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "MD5"
+      },
+      "actual": {
+        "input": "MD5",
+        "misp_str": "md5",
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": "md5"
+      }
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "args": {
+        "variant": "unknown_type_xyz"
+      },
+      "actual": {
+        "input": "unknown_type_xyz",
+        "misp_str": null,
+        "source": "rustre_ti_misp::MispAttributeType"
+      },
+      "expected_checks": {
+        "misp_str": null
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "WannaCry"
+      },
+      "actual": {
+        "input": "WannaCry",
+        "normalized": "wannacry",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "wannacry"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "Fancy Bear"
+      },
+      "actual": {
+        "input": "Fancy Bear",
+        "normalized": "fancy_bear",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "fancy_bear"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "Poison-Ivy"
+      },
+      "actual": {
+        "input": "Poison-Ivy",
+        "normalized": "poison_ivy",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "poison_ivy"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "TrickBot"
+      },
+      "actual": {
+        "input": "TrickBot",
+        "normalized": "trickbot",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "trickbot"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "Cobalt Strike"
+      },
+      "actual": {
+        "input": "Cobalt Strike",
+        "normalized": "cobalt_strike",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "cobalt_strike"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": "APT-28"
+      },
+      "actual": {
+        "input": "APT-28",
+        "normalized": "apt_28",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": "apt_28"
+      }
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "status": "PASS",
+      "args": {
+        "name": ""
+      },
+      "actual": {
+        "input": "",
+        "normalized": "",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::normalize_family_name"
+      },
+      "expected_checks": {
+        "normalized": ""
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "ransomware"
+      },
+      "actual": {
+        "input": "ransomware",
+        "malware_type": "Ransomware",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Ransomware"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "trojan"
+      },
+      "actual": {
+        "input": "trojan",
+        "malware_type": "Trojan",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Trojan"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "backdoor"
+      },
+      "actual": {
+        "input": "backdoor",
+        "malware_type": "Backdoor",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Backdoor"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "banker"
+      },
+      "actual": {
+        "input": "banker",
+        "malware_type": "Banker",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Banker"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "banking"
+      },
+      "actual": {
+        "input": "banking",
+        "malware_type": "Banker",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Banker"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "infostealer"
+      },
+      "actual": {
+        "input": "infostealer",
+        "malware_type": "Stealer",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Stealer"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "stealer"
+      },
+      "actual": {
+        "input": "stealer",
+        "malware_type": "Stealer",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Stealer"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "cryptominer"
+      },
+      "actual": {
+        "input": "cryptominer",
+        "malware_type": "Cryptominer",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Cryptominer"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "miner"
+      },
+      "actual": {
+        "input": "miner",
+        "malware_type": "Cryptominer",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Cryptominer"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "stalkerware"
+      },
+      "actual": {
+        "input": "stalkerware",
+        "malware_type": "Spyware",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Spyware"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "spyware"
+      },
+      "actual": {
+        "input": "spyware",
+        "malware_type": "Spyware",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Spyware"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "loader"
+      },
+      "actual": {
+        "input": "loader",
+        "malware_type": "Dropper",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Dropper"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "dropper"
+      },
+      "actual": {
+        "input": "dropper",
+        "malware_type": "Dropper",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Dropper"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "downloader"
+      },
+      "actual": {
+        "input": "downloader",
+        "malware_type": "Downloader",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Downloader"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "worm"
+      },
+      "actual": {
+        "input": "worm",
+        "malware_type": "Worm",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Worm"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "rootkit"
+      },
+      "actual": {
+        "input": "rootkit",
+        "malware_type": "Rootkit",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Rootkit"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "virus"
+      },
+      "actual": {
+        "input": "virus",
+        "malware_type": "Virus",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Virus"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "adware"
+      },
+      "actual": {
+        "input": "adware",
+        "malware_type": "Adware",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Adware"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "botnet"
+      },
+      "actual": {
+        "input": "botnet",
+        "malware_type": "Botnet",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Botnet"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "bot"
+      },
+      "actual": {
+        "input": "bot",
+        "malware_type": "Botnet",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Botnet"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "fileless"
+      },
+      "actual": {
+        "input": "fileless",
+        "malware_type": "Fileless",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Fileless"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "pua"
+      },
+      "actual": {
+        "input": "pua",
+        "malware_type": "PotentiallyUnwanted",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "PotentiallyUnwanted"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "pup"
+      },
+      "actual": {
+        "input": "pup",
+        "malware_type": "PotentiallyUnwanted",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "PotentiallyUnwanted"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "something_weird"
+      },
+      "actual": {
+        "input": "something_weird",
+        "malware_type": "Unknown",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Unknown"
+      }
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "status": "PASS",
+      "args": {
+        "family_type": "RANSOMWARE"
+      },
+      "actual": {
+        "input": "RANSOMWARE",
+        "malware_type": "Ransomware",
+        "source": "rustre_ti_malpedia::MalpediaApiClient::family_to_malware_type"
+      },
+      "expected_checks": {
+        "malware_type": "Ransomware"
+      }
+    },
+    {
+      "tool": "ti_malpedia_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "some-key-value"
+      },
+      "actual": {
+        "is_valid": false,
+        "validated": false,
+        "source": "rustre_ti_malpedia::MalpediaApiKey::is_valid"
+      },
+      "expected_checks": {
+        "is_valid": false,
+        "validated": false
+      }
+    },
+    {
+      "tool": "ti_malpedia_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "",
+        "validated": true
+      },
+      "actual": {
+        "is_valid": false,
+        "validated": true,
+        "source": "rustre_ti_malpedia::MalpediaApiKey::is_valid"
+      },
+      "expected_checks": {
+        "is_valid": false
+      }
+    },
+    {
+      "tool": "ti_malpedia_api_key_is_valid",
+      "status": "PASS",
+      "args": {
+        "key": "my-api-key",
+        "validated": true
+      },
+      "actual": {
+        "is_valid": true,
+        "validated": true,
+        "source": "rustre_ti_malpedia::MalpediaApiKey::is_valid"
+      },
+      "expected_checks": {
+        "is_valid": true,
+        "validated": true
+      }
+    },
+    {
+      "tool": "ti_vt_threat_signals_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "positives": 35,
+        "total_engines": 70
+      },
+      "actual": {
+        "detection_ratio": 0.5
+      },
+      "expected_checks": {
+        "detection_ratio": 0.5
+      }
+    },
+    {
+      "tool": "ti_vt_threat_signals_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "positives": 0,
+        "total_engines": 0
+      },
+      "actual": {
+        "detection_ratio": 0.0
+      },
+      "expected_checks": {
+        "detection_ratio": 0.0
+      }
+    },
+    {
+      "tool": "ti_vt_threat_signals_detection_ratio",
+      "status": "PASS",
+      "args": {
+        "positives": 70,
+        "total_engines": 70
+      },
+      "actual": {
+        "detection_ratio": 1.0
+      },
+      "expected_checks": {
+        "detection_ratio": 1.0
+      }
+    },
+    {
+      "tool": "ti_otx_pulse_url",
+      "status": "PASS",
+      "args": {
+        "api_key": "test_key_123",
+        "pulse_id": "abc-123"
+      },
+      "actual": {
+        "pulse_url": "https://otx.alienvault.com/api/v1/pulses/abc-123",
+        "subscribed_url": "https://otx.alienvault.com/api/v1/pulses/subscribed",
+        "base_url": "https://otx.alienvault.com",
+        "source": "rustre_ti_otx::OtxConfig"
+      },
+      "expected_checks": {
+        "pulse_url": "https://otx.alienvault.com/api/v1/pulses/abc-123",
+        "subscribed_url": "https://otx.alienvault.com/api/v1/pulses/subscribed",
+        "base_url": "https://otx.alienvault.com"
+      }
+    },
+    {
+      "tool": "ti_otx_pulse_url",
+      "status": "PASS",
+      "args": {
+        "pulse_id": "deadbeef"
+      },
+      "actual": {
+        "pulse_url": "https://otx.alienvault.com/api/v1/pulses/deadbeef",
+        "subscribed_url": "https://otx.alienvault.com/api/v1/pulses/subscribed",
+        "base_url": "https://otx.alienvault.com",
+        "source": "rustre_ti_otx::OtxConfig"
+      },
+      "expected_checks": {
+        "pulse_url": "https://otx.alienvault.com/api/v1/pulses/deadbeef"
+      }
+    }
+  ],
+  "summary": {
+    "total_cases": 110,
+    "passed": 110,
+    "failed": 0,
+    "tools_hardened": 16,
+    "tools_passed": 16,
+    "tools_failed": 0,
+    "tools_skipped": 58
+  },
+  "mismatches": []
+}

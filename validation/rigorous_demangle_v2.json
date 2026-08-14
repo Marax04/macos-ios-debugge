@@ -1,0 +1,775 @@
+{
+  "results": [
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "_ZN3FooC1Ev"
+      },
+      "expected_key": "is_constructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooC1Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "_ZN3FooD1Ev"
+      },
+      "expected_key": "is_constructor",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooD1Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "_ZN3FooC3Ev"
+      },
+      "expected_key": "is_constructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooC3Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "is_constructor",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3Foo3barEi",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "is_constructor",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_constructor",
+      "input": {
+        "mangled": "_ZC1E"
+      },
+      "expected_key": "is_constructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZC1E",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_destructor",
+      "input": {
+        "mangled": "_ZN3FooD1Ev"
+      },
+      "expected_key": "is_destructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooD1Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_destructor",
+      "input": {
+        "mangled": "_ZN3FooD2Ev"
+      },
+      "expected_key": "is_destructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooD2Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_destructor",
+      "input": {
+        "mangled": "_ZN3FooD0Ev"
+      },
+      "expected_key": "is_destructor",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooD0Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_destructor",
+      "input": {
+        "mangled": "_ZN3FooC1Ev"
+      },
+      "expected_key": "is_destructor",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooC1Ev",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_destructor",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "is_destructor",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_vtable",
+      "input": {
+        "mangled": "_ZTV3Foo"
+      },
+      "expected_key": "is_vtable",
+      "expected": true,
+      "actual": true,
+      "note": "_ZTV3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_vtable",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "is_vtable",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3Foo3barEi",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_vtable",
+      "input": {
+        "mangled": "_ZTI3Foo"
+      },
+      "expected_key": "is_vtable",
+      "expected": false,
+      "actual": false,
+      "note": "_ZTI3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_vtable",
+      "input": {
+        "mangled": ""
+      },
+      "expected_key": "is_vtable",
+      "expected": false,
+      "actual": false,
+      "note": "",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_typeinfo",
+      "input": {
+        "mangled": "_ZTI3Foo"
+      },
+      "expected_key": "is_typeinfo",
+      "expected": true,
+      "actual": true,
+      "note": "_ZTI3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_typeinfo",
+      "input": {
+        "mangled": "_ZTS3Foo"
+      },
+      "expected_key": "is_typeinfo",
+      "expected": true,
+      "actual": true,
+      "note": "_ZTS3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_typeinfo",
+      "input": {
+        "mangled": "_ZTV3Foo"
+      },
+      "expected_key": "is_typeinfo",
+      "expected": false,
+      "actual": false,
+      "note": "_ZTV3Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_is_typeinfo",
+      "input": {
+        "mangled": "_ZN3Foo3barEi"
+      },
+      "expected_key": "is_typeinfo",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3Foo3barEi",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "St"
+      },
+      "expected_key": "expansion",
+      "expected": "std",
+      "actual": "std",
+      "note": "St",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "Sa"
+      },
+      "expected_key": "expansion",
+      "expected": "std::allocator",
+      "actual": "std::allocator",
+      "note": "Sa",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "Sb"
+      },
+      "expected_key": "expansion",
+      "expected": "std::basic_string",
+      "actual": "std::basic_string",
+      "note": "Sb",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "Ss"
+      },
+      "expected_key": "expansion",
+      "expected": "std::string",
+      "actual": "std::string",
+      "note": "Ss",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "Si"
+      },
+      "expected_key": "expansion",
+      "expected": "std::istream",
+      "actual": "std::istream",
+      "note": "Si",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "So"
+      },
+      "expected_key": "expansion",
+      "expected": "std::ostream",
+      "actual": "std::ostream",
+      "note": "So",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "Sd"
+      },
+      "expected_key": "expansion",
+      "expected": "std::iostream",
+      "actual": "std::iostream",
+      "note": "Sd",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_standard_substitution",
+      "input": {
+        "code": "XX"
+      },
+      "expected_key": "expansion",
+      "expected": null,
+      "actual": null,
+      "note": "XX",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "_ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "__ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "__ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "?foo@@bar"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "?foo@@bar",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "_R..."
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_R...",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "_D3foo"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_D3foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_detect_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_msvc_detect_wire",
+      "input": {
+        "mangled": "?foo@@bar"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "?foo@@bar",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_msvc_detect_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_msvc_detect_wire",
+      "input": {
+        "mangled": "_R..."
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_R...",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_msvc_detect_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_detect_wire",
+      "input": {
+        "mangled": "_RNvNtCs1234_3std2io5print"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "_RNvNtCs1234_3std2io5print",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_detect_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_detect_wire",
+      "input": {
+        "mangled": "_D3foo"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_D3foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_detect_wire",
+      "input": {
+        "mangled": "_R"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "_R",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_rust_v0_detect_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_detect_wire",
+      "input": {
+        "mangled": "_D3foo3barFiZi"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "_D3foo3barFiZi",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_detect_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_detect_wire",
+      "input": {
+        "mangled": "_R..."
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_R...",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_d_detect_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_detect_wire",
+      "input": {
+        "mangled": "-[NSObject init]"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "-[NSObject init]",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_detect_wire",
+      "input": {
+        "mangled": "+[NSObject alloc]"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "+[NSObject alloc]",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_detect_wire",
+      "input": {
+        "mangled": "_OBJC_CLASS_$_Foo"
+      },
+      "expected_key": "detected",
+      "expected": true,
+      "actual": true,
+      "note": "_OBJC_CLASS_$_Foo",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_detect_wire",
+      "input": {
+        "mangled": "_ZN3FooEv"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "_ZN3FooEv",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_objc_detect_wire",
+      "input": {
+        "mangled": "hello"
+      },
+      "expected_key": "detected",
+      "expected": false,
+      "actual": false,
+      "note": "hello",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "St"
+      },
+      "expected_key": "expanded",
+      "expected": "std",
+      "actual": "std",
+      "note": "St",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "Sa"
+      },
+      "expected_key": "expanded",
+      "expected": "std::allocator",
+      "actual": "std::allocator",
+      "note": "Sa",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "Sb"
+      },
+      "expected_key": "expanded",
+      "expected": "std::basic_string",
+      "actual": "std::basic_string",
+      "note": "Sb",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "Ss"
+      },
+      "expected_key": "expanded",
+      "expected": "std::string",
+      "actual": "std::string",
+      "note": "Ss",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "Si"
+      },
+      "expected_key": "expanded",
+      "expected": "std::istream",
+      "actual": "std::istream",
+      "note": "Si",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "So"
+      },
+      "expected_key": "expanded",
+      "expected": "std::ostream",
+      "actual": "std::ostream",
+      "note": "So",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "Sd"
+      },
+      "expected_key": "expanded",
+      "expected": "std::iostream",
+      "actual": "std::iostream",
+      "note": "Sd",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_itanium_lookup_std_sub_wire",
+      "input": {
+        "abbrev": "ZZ"
+      },
+      "expected_key": "expanded",
+      "expected": null,
+      "actual": null,
+      "note": "ZZ",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_strip_rust_hash_wire",
+      "input": {
+        "mangled": "foo::bar::h1234567890abcdef"
+      },
+      "expected_key": "stripped",
+      "expected": "foo::bar",
+      "actual": "foo::bar",
+      "note": "foo::bar::h1234567890abcdef",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_strip_rust_hash_wire",
+      "input": {
+        "mangled": "foo::bar::h1234567890abcde"
+      },
+      "expected_key": "stripped",
+      "expected": "foo::bar",
+      "actual": "foo::bar",
+      "note": "foo::bar::h1234567890abcde",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_strip_rust_hash_wire",
+      "input": {
+        "mangled": "foo::bar"
+      },
+      "expected_key": "stripped",
+      "expected": "foo::bar",
+      "actual": "foo::bar",
+      "note": "foo::bar",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_strip_rust_hash_wire",
+      "input": {
+        "mangled": "foo::bar::baz"
+      },
+      "expected_key": "stripped",
+      "expected": "foo::bar::baz",
+      "actual": "foo::bar::baz",
+      "note": "foo::bar::baz",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_strip_rust_hash_wire",
+      "input": {
+        "mangled": "foo::hZZZZZZZZZZZZZZZZ"
+      },
+      "expected_key": "stripped",
+      "expected": "foo::hZZZZZZZZZZZZZZZZ",
+      "actual": "foo::hZZZZZZZZZZZZZZZZ",
+      "note": "foo::hZZZZZZZZZZZZZZZZ",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "runtime.goexit"
+      },
+      "expected_key": "description",
+      "expected": "goroutine exit trampoline",
+      "actual": "goroutine exit trampoline",
+      "note": "runtime.goexit",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "runtime.morestack"
+      },
+      "expected_key": "description",
+      "expected": "stack growth trampoline",
+      "actual": "stack growth trampoline",
+      "note": "runtime.morestack",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "runtime.mallocgc"
+      },
+      "expected_key": "description",
+      "expected": "allocate heap object",
+      "actual": "allocate heap object",
+      "note": "runtime.mallocgc",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "runtime.gopanic"
+      },
+      "expected_key": "description",
+      "expected": "initiate a panic",
+      "actual": "initiate a panic",
+      "note": "runtime.gopanic",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "unknown.func"
+      },
+      "expected_key": "description",
+      "expected": null,
+      "actual": null,
+      "note": "unknown.func",
+      "status": "PASS"
+    },
+    {
+      "tool": "demangle_go_runtime_symbol_wire",
+      "input": {
+        "mangled": "main.main"
+      },
+      "expected_key": "description",
+      "expected": null,
+      "actual": null,
+      "note": "main.main",
+      "status": "PASS"
+    }
+  ],
+  "mismatches": []
+}

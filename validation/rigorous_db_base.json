@@ -1,0 +1,19 @@
+{
+  "module": "db_base",
+  "tools_hardened": 16,
+  "checks_passed": 29,
+  "checks_failed": 0,
+  "mismatches": [],
+  "notes": {
+    "computed_up_bytes_per_migration": {
+      "create_graph_tables": 1070,
+      "create_events_table": 498,
+      "create_kv_meta_table": 95
+    },
+    "computed_down_bytes_per_migration": {
+      "create_graph_tables": 57,
+      "create_events_table": 30,
+      "create_kv_meta_table": 31
+    }
+  }
+}

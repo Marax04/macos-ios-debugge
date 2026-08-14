@@ -1,0 +1,20 @@
+{
+  "crate": "rustre-fuzz-cov",
+  "mcp_tested": false,
+  "mcp_reason": "rustre-fuzz-cov is an internal library crate (SanitizerCoverage/block-coverage runtimes, DRcov, LCOV, edge maps). It is not exposed as MCP tools by rustre-mcp.exe; the MCP server surfaces analysis/disasm/decompile/project tools, not fuzz-coverage runtime helpers. Therefore no JSON-RPC stdio comparison is applicable.",
+  "validator": "validation/validators/rustre-fuzz-cov.py",
+  "validator_output": "validation/out/rustre-fuzz-cov.json",
+  "validator_summary": { "fixed": 49, "mismatches": 9 },
+  "mismatch_analysis": {
+    "real_mismatches": 0,
+    "validator_bugs": 9,
+    "notes": [
+      "4 'missing dependency' mismatches are false: deps use TOML workspace inheritance (`thiserror.workspace = true`); validator regex `^\\s*<dep>\\s*=` does not match the dotted form.",
+      "5 'CovError missing variant' mismatches are false: variants Parse/Io/UnsupportedVersion/Overflow/EmptyInput all exist in src/lib.rs (lines 43-55). Validator regex captures the enum body with `[^}]*` which terminates at the first `}` inside `#[error(\"... {0}\")]` attributes, truncating the captured body before the variants."
+    ]
+  },
+  "fixed": 0,
+  "mismatches": 0,
+  "match_final": true,
+  "rebuild_required": false
+}

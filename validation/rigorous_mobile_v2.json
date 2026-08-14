@@ -1,0 +1,909 @@
+[
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "I"
+    },
+    "status": "PASS",
+    "expected": "'int'",
+    "actual": "{\"input\": \"I\", \"java_type\": \"int\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "B"
+    },
+    "status": "PASS",
+    "expected": "'byte'",
+    "actual": "{\"input\": \"B\", \"java_type\": \"byte\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "Z"
+    },
+    "status": "PASS",
+    "expected": "'boolean'",
+    "actual": "{\"input\": \"Z\", \"java_type\": \"boolean\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "V"
+    },
+    "status": "PASS",
+    "expected": "'void'",
+    "actual": "{\"input\": \"V\", \"java_type\": \"void\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "Ljava/lang/String;"
+    },
+    "status": "PASS",
+    "expected": "'java.lang.String'",
+    "actual": "{\"input\": \"Ljava/lang/String;\", \"java_type\": \"java.lang.String\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "[I"
+    },
+    "status": "PASS",
+    "expected": "'int[]'",
+    "actual": "{\"input\": \"[I\", \"java_type\": \"int[]\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor_wire",
+    "args": {
+      "desc": "[[B"
+    },
+    "status": "PASS",
+    "expected": "'byte[][]'",
+    "actual": "{\"input\": \"[[B\", \"java_type\": \"byte[][]\", \"source\": \"rustre_mobile_smali::parse_type_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_method_descriptor_wire",
+    "args": {
+      "desc": "(IZ)V"
+    },
+    "status": "PASS",
+    "expected": "{'params': ['int', 'boolean'], 'return': 'void'}",
+    "actual": "{\"input\": \"(IZ)V\", \"params\": [\"int\", \"boolean\"], \"return\": \"void\", \"source\": \"rustre_mobile_smali::parse_method_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_method_descriptor_wire",
+    "args": {
+      "desc": "()V"
+    },
+    "status": "PASS",
+    "expected": "{'params': [], 'return': 'void'}",
+    "actual": "{\"input\": \"()V\", \"params\": [], \"return\": \"void\", \"source\": \"rustre_mobile_smali::parse_method_descriptor\"}"
+  },
+  {
+    "tool": "mobile_smali_parse_method_descriptor_wire",
+    "args": {
+      "desc": "(Ljava/lang/String;)[B"
+    },
+    "status": "PASS",
+    "expected": "{'params': ['java.lang.String'], 'return': 'byte[]'}",
+    "actual": "{\"input\": \"(Ljava/lang/String;)[B\", \"params\": [\"java.lang.String\"], \"return\": \"byte[]\", \"source\": \"rustre_mobile_smali::parse_method_descriptor\"}"
+  },
+  {
+    "tool": "mobile_jadx_java_method_is_constructor",
+    "args": {
+      "name": "<init>",
+      "signature": "()",
+      "return_type": "void",
+      "params": [],
+      "body": "",
+      "is_static": false,
+      "is_native": false
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"<init>\", \"is_constructor\": true, \"source\": \"rustre_mobile_jadx::JavaMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_jadx_java_method_is_constructor",
+    "args": {
+      "name": "constructor",
+      "signature": "()",
+      "return_type": "void",
+      "params": [],
+      "body": "",
+      "is_static": false,
+      "is_native": false
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"constructor\", \"is_constructor\": true, \"source\": \"rustre_mobile_jadx::JavaMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_jadx_java_method_is_constructor",
+    "args": {
+      "name": "onCreate",
+      "signature": "(Bundle)",
+      "return_type": "void",
+      "params": [],
+      "body": "",
+      "is_static": false,
+      "is_native": false
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"name\": \"onCreate\", \"is_constructor\": false, \"source\": \"rustre_mobile_jadx::JavaMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_jadx_config_new",
+    "args": {
+      "jadx": "jadx",
+      "input": "app.apk",
+      "output": "out"
+    },
+    "status": "PASS",
+    "expected": "{'threads': 4, 'deobfuscate': False}",
+    "actual": "{\"jadx_path\": \"jadx\", \"input\": \"app.apk\", \"output_dir\": \"out\", \"threads\": 4, \"deobfuscate\": false, \"source\": \"rustre_mobile_jadx::JadxConfig::new\"}"
+  },
+  {
+    "tool": "mobile_jadx_config_with_threads",
+    "args": {
+      "threads": 8
+    },
+    "status": "PASS",
+    "expected": "8",
+    "actual": "{\"threads\": 8, \"source\": \"rustre_mobile_jadx::JadxConfig::with_threads\"}"
+  },
+  {
+    "tool": "mobile_jadx_config_with_deobfuscate",
+    "args": {},
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"deobfuscate\": true, \"source\": \"rustre_mobile_jadx::JadxConfig::with_deobfuscate\"}"
+  },
+  {
+    "tool": "mobile_jadx_project_mock",
+    "args": {},
+    "status": "PASS",
+    "expected": "{'total': 9, 'failed': 0, 'classes': 9}",
+    "actual": "{\"total\": 9, \"failed\": 0, \"classes\": 9, \"source\": \"rustre_mobile_jadx::DecompiledProject::mock\"}"
+  },
+  {
+    "tool": "mobile_jadx_project_success_rate",
+    "args": {},
+    "status": "PASS",
+    "expected": "1.0",
+    "actual": "{\"success_rate\": 1.0, \"source\": \"rustre_mobile_jadx::DecompiledProject::success_rate\"}"
+  },
+  {
+    "tool": "mobile_jadx_project_find_class",
+    "args": {
+      "name": "Utils"
+    },
+    "status": "PASS",
+    "expected": "'Utils'",
+    "actual": "{\"query\": \"Utils\", \"found\": \"Utils\", \"source\": \"rustre_mobile_jadx::DecompiledProject::find_class\"}"
+  },
+  {
+    "tool": "mobile_jadx_project_find_class",
+    "args": {
+      "name": "NonExistent"
+    },
+    "status": "PASS",
+    "expected": "None",
+    "actual": "{\"query\": \"NonExistent\", \"found\": null, \"source\": \"rustre_mobile_jadx::DecompiledProject::find_class\"}"
+  },
+  {
+    "tool": "mobile_jadx_project_in_package",
+    "args": {
+      "pkg": "com.example.app"
+    },
+    "status": "PASS",
+    "expected": "['AppApplication', 'MainActivity', 'Utils']",
+    "actual": "{\"pkg\": \"com.example.app\", \"classes\": [\"MainActivity\", \"AppApplication\", \"Utils\"], \"source\": \"rustre_mobile_jadx::DecompiledProject::in_package\"}"
+  },
+  {
+    "tool": "mobile_jadx_class_static_methods",
+    "args": {},
+    "status": "PASS",
+    "expected": "['decrypt', 'encrypt']",
+    "actual": "{\"class\": \"Utils\", \"static_methods\": [\"encrypt\", \"decrypt\"], \"source\": \"rustre_mobile_jadx::JavaClass::static_methods\"}"
+  },
+  {
+    "tool": "mobile_jadx_class_native_methods",
+    "args": {},
+    "status": "PASS",
+    "expected": "['nativeInit']",
+    "actual": "{\"class\": \"MainActivity\", \"native_methods\": [\"nativeInit\"], \"source\": \"rustre_mobile_jadx::JavaClass::native_methods\"}"
+  },
+  {
+    "tool": "mobile_jadx_dalvik_opcode_from_byte",
+    "args": {
+      "byte": 14
+    },
+    "status": "PASS",
+    "expected": "return-void",
+    "actual": "{\"byte\": 14, \"mnemonic\": \"return-void\", \"source\": \"rustre_mobile_jadx::DalvikOpcode::from_byte\"}"
+  },
+  {
+    "tool": "mobile_jadx_dalvik_opcode_from_byte",
+    "args": {
+      "byte": 113
+    },
+    "status": "PASS",
+    "expected": "invoke-static",
+    "actual": "{\"byte\": 113, \"mnemonic\": \"invoke-static\", \"source\": \"rustre_mobile_jadx::DalvikOpcode::from_byte\"}"
+  },
+  {
+    "tool": "mobile_jadx_dalvik_opcode_from_byte",
+    "args": {
+      "byte": 171
+    },
+    "status": "PASS",
+    "expected": "null/None",
+    "actual": "{\"byte\": 171, \"mnemonic\": null, \"source\": \"rustre_mobile_jadx::DalvikOpcode::from_byte\"}"
+  },
+  {
+    "tool": "mobile_jadx_dalvik_opcode_mnemonic",
+    "args": {
+      "byte": 14
+    },
+    "status": "PASS",
+    "expected": "return-void",
+    "actual": "{\"byte\": 14, \"mnemonic\": \"return-void\", \"source\": \"rustre_mobile_jadx::DalvikOpcode::mnemonic\"}"
+  },
+  {
+    "tool": "mobile_smali_class_mock",
+    "args": {
+      "name": "LFoo;"
+    },
+    "status": "PASS",
+    "expected": "{'methods': 3, 'fields': 1}",
+    "actual": "{\"name\": \"LFoo;\", \"super\": \"Ljava/lang/Object;\", \"methods\": 3, \"fields\": 1, \"source\": \"rustre_mobile_smali::SmaliClass::mock\"}"
+  },
+  {
+    "tool": "mobile_smali_method_is_constructor",
+    "args": {
+      "name": "<init>"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"<init>\", \"is_constructor\": true, \"source\": \"rustre_mobile_smali::SmaliMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_smali_method_is_constructor",
+    "args": {
+      "name": "<clinit>"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"<clinit>\", \"is_constructor\": true, \"source\": \"rustre_mobile_smali::SmaliMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_smali_method_is_constructor",
+    "args": {
+      "name": "execute"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"name\": \"execute\", \"is_constructor\": false, \"source\": \"rustre_mobile_smali::SmaliMethod::is_constructor\"}"
+  },
+  {
+    "tool": "mobile_smali_instr_to_text",
+    "args": {},
+    "status": "PASS",
+    "expected": "'return-void'",
+    "actual": "{\"text\": \"return-void\", \"source\": \"rustre_mobile_smali::SmaliInstr::to_text\"}"
+  },
+  {
+    "tool": "mobile_smali_instr_to_text",
+    "args": {
+      "label": ":cond_0"
+    },
+    "status": "PASS",
+    "expected": ":cond_0\\nreturn-void",
+    "actual": "{\"text\": \":cond_0\\nreturn-void\", \"source\": \"rustre_mobile_smali::SmaliInstr::to_text\"}"
+  },
+  {
+    "tool": "mobile_smali_op_display",
+    "args": {
+      "byte": 0
+    },
+    "status": "PASS",
+    "expected": "'nop'",
+    "actual": "{\"display\": \"nop\", \"source\": \"rustre_mobile_smali::SmaliOp::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_op_display",
+    "args": {
+      "byte": 14
+    },
+    "status": "PASS",
+    "expected": "'return-void'",
+    "actual": "{\"display\": \"return-void\", \"source\": \"rustre_mobile_smali::SmaliOp::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 0
+    },
+    "status": "PASS",
+    "expected": "0",
+    "actual": "{\"in\": 0, \"out\": 0, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 1
+    },
+    "status": "PASS",
+    "expected": "1",
+    "actual": "{\"in\": 1, \"out\": 1, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 14
+    },
+    "status": "PASS",
+    "expected": "14",
+    "actual": "{\"in\": 14, \"out\": 14, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 113
+    },
+    "status": "PASS",
+    "expected": "113",
+    "actual": "{\"in\": 113, \"out\": 113, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 216
+    },
+    "status": "PASS",
+    "expected": "216",
+    "actual": "{\"in\": 216, \"out\": 216, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_opcode_as_byte",
+    "args": {
+      "byte": 255
+    },
+    "status": "PASS",
+    "expected": "255",
+    "actual": "{\"in\": 255, \"out\": 255, \"roundtrip\": true, \"source\": \"rustre_mobile_smali::DalvikOpcode::as_byte\"}"
+  },
+  {
+    "tool": "mobile_smali_operand_literal_display",
+    "args": {
+      "value": 0
+    },
+    "status": "PASS",
+    "expected": "0x0",
+    "actual": "{\"display\": \"0x0\", \"source\": \"rustre_mobile_smali::SmaliOperand::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_operand_literal_display",
+    "args": {
+      "value": 5
+    },
+    "status": "PASS",
+    "expected": "0x5",
+    "actual": "{\"display\": \"0x5\", \"source\": \"rustre_mobile_smali::SmaliOperand::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_operand_literal_display",
+    "args": {
+      "value": -5
+    },
+    "status": "PASS",
+    "expected": "-0x5",
+    "actual": "{\"display\": \"-0x5\", \"source\": \"rustre_mobile_smali::SmaliOperand::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_operand_literal_display",
+    "args": {
+      "value": 255
+    },
+    "status": "PASS",
+    "expected": "0xff",
+    "actual": "{\"display\": \"0xff\", \"source\": \"rustre_mobile_smali::SmaliOperand::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_operand_literal_display",
+    "args": {
+      "value": -256
+    },
+    "status": "PASS",
+    "expected": "-0x100",
+    "actual": "{\"display\": \"-0x100\", \"source\": \"rustre_mobile_smali::SmaliOperand::Display\"}"
+  },
+  {
+    "tool": "mobile_smali_instruction_size_bytes",
+    "args": {
+      "byte": 0
+    },
+    "status": "PASS",
+    "expected": "2",
+    "actual": "{\"byte\": 0, \"size_bytes\": 2, \"source\": \"rustre_mobile_smali::instruction_size_bytes\"}"
+  },
+  {
+    "tool": "mobile_smali_instruction_size_bytes",
+    "args": {
+      "byte": 14
+    },
+    "status": "PASS",
+    "expected": "2",
+    "actual": "{\"byte\": 14, \"size_bytes\": 2, \"source\": \"rustre_mobile_smali::instruction_size_bytes\"}"
+  },
+  {
+    "tool": "mobile_smali_instruction_size_bytes",
+    "args": {
+      "byte": 1
+    },
+    "status": "PASS",
+    "expected": "2",
+    "actual": "{\"byte\": 1, \"size_bytes\": 2, \"source\": \"rustre_mobile_smali::instruction_size_bytes\"}"
+  },
+  {
+    "tool": "mobile_smali_instruction_size_bytes",
+    "args": {
+      "byte": 26
+    },
+    "status": "PASS",
+    "expected": "4",
+    "actual": "{\"byte\": 26, \"size_bytes\": 4, \"source\": \"rustre_mobile_smali::instruction_size_bytes\"}"
+  },
+  {
+    "tool": "mobile_smali_instruction_size_bytes",
+    "args": {
+      "byte": 20
+    },
+    "status": "PASS",
+    "expected": "6",
+    "actual": "{\"byte\": 20, \"size_bytes\": 6, \"source\": \"rustre_mobile_smali::instruction_size_bytes\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_arm64",
+    "args": {
+      "magic": "dyld_v1   arm64e"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_arm64\": true, \"magic\": \"dyld_v1   arm64e\", \"source\": \"rustre_mobile_dyld::DyldHeader::is_arm64\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_arm64",
+    "args": {
+      "magic": "dyld_v1    x86_64"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_arm64\": false, \"magic\": \"dyld_v1    x86_64\", \"source\": \"rustre_mobile_dyld::DyldHeader::is_arm64\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_filename",
+    "args": {
+      "path": "/usr/lib/libSystem.B.dylib"
+    },
+    "status": "PASS",
+    "expected": "'libSystem.B.dylib'",
+    "actual": "{\"filename\": \"libSystem.B.dylib\", \"path\": \"/usr/lib/libSystem.B.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::filename\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_filename",
+    "args": {
+      "path": "libfoo.dylib"
+    },
+    "status": "PASS",
+    "expected": "'libfoo.dylib'",
+    "actual": "{\"filename\": \"libfoo.dylib\", \"path\": \"libfoo.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::filename\"}"
+  },
+  {
+    "tool": "mobile_dyld_is_system_framework_path",
+    "args": {
+      "path": "/System/Library/Frameworks/Foundation.framework/Foundation"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_system_framework\": true, \"source\": \"rustre_mobile_dyld::is_system_framework_path\"}"
+  },
+  {
+    "tool": "mobile_dyld_is_system_framework_path",
+    "args": {
+      "path": "/usr/lib/libSystem.B.dylib"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_system_framework\": true, \"source\": \"rustre_mobile_dyld::is_system_framework_path\"}"
+  },
+  {
+    "tool": "mobile_dyld_is_system_framework_path",
+    "args": {
+      "path": "/private/tmp/app.dylib"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_system_framework\": false, \"source\": \"rustre_mobile_dyld::is_system_framework_path\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_objc",
+    "args": {
+      "name": "_OBJC_CLASS_$_NSObject"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_objc\": true, \"name\": \"_OBJC_CLASS_$_NSObject\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_objc\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_objc",
+    "args": {
+      "name": "+[NSObject init]"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_objc\": true, \"name\": \"+[NSObject init]\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_objc\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_objc",
+    "args": {
+      "name": "_main"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_objc\": false, \"name\": \"_main\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_objc\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_swift",
+    "args": {
+      "name": "_$sSS10FoundationE4DataV"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_swift\": true, \"name\": \"_$sSS10FoundationE4DataV\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_swift\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_swift",
+    "args": {
+      "name": "$sSSyyy"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_swift\": true, \"name\": \"$sSSyyy\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_swift\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_swift",
+    "args": {
+      "name": "_main"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_swift\": false, \"name\": \"_main\", \"source\": \"rustre_mobile_dyld::DyldSymbol::is_swift\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_platform_name",
+    "args": {
+      "platform": 1
+    },
+    "status": "PASS",
+    "expected": "iOS",
+    "actual": "{\"platform_name\": \"iOS\", \"platform\": 1, \"source\": \"rustre_mobile_dyld::DyldHeader::platform_name\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_platform_name",
+    "args": {
+      "platform": 2
+    },
+    "status": "PASS",
+    "expected": "macOS",
+    "actual": "{\"platform_name\": \"macOS\", \"platform\": 2, \"source\": \"rustre_mobile_dyld::DyldHeader::platform_name\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_platform_name",
+    "args": {
+      "platform": 3
+    },
+    "status": "PASS",
+    "expected": "tvOS",
+    "actual": "{\"platform_name\": \"tvOS\", \"platform\": 3, \"source\": \"rustre_mobile_dyld::DyldHeader::platform_name\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_platform_name",
+    "args": {
+      "platform": 7
+    },
+    "status": "PASS",
+    "expected": "iOSSimulator",
+    "actual": "{\"platform_name\": \"iOSSimulator\", \"platform\": 7, \"source\": \"rustre_mobile_dyld::DyldHeader::platform_name\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_platform_name",
+    "args": {
+      "platform": 99
+    },
+    "status": "PASS",
+    "expected": "unknown",
+    "actual": "{\"platform_name\": \"unknown\", \"platform\": 99, \"source\": \"rustre_mobile_dyld::DyldHeader::platform_name\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_simulator",
+    "args": {
+      "platform": 1
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_simulator\": false, \"platform\": 1, \"source\": \"rustre_mobile_dyld::DyldHeader::is_simulator\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_simulator",
+    "args": {
+      "platform": 7
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_simulator\": true, \"platform\": 7, \"source\": \"rustre_mobile_dyld::DyldHeader::is_simulator\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_simulator",
+    "args": {
+      "platform": 8
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_simulator\": true, \"platform\": 8, \"source\": \"rustre_mobile_dyld::DyldHeader::is_simulator\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_simulator",
+    "args": {
+      "platform": 9
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_simulator\": true, \"platform\": 9, \"source\": \"rustre_mobile_dyld::DyldHeader::is_simulator\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_is_simulator",
+    "args": {
+      "platform": 2
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"is_simulator\": false, \"platform\": 2, \"source\": \"rustre_mobile_dyld::DyldHeader::is_simulator\"}"
+  },
+  {
+    "tool": "mobile_dyld_mock_image_count",
+    "args": {},
+    "status": "PASS",
+    "expected": "2",
+    "actual": "{\"image_count\": 2, \"symbol_count\": 3, \"source\": \"rustre_mobile_dyld::DyldCache::mock\"}"
+  },
+  {
+    "tool": "mobile_dyld_format_uuid",
+    "args": {
+      "uuid": [
+        0,
+        17,
+        34,
+        51,
+        68,
+        85,
+        102,
+        119,
+        136,
+        153,
+        170,
+        187,
+        204,
+        221,
+        238,
+        255
+      ]
+    },
+    "status": "PASS",
+    "expected": "00112233-4455-6677-8899-aabbccddeeff",
+    "actual": "{\"uuid\": \"00112233-4455-6677-8899-aabbccddeeff\", \"source\": \"rustre_mobile_dyld::format_uuid\"}"
+  },
+  {
+    "tool": "mobile_ipa_is_binary_plist",
+    "args": {
+      "hex": "62706c6973743030"
+    },
+    "status": "PASS",
+    "expected": "true",
+    "actual": "{\"is_binary_plist\": true, \"byte_len\": 8, \"source\": \"rustre_mobile_ipa::SimplePlistReader::is_binary_plist\"}"
+  },
+  {
+    "tool": "mobile_ipa_is_binary_plist",
+    "args": {
+      "hex": "3c3f786d6c"
+    },
+    "status": "PASS",
+    "expected": "false",
+    "actual": "{\"is_binary_plist\": false, \"byte_len\": 5, \"source\": \"rustre_mobile_ipa::SimplePlistReader::is_binary_plist\"}"
+  },
+  {
+    "tool": "mobile_ipa_plist_is_binary",
+    "args": {
+      "hex": "62706c6973743030"
+    },
+    "status": "PASS",
+    "expected": "true",
+    "actual": "{\"is_binary_plist\": true, \"len\": 8, \"hex_prefix\": \"62706c6973743030\", \"source\": \"rustre_mobile_ipa::SimplePlistReader::is_binary_plist\"}"
+  },
+  {
+    "tool": "mobile_ipa_plist_is_binary",
+    "args": {
+      "hex": "3c3f786d6c"
+    },
+    "status": "PASS",
+    "expected": "false",
+    "actual": "{\"is_binary_plist\": false, \"len\": 5, \"hex_prefix\": \"3c3f786d6c\", \"source\": \"rustre_mobile_ipa::SimplePlistReader::is_binary_plist\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_package",
+    "args": {},
+    "status": "PASS",
+    "expected": "bundle_id=com.example.TestApp",
+    "actual": "{\"package\": {\"info_plist\": {\"bundle_id\": \"com.example.TestApp\", \"bundle_name\": \"TestApp\", \"bundle_version\": \"1.2.3\", \"min_os_version\": \"15.0\", \"executable\": \"TestApp\", \"supported_platforms\": [\"iPhoneO"
+  },
+  {
+    "tool": "mobile_ipa_mock_summary",
+    "args": {},
+    "status": "PASS",
+    "expected": "bundle_id=com.example.TestApp",
+    "actual": "{\"entry_count\": 4, \"framework_count\": 1, \"executable_path\": \"Payload/TestApp.app/TestApp\", \"bundle_id\": \"com.example.TestApp\", \"source\": \"rustre_mobile_ipa::IpaPackage::mock\"}"
+  },
+  {
+    "tool": "mobile_apktool_mock_success",
+    "args": {},
+    "status": "PASS",
+    "expected": "{'decode_ok': True, 'build_ok': True}",
+    "actual": "{\"decode_ok\": true, \"build_ok\": true, \"smali_dirs\": [\"smali\", \"smali_classes2\"], \"source\": \"rustre_mobile_apktool::MockApktoolRunner::success\"}"
+  },
+  {
+    "tool": "mobile_apktool_mock_failure",
+    "args": {},
+    "status": "PASS",
+    "expected": "{'decode_ok': False, 'build_ok': False, 'smali_dirs': 0}",
+    "actual": "{\"decode_ok\": false, \"build_ok\": false, \"smali_dirs\": 0, \"source\": \"rustre_mobile_apktool::MockApktoolRunner::failure\"}"
+  },
+  {
+    "tool": "mobile_apktool_error_display",
+    "args": {
+      "variant": "not_found",
+      "message": "apktool"
+    },
+    "status": "PASS",
+    "expected": "not found: apktool",
+    "actual": "{\"variant\": \"not_found\", \"display\": \"not found: apktool\", \"source\": \"rustre_mobile_apktool::ApktoolError::Display\"}"
+  },
+  {
+    "tool": "mobile_apktool_error_display",
+    "args": {
+      "variant": "decode",
+      "message": "bad apk"
+    },
+    "status": "PASS",
+    "expected": "decode error: bad apk",
+    "actual": "{\"variant\": \"decode\", \"display\": \"decode error: bad apk\", \"source\": \"rustre_mobile_apktool::ApktoolError::Display\"}"
+  },
+  {
+    "tool": "mobile_apktool_config_with_no_res",
+    "args": {
+      "path": "apktool",
+      "out": "out"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"no_res\": true, \"source\": \"rustre_mobile_apktool::ApktoolConfig::with_no_res\"}"
+  },
+  {
+    "tool": "mobile_apktool_config_with_force",
+    "args": {
+      "path": "apktool",
+      "out": "out"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"force\": true, \"source\": \"rustre_mobile_apktool::ApktoolConfig::with_force\"}"
+  },
+  {
+    "tool": "mobile_apktool_config_with_no_src",
+    "args": {
+      "path": "apktool",
+      "out": "out"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"no_src\": true, \"no_res\": false, \"force\": false, \"source\": \"rustre_mobile_apktool::ApktoolConfig::with_no_src\"}"
+  },
+  {
+    "tool": "mobile_ios_swift_is_mangled",
+    "args": {
+      "name": "_$sSS10FoundationE4DataV"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"_$sSS10FoundationE4DataV\", \"is_swift_mangled\": true, \"source\": \"rustre_mobile_ios::SwiftDemangler::is_swift_mangled\"}"
+  },
+  {
+    "tool": "mobile_ios_swift_is_mangled",
+    "args": {
+      "name": "_$SFooBar"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"name\": \"_$SFooBar\", \"is_swift_mangled\": true, \"source\": \"rustre_mobile_ios::SwiftDemangler::is_swift_mangled\"}"
+  },
+  {
+    "tool": "mobile_ios_swift_is_mangled",
+    "args": {
+      "name": "_main"
+    },
+    "status": "PASS",
+    "expected": "False",
+    "actual": "{\"name\": \"_main\", \"is_swift_mangled\": false, \"source\": \"rustre_mobile_ios::SwiftDemangler::is_swift_mangled\"}"
+  },
+  {
+    "tool": "ios_swift_is_mangled_wire",
+    "args": {
+      "name": "_$sFoo"
+    },
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"is_swift_mangled\": true, \"source\": \"rustre_mobile_ios::SwiftDemangler::is_swift_mangled\"}"
+  },
+  {
+    "tool": "mobile_ios_decode_type_encoding",
+    "args": {
+      "encoding": "i"
+    },
+    "status": "PASS",
+    "expected": "['int']",
+    "actual": "{\"encoding\": \"i\", \"parts\": [\"int\"], \"source\": \"rustre_mobile_ios::decode_type_encoding\"}"
+  },
+  {
+    "tool": "mobile_ios_decode_type_encoding",
+    "args": {
+      "encoding": "@:I"
+    },
+    "status": "PASS",
+    "expected": "['id', 'SEL', 'unsigned int']",
+    "actual": "{\"encoding\": \"@:I\", \"parts\": [\"id\", \"SEL\", \"unsigned int\"], \"source\": \"rustre_mobile_ios::decode_type_encoding\"}"
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "args": {
+      "encoding": "i"
+    },
+    "status": "PASS",
+    "expected": "['int']",
+    "actual": "{\"types\": [\"int\"], \"source\": \"rustre_mobile_ios::decode_type_encoding\"}"
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "args": {
+      "encoding": "@:I"
+    },
+    "status": "PASS",
+    "expected": "['id', 'SEL', 'unsigned int']",
+    "actual": "{\"types\": [\"id\", \"SEL\", \"unsigned int\"], \"source\": \"rustre_mobile_ios::decode_type_encoding\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_has_entitlements",
+    "args": {},
+    "status": "PASS",
+    "expected": "True",
+    "actual": "{\"has_entitlements\": true, \"source\": \"rustre_mobile_ipa::InfoPlist::has_entitlements\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_entry_counts",
+    "args": {},
+    "status": "PASS",
+    "expected": "entry_count=4",
+    "actual": "{\"entry_count\": 4, \"framework_count\": 1, \"is_encrypted\": false, \"source\": \"rustre_mobile_ipa::IpaPackage\"}"
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "tool": "windbg_command_parser_parse",
+    "reason": "no independent ground-truth test case (nondeterministic or complex output)"
+  },
+  {
+    "tool": "windbg_expr_evaluator_evaluate",
+    "reason": "no independent ground-truth test case (nondeterministic or complex output)"
+  },
+  {
+    "tool": "windbg_module_list_parse_lm",
+    "reason": "no independent ground-truth test case (nondeterministic or complex output)"
+  },
+  {
+    "tool": "windbg_parsed_dbg_output_key_values",
+    "reason": "no independent ground-truth test case (nondeterministic or complex output)"
+  }
+]

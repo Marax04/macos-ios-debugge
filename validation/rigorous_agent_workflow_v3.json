@@ -1,0 +1,48 @@
+{
+  "category": "agent_workflow",
+  "generated": "2026-07-11",
+  "validator": "validate_agent_workflow.py",
+  "tools": [
+    {
+      "tool": "agent_workflow_builtin_list",
+      "status": "PASS",
+      "reference": "rustre_agent_workflow::builtin_workflows() in crates/rustre-agent-workflow/src/lib.rs",
+      "expected_ids": [
+        "analyze_binary",
+        "find_vulnerabilities",
+        "full_re_analysis",
+        "function_rename",
+        "malware_triage",
+        "vuln_hunt"
+      ],
+      "expected_names": {
+        "full_re_analysis": "Full RE Analysis",
+        "malware_triage": "Malware Triage",
+        "function_rename": "Function Rename Automation",
+        "vuln_hunt": "Vulnerability Hunt",
+        "analyze_binary": "Analyze Binary",
+        "find_vulnerabilities": "Find Vulnerabilities"
+      },
+      "verified_fields": ["id", "name"],
+      "tolerance": "exact match on id set and name strings"
+    },
+    {
+      "tool": "agent_workflow_templates_list",
+      "status": "PASS",
+      "reference": "rustre_agent_workflow::workflow_templates::list_templates() in crates/rustre-agent-workflow/src/workflow_templates.rs",
+      "expected_count": 8,
+      "expected_ids": [
+        "malware_analysis",
+        "pe_deep_dive",
+        "apk_analysis",
+        "network_capture",
+        "crash_triage",
+        "yara_hunt",
+        "dotnet_analysis",
+        "shellcode_analysis"
+      ],
+      "verified_fields": ["count", "id"],
+      "tolerance": "exact count and id list match"
+    }
+  ]
+}

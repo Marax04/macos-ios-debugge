@@ -1,0 +1,37 @@
+{
+  "crate": "rustre-pe-tools",
+  "mcp_surface": "high-level patch ops only",
+  "mcp_tools_from_crate": [
+    "patch_pe_security_summary",
+    "patch_pe_set_security",
+    "patch_bytes",
+    "patch_nop_range",
+    "patch_xor_region"
+  ],
+  "note": "rustre-pe-tools is exposed via MCP only through five high-level file/VA-level operations (security summary, set security flags, byte patching, NOP range, XOR region). The validator (validation/validators/rustre-pe-tools.py) reimplements ~40 pure helper functions of the crate (entropy, Shannon entropy, machine/subsystem maps, dll_characteristics flag names, SecuritySummary score, PE imagehlp checksum, Rich header decode, RVA->offset, overlay/SFX detection, ASCII/UTF16LE string extraction, string/api classifiers, DLL name normalisation, ASN.1 OID decode, manifest XML parse, section permission helpers, basic PE parser). These helpers are internal library functions and are NOT individually exposed as MCP tools. A 1:1 JSON-RPC stdio comparison against C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe is therefore N/A for the validator's surface. The high-level MCP patch tools require an on-disk PE target and mutate files; they are validated indirectly (rustre-loader-pe / rustre-pe-editor comparisons) and via Rust unit tests in crates/rustre-mcp-tools/src/lib.rs (test_patch_bytes, test_patch_bytes_oob, etc.).",
+  "validator": "validation/validators/rustre-pe-tools.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 40,
+    "passed": 40,
+    "functions_covered": [
+      "byte_histogram", "shannon_entropy", "most_common_byte", "is_likely_packed",
+      "machine_from_value", "machine_pointer_size", "machine_is_64bit",
+      "subsystem_from_value", "subsystem_is_console", "subsystem_is_efi",
+      "dllchar_flag_names", "has_aslr", "has_high_entropy_va", "has_nx", "has_cfg",
+      "no_seh", "force_integrity", "is_appcontainer", "security_score",
+      "compute_pe_checksum", "decode_rich_header", "rva_to_offset",
+      "find_overlay_offset", "detect_sfx_kind", "find_embedded_pe_offsets",
+      "extract_ascii_strings", "extract_utf16le_strings",
+      "classify_string", "classify_api", "normalise_dll_name",
+      "decode_oid", "known_oid_name", "parse_manifest_xml",
+      "section_permission_string", "section_contains_code",
+      "section_contains_initialized_data", "section_is_executable",
+      "section_is_writable", "section_is_readable", "parse_pe_basic"
+    ]
+  },
+  "tests": 40,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

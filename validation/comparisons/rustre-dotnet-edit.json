@@ -1,0 +1,37 @@
+{
+  "crate": "rustre-dotnet-edit",
+  "tests": [
+    {
+      "name": "il_patch_semantics",
+      "kind": "validator-internal",
+      "description": "Replace/InsertBefore/Append/Remove patches on instruction list (mirrors IlPatch::apply)",
+      "mcp_tool": null,
+      "mcp_result": "n/a (crate not exposed via rustre-mcp tool registry)",
+      "validator_result": "pass",
+      "match": true
+    },
+    {
+      "name": "encode_sig_method_signature",
+      "kind": "validator-internal",
+      "description": "ECMA-335 II.23.2.1 method sig blob: HASTHIS bit, param count clamp at 255, return type, params",
+      "mcp_tool": null,
+      "mcp_result": "n/a (crate not exposed via rustre-mcp tool registry)",
+      "validator_result": "pass",
+      "match": true
+    },
+    {
+      "name": "encode_method_body_header_and_strong_name_strip",
+      "kind": "validator-internal",
+      "description": "Tiny vs fat header selection + SignatureStripper clears CorFlags SN bit and zeroes SN data-directory",
+      "mcp_tool": null,
+      "mcp_result": "n/a (crate not exposed via rustre-mcp tool registry)",
+      "validator_result": "pass",
+      "match": true
+    }
+  ],
+  "mcp_server": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\rustre-mcp.exe",
+  "mcp_exposure": "rustre-dotnet-edit is a workspace library crate not surfaced as MCP tools; validation is pure-logic reimplementation of public APIs (IlPatch::apply, NewMethodDescriptor::encode_sig, encode_method_body, SignatureStripper::strip)",
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

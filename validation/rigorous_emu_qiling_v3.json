@@ -1,0 +1,583 @@
+{
+  "category": "emu_qiling",
+  "tools_hardened": 40,
+  "tools_passed": 39,
+  "tools_failed": 1,
+  "tools_skipped": 2,
+  "mismatches": [
+    {
+      "tool": "emu_qiling_fd_table_is_empty",
+      "expected": {
+        "is_empty": false,
+        "len": 3
+      },
+      "actual": {
+        "is_empty": true,
+        "len": 0
+      },
+      "note": ""
+    }
+  ],
+  "results": [
+    {
+      "tool": "emu_qiling_elf_loader_stub_is_elf",
+      "passed": true,
+      "note": "",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_qiling_rootfs_path_host_path",
+      "passed": true,
+      "note": "",
+      "expected": "**/etc/passwd",
+      "actual": "/tmp/rootfs\\etc/passwd"
+    },
+    {
+      "tool": "emu_qiling_rootfs_path_host_path[dotdot]",
+      "passed": true,
+      "note": "",
+      "expected": "no escape",
+      "actual": "/tmp/rootfs"
+    },
+    {
+      "tool": "emu_qiling_rootfs_exists",
+      "passed": true,
+      "note": "",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_qiling_process_env_new_linux64",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "argv_len": 2,
+        "envp_len": 3,
+        "stack_base": 140737219919872,
+        "stack_size": 8388608,
+        "heap_base": 6291456,
+        "brk": 6291456
+      },
+      "actual": {
+        "argv_len": 2,
+        "envp_len": 3,
+        "stack_base": 140737219919872,
+        "stack_size": 8388608,
+        "heap_base": 6291456,
+        "brk": 6291456
+      }
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "passed": true,
+      "note": "",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "emu_qiling_syscall_result_retval",
+      "passed": true,
+      "note": "",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "emu_qiling_process_env_getenv",
+      "passed": true,
+      "note": "",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "emu_qiling_process_env_setenv",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "envp_len": 4,
+        "has_NEW_VAR": true
+      },
+      "actual": {
+        "envp_len": 4,
+        "has_NEW_VAR": true
+      }
+    },
+    {
+      "tool": "emu_qiling_process_env_setenv[replace]",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "envp_len": 3,
+        "PATH=/custom": true
+      },
+      "actual": {
+        "envp_len": 3,
+        "PATH=/custom": true
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_new",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len": 3,
+        "is_empty": false,
+        "open_fds": [
+          0,
+          1,
+          2
+        ]
+      },
+      "actual": {
+        "len": 3,
+        "is_empty": false,
+        "open_fds": [
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_open_close",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "fd": 3,
+        "len_after": 4
+      },
+      "actual": {
+        "fd": 3,
+        "len_after": 4
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_open_close[close_after]",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len_after": 3,
+        "closed": true
+      },
+      "actual": {
+        "len_after": 3,
+        "closed": true
+      }
+    },
+    {
+      "tool": "emu_qiling_guest_file_rw",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "read": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "written": 4,
+        "is_eof": true,
+        "remaining": 0
+      },
+      "actual": {
+        "read": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "written": 4,
+        "is_eof": true,
+        "remaining": 0
+      }
+    },
+    {
+      "tool": "emu_qiling_rootfs_root",
+      "passed": true,
+      "note": "",
+      "expected": "/tmp/rootfs",
+      "actual": "/tmp/rootfs"
+    },
+    {
+      "tool": "emu_qiling_os_target_display_all",
+      "passed": true,
+      "note": "",
+      "expected": [
+        "linux",
+        "windows",
+        "macos",
+        "freebsd",
+        "baremetal"
+      ],
+      "actual": [
+        "linux",
+        "windows",
+        "macos",
+        "freebsd",
+        "baremetal"
+      ]
+    },
+    {
+      "tool": "emu_qiling_fd_table_is_empty",
+      "passed": false,
+      "note": "",
+      "expected": {
+        "is_empty": false,
+        "len": 3
+      },
+      "actual": {
+        "is_empty": true,
+        "len": 0
+      }
+    },
+    {
+      "tool": "emu_qiling_syscall_table_empty",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "is_empty": true,
+        "len": 0,
+        "os": "windows"
+      },
+      "actual": {
+        "is_empty": true,
+        "len": 0,
+        "os": "windows"
+      }
+    },
+    {
+      "tool": "emu_qiling_emulator_state_new_x86_64",
+      "passed": true,
+      "note": "",
+      "expected": "contains rax,rbx,rcx,rdx,rsp,rip",
+      "actual": [
+        "cs",
+        "ds",
+        "es",
+        "fs",
+        "gs",
+        "r10",
+        "r11",
+        "r12",
+        "r13",
+        "r14",
+        "r15",
+        "r8",
+        "r9",
+        "rax",
+        "rbp",
+        "rbx",
+        "rcx",
+        "rdi",
+        "rdx",
+        "rflags",
+        "rip",
+        "rsi",
+        "rsp",
+        "ss"
+      ]
+    },
+    {
+      "tool": "emu_qiling_emulator_state_mem_u64_roundtrip",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "match": true,
+        "wrote": 16045690984503098046
+      },
+      "actual": {
+        "match": true,
+        "wrote": 16045690984503098046
+      }
+    },
+    {
+      "tool": "emu_qiling_emulator_state_mem_u32_roundtrip",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "match": true,
+        "wrote": 3735928559
+      },
+      "actual": {
+        "match": true,
+        "wrote": 3735928559
+      }
+    },
+    {
+      "tool": "emu_qiling_emulator_state_cstring_roundtrip",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "match": true,
+        "wrote": "hello"
+      },
+      "actual": {
+        "match": true,
+        "wrote": "hello"
+      }
+    },
+    {
+      "tool": "emu_qiling_emulator_state_read_bytes",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "match": true,
+        "len": 4
+      },
+      "actual": {
+        "match": true,
+        "len": 4
+      }
+    },
+    {
+      "tool": "emu_qiling_closure_syscall_table_linux_len",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len_gt_50": true,
+        "is_empty": false,
+        "os": "linux"
+      },
+      "actual": {
+        "len": 100,
+        "is_empty": false,
+        "os": "linux"
+      }
+    },
+    {
+      "tool": "emu_qiling_closure_syscall_table_windows_len",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len_gt_10": true,
+        "is_empty": false,
+        "os": "windows"
+      },
+      "actual": {
+        "len": 16,
+        "is_empty": false,
+        "os": "windows"
+      }
+    },
+    {
+      "tool": "emu_qiling_closure_syscall_dispatch_exit",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "ret": 42,
+        "recorded_exit": 42
+      },
+      "actual": {
+        "ret": 42,
+        "recorded_exit": 42
+      }
+    },
+    {
+      "tool": "emu_qiling_errno_constants",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "EPERM": -1,
+        "ENOENT": -2,
+        "EBADF": -9,
+        "EACCES": -13,
+        "EINVAL": -22,
+        "ENOSYS": -38,
+        "ECONNREFUSED": -111
+      },
+      "actual": {
+        "EPERM": -1,
+        "ENOENT": -2,
+        "EBADF": -9,
+        "EACCES": -13,
+        "EINVAL": -22,
+        "ENOSYS": -38,
+        "ECONNREFUSED": -111
+      }
+    },
+    {
+      "tool": "emu_qiling_guest_file_is_eof",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "is_eof": true,
+        "remaining": 0
+      },
+      "actual": {
+        "is_eof": true,
+        "remaining": 0
+      }
+    },
+    {
+      "tool": "emu_qiling_guest_file_is_eof[partial]",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "is_eof": false,
+        "remaining": 2
+      },
+      "actual": {
+        "is_eof": false,
+        "remaining": 2
+      }
+    },
+    {
+      "tool": "emu_qiling_guest_file_remaining",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "remaining": 7,
+        "is_eof": false
+      },
+      "actual": {
+        "remaining": 7,
+        "is_eof": false
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_open_fds",
+      "passed": true,
+      "note": "",
+      "expected": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "actual": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "tool": "emu_qiling_fd_table_len",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len": 3,
+        "is_empty": false
+      },
+      "actual": {
+        "len": 3,
+        "is_empty": false
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_len[close_stdio]",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len": 0,
+        "is_empty": true
+      },
+      "actual": {
+        "len": 0,
+        "is_empty": true
+      }
+    },
+    {
+      "tool": "emu_qiling_syscall_ctx_args",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "nr": 7,
+        "args": [
+          10,
+          20,
+          30,
+          40,
+          50,
+          60
+        ]
+      },
+      "actual": {
+        "nr": 7,
+        "arg0": 10,
+        "arg5": 60
+      }
+    },
+    {
+      "tool": "emu_qiling_syscall_result_not_impl_retval",
+      "passed": true,
+      "note": "",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "emu_qiling_default_linux_x86_64_table_len",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "len": 16,
+        "os": "linux",
+        "arch": "X86_64"
+      },
+      "actual": {
+        "len": 16,
+        "os": "linux",
+        "arch": "X86_64"
+      }
+    },
+    {
+      "tool": "emu_qiling_process_env_setenv_check",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "getenv": "my_value",
+        "envp_len": 4
+      },
+      "actual": {
+        "getenv": "my_value",
+        "envp_len": 4
+      }
+    },
+    {
+      "tool": "emu_qiling_raw_binary_loader_format_name",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "format_name": "RAW",
+        "can_load": true
+      },
+      "actual": {
+        "format_name": "RAW",
+        "can_load": true
+      }
+    },
+    {
+      "tool": "emu_qiling_elf_loader_stub_format_name",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "format_name": "ELF",
+        "can_load": true,
+        "is_elf": true
+      },
+      "actual": {
+        "format_name": "ELF",
+        "can_load": true,
+        "is_elf": true
+      }
+    },
+    {
+      "tool": "emu_qiling_elf_loader_stub_format_name[non-elf]",
+      "passed": true,
+      "note": "",
+      "expected": {
+        "format_name": "ELF",
+        "can_load": false,
+        "is_elf": false
+      },
+      "actual": {
+        "format_name": "ELF",
+        "can_load": false,
+        "is_elf": false
+      }
+    }
+  ],
+  "notes": "Skipped: emu_qiling_linux_x86_64 (needs Linux rootfs), emu_qiling_shellcode_runner (needs emulation engine)"
+}

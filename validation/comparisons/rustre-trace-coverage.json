@@ -1,0 +1,25 @@
+{
+  "crate": "rustre-trace-coverage",
+  "tests": [
+    {
+      "name": "coverage_metrics",
+      "py": {
+        "total_blocks": 0,
+        "covered_blocks": 0,
+        "block_coverage_pct": 0.0,
+        "total_functions": 0,
+        "covered_functions": 0,
+        "function_coverage_pct": 0.0,
+        "trace_count": 0,
+        "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace.json"
+      },
+      "mcp": {
+        "note": "rustre-mcp exposes no dedicated trace-coverage tool; closest are analysis_trace_data_flow_path / trace_data_flow which are xref slicers, not coverage analyzers"
+      },
+      "mismatch": false,
+      "reason": "no MCP equivalent — validator-only crate"
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

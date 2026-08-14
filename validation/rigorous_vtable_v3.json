@@ -1,0 +1,23 @@
+[
+  {
+    "tool": "vtable_abstract_class_inference_wire (1 abstract class)",
+    "passed": true,
+    "expected": {
+      "count_ge": 1,
+      "is_abstract": true,
+      "vtable_address": 4096
+    },
+    "actual": {
+      "count": 1,
+      "results": [
+        {
+          "class_name": "class_0x1000",
+          "vtable_address": 4096,
+          "pure_virtual_slots": [0],
+          "is_abstract": true
+        }
+      ]
+    },
+    "notes": "vtable at base 0x1000 with entry targeting stub 0xdead => inferred abstract; pure_virtual_slots=[0]"
+  }
+]

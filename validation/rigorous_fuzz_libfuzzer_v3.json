@@ -1,0 +1,195 @@
+{
+  "module": "fuzz_libfuzzer",
+  "tools_hardened": 10,
+  "tool_results": {
+    "fuzz_libfuzzer_bucket_bitmap": true,
+    "fuzz_libfuzzer_count_new_bits_bucketed": true,
+    "fuzz_libfuzzer_parse_sanitizer_output": true,
+    "fuzz_libfuzzer_structured_serialize": true,
+    "fuzz_libfuzzer_structured_deserialize": true,
+    "fuzz_libfuzzer_input_splice": true,
+    "fuzz_libfuzzer_simple_rng": true,
+    "fuzz_libfuzzer_havoc_mutate": true,
+    "fuzz_libfuzzer_crash_handler_inject": true,
+    "fuzz_libfuzzer_persistent_harness_run": true
+  },
+  "checks_passed": 18,
+  "checks_failed": 0,
+  "mismatches": [],
+  "all_checks": [
+    {
+      "tool": "fuzz_libfuzzer_bucket_bitmap",
+      "passed": true,
+      "expected": "00010204081020408080",
+      "actual": "00010204081020408080",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_count_new_bits_bucketed",
+      "passed": true,
+      "expected": 3,
+      "actual": 3,
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_parse_sanitizer_output (heap-overflow)",
+      "passed": true,
+      "expected": "HeapOverflow",
+      "actual": "HeapOverflow",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_parse_sanitizer_output (uaf)",
+      "passed": true,
+      "expected": "UseAfterFree",
+      "actual": "UseAfterFree",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_parse_sanitizer_output (unknown)",
+      "passed": true,
+      "expected": "Unknown",
+      "actual": "Unknown",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_structured_serialize",
+      "passed": true,
+      "expected": "0400deadbeef0200cafe",
+      "actual": "0400deadbeef0200cafe",
+      "note": "field_count=2"
+    },
+    {
+      "tool": "fuzz_libfuzzer_structured_deserialize (valid)",
+      "passed": true,
+      "expected": 2,
+      "actual": 2,
+      "note": "ok=True"
+    },
+    {
+      "tool": "fuzz_libfuzzer_structured_deserialize (invalid)",
+      "passed": true,
+      "expected": false,
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_input_splice (both empty)",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_input_splice (a_empty)",
+      "passed": true,
+      "expected": "deadbeef",
+      "actual": "deadbeef",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_input_splice (b_empty)",
+      "passed": true,
+      "expected": "cafebabe",
+      "actual": "cafebabe",
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_simple_rng",
+      "passed": true,
+      "expected": [
+        1082269761,
+        1152992998833853505,
+        11177516664432764457,
+        17678023832001937445
+      ],
+      "actual": [
+        1082269761,
+        1152992998833853505,
+        11177516664432764457,
+        17678023832001937445
+      ],
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_simple_rng (seed=0)",
+      "passed": true,
+      "expected": [
+        8845435722900356690,
+        9921558552226916270,
+        2963485814451879649
+      ],
+      "actual": [
+        8845435722900356690,
+        9921558552226916270,
+        2963485814451879649
+      ],
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_havoc_mutate (structural)",
+      "passed": true,
+      "expected": "valid-hex-len<=256",
+      "actual": "len=4 hex_ok=True",
+      "note": "non-deterministic; structural check only"
+    },
+    {
+      "tool": "fuzz_libfuzzer_crash_handler_inject",
+      "passed": true,
+      "expected": {
+        "total": 3,
+        "last_signal": 4,
+        "is_crashed": true
+      },
+      "actual": {
+        "total": 3,
+        "last_signal": 4,
+        "is_crashed": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_crash_handler_inject (empty)",
+      "passed": true,
+      "expected": {
+        "total": 0,
+        "is_crashed": false
+      },
+      "actual": {
+        "total": 0,
+        "is_crashed": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_persistent_harness_run",
+      "passed": true,
+      "expected": {
+        "iterations": 5,
+        "kept": 4,
+        "progress": 1.0
+      },
+      "actual": {
+        "iterations": 5,
+        "kept": 4,
+        "progress": 1.0
+      },
+      "note": ""
+    },
+    {
+      "tool": "fuzz_libfuzzer_persistent_harness_run (partial)",
+      "passed": true,
+      "expected": {
+        "iterations": 3,
+        "kept": 3,
+        "progress": 0.3
+      },
+      "actual": {
+        "iterations": 3,
+        "kept": 3,
+        "progress": 0.3
+      },
+      "note": ""
+    }
+  ]
+}

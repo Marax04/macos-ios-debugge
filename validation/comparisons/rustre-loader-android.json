@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-android",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches": [],
+  "match": true,
+  "notes": [
+    "Validator rustre-loader-android.py e' una libreria pura stdlib (struct/zlib/re/math) che riproduce ~70 funzioni del crate: is_apk/is_dex/is_vdex, verify_dex_checksum (adler32), DexHeader + _parse_dex_header, read_uleb128, read_dex_string, read_string_table/read_type_ids/read_proto_ids/read_field_ids/read_method_ids/read_class_defs, parse_encoded_methods, parse_apk_entries (ZIP CDFH/EOCD), extract_entry_data, detect_signing_schemes (v1/v2/v3 via META-INF + APK Sig Block 42), extract_vdex_dex_files, parse_android_manifest_binary + parse_string_pool (AXML magic 0x0003, utf8/utf16 flag), detect_v4_signature (IDSG), dalvik_opcode_class + opcode_histogram, build_oat_stub, detect_format (Apk/Dex/Vdex/Oat/Art/Elf), load_android_binary, extract_all_components, byte_entropy/shannon_entropy, find_apk_v2_signing_block. Nessun blocco __main__ test-runner che produca JSON: lo script stampa solo 'rustre-loader-android validator OK (70 funzioni)'.",
+    "Nessun tool MCP dedicato loader_android_* / apk_* / dex_* / vdex_* / axml_* esiste in crates/rustre-mcp-tools/src/wire_tools.rs (grep case-insensitive android|apk|dex|vdex = 0 match al di fuori di 'index' che e' substring di 'index'). Le primitive del crate rustre-loader-android non sono esposte come endpoint JSON-RPC sul binario target/release/rustre-mcp.exe.",
+    "I tool MCP generici (binary_info, triage_analyze, analyze_strings, analyze_full, binary_hexdump) operano su PE/ELF/Mach-O e non riconoscono i magic DEX (dex\\n035), VDEX (vdex), AXML (0x0003), IDSG, OAT (oat\\n), ART (art\\n) ne' la struttura ZIP centrale APK; non restituiscono campi loader-android-specifici (format, entries[], manifest.package, permissions, signing_schemes, dex_count, opcode histogram) confrontabili 1:1 con le funzioni Python.",
+    "Conclusione coerente con rustre-loader-{console,pe,elf,macho,dotnet,lua,luajit,wasm,ole,registry}: confronto MCP vs validator NON applicabile per assenza di endpoint dedicati. Nessun mismatch reale, nessun fix da applicare al workspace (rustre-loader-android continua a builddare e i suoi test interni superano)."
+  ]
+}

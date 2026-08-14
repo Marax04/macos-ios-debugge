@@ -1,0 +1,42 @@
+{
+  "crate": "rustre-ttd-replayer",
+  "mcp_surface": "none",
+  "note": "rustre-ttd-replayer is a workspace library crate (Time-Travel Debugging replayer: TtdTrace, TraceEvent, TraceSnapshot, ReplayState, TtdReplayer with goto/step_forward/step_backward, find_writes, find_root_cause, TraceBuilder, TtdQuery parser, TraceStats, format constants TRACE_MAGIC/HEADER_SIZE/FRAME_SIZE/kind tags). It is NOT exposed via the MCP server: no references to ttd-replayer/TtdReplay in crates/rustre-mcp-tools (grep -i 'ttd[_-]?replay' returns no matches). JSON-RPC stdio comparison against rustre-mcp.exe is therefore N/A; the pure-logic Python validator IS the ground-truth comparison.",
+  "validator": "validation/validators/rustre-ttd-replayer.py",
+  "validator_result": "validation/validators/rustre-ttd-replayer.result.json",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 11,
+    "all_passed": true,
+    "functions": [
+      "constants",
+      "mem_write_record",
+      "trace_event",
+      "snapshot_and_state",
+      "trace_basic",
+      "replayer",
+      "query_parse",
+      "root_cause",
+      "stats",
+      "error_variants",
+      "modules"
+    ],
+    "checked_against_source": {
+      "constants": "DEFAULT_SNAPSHOT_INTERVAL=256, MAX_MEM_WRITES_PER_EVENT=1024, REPLAY_PAGE_SIZE=4096, TRACE_MAGIC=0x0052554E00445454, SUPPORTED_VERSION_MAJOR=2, HEADER_SIZE=128, FRAME_SIZE=32",
+      "MemWriteRecord": "addr/data with size/end_addr/overlaps/bytes_in_range",
+      "TraceEvent": "SyscallEntry/SyscallExit/SignalDelivered + tick/kind_name/has_mem_writes",
+      "TraceSnapshot+ReplayState": "page-aligned mem (4096), regs map, program_counter via pc/rip/eip",
+      "TtdTrace": "push_event/push_snapshot/min_tick/max_tick/first_event_at_or_after/last_event_at_or_before/events_in_range/event_counts/all_writes_touching",
+      "TtdReplayer": "goto(target_tick), step_forward, step_backward, find_all_writes_to, read_memory_at_tick, find_last_write_before, find_last_write_range_before, reset, remaining_events",
+      "TtdQuery": "parse for read_mem/find_writes/last_write/list_syscalls/list_signals/read_reg/count_events/root_cause/max_tick/min_tick with 256MB size cap",
+      "find_root_cause": "chain = last_write_before + preceding SyscallEntry + preceding SignalDelivered; confidence=min(1.0,0.25*len)",
+      "TraceStats": "total_events/syscall_entries/syscall_exits/signals/total_bytes_written/unique_write_addrs/min_tick/max_tick/snapshot_count/syscall_freq",
+      "error_variants": "ReplayError/QueryValue/QueryAst/TraceLoader variant lists match",
+      "modules": "17 sub-modules (api_call_tracker, memory_diff_viewer, ... timeline)"
+    }
+  },
+  "tests": 11,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

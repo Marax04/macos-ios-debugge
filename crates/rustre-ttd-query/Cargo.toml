@@ -1,0 +1,26 @@
+[package]
+license.workspace = true
+name = "rustre-ttd-query"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-ttd = { path = "../rustre-ttd" }
+rustre-trace = { path = "../rustre-trace" }
+rustre-trace-navigate = { path = "../rustre-trace-navigate" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

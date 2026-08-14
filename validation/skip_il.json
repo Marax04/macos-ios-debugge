@@ -1,0 +1,22 @@
+[
+  {
+    "tool": "il_lift_level_at_least",
+    "reason": "requires enum variant input 'a'; make_input provides no default for this param type"
+  },
+  {
+    "tool": "il_lift_x86_lift_bytes",
+    "reason": "requires bytes_hex input; while technically testable the exact IL output depends on iced-x86 internals and is covered by crate unit tests"
+  },
+  {
+    "tool": "il_lift_level_at_least_pair_r7",
+    "reason": "same as il_lift_level_at_least \u2014 missing 'a' param in make_input"
+  },
+  {
+    "tool": "il_lift_arch_description",
+    "reason": "descriptive string not a deterministic constant \u2014 can change with refactors"
+  },
+  {
+    "tool": "il_lift_filters_writing_register_n6",
+    "reason": "depends on register name lookup; hits=0 but arch-specific behaviour"
+  }
+]

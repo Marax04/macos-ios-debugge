@@ -1,0 +1,24 @@
+{
+  "module": "codeview",
+  "tools_hardened": 14,
+  "tools_list": [
+    "codeview_data32_parse",
+    "codeview_frameproc_parse",
+    "codeview_guid_to_string",
+    "codeview_magic_detect",
+    "codeview_magic_label",
+    "codeview_parse_symbols",
+    "codeview_primitive_type",
+    "codeview_proc32_parse",
+    "codeview_public32_parse",
+    "codeview_signature_as_str",
+    "codeview_signature_from_bytes",
+    "codeview_sym_kind_is_named_address",
+    "codeview_symbol_stream_count",
+    "codeview_type_kind_from_u16"
+  ],
+  "checks_passed": 129,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

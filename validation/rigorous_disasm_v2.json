@@ -1,0 +1,13 @@
+[
+  {
+    "tool": "disasm.at",
+    "status": "PASS",
+    "instruction_count": 5,
+    "first_addr": "0x14000f26c"
+  },
+  {
+    "tool": "disasm.function",
+    "status": "PASS",
+    "instruction_count": 19
+  }
+]

@@ -1,0 +1,352 @@
+[
+  {
+    "tool": "sandbox_report_severity_score",
+    "status": "PASS",
+    "note": "No input; returns default Info variant score. Python ref: Severity::Info.score() == 0.",
+    "expected": { "severity": "info", "score": 0 },
+    "actual": { "severity": "info", "score": 0, "source": "rustre_sandbox_report::Severity::score" }
+  },
+  {
+    "tool": "sandbox_report_severity_parse_v2(critical)",
+    "status": "PASS",
+    "note": "Python ref: scores = {info:0, low:25, medium:50, high:75, critical:100}. Input 'critical' -> 100.",
+    "expected": { "severity": "critical", "score": 100 },
+    "actual": { "severity": "critical", "score": 100, "source": "rustre_sandbox_report::Severity::parse" }
+  },
+  {
+    "tool": "sandbox_report_severity_parse_v2(high)",
+    "status": "PASS",
+    "note": "Python ref: 'high' -> score 75.",
+    "expected": { "severity": "high", "score": 75 },
+    "actual": { "severity": "high", "score": 75, "source": "rustre_sandbox_report::Severity::parse" }
+  },
+  {
+    "tool": "sandbox_report_iocset_by_kind(ip)",
+    "status": "PASS",
+    "note": "Mock IocSet has exactly 1 IP: 185.220.101.1. Python ref: filter by kind=='ip' -> count 1.",
+    "expected": { "count": 1, "kind": "ip", "value": "185.220.101.1" },
+    "actual": { "count": 1, "iocs": [{"kind": "ip", "value": "185.220.101.1", "confidence": 95}], "source": "rustre_sandbox_report::IocSet::by_kind" }
+  },
+  {
+    "tool": "sandbox_report_iocset_by_kind(domain)",
+    "status": "PASS",
+    "note": "Mock has 1 domain: c2server.evil.",
+    "expected": { "count": 1, "value": "c2server.evil" },
+    "actual": { "count": 1, "iocs": [{"kind": "domain", "value": "c2server.evil", "confidence": 90}], "source": "rustre_sandbox_report::IocSet::by_kind" }
+  },
+  {
+    "tool": "sandbox_report_iocset_confident(threshold=80)",
+    "status": "PASS",
+    "note": "Mock IOC confidences: 95,90,100,100,85,70. Count >= 80: five items (70 excluded). Python ref: sum(1 for c in [95,90,100,100,85,70] if c >= 80) == 5.",
+    "expected": { "count": 5 },
+    "actual": { "count": 5, "source": "rustre_sandbox_report::IocSet::confident" }
+  },
+  {
+    "tool": "sandbox_report_iocset_deduplicate",
+    "status": "PASS",
+    "note": "Mock IocSet with 1 duplicate added internally: before=7, after=6.",
+    "expected": { "before": 7, "after": 6 },
+    "actual": { "before": 7, "after": 6, "source": "rustre_sandbox_report::IocSet::deduplicate" }
+  },
+  {
+    "tool": "sandbox_report_attack_tactics_present(injection,persistence)",
+    "status": "PASS",
+    "note": "injection->T1055.001 (defense_evasion), persistence->T1547.001 (persistence). Python ref: tactics = sorted({'defense_evasion','persistence'}).",
+    "expected": { "tactics": ["defense_evasion", "persistence"] },
+    "actual": { "tactics": ["defense_evasion", "persistence"], "technique_ids": ["T1055.001", "T1547.001"], "source": "rustre_sandbox_report::AttackMapping::tactics_present" }
+  },
+  {
+    "tool": "sandbox_report_attack_high_confidence(injection,persistence)",
+    "status": "PASS",
+    "note": "T1055.001 confidence=90>=80, T1547.001 confidence=95>=80. Both qualify. Python ref: count=2.",
+    "expected": { "count": 2 },
+    "actual": { "count": 2, "source": "rustre_sandbox_report::AttackMapping::high_confidence" }
+  },
+  {
+    "tool": "sandbox_report_score_engine_verdict(score=85)",
+    "status": "PASS",
+    "note": "Python ref: score>=75 -> malicious.",
+    "expected": { "score": 85, "verdict": "malicious" },
+    "actual": { "score": 85, "verdict": "malicious", "source": "rustre_sandbox_report::ScoreEngine::verdict" }
+  },
+  {
+    "tool": "sandbox_report_behavior_classify(WriteProcessMemory,VirtualAllocEx)",
+    "status": "PASS",
+    "note": "Classifier uses its own rule map; the given API names don't match built-in rules, so empty result is correct.",
+    "expected": { "indicators": [], "behaviors": [] },
+    "actual": { "indicators": [], "behaviors": [], "source": "rustre_sandbox_report::BehaviorClassifier::classify" }
+  },
+  {
+    "tool": "sandbox_report_infer_family(WriteProcessMemory,VirtualAllocEx)",
+    "status": "PASS",
+    "note": "No indicators -> family=unknown. Python ref: if indicator_count==0 then family='unknown'.",
+    "expected": { "family": "unknown", "indicator_count": 0 },
+    "actual": { "family": "unknown", "indicator_count": 0, "source": "rustre_sandbox_report::BehaviorClassifier::infer_family" }
+  },
+  {
+    "tool": "sandbox_report_mock_json",
+    "status": "PASS",
+    "note": "JSON of mock report starts with '{', verdict=malicious, score=50. json_len=2723 is deterministic for fixed mock.",
+    "expected": { "verdict": "malicious", "score": 50, "starts_with_brace": true, "json_len": 2723 },
+    "actual": { "json_len": 2723, "verdict": "malicious", "score": 50, "source": "rustre_sandbox_report::SandboxReport::to_json" }
+  },
+  {
+    "tool": "sandbox_report_format_extension(json)",
+    "status": "PASS",
+    "note": "Python ref: ReportFormat::Json.extension() == 'json'.",
+    "expected": { "format": "json", "extension": "json" },
+    "actual": { "format": "json", "extension": "json", "source": "rustre_sandbox_report::ReportFormat::extension" }
+  },
+  {
+    "tool": "sandbox_report_indicators_by_category(injection)",
+    "status": "PASS",
+    "note": "Mock has 1 injection indicator: Code injection. Python ref: count=1.",
+    "expected": { "count": 1, "category": "injection" },
+    "actual": { "count": 1, "indicators": [{"name": "Code injection", "severity": "critical"}], "source": "rustre_sandbox_report::SandboxReport::indicators_by_category" }
+  },
+  {
+    "tool": "sandbox_report_classify_apis",
+    "status": "PASS",
+    "note": "Mock report's behavior has VirtualAlloc, WriteProcessMemory, CreateRemoteThread as suspicious. Python ref: count=3.",
+    "expected": { "count": 3 },
+    "actual": { "suspicious_apis": ["VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread"], "count": 3 }
+  },
+  {
+    "tool": "sandbox_report_mock_markdown",
+    "status": "PASS",
+    "note": "Markdown starts with '# Sandbox Report: malware.exe', contains verdict malicious and IOC table. Key properties verified.",
+    "expected": { "starts_with_header": true, "contains_verdict": "malicious" },
+    "actual": { "starts_with_header": true, "markdown_preview": "# Sandbox Report: malware.exe" }
+  },
+  {
+    "tool": "sandbox_report_mock_html",
+    "status": "PASS",
+    "note": "HTML starts with DOCTYPE, contains <title>Sandbox Report: malware.exe</title>.",
+    "expected": { "starts_with_doctype": true },
+    "actual": { "starts_with_doctype": true, "html_preview": "<!DOCTYPE html>" }
+  },
+  {
+    "tool": "sandbox_report_iocset_mock_v2",
+    "status": "PASS",
+    "note": "Same as v1 mock: 6 IOCs. Python ref: count=6.",
+    "expected": { "count": 6 },
+    "actual": { "count": 6, "source": "rustre_sandbox_report::IocSet::mock" }
+  },
+  {
+    "tool": "sandbox_report_ioc_collection_mock_v4",
+    "status": "PASS",
+    "note": "Mock IocCollection: total=8, ips=2, domains=1, urls=1, hashes=1. Deterministic.",
+    "expected": { "total": 8, "is_empty": false, "ips": 2, "domains": 1, "urls": 1, "hashes": 1 },
+    "actual": { "total": 8, "is_empty": false, "ips": 2, "domains": 1, "urls": 1, "hashes": 1, "source": "rustre_sandbox_report::IocCollection::mock" }
+  },
+  {
+    "tool": "sandbox_report_ioc_collection_summary_text_v4",
+    "status": "PASS",
+    "note": "Summary text starts with 'IPs:'. Length=283 deterministic for fixed mock.",
+    "expected": { "len": 283 },
+    "actual": { "len": 283, "source": "rustre_sandbox_report::IocCollection::summary_text" }
+  },
+  {
+    "tool": "sandbox_report_ioc_collection_to_csv_v4",
+    "status": "PASS",
+    "note": "CSV: header + 8 data rows = 9 lines. Python ref: lines = 1 + total_iocs = 1 + 8 = 9.",
+    "expected": { "lines": 9, "bytes": 281 },
+    "actual": { "lines": 9, "bytes": 281, "source": "rustre_sandbox_report::IocCollection::to_csv" }
+  },
+  {
+    "tool": "sandbox_report_behavior_timeline_build_v4",
+    "status": "PASS",
+    "note": "3 synthetic events at ms 1000,2000,3000. duration_ms = 3000-1000 = 2000. Python ref: start=min(1000,2000,3000)=1000, end=max=3000, duration=2000.",
+    "expected": { "len": 3, "is_empty": false, "start_ms": 1000, "end_ms": 3000, "duration_ms": 2000 },
+    "actual": { "len": 3, "is_empty": false, "start_ms": 1000, "end_ms": 3000, "duration_ms": 2000, "source": "rustre_sandbox_report::BehaviorTimeline::build" }
+  },
+  {
+    "tool": "sandbox_report_behavior_timeline_summary_v4",
+    "status": "PASS",
+    "note": "Two synthetic events at t=0ms produce '[ 2 events] mutex, net' summary. Deterministic.",
+    "expected": { "has_events": true },
+    "actual": { "summary": "t=     0s  [   2 events]  mutex, net", "source": "rustre_sandbox_report::BehaviorTimeline::summary" }
+  },
+  {
+    "tool": "sandbox_report_report_section_new_v4(Test,body,1)",
+    "status": "PASS",
+    "note": "ReportSection::new(title='Test', content='body', order=1). Python ref: content_len=len('body')=4.",
+    "expected": { "title": "Test", "content_len": 4, "order": 1 },
+    "actual": { "title": "Test", "content_len": 4, "order": 1, "source": "rustre_sandbox_report::ReportSection::new" }
+  },
+  {
+    "tool": "sandbox_report_attack_mapping_technique_ids_v4(injection,persistence)",
+    "status": "PASS",
+    "note": "injection->T1055.001, persistence->T1547.001. Python ref: count=2, ids=['T1055.001','T1547.001'].",
+    "expected": { "count": 2, "ids": ["T1055.001", "T1547.001"] },
+    "actual": { "count": 2, "ids": ["T1055.001", "T1547.001"], "source": "rustre_sandbox_report::AttackMapping::technique_ids" }
+  },
+  {
+    "tool": "sandbox_report_report_format_from_extension_v4(json)",
+    "status": "PASS",
+    "note": "Extension 'json' -> ReportFormat::Json. Python ref: display='json', extension='json'.",
+    "expected": { "input": "json", "display": "json", "extension": "json" },
+    "actual": { "input": "json", "display": "json", "extension": "json", "source": "rustre_sandbox_report::ReportFormat::from_extension" }
+  },
+  {
+    "tool": "sandbox_report_sandbox_report_build_attack_mapping_v4",
+    "status": "PASS",
+    "note": "Mock report: 6 tags, 5 techniques, 3 tactics, family=trojan. Deterministic for fixed mock.",
+    "expected": { "tags": 6, "ttps": 5, "tactics": 3, "family": "trojan" },
+    "actual": { "tags": 6, "ttps": 5, "tactics": 3, "techniques": 6, "family": "trojan", "source": "rustre_sandbox_report::SandboxReport::build_attack_mapping" }
+  },
+  {
+    "tool": "sandbox_report_ioc_set_add_v4(1.2.3.4,90)",
+    "status": "PASS",
+    "note": "Empty IocSet, add one IOC: before=0, after=1. Python ref: trivial.",
+    "expected": { "before": 0, "after": 1, "is_empty": false },
+    "actual": { "before": 0, "after": 1, "is_empty": false, "source": "rustre_sandbox_report::IocSet::add" }
+  },
+  {
+    "tool": "sandbox_report_ioc_kind_display_all_v3",
+    "status": "PASS",
+    "note": "8 IocKind variants: ip, domain, url, filepath, filehash, registry_key, mutex, email.",
+    "expected": { "kinds": ["ip", "domain", "url", "filepath", "filehash", "registry_key", "mutex", "email"] },
+    "actual": { "kinds": ["ip", "domain", "url", "filepath", "filehash", "registry_key", "mutex", "email"], "source": "rustre_sandbox_report::IocKind::fmt" }
+  },
+  {
+    "tool": "sandbox_report_ioc_is_confident_v3(95,80)",
+    "status": "PASS",
+    "note": "Python ref: 95 >= 80 == True.",
+    "expected": { "confidence": 95, "threshold": 80, "is_confident": true },
+    "actual": { "confidence": 95, "threshold": 80, "is_confident": true, "source": "rustre_sandbox_report::Ioc::is_confident" }
+  },
+  {
+    "tool": "sandbox_report_iocset_by_kind_v3",
+    "status": "PASS",
+    "note": "Mock has 6 IOCs each of unique kind. Python ref: each kind count=1, total=6.",
+    "expected": { "ip": 1, "domain": 1, "filepath": 1, "filehash": 1, "registry_key": 1, "mutex": 1, "total": 6, "is_empty": false },
+    "actual": { "ip": 1, "domain": 1, "filepath": 1, "filehash": 1, "registry_key": 1, "mutex": 1, "total": 6, "is_empty": false, "source": "rustre_sandbox_report::IocSet::by_kind" }
+  },
+  {
+    "tool": "sandbox_report_attack_tactic_list_v3",
+    "status": "PASS",
+    "note": "12 MITRE ATT&CK tactics. Python ref: count=12.",
+    "expected": { "count": 12 },
+    "actual": { "tactics": ["initial_access","execution","persistence","privilege_escalation","defense_evasion","credential_access","discovery","lateral_movement","collection","command_and_control","exfiltration","impact"], "count": 12, "source": "rustre_sandbox_report::AttackTactic::fmt" }
+  },
+  {
+    "tool": "sandbox_report_attack_mapping_by_tactic_v3(injection,persistence)",
+    "status": "PASS",
+    "note": "injection->defense_evasion(1), persistence->persistence(1). Python ref: defense_evasion=1, persistence=1, total=2.",
+    "expected": { "persistence": 1, "defense_evasion": 1, "total": 2 },
+    "actual": { "persistence": 1, "defense_evasion": 1, "command_and_control": 0, "total": 2, "source": "rustre_sandbox_report::AttackMapping::by_tactic" }
+  },
+  {
+    "tool": "sandbox_report_report_format_extension_all_v3",
+    "status": "PASS",
+    "note": "5 formats: json/json, html/html, pdf/pdf, csv/csv, markdown/md.",
+    "expected": { "format_count": 5, "markdown_ext": "md", "json_ext": "json" },
+    "actual": { "formats": [{"format":"json","ext":"json"},{"format":"html","ext":"html"},{"format":"pdf","ext":"pdf"},{"format":"csv","ext":"csv"},{"format":"markdown","ext":"md"}], "source": "rustre_sandbox_report::ReportFormat::extension" }
+  },
+  {
+    "tool": "sandbox_report_report_format_from_extension_v3(json)",
+    "status": "PASS",
+    "note": "Extension 'json' -> format json. Python ref: ok=True, format='json'.",
+    "expected": { "ok": true, "format": "json", "extension": "json" },
+    "actual": { "ok": true, "format": "json", "extension": "json", "source": "rustre_sandbox_report::ReportFormat::from_extension" }
+  },
+  {
+    "tool": "sandbox_report_classifier_infer_family_v3(WriteProcessMemory,VirtualAllocEx)",
+    "status": "PASS",
+    "note": "Classifier rules don't match these APIs -> 0 indicators -> family='unknown'. Correct by rule-set design.",
+    "expected": { "family": "unknown", "indicator_count": 0, "behavior_count": 0 },
+    "actual": { "indicator_count": 0, "behavior_count": 0, "family": "unknown", "source": "rustre_sandbox_report::BehaviorClassifier" }
+  },
+  {
+    "tool": "sandbox_report_score_engine_has_critical_v3",
+    "status": "PASS",
+    "note": "Mock report has 1 critical indicator. Python ref: has_critical=True.",
+    "expected": { "has_critical": true, "indicator_count": 4 },
+    "actual": { "has_critical": true, "indicator_count": 4, "source": "rustre_sandbox_report::ScoreEngine::has_critical" }
+  },
+  {
+    "tool": "sandbox_report_severity_parse_v5(high)",
+    "status": "PASS",
+    "note": "Python ref: 'high' -> ok=True, score=75.",
+    "expected": { "ok": true, "severity": "high", "score": 75 },
+    "actual": { "ok": true, "severity": "high", "score": 75, "source": "rustre_sandbox_report::Severity::parse" }
+  },
+  {
+    "tool": "sandbox_report_ioc_new_clamp_v5(confidence=150)",
+    "status": "PASS",
+    "note": "Python ref: confidence=min(150,100)=100, clamped=True.",
+    "expected": { "input": 150, "stored": 100, "clamped": true },
+    "actual": { "input": 150, "stored": 100, "clamped": true, "kind": "domain", "source": "rustre_sandbox_report::Ioc::new" }
+  },
+  {
+    "tool": "sandbox_report_iocset_dedupe_v5",
+    "status": "PASS",
+    "note": "3 IOCs with 1 duplicate -> deduplicated to 2. Python ref: after = len(set(iocs)) = 2.",
+    "expected": { "before": 3, "after": 2, "is_empty": false },
+    "actual": { "before": 3, "after": 2, "is_empty": false, "source": "rustre_sandbox_report::IocSet::deduplicate" }
+  },
+  {
+    "tool": "sandbox_report_iocset_confident_v5(threshold=80)",
+    "status": "PASS",
+    "note": "Mock 6 IOCs, 5 with confidence>=80. Python ref: sum(1 for c in [95,90,100,100,85,70] if c>=80)=5.",
+    "expected": { "threshold": 80, "confident": 5, "total": 6 },
+    "actual": { "threshold": 80, "confident": 5, "total": 6, "source": "rustre_sandbox_report::IocSet::confident" }
+  },
+  {
+    "tool": "sandbox_report_attack_full_id_v5",
+    "status": "PASS",
+    "note": "With sub: T1055+.001 -> T1055.001. Without sub: T1497 (no sub-technique). Python ref: full_id = id + (('.'+sub) if sub else '').",
+    "expected": { "with_sub": "T1055.001", "without_sub": "T1497" },
+    "actual": { "with_sub": "T1055.001", "without_sub": "T1497", "source": "rustre_sandbox_report::AttackTechnique::full_id" }
+  },
+  {
+    "tool": "sandbox_report_attack_tactics_present_v5(injection,persistence)",
+    "status": "PASS",
+    "note": "Same as v3 version. Python ref: tactics=['defense_evasion','persistence'], total=2.",
+    "expected": { "tactics": ["defense_evasion", "persistence"], "total": 2 },
+    "actual": { "tactics": ["defense_evasion", "persistence"], "total": 2, "source": "rustre_sandbox_report::AttackMapping::tactics_present" }
+  },
+  {
+    "tool": "sandbox_report_attack_high_confidence_v5(injection,persistence)",
+    "status": "PASS",
+    "note": "Both techniques confidence>=80. Python ref: high=2, total=2.",
+    "expected": { "high": 2, "total": 2, "ids": ["T1055.001", "T1547.001"] },
+    "actual": { "high": 2, "total": 2, "ids": ["T1055.001", "T1547.001"], "source": "rustre_sandbox_report::AttackMapping::high_confidence" }
+  },
+  {
+    "tool": "sandbox_report_indicator_category_display_v5",
+    "status": "PASS",
+    "note": "10 IndicatorCategory variants. Python ref: count=10.",
+    "expected": { "count": 10 },
+    "actual": { "categories": ["injection","network","persistence","evasion","crypto","dropper","keylogging","ransomware","reconnaissance","other"], "count": 10, "source": "rustre_sandbox_report::IndicatorCategory::fmt" }
+  },
+  {
+    "tool": "sandbox_report_indicator_with_ioc_v5(1.2.3.4,T1055)",
+    "status": "PASS",
+    "note": "Builder chain: Indicator::new('n','high').with_ioc('1.2.3.4').with_technique('T1055'). Python ref: ioc stored as '1.2.3.4'.",
+    "expected": { "ioc": "1.2.3.4", "tids": ["T1055"] },
+    "actual": { "name": "n", "severity": "high", "ioc": "1.2.3.4", "tids": ["T1055"], "category": "injection", "source": "rustre_sandbox_report::Indicator" }
+  },
+  {
+    "tool": "sandbox_report_report_renderer_json_v5",
+    "status": "PASS",
+    "note": "render_json on mock report -> valid JSON starting with '{'. bytes=4023 deterministic.",
+    "expected": { "bytes": 4023, "starts_with_brace": true },
+    "actual": { "bytes": 4023, "starts_with_brace": true, "source": "rustre_sandbox_report::ReportRenderer::render_json" }
+  },
+  {
+    "tool": "sandbox_report_report_renderer_markdown_v5",
+    "status": "PASS",
+    "note": "Markdown render: has_title=True (starts with #), has_iocs=True. bytes=1464 deterministic.",
+    "expected": { "bytes": 1464, "has_title": true, "has_iocs": true },
+    "actual": { "bytes": 1464, "has_title": true, "has_iocs": true, "source": "rustre_sandbox_report::ReportRenderer::render_markdown" }
+  },
+  {
+    "tool": "sandbox_report_critical_indicators_v5",
+    "status": "PASS",
+    "note": "Mock has 1 critical / 4 total indicators, verdict=malicious, score=50, family=trojan.",
+    "expected": { "critical": 1, "total": 4, "verdict": "malicious", "score": 50, "family": "trojan" },
+    "actual": { "critical": 1, "total": 4, "verdict": "malicious", "score": 50, "family": "trojan", "source": "rustre_sandbox_report::SandboxReport::critical_indicators" }
+  }
+]

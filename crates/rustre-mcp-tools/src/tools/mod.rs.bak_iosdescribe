@@ -1,0 +1,207 @@
+//! MCP tool sub-modules, one per rustre-* crate.
+pub mod adb;
+pub mod adf;
+pub mod agent;
+pub mod an_cfg;
+pub mod analysis;
+pub mod analysis_cfg;
+pub mod analysis_typerecov;
+pub mod arch6502;
+pub mod arch68k;
+pub mod arch_cil;
+pub mod arch_dex;
+pub mod arch_jvm;
+pub mod arch_lua;
+pub mod arch_wasm;
+pub mod arch_x86;
+pub mod arm;
+pub mod arm64;
+pub mod avr;
+pub mod axr;
+pub mod bpf;
+pub mod callconv;
+pub mod codeview;
+pub mod crypto;
+pub mod db_base_migrations;
+pub mod debug;
+// [Implement-phase 2026-07-18] self-contained debug.* capability modules.
+pub mod debug_execution_heatmap;
+pub mod debug_root_cause_ranking;
+pub mod debug_tracepoints;
+pub mod debug_conditional_breakpoints;
+// debug_ttd_navigation_extra superseded 2026-07-18: its ttd_seek/
+// run_to_previous_call/history tools are now LIVE-wired in tools/debug.rs
+// against sess.ttd. File removed.
+pub mod debug_dataflow_dsl_query;
+// [Frontier 2026-07-22] novel capabilities not present in WinDbg/GDB/rr/x64dbg/IDA.
+pub mod debug_live_invariant;
+/// Retroactive print (Pernosco-style): annotate address → format → timeline.
+pub mod debug_retroactive_print;
+pub mod debug_semantic_run_diff;
+pub mod debug_causal_contribution;
+/// Natural-language query front-end: translate/execute free-form debug questions.
+pub mod debug_nl_query;
+/// TTD trace open / seek / memory / step tools (WinDbg TTD + rr backends).
+pub mod debug_ttd_open;
+// [DISABLED 2026-07-12] rustre-debug-macos dep disabled.
+// pub mod debug_macos;
+// [DISABLED 2026-07-12] rustre-debug-unicorn dep disabled.
+// pub mod debug_unicorn;
+// [DISABLED 2026-07-12] rustre-debug-windbg dep disabled.
+// pub mod debug_windbg;
+// [DISABLED 2026-07-12] rustre-debug-windows dep disabled.
+// pub mod debug_windows;
+pub mod decomp;
+pub mod decomp2;
+pub mod decompiler;
+pub mod decompiler_expr;
+pub mod decompiler_type;
+pub mod demangle;
+pub mod deobf;
+pub mod diff;
+pub mod dm;
+pub mod dotnet;
+pub mod dotnet_edit;
+pub mod dotnet_metadata;
+pub mod dt;
+pub mod dwarf;
+pub mod emu;
+// [DISABLED 2026-07-12] rustre-emu-unicorn dep disabled.
+// pub mod emu_unicorn;
+pub mod events;
+pub mod f;
+pub mod ffs;
+pub mod firmware;
+pub mod flirt;
+pub mod flirt_apply;
+pub mod flirt_gen;
+pub mod forensics;
+pub mod forensics_fs;
+pub mod forensics_mem;
+// [DISABLED 2026-07-12] rustre-debug-frida dep disabled.
+// pub mod frida;
+pub mod function;
+pub mod fuzz;
+pub mod fuzz_afl;
+pub mod fuzz_cov;
+pub mod fuzz_libfuzzer;
+pub mod fuzz_net;
+pub mod fuzz_san;
+// [DISABLED 2026-07-12] rustre-debug-gdb dep disabled.
+// pub mod gdb;
+// [DISABLED 2026-07-12] Ghidra sub-modules — rustre-decompiler-ghidra dep disabled.
+// pub mod ghidra;
+// pub mod ghidra_backend;
+// pub mod ghidra_pcode;
+pub mod hex;
+pub mod hex_pattern;
+pub mod hex_template;
+pub mod hex_view;
+pub mod iadl;
+pub mod il_hlil;
+pub mod il_lift;
+pub mod il_mlil;
+pub mod il_passes;
+pub mod ios;
+// [DISABLED 2026-07-12] rustre-debug-kgdb dep disabled.
+// pub mod kgdb;
+pub mod llm;
+pub mod loader;
+pub mod lua;
+pub mod luajit;
+pub mod m68k;
+pub mod malpedia;
+pub mod mem;
+pub mod misc;
+pub mod mem_diff;
+pub mod mem_kx7;
+pub mod mem_ma;
+pub mod mhcde;
+pub mod mips;
+pub mod mobile;
+pub mod mobile_apktool;
+pub mod mobile_dyld;
+pub mod mobile_ios;
+pub mod mobile_ipa;
+pub mod mobile_jadx;
+pub mod mobile_smali;
+pub mod msp430;
+pub mod net;
+pub mod net_dissect;
+pub mod net_dns;
+pub mod net_pcap;
+pub mod net_proxy;
+pub mod net_rules;
+pub mod noreturn;
+pub mod patch;
+pub mod pe;
+pub mod pe_editor;
+pub mod plugin;
+pub mod ppc;
+pub mod python;
+pub mod rd;
+pub mod reconstruction;
+pub mod recover;
+pub mod rhai;
+pub mod rlib_dec;
+pub mod rlib_dec2;
+pub mod rs;
+pub mod rs_sym;
+pub mod rustre_decompiler;
+pub mod rustre_symb;
+pub mod rv;
+pub mod sandbox;
+pub mod sandbox_report;
+pub mod script;
+pub mod script_lua;
+pub mod script_python;
+pub mod script_rhai;
+pub mod smali;
+pub mod sparc;
+pub mod sr;
+pub mod stabs;
+pub mod stack;
+pub mod survey;
+pub mod symb;
+// [DISABLED 2026-07-12] rustre-symb-z3 dep disabled.
+// pub mod symb_z3;
+pub mod symbols;
+pub mod symbols_pdb;
+pub mod symbols_stabs;
+pub mod symbols_v6;
+pub mod symbols_v7;
+pub mod syscalls;
+pub mod syscalls_linux;
+pub mod linux_debug;
+pub mod syscalls_windows;
+pub mod sysinternals;
+pub mod threatintel;
+pub mod threatintel_group;
+pub mod threatintel_indicator;
+pub mod threatintel_ioc;
+pub mod ti;
+pub mod ti_malpedia;
+pub mod ti_misp;
+pub mod ti_opencti;
+pub mod ti_otx;
+pub mod ti_vt;
+pub mod trace;
+pub mod trace_cov;
+pub mod trace_coverage;
+pub mod trace_navigate;
+pub mod trace_pt;
+pub mod triage_die;
+pub mod triage_entropy;
+pub mod ttd;
+pub mod ttd_query;
+pub mod ttd_recorder;
+pub mod ttd_replay;
+pub mod ttd_replayer;
+pub mod vmlift;
+pub mod vsa;
+pub mod vtable;
+// [DISABLED 2026-07-12] rustre-debug-windbg dep disabled.
+// pub mod windbg;
+pub mod wire;
+pub mod yara;
+pub mod z80;

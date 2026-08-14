@@ -1,0 +1,25 @@
+[
+  {
+    "note": "All patch_* MCP tools are fully covered by rigorous_patch_v2.json (7 tools PASS) and skip_patch.json (7 tools SKIP). No remaining tools require hardening in this round.",
+    "tools_verified": [
+      "patch_parse_hex_bytes",
+      "patch_assemble_simple",
+      "patch_compute_pe_checksum",
+      "patch_pe_security_summary",
+      "patch_binary_diff",
+      "patch_binary_patch",
+      "patch_build_delta"
+    ],
+    "tools_skipped": [
+      "patch_patch_find_code_caves",
+      "patch_bytes_at_va",
+      "patch_nop_range_at_va",
+      "patch_asm_at_va",
+      "patch_patch_xor_region_at_va",
+      "patch_pe_security_set",
+      "patch_pe_va_to_file_offset"
+    ],
+    "mismatches": [],
+    "status": "COMPLETE"
+  }
+]

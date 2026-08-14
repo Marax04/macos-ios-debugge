@@ -1,0 +1,22 @@
+{
+  "crate": "rustre-fuzz-net",
+  "tests": 0,
+  "mismatches": 0,
+  "match": false,
+  "mcp_outputs": {},
+  "validator_outputs": {
+    "smoke_test": "rustre-fuzz-net validator: OK"
+  },
+  "notes": [
+    "No MCP tools expose rustre-fuzz-net functionality. Grep over crates/rustre-mcp-tools, crates/rustre-mcp-server, and wire_tools.rs returned no matches for fuzz_net/FuzzNet/NetFuzz.",
+    "The Rust crate exists (crates/rustre-fuzz-net/src/lib.rs) but is not surfaced through the MCP server (target/release/rustre-mcp.exe).",
+    "The Python validator at validation/validators/rustre-fuzz-net.py only contains a smoke test in __main__ (no parameterized test cases to forward via JSON-RPC).",
+    "Therefore no direct comparison was possible; match=false reflects an integration gap rather than a value mismatch."
+  ],
+  "mismatches_list": [
+    {
+      "type": "missing_mcp_coverage",
+      "detail": "rustre-fuzz-net public API (MessageDef, ProtocolDef, frame_u32_le, xor_checksum, add_checksum, CrashDetector, NetworkStateMachine, ProtocolModel, TlsFuzzer, ReplayEngine, etc.) has zero MCP wrapper tools."
+    }
+  ]
+}

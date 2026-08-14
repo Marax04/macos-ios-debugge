@@ -1,0 +1,100 @@
+{
+  "wasm_garbage": [
+    "arch_wasm_limits_decode",
+    "arch_wasm_functype_decode",
+    "arch_wasm_module_header_parse",
+    "arch_wasm_disassemble",
+    "arch_wasm_memory_type_decode",
+    "arch_wasm_table_type_decode",
+    "arch_wasm_global_type_decode",
+    "arch_wasm_function_stats",
+    "arch_wasm_decode_fc_prefix",
+    "arch_wasm_decode_fd_prefix",
+    "arch_wasm_decode_fe_prefix",
+    "arch_wasm_decode_func_type",
+    "arch_wasm_functype_arity"
+  ],
+  "demangle_inapplicable": [
+    "demangle_rust_v0_wire",
+    "demangle_rust_legacy_wire",
+    "demangle_rust_auto_wire",
+    "demangle_cpp_itanium_wire",
+    "demangle_cpp_msvc_wire",
+    "demangle_cpp_auto_wire"
+  ],
+  "dotnet_pe_too_small": [
+    "dotnet_edit_signature_stripper_strip",
+    "dotnet_edit_assembly_patcher_patch_u32",
+    "dotnet_edit_il_patch_remove",
+    "dotnet_edit_il_patch_replace_v2",
+    "dotnet_edit_il_patch_insert_before",
+    "dotnet_edit_il_patch_insert_after",
+    "dotnet_metadata_validate"
+  ],
+  "frida_no_agent": [
+    "debug_frida_install_hook_detached_errors",
+    "debug_frida_execute_script_detached_errors",
+    "debug_frida_scan_memory_detached"
+  ],
+  "semantic_mismatch": [
+    {
+      "tool": "net_rules_parse_single",
+      "reason": "Valid YARA rule syntax `rule test { strings: $a = \"test\" condition: $a }` rejected with 'missing options block ('. Parser appears to expect a non-standard options block that standard YARA does not require, indicating a semantic mismatch between the documented input format and the implementation."
+    }
+  ],
+  "other_error_body": [
+    {"tool": "diff.compare", "reason": "Expected: binary not loaded when called with empty IDs."},
+    {"tool": "flirt_sig_file_parse_wire", "reason": "Expected: sig file too short when given minimal bytes."},
+    {"tool": "fuzz_libfuzzer_structured_deserialize", "reason": "Expected: field length OOB when given random bytes."},
+    {"tool": "fuzz_san_ubsan_check_access", "reason": "Expected: NullDeref when checking null pointer access."},
+    {"tool": "gdb_packet_decode", "reason": "Expected: framing error on empty packet."},
+    {"tool": "gdb_stop_reply_parse", "reason": "Expected: framing error on empty stop-reply."},
+    {"tool": "il_lift_x86_reg_id", "reason": "Expected: unknown register name for empty/invalid register string."},
+    {"tool": "kgdb_rsp_verify_checksum_bytes", "reason": "Expected: bad checksum hex on empty input."},
+    {"tool": "loader_java_parse_class", "reason": "Expected: invalid magic on non-Java bytes."},
+    {"tool": "loader_android_verify_dex_checksum", "reason": "Expected: checksum mismatch on 16-byte DEX stub (checksum covers payload bytes not matching)."},
+    {"tool": "loader_rich_load_result_auto", "reason": "Expected: no loader for Unknown format."},
+    {"tool": "lua_bc_header_parse", "reason": "Expected: truncated data on minimal bytes."},
+    {"tool": "lua_bc_module_parse", "reason": "Expected: truncated data on minimal bytes."},
+    {"tool": "lua_bc_read_string", "reason": "Expected: truncated data on minimal bytes."},
+    {"tool": "lua_loader_lua_header_parse", "reason": "Expected: invalid magic on non-Lua bytes."},
+    {"tool": "lua_loader_lua_bytecode_loader_load", "reason": "Expected: invalid magic on non-Lua bytes."},
+    {"tool": "lua_loader_lua_header_to_endian", "reason": "Expected: invalid magic on non-Lua bytes."},
+    {"tool": "lua_loader_lua_bytecode_parse", "reason": "Expected: invalid magic on non-Lua bytes."},
+    {"tool": "lua_loader_read_string_lua", "reason": "Expected: unsupported size_t_size 0 on empty input."},
+    {"tool": "mem_null_provider_read_v5", "reason": "Expected: NullMemoryProvider always errors on read by design."},
+    {"tool": "mobile_ipa_entitlements_from_plist", "reason": "Expected: invalid UTF-8 on binary input."},
+    {"tool": "net_proxy_parse_request_line", "reason": "Expected: malformed request line on empty input."},
+    {"tool": "net_proxy_parse_status_line", "reason": "Expected: malformed status line on empty input."},
+    {"tool": "net_proxy_http_connect_request_parse", "reason": "Expected: empty request error on empty input."},
+    {"tool": "net_proxy_http_status_classify", "reason": "Expected: malformed status line on empty input."},
+    {"tool": "net_proxy_http_request_line_version", "reason": "Expected: malformed request line on empty input."},
+    {"tool": "net_proxy_socks5_udp_header_parse", "reason": "Expected: unsupported address type on 0xde byte."},
+    {"tool": "sandbox_report_report_format_from_extension_v3", "reason": "Expected: unknown format on empty extension string."},
+    {"tool": "sandbox_report_severity_parse_v5", "reason": "Expected: unknown severity on empty string."},
+    {"tool": "symbols_pdb_from_bytes", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_symbols_list", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_symbols_count_by_kind", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_module_proc_symbols", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_symbols_with_segment", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_reader_types", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_reader_modules", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_reader_guid", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_reader_symbols_count", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_types_by_kind", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_module_proc_count", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_symbols_filter_functions", "reason": "Expected: bad MSF magic on non-PDB bytes."},
+    {"tool": "symbols_pdb_stream_info_signature", "reason": "Expected: invalid PDB or too short on non-PDB bytes."},
+    {"tool": "triage_die_compiler_detect", "reason": "Expected: file too small to parse (16 bytes) on minimal input."},
+    {"tool": "triage_die_compiler_detect_with_threshold", "reason": "Expected: file too small to parse (16 bytes) on minimal input."},
+    {"tool": "ttd_query_parse", "reason": "Expected: unrecognised query on literal string 'test'."},
+    {"tool": "ttd_replayer_query_parse_kind", "reason": "Expected: unknown command SELECT - tool uses custom TTD query language, not SQL."}
+  ],
+  "empty_result": [
+    {
+      "tool": "malpedia_check_ruleset_quality",
+      "expected_content": true,
+      "note": "Returns [] — tool name implies it should return quality issues/diagnostics for a ruleset. Empty list may be valid if no rules were provided, but should be investigated."
+    }
+  ]
+}

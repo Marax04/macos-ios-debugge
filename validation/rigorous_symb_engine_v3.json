@@ -1,0 +1,336 @@
+{
+  "module": "symb_engine",
+  "tools_hardened": 33,
+  "checks_passed": 33,
+  "checks_failed": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "symb_engine_check_satisfiable_const",
+      "status": "PASS",
+      "data": {
+        "input_len": 3,
+        "satisfiable": true,
+        "source": "rustre_symb_engine::full_symex::check_satisfiable"
+      }
+    },
+    {
+      "tool": "symb_engine_default_solver",
+      "status": "PASS",
+      "data": {
+        "solver": "BitBlasting"
+      }
+    },
+    {
+      "tool": "symb_engine_default_strategy",
+      "status": "PASS",
+      "data": {
+        "strategy": "Dfs"
+      }
+    },
+    {
+      "tool": "symb_engine_exec_config_default",
+      "status": "PASS",
+      "data": {
+        "max_steps": 1000,
+        "max_paths": 64,
+        "explore_both_branches": true
+      }
+    },
+    {
+      "tool": "symb_engine_executor_config_custom",
+      "status": "PASS",
+      "data": {
+        "max_states": 10,
+        "max_depth": 5,
+        "state_merging": false,
+        "solver": "BitBlasting",
+        "timeout_ms": 1000,
+        "strategy": "Dfs",
+        "source": "rustre_symb_engine::ExecutorConfig"
+      }
+    },
+    {
+      "tool": "symb_engine_executor_config_default",
+      "status": "PASS",
+      "data": {
+        "max_states": 1024,
+        "max_depth": 512,
+        "state_merging": false,
+        "timeout_ms": 0
+      }
+    },
+    {
+      "tool": "symb_engine_executor_config_defaults",
+      "status": "PASS",
+      "data": {
+        "max_states": 1024,
+        "max_depth": 512,
+        "state_merging": false,
+        "timeout_ms": 0,
+        "source": "rustre_symb_engine::ExecutorConfig::default"
+      }
+    },
+    {
+      "tool": "symb_engine_executor_config_defaults_v3",
+      "status": "PASS",
+      "data": {
+        "max_states": 1024,
+        "max_depth": 512,
+        "state_merging": false,
+        "solver": "BitBlasting",
+        "timeout_ms": 0,
+        "strategy": "Dfs",
+        "source": "rustre_symb_engine::ExecutorConfig::default"
+      }
+    },
+    {
+      "tool": "symb_engine_exploration_strategy_list",
+      "status": "PASS",
+      "data": {
+        "strategies": [
+          "Dfs",
+          "Bfs",
+          "RandomWalk",
+          "CoverageGuided"
+        ],
+        "default": "Dfs",
+        "source": "rustre_symb_engine::ExplorationStrategy"
+      }
+    },
+    {
+      "tool": "symb_engine_expr_depth_chain_add",
+      "status": "PASS",
+      "data": {
+        "depth_input": 1,
+        "expr_depth": 0,
+        "source": "rustre_symb_engine::analysis::expr_depth"
+      }
+    },
+    {
+      "tool": "symb_engine_expr_node_count_chain_add",
+      "status": "PASS",
+      "data": {
+        "depth_input": 1,
+        "node_count": 1,
+        "source": "rustre_symb_engine::analysis::expr_node_count"
+      }
+    },
+    {
+      "tool": "symb_engine_format_path_conditions_const",
+      "status": "PASS",
+      "data": {
+        "input_len": 3,
+        "formatted": "  [0] (_ bv1 64)\n  [1] (_ bv2 64)\n  [2] (_ bv4 64)\n",
+        "source": "rustre_symb_engine::analysis::format_path_conditions"
+      }
+    },
+    {
+      "tool": "symb_engine_function_summary_new",
+      "status": "PASS",
+      "data": {
+        "address": 5368771180,
+        "may_not_return": false,
+        "source": "rustre_symb_engine::FunctionSummary::new"
+      }
+    },
+    {
+      "tool": "symb_engine_function_summary_new_v3",
+      "status": "PASS",
+      "data": {
+        "address": 5368771180,
+        "has_name": false,
+        "output_register_count": 0,
+        "memory_write_count": 0,
+        "has_return_value": false,
+        "may_not_return": false,
+        "source": "rustre_symb_engine::FunctionSummary::new"
+      }
+    },
+    {
+      "tool": "symb_engine_halt_reason_list",
+      "status": "PASS",
+      "data": {
+        "variants": [
+          "MaxSteps",
+          "ExplicitHalt",
+          "Unreachable",
+          "Error(example)"
+        ],
+        "source": "rustre_symb_engine::HaltReason"
+      }
+    },
+    {
+      "tool": "symb_engine_has_contradiction_const",
+      "status": "PASS",
+      "data": {
+        "input_len": 3,
+        "has_contradiction": false,
+        "source": "rustre_symb_engine::analysis::has_contradiction"
+      }
+    },
+    {
+      "tool": "symb_engine_lifted_instr_new",
+      "status": "PASS",
+      "data": {
+        "address": 5368771180,
+        "original_mnemonic": "mnemonic",
+        "ir_text": "mnemonic"
+      }
+    },
+    {
+      "tool": "symb_engine_loop_bound_analysis_add_edge",
+      "status": "PASS",
+      "data": {
+        "loop_count": 1,
+        "bound_for_to": 0,
+        "to_is_loop_header": true,
+        "source": "rustre_symb_engine::analysis::LoopBoundAnalysis"
+      }
+    },
+    {
+      "tool": "symb_engine_loop_bound_analysis_new",
+      "status": "PASS",
+      "data": {
+        "default_bound": 0,
+        "back_edges_len": 0,
+        "bounds_len": 0,
+        "source": "rustre_symb_engine::analysis::LoopBoundAnalysis::new"
+      }
+    },
+    {
+      "tool": "symb_engine_simplify_constraints_len",
+      "status": "PASS",
+      "data": {
+        "input_len": 3,
+        "simplified_len": 2,
+        "source": "rustre_symb_engine::analysis::simplify_constraints"
+      }
+    },
+    {
+      "tool": "symb_engine_solver_type_list",
+      "status": "PASS",
+      "data": {
+        "solvers": [
+          "BitBlasting",
+          "SmtLib2",
+          "Z3"
+        ],
+        "default": "BitBlasting",
+        "source": "rustre_symb_engine::SolverType"
+      }
+    },
+    {
+      "tool": "symb_engine_state_manager_empty_stats",
+      "status": "PASS",
+      "data": {
+        "len": 0,
+        "is_empty": true,
+        "total_enqueued": 0,
+        "pruned": 0,
+        "source": "rustre_symb_engine::StateManager::new"
+      }
+    },
+    {
+      "tool": "symb_engine_state_manager_new",
+      "status": "PASS",
+      "data": {
+        "len": 0,
+        "is_empty": true,
+        "total_enqueued": 0,
+        "pruned": 0,
+        "source": "rustre_symb_engine::StateManager::new"
+      }
+    },
+    {
+      "tool": "symb_engine_state_manager_new_len",
+      "status": "PASS",
+      "data": {
+        "len": 0,
+        "is_empty": true,
+        "source": "rustre_symb_engine::StateManager::new+len"
+      }
+    },
+    {
+      "tool": "symb_engine_state_merger_hash_constraints",
+      "status": "PASS",
+      "data": {
+        "input_len": 3,
+        "hash": 9042769698631238780,
+        "source": "rustre_symb_engine::state_merger::MergeKey::hash_constraints"
+      }
+    },
+    {
+      "tool": "symb_engine_symbolic_address_concrete",
+      "status": "PASS",
+      "data": {
+        "address": 5368771180,
+        "is_concrete": true,
+        "concrete_value": 5368771180,
+        "source": "rustre_symb_engine::SymbolicAddress::Concrete"
+      }
+    },
+    {
+      "tool": "symb_engine_symbolic_executor_stats",
+      "status": "PASS",
+      "data": {
+        "live_states": 0,
+        "total_enqueued": 0,
+        "pruned_states": 0,
+        "visited_addresses": 0,
+        "vuln_count": 0,
+        "source": "rustre_symb_engine::SymbolicExecutor::with_default_config"
+      }
+    },
+    {
+      "tool": "symb_engine_symbolic_interpreter_state_new",
+      "status": "PASS",
+      "data": {
+        "regs": 0,
+        "memory": 0
+      }
+    },
+    {
+      "tool": "symb_engine_vuln_detector_empty",
+      "status": "PASS",
+      "data": {
+        "finding_count": 0,
+        "source": "rustre_symb_engine::VulnDetector::new"
+      }
+    },
+    {
+      "tool": "symb_engine_vuln_detector_new",
+      "status": "PASS",
+      "data": {
+        "findings_count": 0
+      }
+    },
+    {
+      "tool": "symb_engine_vuln_detector_register_free",
+      "status": "PASS",
+      "data": {
+        "freed_address": 5368771180,
+        "finding_count": 0,
+        "source": "rustre_symb_engine::VulnDetector::register_free"
+      }
+    },
+    {
+      "tool": "symb_engine_widen_sequence_check",
+      "status": "PASS",
+      "data": {
+        "widenable": false,
+        "count": 3,
+        "source": "rustre_symb_engine::loop_summarizer::widen_sequence"
+      }
+    },
+    {
+      "tool": "symb_engine_widen_sequence_expr",
+      "status": "PASS",
+      "data": {
+        "widenable": false,
+        "expr_debug": null,
+        "source": "rustre_symb_engine::loop_summarizer::widen_sequence"
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "crate": "rustre-deobf-vmlift",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches": [
+    {
+      "kind": "missing_validator",
+      "detail": "C:/Users/Fra/Desktop/RustRE/validation/validators/rustre-deobf-vmlift.py does not exist (closest sibling: rustre-deobf-vm.py)"
+    },
+    {
+      "kind": "missing_mcp_tools",
+      "detail": "No tools matching 'vmlift' found in crates/rustre-mcp-tools/src/wire_tools.rs; crate is not wired to the MCP server"
+    }
+  ],
+  "match": false,
+  "tests": 0
+}

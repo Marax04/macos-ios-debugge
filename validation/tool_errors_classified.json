@@ -1,0 +1,494 @@
+{
+ "OK_parse_error": {
+  "count": 233,
+  "samples": [
+   "kg.query",
+   "lua_loader_lua_header_is_official_format_wx1",
+   "mobile_dyld_parse_dyld_magic",
+   "mobile_dyld_format_uuid",
+   "mobile_dyld_header_uuid_string"
+  ]
+ },
+ "BUG_field_sent_but_missing": {
+  "count": 102,
+  "samples": [
+   {
+    "tool": "kg.set_function_name",
+    "field": "addr",
+    "input": {
+     "binary_id": "bin-0001",
+     "addr": 5368771180,
+     "name": "main"
+    },
+    "msg": "execution failed: invalid params: missing 'addr'"
+   },
+   {
+    "tool": "kg.set_comment",
+    "field": "addr",
+    "input": {
+     "binary_id": "bin-0001",
+     "addr": 5368771180,
+     "text": "hello world"
+    },
+    "msg": "execution failed: invalid params: missing 'addr'"
+   },
+   {
+    "tool": "kg.get_function",
+    "field": "addr",
+    "input": {
+     "binary_id": "bin-0001",
+     "addr": 5368771180
+    },
+    "msg": "execution failed: invalid params: missing 'addr'"
+   },
+   {
+    "tool": "threatintel_db_get_w3",
+    "field": "value",
+    "input": {
+     "value": 8,
+     "ioc_type": "call"
+    },
+    "msg": "execution failed: execution failed: invalid params: missing 'value'"
+   },
+   {
+    "tool": "threatintel_group_link_ioc_w3",
+    "field": "value",
+    "input": {
+     "group": "default",
+     "value": 8
+    },
+    "msg": "execution failed: execution failed: invalid params: missing 'value'"
+   },
+   {
+    "tool": "decompiler_type_unifier_same_class_z1",
+    "field": "a",
+    "input": {
+     "a": 8,
+     "b": 8
+    },
+    "msg": "execution failed: execution failed: invalid params: missing 'a'"
+   },
+   {
+    "tool": "decompiler_type_inference_pointer_deref_z1",
+    "field": "width",
+    "input": {
+     "ptr": "default",
+     "result": "default",
+     "width": 64
+    },
+    "msg": "execution failed: execution failed: invalid params: missing 'width'"
+   },
+   {
+    "tool": "decompiler_type_propagator_binop_z1",
+    "field": "lhs",
+    "input": {
+     "lhs": 8,
+     "rhs": 8,
+     "result": "default",
+     "width": 64
+    },
+    "msg": "execution failed: execution failed: invalid params: missing 'lhs'"
+   }
+  ]
+ },
+ "OK_unknown_variant": {
+  "count": 67,
+  "samples": [
+   "threatintel_ioc_type_display_w3",
+   "trace_navigate_access_kind_from_str_x",
+   "rustre_analysis_string_encoding_info",
+   "debug_macos_stop_reason_is_exit",
+   "windbg_kdnet_packet_type_id"
+  ]
+ },
+ "OK_bad_encoding_from_smart": {
+  "count": 56,
+  "samples": [
+   "deobf_string_xor_decrypt_cyclic",
+   "deobf_string_rc4_decrypt",
+   "deobf_string_hex_decode",
+   "mem_read_u128_le_at_hex",
+   "mem_read_f32_be_at_hex"
+  ]
+ },
+ "OK_binary_not_loaded": {
+  "count": 25,
+  "samples": [
+   "binary.info",
+   "binary.hexdump",
+   "binary.read",
+   "binary.search_bytes",
+   "binary.search_strings"
+  ]
+ },
+ "SUSPICIOUS_internal_error": {
+  "count": 24,
+  "samples": [
+   {
+    "tool": "dwarf_functions_count_path",
+    "msg": "execution failed: execution failed: internal error: dwarf open failed: not a supported binary format (elf/mach-o)",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "dwarf_types_count_path",
+    "msg": "execution failed: execution failed: internal error: dwarf open failed: not a supported binary format (elf/mach-o)",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "trace_open_trace_file",
+    "msg": "execution failed: execution failed: internal error: open_trace_file: store error: file is not a database",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "dwarf_functions_path",
+    "msg": "execution failed: execution failed: internal error: dwarf open failed: not a supported binary format (elf/mach-o)",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "dwarf_types_path",
+    "msg": "execution failed: execution failed: internal error: dwarf open failed: not a supported binary format (elf/mach-o)",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "dwarf_line_info_path",
+    "msg": "execution failed: execution failed: internal error: dwarf open failed: not a supported binary format (elf/mach-o)",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    }
+   },
+   {
+    "tool": "forensics_fs_lnk_analyzer_summary",
+    "msg": "execution failed: execution failed: internal error: lnk parse: too short: need 76, got 64",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+     "data": [
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51
+     ]
+    }
+   },
+   {
+    "tool": "forensics_fs_lnk_file_target_path",
+    "msg": "execution failed: execution failed: internal error: lnk parse: too short: need 76, got 64",
+    "input": {
+     "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+     "data": [
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51,
+      222,
+      173,
+      190,
+      239,
+      0,
+      17,
+      34,
+      51
+     ]
+    }
+   }
+  ]
+ },
+ "OK_smart_did_not_know_field_key": {
+  "count": 4,
+  "samples": [
+   "script_xor_bytes",
+   "deobf_rc4_decrypt",
+   "deobf_rc4_ksa",
+   "deobf_xor_decrypt_cyclic"
+  ]
+ },
+ "OK_empty_input": {
+  "count": 4,
+  "samples": [
+   "decompiler_cfs_scc_groups",
+   "diff_bindiff_hungarian_solve",
+   "diff_bindiff_hungarian_from_similarity",
+   "diff_bindiff_hungarian_dims"
+  ]
+ },
+ "OK_smart_did_not_know_field_fact": {
+  "count": 4,
+  "samples": [
+   "analysis_type_fact_byte_size",
+   "analysis_type_fact_is_known",
+   "analysis_type_fact_display_name",
+   "analysis_type_fact_display"
+  ]
+ },
+ "OK_smart_did_not_know_field_idx": {
+  "count": 3,
+  "samples": [
+   "trace_navigate_insn_entry_v2",
+   "trace_navigate_call_entry",
+   "trace_navigate_ret_entry"
+  ]
+ },
+ "OK_smart_did_not_know_field_hex_a": {
+  "count": 3,
+  "samples": [
+   "diff_semantic_matcher_similarity",
+   "diff_semantic_matcher_are_equivalent",
+   "diff_semantic_differ_diff_function_pair"
+  ]
+ },
+ "OK_smart_did_not_know_field_stab": {
+  "count": 3,
+  "samples": [
+   "symbols_stabs_parse_all",
+   "symbols_stabs_record_parse_all_be",
+   "symbols_stabs_provider_from_bytes"
+  ]
+ },
+ "OK_smart_did_not_know_field_binary_id": {
+  "count": 2,
+  "samples": [
+   "debug.read_memory",
+   "debug.write_memory"
+  ]
+ },
+ "OK_smart_did_not_know_field_pairs": {
+  "count": 2,
+  "samples": [
+   "rlib_dec_symbol_map_from_flirt_pairs",
+   "rlib_dec2_symbol_map_extend_pairs"
+  ]
+ },
+ "OK_smart_did_not_know_field_address": {
+  "count": 1,
+  "samples": [
+   "debug.set_breakpoint"
+  ]
+ },
+ "OK_smart_did_not_know_field_var": {
+  "count": 1,
+  "samples": [
+   "rlib_dec_typeprop_set_get"
+  ]
+ },
+ "OK_smart_did_not_know_field_lines": {
+  "count": 1,
+  "samples": [
+   "rlib_dec_cfs_detect_loop"
+  ]
+ },
+ "OK_smart_did_not_know_field_src": {
+  "count": 1,
+  "samples": [
+   "rlib_dec_quality_from_source"
+  ]
+ },
+ "OK_smart_did_not_know_field_original_count": {
+  "count": 1,
+  "samples": [
+   "trace_compressor_compression_ratio"
+  ]
+ },
+ "UNCLASSIFIED": {
+  "count": 1,
+  "samples": [
+   {
+    "tool": "emu_interpreter_mem_roundtrip",
+    "msg": "execution failed: execution failed: tool error: memory fault at 0x0000000000000011 (write-oob)",
+    "input": {
+     "arch": "x86_64",
+     "base": 1,
+     "size": 16,
+     "offset": 0,
+     "hex": "deadbeef00112233445566778899aabbccddeeffdeadbeef00112233445566778899aabbccddeeffdeadbeef00112233445566778899aabbccddeeffdeadbeef00112233445566778899aabbccddeeff"
+    }
+   }
+  ]
+ },
+ "OK_smart_did_not_know_field_fn_addr": {
+  "count": 1,
+  "samples": [
+   "trace_navigate_stackframe_display_name"
+  ]
+ },
+ "OK_smart_did_not_know_field_name": {
+  "count": 1,
+  "samples": [
+   "trace_navigate_bookmark_with_note"
+  ]
+ },
+ "OK_smart_did_not_know_field_cap": {
+  "count": 1,
+  "samples": [
+   "trace_navigate_step_window"
+  ]
+ },
+ "OK_smart_did_not_know_field_entries": {
+  "count": 1,
+  "samples": [
+   "trace_navigate_idx_for_tsc"
+  ]
+ },
+ "OK_smart_did_not_know_field_writes": {
+  "count": 1,
+  "samples": [
+   "trace_navigate_mem_access_index"
+  ]
+ },
+ "OK_yara_compile": {
+  "count": 1,
+  "samples": [
+   "yara_engine_parse_rule"
+  ]
+ },
+ "OK_smart_did_not_know_field_binary_path": {
+  "count": 1,
+  "samples": [
+   "symbols_discover_pdb_for_binary"
+  ]
+ },
+ "OK_smart_did_not_know_field_from": {
+  "count": 1,
+  "samples": [
+   "script_lua_template_patch_pattern"
+  ]
+ },
+ "OK_smart_did_not_know_field_env": {
+  "count": 1,
+  "samples": [
+   "analysis_type_infer_signature"
+  ]
+ },
+ "OK_smart_did_not_know_field_addr": {
+  "count": 1,
+  "samples": [
+   "rlib_dec2_name_recovery_pass"
+  ]
+ },
+ "OK_smart_did_not_know_field_msg": {
+  "count": 1,
+  "samples": [
+   "rlib_dec2_diagnostic_from_pass"
+  ]
+ }
+}

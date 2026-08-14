@@ -1,0 +1,207 @@
+{
+  "crate": "rustre-analysis-vsa",
+  "functions": [
+    {
+      "module": "abstract_interpretation",
+      "description": "trait `AbstractDomain`, `ConstantDomain`, `IntervalDomain`, `SignDomain`, `Fixpoint`, `TransferFunction`.",
+      "symbol_count": 6,
+      "symbols": [
+        "AbstractDomain",
+        "ConstantDomain",
+        "IntervalDomain",
+        "SignDomain",
+        "Fixpoint",
+        "TransferFunction"
+      ]
+    },
+    {
+      "module": "alias_analysis",
+      "description": "Andersen-style points-to: `AndersenSolver`, `PointsToGraph`, `AliasResult`, `query_alias`, `may_alias`, `must_alias`, `classify_pointer`, `is_stack_only`, `is_heap_only`, `is_global_only`, `different_regions`, `PtrArithTracker`.",
+      "symbol_count": 12,
+      "symbols": [
+        "AndersenSolver",
+        "PointsToGraph",
+        "AliasResult",
+        "query_alias",
+        "may_alias",
+        "must_alias",
+        "classify_pointer",
+        "is_stack_only",
+        "is_heap_only",
+        "is_global_only",
+        "different_regions",
+        "PtrArithTracker"
+      ]
+    },
+    {
+      "module": "jumptable",
+      "description": "`bound_jump_table`, `resolve_indirect_targets`, `resolve_switch`, `scale`, `offset`, `widen`, `JumpTableBounds`, `TableImage`.",
+      "symbol_count": 8,
+      "symbols": [
+        "bound_jump_table",
+        "resolve_indirect_targets",
+        "resolve_switch",
+        "scale",
+        "offset",
+        "widen",
+        "JumpTableBounds",
+        "TableImage"
+      ]
+    },
+    {
+      "module": "pointer",
+      "description": "`AbstractPointer`, `PointerEnvironment`, `PointsToSet`, `PointerRegion`, `run_pointer_analysis`, `ptr_add`, `ptr_sub`, `may_alias`, `must_alias`, `widen`, `widen_envs`, `PtrCfg/Block/Instr`.",
+      "symbol_count": 12,
+      "symbols": [
+        "AbstractPointer",
+        "PointerEnvironment",
+        "PointsToSet",
+        "PointerRegion",
+        "run_pointer_analysis",
+        "ptr_add",
+        "ptr_sub",
+        "may_alias",
+        "must_alias",
+        "widen",
+        "widen_envs",
+        "PtrCfg/Block/Instr"
+      ]
+    },
+    {
+      "module": "strided_interval",
+      "description": "enum `StridedInterval`, `WideningThresholds`.",
+      "symbol_count": 2,
+      "symbols": [
+        "StridedInterval",
+        "WideningThresholds"
+      ]
+    },
+    {
+      "module": "strided_intervals",
+      "description": "struct `StridedInterval`, `WrappedInterval`, `ValueSet`, `IntervalAnalysis`, `si_add/sub/mul/and/or/xor/shl/shr`, `widen`, `narrow`.",
+      "symbol_count": 7,
+      "symbols": [
+        "StridedInterval",
+        "WrappedInterval",
+        "ValueSet",
+        "IntervalAnalysis",
+        "si_add/sub/mul/and/or/xor/shl/shr",
+        "widen",
+        "narrow"
+      ]
+    },
+    {
+      "module": "taint",
+      "description": "`TaintLabel`, `TaintValue`, `TaintState`, `TaintSource/Sink/Sanitizer`, `TaintConfig`, `TaintAnalyzer`, `TaintFlow`, `TaintReport`, `ConstValue`, `ConstPropState`, `TaintStatistic`.",
+      "symbol_count": 11,
+      "symbols": [
+        "TaintLabel",
+        "TaintValue",
+        "TaintState",
+        "TaintSource/Sink/Sanitizer",
+        "TaintConfig",
+        "TaintAnalyzer",
+        "TaintFlow",
+        "TaintReport",
+        "ConstValue",
+        "ConstPropState",
+        "TaintStatistic"
+      ]
+    },
+    {
+      "module": "value_set_operations",
+      "description": "`run_vsa`, `AbstractInterpreter`, `AbstractMemory`, `FunctionSummary`, `SummaryDatabase`, `refine_lt`, `refine_geq`, `VsaResult`, `VsaStats`.",
+      "symbol_count": 9,
+      "symbols": [
+        "run_vsa",
+        "AbstractInterpreter",
+        "AbstractMemory",
+        "FunctionSummary",
+        "SummaryDatabase",
+        "refine_lt",
+        "refine_geq",
+        "VsaResult",
+        "VsaStats"
+      ]
+    },
+    {
+      "module": "lib_root",
+      "description": "Top-level public surface from lib.rs (types, traits, consumer APIs).",
+      "symbol_count": 72,
+      "symbols": [
+        "ValueSet",
+        "Bottom | Concrete(Vec<u64>) | Range{lo,hi,stride} | Top",
+        "singleton",
+        "top",
+        "bottom",
+        "interval",
+        "strided",
+        "join",
+        "meet",
+        "widen",
+        "leq",
+        "contains",
+        "is_top",
+        "is_bottom",
+        "add",
+        "sub",
+        "bitwise_and",
+        "bitwise_or",
+        "concretize(limit) -> Option<Vec<u64>>",
+        "VsaState { vars: HashMap<String, ValueSet> }",
+        "new/get/set/join/leq/widen",
+        "VsaInstr",
+        "Const|Copy|Add|Sub|And|Or|Load|Store|Phi|IndirectCall",
+        "VsaBlock { id, instrs }",
+        "VsaCfg { blocks, successors, predecessors, entry }::new",
+        "MemoryModel",
+        "Vec<(ValueSet, ValueSet)>",
+        "store/load",
+        "MAX_CELLS = 65_536",
+        "VsaAnalyzer { initial_state }",
+        "new",
+        "transfer(block, state, mem)",
+        "run(cfg) -> Result<Vec<VsaState>, VsaError>",
+        "AddressClass { Stack|Heap|Global|ReadOnly|Code|Unknown }",
+        "AddressClassifier::{classify_addr, classify}",
+        "IndirectCallResolver { states, classifier }::resolve(cfg) -> Vec<IndirectCallResolution{block_id,target_var,resolved_targets,is_imprecise}>",
+        "StridedInterval",
+        "BOTTOM/TOP",
+        "is_bottom/top/singleton",
+        "join/meet/widen",
+        "add/sub/bitwise_and/bitwise_or",
+        "concretize",
+        "is_definitely_null(&StridedInterval) -> bool",
+        "may_be_out_of_bounds(&StridedInterval, (base,limit)) -> bool",
+        "MemoryAbstraction",
+        "Vec<(StridedInterval, StridedInterval)>",
+        "store/load/join/leq/cell_count",
+        "RegisterState { regs }",
+        "get/set/join/widen/leq",
+        "VsaEngine",
+        "VsaEngineCfg/Block/Instr",
+        "VsaConfig",
+        "VsaEngineResult",
+        "VsaEngineV2",
+        "VsaTransfer",
+        "VsaAnalysisPass",
+        "LlilExpr",
+        "LlilInstruction",
+        "LlilBlock",
+        "LlilCfg",
+        "resolve_jump_table(...)",
+        "resolve_indirect_calls(...)",
+        "detect_buffer_overflows(...)",
+        "query_point(result, addr, target) -> PointQueryResult { PointValue, PointConfidence }",
+        "strided_interval_to_value_set(si) -> ValueSet",
+        "trait BinaryMemory: Send + Sync",
+        "MapBinaryMemory(HashMap<u64,u8>)",
+        "MemRegionId",
+        "RegionValueSet",
+        "VsaStateV2",
+        "JumpTableInfo",
+        "VsaError::{UnknownVariable, NoConvergence, EmptyProgram}"
+      ]
+    }
+  ]
+}

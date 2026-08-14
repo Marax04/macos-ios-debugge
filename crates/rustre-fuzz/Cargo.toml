@@ -1,0 +1,44 @@
+[package]
+name = "rustre-fuzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+# Backend sub-crates are optional to break the dependency cycle: each backend
+# depends on rustre-fuzz for shared primitives, so the hub can only pull them
+# in via the `backends` feature, enabled by the umbrella `rustre-bin` / CLI.
+# rustre-fuzz-afl is intentionally NOT listed here: rustre-fuzz-afl depends on
+# rustre-fuzz for shared primitives (Corpus, CoverageMap, FuzzInput,
+# TargetExecutor, fnv1a, ...), so re-adding an edge in this direction would
+# create a hard cargo cycle (even an optional path dep is rejected). The afl
+# backend is therefore reached by downstream binaries via a direct
+# `rustre-fuzz-afl` dependency rather than through this hub's registry.
+rustre-fuzz-cov = { path = "../rustre-fuzz-cov", optional = true }
+# rustre-fuzz-libfuzzer and rustre-fuzz-net both depend on rustre-fuzz-afl,
+# which depends on this hub crate for shared primitives. Re-exporting them
+# from here would therefore form a transitive cargo cycle
+# (rustre-fuzz -> rustre-fuzz-libfuzzer -> rustre-fuzz-afl -> rustre-fuzz),
+# which cargo rejects even for optional path deps. Consumers reach those
+# backends directly via `rustre_fuzz_libfuzzer::*` / `rustre_fuzz_net::*`.
+rustre-fuzz-sanitizers = { path = "../rustre-fuzz-sanitizers", optional = true }
+
+[features]
+default = []
+backends = [
+    "dep:rustre-fuzz-cov",
+    "dep:rustre-fuzz-sanitizers",
+]
+
+[lints]
+workspace = true

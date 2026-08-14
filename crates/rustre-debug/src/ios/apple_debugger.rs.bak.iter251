@@ -1,0 +1,2086 @@
+//! [`AppleDebugger`] — an implementation of `crate::Debugger` that
+//! drives a macOS/iOS target through `debugserver`'s Remote Serial Protocol.
+//!
+//! # Why RSP and not Mach APIs
+//!
+//! The obvious way to write an Apple debugger is `task_for_pid` +
+//! `thread_get_state` + a Mach exception port. That code cannot exist outside
+//! macOS, cannot be compiled here, and — as the hub crate's own notes record —
+//! a backend that is never compiled accumulates defects that no test can see.
+//! `debugserver` speaks a byte protocol, so every layer of this backend is
+//! ordinary byte and register math that compiles and is unit-tested on any
+//! host. The only genuinely host-bound piece is *opening the connection*, and
+//! that is isolated behind [`TransportFactory`].
+//!
+//! # Concurrency model
+//!
+//! Every `Debugger` method takes `&self`, so the mutable protocol state lives
+//! behind a `parking_lot::Mutex`. The RSP exchange itself is synchronous and
+//! must stay that way: framing is stateful and two interleaved requests on one
+//! connection corrupt it. The `async` in the trait signature therefore buys
+//! nothing here and the work is done inline — deliberately, rather than
+//! wrapping a blocking call in `block_in_place`, which panics on a
+//! current-thread runtime.
+//!
+//! # What is deliberately NOT implemented
+//!
+//! Each of the following returns [`DebugError::Unsupported`] with a reason,
+//! never a plausible-looking wrong answer:
+//! * [`AppleDebugger::pause`] — an asynchronous `\x03` interrupt needs an
+//!   out-of-band reader; the strictly request/response [`RspClient`] has none,
+//!   and injecting the byte anyway desynchronises the framer.
+//! * backtraces on a non-ARM64 target — [`crate::ios::unwind`] implements ARM64
+//!   (and only ARM64) frame recovery.
+//! * `LaunchOptions::follow_forks` and the stdio redirection flags, which the
+//!   `A` packet cannot express.
+
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use parking_lot::{Mutex, RwLock};
+use rustre_core::address::Address;
+use crate::symbol_resolver::FrameSymbolResolver;
+use crate::{
+    Breakpoint, BreakpointKind, DebugError, DebugEvent, Debugger, LaunchOptions, MemoryMap,
+    ModuleInfo, ProcessId, RegisterSet, RunToReturnStep, StackFrame, StopReason, ThreadId,
+    run_to_return_step,
+};
+
+use crate::ios::arm64;
+use crate::ios::lldb_ext::{self, GenericRole, MemoryRegionInfo, ProcessInfo};
+use crate::ios::rsp::{
+    RspClient, RspError, RspTransport, StopReply,
+    commands::{self, ZKind},
+};
+use crate::ios::unwind::{AppleUnwinder, Arm64UnwindRegs, MemoryReader, UnwindError};
+
+// ---------------------------------------------------------------------------
+// Transport plumbing
+// ---------------------------------------------------------------------------
+
+/// Forwarding impl so a session can hold a `Box<dyn RspTransport>` and stay
+/// agnostic about whether it is talking to a socket or to
+/// [`crate::ios::mock_debugserver`].
+impl RspTransport for Box<dyn RspTransport> {
+    fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+        (**self).send(data)
+    }
+    fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        (**self).recv(buf)
+    }
+    fn description(&self) -> String {
+        (**self).description()
+    }
+}
+
+/// Bridge between the crate's two transport traits.
+///
+/// [`crate::ios::mock_client::LoopbackTransport`] was written against
+/// [`crate::ios::mock_client::AppleTransport`]; the debugger is built on
+/// [`RspTransport`]. Both traits and the type are local to this crate, so the
+/// impl is legal here — and it must live in the library rather than in a test
+/// module, because an integration test in `tests/` could not write it (orphan
+/// rule) and would otherwise be unable to reach the mock at all.
+impl RspTransport for crate::ios::mock_client::LoopbackTransport {
+    fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+        crate::ios::mock_client::AppleTransport::send(self, data)
+    }
+    fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        crate::ios::mock_client::AppleTransport::recv(self, buf)
+    }
+    fn description(&self) -> String {
+        "loopback-mock-debugserver".to_string()
+    }
+}
+
+/// A [`TransportFactory`] serving one in-process [`crate::ios::mock_debugserver`].
+///
+/// This is the whole reason an Apple backend can be verified from a Windows
+/// host: the debugger under test is the real one, only the socket is
+/// simulated. The server is handed out exactly once — a second connection
+/// attempt is an error rather than a silently fresh process, because
+/// "reconnecting resurrected my target" is a bug class this would otherwise
+/// hide.
+pub struct LoopbackFactory {
+    server: Mutex<Option<crate::ios::mock_debugserver::MockDebugserver>>,
+    chunk: usize,
+}
+
+impl LoopbackFactory {
+    /// Serve `server`, dribbling `chunk` bytes per `recv` (0 = no limit).
+    ///
+    /// A small `chunk` is not pedantry: it makes "one `read()` returns one
+    /// packet" — the defect already present in this workspace's other RSP
+    /// client — impossible to pass.
+    #[must_use]
+    pub const fn new(server: crate::ios::mock_debugserver::MockDebugserver, chunk: usize) -> Self {
+        Self { server: Mutex::new(Some(server)), chunk }
+    }
+}
+
+impl std::fmt::Debug for LoopbackFactory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoopbackFactory")
+            .field("available", &self.server.lock().is_some())
+            .field("chunk", &self.chunk)
+            .finish()
+    }
+}
+
+impl TransportFactory for LoopbackFactory {
+    fn connect(&self, _request: &ConnectRequest<'_>) -> Result<Box<dyn RspTransport>, DebugError> {
+        let server = self.server.lock().take().ok_or_else(|| {
+            DebugError::Os("loopback debugserver has already been connected to".to_string())
+        })?;
+        let mut t = crate::ios::mock_client::LoopbackTransport::new(server);
+        if self.chunk > 0 {
+            t = t.with_chunk(self.chunk);
+        }
+        Ok(Box::new(t))
+    }
+
+    fn description(&self) -> String {
+        "loopback".to_string()
+    }
+}
+
+/// What the debugger is about to do, so a factory can pick the right endpoint
+/// (a launch usually needs a freshly spawned `debugserver`, an attach can reuse
+/// a listening one).
+#[derive(Debug)]
+pub enum ConnectRequest<'a> {
+    /// Attach to an already-running process.
+    Attach(ProcessId),
+    /// Start a new process.
+    Launch(&'a LaunchOptions),
+}
+
+/// Opens a byte pipe to a `debugserver`.
+///
+/// This is the crate's single host boundary. Spawning `debugserver` itself is
+/// a macOS-only operation (and needs `com.apple.security.cs.debugger` or root),
+/// so it lives in the caller's factory rather than being faked here.
+pub trait TransportFactory: Send + Sync {
+    /// Connect for the given operation.
+    ///
+    /// # Errors
+    /// [`DebugError::LaunchError`] or [`DebugError::Os`] describing why the
+    /// connection could not be established.
+    fn connect(&self, request: &ConnectRequest<'_>) -> Result<Box<dyn RspTransport>, DebugError>;
+
+    /// Description used in diagnostics.
+    fn description(&self) -> String {
+        "transport-factory".to_string()
+    }
+}
+
+/// Connects to a `debugserver` already listening on a TCP endpoint
+/// (`debugserver 127.0.0.1:1234 --attach=<pid>`).
+#[derive(Debug, Clone)]
+pub struct TcpDebugserverFactory {
+    addr: String,
+    timeout: Option<std::time::Duration>,
+}
+
+impl TcpDebugserverFactory {
+    /// Target `addr` (`host:port`), with an optional read/write timeout.
+    #[must_use]
+    pub fn new(addr: impl Into<String>, timeout: Option<std::time::Duration>) -> Self {
+        Self { addr: addr.into(), timeout }
+    }
+}
+
+impl TransportFactory for TcpDebugserverFactory {
+    fn connect(&self, _request: &ConnectRequest<'_>) -> Result<Box<dyn RspTransport>, DebugError> {
+        let t = crate::ios::rsp::TcpTransport::connect(&self.addr, self.timeout)
+            .map_err(|e| DebugError::Os(format!("connect to debugserver at {}: {e}", self.addr)))?;
+        Ok(Box::new(t))
+    }
+
+    fn description(&self) -> String {
+        format!("tcp:{}", self.addr)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Register map
+// ---------------------------------------------------------------------------
+
+/// The target's register layout, discovered at runtime via `qRegisterInfo`.
+///
+/// Discovering it is not ceremony: `arm64` and `arm64e` and `x86_64` have
+/// different `g`-packet layouts, and every backend that hardcoded one has
+/// eventually read the wrong bytes. Nothing in this module assumes an offset.
+#[derive(Debug, Clone, Default)]
+pub struct RegisterMap {
+    pub(crate) regs: Vec<lldb_ext::RegisterInfo>,
+}
+
+impl RegisterMap {
+    /// Registers in `p`/`P` index order.
+    #[must_use]
+    pub fn entries(&self) -> &[lldb_ext::RegisterInfo] {
+        &self.regs
+    }
+
+    /// Look a register up by name or alternate name (case-insensitive).
+    #[must_use]
+    pub fn by_name(&self, name: &str) -> Option<&lldb_ext::RegisterInfo> {
+        self.regs.iter().find(|r| {
+            r.name.eq_ignore_ascii_case(name)
+                || r.alt_name.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(name))
+        })
+    }
+
+    /// Look a register up by the role the stub assigned it.
+    #[must_use]
+    pub fn by_generic(&self, role: GenericRole) -> Option<&lldb_ext::RegisterInfo> {
+        lldb_ext::find_generic(&self.regs, role)
+    }
+
+    /// The register holding a role, falling back to a conventional name when
+    /// the stub tagged nothing (some stubs omit `generic:` entirely).
+    fn role_or_name(&self, role: GenericRole, name: &str) -> Option<&lldb_ext::RegisterInfo> {
+        self.by_generic(role).or_else(|| self.by_name(name))
+    }
+
+    /// Minimum `g`-packet length implied by the map, in bytes.
+    #[must_use]
+    pub fn g_packet_bytes(&self) -> usize {
+        self.regs
+            .iter()
+            .filter_map(|r| r.offset.map(|o| o as usize + r.byte_size() as usize))
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Decode a raw `g` block into the hub crate's [`RegisterSet`].
+    ///
+    /// Registers wider than 64 bits (the `v` file) are skipped rather than
+    /// truncated: a silently halved `v0` is worse than an absent one.
+    fn decode(&self, block: &[u8]) -> RegisterSet {
+        let mut set = RegisterSet::new();
+        for r in &self.regs {
+            let (Some(off), size) = (r.offset, r.byte_size() as usize) else {
+                continue;
+            };
+            if size == 0 || size > 8 {
+                continue;
+            }
+            let off = off as usize;
+            let Some(raw) = block.get(off..off + size) else {
+                continue;
+            };
+            let mut buf = [0u8; 8];
+            buf[..size].copy_from_slice(raw);
+            set.set(&r.name, u64::from_le_bytes(buf));
+        }
+        set.pc = self
+            .role_or_name(GenericRole::Pc, "pc")
+            .and_then(|r| set.get(&r.name))
+            .unwrap_or(0);
+        set.sp = self
+            .role_or_name(GenericRole::Sp, "sp")
+            .and_then(|r| set.get(&r.name))
+            .unwrap_or(0);
+        set.fp = self.role_or_name(GenericRole::Fp, "fp").and_then(|r| set.get(&r.name));
+        set.lr = self.role_or_name(GenericRole::Ra, "lr").and_then(|r| set.get(&r.name));
+        set
+    }
+
+    /// Overlay a [`RegisterSet`] onto an existing raw `g` block.
+    ///
+    /// Starting from the block that was just read (rather than from zeroes) is
+    /// what keeps the vector and floating-point state intact through a
+    /// read-modify-write of two integer registers.
+    fn encode_into(&self, set: &RegisterSet, block: &mut [u8]) {
+        let mut apply = |name: &str, value: u64| {
+            let Some(r) = self.by_name(name) else { return };
+            let (Some(off), size) = (r.offset, r.byte_size() as usize) else {
+                return;
+            };
+            if size == 0 || size > 8 {
+                return;
+            }
+            let off = off as usize;
+            if let Some(dst) = block.get_mut(off..off + size) {
+                dst.copy_from_slice(&value.to_le_bytes()[..size]);
+            }
+        };
+        for (name, value) in &set.regs {
+            apply(name, *value);
+        }
+        if let Some(r) = self.role_or_name(GenericRole::Pc, "pc") {
+            let name = r.name.clone();
+            apply(&name, set.pc);
+        }
+        if let Some(r) = self.role_or_name(GenericRole::Sp, "sp") {
+            let name = r.name.clone();
+            apply(&name, set.sp);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Architecture
+// ---------------------------------------------------------------------------
+
+/// `CPU_TYPE_ARM64` from `<mach/machine.h>` (`CPU_ARCH_ABI64 | CPU_TYPE_ARM`).
+pub const CPU_TYPE_ARM64: u32 = 0x0100_000C;
+/// `CPU_TYPE_X86_64`.
+pub const CPU_TYPE_X86_64: u32 = 0x0100_0007;
+
+/// The architecture of the attached target, as reported by `qProcessInfo`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetArch {
+    /// ARM64 without pointer authentication.
+    Arm64,
+    /// ARM64e — return addresses carry a PAC and must be stripped.
+    Arm64e,
+    /// Intel.
+    X86_64,
+    /// Something this backend has no register or unwind model for.
+    Other(u32),
+}
+
+impl TargetArch {
+    /// Classify a Mach-O `(cputype, cpusubtype)` pair.
+    #[must_use]
+    pub const fn from_cpu(cputype: u32, cpusubtype: u32) -> Self {
+        match cputype {
+            CPU_TYPE_ARM64 => {
+                if cpusubtype & 0x00FF_FFFF == lldb_ext::CPU_SUBTYPE_ARM64E {
+                    Self::Arm64e
+                } else {
+                    Self::Arm64
+                }
+            }
+            CPU_TYPE_X86_64 => Self::X86_64,
+            other => Self::Other(other),
+        }
+    }
+
+    /// Name used by `supported_architectures`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Arm64 => "arm64",
+            Self::Arm64e => "arm64e",
+            Self::X86_64 => "x86_64",
+            Self::Other(_) => "unknown",
+        }
+    }
+
+    /// `true` for the two ARM64 flavours, which share a register file, a
+    /// breakpoint encoding and an unwinder.
+    #[must_use]
+    pub const fn is_arm64(self) -> bool {
+        matches!(self, Self::Arm64 | Self::Arm64e)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Session
+// ---------------------------------------------------------------------------
+
+/// Everything that only exists while a target is attached.
+pub(crate) struct Session {
+    pub(crate) client: RspClient<Box<dyn RspTransport>>,
+    pub(crate) regs: RegisterMap,
+    pid: ProcessId,
+    /// Thread that reported the most recent stop.
+    pub(crate) current_tid: ThreadId,
+    arch: TargetArch,
+}
+
+pub(crate) fn rsp_err(context: &str, e: &RspError) -> DebugError {
+    match e {
+        // EACCES from the stub is a permission problem (SIP, missing
+        // com.apple.security.cs.debugger), not a generic OS failure.
+        RspError::Remote(0x0D) => DebugError::PermissionDenied(format!("{context}: {e}")),
+        _ => DebugError::Os(format!("{context}: {e}")),
+    }
+}
+
+impl Session {
+    /// Ask the stub what it supports, turn off acks, and learn the register
+    /// layout and architecture. Everything after this point is data-driven.
+    fn establish(transport: Box<dyn RspTransport>) -> Result<Self, DebugError> {
+        let mut client = RspClient::new(transport);
+        client
+            .handshake(&["xmlRegisters=i386,arm,arm64", "multiprocess+", "swbreak+", "hwbreak+"])
+            .map_err(|e| rsp_err("qSupported handshake", &e))?;
+
+        let regs = Self::discover_registers(&mut client)?;
+        let info = Self::process_info(&mut client)?;
+        let arch = TargetArch::from_cpu(info.cputype, info.cpusubtype);
+        let pid = ProcessId(u32::try_from(info.pid).unwrap_or(0));
+
+        Ok(Self { client, regs, pid, current_tid: ThreadId(0), arch })
+    }
+
+    /// Enumerate `qRegisterInfo0..` until the stub answers `E45`.
+    ///
+    /// The bound exists because a stub that never terminates the enumeration
+    /// would otherwise hang the attach; 1024 is far beyond any real Apple
+    /// register file (arm64 reports 68).
+    fn discover_registers(
+        client: &mut RspClient<Box<dyn RspTransport>>,
+    ) -> Result<RegisterMap, DebugError> {
+        const MAX_REGISTERS: u32 = 1024;
+        let mut out = Vec::new();
+        for n in 0..MAX_REGISTERS {
+            let reply = client
+                .request(lldb_ext::RegisterInfo::command(n).as_bytes())
+                .map_err(|e| rsp_err("qRegisterInfo", &e))?;
+            let text = reply.as_str().into_owned();
+            if text.is_empty() {
+                break;
+            }
+            match lldb_ext::RegisterInfo::parse(n, &text) {
+                Ok(info) => out.push(info),
+                // `E45` is the documented end-of-list marker, not a failure.
+                Err(lldb_ext::LldbExtError::ErrorReply { .. }) => break,
+                Err(e) => {
+                    return Err(DebugError::RegisterError(format!(
+                        "qRegisterInfo{n:x} reply not understood: {e}"
+                    )));
+                }
+            }
+        }
+        if out.is_empty() {
+            return Err(DebugError::RegisterError(
+                "stub advertised no registers via qRegisterInfo; this backend refuses to \
+                 guess a g-packet layout"
+                    .to_string(),
+            ));
+        }
+        Ok(RegisterMap { regs: out })
+    }
+
+    fn process_info(
+        client: &mut RspClient<Box<dyn RspTransport>>,
+    ) -> Result<ProcessInfo, DebugError> {
+        let reply = client
+            .request(ProcessInfo::COMMAND.as_bytes())
+            .map_err(|e| rsp_err("qProcessInfo", &e))?;
+        ProcessInfo::parse(&reply.as_str())
+            .map_err(|e| DebugError::Os(format!("qProcessInfo reply not understood: {e}")))
+    }
+
+    /// Send a raw packet and return the reply text.
+    pub(crate) fn text(&mut self, payload: &[u8], what: &str) -> Result<String, DebugError> {
+        let reply = self.client.request(payload).map_err(|e| rsp_err(what, &e))?;
+        Ok(reply.as_str().into_owned())
+    }
+
+    /// Point `Hg`/`Hc` at `tid`, so a subsequent register or resume packet acts
+    /// on the thread the caller named rather than on whatever was last stopped.
+    pub(crate) fn select_thread(&mut self, tid: ThreadId) -> Result<(), DebugError> {
+        if tid.0 == 0 {
+            return Ok(());
+        }
+        for op in [commands::HOp::General, commands::HOp::Continue] {
+            let reply = self.text(&commands::set_thread(op, Some(u64::from(tid.0))), "H")?;
+            if !reply.starts_with("OK") {
+                return Err(DebugError::Os(format!(
+                    "stub rejected thread selection for {tid}: {reply}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn read_register_set(&mut self, tid: ThreadId) -> Result<RegisterSet, DebugError> {
+        self.select_thread(tid)?;
+        let block = self.client.read_registers().map_err(|e| rsp_err("g", &e))?;
+        if block.len() < self.regs.g_packet_bytes() {
+            return Err(DebugError::RegisterError(format!(
+                "g packet is {} bytes but qRegisterInfo describes {}",
+                block.len(),
+                self.regs.g_packet_bytes()
+            )));
+        }
+        Ok(self.regs.decode(&block))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Breakpoint bookkeeping
+// ---------------------------------------------------------------------------
+
+/// Number of bytes an A64 software breakpoint occupies.
+const A64_BP_LEN: u32 = 4;
+
+#[derive(Debug, Clone)]
+struct BpRecord {
+    bp: Breakpoint,
+    /// Original instruction bytes, set only when the stub did not support `Z0`
+    /// and this backend had to patch `BRK` in itself.
+    saved: Option<Vec<u8>>,
+}
+
+const fn z_kind_for(kind: BreakpointKind) -> (ZKind, u32) {
+    match kind {
+        BreakpointKind::Software => (ZKind::Software, A64_BP_LEN),
+        BreakpointKind::Hardware => (ZKind::Hardware, A64_BP_LEN),
+        // Watchpoint "size" is the watched region, not an instruction length.
+        BreakpointKind::DataRead => (ZKind::ReadWatch, 8),
+        BreakpointKind::DataWrite => (ZKind::WriteWatch, 8),
+        BreakpointKind::DataReadWrite => (ZKind::AccessWatch, 8),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Memory reader bridging RSP into the unwinder
+// ---------------------------------------------------------------------------
+
+/// Adapts a live RSP connection to [`MemoryReader`].
+///
+/// The `Mutex` is not for cross-thread sharing — it is the only way to satisfy
+/// `MemoryReader::read(&self, ..)` while `RspClient::read_memory` needs
+/// `&mut self`. The lock is uncontended by construction: the session mutex is
+/// already held by the caller.
+struct RspMemory<'a> {
+    client: Mutex<&'a mut RspClient<Box<dyn RspTransport>>>,
+}
+
+impl MemoryReader for RspMemory<'_> {
+    fn read(&self, addr: u64, buf: &mut [u8]) -> Result<(), UnwindError> {
+        let data = self
+            .client
+            .lock()
+            .read_memory(addr, buf.len())
+            .map_err(|_| UnwindError::MemoryRead { addr, len: buf.len() })?;
+        if data.len() != buf.len() {
+            return Err(UnwindError::MemoryRead { addr, len: buf.len() });
+        }
+        buf.copy_from_slice(&data);
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The debugger
+// ---------------------------------------------------------------------------
+
+/// A `crate::Debugger` backed by an Apple `debugserver`.
+///
+/// Construct with a [`TransportFactory`]; the debugger owns no socket until
+/// [`Debugger::launch`] or [`Debugger::attach`] is called.
+pub struct AppleDebugger {
+    factory: Arc<dyn TransportFactory>,
+    session: Mutex<Option<Session>>,
+    /// Address-keyed so `remove`/`enable`/`disable` are O(log n) and the
+    /// enumeration order is deterministic (a `HashMap` made one backend's
+    /// `breakpoints()` output shuffle between calls).
+    breakpoints: RwLock<BTreeMap<u64, BpRecord>>,
+    resolver: RwLock<Option<Arc<dyn FrameSymbolResolver>>>,
+    /// Cap on `step_out` iterations, so a runaway loop surfaces as an error
+    /// rather than as a hang.
+    max_step_out_instructions: usize,
+}
+
+impl std::fmt::Debug for AppleDebugger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppleDebugger")
+            .field("transport", &self.factory.description())
+            .field("attached", &self.session.lock().is_some())
+            .field("breakpoints", &self.breakpoints.read().len())
+            .finish()
+    }
+}
+
+impl Drop for AppleDebugger {
+    /// Best-effort cleanup for a session that goes out of scope still attached.
+    ///
+    /// Same contract the other three backends grew in iters 249-250: a
+    /// debugger that disappears must leave the target running, not carrying
+    /// the instructions this backend patched into it. Only the manual
+    /// fallback breakpoints are ours to undo — the `Z0` ones belong to the
+    /// stub, which drops them when the connection does.
+    ///
+    /// After an explicit `detach()`/`kill()` there is no session left and this
+    /// is a no-op, which is correct.
+    fn drop(&mut self) {
+        let mut guard = self.session.lock();
+        let Some(session) = guard.as_mut() else { return };
+        for record in self.breakpoints.read().values() {
+            let Some(saved) = record.saved.as_ref() else { continue };
+            let _ = session.client.write_memory(record.bp.address.as_u64(), saved);
+        }
+    }
+}
+
+impl AppleDebugger {
+    /// Build a debugger that reaches its target through `factory`.
+    #[must_use]
+    pub fn new(factory: Arc<dyn TransportFactory>) -> Self {
+        Self {
+            factory,
+            session: Mutex::new(None),
+            breakpoints: RwLock::new(BTreeMap::new()),
+            resolver: RwLock::new(None),
+            max_step_out_instructions: 200_000,
+        }
+    }
+
+    /// Reach a `debugserver` listening on `addr` (`host:port`).
+    #[must_use]
+    pub fn tcp(addr: impl Into<String>, timeout: Option<std::time::Duration>) -> Self {
+        Self::new(Arc::new(TcpDebugserverFactory::new(addr, timeout)))
+    }
+
+    /// Override the `step_out` instruction budget.
+    #[must_use]
+    pub const fn with_max_step_out_instructions(mut self, n: usize) -> Self {
+        self.max_step_out_instructions = n;
+        self
+    }
+
+    /// The target architecture, once attached.
+    #[must_use]
+    pub fn target_arch(&self) -> Option<TargetArch> {
+        self.session.lock().as_ref().map(|s| s.arch)
+    }
+
+    /// The runtime-discovered register layout, once attached.
+    #[must_use]
+    pub fn register_map(&self) -> Option<RegisterMap> {
+        self.session.lock().as_ref().map(|s| s.regs.clone())
+    }
+
+    /// Run `f` with the live session, or fail with [`DebugError::NotAttached`].
+    pub(crate) fn with_session<R>(
+        &self,
+        f: impl FnOnce(&mut Session) -> Result<R, DebugError>,
+    ) -> Result<R, DebugError> {
+        let mut guard = self.session.lock();
+        let session = guard.as_mut().ok_or(DebugError::NotAttached)?;
+        f(session)
+    }
+
+    /// Turn a stop reply into the hub crate's event, consulting the breakpoint
+    /// table so a `SIGTRAP` at a registered address is reported as a
+    /// breakpoint hit rather than as a bare signal.
+    fn classify(&self, session: &mut Session, reply: &StopReply) -> Result<DebugEvent, DebugError> {
+        let pid = session.pid;
+        match reply {
+            StopReply::Exited { status } => Ok(DebugEvent::new(
+                pid,
+                session.current_tid,
+                StopReason::ProcessExit { exit_code: i32::from(*status) },
+            )),
+            StopReply::Terminated { signal } => Ok(DebugEvent::new(
+                pid,
+                session.current_tid,
+                StopReason::Signal {
+                    signum: i32::from(*signal),
+                    signame: signal_name(*signal).to_string(),
+                    address: None,
+                },
+            )),
+            StopReply::Signal { signal } | StopReply::SignalWithInfo { signal, .. } => {
+                if let StopReply::SignalWithInfo { thread: Some(tid), .. } = reply {
+                    session.current_tid = ThreadId(u32::try_from(*tid).unwrap_or(0));
+                }
+                let reason_field = match reply {
+                    StopReply::SignalWithInfo { pairs, .. } => pairs
+                        .iter()
+                        .find(|(k, _)| k == "reason")
+                        .map(|(_, v)| v.clone()),
+                    StopReply::Signal { .. } => None,
+                    _ => unreachable!("outer match restricts this arm to signal replies"),
+                };
+                // Read the PC back rather than trusting the expedited register
+                // list: which registers are expedited is stub-dependent, and a
+                // breakpoint misattributed to the wrong address is worse than
+                // one extra round trip.
+                let pc = session
+                    .read_register_set(session.current_tid)
+                    .map(|r| r.pc)
+                    .unwrap_or(0);
+                let tid = session.current_tid;
+                Ok(DebugEvent::new(pid, tid, self.stop_reason_at(pc, *signal, reason_field.as_deref())))
+            }
+        }
+    }
+
+    fn stop_reason_at(&self, pc: u64, signal: u8, reason: Option<&str>) -> StopReason {
+        let addr = Address::new(pc);
+        if let Some(rec) = self.breakpoints.write().get_mut(&pc) {
+            if rec.bp.enabled {
+                rec.bp.hit_count += 1;
+                return StopReason::Breakpoint { address: addr, bp: rec.bp.clone() };
+            }
+        }
+        match reason {
+            Some("trace") => StopReason::SingleStep { address: addr },
+            Some("watchpoint") => StopReason::AccessViolation { address: addr, is_write: true },
+            _ => StopReason::Signal {
+                signum: i32::from(signal),
+                signame: signal_name(signal).to_string(),
+                address: Some(addr),
+            },
+        }
+    }
+
+    /// Resume and wait, with `vCont` and a `c`/`s` fallback for stubs that do
+    /// not advertise `vCont`.
+    fn resume(&self, tid: Option<ThreadId>, step: bool) -> Result<DebugEvent, DebugError> {
+        let reply = self.with_session(|s| {
+            if let Some(t) = tid {
+                s.select_thread(t)?;
+            }
+            let verb = if step { "s" } else { "c" };
+            let action: (&str, Option<u64>) = (verb, tid.map(|t| u64::from(t.0)));
+            let text = s.text(&commands::vcont(&[action]), "vCont")?;
+            let raw = if text.is_empty() {
+                // Empty reply == "packet unsupported"; fall back to the legacy
+                // single-letter resume rather than reporting a phantom stop.
+                let legacy = if step { commands::step(None) } else { commands::cont(None) };
+                s.text(&legacy, verb)?
+            } else {
+                text
+            };
+            StopReply::parse(raw.as_bytes())
+                .map_err(|e| DebugError::StepError(format!("stop reply {raw:?}: {e}")))
+        })?;
+        let mut guard = self.session.lock();
+        let session = guard.as_mut().ok_or(DebugError::NotAttached)?;
+        self.classify(session, &reply)
+    }
+
+    /// Read the 4-byte A64 instruction at `pc`.
+    fn instruction_at(&self, pc: u64) -> Result<u32, DebugError> {
+        let bytes = self.with_session(|s| {
+            s.client
+                .read_memory(pc, 4)
+                .map_err(|e| DebugError::MemoryError(pc, format!("read instruction: {e}")))
+        })?;
+        arm64::word_from_le(&bytes)
+            .ok_or_else(|| DebugError::MemoryError(pc, "short instruction read".to_string()))
+    }
+
+    fn require_arm64(&self, what: &str) -> Result<(), DebugError> {
+        let arch = self
+            .session
+            .lock()
+            .as_ref()
+            .map(|s| s.arch)
+            .ok_or(DebugError::NotAttached)?;
+        if arch.is_arm64() {
+            Ok(())
+        } else {
+            Err(DebugError::Unsupported(format!(
+                "{what} is implemented for arm64/arm64e only; target reports {}",
+                arch.name()
+            )))
+        }
+    }
+
+    /// Walk the address space with `qMemoryRegionInfo`.
+    ///
+    /// Seeded rather than swept from zero on purpose: the reply for an unmapped
+    /// address carries no hole size, so a blind forward walk cannot skip a gap
+    /// and would stop at the first one. Seeding from the loaded images and the
+    /// current thread's PC/SP finds the regions that actually matter, and each
+    /// seed is then followed forward while the regions stay contiguous.
+    fn walk_memory_regions(&self, seeds: &[u64]) -> Result<Vec<MemoryMap>, DebugError> {
+        const MAX_REGIONS: usize = 4096;
+        let mut out: BTreeMap<u64, MemoryMap> = BTreeMap::new();
+        self.with_session(|s| {
+            for seed in seeds {
+                let mut addr = *seed;
+                while out.len() < MAX_REGIONS {
+                    let text = s.text(MemoryRegionInfo::command(addr).as_bytes(), "qMemoryRegionInfo")?;
+                    let Ok(info) = MemoryRegionInfo::parse(&text) else { break };
+                    if !info.is_mapped() {
+                        break;
+                    }
+                    let end = info.end();
+                    if out.contains_key(&info.start) {
+                        // Already walked from another seed — following it again
+                        // would loop over the same tail.
+                        break;
+                    }
+                    out.insert(
+                        info.start,
+                        MemoryMap {
+                            base: Address::new(info.start),
+                            size: info.size,
+                            readable: info.readable,
+                            writable: info.writable,
+                            executable: info.executable,
+                            name: info.name.clone(),
+                            file_path: info.name,
+                            file_offset: 0,
+                        },
+                    );
+                    if end <= addr {
+                        break; // Degenerate reply; refuse to spin.
+                    }
+                    addr = end;
+                }
+            }
+            Ok(())
+        })?;
+        Ok(out.into_values().collect())
+    }
+}
+
+/// Names for the handful of signals an Apple stop reply actually carries.
+const fn signal_name(sig: u8) -> &'static str {
+    match sig {
+        2 => "SIGINT",
+        4 => "SIGILL",
+        5 => "SIGTRAP",
+        6 => "SIGABRT",
+        8 => "SIGFPE",
+        9 => "SIGKILL",
+        10 => "SIGBUS",
+        11 => "SIGSEGV",
+        24 => "SIGXCPU",
+        _ => "SIG?",
+    }
+}
+
+impl AppleDebugger {
+    /// Write back the original words for every breakpoint this backend
+    /// patched itself, leaving the stub's own `Z0` ones alone.
+    ///
+    /// Best-effort by design: a target that is already gone cannot be written
+    /// to, and failing here must not turn a successful detach into an error.
+    fn restore_patched_breakpoints(&self, session: &mut Session) {
+        for record in self.breakpoints.read().values() {
+            let Some(saved) = record.saved.as_ref() else { continue };
+            let _ = session.client.write_memory(record.bp.address.as_u64(), saved);
+        }
+    }
+
+    /// Plant a temporary software breakpoint at `addr`, with the same fallback
+    /// [`Debugger::set_breakpoint`] uses: a stub without server-managed
+    /// software breakpoints answers `Z0` with an empty reply, and the A64
+    /// `BRK #0` is then patched in by hand.
+    ///
+    /// Returns the saved original bytes when the fallback was taken, so the
+    /// caller can restore them; `None` means the stub owns the breakpoint.
+    ///
+    /// `step_over` used to plant its return-site breakpoint with a bare
+    /// `client.insert_breakpoint`, which maps an empty `Z0` reply to a framing
+    /// error — so stepping over a call failed outright against exactly the
+    /// stubs this backend already knew how to handle everywhere else.
+    ///
+    /// # Errors
+    /// Transport failures, or a memory read/write refused by the stub.
+    fn plant_temp_breakpoint(&self, addr: u64) -> Result<Option<Vec<u8>>, DebugError> {
+        let accepted = self.with_session(|s| {
+            let text = s.text(&commands::insert_breakpoint(ZKind::Software, addr, A64_BP_LEN), "Z")?;
+            Ok(text.starts_with("OK"))
+        })?;
+        if accepted {
+            return Ok(None);
+        }
+        let original = self.with_session(|s| {
+            let orig = s
+                .client
+                .read_memory(addr, 4)
+                .map_err(|e| DebugError::MemoryError(addr, format!("save original: {e}")))?;
+            s.client
+                .write_memory(addr, &arm64::brk_bytes(0))
+                .map_err(|e| DebugError::MemoryError(addr, format!("patch BRK: {e}")))?;
+            Ok(orig)
+        })?;
+        Ok(Some(original))
+    }
+
+    /// Undo a [`Self::plant_temp_breakpoint`]. Best-effort: the target may
+    /// already be gone, and a failure here must not mask the stop event the
+    /// caller is returning.
+    fn unplant_temp_breakpoint(&self, addr: u64, saved: Option<Vec<u8>>) {
+        let _ = match saved {
+            Some(orig) => self.with_session(|s| {
+                s.client
+                    .write_memory(addr, &orig)
+                    .map(drop)
+                    .map_err(|e| DebugError::MemoryError(addr, format!("unpatch BRK: {e}")))
+            }),
+            None => self.with_session(|s| {
+                s.client
+                    .remove_breakpoint(ZKind::Software, addr, A64_BP_LEN)
+                    .map_err(|e| rsp_err("z0", &e))
+            }),
+        };
+    }
+
+    /// Fully-qualified Swift type name of the instance at `ptr`.
+    ///
+    /// A Swift class instance keeps its type-metadata pointer in its first
+    /// word, exactly where an Objective-C object keeps its `isa`, so this is
+    /// the Swift counterpart of [`Self::describe_objc_object`].
+    ///
+    /// `swift_runtime` previously had only a TRANSITIVE path to a live target
+    /// (through `ObjcMemoryAdapter` over an `ObjcMemory`); no method on this
+    /// backend actually used it, so in practice nothing drove it.
+    ///
+    /// # Errors
+    /// Read failures, or `NotNominal` for kinds with no descriptor — tuples,
+    /// functions and existentials have structural rather than nominal names
+    /// and are reported as such rather than given an invented one.
+    pub async fn describe_swift_object(&self, ptr: u64) -> Result<String, DebugError> {
+        use crate::ios::objc_runtime::ReaderMemory;
+        use crate::ios::swift_runtime::{type_name, ObjcMemoryAdapter, SwiftMemoryReader};
+
+        let mem = ReaderMemory(|addr: u64, len: usize| {
+            crate::scripting_api::block_on(self.read_memory(Address(addr), len)).ok()
+        });
+        let reader = ObjcMemoryAdapter(&mem);
+        let metadata = reader
+            .read_u64(ptr)
+            .map_err(|e| DebugError::Os(format!("swift metadata at {ptr:#x}: {e}")))?;
+        type_name(&reader, metadata)
+            .map_err(|e| DebugError::Os(format!("swift type at {ptr:#x}: {e}")))
+    }
+
+    /// Describe an Objective-C object living in the target, the way a
+    /// debugger's `po` would.
+    ///
+    /// This is the first live path into `objc_runtime` (and, through
+    /// `ObjcMemoryAdapter`, into `swift_runtime`): both read through abstract
+    /// memory traits whose only implementor was an in-process test container,
+    /// so neither could be pointed at a real process however complete they
+    /// were.
+    ///
+    /// Reads are served straight from the session. A tagged pointer needs no
+    /// memory at all and is decoded from the value itself.
+    ///
+    /// # Errors
+    /// Propagates the runtime's own read/parse failures — an unmapped isa or
+    /// a class chain that does not lead anywhere is reported, never guessed at.
+    pub async fn describe_objc_object(&self, ptr: u64) -> Result<String, DebugError> {
+        use crate::ios::objc_runtime::{ObjcAbi, ObjcRuntime, ReaderMemory};
+
+        // The runtime walks pointer chains, so it cannot be handed a
+        // pre-fetched window: reads are demand-driven. `block_on` is safe here
+        // for the same reason the rest of this backend blocks on the session —
+        // there is no true async I/O underneath, only a channel round-trip.
+        let mem = ReaderMemory(|addr: u64, len: usize| {
+            crate::scripting_api::block_on(self.read_memory(Address(addr), len)).ok()
+        });
+        ObjcRuntime::new(&mem, ObjcAbi::Arm64)
+            .describe(ptr)
+            .map_err(|e| DebugError::Os(format!("objc describe {ptr:#x}: {e}")))
+    }
+
+    /// The target's per-image unwind tables, or an empty set when the stub
+    /// cannot enumerate its images.
+    ///
+    /// Empty is a legitimate answer, not an error: the unwinder degrades to
+    /// the frame-pointer walk, which is exactly the behaviour that existed
+    /// before — never worse, sometimes much better.
+    async fn unwind_images(&self) -> Vec<crate::ios::unwind::ImageUnwindTables> {
+        let Ok(modules) = self.modules().await else { return Vec::new() };
+        let mut chunks: Vec<(u64, usize, Option<Vec<u8>>)> = Vec::new();
+        for m in &modules {
+            let base = m.base.as_u64();
+            let Ok(len) = usize::try_from(m.size) else { continue };
+            if len == 0 {
+                continue;
+            }
+            chunks.push((base, len, self.read_memory(Address(base), len).await.ok()));
+        }
+        crate::ios::unwind::unwind_images_from_modules(&modules, |addr, len| {
+            chunks
+                .iter()
+                .find(|(b, l, _)| *b == addr && *l == len)
+                .and_then(|(_, _, bytes)| bytes.clone())
+        })
+    }
+
+    /// Build a symbolicator from the target's own loaded images and install
+    /// it as this session's frame resolver.
+    ///
+    /// Without this the Apple symbol engine was reachable in principle (it
+    /// implements [`FrameSymbolResolver`]) but nothing ever built one from a
+    /// live target, so `backtrace()` frames stayed nameless unless the caller
+    /// assembled the images by hand.
+    ///
+    /// Returns how many images produced usable symbols. Zero is a legitimate
+    /// answer — a fully stripped target has no symbols to find — and is
+    /// reported as such rather than as an error.
+    ///
+    /// # Errors
+    /// Propagates the failure of `modules()` when the stub cannot enumerate
+    /// its loaded images at all.
+    pub async fn load_symbols_from_target(&self) -> Result<usize, DebugError> {
+        let modules = self.modules().await?;
+        let mut chunks: Vec<(u64, usize, Option<Vec<u8>>)> = Vec::new();
+        for m in &modules {
+            let base = m.base.as_u64();
+            let Ok(len) = usize::try_from(m.size) else { continue };
+            if len == 0 {
+                continue;
+            }
+            let bytes = self.read_memory(Address(base), len).await.ok();
+            chunks.push((base, len, bytes));
+        }
+        let engine = crate::ios::symbolication::symbolicator_from_modules(&modules, |addr, len| {
+            chunks
+                .iter()
+                .find(|(b, l, _)| *b == addr && *l == len)
+                .and_then(|(_, _, bytes)| bytes.clone())
+        });
+        let count = engine.image_count();
+        self.set_symbol_resolver(Arc::new(engine));
+        Ok(count)
+    }
+
+}
+
+#[async_trait::async_trait]
+impl Debugger for AppleDebugger {
+    fn name(&self) -> &str {
+        crate::ios::BACKEND_NAME
+    }
+
+    fn supported_architectures(&self) -> Vec<String> {
+        crate::ios::supported_architectures()
+    }
+
+    // -- lifecycle ----------------------------------------------------------
+
+    async fn launch(&self, opts: LaunchOptions) -> Result<ProcessId, DebugError> {
+        if self.session.lock().is_some() {
+            return Err(DebugError::LaunchError(
+                "already attached; detach before launching another target".to_string(),
+            ));
+        }
+        if opts.follow_forks || opts.redirect.stdout || opts.redirect.stderr {
+            return Err(DebugError::Unsupported(
+                "follow_forks and stdio redirection are not expressible in the debugserver `A` \
+                 packet; launch debugserver with the redirection already applied"
+                    .to_string(),
+            ));
+        }
+        let transport = self.factory.connect(&ConnectRequest::Launch(&opts))?;
+        let mut session = Session::establish(transport)?;
+
+        // `A` carries argv; argv[0] is the executable.
+        let mut argv = vec![opts.executable.clone()];
+        argv.extend(opts.args.iter().cloned());
+        let reply = session.text(lldb_ext::build_a_packet(&argv).as_bytes(), "A")?;
+        if !reply.starts_with("OK") {
+            return Err(DebugError::LaunchError(format!(
+                "stub rejected `A` packet for {}: {reply}",
+                opts.executable
+            )));
+        }
+        // Refresh: the pid learned during `establish` predates the exec.
+        let info = Session::process_info(&mut session.client)?;
+        session.pid = ProcessId(u32::try_from(info.pid).unwrap_or(0));
+        session.arch = TargetArch::from_cpu(info.cputype, info.cpusubtype);
+
+        let stop = session.text(&commands::halt_reason(), "?")?;
+        if let Ok(StopReply::SignalWithInfo { thread: Some(t), .. }) = StopReply::parse(stop.as_bytes())
+        {
+            session.current_tid = ThreadId(u32::try_from(t).unwrap_or(0));
+        }
+        let pid = session.pid;
+        *self.session.lock() = Some(session);
+        Ok(pid)
+    }
+
+    async fn attach(&self, pid: ProcessId) -> Result<(), DebugError> {
+        if self.session.lock().is_some() {
+            return Err(DebugError::LaunchError(
+                "already attached; detach first".to_string(),
+            ));
+        }
+        let transport = self.factory.connect(&ConnectRequest::Attach(pid))?;
+        let mut session = Session::establish(transport)?;
+
+        let reply = session.text(format!("vAttach;{:x}", pid.0).as_bytes(), "vAttach")?;
+        if reply.is_empty() || reply.starts_with('E') {
+            return Err(DebugError::ProcessNotFound(pid.0));
+        }
+        let stop = StopReply::parse(reply.as_bytes())
+            .map_err(|e| DebugError::Os(format!("vAttach stop reply {reply:?}: {e}")))?;
+        if let StopReply::SignalWithInfo { thread: Some(t), .. } = stop {
+            session.current_tid = ThreadId(u32::try_from(t).unwrap_or(0));
+        }
+        if session.current_tid.0 == 0 {
+            // Fall back to the stub's notion of "current thread".
+            let qc = session.text(b"qC", "qC")?;
+            if let Some(hex) = qc.strip_prefix("QC") {
+                session.current_tid = ThreadId(u32::from_str_radix(hex, 16).unwrap_or(0));
+            }
+        }
+        session.pid = pid;
+        *self.session.lock() = Some(session);
+        Ok(())
+    }
+
+    async fn detach(&self) -> Result<(), DebugError> {
+        let mut guard = self.session.lock();
+        let session = guard.as_mut().ok_or(DebugError::NotAttached)?;
+        // Restore BEFORE the `D`: once the stub has detached, the target is
+        // no longer writable through this connection.
+        self.restore_patched_breakpoints(session);
+        let reply = session
+            .text(&commands::detach(), "D")
+            .map_err(|e| DebugError::DetachError(e.to_string()))?;
+        *guard = None;
+        // Breakpoints belong to the departed process; keeping them would make
+        // a later attach report a table that the new target never installed.
+        //
+        // The `Z0` ones are the stub's to undo. The ones this backend patched
+        // ITSELF — the fallback for stubs without server-managed software
+        // breakpoints — are ours, and were being abandoned in the target's
+        // code: an A64 `BRK #0` left behind raises SIGTRAP with no debugger
+        // left to handle it, which terminates the process. Same defect fixed
+        // for the other three backends in iter 245; this one was not covered
+        // by those guards because it is a fourth `Debugger` impl.
+        self.breakpoints.write().clear();
+        if reply.starts_with("OK") || reply.is_empty() {
+            Ok(())
+        } else {
+            Err(DebugError::DetachError(format!("stub answered {reply:?} to D")))
+        }
+    }
+
+    async fn kill(&self) -> Result<(), DebugError> {
+        let mut guard = self.session.lock();
+        let session = guard.as_mut().ok_or(DebugError::NotAttached)?;
+        let pid = session.pid;
+        // `vKill` is answered; bare `k` is not (the stub dies mid-reply), so it
+        // is only used as a fallback and its silence is expected.
+        let reply = session.text(format!("vKill;{:x}", pid.0).as_bytes(), "vKill");
+        let killed = match reply {
+            Ok(r) if r.starts_with("OK") => true,
+            _ => {
+                let _ = session.client.transport_mut().send(&crate::ios::rsp::RspPacket::new(commands::kill()).encode());
+                true
+            }
+        };
+        *guard = None;
+        self.breakpoints.write().clear();
+        if killed {
+            Ok(())
+        } else {
+            Err(DebugError::Os("stub refused to kill the target".to_string()))
+        }
+    }
+
+    fn is_attached(&self) -> bool {
+        self.session.lock().is_some()
+    }
+
+    fn target_pid(&self) -> Option<ProcessId> {
+        self.session.lock().as_ref().map(|s| s.pid)
+    }
+
+    // -- execution ----------------------------------------------------------
+
+    async fn continue_execution(&self) -> Result<DebugEvent, DebugError> {
+        self.resume(None, false)
+    }
+
+    async fn single_step(&self, tid: ThreadId) -> Result<DebugEvent, DebugError> {
+        self.resume(Some(tid), true)
+    }
+
+    async fn step_over(&self, tid: ThreadId) -> Result<DebugEvent, DebugError> {
+        self.require_arm64("step_over")?;
+        let pc = self.with_session(|s| s.read_register_set(tid))?.pc;
+        let insn = self.instruction_at(pc)?;
+        let is_call = arm64::BranchKind::decode(insn).is_some_and(arm64::BranchKind::is_call);
+        if !is_call {
+            // Fixed-width ISA: anything that is not a call steps over exactly
+            // as it steps into.
+            return self.resume(Some(tid), true);
+        }
+        // Plant a temporary breakpoint at the return site and run to it. The
+        // breakpoint is removed even when the run stops somewhere else (a
+        // fault, a nested breakpoint), which is why the removal is not
+        // conditional on the outcome.
+        let ret = pc.wrapping_add(arm64::INSTRUCTION_SIZE);
+        let already_there = self.breakpoints.read().contains_key(&ret);
+        // Planted through the shared helper so a stub without server-managed
+        // software breakpoints gets the same `BRK #0` fallback `set_breakpoint`
+        // gets, instead of a framing error.
+        let planted = if already_there {
+            None
+        } else {
+            Some(self.plant_temp_breakpoint(ret)?)
+        };
+        let event = self.resume(Some(tid), false);
+        if let Some(saved) = planted {
+            self.unplant_temp_breakpoint(ret, saved);
+        }
+        event
+    }
+
+    async fn step_out(&self, tid: ThreadId) -> Result<DebugEvent, DebugError> {
+        self.require_arm64("step_out")?;
+        let start = self.with_session(|s| s.read_register_set(tid))?;
+        let Some(target) = start.lr else {
+            return Err(DebugError::StepError(
+                "link register is unknown, so the return address cannot be identified".to_string(),
+            ));
+        };
+        let min_sp = start.sp;
+        let mut event = self.single_step(tid).await?;
+        for _ in 0..self.max_step_out_instructions {
+            // Ordering matters and is not ours to re-derive: the hub crate owns
+            // this decision precisely because it has been got wrong twice.
+            let regs = self.with_session(|s| s.read_register_set(tid)).ok().map(|r| (r.pc, r.sp));
+            match run_to_return_step(event.reason.is_exit(), regs, target, min_sp) {
+                RunToReturnStep::Done => return Ok(event),
+                RunToReturnStep::KeepGoing => {}
+            }
+            event = self.single_step(tid).await?;
+        }
+        Err(DebugError::StepError(format!(
+            "did not return to {target:#x} within {} instructions",
+            self.max_step_out_instructions
+        )))
+    }
+
+    async fn pause(&self) -> Result<(), DebugError> {
+        if !self.is_attached() {
+            return Err(DebugError::NotAttached);
+        }
+        Err(DebugError::Unsupported(
+            "asynchronous interrupt (\\x03) requires an out-of-band reader; RspClient is strictly \
+             request/response and injecting the byte would leave an unmatched stop reply in the \
+             framer. Stop the target with a breakpoint instead."
+                .to_string(),
+        ))
+    }
+
+    // -- threads ------------------------------------------------------------
+
+    async fn threads(&self) -> Result<Vec<ThreadId>, DebugError> {
+        self.with_session(|s| {
+            let ids = s.client.thread_ids().map_err(|e| rsp_err("qfThreadInfo", &e))?;
+            Ok(ids
+                .into_iter()
+                .map(|t| ThreadId(u32::try_from(t).unwrap_or(0)))
+                .collect())
+        })
+    }
+
+    async fn current_thread(&self) -> Result<ThreadId, DebugError> {
+        self.with_session(|s| {
+            if s.current_tid.0 != 0 {
+                return Ok(s.current_tid);
+            }
+            let qc = s.text(b"qC", "qC")?;
+            let tid = qc
+                .strip_prefix("QC")
+                .and_then(|h| u32::from_str_radix(h, 16).ok())
+                .ok_or_else(|| DebugError::Os(format!("qC reply not understood: {qc:?}")))?;
+            s.current_tid = ThreadId(tid);
+            Ok(s.current_tid)
+        })
+    }
+
+    // -- registers ----------------------------------------------------------
+
+    async fn get_registers(&self, tid: ThreadId) -> Result<RegisterSet, DebugError> {
+        self.with_session(|s| s.read_register_set(tid))
+    }
+
+    async fn set_registers(&self, tid: ThreadId, regs: RegisterSet) -> Result<(), DebugError> {
+        self.with_session(|s| {
+            s.select_thread(tid)?;
+            // Read-modify-write: the `G` packet is all-or-nothing, so writing a
+            // block built from only the integer registers would zero the vector
+            // file.
+            let mut block = s.client.read_registers().map_err(|e| rsp_err("g", &e))?;
+            s.regs.encode_into(&regs, &mut block);
+            s.client.write_registers(&block).map_err(|e| rsp_err("G", &e))
+        })
+    }
+
+    async fn get_register(&self, tid: ThreadId, name: &str) -> Result<u64, DebugError> {
+        self.with_session(|s| {
+            s.select_thread(tid)?;
+            let info = s
+                .regs
+                .by_name(name)
+                .ok_or_else(|| DebugError::RegisterError(format!("no register named {name:?}")))?;
+            let (regnum, size) = (info.regnum, info.byte_size() as usize);
+            if size > 8 {
+                return Err(DebugError::RegisterError(format!(
+                    "{name} is {} bits wide and does not fit a u64",
+                    info.bitsize
+                )));
+            }
+            let text = s.text(&commands::read_register(regnum), "p")?;
+            let bytes = crate::ios::rsp::hex_decode(text.as_bytes())
+                .map_err(|e| DebugError::RegisterError(format!("p{regnum:x} reply: {e}")))?;
+            let mut buf = [0u8; 8];
+            let n = size.min(bytes.len());
+            buf[..n].copy_from_slice(&bytes[..n]);
+            Ok(u64::from_le_bytes(buf))
+        })
+    }
+
+    async fn set_register(&self, tid: ThreadId, name: &str, value: u64) -> Result<(), DebugError> {
+        self.with_session(|s| {
+            s.select_thread(tid)?;
+            let info = s
+                .regs
+                .by_name(name)
+                .ok_or_else(|| DebugError::RegisterError(format!("no register named {name:?}")))?;
+            let (regnum, size) = (info.regnum, info.byte_size() as usize);
+            if size > 8 {
+                return Err(DebugError::RegisterError(format!(
+                    "{name} is {} bits wide; write it through set_registers",
+                    info.bitsize
+                )));
+            }
+            let text = s.text(&commands::write_register(regnum, &value.to_le_bytes()[..size]), "P")?;
+            if text.starts_with("OK") {
+                Ok(())
+            } else {
+                Err(DebugError::RegisterError(format!(
+                    "stub rejected P{regnum:x} ({name}): {text:?}"
+                )))
+            }
+        })
+    }
+
+    // -- memory -------------------------------------------------------------
+
+    async fn read_memory(&self, addr: Address, size: usize) -> Result<Vec<u8>, DebugError> {
+        self.with_session(|s| {
+            s.client
+                .read_memory(addr.as_u64(), size)
+                .map_err(|e| DebugError::MemoryError(addr.as_u64(), e.to_string()))
+        })
+    }
+
+    async fn write_memory(&self, addr: Address, data: &[u8]) -> Result<usize, DebugError> {
+        self.with_session(|s| {
+            s.client
+                .write_memory(addr.as_u64(), data)
+                .map_err(|e| DebugError::MemoryError(addr.as_u64(), e.to_string()))
+        })
+    }
+
+    async fn memory_maps(&self) -> Result<Vec<MemoryMap>, DebugError> {
+        let mut seeds = vec![0u64];
+        if let Ok(mods) = self.modules().await {
+            seeds.extend(mods.iter().map(|m| m.base.as_u64()));
+        }
+        if let Ok(tid) = self.current_thread().await
+            && let Ok(regs) = self.get_registers(tid).await
+        {
+            seeds.push(regs.pc);
+            seeds.push(regs.sp);
+        }
+        self.walk_memory_regions(&seeds)
+    }
+
+    // -- breakpoints --------------------------------------------------------
+
+    async fn set_breakpoint(&self, addr: Address, kind: BreakpointKind) -> Result<(), DebugError> {
+        let a = addr.as_u64();
+        if self.breakpoints.read().contains_key(&a) {
+            return Err(DebugError::BreakpointExists(a));
+        }
+        if kind == BreakpointKind::Software || kind == BreakpointKind::Hardware {
+            arm64::check_instruction_alignment(a).map_err(|e| {
+                DebugError::Unsupported(format!("breakpoint at {a:#x} is not A64-aligned: {e}"))
+            })?;
+        }
+        let (zkind, size) = z_kind_for(kind);
+        let accepted = self.with_session(|s| {
+            let text = s.text(&commands::insert_breakpoint(zkind, a, size), "Z")?;
+            Ok(text.starts_with("OK"))
+        })?;
+
+        let mut record = BpRecord {
+            bp: match kind {
+                BreakpointKind::Software => Breakpoint::new_software(addr),
+                BreakpointKind::Hardware => Breakpoint::new_hardware(addr),
+                other => Breakpoint::new_watchpoint(addr, other),
+            },
+            saved: None,
+        };
+
+        if !accepted {
+            if kind != BreakpointKind::Software {
+                return Err(DebugError::Unsupported(format!(
+                    "stub does not support {kind:?} breakpoints (Z{})",
+                    zkind.code()
+                )));
+            }
+            // Fallback: install the A64 `BRK #0` ourselves, keeping the four
+            // original bytes so the patch is exactly reversible. `Breakpoint`
+            // only models a single `original_byte` (an x86 `int3` assumption),
+            // so the full word is kept here and the first byte mirrored there
+            // for the hub crate's benefit.
+            let original = self.with_session(|s| {
+                let orig = s
+                    .client
+                    .read_memory(a, 4)
+                    .map_err(|e| DebugError::MemoryError(a, format!("save original: {e}")))?;
+                s.client
+                    .write_memory(a, &arm64::brk_bytes(0))
+                    .map_err(|e| DebugError::MemoryError(a, format!("patch BRK: {e}")))?;
+                Ok(orig)
+            })?;
+            record.bp.original_byte = original.first().copied();
+            record.saved = Some(original);
+        }
+
+        self.breakpoints.write().insert(a, record);
+        Ok(())
+    }
+
+    async fn remove_breakpoint(&self, addr: Address) -> Result<(), DebugError> {
+        let a = addr.as_u64();
+        let record = self
+            .breakpoints
+            .write()
+            .remove(&a)
+            .ok_or(DebugError::BreakpointNotFound(a))?;
+        let (zkind, size) = z_kind_for(record.bp.kind);
+        self.with_session(|s| {
+            if let Some(orig) = &record.saved {
+                s.client
+                    .write_memory(a, orig)
+                    .map_err(|e| DebugError::MemoryError(a, format!("restore original: {e}")))?;
+            } else if record.bp.enabled {
+                s.text(&commands::remove_breakpoint(zkind, a, size), "z")?;
+            }
+            Ok(())
+        })
+    }
+
+    async fn enable_breakpoint(&self, addr: Address) -> Result<(), DebugError> {
+        let a = addr.as_u64();
+        let (kind, was_enabled, saved) = {
+            let guard = self.breakpoints.read();
+            let rec = guard.get(&a).ok_or(DebugError::BreakpointNotFound(a))?;
+            (rec.bp.kind, rec.bp.enabled, rec.saved.is_some())
+        };
+        if was_enabled {
+            return Ok(());
+        }
+        let (zkind, size) = z_kind_for(kind);
+        self.with_session(|s| {
+            if saved {
+                s.client
+                    .write_memory(a, &arm64::brk_bytes(0))
+                    .map_err(|e| DebugError::MemoryError(a, format!("re-patch BRK: {e}")))?;
+            } else {
+                s.text(&commands::insert_breakpoint(zkind, a, size), "Z")?;
+            }
+            Ok(())
+        })?;
+        if let Some(rec) = self.breakpoints.write().get_mut(&a) {
+            rec.bp.enabled = true;
+        }
+        Ok(())
+    }
+
+    async fn disable_breakpoint(&self, addr: Address) -> Result<(), DebugError> {
+        let a = addr.as_u64();
+        let (kind, was_enabled, saved) = {
+            let guard = self.breakpoints.read();
+            let rec = guard.get(&a).ok_or(DebugError::BreakpointNotFound(a))?;
+            (rec.bp.kind, rec.bp.enabled, rec.saved.clone())
+        };
+        if !was_enabled {
+            return Ok(());
+        }
+        let (zkind, size) = z_kind_for(kind);
+        self.with_session(|s| {
+            if let Some(orig) = &saved {
+                s.client
+                    .write_memory(a, orig)
+                    .map_err(|e| DebugError::MemoryError(a, format!("unpatch BRK: {e}")))?;
+            } else {
+                s.text(&commands::remove_breakpoint(zkind, a, size), "z")?;
+            }
+            Ok(())
+        })?;
+        if let Some(rec) = self.breakpoints.write().get_mut(&a) {
+            rec.bp.enabled = false;
+        }
+        Ok(())
+    }
+
+    async fn breakpoints(&self) -> Result<Vec<Breakpoint>, DebugError> {
+        Ok(self.breakpoints.read().values().map(|r| r.bp.clone()).collect())
+    }
+
+    // -- modules ------------------------------------------------------------
+
+    async fn modules(&self) -> Result<Vec<ModuleInfo>, DebugError> {
+        let json = self.with_session(|s| {
+            s.text(b"jGetLoadedDynamicLibrariesInfos:{\"fetch_all_solibs\":true}", "jGetLoadedDynamicLibrariesInfos")
+        })?;
+        if json.is_empty() {
+            return Err(DebugError::Unsupported(
+                "stub does not implement jGetLoadedDynamicLibrariesInfos; this backend will not \
+                 fabricate a module list"
+                    .to_string(),
+            ));
+        }
+        let root: serde_json::Value = serde_json::from_str(&json)
+            .map_err(|e| DebugError::Os(format!("jGetLoadedDynamicLibrariesInfos: {e}")))?;
+        let images = root
+            .get("images")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| DebugError::Os("image list has no `images` array".to_string()))?;
+
+        let mut out = Vec::with_capacity(images.len());
+        for img in images {
+            let base = img.get("load_address").and_then(serde_json::Value::as_u64).unwrap_or(0);
+            let path = img
+                .get("pathname")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let filetype = img
+                .get("mach_header")
+                .and_then(|h| h.get("filetype"))
+                .and_then(serde_json::Value::as_u64);
+            // Size is not in the reply. Rather than reporting 0 as if it were
+            // measured, take it from the region the header sits in.
+            let size = self
+                .with_session(|s| {
+                    let text = s.text(MemoryRegionInfo::command(base).as_bytes(), "qMemoryRegionInfo")?;
+                    Ok(MemoryRegionInfo::parse(&text).ok().filter(MemoryRegionInfo::is_mapped).map_or(0, |r| r.size))
+                })
+                .unwrap_or(0);
+            out.push(ModuleInfo {
+                name: path.rsplit('/').next().unwrap_or(&path).to_string(),
+                path,
+                base: Address::new(base),
+                size,
+                // The reply carries no entry point; inventing one would be the
+                // exact kind of confident wrongness this repo punishes.
+                entry_point: None,
+                is_main: filetype == Some(2), // MH_EXECUTE
+            });
+        }
+        Ok(out)
+    }
+
+    // -- stack --------------------------------------------------------------
+
+    async fn backtrace(&self, tid: ThreadId) -> Result<Vec<StackFrame>, DebugError> {
+        self.require_arm64("backtrace")?;
+        let regs = self.get_registers(tid).await?;
+        let unwind_regs = Arm64UnwindRegs::from(&regs);
+        // Feed the unwinder the target's own images so the CompactUnwind and
+        // EhFrame strategies can actually run: with none, only the
+        // frame-pointer walk was ever reachable, which on arm64 misses the
+        // majority of functions.
+        let images = self.unwind_images().await;
+        let mut frames: Vec<StackFrame> = self.with_session(|s| {
+            let unwinder = images
+                .into_iter()
+                .fold(AppleUnwinder::new(), AppleUnwinder::with_image);
+            let mem = RspMemory { client: Mutex::new(&mut s.client) };
+            Ok(unwinder
+                .backtrace(unwind_regs, &mem)
+                .iter()
+                .map(crate::ios::unwind::UnwindFrame::to_stack_frame)
+                .collect())
+        })?;
+        if let Some(resolver) = self.resolver.read().clone() {
+            crate::symbol_resolver::enrich_frames(&mut frames, resolver.as_ref());
+        }
+        Ok(frames)
+    }
+
+    fn set_symbol_resolver(&self, resolver: Arc<dyn FrameSymbolResolver>) {
+        *self.resolver.write() = Some(resolver);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ios::mock_debugserver::MockDebugserver;
+
+    const TEXT_BASE: u64 = 0x1_0000_4000;
+
+    /// A tiny A64 program: a leaf that stores to the stack, called from a
+    /// frame-pointer-establishing caller, so a backtrace has something real to
+    /// walk.
+    ///
+    /// ```text
+    /// 0x…4000  stp  x29, x30, [sp, #-16]!   (caller prologue)
+    /// 0x…4004  mov  x29, sp
+    /// 0x…4008  bl   +0x10  -> 0x…4018
+    /// 0x…400c  ldp  x29, x30, [sp], #16
+    /// 0x…4010  ret
+    /// 0x…4014  brk  #0
+    /// 0x…4018  stp  x29, x30, [sp, #-16]!   (callee prologue)
+    /// 0x…401c  mov  x29, sp
+    /// 0x…4020  movz x0, #0x2a               (callee body — breakpoint target)
+    /// 0x…4024  ldp  x29, x30, [sp], #16
+    /// 0x…4028  ret
+    /// ```
+    ///
+    /// The callee establishes a frame of its own on purpose. Without a
+    /// prologue, `x29` at the breakpoint would still belong to the *caller*,
+    /// and walking it would skip a frame rather than recover one — which is
+    /// exactly the shape that makes a backtrace test pass while the unwinder
+    /// is wrong.
+    fn program() -> Vec<u32> {
+        vec![
+            0xA9BF_7BFD, // stp x29, x30, [sp, #-16]!
+            0x9100_03FD, // mov x29, sp
+            0x9400_0004, // bl #+0x10
+            0xA8C1_7BFD, // ldp x29, x30, [sp], #16
+            0xD65F_03C0, // ret
+            0xD420_0000, // brk #0
+            0xA9BF_7BFD, // stp x29, x30, [sp, #-16]!
+            0x9100_03FD, // mov x29, sp
+            0xD280_0540, // movz x0, #0x2a
+            0xA8C1_7BFD, // ldp x29, x30, [sp], #16
+            0xD65F_03C0, // ret
+        ]
+    }
+
+    fn debugger() -> AppleDebugger {
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // 7 bytes per recv: a prime chunk size, so any assumption that one
+        // read yields one packet fails immediately.
+        AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)))
+    }
+
+    /// When the stub has no server-managed software breakpoints, this backend
+    /// falls back to patching an A64 `BRK #0` into the target itself and keeps
+    /// the original word so the patch is reversible.
+    ///
+    /// `remove_breakpoint` writes that word back; `detach()` did NOT — it
+    /// cleared its table and abandoned the `BRK` in the target's code, where
+    /// it raises SIGTRAP with no debugger left to handle it and terminates the
+    /// process. The same defect fixed for the other three backends in iter
+    /// 245, in a FOURTH `Debugger` impl the source guards never covered.
+    ///
+    /// The loopback factory serves exactly one connection, so the state after
+    /// `detach` cannot be re-read here; this proves the patch/restore
+    /// mechanism detach now uses, and
+    /// `every_backend_undoes_its_own_patches_on_detach` guards the ordering.
+    #[tokio::test]
+    async fn a_self_patched_breakpoint_is_reversible() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints(); // force the manual fallback
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let addr = Address(TEXT_BASE);
+        let original = dbg.read_memory(addr, 4).await.expect("read original");
+        dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("set_breakpoint");
+
+        let patched = dbg.read_memory(addr, 4).await.expect("read patched");
+        assert_ne!(patched, original, "the fallback must really patch the target");
+        assert_eq!(
+            patched,
+            crate::ios::arm64::brk_bytes(0),
+            "the fallback must plant an A64 BRK #0"
+        );
+
+        dbg.remove_breakpoint(addr).await.expect("remove_breakpoint");
+        assert_eq!(
+            dbg.read_memory(addr, 4).await.expect("read restored"),
+            original,
+            "a self-patched breakpoint must be exactly reversible"
+        );
+        dbg.detach().await.ok();
+    }
+
+    #[test]
+    fn arch_classification_separates_arm64e() {
+        assert_eq!(TargetArch::from_cpu(CPU_TYPE_ARM64, 0), TargetArch::Arm64);
+        assert_eq!(TargetArch::from_cpu(CPU_TYPE_ARM64, 2), TargetArch::Arm64e);
+        assert_eq!(TargetArch::from_cpu(CPU_TYPE_X86_64, 3), TargetArch::X86_64);
+        assert!(matches!(TargetArch::from_cpu(12, 9), TargetArch::Other(12)));
+        assert!(TargetArch::Arm64e.is_arm64());
+        assert!(!TargetArch::X86_64.is_arm64());
+    }
+
+    #[test]
+    fn z_kind_mapping_is_total_and_distinct() {
+        let kinds = [
+            BreakpointKind::Software,
+            BreakpointKind::Hardware,
+            BreakpointKind::DataRead,
+            BreakpointKind::DataWrite,
+            BreakpointKind::DataReadWrite,
+        ];
+        let codes: Vec<u8> = kinds.iter().map(|k| z_kind_for(*k).0.code()).collect();
+        assert_eq!(codes, vec![0, 1, 3, 2, 4]);
+        // Instruction breakpoints are 4 bytes; watchpoints size a region.
+        assert_eq!(z_kind_for(BreakpointKind::Software).1, 4);
+        assert_eq!(z_kind_for(BreakpointKind::DataWrite).1, 8);
+    }
+
+    #[tokio::test]
+    async fn unattached_calls_report_not_attached_rather_than_panicking() {
+        let dbg = debugger();
+        assert!(!dbg.is_attached());
+        assert!(dbg.target_pid().is_none());
+        assert!(matches!(dbg.threads().await, Err(DebugError::NotAttached)));
+        assert!(matches!(
+            dbg.read_memory(Address::new(TEXT_BASE), 4).await,
+            Err(DebugError::NotAttached)
+        ));
+        assert!(matches!(dbg.detach().await, Err(DebugError::NotAttached)));
+        assert!(matches!(dbg.pause().await, Err(DebugError::NotAttached)));
+    }
+
+    #[tokio::test]
+    async fn attach_discovers_registers_and_architecture() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        assert!(dbg.is_attached());
+        assert_eq!(dbg.target_pid(), Some(ProcessId(4242)));
+        assert_eq!(dbg.target_arch(), Some(TargetArch::Arm64e));
+        let map = dbg.register_map().unwrap();
+        // 31 x-regs + sp + pc + cpsr + 32 v-regs + fpsr + fpcr.
+        assert_eq!(map.entries().len(), 68);
+        assert_eq!(map.by_generic(GenericRole::Pc).unwrap().name, "pc");
+        assert_eq!(map.by_name("x0").unwrap().regnum, 0);
+    }
+
+    #[tokio::test]
+    async fn wrong_pid_is_process_not_found() {
+        let dbg = debugger();
+        assert!(matches!(
+            dbg.attach(ProcessId(1)).await,
+            Err(DebugError::ProcessNotFound(1))
+        ));
+    }
+
+    #[tokio::test]
+    async fn registers_round_trip_through_g_and_p() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+
+        let regs = dbg.get_registers(tid).await.unwrap();
+        assert_eq!(regs.pc, TEXT_BASE);
+        assert!(regs.sp > 0);
+
+        dbg.set_register(tid, "x5", 0xDEAD_BEEF_1234).await.unwrap();
+        assert_eq!(dbg.get_register(tid, "x5").await.unwrap(), 0xDEAD_BEEF_1234);
+
+        let mut whole = dbg.get_registers(tid).await.unwrap();
+        whole.set("x6", 0x55AA);
+        dbg.set_registers(tid, whole).await.unwrap();
+        assert_eq!(dbg.get_register(tid, "x6").await.unwrap(), 0x55AA);
+        // The read-modify-write must not have clobbered the other register.
+        assert_eq!(dbg.get_register(tid, "x5").await.unwrap(), 0xDEAD_BEEF_1234);
+
+        assert!(matches!(
+            dbg.get_register(tid, "nonexistent").await,
+            Err(DebugError::RegisterError(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_round_trips_and_unmapped_reads_fail() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let insn = dbg.read_memory(Address::new(TEXT_BASE), 4).await.unwrap();
+        assert_eq!(u32::from_le_bytes(insn.try_into().unwrap()), program()[0]);
+
+        // The stack is writable; prove a write is observable.
+        let sp = dbg.get_registers(dbg.current_thread().await.unwrap()).await.unwrap().sp;
+        let scratch = Address::new(sp - 64);
+        assert_eq!(dbg.write_memory(scratch, &[1, 2, 3, 4]).await.unwrap(), 4);
+        assert_eq!(dbg.read_memory(scratch, 4).await.unwrap(), vec![1, 2, 3, 4]);
+
+        assert!(matches!(
+            dbg.read_memory(Address::new(0xDEAD_0000), 4).await,
+            Err(DebugError::MemoryError(0xDEAD_0000, _))
+        ));
+    }
+
+    #[tokio::test]
+    async fn breakpoint_lifecycle_is_enforced() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let addr = Address::new(TEXT_BASE + 0x18);
+
+        dbg.set_breakpoint(addr, BreakpointKind::Software).await.unwrap();
+        assert!(matches!(
+            dbg.set_breakpoint(addr, BreakpointKind::Software).await,
+            Err(DebugError::BreakpointExists(_))
+        ));
+        assert_eq!(dbg.breakpoints().await.unwrap().len(), 1);
+
+        dbg.disable_breakpoint(addr).await.unwrap();
+        assert!(!dbg.breakpoints().await.unwrap()[0].enabled);
+        dbg.enable_breakpoint(addr).await.unwrap();
+        assert!(dbg.breakpoints().await.unwrap()[0].enabled);
+
+        dbg.remove_breakpoint(addr).await.unwrap();
+        assert!(dbg.breakpoints().await.unwrap().is_empty());
+        assert!(matches!(
+            dbg.remove_breakpoint(addr).await,
+            Err(DebugError::BreakpointNotFound(_))
+        ));
+
+        // A misaligned A64 breakpoint is rejected, not silently rounded.
+        assert!(matches!(
+            dbg.set_breakpoint(Address::new(TEXT_BASE + 1), BreakpointKind::Software).await,
+            Err(DebugError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn hardware_breakpoints_use_z1() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let addr = Address::new(TEXT_BASE + 0x18);
+        dbg.set_breakpoint(addr, BreakpointKind::Hardware).await.unwrap();
+        let bps = dbg.breakpoints().await.unwrap();
+        assert_eq!(bps[0].kind, BreakpointKind::Hardware);
+        dbg.remove_breakpoint(addr).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn single_step_advances_one_instruction() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        let before = dbg.get_registers(tid).await.unwrap().pc;
+        let event = dbg.single_step(tid).await.unwrap();
+        assert!(matches!(event.reason, StopReason::SingleStep { .. }), "{:?}", event.reason);
+        assert_eq!(dbg.get_registers(tid).await.unwrap().pc, before + 4);
+    }
+
+    #[tokio::test]
+    async fn step_over_a_call_lands_after_it() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        // Park on the `bl`.
+        dbg.set_register(tid, "pc", TEXT_BASE + 8).await.unwrap();
+        dbg.step_over(tid).await.unwrap();
+        assert_eq!(dbg.get_registers(tid).await.unwrap().pc, TEXT_BASE + 0xC);
+        // The temporary return-site breakpoint must not survive.
+        assert!(dbg.breakpoints().await.unwrap().is_empty());
+    }
+
+    /// A stub is allowed to answer `m` with fewer bytes than were asked for.
+    /// `RspClient::read_memory` used to hand that shortfall back as if it were
+    /// the whole read, and the software-breakpoint fallback then saved a SHORT
+    /// original word before patching `BRK #0` — so the restore wrote back fewer
+    /// bytes than it overwrote and left part of the `BRK` in the target's code.
+    /// That is the iter-245 defect (an abandoned `BRK` raises SIGTRAP with no
+    /// debugger left and kills the process) reached by a different road.
+    ///
+    /// With the shortfall reported, `set_breakpoint` fails BEFORE it writes,
+    /// so the target is left untouched — which is what this asserts.
+    #[tokio::test]
+    async fn a_short_read_cannot_leave_a_half_restored_breakpoint() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints(); // force the read-then-patch fallback
+        srv.short_read_memory();
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let addr = Address::new(TEXT_BASE + 0x10);
+
+        let err = dbg
+            .set_breakpoint(addr, BreakpointKind::Software)
+            .await
+            .expect_err("a short save must not be accepted as the original word");
+        assert!(
+            format!("{err}").contains("short read"),
+            "wrong failure mode: {err}"
+        );
+        // Nothing was patched, so no breakpoint is recorded and the target's
+        // code is still its own.
+        assert!(dbg.breakpoints().await.unwrap().is_empty());
+    }
+
+    /// The same step-over, against a stub with no server-managed software
+    /// breakpoints — the case `set_breakpoint` has always handled by patching
+    /// `BRK #0` itself.
+    ///
+    /// `step_over` planted its return-site breakpoint with a bare
+    /// `client.insert_breakpoint`, which turns the empty `Z0` reply into
+    /// `RspError::Framing` — so stepping over a call failed outright on stubs
+    /// this backend otherwise fully supported. The gap was invisible because
+    /// every other step_over test runs against the permissive mock.
+    #[tokio::test]
+    async fn step_over_falls_back_when_the_stub_refuses_z0() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints();
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        dbg.set_register(tid, "pc", TEXT_BASE + 8).await.unwrap();
+
+        dbg.step_over(tid).await.expect("step_over must fall back to a self-patched BRK");
+        assert_eq!(dbg.get_registers(tid).await.unwrap().pc, TEXT_BASE + 0xC);
+        assert!(
+            dbg.breakpoints().await.unwrap().is_empty(),
+            "the temporary return-site breakpoint must not survive"
+        );
+        // And the patch must be undone: the original word is back, so the
+        // return site is executable code again rather than a stray `BRK #0`.
+        let after = dbg.read_memory(Address::new(TEXT_BASE + 0xC), 4).await.unwrap();
+        assert_ne!(
+            after,
+            arm64::brk_bytes(0).to_vec(),
+            "unplant left the BRK in the target"
+        );
+    }
+
+    #[tokio::test]
+    async fn continue_stops_at_the_breakpoint_and_counts_the_hit() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let target = Address::new(TEXT_BASE + 0x18);
+        dbg.set_breakpoint(target, BreakpointKind::Software).await.unwrap();
+
+        let event = dbg.continue_execution().await.unwrap();
+        match &event.reason {
+            StopReason::Breakpoint { address, bp } => {
+                assert_eq!(*address, target);
+                assert_eq!(bp.hit_count, 1);
+            }
+            other => panic!("expected a breakpoint stop, got {other:?}"),
+        }
+        let tid = dbg.current_thread().await.unwrap();
+        assert_eq!(dbg.get_registers(tid).await.unwrap().pc, target.as_u64());
+    }
+
+    #[tokio::test]
+    async fn modules_and_memory_maps_come_from_the_stub() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+
+        let mods = dbg.modules().await.unwrap();
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].name, "mock.dylib");
+        assert_eq!(mods[0].base.as_u64(), TEXT_BASE);
+        // Size is measured from the mapped region, never guessed.
+        assert_eq!(mods[0].size, program().len() as u64 * 4);
+        assert!(!mods[0].is_main, "the mock image is a dylib (filetype 6)");
+
+        let maps = dbg.memory_maps().await.unwrap();
+        let text = maps.iter().find(|m| m.base.as_u64() == TEXT_BASE).expect("__TEXT");
+        assert!(text.executable && !text.writable);
+        assert!(maps.iter().any(|m| m.writable && m.name.as_deref() == Some("Stack")));
+    }
+
+    #[tokio::test]
+    async fn threads_are_enumerated() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let threads = dbg.threads().await.unwrap();
+        assert_eq!(threads, vec![ThreadId(1)]);
+        assert_eq!(dbg.current_thread().await.unwrap(), ThreadId(1));
+    }
+
+    #[tokio::test]
+    async fn backtrace_walks_the_frame_pointer_chain() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        // Stop inside the callee, past its prologue, so its own frame record
+        // is on the stack.
+        dbg.set_breakpoint(Address::new(TEXT_BASE + 0x20), BreakpointKind::Software)
+            .await
+            .unwrap();
+        dbg.continue_execution().await.unwrap();
+
+        let frames = dbg.backtrace(tid).await.unwrap();
+        assert!(!frames.is_empty());
+        assert_eq!(frames[0].index, 0);
+        assert_eq!(frames[0].pc.as_u64(), TEXT_BASE + 0x20);
+        // The caller's prologue saved x29/x30, so the chain reaches it.
+        assert!(
+            frames.len() >= 2,
+            "expected the caller frame to be recovered, got {frames:?}"
+        );
+        assert_eq!(frames[1].pc.as_u64(), TEXT_BASE + 0xC);
+    }
+
+    #[tokio::test]
+    async fn detach_clears_state_and_is_not_repeatable() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        dbg.set_breakpoint(Address::new(TEXT_BASE), BreakpointKind::Software).await.unwrap();
+        dbg.detach().await.unwrap();
+        assert!(!dbg.is_attached());
+        assert!(dbg.breakpoints().await.unwrap().is_empty());
+        assert!(matches!(dbg.detach().await, Err(DebugError::NotAttached)));
+    }
+
+    #[tokio::test]
+    async fn launch_rejects_options_it_cannot_honour() {
+        let dbg = debugger();
+        let mut opts = LaunchOptions::new("/usr/bin/true");
+        opts.follow_forks = true;
+        assert!(matches!(dbg.launch(opts).await, Err(DebugError::Unsupported(_))));
+        assert!(!dbg.is_attached(), "a rejected launch must not leave a session");
+    }
+
+    #[tokio::test]
+    async fn launch_sends_argv_and_reports_the_pid() {
+        let dbg = debugger();
+        let opts = LaunchOptions::new("/usr/bin/true").with_args(vec!["-x".to_string()]);
+        assert_eq!(dbg.launch(opts).await.unwrap(), ProcessId(4242));
+        assert!(dbg.is_attached());
+    }
+
+    #[tokio::test]
+    async fn backtrace_on_a_non_arm64_target_is_an_explicit_error() {
+        // Force the recorded architecture to Intel and confirm the unwinder is
+        // refused rather than run with an ARM64 model.
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        if let Some(s) = dbg.session.lock().as_mut() {
+            s.arch = TargetArch::X86_64;
+        }
+        assert!(matches!(
+            dbg.backtrace(ThreadId(1)).await,
+            Err(DebugError::Unsupported(_))
+        ));
+        assert!(matches!(
+            dbg.step_out(ThreadId(1)).await,
+            Err(DebugError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn register_map_decodes_the_g_block_by_discovered_offsets() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let map = dbg.register_map().unwrap();
+        // 31*8=248 (x0..x30) + 8 sp + 8 pc + 4 cpsr = 268, then 32*16=512 of
+        // vector state, then fpsr and fpcr: 268 + 512 + 4 + 4 = 788.
+        assert_eq!(map.g_packet_bytes(), 788);
+        let mut block = vec![0u8; map.g_packet_bytes()];
+        let mut set = RegisterSet::new();
+        set.set("x3", 0x1122_3344);
+        set.pc = 0xABCD;
+        map.encode_into(&set, &mut block);
+        let back = map.decode(&block);
+        assert_eq!(back.get("x3"), Some(0x1122_3344));
+        assert_eq!(back.pc, 0xABCD);
+        // Vector registers are skipped, not truncated into the name space.
+        assert!(back.get("v0").is_none());
+    }
+}

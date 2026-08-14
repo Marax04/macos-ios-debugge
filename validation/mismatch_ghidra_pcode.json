@@ -1,0 +1,9 @@
+{
+ "category": "ghidra_pcode",
+ "tools_in_category": 22,
+ "tools_tested": 22,
+ "checks_total": 22,
+ "checks_passed": 22,
+ "checks_skipped": 0,
+ "mismatches": []
+}

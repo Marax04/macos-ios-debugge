@@ -1,0 +1,99 @@
+{
+  "probe_ok": true,
+  "samples_ok": 8,
+  "hlil_pseudo_populated_count": 0,
+  "dce_comment_present_count": 3,
+  "winapi_resolved_count": 0,
+  "avg_noise_var_delta": -1.5,
+  "confidence_delta": 0.0,
+  "samples": [
+    {
+      "addr": "0x140001000",
+      "ok": true,
+      "error": null,
+      "confidence": 72,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": false,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "// inferred from 3 accesses on `a2`\nstruct Struct_1_t {\n    char _pad_start[32];\n    __int64 field_20; // offset 32\n    __int64 field_28; // offset 40\n    __int64 field_30; // offset 48\n};\n\n// inferred from 4 accesses on `ptr`\nstruct Struct_2_t {\n    char _pad_start[1];\n    char field_1; // offset 1"
+    },
+    {
+      "addr": "0x14000d880",
+      "ok": true,
+      "error": null,
+      "confidence": 56,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": true,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "// inferred from 3 accesses on `a3`\nstruct Struct_1_t {\n    char _pad_start[24];\n    __int64 field_18; // offset 24\n    __int64 field_20; // offset 32\n    __int64 field_28; // offset 40\n};\n\n__int64 sub_14000D9AA();\n\n__int64 __fastcall sub_14000d880(__int64 a1, __int64 *a2,struct Struct_1_t *a3, __in"
+    },
+    {
+      "addr": "0x140026ad0",
+      "ok": true,
+      "error": null,
+      "confidence": 92,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": false,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "// inferred from 2 accesses on `a1`\nstruct Struct_1_t {\n    __int64 field_0; // offset 0\n    __int64 field_8; // offset 8\n};\n\n__int64 sub_1400F2A00();\nextern __int64 off_14012C420;\nextern __int64 off_140111370;\nextern __int64 off_14012C418;\n\n__int64 __fastcall sub_140026ad0(struct Struct_1_t *a1) {\n"
+    },
+    {
+      "addr": "0x1400a4a90",
+      "ok": true,
+      "error": null,
+      "confidence": 92,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": false,
+      "resolved_winapi": false,
+      "noise_vars": 12,
+      "pseudo_code_snippet": "__int64 sub_1400F1190();\n\n__int64 __fastcall sub_1400a4a90(__int64 a1, __int64 a2, __int64 a3) {\n    int v_1240;\n    int v_1250;\n    int v_1260;\n    int v_1270;\n    int v_1280;\n    int v_1290;\n    __m128i xmm11;\n    __m128i xmm10;\n    __m128i xmm9;\n    __m128i xmm8;\n    __m128i xmm7;\n    __m128i xmm"
+    },
+    {
+      "addr": "0x1400f1190",
+      "ok": true,
+      "error": null,
+      "confidence": 92,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": true,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "__int64 __fastcall sub_1400f1190() {\n    __int64 rsp;\n    int v_8;\n    __int64 v4;\n    __int64 v2;\n    __int64 *dst;\n    __int64 v5;\n    __int64 v8;\n    __int64 v6;\n    __int64 v1;\n    __int64 v3;\n\n    *(__int64 *)rsp = v5;\n    v_8 = v6;\n    v4 = 0;\n    v2 = rsp + 24;\n    v2 -= v1;\n    if (v2 < 0) v"
+    },
+    {
+      "addr": "0x140009a90",
+      "ok": true,
+      "error": null,
+      "confidence": 80,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": false,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "int __fastcall sub_140009a90(__int64 *a1) {\n    int result;\n\n    result = *a1;\n    if (result >= 3) JUMPOUT(0x140009abf);\n    return result;\n}"
+    },
+    {
+      "addr": "0x1400f2a00",
+      "ok": true,
+      "error": null,
+      "confidence": 80,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": false,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "void __fastcall sub_1400f2a00(__int64 a1, __int64 a2, __int64 a3) {\n    if (a1 <= a3) JUMPOUT(0x1400f2a1a);\n    return;\n}"
+    },
+    {
+      "addr": "0x1400f206c",
+      "ok": true,
+      "error": null,
+      "confidence": 68,
+      "has_hlil_pseudo": false,
+      "has_dce_comment": true,
+      "resolved_winapi": false,
+      "noise_vars": 0,
+      "pseudo_code_snippet": "__int64 sub_1400F20FE();\n\n__int64 __fastcall mainCRTStartup(int a1, __int64 a2, __int64 a3, __int64 a4) {\n    __int64 v2;\n    __int64 v5;\n    __int64 v1;\n    __int64 v3;\n    __int64 v4;\n    __int64 v7;\n    int v6;\n\n    a1 = v4 + v1;\n    --a1;\n    v2 = v7;\n    v2 = -v2;\n    v2 &= a1;\n    v2 *= a4; /*"
+    }
+  ]
+}

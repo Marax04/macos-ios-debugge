@@ -1,0 +1,28 @@
+{
+  "crate": "rustre-decompiler-ghidra",
+  "approach": "static-structural validator (crate is a backend library consumed by rustre-mcp-tools; not directly exposed as a dedicated MCP tool family)",
+  "tests": [
+    {
+      "name": "expected modules present",
+      "expected": 16,
+      "result": "all present"
+    },
+    {
+      "name": "expected public symbols (enums/structs)",
+      "expected": 21,
+      "result": "all present"
+    },
+    {
+      "name": "pub fn count >= 200",
+      "result": "pass"
+    },
+    {
+      "name": "Cargo.toml required deps (rustre-core, rustre-decompiler, anyhow, thiserror, serde, serde_json, tokio)",
+      "result": "all present"
+    }
+  ],
+  "mcp_consumer": "rustre-mcp-tools (uses decompiler_ghidra internally; surfaces via generic decompile_* tools)",
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

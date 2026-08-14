@@ -1,0 +1,42 @@
+{
+  "crate": "rustre-symb-z3",
+  "mcp_tools_discovered": [
+    "symbols_demangle_auto",
+    "symbols_demangle_rust",
+    "symbols_demangle_msvc",
+    "symbols_demangle_itanium",
+    "symbols_demangle_swift",
+    "symbols_pdb_load"
+  ],
+  "tests": [
+    {
+      "id": "validator_bit_width",
+      "validator": {
+        "ok": true,
+        "result": 32
+      },
+      "mcp": null,
+      "mcp_available": false
+    },
+    {
+      "id": "validator_emit_smtlib2",
+      "validator": {
+        "ok": true,
+        "result": "(bvadd x (_ bv5 8))"
+      },
+      "mcp": null,
+      "mcp_available": false
+    },
+    {
+      "id": "validator_parse_check_sat",
+      "validator": {
+        "ok": true,
+        "result": "Sat"
+      },
+      "mcp": null,
+      "mcp_available": false
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

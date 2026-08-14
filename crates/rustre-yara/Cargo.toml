@@ -1,0 +1,29 @@
+[package]
+license.workspace = true
+name = "rustre-yara"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+petgraph = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+hex = { workspace = true }
+rayon = { workspace = true }
+aho-corasick = { workspace = true }
+bitflags = { workspace = true }
+
+[lints]
+workspace = true

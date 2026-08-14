@@ -1,0 +1,499 @@
+{
+  "schema_version": "v3",
+  "category": "hex_template",
+  "tools_hardened": 55,
+  "tools_passed": 55,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "hex_template_wav",
+      "status": "PASS",
+      "key": "name",
+      "expected": "WAV",
+      "actual": "WAV",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_wav",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 13,
+      "actual": 13,
+      "note": ""
+    },
+    {
+      "tool": "hex_template_riff_chunk",
+      "status": "PASS",
+      "key": "name",
+      "expected": "RIFF_CHUNK",
+      "actual": "RIFF_CHUNK",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_riff_chunk",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 2,
+      "actual": 2,
+      "note": ""
+    },
+    {
+      "tool": "hex_template_builtin_templates",
+      "status": "PASS",
+      "key": "count",
+      "expected": 10,
+      "actual": 10,
+      "note": "map length"
+    },
+    {
+      "tool": "hex_template_builtin_names",
+      "status": "PASS",
+      "expected": [
+        "BMP",
+        "ELF32",
+        "ELF64",
+        "GIF",
+        "JPEG",
+        "MZ",
+        "PDF",
+        "PE_COFF",
+        "PNG",
+        "ZIP"
+      ],
+      "actual": [
+        "BMP",
+        "ELF32",
+        "ELF64",
+        "GIF",
+        "JPEG",
+        "MZ",
+        "PDF",
+        "PE_COFF",
+        "PNG",
+        "ZIP"
+      ]
+    },
+    {
+      "tool": "hex_template_bitfield_extract",
+      "status": "PASS",
+      "key": "value",
+      "expected": 15,
+      "actual": 15,
+      "note": "raw=255,sb=2,bc=4"
+    },
+    {
+      "tool": "hex_template_elf32_phdr",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ELF32_PHDR",
+      "actual": "ELF32_PHDR",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_elf32_phdr",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 8,
+      "actual": 8,
+      "note": ""
+    },
+    {
+      "tool": "hex_template_elf64_phdr",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ELF64_PHDR",
+      "actual": "ELF64_PHDR",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_elf64_phdr",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 8,
+      "actual": 8,
+      "note": ""
+    },
+    {
+      "tool": "hex_template_riff_chunk_wire",
+      "status": "PASS",
+      "key": "name",
+      "expected": "RIFF_CHUNK",
+      "actual": "RIFF_CHUNK",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_riff_chunk_wire",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 2,
+      "actual": 2,
+      "note": ""
+    },
+    {
+      "tool": "hex_template_wav_wire",
+      "status": "PASS",
+      "key": "name",
+      "expected": "WAV",
+      "actual": "WAV",
+      "note": ""
+    },
+    {
+      "tool": "hex_template_wav_wire",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 13,
+      "actual": 13,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_builtin_count",
+      "status": "PASS",
+      "key": "count",
+      "expected": 10,
+      "actual": 10,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_registry_with_builtins",
+      "status": "PASS",
+      "key": "len",
+      "expected": 10,
+      "actual": 10,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_registry_with_builtins",
+      "status": "PASS",
+      "key": "is_empty",
+      "expected": false,
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_registry_with_builtins/names",
+      "status": "PASS",
+      "expected": [
+        "BMP",
+        "ELF32",
+        "ELF64",
+        "GIF",
+        "JPEG",
+        "MZ",
+        "PDF",
+        "PE_COFF",
+        "PNG",
+        "ZIP"
+      ],
+      "actual": [
+        "BMP",
+        "ELF32",
+        "ELF64",
+        "GIF",
+        "JPEG",
+        "MZ",
+        "PDF",
+        "PE_COFF",
+        "PNG",
+        "ZIP"
+      ]
+    },
+    {
+      "tool": "hex_tplx_template_json_roundtrip",
+      "status": "PASS",
+      "key": "name",
+      "expected": "MZ",
+      "actual": "MZ",
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_template_json_roundtrip/sanity",
+      "status": "PASS",
+      "actual": {
+        "name": "MZ",
+        "fields_count": 19,
+        "json_len": 3657,
+        "source": "rustre_hex_template::Template::{to_json,from_json}"
+      }
+    },
+    {
+      "tool": "hex_tplx_expr_eval/match",
+      "status": "PASS",
+      "key": "result",
+      "expected": true,
+      "actual": true,
+      "note": "42==42"
+    },
+    {
+      "tool": "hex_tplx_expr_eval/nomatch",
+      "status": "PASS",
+      "key": "result",
+      "expected": false,
+      "actual": false,
+      "note": "99!=42"
+    },
+    {
+      "tool": "hex_tplx_bitfield_def_extract",
+      "status": "PASS",
+      "key": "value",
+      "expected": 10,
+      "actual": 10,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_bitfield_struct_extract/lo",
+      "status": "PASS",
+      "key": "lo",
+      "expected": 13,
+      "actual": 13,
+      "note": "lo of 0xCD"
+    },
+    {
+      "tool": "hex_tplx_bitfield_struct_extract/hi",
+      "status": "PASS",
+      "key": "hi",
+      "expected": 12,
+      "actual": 12,
+      "note": "hi of 0xCD"
+    },
+    {
+      "tool": "hex_tplx_bitfield_struct_extract/field_count",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 2,
+      "actual": 2,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_printer_render",
+      "status": "PASS",
+      "expected": "output contains 'Empty'",
+      "actual": "struct Empty {\n}\n"
+    },
+    {
+      "tool": "hex_tplx_apply_builtin_to_bytes",
+      "status": "PASS",
+      "actual": {
+        "name": "MZ",
+        "field_count": 19,
+        "source": "rustre_hex_template::TemplateApplier::apply"
+      }
+    },
+    {
+      "tool": "hex_tplx_registry_apply",
+      "status": "PASS",
+      "actual": {
+        "name": "MZ",
+        "field_count": 19,
+        "source": "rustre_hex_template::TemplateRegistry::apply"
+      }
+    },
+    {
+      "tool": "hex_tplx_pe_opt_header",
+      "status": "PASS",
+      "key": "name",
+      "expected": "PE_OPT_HEADER",
+      "actual": "PE_OPT_HEADER",
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_pe_opt_header",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 30,
+      "actual": 30,
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_elf32_shdr",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ELF32_SHDR",
+      "actual": "ELF32_SHDR",
+      "note": ""
+    },
+    {
+      "tool": "hex_tplx_elf32_shdr",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 10,
+      "actual": 10,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_bmp_header",
+      "status": "PASS",
+      "key": "name",
+      "expected": "BMP",
+      "actual": "BMP",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_bmp_header",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 16,
+      "actual": 16,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_jpeg_jfif",
+      "status": "PASS",
+      "key": "name",
+      "expected": "JPEG_JFIF",
+      "actual": "JPEG_JFIF",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_jpeg_jfif",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 11,
+      "actual": 11,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_zip_local_file_header",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ZIP_LocalFileHeader",
+      "actual": "ZIP_LocalFileHeader",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_zip_local_file_header",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 11,
+      "actual": 11,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_zip_eocd",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ZIP_EOCD",
+      "actual": "ZIP_EOCD",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_zip_eocd",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 8,
+      "actual": 8,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_coff_file_header",
+      "status": "PASS",
+      "key": "name",
+      "expected": "COFF_FileHeader",
+      "actual": "COFF_FileHeader",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_coff_file_header",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 7,
+      "actual": 7,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe32plus_optional_header",
+      "status": "PASS",
+      "key": "name",
+      "expected": "PE32Plus_OptionalHeader",
+      "actual": "PE32Plus_OptionalHeader",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe32plus_optional_header",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 29,
+      "actual": 29,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_elf64_shdr",
+      "status": "PASS",
+      "key": "name",
+      "expected": "ELF64_SHDR",
+      "actual": "ELF64_SHDR",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_elf64_shdr",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 10,
+      "actual": 10,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe_import_descriptor",
+      "status": "PASS",
+      "key": "name",
+      "expected": "PE_ImportDescriptor",
+      "actual": "PE_ImportDescriptor",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe_import_descriptor",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 5,
+      "actual": 5,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe_export_directory",
+      "status": "PASS",
+      "key": "name",
+      "expected": "PE_ExportDirectory",
+      "actual": "PE_ExportDirectory",
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_pe_export_directory",
+      "status": "PASS",
+      "key": "field_count",
+      "expected": 11,
+      "actual": 11,
+      "note": ""
+    },
+    {
+      "tool": "hex_tply_auto_select_template",
+      "status": "PASS",
+      "actual": {
+        "matched": true,
+        "name": "MZ",
+        "field_count": 19,
+        "source": "rustre_hex_template::auto_select_template"
+      }
+    },
+    {
+      "tool": "hex_tply_flatten_parsed",
+      "status": "PASS",
+      "actual": {
+        "flat_count": 19,
+        "source": "rustre_hex_template::flatten_parsed"
+      }
+    },
+    {
+      "tool": "hex_tply_template_report",
+      "status": "PASS",
+      "actual": {
+        "template_name": "MZ",
+        "source_name": "wire",
+        "field_count": 19,
+        "total_size": 64,
+        "source": "rustre_hex_template::TemplateReport::build"
+      }
+    }
+  ],
+  "notes": "Field counts and template names verified against Rust source (lib.rs add_field() calls). BitfieldDef::extract verified with formula (raw>>start_bit)&mask. Apply-bytes tools verified by checking name/field_count>0. auto_select_template verified: MZ magic bytes select MZ template."
+}

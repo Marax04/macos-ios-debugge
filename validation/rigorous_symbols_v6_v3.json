@@ -1,0 +1,31 @@
+{
+  "module": "symbols_v6",
+  "version": 3,
+  "tools_hardened": 10,
+  "tools_passed": 10,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "validator_fixes": [
+    {
+      "tool": "symbols_v6_addr_map_lookup",
+      "fix": "validator used wrong key 'lookup_exact'/'lookup_floor'; actual response keys are 'exact'/'floor'"
+    },
+    {
+      "tool": "symbols_v6_conflict_resolve",
+      "fix": "validator expected key 'winner'; actual response key is 'kept' (list of kept names)"
+    }
+  ],
+  "tools": [
+    {"name": "symbols_v6_source_priority_all", "status": "PASS", "note": "12 SymbolSource variants returned"},
+    {"name": "symbols_v6_synthetic_names_all", "status": "PASS", "note": "sub_1000/byte_1000/loc_1000/dword_1000/qword_1000 at addr=0x1000"},
+    {"name": "symbols_v6_try_demangle_batch", "status": "PASS", "note": "Rust mangled -> demangled, C++ mangled -> null (not supported), plain -> null"},
+    {"name": "symbols_v6_function_boundary_ops", "status": "PASS", "note": "size=256, contains=true, overlaps=true verified"},
+    {"name": "symbols_v6_pdb_url_build", "status": "PASS", "note": "URL format: msdl.microsoft.com/.../foo.pdb/GUID+age/foo.pdb"},
+    {"name": "symbols_v6_symkind_display_all", "status": "PASS", "note": "11 SymKind variants"},
+    {"name": "symbols_v6_addr_map_lookup", "status": "PASS", "note": "exact='f_1000', floor='f_1000' for probe=0x1000"},
+    {"name": "symbols_v6_conflict_resolve", "status": "PASS", "note": "KeepFirst: kept=[\"foo\"] from [\"foo\",\"bar\",\"baz\"]"},
+    {"name": "symbols_v6_unified_table_ops", "status": "PASS", "note": "len=2 after inserting 2 entries"},
+    {"name": "symbols_v6_demangle_all_table", "status": "PASS", "note": "demangle_all applied to table, len=2"}
+  ]
+}

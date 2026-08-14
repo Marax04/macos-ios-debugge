@@ -1,0 +1,932 @@
+{
+  "category": "events",
+  "tools_hardened": 101,
+  "tools_passed": 96,
+  "tools_failed": 0,
+  "tools_skipped": 1,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "events_bus_new_capacity_ext",
+      "status": "PASS",
+      "raw": {
+        "receiver_count": 0,
+        "total_sent": 0,
+        "source": "rustre_events::EventBus::new"
+      }
+    },
+    {
+      "tool": "events_bus_send_symbol_defined_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_symbol_defined"
+      }
+    },
+    {
+      "tool": "events_bus_send_agent_action_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_agent_action"
+      }
+    },
+    {
+      "tool": "events_bus_send_xref_added_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_xref_added"
+      }
+    },
+    {
+      "tool": "events_bus_send_patch_applied_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_patch_applied"
+      }
+    },
+    {
+      "tool": "events_bus_send_script_executed_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_script_executed"
+      }
+    },
+    {
+      "tool": "events_bus_send_analysis_progress_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_analysis_progress"
+      }
+    },
+    {
+      "tool": "events_bus_send_function_renamed_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_function_renamed"
+      }
+    },
+    {
+      "tool": "events_bus_send_analysis_failed_ext",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_analysis_failed"
+      }
+    },
+    {
+      "tool": "events_replay_replay_all_ext",
+      "status": "PASS",
+      "raw": {
+        "len": 3,
+        "is_empty": false,
+        "failures": 0,
+        "bus_total": 3,
+        "source": "rustre_events::EventReplay::replay_all"
+      }
+    },
+    {
+      "tool": "events_stats_kind_count_ext",
+      "status": "PASS",
+      "raw": {
+        "total": 4,
+        "kind_view": 4,
+        "variant_view_closed": 4,
+        "source": "rustre_events::EventStats::kind_count"
+      }
+    },
+    {
+      "tool": "events_core_event_variant_name",
+      "status": "PASS",
+      "raw": {
+        "variant_name": "ViewOpened",
+        "view_id": 1,
+        "kind": "View",
+        "source": "rustre_events::CoreEvent::variant_name"
+      }
+    },
+    {
+      "tool": "events_core_event_is_debug_event",
+      "status": "PASS",
+      "raw": {
+        "is_debug_event": true,
+        "is_analysis_event": false,
+        "is_function_event": false,
+        "source": "rustre_events::CoreEvent::is_debug_event"
+      }
+    },
+    {
+      "tool": "events_core_event_json_roundtrip",
+      "status": "PASS",
+      "raw": {
+        "json_len": 62,
+        "roundtrip_variant": "FunctionDefined",
+        "source": "rustre_events::CoreEvent::to_json"
+      }
+    },
+    {
+      "tool": "events_filter_for_view",
+      "status": "PASS",
+      "raw": {
+        "matches_expected": true,
+        "matches_other": false,
+        "source": "rustre_events::EventFilter::for_view"
+      }
+    },
+    {
+      "tool": "events_bus_send_custom",
+      "status": "PASS",
+      "raw": {
+        "total_sent": 1,
+        "custom_count": 1,
+        "receiver_count": 1,
+        "source": "rustre_events::EventBus::send_custom"
+      }
+    },
+    {
+      "tool": "events_logger_record_and_count",
+      "status": "PASS",
+      "raw": {
+        "count": 5,
+        "sample_len": 3,
+        "source": "rustre_events::EventLogger::record"
+      }
+    },
+    {
+      "tool": "events_correlator_by_view",
+      "status": "PASS",
+      "raw": {
+        "keys": [
+          "1",
+          "2"
+        ],
+        "total_count": 3,
+        "group_1_len": 2,
+        "source": "rustre_events::EventCorrelator::by_view"
+      }
+    },
+    {
+      "tool": "events_hook_dispatcher_register",
+      "status": "PASS",
+      "raw": {
+        "hook_count_before_remove": 1,
+        "hook_count_after_remove": 0,
+        "source": "rustre_events::HookDispatcher::register"
+      }
+    },
+    {
+      "tool": "events_replay_filtered",
+      "status": "PASS",
+      "raw": {
+        "replayed": 2,
+        "len": 3,
+        "total_sent_after": 2,
+        "source": "rustre_events::EventReplay::replay_filtered"
+      }
+    },
+    {
+      "tool": "events_stats_record_many",
+      "status": "PASS",
+      "raw": {
+        "total": 3,
+        "custom_count": 2,
+        "view_kind_count": 1,
+        "source": "rustre_events::EventStats::record"
+      }
+    },
+    {
+      "tool": "events_spec_core_event_variant_name",
+      "status": "PASS",
+      "raw": {
+        "variant_name": "ViewOpened",
+        "view_id": 1,
+        "source": "rustre_events::SpecCoreEvent::variant_name"
+      }
+    },
+    {
+      "tool": "events_spec_core_event_view_id_debugger",
+      "status": "PASS",
+      "raw": {
+        "variant_name": "DebuggerAttached",
+        "view_id": null,
+        "source": "rustre_events::SpecCoreEvent::view_id"
+      }
+    },
+    {
+      "tool": "events_bus_send_view_closed",
+      "status": "PASS",
+      "raw": {
+        "view_id": 0,
+        "total_sent": 1,
+        "source": "rustre_events::EventBus::send_view_closed"
+      }
+    },
+    {
+      "tool": "events_bus_send_plugin_loaded",
+      "status": "PASS",
+      "raw": {
+        "plugin_id": "",
+        "total_sent": 1,
+        "source": "rustre_events::EventBus::send_plugin_loaded"
+      }
+    },
+    {
+      "tool": "events_view_subscription",
+      "status": "PASS",
+      "raw": {
+        "view_id": 1,
+        "received_count": 0,
+        "delivered_count": 0,
+        "source": "rustre_events::view_subscription"
+      }
+    },
+    {
+      "tool": "events_kind_subscription",
+      "status": "PASS",
+      "raw": {
+        "kind": "View",
+        "received_count": 0,
+        "delivered_count": 0,
+        "source": "rustre_events::kind_subscription"
+      }
+    },
+    {
+      "tool": "events_bus_publish_custom",
+      "status": "PASS",
+      "raw": {
+        "variant": "Custom",
+        "event_type": "probe",
+        "total_sent": 1,
+        "receivers": 1,
+        "source": "rustre_events::EventBus::send"
+      }
+    },
+    {
+      "tool": "events_classify_variant",
+      "status": "PASS",
+      "raw": {
+        "variant": "ViewClosed",
+        "kind": "View",
+        "is_debug": false,
+        "is_analysis": false,
+        "is_function": false,
+        "source": "rustre_events::CoreEvent::kind"
+      }
+    },
+    {
+      "tool": "events_bus_new_default",
+      "status": "PASS",
+      "raw": {
+        "receiver_count": 0,
+        "total_sent": 0,
+        "source": "rustre_events::EventBus::new_default"
+      }
+    },
+    {
+      "tool": "events_logger_new",
+      "status": "PASS",
+      "raw": {
+        "max_size": 10,
+        "count": 0,
+        "source": "rustre_events::EventLogger::new"
+      }
+    },
+    {
+      "tool": "events_stats_record",
+      "status": "PASS",
+      "raw": {
+        "total": 1,
+        "variant_count_Custom": 1,
+        "source": "rustre_events::EventStats::record"
+      }
+    },
+    {
+      "tool": "events_replay_push",
+      "status": "PASS",
+      "raw": {
+        "len": 1,
+        "is_empty": false,
+        "source": "rustre_events::EventReplay::push"
+      }
+    },
+    {
+      "tool": "events_hook_dispatcher_new",
+      "status": "PASS",
+      "raw": {
+        "hook_count": 0,
+        "source": "rustre_events::HookDispatcher::new"
+      }
+    },
+    {
+      "tool": "events_core_event_kind_memory",
+      "status": "PASS",
+      "raw": {
+        "kind": "Memory",
+        "variant": "MemoryRead",
+        "view_id": 7,
+        "source": "rustre_events::CoreEvent::kind"
+      }
+    },
+    {
+      "tool": "events_core_event_display_formatting",
+      "status": "PASS",
+      "raw": {
+        "scoped": "[view=3] FunctionRenamed",
+        "unscoped": "PluginLoaded",
+        "source": "rustre_events::CoreEvent::fmt"
+      }
+    },
+    {
+      "tool": "events_filter_of_kind_matches",
+      "status": "PASS",
+      "raw": {
+        "matches_bp": true,
+        "matches_view": false,
+        "source": "rustre_events::EventFilter::of_kind"
+      }
+    },
+    {
+      "tool": "events_filter_combinators",
+      "status": "PASS",
+      "raw": {
+        "and_match": true,
+        "negate_match": true,
+        "or_match": true,
+        "source": "rustre_events::EventFilter::{and,or,negate}"
+      }
+    },
+    {
+      "tool": "events_bus_event_counters",
+      "status": "PASS",
+      "raw": {
+        "total_sent": 5,
+        "func_defined": 1,
+        "func_renamed": 1,
+        "analysis_completed": 1,
+        "source": "rustre_events::EventBus::event_count"
+      }
+    },
+    {
+      "tool": "events_bus_send_breakpoint_hit",
+      "status": "PASS",
+      "raw": {
+        "total_sent": 1,
+        "bp_hit_count": 1,
+        "source": "rustre_events::EventBus::send_breakpoint_hit"
+      }
+    },
+    {
+      "tool": "events_logger_events_by_kind",
+      "status": "PASS",
+      "raw": {
+        "total": 3,
+        "view_kind": 2,
+        "view_1": 2,
+        "source": "rustre_events::EventLogger::events_by_kind"
+      }
+    },
+    {
+      "tool": "events_replay_snapshot_from",
+      "status": "PASS",
+      "raw": {
+        "len": 3,
+        "is_empty": false,
+        "failures": 0,
+        "total_sent": 3,
+        "source": "rustre_events::EventReplay::snapshot_from"
+      }
+    },
+    {
+      "tool": "events_correlator_by_variant",
+      "status": "PASS",
+      "raw": {
+        "keys": [
+          "ViewClosed",
+          "ViewOpened"
+        ],
+        "view_opened_len": 2,
+        "view_closed_len": 1,
+        "total_count": 3,
+        "source": "rustre_events::EventCorrelator::by_variant"
+      }
+    },
+    {
+      "tool": "events_stats_all_variant_counts",
+      "status": "PASS",
+      "raw": {
+        "counts_before": {
+          "ViewOpened": 1,
+          "ViewClosed": 2
+        },
+        "total_before": 3,
+        "total_after_reset": 0,
+        "source": "rustre_events::EventStats::all_variant_counts"
+      }
+    },
+    {
+      "tool": "events_filtered_subscription_counters",
+      "status": "PASS",
+      "raw": {
+        "received": 0,
+        "delivered": 0,
+        "with_filter_received": 0,
+        "source": "rustre_events::FilteredSubscription::new"
+      }
+    },
+    {
+      "tool": "events_bus_new_with_capacity",
+      "status": "PASS",
+      "raw": {
+        "capacity": 16,
+        "receiver_count": 0,
+        "total_sent": 0,
+        "source": "rustre_events::EventBus::new"
+      }
+    },
+    {
+      "tool": "events_bus_event_count",
+      "status": "PASS",
+      "raw": {
+        "view_closed_count": 1,
+        "total_sent": 1,
+        "source": "rustre_events::EventBus::event_count"
+      }
+    },
+    {
+      "tool": "events_filter_by_variant",
+      "status": "PASS",
+      "raw": {
+        "variant": "ViewClosed",
+        "matches": true,
+        "source": "rustre_events::EventFilter::by_variant"
+      }
+    },
+    {
+      "tool": "events_filter_negate",
+      "status": "PASS",
+      "raw": {
+        "view_id": 3,
+        "matches_same": false,
+        "matches_other": true,
+        "source": "rustre_events::EventFilter::negate"
+      }
+    },
+    {
+      "tool": "events_hook_matches_and_label",
+      "status": "PASS",
+      "raw": {
+        "label": "h",
+        "matches": true,
+        "input_label": "h",
+        "source": "rustre_events::EventHook"
+      }
+    },
+    {
+      "tool": "events_hook_dispatcher_remove",
+      "status": "PASS",
+      "raw": {
+        "before": 2,
+        "after": 1,
+        "source": "rustre_events::HookDispatcher::remove"
+      }
+    },
+    {
+      "tool": "events_logger_recent_events",
+      "status": "PASS",
+      "raw": {
+        "count": 5,
+        "recent_len": 3,
+        "source": "rustre_events::EventLogger::recent_events"
+      }
+    },
+    {
+      "tool": "events_logger_events_for_view",
+      "status": "PASS",
+      "raw": {
+        "total": 3,
+        "for_view": 2,
+        "source": "rustre_events::EventLogger::events_for_view"
+      }
+    },
+    {
+      "tool": "events_logger_clear_and_count",
+      "status": "PASS",
+      "raw": {
+        "before": 2,
+        "after": 0,
+        "source": "rustre_events::EventLogger::clear"
+      }
+    },
+    {
+      "tool": "events_replay_new_is_empty",
+      "status": "PASS",
+      "raw": {
+        "is_empty": true,
+        "len": 0,
+        "source": "rustre_events::EventReplay::new"
+      }
+    },
+    {
+      "tool": "events_replay_clear",
+      "status": "PASS",
+      "raw": {
+        "before": 3,
+        "after": 0,
+        "source": "rustre_events::EventReplay::clear"
+      }
+    },
+    {
+      "tool": "events_stats_variant_count",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 4,
+        "total": 4,
+        "source": "rustre_events::EventStats::variant_count"
+      }
+    },
+    {
+      "tool": "events_stats_kind_count_reset",
+      "status": "PASS",
+      "raw": {
+        "before": 1,
+        "after": 0,
+        "total_after": 0,
+        "source": "rustre_events::EventStats::reset"
+      }
+    },
+    {
+      "tool": "events_core_event_is_analysis_event",
+      "status": "PASS",
+      "raw": {
+        "analysis": true,
+        "view": false,
+        "source": "rustre_events::CoreEvent::is_analysis_event"
+      }
+    },
+    {
+      "tool": "events_core_event_is_function_event",
+      "status": "PASS",
+      "raw": {
+        "function": true,
+        "view": false,
+        "source": "rustre_events::CoreEvent::is_function_event"
+      }
+    },
+    {
+      "tool": "events_ext_bus_new_default",
+      "status": "PASS",
+      "raw": {
+        "total_published": 0,
+        "history_len": 0,
+        "receiver_count": 0,
+        "dropped": 0,
+        "source": "rustre_events::ExtEventBus::new_default"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_tick",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_ttd_tick"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_backward",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_ttd_backward"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_step",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_emulation_step"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_stop",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_emulation_stop"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_crash",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_fuzz_crash"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_new_coverage",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_fuzz_new_coverage"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_call",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_mcp_tool_call"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_diff_started",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_diff_started"
+      }
+    },
+    {
+      "tool": "events_ext_bus_metrics_snapshot",
+      "status": "PASS",
+      "raw": {
+        "total_published": 2,
+        "history_len": 2,
+        "receiver_count": 1,
+        "dropped": 0,
+        "variants": 2,
+        "source": "rustre_events::ExtEventBus::metrics"
+      }
+    },
+    {
+      "tool": "events_spec_bus_new_history",
+      "status": "PASS",
+      "raw": {
+        "history_len": 0,
+        "receiver_count": 0,
+        "source": "rustre_events::SpecEventBus::new"
+      }
+    },
+    {
+      "tool": "events_spec_bus_recent_events",
+      "status": "PASS",
+      "raw": {
+        "history_len": 5,
+        "recent_len": 3,
+        "recent_names": [
+          "ViewClosed",
+          "ViewClosed",
+          "ViewClosed"
+        ],
+        "source": "rustre_events::SpecEventBus::recent_events"
+      }
+    },
+    {
+      "tool": "events_spec_bus_publish_and_receivers",
+      "status": "PASS",
+      "raw": {
+        "receiver_count": 1,
+        "history_len": 1,
+        "source": "rustre_events::SpecEventBus::publish"
+      }
+    },
+    {
+      "tool": "events_spec_filter_view_ids_matches",
+      "status": "PASS",
+      "raw": {
+        "matches": true,
+        "source": "rustre_events::SpecEventFilter::with_view_ids"
+      }
+    },
+    {
+      "tool": "events_spec_filter_event_types_matches",
+      "status": "PASS",
+      "raw": {
+        "type_name": "FunctionDefined",
+        "matches_function_defined": true,
+        "matches_view_closed": false,
+        "source": "rustre_events::SpecEventFilter::with_event_types"
+      }
+    },
+    {
+      "tool": "events_spec_filter_combined",
+      "status": "PASS",
+      "raw": {
+        "matches_hit_same_view": true,
+        "type_name": "BreakpointHit",
+        "source": "rustre_events::SpecEventFilter"
+      }
+    },
+    {
+      "tool": "events_spec_filter_pass_global",
+      "status": "PASS",
+      "raw": {
+        "pass_global": true,
+        "matches": true,
+        "source": "rustre_events::SpecEventFilter::with_pass_global_events"
+      }
+    },
+    {
+      "tool": "events_global_bus_publish",
+      "status": "SKIP",
+      "reason": "Nondeterministic: publishes to shared global_bus; history_len accumulates across all tool calls within the same process lifetime."
+    },
+    {
+      "tool": "events_spec_core_event_view_id_agent",
+      "status": "PASS",
+      "raw": {
+        "view_id": 5,
+        "variant_name": "AgentAction",
+        "source": "rustre_events::SpecCoreEvent::AgentAction"
+      }
+    },
+    {
+      "tool": "events_spec_core_event_json_roundtrip",
+      "status": "PASS",
+      "raw": {
+        "json_len": 60,
+        "variant_name": "FunctionDefined",
+        "view_id": 1,
+        "source": "rustre_events::SpecCoreEvent (serde)"
+      }
+    },
+    {
+      "tool": "events_bus_send_view_opened",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_view_opened"
+      }
+    },
+    {
+      "tool": "events_bus_send_function_defined",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_function_defined"
+      }
+    },
+    {
+      "tool": "events_bus_send_analysis_completed",
+      "status": "PASS",
+      "raw": {
+        "count": 1,
+        "total": 1,
+        "source": "rustre_events::EventBus::send_analysis_completed"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_diff_completed",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_diff_completed"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_flirt_match",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_flirt_match"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_coverage_updated",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_coverage_updated"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_watchdog_ping",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_watchdog_ping"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_peer_connected",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_peer_connected"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_agent_thinking",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_agent_thinking"
+      }
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_result",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 1,
+        "total": 1,
+        "source": "rustre_events::ExtEventBus::send_mcp_tool_result"
+      }
+    },
+    {
+      "tool": "events_ext_bus_subscribe_with_history",
+      "status": "PASS",
+      "raw": {
+        "history_len": 3,
+        "receiver_count": 1,
+        "source": "rustre_events::ExtEventBus::subscribe_with_history"
+      }
+    },
+    {
+      "tool": "events_ext_bus_variant_count",
+      "status": "PASS",
+      "raw": {
+        "variant_count": 4,
+        "other": 0,
+        "source": "rustre_events::ExtEventBus::variant_count"
+      }
+    },
+    {
+      "tool": "events_ext_bus_dropped_count",
+      "status": "PASS",
+      "raw": {
+        "dropped": 0,
+        "total": 0,
+        "source": "rustre_events::ExtEventBus::dropped_count"
+      }
+    },
+    {
+      "tool": "events_ext_bus_total_published",
+      "status": "PASS",
+      "raw": {
+        "total": 5,
+        "source": "rustre_events::ExtEventBus::total_published"
+      }
+    },
+    {
+      "tool": "events_ext_bus_recent_events",
+      "status": "PASS",
+      "raw": {
+        "recent_len": 3,
+        "history_len": 5,
+        "source": "rustre_events::ExtEventBus::recent_events"
+      }
+    },
+    {
+      "tool": "events_correlator_keys_and_total",
+      "status": "PASS",
+      "raw": {
+        "keys": [
+          "0",
+          "1",
+          "2"
+        ],
+        "total": 3,
+        "source": "rustre_events::EventCorrelator::by_view"
+      }
+    },
+    {
+      "tool": "events_bus_total_sent_variant",
+      "status": "PASS",
+      "raw": {
+        "total_sent": 3,
+        "view_closed_count": 3,
+        "source": "rustre_events::EventBus::total_sent"
+      }
+    }
+  ]
+}

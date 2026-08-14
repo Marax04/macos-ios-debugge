@@ -1,0 +1,30 @@
+{
+  "category": "flirt_apply",
+  "generated": "2026-07-11",
+  "tools_hardened": 16,
+  "tools_passed": 16,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "checks_passed": 19,
+  "checks_failed": 0,
+  "mismatches": [],
+  "notes": "All 16 flirt_apply tools verified. Wire tools (crc16_flirt_wire, demo_sigs_count_wire, pattern_new_wire, pattern_matches_wire, pattern_from_str_wire, signature_from_pattern_wire, signature_matches_at_wire, wildcard_prefix_wire, sig_db_add_count_wire, scan_bytes_demo_wire, ac_index_built_wire, applier_match_count_wire, resolve_renames_wire) confirmed. CRC-16 FLIRT (reflected poly 0x8408) reference matches Rust output. FLIRT pattern format requires space-separated hex bytes with minimum 4 bytes; '..' is wildcard token.",
+  "tools": [
+    {"name": "flirt_apply_crc16_flirt_wire",           "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_demo_sigs_count_wire",        "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_pattern_new_wire",            "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_pattern_matches_wire",        "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_pattern_from_str_wire",       "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_signature_from_pattern_wire", "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_signature_matches_at_wire",   "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_wildcard_prefix_wire",        "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_sig_db_add_count_wire",       "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_scan_bytes_demo_wire",        "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_ac_index_built_wire",         "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_applier_match_count_wire",    "checks": 1, "status": "PASS"},
+    {"name": "flirt_apply_resolve_renames_wire",        "checks": 2, "status": "PASS"},
+    {"name": "flirt_apply_auto",                        "checks": 0, "status": "COVERED_BY_PRIOR"},
+    {"name": "flirt_apply_crc16",                       "checks": 0, "status": "COVERED_BY_PRIOR"},
+    {"name": "flirt_apply_library_marks_from_matches",  "checks": 0, "status": "COVERED_BY_PRIOR"}
+  ]
+}

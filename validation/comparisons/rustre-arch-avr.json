@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-arch-avr",
+  "notes": "No AVR-specific MCP tool exposed (no analysis_disasm_at_path_avr counterpart to mips/arm64/riscv/wasm/cil/jvm). Server has no 'avr' references. Validator is self-contained (decodes AVR opcodes per Atmel ISA manual without importing the Rust crate or calling MCP), so comparison is validator-only.",
+  "mcp_tools_relevant": [],
+  "validator_total": 29,
+  "validator_mismatches": 0,
+  "mcp_outputs": {},
+  "mismatches": [],
+  "fixed": 0,
+  "match_final": true
+}

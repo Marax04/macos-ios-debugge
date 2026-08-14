@@ -1,0 +1,54 @@
+{
+  "category": "ghidra",
+  "tools_hardened": 6,
+  "tools_passed": 6,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "passed_detail": [
+    {
+      "tool": "ghidra_server_connect",
+      "args": {"port": 18001},
+      "actual": {"before": false, "after": true, "final": false, "host": "127.0.0.1", "port": 18001, "source": "rustre_decompiler_ghidra::GhidraServer::connect"},
+      "reference": "GhidraServer::localhost(18001): before connect is_connected()=false; after connect()=true; after disconnect()=false. Pure in-memory state.",
+      "verdict": "pass"
+    },
+    {
+      "tool": "ghidra_script_timeout",
+      "args": {"name": "Decompile.java", "arg": "0x1000", "timeout": 120000},
+      "actual": {"name": "Decompile.java", "args": ["0x1000"], "timeout_ms": 120000, "cmdline": "Decompile.java 0x1000", "source": "rustre_decompiler_ghidra::GhidraScript"},
+      "reference": "GhidraScript::new('Decompile.java').arg('0x1000').timeout(120000): cmdline = name + ' ' + args.join(' ') = 'Decompile.java 0x1000'",
+      "verdict": "pass"
+    },
+    {
+      "tool": "ghidra_server_config_custom",
+      "args": {"port": 18001, "tls": false},
+      "actual": {"host": "127.0.0.1", "port": 18001, "tls": false, "timeout_ms": 15000, "connected": false, "source": "rustre_decompiler_ghidra::GhidraServer::new"},
+      "reference": "GhidraServerConfig { host: '127.0.0.1', port: 18001, timeout_ms: 15000, use_tls: false }; GhidraServer::new(cfg).is_connected()=false",
+      "verdict": "pass"
+    },
+    {
+      "tool": "ghidra_pcode_varnode_classify_batch",
+      "args": {"spaces": ["const", "register", "ram", "unique"]},
+      "actual": {"n": 4, "const": 1, "register": 1, "unique": 1, "ram": 1, "source": "rustre_decompiler_ghidra::Varnode"},
+      "reference": "For each of 4 spaces, create Varnode { space, offset:0, size:8 }. is_const() iff space=='const', is_register() iff space=='register', is_unique() iff space=='unique', is_ram() iff space=='ram'. Result: each counter=1.",
+      "verdict": "pass"
+    },
+    {
+      "tool": "ghidra_server_connect_disconnect",
+      "args": {"port": 18001},
+      "actual": {"port": 18001, "before": false, "after_connect": true, "after_disconnect": false, "source": "rustre_decompiler_ghidra::GhidraServer::connect"},
+      "reference": "GhidraServer::localhost(18001): before=false (initial); connect()->after_connect=true; disconnect()->after_disconnect=false.",
+      "verdict": "pass"
+    },
+    {
+      "tool": "ghidra_server_config_access_ghidfixp1",
+      "args": {"port": 18001},
+      "actual": {"port": 18001, "host": "127.0.0.1", "use_tls": false, "timeout_ms": 30000, "is_connected": false, "source": "rustre_decompiler_ghidra::GhidraServer::config"},
+      "reference": "GhidraServer::localhost(18001).config(): host='127.0.0.1', port=18001, use_tls=false, timeout_ms=30000 (localhost default), is_connected=false.",
+      "verdict": "pass"
+    }
+  ],
+  "failed_detail": [],
+  "notes": "6 tools not covered by rigorous_ghidra.json or rigorous_ghidra_v2.json. All deterministic pure-logic tools verified inline. No network/binary dependency."
+}

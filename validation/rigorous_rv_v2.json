@@ -1,0 +1,192 @@
+[
+  {
+    "tool": "rv_brev8_32",
+    "args": {
+      "val": 0
+    },
+    "status": "PASS",
+    "expected": {
+      "input": 0,
+      "output": 0,
+      "hex": "00000000"
+    },
+    "actual": {
+      "input": 0,
+      "output": 0,
+      "hex": "00000000"
+    }
+  },
+  {
+    "tool": "rv_brev8_32",
+    "args": {
+      "val": 4294967295
+    },
+    "status": "PASS",
+    "expected": {
+      "input": 4294967295,
+      "output": 4294967295,
+      "hex": "FFFFFFFF"
+    },
+    "actual": {
+      "input": 4294967295,
+      "output": 4294967295,
+      "hex": "FFFFFFFF"
+    }
+  },
+  {
+    "tool": "rv_brev8_32",
+    "args": {
+      "val": 16909060
+    },
+    "status": "PASS",
+    "expected": {
+      "input": 16909060,
+      "output": 2151727136,
+      "hex": "8040C020"
+    },
+    "actual": {
+      "input": 16909060,
+      "output": 2151727136,
+      "hex": "8040C020"
+    }
+  },
+  {
+    "tool": "rv_brev8_32",
+    "args": {
+      "val": 3735928559
+    },
+    "status": "PASS",
+    "expected": {
+      "input": 3735928559,
+      "output": 2075491831,
+      "hex": "7BB57DF7"
+    },
+    "actual": {
+      "input": 3735928559,
+      "output": 2075491831,
+      "hex": "7BB57DF7"
+    }
+  },
+  {
+    "tool": "rv_brev8_32",
+    "args": {
+      "val": 2779096485
+    },
+    "status": "PASS",
+    "expected": {
+      "input": 2779096485,
+      "output": 2779096485,
+      "hex": "A5A5A5A5"
+    },
+    "actual": {
+      "input": 2779096485,
+      "output": 2779096485,
+      "hex": "A5A5A5A5"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 0
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 0,
+      "class": "c.addi4spn"
+    },
+    "actual": {
+      "hw": 0,
+      "class": "c.addi4spn"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 8192
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 8192,
+      "class": "c.fld"
+    },
+    "actual": {
+      "hw": 8192,
+      "class": "c.fld"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 16384
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 16384,
+      "class": "c.lw"
+    },
+    "actual": {
+      "hw": 16384,
+      "class": "c.lw"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 16385
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 16385,
+      "class": "c.li"
+    },
+    "actual": {
+      "hw": 16385,
+      "class": "c.li"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 32772
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 32772,
+      "class": "c.unknown"
+    },
+    "actual": {
+      "hw": 32772,
+      "class": "c.unknown"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 51202
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 51202,
+      "class": "c.swsp"
+    },
+    "actual": {
+      "hw": 51202,
+      "class": "c.swsp"
+    }
+  },
+  {
+    "tool": "rv_c_classify",
+    "args": {
+      "hw": 57346
+    },
+    "status": "PASS",
+    "expected": {
+      "hw": 57346,
+      "class": "c.fswsp"
+    },
+    "actual": {
+      "hw": 57346,
+      "class": "c.fswsp"
+    }
+  }
+]

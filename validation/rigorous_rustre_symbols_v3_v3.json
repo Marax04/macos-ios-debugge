@@ -1,0 +1,104 @@
+{
+  "category": "rustre_symbols_v3",
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "rustre_symbols_v3_symbol_new",
+      "args": {"name": "main", "address": 4096},
+      "checks": {"name": "main", "address": 4096, "display_name": "main", "kind": "Function"},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_contains",
+      "args": {"address": 4096, "size": 16, "probe": 4096},
+      "checks": {"contains": true, "end_address": 4112},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_contains",
+      "description": "probe outside range",
+      "args": {"address": 4096, "size": 16, "probe": 4112},
+      "checks": {"contains": false, "end_address": 4112},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_table_add_remove",
+      "args": {},
+      "checks": {"before": 2, "removed": true, "after": 1},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_cache_ops",
+      "args": {"capacity": 4},
+      "checks": {"hit": true, "miss": false, "after_clear": false},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_store_find_ops",
+      "args": {},
+      "checks": {"prefix_count": 2, "range_count": 2},
+      "status": "PASS",
+      "notes": "find_by_prefix('foo_') returns foo_a+foo_b; find_in_range(0x1000,0x2500) returns 0x1000+0x2000"
+    },
+    {
+      "tool": "rustre_symbols_v3_store_export_csv",
+      "args": {},
+      "checks": {"lines_gte": 1, "len_gt": 0},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_cross_ref_index_ops",
+      "args": {"to": 16384},
+      "checks": {"ref_count_to": 2, "refs_to": [4096, 8192], "refs_from": [16384]},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_pdb_server_url",
+      "args": {"base": "https://msdl.microsoft.com/download/symbols", "pdb": "ntdll.pdb", "guid": "ABCDEF0123456789ABCDEF0123456789", "age": 1},
+      "checks": {"url": "https://msdl.microsoft.com/download/symbols/ntdll.pdb/ABCDEF0123456789ABCDEF01234567891/ntdll.pdb"},
+      "status": "PASS",
+      "reference": "format!('{}/{}/{}{:X}/{}', base, pdb, guid.replace('-',''), age, pdb)"
+    },
+    {
+      "tool": "rustre_symbols_v3_synthetic_gen_all",
+      "args": {"addr": 4198400},
+      "checks": {
+        "function": "sub_401000",
+        "data": "byte_401000",
+        "label": "loc_401000",
+        "dword": "dword_401000",
+        "qword": "qword_401000"
+      },
+      "status": "PASS",
+      "reference": "format!('{prefix}_{addr:X}') for each prefix"
+    },
+    {
+      "tool": "rustre_symbols_v3_exporter_all_formats",
+      "args": {},
+      "checks": {"json_len_gt": 0, "csv_len_gt": 0, "idc_len_gt": 0, "map_len_gt": 0},
+      "status": "PASS"
+    },
+    {
+      "tool": "rustre_symbols_v3_try_demangle_top",
+      "args": {"name": "_ZN3foo3barEv"},
+      "checks": {"no_error": true},
+      "status": "PASS",
+      "notes": "demangled output is nondeterministic based on demangler version; check only that no error occurs"
+    },
+    {
+      "tool": "rustre_symbols_v3_unified_table_pdb_url_list",
+      "args": {"base": "https://msdl.microsoft.com/download/symbols"},
+      "checks": {"count": 0, "is_empty": true},
+      "status": "PASS",
+      "notes": "fresh empty table has no PDB entries"
+    }
+  ],
+  "summary": {
+    "tools_hardened": 12,
+    "tools_passed": 12,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "checks_total": 14,
+    "checks_passed": 14
+  }
+}

@@ -1,0 +1,12 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0177a267cf1b934332de7ae4e0feb1be1b095d55eff934d9b4ee5c32365a2287 # shrinks to name = "a", ret = "_J", params = []
+cc b176bbfb9ccdf95658981fbcf36a064d3a372b57f1391958b6af0d148b7f3ef9 # shrinks to name = "A", cls = "a", is_static = false, ret = "D", params = ["_J"]
+cc a7f0a3227a8f185e3ac59dc0202abc3d5ad0784bb57e3c9069e7d50bff5c2822 # shrinks to name = "A", cls = "a", member_access = '0', is_member = false, ty = "PEAD", cv = 'B'
+cc a92dfaae3dba41bd3a26a553e5ce0911c6c61a28d55c7f68b40fc47c357f2c84 # shrinks to cls = "a", is_ctor = true, params = ["_J"]
+cc 3e73863eceeac417ea20e2a5f2b1ef0bea2721e69d246e6283798dde7a83aa35 # shrinks to name = "a", classes = ["A"], access = 'A', this_cv = 'A', ret = "D", params = ["_J"]
+cc b27b9b166060121b6f0e84d3c57cafc5a2b93e407908b97fdded3eee7ee02098 # shrinks to name = "A", cls = "a", member_access = '0', is_member = false, ty = "UA0@@", cv = 'A'

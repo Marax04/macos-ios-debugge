@@ -1,0 +1,146 @@
+//! Apple (macOS/iOS) debugger backend.
+//!
+//! Architectural rule for this crate: nothing is gated on
+//! `cfg(target_os = "macos")`. Apple-specific *knowledge* (Mach-O layouts,
+//! compact-unwind encodings, ARM64 frame conventions) is pure byte/register
+//! math and therefore compiles and unit-tests on any host, including the
+//! Windows machines this workspace is developed on. Only genuine syscall
+//! access would need a host gate, and that lives behind a trait so the
+//! testable part never does.
+
+/// ARM64/AArch64 architecture support: breakpoint instruction encoding, the
+/// full register set with DWARF numbers and aliases, hardware
+/// breakpoint/watchpoint control-register layouts, and AAPCS64 argument
+/// extraction. Entirely pure functions — no host dependency.
+pub mod arm64;
+
+/// GDB Remote Serial Protocol wire layer: framing, checksum, ack/nack,
+/// escaping, run-length encoding, typed command builders, and a transport
+/// abstraction with TCP and in-memory implementations.
+///
+/// This is how a Mac target is actually reached: `debugserver` speaks RSP with
+/// lldb extensions. Keeping the socket behind [`rsp::RspTransport`] is what
+/// makes the protocol testable from a Windows host.
+pub mod rsp;
+
+/// LLDB/`debugserver` extensions layered on top of [`rsp`]: `qHostInfo`,
+/// `qProcessInfo`, `jThreadsInfo`, `qRegisterInfo` (runtime register-set
+/// discovery), `A`/`QLaunchArch`, `qShlibInfoAddr`, `qMemoryRegionInfo` and
+/// `_M`/`_m`. Base GDB RSP alone cannot drive an Apple target.
+pub mod lldb_ext;
+/// Objective-C runtime introspection over the *live* memory of the target:
+/// `isa` decoding (tagged pointers, ARM64 non-pointer isa), `objc_class` ->
+/// name/superclass/method list/ivar list, and NSString/CFString/NSNumber
+/// value reading. Everything goes through a memory-reading trait, so it is
+/// unit-testable with synthetic memory on any host.
+pub mod objc_runtime;
+/// Swift runtime introspection over live target memory: metadata kinds and
+/// layout, nominal type descriptors, qualified type-name reconstruction,
+/// existential containers, and the representation of `String` (small/large),
+/// `Array` and `Optional`. Reads go through a memory trait, so the whole
+/// module is unit-tested with synthetic memory on any host; mangled names are
+/// routed to the workspace's canonical Swift demangler.
+pub mod swift_runtime;
+pub mod symbolication;
+
+/// dSYM bundle support: locating a `.dSYM` beside a binary or by UUID,
+/// extracting the `__DWARF` sections out of the bundle's Mach-O payload,
+/// parsing `.debug_abbrev`/`.debug_info`/`.debug_line` headers, and mapping
+/// addresses to `file:line` through the workspace's existing DWARF line-program
+/// state machine. UUID agreement between image and dSYM is enforced as a hard
+/// error — a mismatched dSYM yields plausible, wrong line numbers.
+pub mod dsym;
+/// A faithful in-process `debugserver` simulator. Everything else in the crate
+/// is testable on Windows because this exists.
+pub mod mock_debugserver;
+
+/// A real RSP client (checksum-verifying, reassembling, runtime register map)
+/// that drives [`mock_debugserver`] end to end.
+pub mod mock_client;
+
+/// Compact-unwind / `__eh_frame` / frame-pointer stack walking for ARM64
+/// Darwin targets, over any [`unwind::MemoryReader`].
+pub mod unwind;
+
+/// Real transports to a device: TCP to a reachable `debugserver`, and a
+/// usbmuxd client (Windows named pipe / Unix socket) that port-forwards over
+/// USB. Includes the plist codec, the 16-byte mux framing, and a mock daemon.
+pub mod transport;
+
+/// The integration layer: [`apple_debugger::AppleDebugger`] implements
+/// `crate::Debugger` on top of every module above, driving a real
+/// `debugserver` (or [`mock_debugserver`]) over RSP.
+pub mod apple_debugger;
+
+/// ARM64 hardware breakpoints and watchpoints end to end: DBGBVR/DBGBCR and
+/// DBGWVR/DBGWCR programming, a finite slot file whose exhaustion is an
+/// explicit error, Z1/Z2/Z3/Z4 packet driving, and watch/rwatch/awatch
+/// stop-reply attribution.
+pub mod hw_breakpoints;
+
+/// Multi-thread enumeration and per-thread stacks: `jThreadsInfo`, the `H`
+/// packet, `qThreadStopInfo`, `qThreadExtraInfo`, and a backtrace per thread
+/// built on [`unwind`].
+pub mod threads;
+
+/// Target expression evaluation: binds the workspace's single expression
+/// evaluator (`crate::expression_evaluator`) to an Apple target by
+/// supplying the ARM64 register set, an RSP-backed memory provider and a
+/// symbol table. Contains no parser of its own.
+pub mod expr;
+
+pub use apple_debugger::{
+    AppleDebugger, ConnectRequest, LoopbackFactory, RegisterMap, TargetArch,
+    TcpDebugserverFactory, TransportFactory,
+};
+pub use transport::{
+    ConnectionType, MockMuxd, MuxDevice, MuxError, MuxHeader, MuxStream, PairRecord, PlistValue,
+    TcpRspTransport, UsbmuxClient, UsbmuxRspTransport, connect_usbmuxd, open_device_port,
+};
+pub use threads::{
+    FrameRegisters, ThreadBacktrace, ThreadDescription, ThreadInfoSource, ThreadStopReason,
+};
+pub use hw_breakpoints::{
+    HwBreakpointController, HwBreakpointEntry, HwError, HwKind, HwSlotLimits, HwSlotTable, HwStop,
+    HwWatchpointEntry,
+};
+pub use rsp::{
+    RspClient, RspError, RspFramer, RspIncoming, RspPacket, RspResult, RspTransport, StopReply,
+    commands,
+};
+
+/// Backend name used in diagnostics and backend registration.
+pub const BACKEND_NAME: &str = "apple";
+
+/// Architectures this backend targets.
+///
+/// `arm64e` is listed apart from `arm64` because pointer authentication changes
+/// how return addresses must be read while unwinding; conflating them is a
+/// known source of wrong backtraces.
+#[must_use]
+pub fn supported_architectures() -> Vec<String> {
+    ["arm64", "arm64e", "x86_64"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+}
+
+#[cfg(test)]
+mod lib_tests {
+    use super::{BACKEND_NAME, RspPacket, commands, supported_architectures};
+
+    #[test]
+    fn backend_identity_is_stable() {
+        assert_eq!(BACKEND_NAME, "apple");
+        let arches = supported_architectures();
+        assert!(arches.contains(&"arm64".to_string()));
+        assert!(arches.contains(&"arm64e".to_string()));
+        assert!(arches.contains(&"x86_64".to_string()));
+    }
+
+    #[test]
+    fn reexports_are_usable_from_the_crate_root() {
+        assert_eq!(RspPacket::new(b"OK".to_vec()).encode(), b"$OK#9a");
+        assert_eq!(commands::halt_reason(), b"?");
+    }
+}

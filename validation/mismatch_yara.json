@@ -1,0 +1,8 @@
+{
+  "category": "yara",
+  "tools_in_category": 62,
+  "checks_total": 24,
+  "checks_passed": 20,
+  "checks_skipped": 4,
+  "mismatches": []
+}

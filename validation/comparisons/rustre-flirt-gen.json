@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-flirt-gen",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "Nessun tool MCP espone le primitive testabili del validator (crc16_flirt, crc16_sig_header, scan_x86_masks, generate_pattern, generate_from_ranges, generate_batch, generate_pattern_with_quality, parse_elf_functions, library_build, dedup_patterns, sig_writer_build, encode_trie_root, write_sig_file, quality_from_ratio, flirt_arch_to_u8). Il server rustre-mcp espone solo i tool di alto livello 'generate_flirt_sig' e 'apply_flirt_signatures' (tool_catalog.rs:768,776), che wrappano l'API end-to-end e non permettono confronto a parita' di superficie con le primitive del validator. Stessa situazione del crate rustre-flirt. Confronto MCP vs validator non eseguibile senza nuovi MCP tool che espongano le primitive."
+}

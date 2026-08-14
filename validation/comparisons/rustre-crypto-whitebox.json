@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-crypto-whitebox",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "note": "rustre-crypto-whitebox is not wired into the MCP server (wire_tools.rs has no tools referencing rustre_crypto_whitebox). 95 Python validator functions exist but there are 0 MCP tool counterparts to compare against.",
+  "mismatches": 0,
+  "match": false,
+  "tests": 0
+}

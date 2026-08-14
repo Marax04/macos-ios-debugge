@@ -1,0 +1,21 @@
+[package]
+license.workspace = true
+name = "rustre-syscalls-linux"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-syscalls = { path = "../rustre-syscalls" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rusqlite = { workspace = true }
+
+[lints]
+workspace = true

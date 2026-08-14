@@ -1,0 +1,24 @@
+{
+  "module": "hex_pattern",
+  "tools_hardened": [
+    "hex_pattern_canonicalize",
+    "hex_pattern_compiled_matches_at",
+    "hex_pattern_compiled_search",
+    "hex_pattern_crc16_ibm",
+    "hex_pattern_exact_count",
+    "hex_pattern_group_search_all",
+    "hex_pattern_masked_matches_at",
+    "hex_pattern_masked_new",
+    "hex_pattern_masked_search",
+    "hex_pattern_matches_at",
+    "hex_pattern_parse",
+    "hex_pattern_search",
+    "hex_pattern_specificity",
+    "hex_pattern_to_bytes",
+    "hex_pattern_to_simd_form",
+    "hex_pattern_wildcard_count"
+  ],
+  "checks_passed": 60,
+  "checks_failed": 0,
+  "mismatches": []
+}

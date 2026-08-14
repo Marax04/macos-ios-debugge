@@ -1,0 +1,44 @@
+{
+  "module": "fuzz_net_v3",
+  "tools_hardened": 3,
+  "tool_names": [
+    "fuzz_net_crash_kind_labels",
+    "fuzz_net_interesting_int_mutation",
+    "fuzz_net_protocol_drive_path"
+  ],
+  "checks_passed": 5,
+  "checks_failed": 0,
+  "checks": [
+    {
+      "tool": "fuzz_net_crash_kind_labels",
+      "check": "labels+is_crash+is_interesting",
+      "pass": true,
+      "note": "ok"
+    },
+    {
+      "tool": "fuzz_net_interesting_int_mutation",
+      "check": "mutated_value",
+      "pass": true,
+      "note": "expected 40, got 40"
+    },
+    {
+      "tool": "fuzz_net_interesting_int_mutation",
+      "check": "structure_current_0_sz_1",
+      "pass": true,
+      "note": "mutated=-60"
+    },
+    {
+      "tool": "fuzz_net_protocol_drive_path",
+      "check": "drive_to_done",
+      "pass": true,
+      "note": "current_state=done, target=done"
+    },
+    {
+      "tool": "fuzz_net_protocol_drive_path",
+      "check": "drive_to_start",
+      "pass": true,
+      "note": "current_state=start"
+    }
+  ],
+  "mismatches": []
+}

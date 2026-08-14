@@ -1,0 +1,24 @@
+﻿[package]
+license.workspace = true
+name = "rustre-flirt"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+ahash = { workspace = true }
+rustre-core = { path = "../rustre-core" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+aho-corasick = { workspace = true }
+rayon = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

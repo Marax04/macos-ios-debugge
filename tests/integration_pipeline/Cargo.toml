@@ -1,0 +1,18 @@
+[package]
+name = "integration-pipeline-tests"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+rustre-core = { path = "../../crates/rustre-core" }
+rustre-loader = { path = "../../crates/rustre-loader" }
+rustre-analysis-cfg = { path = "../../crates/rustre-analysis-cfg" }
+rustre-il-llil = { path = "../../crates/rustre-il-llil" }
+rustre-decompiler = { path = "../../crates/rustre-decompiler" }
+rustre-mcp-tools = { path = "../../crates/rustre-mcp-tools" }
+serde_json = { workspace = true }

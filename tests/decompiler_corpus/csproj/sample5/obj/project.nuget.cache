@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "xADf7NMbDMI=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Fra\\Desktop\\RustRE\\tests\\decompiler_corpus\\csproj\\sample5\\sample5.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.dotnet.ilcompiler\\10.0.5\\microsoft.dotnet.ilcompiler.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.5\\microsoft.net.illink.tasks.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\10.0.5\\runtime.win-x64.microsoft.dotnet.ilcompiler.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.5\\microsoft.netcore.app.runtime.win-x64.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.5\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\10.0.5\\microsoft.aspnetcore.app.runtime.win-x64.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\microsoft.netcore.app.runtime.nativeaot.win-x64\\10.0.5\\microsoft.netcore.app.runtime.nativeaot.win-x64.10.0.5.nupkg.sha512",
+    "C:\\Users\\Fra\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\10.0.5\\runtime.win-x64.microsoft.dotnet.ilcompiler.10.0.5.nupkg.sha512"
+  ],
+  "logs": []
+}

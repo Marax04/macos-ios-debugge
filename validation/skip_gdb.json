@@ -1,0 +1,18 @@
+[
+  {
+    "tool": "gdb_stop_reply_parse",
+    "reason": "stop reason is emitted as Rust Debug repr; no stable string reference"
+  },
+  {
+    "tool": "gdb_memory_map_parse",
+    "reason": "XML parsing with complex region structure; covered by Rust unit tests"
+  },
+  {
+    "tool": "gdb_register_codec_decode_g",
+    "reason": "requires full g-packet sized to target total_bytes; covered by Rust tests"
+  },
+  {
+    "tool": "gdb_register_codec_encode_g",
+    "reason": "requires RegisterSet map round-trip; covered by Rust tests"
+  }
+]

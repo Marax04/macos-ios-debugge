@@ -1,0 +1,498 @@
+{
+  "category": "vsa",
+  "tools_hardened": 12,
+  "tools_passed": 12,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "vsa_valueset_singleton",
+      "args": {
+        "value": 42
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false,
+        "is_bottom": false,
+        "contains_value": true
+      },
+      "actual": {
+        "display": "{0x2a}",
+        "is_top": false,
+        "is_bottom": false,
+        "contains_value": true,
+        "source": "rustre_analysis_vsa::ValueSet::singleton"
+      }
+    },
+    {
+      "tool": "vsa_valueset_singleton",
+      "args": {
+        "value": 0
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false,
+        "is_bottom": false,
+        "contains_value": true
+      },
+      "actual": {
+        "display": "{0x0}",
+        "is_top": false,
+        "is_bottom": false,
+        "contains_value": true,
+        "source": "rustre_analysis_vsa::ValueSet::singleton"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_new",
+      "args": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 2
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 2
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 2,
+        "is_bottom": false,
+        "is_top": false,
+        "is_singleton": false,
+        "display": "[0x0, 0xa]/2",
+        "source": "rustre_analysis_vsa::StridedInterval::new"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_new",
+      "args": {
+        "lo": 5,
+        "hi": 5,
+        "stride": 1
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 5,
+        "hi": 5,
+        "stride": 1,
+        "is_singleton": true
+      },
+      "actual": {
+        "lo": 5,
+        "hi": 5,
+        "stride": 1,
+        "is_bottom": false,
+        "is_top": false,
+        "is_singleton": true,
+        "display": "{0x5}",
+        "source": "rustre_analysis_vsa::StridedInterval::new"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_new",
+      "args": {
+        "lo": 0,
+        "hi": 100,
+        "stride": 3
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 0,
+        "hi": 99,
+        "stride": 3
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 99,
+        "stride": 3,
+        "is_bottom": false,
+        "is_top": false,
+        "is_singleton": false,
+        "display": "[0x0, 0x63]/3",
+        "source": "rustre_analysis_vsa::StridedInterval::new"
+      }
+    },
+    {
+      "tool": "vsa_valueset_top",
+      "args": {},
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": true,
+        "is_bottom": false
+      },
+      "actual": {
+        "display": "\u22a4",
+        "is_top": true,
+        "is_bottom": false,
+        "source": "rustre_analysis_vsa::ValueSet::top"
+      }
+    },
+    {
+      "tool": "vsa_valueset_bottom",
+      "args": {},
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false,
+        "is_bottom": true
+      },
+      "actual": {
+        "display": "\u22a5",
+        "is_top": false,
+        "is_bottom": true,
+        "source": "rustre_analysis_vsa::ValueSet::bottom"
+      }
+    },
+    {
+      "tool": "vsa_valueset_interval_wire",
+      "args": {
+        "lo": 10,
+        "hi": 20
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false,
+        "is_bottom": false,
+        "contains_lo": true
+      },
+      "actual": {
+        "display": "[0xa, 0x14]/1",
+        "is_top": false,
+        "is_bottom": false,
+        "contains_lo": true,
+        "source": "rustre_analysis_vsa::ValueSet::interval"
+      }
+    },
+    {
+      "tool": "vsa_valueset_interval_wire",
+      "args": {
+        "lo": 7,
+        "hi": 7
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false,
+        "is_bottom": false,
+        "contains_lo": true
+      },
+      "actual": {
+        "display": "{0x7}",
+        "is_top": false,
+        "is_bottom": false,
+        "contains_lo": true,
+        "source": "rustre_analysis_vsa::ValueSet::interval"
+      }
+    },
+    {
+      "tool": "vsa_valueset_join_intervals_wire",
+      "args": {
+        "a_lo": 0,
+        "a_hi": 10,
+        "b_lo": 20,
+        "b_hi": 30
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "display": "[0x0, 0x1e]/1"
+      },
+      "actual": {
+        "display": "[0x0, 0x1e]/1",
+        "source": "rustre_analysis_vsa::ValueSet::join"
+      }
+    },
+    {
+      "tool": "vsa_valueset_join_intervals_wire",
+      "args": {
+        "a_lo": 5,
+        "a_hi": 10,
+        "b_lo": 5,
+        "b_hi": 20
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "display": "[0x5, 0x14]/1"
+      },
+      "actual": {
+        "display": "[0x5, 0x14]/1",
+        "source": "rustre_analysis_vsa::ValueSet::join"
+      }
+    },
+    {
+      "tool": "vsa_valueset_widen_intervals_wire",
+      "args": {
+        "a_lo": 5,
+        "a_hi": 10,
+        "b_lo": 5,
+        "b_hi": 20
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false
+      },
+      "actual": {
+        "display": "[0x5, 0xffffffffffffffff]/1",
+        "is_top": false,
+        "source": "rustre_analysis_vsa::ValueSet::widen"
+      }
+    },
+    {
+      "tool": "vsa_valueset_widen_intervals_wire",
+      "args": {
+        "a_lo": 5,
+        "a_hi": 20,
+        "b_lo": 5,
+        "b_hi": 20
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_top": false
+      },
+      "actual": {
+        "display": "[0x5, 0x14]/1",
+        "is_top": false,
+        "source": "rustre_analysis_vsa::ValueSet::widen"
+      }
+    },
+    {
+      "tool": "vsa_valueset_concretize_strided_wire",
+      "args": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 2,
+        "limit": 10
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "values": [
+          0,
+          2,
+          4,
+          6,
+          8,
+          10
+        ],
+        "enumerated": true
+      },
+      "actual": {
+        "display": "[0x0, 0xa]/2",
+        "values": [
+          0,
+          2,
+          4,
+          6,
+          8,
+          10
+        ],
+        "enumerated": true,
+        "source": "rustre_analysis_vsa::ValueSet::concretize"
+      }
+    },
+    {
+      "tool": "vsa_valueset_concretize_strided_wire",
+      "args": {
+        "lo": 0,
+        "hi": 100,
+        "stride": 1,
+        "limit": 3
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "enumerated": false
+      },
+      "actual": {
+        "display": "[0x0, 0x64]/1",
+        "values": null,
+        "enumerated": false,
+        "source": "rustre_analysis_vsa::ValueSet::concretize"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_join_wire",
+      "args": {
+        "a_lo": 0,
+        "a_hi": 10,
+        "a_stride": 2,
+        "b_lo": 20,
+        "b_hi": 30,
+        "b_stride": 2
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 0,
+        "hi": 30,
+        "stride": 2
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 30,
+        "stride": 2,
+        "display": "[0x0, 0x1e]/2",
+        "source": "rustre_analysis_vsa::StridedInterval::join"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_join_wire",
+      "args": {
+        "a_lo": 0,
+        "a_hi": 0,
+        "a_stride": 1,
+        "b_lo": 0,
+        "b_hi": 0,
+        "b_stride": 1
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 0,
+        "hi": 0,
+        "stride": 1
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 0,
+        "stride": 1,
+        "display": "{0x0}",
+        "source": "rustre_analysis_vsa::StridedInterval::join"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_add_wire",
+      "args": {
+        "a_lo": 0,
+        "a_hi": 10,
+        "a_stride": 2,
+        "b_lo": 0,
+        "b_hi": 5,
+        "b_stride": 1
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 0,
+        "hi": 15,
+        "stride": 1
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 15,
+        "stride": 1,
+        "display": "[0x0, 0xf]/1",
+        "is_top": false,
+        "source": "rustre_analysis_vsa::StridedInterval::add"
+      }
+    },
+    {
+      "tool": "vsa_strided_interval_add_wire",
+      "args": {
+        "a_lo": 5,
+        "a_hi": 5,
+        "a_stride": 1,
+        "b_lo": 3,
+        "b_hi": 3,
+        "b_stride": 1
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "lo": 8,
+        "hi": 8
+      },
+      "actual": {
+        "lo": 8,
+        "hi": 8,
+        "stride": 1,
+        "display": "{0x8}",
+        "is_top": false,
+        "source": "rustre_analysis_vsa::StridedInterval::add"
+      }
+    },
+    {
+      "tool": "vsa_is_definitely_null_wire",
+      "args": {
+        "value": 0
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_definitely_null": true
+      },
+      "actual": {
+        "value": 0,
+        "is_definitely_null": true,
+        "source": "rustre_analysis_vsa::is_definitely_null"
+      }
+    },
+    {
+      "tool": "vsa_is_definitely_null_wire",
+      "args": {
+        "value": 1
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "is_definitely_null": false
+      },
+      "actual": {
+        "value": 1,
+        "is_definitely_null": false,
+        "source": "rustre_analysis_vsa::is_definitely_null"
+      }
+    },
+    {
+      "tool": "vsa_may_be_out_of_bounds_wire",
+      "args": {
+        "lo": 5,
+        "hi": 10,
+        "stride": 1,
+        "base": 0,
+        "limit": 100
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "may_be_out_of_bounds": false
+      },
+      "actual": {
+        "display": "[0x5, 0xa]/1",
+        "may_be_out_of_bounds": false,
+        "source": "rustre_analysis_vsa::may_be_out_of_bounds"
+      }
+    },
+    {
+      "tool": "vsa_may_be_out_of_bounds_wire",
+      "args": {
+        "lo": 0,
+        "hi": 100,
+        "stride": 1,
+        "base": 0,
+        "limit": 50
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "may_be_out_of_bounds": true
+      },
+      "actual": {
+        "display": "[0x0, 0x64]/1",
+        "may_be_out_of_bounds": true,
+        "source": "rustre_analysis_vsa::may_be_out_of_bounds"
+      }
+    },
+    {
+      "tool": "vsa_may_be_out_of_bounds_wire",
+      "args": {
+        "lo": 3,
+        "hi": 5,
+        "stride": 1,
+        "base": 10,
+        "limit": 100
+      },
+      "status": "PASS",
+      "expected_fields": {
+        "may_be_out_of_bounds": true
+      },
+      "actual": {
+        "display": "[0x3, 0x5]/1",
+        "may_be_out_of_bounds": true,
+        "source": "rustre_analysis_vsa::may_be_out_of_bounds"
+      }
+    }
+  ]
+}

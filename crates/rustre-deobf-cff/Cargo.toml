@@ -1,0 +1,23 @@
+﻿[package]
+license.workspace = true
+name = "rustre-deobf-cff"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-deobf = { path = "../rustre-deobf" }
+rustre-core = { path = "../rustre-core" }
+serde = { workspace = true }
+ahash = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

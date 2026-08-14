@@ -1,0 +1,13 @@
+{
+ "category": "threatintel_ttp",
+ "checks_total": 2,
+ "checks_passed": 1,
+ "mismatches": [
+  {
+   "tool": "sub_technique(T1053.001)",
+   "mcp": false,
+   "truth": true,
+   "note": "has . = sub"
+  }
+ ]
+}

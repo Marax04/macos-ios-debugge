@@ -1,0 +1,29 @@
+{
+  "crate": "rustre-forensics-mem",
+  "mcp_surface": "none-direct",
+  "note": "rustre-forensics-mem is a workspace library crate (Windows/Linux memory analyzers, PE scanner, stack canaries, NT heap, UTF-16 strings, process_tree, kernel_forensics). The MCP server (crates/rustre-mcp-tools/src/lib.rs, register_forensics_group near L6921) exposes only 'forensics.open_memory_dump' and 'forensics.run_plugin', both of which are static placeholder stubs that do NOT invoke rustre-forensics-mem (returns hardcoded pslist/netscan strings; no calls to WindowsAnalyzer/LinuxAnalyzer/MemoryForensicsScanner). No other rustre-mcp* crate depends on rustre-forensics-mem (verified via grep). Direct JSON-RPC stdio comparison vs validator is therefore N/A. The crate is consumed by sibling library crates (rustre-forensics-fs, rustre-forensics-plugins) and surfaced in the GUI (rustre-gui processes panel).",
+  "validator": "validation/validators/rustre-forensics-mem.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 9,
+    "all_passed": true,
+    "checks": {
+      "WindowsAnalyzer.find_processes": "2 processes (System pid=4, explorer.exe pid=1000) matched on EPRC signature, 56-byte record layout",
+      "WindowsAnalyzer.find_modules(pid=1000)": "1 module (kernel32.dll) on LDRM signature, 116-byte record",
+      "WindowsAnalyzer.find_network_connections": "1 NCON record decoded as TcpV4 192.168.1.1:443 -> 10.0.0.1:8080 Established pid=1000",
+      "WindowsAnalyzer.extract_registry_hives": "1 HIVE record (SOFTWARE) on 52-byte record",
+      "WindowsAnalyzer.find_kernel_info": "KDBG signature located, version 10.0.19041, arch=x64 (arch byte=64)",
+      "LinuxAnalyzer.find_processes": "TSKB record init pid=1",
+      "LinuxAnalyzer.find_modules": "KMOD record ext4",
+      "MemoryForensicsScanner.scan_pe_headers": "MZ+PE detected at base_addr 0x1000",
+      "MemoryForensicsScanner.scan_stack_canaries": "DEADBEEF@0 and BAADF00D@8 detected",
+      "MemoryForensicsScanner.find_unicode_strings(min=4)": "Hello (UTF-16LE) detected",
+      "try_find_processes(empty)": "raises InvalidAddress as expected"
+    },
+    "signature_layout_source_of_truth": "crates/rustre-forensics-mem/src/{windows_structs.rs,linux_structs.rs,memory_forensics.rs,strings_extractor.rs}; mock images produced by rustre_forensics_mem::build_mock_image() used by sibling crates' tests"
+  },
+  "tests": 9,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

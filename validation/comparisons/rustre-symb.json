@@ -1,0 +1,32 @@
+{
+  "crate": "rustre-symb",
+  "tool": null,
+  "target": "rustre-mcp.exe",
+  "validator": "validators/rustre-symb.py",
+  "validator_status": "ok",
+  "validator_smoke_tests": {
+    "ty_bv_width": 32,
+    "ty_ptr_width": 64,
+    "add_const_3_4": 7,
+    "sub_xx_simplify": 0,
+    "mul_zero_simplify": 0,
+    "xor_xx_simplify": 0,
+    "double_not_simplify": "Var x_1",
+    "ite_true": 1,
+    "extract_const_0xDEADBEEF_15_0": 48879,
+    "concat_const": 730144440507,
+    "eq_const_true": true,
+    "eval_concrete_xpy_10_5": 15,
+    "evaluate_str_x1_41_plus_1": 42,
+    "state_sat": true,
+    "fork_pair_pc_terms": [2, 2],
+    "merged_rax_op": "Ite"
+  },
+  "mcp_tools_for_symb": [],
+  "mcp_coverage_note": "rustre-mcp.exe does not expose any tools covering the rustre-symb crate symbolic-execution surface (SymExpr constructors, simplifier, SymMemory, PathConstraint, SymbolicState). MCP server only references rustre-symbols-pdb (a different crate) and analysis_trace_data_flow_path (rustre-analysis-dataflow). The symbolic execution core is an internal library API consumed by other crates, not surfaced via MCP.",
+  "tests": 17,
+  "mismatches": 0,
+  "fixed": 0,
+  "fixes_applied": [],
+  "match": true
+}

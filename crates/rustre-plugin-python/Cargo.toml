@@ -1,0 +1,22 @@
+[package]
+license.workspace = true
+name = "rustre-plugin-python"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+pyo3 = { workspace = true }
+
+[lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

@@ -1,0 +1,11 @@
+{
+  "category": "deobf",
+  "note": "All 106 deobf tools were already covered in rigorous_deobf_v2.json (62 passed, 44 skipped). No new tools found in this round.",
+  "tools_in_category": 106,
+  "new_checks_total": 0,
+  "new_checks_passed": 0,
+  "new_checks_failed": 0,
+  "new_checks_skipped": 0,
+  "mismatches": [],
+  "newly_skipped": []
+}

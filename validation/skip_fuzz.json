@@ -1,0 +1,47 @@
+{
+  "events_ext_bus_send_fuzz_crash": {
+    "reason": "event bus publish - side-effect only, no verifiable return value"
+  },
+  "events_ext_bus_send_fuzz_new_coverage": {
+    "reason": "event bus publish - side-effect only, no verifiable return value"
+  },
+  "fuzz_compute_priority": {
+    "reason": "depends on complex internal fuzzer priority scoring not independently specifiable"
+  },
+  "fuzz_generate_corpus": {
+    "reason": "grammar-based generation seeded but grammar internals complex, output nondeterministic at scale"
+  },
+  "fuzz_cov_cmplog_mask_bit_diff_x": {
+    "reason": "requires CmplogEntry internal bit-mask computation - covered by cmplog_entry_diff"
+  },
+  "fuzz_cov_cmplog_unique_pcs_x": {
+    "reason": "pure accessor on CmplogMap - covered by suggest_mutations which also reports unique_pcs"
+  },
+  "fuzz_cov_corpus_prune": {
+    "reason": "same semantics as fuzz_corpus_prune but in coverage crate; requires full CoverageRun objects"
+  },
+  "fuzz_cov_corpus_pruner": {
+    "reason": "CoverageCorpusPruner object - requires full CoverageRun corpus, not independently verifiable"
+  },
+  "fuzz_cov_coverage_stats": {
+    "reason": "CoverageStats aggregation requires multiple CoverageRun objects"
+  },
+  "fuzz_cov_db_aggregate_new_x": {
+    "reason": "new-block aggregate on CoverageDatabase - no independently verifiable result"
+  },
+  "fuzz_cov_drcov_header_parse_v2": {
+    "reason": "V2 DRcov header parse - no Python DRcov V2 parser available"
+  },
+  "fuzz_cov_edge_hot_edges": {
+    "reason": "EdgeCoverageMap::hot_edges - covered by edge_map_analyze which returns hot_edges"
+  },
+  "fuzz_cov_pcguard_hash_merge": {
+    "reason": "PC-guard merge requires mutable internal PcGuardBitmap state"
+  },
+  "fuzz_cov_pcguard_reset_hit_guards_x": {
+    "reason": "reset on PcGuardBitmap - covered by pcguard_hit_guards which tests reset"
+  },
+  "fuzz_cov_stats_full": {
+    "reason": "CoverageStats::full requires complex multi-field construction"
+  }
+}

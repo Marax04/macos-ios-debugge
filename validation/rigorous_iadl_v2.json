@@ -1,0 +1,50 @@
+{
+  "category": "iadl",
+  "tools_hardened": 5,
+  "tools_passed": 10,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "iadl_convergence_moving_average",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_convergence_ema",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_convergence_trend_slope",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[djb2]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[fnv1a32]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[sdbm]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[crc32]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[adler32]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_compute_hash[ror_hash]",
+      "status": "PASS"
+    },
+    {
+      "tool": "iadl_analyze_binary_for_protections",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,1463 @@
+{
+  "summary": {
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0,
+    "total_tests": 86
+  },
+  "tests": [
+    {
+      "tool": "debug_unicorn_mem_region_perms",
+      "input": {
+        "addr": 4096,
+        "size": 16,
+        "perms": 7
+      },
+      "expected": "readable=True writable=True executable=True for perms=7",
+      "actual": {
+        "addr": 4096,
+        "size": 16,
+        "perms": 7,
+        "readable": true,
+        "writable": true,
+        "executable": true,
+        "display": "MemRegion(addr=0x1000, size=0x10, perms=111)",
+        "source": "rustre_debug_unicorn::MemRegion"
+      },
+      "pass": true,
+      "note": "perms=7=0b111 includes addr/size"
+    },
+    {
+      "tool": "debug_windows_is_committed",
+      "input": {
+        "state": 4096
+      },
+      "expected": "is_committed==True for state=4096",
+      "actual": {
+        "state": 4096,
+        "is_committed": true,
+        "source": "rustre_debug_windows::win32::is_committed"
+      },
+      "pass": true,
+      "note": "MEM_COMMIT=0x1000"
+    },
+    {
+      "tool": "debug_windows_is_committed",
+      "input": {
+        "state": 8192
+      },
+      "expected": "is_committed==False for state=8192",
+      "actual": {
+        "state": 8192,
+        "is_committed": false,
+        "source": "rustre_debug_windows::win32::is_committed"
+      },
+      "pass": true,
+      "note": "MEM_COMMIT=0x1000"
+    },
+    {
+      "tool": "debug_windows_is_committed",
+      "input": {
+        "state": 1
+      },
+      "expected": "is_committed==False for state=1",
+      "actual": {
+        "state": 1,
+        "is_committed": false,
+        "source": "rustre_debug_windows::win32::is_committed"
+      },
+      "pass": true,
+      "note": "MEM_COMMIT=0x1000"
+    },
+    {
+      "tool": "debug_windows_exception_name",
+      "input": {
+        "code": 1
+      },
+      "expected": "name=='EXCEPTION_UNKNOWN'",
+      "actual": {
+        "code": 1,
+        "name": "EXCEPTION_UNKNOWN",
+        "source": "rustre_debug_windows::DebugEventDecoder::exception_name"
+      },
+      "pass": true,
+      "note": "code=0x1"
+    },
+    {
+      "tool": "debug_windows_exception_name",
+      "input": {
+        "code": 3221225477
+      },
+      "expected": "name=='EXCEPTION_ACCESS_VIOLATION'",
+      "actual": {
+        "code": 3221225477,
+        "name": "EXCEPTION_ACCESS_VIOLATION",
+        "source": "rustre_debug_windows::DebugEventDecoder::exception_name"
+      },
+      "pass": true,
+      "note": "code=0xc0000005"
+    },
+    {
+      "tool": "debug_windows_exception_name",
+      "input": {
+        "code": 2147483651
+      },
+      "expected": "name=='EXCEPTION_BREAKPOINT'",
+      "actual": {
+        "code": 2147483651,
+        "name": "EXCEPTION_BREAKPOINT",
+        "source": "rustre_debug_windows::DebugEventDecoder::exception_name"
+      },
+      "pass": true,
+      "note": "code=0x80000003"
+    },
+    {
+      "tool": "debug_macos_process_describe",
+      "input": {
+        "pid": 42,
+        "task_port": 100,
+        "thread_ports": [
+          1,
+          2
+        ]
+      },
+      "expected": "pid==42 task_port==100 thread_ports==[1,2]",
+      "actual": {
+        "pid": 42,
+        "task_port": 100,
+        "thread_ports": [
+          1,
+          2
+        ],
+        "source": "rustre_debug_macos::MacosProcess"
+      },
+      "pass": true,
+      "note": "passthrough struct fields"
+    },
+    {
+      "tool": "debug_macos_x86_register_index",
+      "input": {
+        "name": "rax"
+      },
+      "expected": "index field present",
+      "actual": {
+        "name": "rax",
+        "index": 0,
+        "source": "rustre_debug_macos::MacosRegisterSet::x86_64_index"
+      },
+      "pass": true,
+      "note": "rax register index"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index",
+      "input": {
+        "name": "x0"
+      },
+      "expected": "index field present",
+      "actual": {
+        "name": "x0",
+        "index": 0,
+        "source": "rustre_debug_macos::MacosRegisterSet::arm64_index"
+      },
+      "pass": true,
+      "note": "x0 register index"
+    },
+    {
+      "tool": "debug_macos_format_uuid",
+      "input": {
+        "hex": "deadbeef00112233445566778899aabb"
+      },
+      "expected": "uuid field present with 36-char UUID format",
+      "actual": {
+        "uuid": "DEADBEEF-0011-2233-4455-66778899AABB",
+        "source": "rustre_debug_macos::format_uuid"
+      },
+      "pass": true,
+      "note": "UUID format check"
+    },
+    {
+      "tool": "debug_macos_mach_exception_from_u32",
+      "input": {
+        "value": 1
+      },
+      "expected": "valid mach exception response",
+      "actual": {
+        "value": 1,
+        "name": "EXC_BAD_ACCESS",
+        "signal": 11,
+        "source": "rustre_debug_macos::MachException::from_u32"
+      },
+      "pass": true,
+      "note": "mach exception from u32"
+    },
+    {
+      "tool": "debug_macos_mach_exception_to_signal",
+      "input": {
+        "value": 1
+      },
+      "expected": "signal field present",
+      "actual": {
+        "value": 1,
+        "name": "EXC_BAD_ACCESS",
+        "signal": 11,
+        "source": "rustre_debug_macos::MachException::to_signal"
+      },
+      "pass": true,
+      "note": "mach exc -> POSIX signal"
+    },
+    {
+      "tool": "debug_macos_vm_region_describe",
+      "input": {
+        "address": 4096,
+        "size": 4096,
+        "prot": 5
+      },
+      "expected": "description field present",
+      "actual": {
+        "address": 4096,
+        "size": 4096,
+        "readable": true,
+        "writable": false,
+        "executable": true,
+        "prot_str": "r-x",
+        "source": "rustre_debug_macos::VmRegion"
+      },
+      "pass": true,
+      "note": "vm region describe"
+    },
+    {
+      "tool": "debug_macos_vm_region_contains",
+      "input": {
+        "address": 4096,
+        "size": 4096,
+        "query": 4352
+      },
+      "expected": "contains==True for query inside region",
+      "actual": {
+        "query": 4352,
+        "contains": true,
+        "source": "rustre_debug_macos::VmRegion::contains"
+      },
+      "pass": true,
+      "note": "0x1100 in [0x1000, 0x2000)"
+    },
+    {
+      "tool": "debug_macos_mach_vm_region_is_writable",
+      "input": {
+        "address": 4096,
+        "size": 16,
+        "prot": 3
+      },
+      "expected": "is_writable==True for prot=3 (R+W)",
+      "actual": {
+        "address": 4096,
+        "end": 4112,
+        "is_writable": true,
+        "is_executable": false,
+        "source": "rustre_debug_macos::MachVmRegion::is_writable"
+      },
+      "pass": true,
+      "note": "prot=3=R|W"
+    },
+    {
+      "tool": "debug_macos_vm_region_map_ops",
+      "input": {
+        "regions": []
+      },
+      "expected": "len/total_size/count present",
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "total_size": 0,
+        "executable_count": 0,
+        "writable_count": 0,
+        "query": null,
+        "found_address": null,
+        "source": "rustre_debug_macos::VmRegionMap"
+      },
+      "pass": true,
+      "note": "empty region map ops"
+    },
+    {
+      "tool": "debug_macos_dyld_image_list_find",
+      "input": {
+        "images": [],
+        "name": "libc"
+      },
+      "expected": "find_by_name/found/len present",
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "find_by_name": null,
+        "image_at": null,
+        "source": "rustre_debug_macos::DyldImageList"
+      },
+      "pass": true,
+      "note": "empty list, find_by_name==None"
+    },
+    {
+      "tool": "debug_macos_macho_section_contains",
+      "input": {
+        "segment": "__TEXT",
+        "section": "__text",
+        "addr": 4096,
+        "size": 256,
+        "query": 4176
+      },
+      "expected": "contains==True for query inside section",
+      "actual": {
+        "query": 4176,
+        "contains": true,
+        "qualified_name": "__TEXT.__text",
+        "source": "rustre_debug_macos::MachoSection::contains"
+      },
+      "pass": true,
+      "note": "0x1050 in [0x1000, 0x1100)"
+    },
+    {
+      "tool": "debug_macos_stop_reason_address",
+      "input": {
+        "kind": "breakpoint",
+        "address": 16384
+      },
+      "expected": "address==0x4000 for breakpoint stop",
+      "actual": {
+        "kind": "breakpoint",
+        "address": 16384,
+        "is_exit": false,
+        "source": "rustre_debug_macos::MacosStopReason::address"
+      },
+      "pass": true,
+      "note": "breakpoint address"
+    },
+    {
+      "tool": "debug_macos_process_table_enumerate",
+      "input": {
+        "entries": []
+      },
+      "expected": "count/processes present",
+      "actual": {
+        "count": 0,
+        "filtered_count": null,
+        "find_by_pid_name": null,
+        "find_by_name_pid": null,
+        "source": "rustre_debug_macos::MacOsProcessEnumerator"
+      },
+      "pass": true,
+      "note": "empty process table"
+    },
+    {
+      "tool": "debug_macos_thread_list_ops",
+      "input": {
+        "threads": []
+      },
+      "expected": "len/count/all field present",
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "stopped_tids": [],
+        "found_port": null,
+        "source": "rustre_debug_macos::MacosThreadList"
+      },
+      "pass": true,
+      "note": "empty thread list ops"
+    },
+    {
+      "tool": "debug_unicorn_trace_entry_build",
+      "input": {
+        "address": 4096,
+        "mnemonic": "nop",
+        "raw_hex": "90"
+      },
+      "expected": "display field present",
+      "actual": {
+        "display": "[000000] 0x0000000000001000  nop",
+        "bytes_hex": "90",
+        "raw_len": 1,
+        "source": "rustre_debug_unicorn::TraceEntry"
+      },
+      "pass": true,
+      "note": "trace entry build"
+    },
+    {
+      "tool": "debug_unicorn_watchpoint_probe",
+      "input": {
+        "address": 4096,
+        "size": 4,
+        "kind": "read",
+        "probe_addr": 4098,
+        "probe_kind": "read"
+      },
+      "expected": "covers==True matches==True",
+      "actual": {
+        "display": "WP[1] 0x1000+4 read hits=0",
+        "covers": true,
+        "matches": true,
+        "source": "rustre_debug_unicorn::Watchpoint"
+      },
+      "pass": true,
+      "note": "probe inside watchpoint range"
+    },
+    {
+      "tool": "debug_unicorn_symbol_table_resolve",
+      "input": {
+        "symbols": [
+          {
+            "addr": 4096,
+            "name": "main"
+          },
+          {
+            "addr": 8192,
+            "name": "helper"
+          }
+        ],
+        "query_addr": 4096,
+        "query_name": "helper"
+      },
+      "expected": "resolve_addr_display or resolve_name_addr present, count==2",
+      "actual": {
+        "count": 2,
+        "resolve_addr_display": "helper+0x1000",
+        "resolve_name_addr": 0,
+        "prefix_hits": null,
+        "sorted_names": [
+          "main",
+          "helper"
+        ],
+        "source": "rustre_debug_unicorn::SymbolTable"
+      },
+      "pass": true,
+      "note": "symbol table resolve"
+    },
+    {
+      "tool": "debug_unicorn_thread_simulate",
+      "input": {
+        "pc": 4096,
+        "sp": 32768
+      },
+      "expected": "count/tids/current/spawned_tids present",
+      "actual": {
+        "spawned_tids": [],
+        "count": 0,
+        "tids": [],
+        "current": null,
+        "running_count": 0,
+        "final_pc": null,
+        "source": "rustre_debug_unicorn::ThreadSimulator"
+      },
+      "pass": true,
+      "note": "thread simulation"
+    },
+    {
+      "tool": "debug_unicorn_script_gen",
+      "input": {
+        "target": "python"
+      },
+      "expected": "script/text/code field present",
+      "actual": {
+        "script": "# Minimal Unicorn emulator scaffold (x86_64)\nfrom unicorn import *\nfrom unicorn.x86_64_const import *\nX86_CODE = b'\\x90'  # nop\nADDRESS = 0x00401000\nmu = Uc(UC_ARCH_X86_64, UC_MODE_64)\nmu.mem_map(ADDRESS, 2 * 1024 * 1024)\nmu.mem_write(ADDRESS, X86_CODE)\nmu.emu_start(ADDRESS, ADDRESS + len(X86_CODE))\nprint('Done. PC =', hex(mu.reg_read(UC_X86_REG_RIP)))\n",
+        "lines": 10,
+        "source": "rustre_debug_unicorn::EmulatorScriptGen"
+      },
+      "pass": true,
+      "note": "unicorn script generation"
+    },
+    {
+      "tool": "debug_unicorn_hook_record_describe",
+      "input": {
+        "hook_id": 1,
+        "address": 4096,
+        "kind": "code"
+      },
+      "expected": "display/description present",
+      "actual": {
+        "display": "HookRecord(id=1, type=code, addr=0x1000, size=0)",
+        "hook_type": "code",
+        "source": "rustre_debug_unicorn::HookRecord"
+      },
+      "pass": true,
+      "note": "hook record describe"
+    },
+    {
+      "tool": "debug_unicorn_emulate_steps",
+      "input": {
+        "steps": 1,
+        "arch": "x86_64"
+      },
+      "expected": "final_pc/steps/mem_regions present",
+      "actual": {
+        "final_pc": 4097,
+        "mem_regions": [],
+        "installed_hooks": [],
+        "source": "rustre_debug_unicorn::UnicornDebugger::emulate"
+      },
+      "pass": true,
+      "note": "emulate steps"
+    },
+    {
+      "tool": "debug_unicorn_symbol_table_format",
+      "input": {
+        "symbols": [
+          {
+            "addr": 4096,
+            "name": "main"
+          }
+        ],
+        "addr": 4096
+      },
+      "expected": "formatted/display/result present",
+      "actual": {
+        "count": 1,
+        "formatted": null,
+        "resolved_name_addr": null,
+        "prefix_hits": 0,
+        "sorted_count": 1,
+        "source": "rustre_debug_unicorn::SymbolTable"
+      },
+      "pass": true,
+      "note": "symbol table format"
+    },
+    {
+      "tool": "debug_unicorn_coverage_granularity_align",
+      "input": {
+        "granularity": "instruction",
+        "addr": 4101
+      },
+      "expected": "aligned==0x1005 for instruction granularity",
+      "actual": {
+        "aligned": 4101,
+        "display": "instruction",
+        "source": "rustre_debug_unicorn::CoverageGranularity::align"
+      },
+      "pass": true,
+      "note": "instruction aligned to 1"
+    },
+    {
+      "tool": "debug_unicorn_fault_rule_should_fire",
+      "input": {
+        "address": 4096,
+        "kind": "mem_read_replace",
+        "param": 255,
+        "probe": 4096
+      },
+      "expected": "should_fire==True when probe==address",
+      "actual": {
+        "should_fire": true,
+        "display": "FaultRule[1] addr=0x1000 kind=mem_read_replace fires=0/0",
+        "kind": "mem_read_replace",
+        "source": "rustre_debug_unicorn::FaultRule::should_fire"
+      },
+      "pass": true,
+      "note": "fault rule probe match"
+    },
+    {
+      "tool": "debug_unicorn_thread_simulator_scheduling",
+      "input": {
+        "threads": []
+      },
+      "expected": "count/scheduled/threads present",
+      "actual": {
+        "tids": [],
+        "count": 0,
+        "current": null,
+        "stepped_pc": null,
+        "running_count": 0,
+        "exited": false,
+        "spawned": [],
+        "source": "rustre_debug_unicorn::ThreadSimulator"
+      },
+      "pass": true,
+      "note": "empty thread scheduler"
+    },
+    {
+      "tool": "debug_unicorn_v2_config_presets",
+      "input": {},
+      "expected": "arch/presets/configs/mode present",
+      "actual": {
+        "arch": "x86_64",
+        "mode": "mode64",
+        "stack_size": 1048576,
+        "timeout_ms": 5000,
+        "pointer_size": 8,
+        "source": "rustre_debug_unicorn::v2::UnicornConfig"
+      },
+      "pass": true,
+      "note": "v2 config presets listing"
+    },
+    {
+      "tool": "debug_unicorn_v2_debugger_emulate",
+      "input": {
+        "arch": "x86_64",
+        "steps": 0
+      },
+      "expected": "instructions/success/error present",
+      "actual": {
+        "instructions": 0,
+        "mem_reads": 0,
+        "mem_writes": 0,
+        "exit_addr": 0,
+        "error": "start == end",
+        "success": false,
+        "hook_count": 0,
+        "hook_ids": [],
+        "source": "rustre_debug_unicorn::v2::UnicornDebugger::emulate"
+      },
+      "pass": true,
+      "note": "v2 debugger emulate (steps=0 may error)"
+    },
+    {
+      "tool": "debug_unicorn_patch_record_new",
+      "input": {
+        "address": 4096,
+        "old_hex": "90",
+        "new_hex": "cc"
+      },
+      "expected": "display/address present",
+      "actual": {
+        "size": 0,
+        "applied": false,
+        "display": "Patch@0x1000+0 applied=false",
+        "source": "rustre_debug_unicorn::PatchRecord"
+      },
+      "pass": true,
+      "note": "patch record new"
+    },
+    {
+      "tool": "debug_windows_hwbp_condition_dr7",
+      "input": {
+        "condition": "execute"
+      },
+      "expected": "dr7_cond==0 for condition='execute'",
+      "actual": {
+        "condition": "execute",
+        "dr7_cond": 0,
+        "source": "rustre_debug_windows::HwBpCondition::dr7_cond"
+      },
+      "pass": true,
+      "note": "DR7 condition encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_condition_dr7",
+      "input": {
+        "condition": "write"
+      },
+      "expected": "dr7_cond==1 for condition='write'",
+      "actual": {
+        "condition": "write",
+        "dr7_cond": 1,
+        "source": "rustre_debug_windows::HwBpCondition::dr7_cond"
+      },
+      "pass": true,
+      "note": "DR7 condition encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_condition_dr7",
+      "input": {
+        "condition": "readwrite"
+      },
+      "expected": "dr7_cond==3 for condition='readwrite'",
+      "actual": {
+        "condition": "readwrite",
+        "dr7_cond": 3,
+        "source": "rustre_debug_windows::HwBpCondition::dr7_cond"
+      },
+      "pass": true,
+      "note": "DR7 condition encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_size_dr7",
+      "input": {
+        "size": "byte"
+      },
+      "expected": "dr7_size==0 for size='byte'",
+      "actual": {
+        "size": "byte",
+        "dr7_size": 0,
+        "source": "rustre_debug_windows::HwBpSize::dr7_size"
+      },
+      "pass": true,
+      "note": "DR7 size encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_size_dr7",
+      "input": {
+        "size": "word"
+      },
+      "expected": "dr7_size==1 for size='word'",
+      "actual": {
+        "size": "word",
+        "dr7_size": 1,
+        "source": "rustre_debug_windows::HwBpSize::dr7_size"
+      },
+      "pass": true,
+      "note": "DR7 size encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_size_dr7",
+      "input": {
+        "size": "dword"
+      },
+      "expected": "dr7_size==3 for size='dword'",
+      "actual": {
+        "size": "dword",
+        "dr7_size": 3,
+        "source": "rustre_debug_windows::HwBpSize::dr7_size"
+      },
+      "pass": true,
+      "note": "DR7 size encoding"
+    },
+    {
+      "tool": "debug_windows_hwbp_size_dr7",
+      "input": {
+        "size": "qword"
+      },
+      "expected": "dr7_size==2 for size='qword'",
+      "actual": {
+        "size": "qword",
+        "dr7_size": 2,
+        "source": "rustre_debug_windows::HwBpSize::dr7_size"
+      },
+      "pass": true,
+      "note": "DR7 size encoding"
+    },
+    {
+      "tool": "debug_windows_region_perms",
+      "input": {
+        "state": 4096,
+        "protect": 32
+      },
+      "expected": "is_committed=True readable=True executable=True for MEM_COMMIT + PAGE_EXECUTE_READ",
+      "actual": {
+        "state": 4096,
+        "protect": 32,
+        "is_committed": true,
+        "readable": true,
+        "writable": false,
+        "executable": true,
+        "protect_name": "PAGE_EXECUTE_READ",
+        "source": "rustre_debug_windows::MemoryRegionInfo"
+      },
+      "pass": true,
+      "note": "PAGE_EXECUTE_READ=32"
+    },
+    {
+      "tool": "debug_frida_simulate_hook_hit_detached",
+      "input": {
+        "address": 4096
+      },
+      "expected": "records_after field present",
+      "actual": {
+        "records_after": 0,
+        "source": "rustre_debug_frida::FridaDebugSession::simulate_hook_hit"
+      },
+      "pass": true,
+      "note": "simulate hook hit returns records"
+    },
+    {
+      "tool": "debug_frida_v2_manager_lifecycle",
+      "input": {},
+      "expected": "session_a_id/sessions_before_detach/state/count present",
+      "actual": {
+        "session_a_id": 1,
+        "session_b_id": 2,
+        "session_a_attached_initially": true,
+        "session_b_attached_initially": true,
+        "interceptor_count": 1,
+        "sessions_before_detach": 2,
+        "sessions_after_detach": 1,
+        "stalker_event_count": 6,
+        "first_event": "call 0x0 -> 0x1000",
+        "source": "rustre_debug_frida::v2::FridaManager"
+      },
+      "pass": true,
+      "note": "frida v2 manager lifecycle"
+    },
+    {
+      "tool": "debug_windows_memory_region_to_map",
+      "input": {
+        "base": 4096,
+        "size": 4096,
+        "state": 4096,
+        "protect": 4
+      },
+      "expected": "region display fields present",
+      "actual": {
+        "base": 4096,
+        "size": 4096,
+        "readable": true,
+        "writable": true,
+        "executable": false,
+        "source": "rustre_debug_windows::MemoryRegionInfo::to_memory_map"
+      },
+      "pass": true,
+      "note": "memory region to map"
+    },
+    {
+      "tool": "debug_windows_wow64_context_to_register_set",
+      "input": {
+        "eip": 4660,
+        "esp": 22136,
+        "ebp": 43981
+      },
+      "expected": "pc/sp/registers present",
+      "actual": {
+        "pc": 4660,
+        "sp": 22136,
+        "fp": 43981,
+        "eip": 4660,
+        "esp": 22136,
+        "ebp": 43981,
+        "eax": 0,
+        "eflags": 0,
+        "source": "rustre_debug_windows::Wow64Context::to_register_set"
+      },
+      "pass": true,
+      "note": "wow64 context to register set"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_is_fatal",
+      "input": {
+        "value": 1
+      },
+      "expected": "is_typically_fatal==True for value=1",
+      "actual": {
+        "value": 1,
+        "is_typically_fatal": true,
+        "source": "rustre_debug_macos::MachExceptionType::is_typically_fatal"
+      },
+      "pass": true,
+      "note": "value=1"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_is_fatal",
+      "input": {
+        "value": 8
+      },
+      "expected": "is_typically_fatal==False for value=8",
+      "actual": {
+        "value": 8,
+        "is_typically_fatal": false,
+        "source": "rustre_debug_macos::MachExceptionType::is_typically_fatal"
+      },
+      "pass": true,
+      "note": "value=8"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_is_fatal",
+      "input": {
+        "value": 6
+      },
+      "expected": "is_typically_fatal==False for value=6",
+      "actual": {
+        "value": 6,
+        "is_typically_fatal": false,
+        "source": "rustre_debug_macos::MachExceptionType::is_typically_fatal"
+      },
+      "pass": true,
+      "note": "value=6"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_as_raw",
+      "input": {
+        "read": true,
+        "write": false,
+        "execute": true
+      },
+      "expected": "raw==5 unix=='r-x' for R+X",
+      "actual": {
+        "raw": 5,
+        "unix": "r-x",
+        "source": "rustre_debug_macos::MachVmProtection::as_raw"
+      },
+      "pass": true,
+      "note": "R(1)+X(4)=5"
+    },
+    {
+      "tool": "debug_macos_dyld_image_name",
+      "input": {
+        "path": "/usr/lib/libSystem.B.dylib"
+      },
+      "expected": "name=='libSystem.B.dylib'",
+      "actual": {
+        "path": "/usr/lib/libSystem.B.dylib",
+        "name": "libSystem.B.dylib",
+        "source": "rustre_debug_macos::DyldImage::name"
+      },
+      "pass": true,
+      "note": "basename extraction"
+    },
+    {
+      "tool": "debug_macos_stop_reason_is_exit",
+      "input": {
+        "kind": "exited",
+        "value": 0
+      },
+      "expected": "is_exit==True for kind='exited'",
+      "actual": {
+        "kind": "exited",
+        "is_exit": true,
+        "address": null,
+        "source": "rustre_debug_macos::MacosStopReason"
+      },
+      "pass": true,
+      "note": "exited"
+    },
+    {
+      "tool": "debug_macos_stop_reason_is_exit",
+      "input": {
+        "kind": "breakpoint",
+        "value": 4096
+      },
+      "expected": "is_exit==False for kind='breakpoint'",
+      "actual": {
+        "kind": "breakpoint",
+        "is_exit": false,
+        "address": 4096,
+        "source": "rustre_debug_macos::MacosStopReason"
+      },
+      "pass": true,
+      "note": "breakpoint"
+    },
+    {
+      "tool": "debug_macos_dsym_locator_candidates",
+      "input": {
+        "executable": "MyApp",
+        "search_paths": [
+          "/tmp"
+        ]
+      },
+      "expected": "candidates present",
+      "actual": {
+        "executable": "MyApp",
+        "candidates": [
+          "/tmp/MyApp.dSYM"
+        ],
+        "source": "rustre_debug_macos::DsymLocator::candidates"
+      },
+      "pass": true,
+      "note": "dsym locator candidates"
+    },
+    {
+      "tool": "debug_macos_mac_mem_perm_from_unix_str",
+      "input": {
+        "s": "r-x"
+      },
+      "expected": "readable=True writable=False executable=True",
+      "actual": {
+        "s": "r-x",
+        "parsed": {
+          "readable": true,
+          "writable": false,
+          "executable": true,
+          "roundtrip": "r-x"
+        },
+        "source": "rustre_debug_macos::MacMemoryPermissions::from_unix_str"
+      },
+      "pass": true,
+      "note": "r-x parse"
+    },
+    {
+      "tool": "debug_macos_uuid_record_canonical",
+      "input": {
+        "hex": "deadbeef00112233445566778899aabb"
+      },
+      "expected": "canonical UUID string (36 chars, 4 dashes)",
+      "actual": {
+        "canonical": "deadbeef-0011-2233-4455-66778899aabb",
+        "is_zero": false,
+        "source": "rustre_debug_macos::UuidRecord::to_string_canonical"
+      },
+      "pass": true,
+      "note": "UUID canonical format"
+    },
+    {
+      "tool": "debug_linux_procmaps_parse_line",
+      "input": {
+        "line": "7f1234560000-7f1234570000 r-xp 00000000 08:01 12345 /lib/x86_64-linux-gnu/libc.so.6"
+      },
+      "expected": "matched=True base==0x7f1234560000 size==65536",
+      "actual": {
+        "matched": true,
+        "base": 139716164190208,
+        "size": 65536,
+        "readable": true,
+        "writable": false,
+        "executable": true,
+        "name": "libc.so.6",
+        "file_path": "/lib/x86_64-linux-gnu/libc.so.6",
+        "source": "rustre_debug_linux::ProcMapsParser::parse_line"
+      },
+      "pass": true,
+      "note": "valid procmaps line parse"
+    },
+    {
+      "tool": "debug_unicorn_coverage_granularity_align_v2",
+      "input": {
+        "granularity": "instruction",
+        "addr": 4101
+      },
+      "expected": "aligned==0x1005 for instruction",
+      "actual": {
+        "aligned": 4101,
+        "display": "instruction",
+        "source": "rustre_debug_unicorn::CoverageGranularity::align"
+      },
+      "pass": true,
+      "note": "instruction align"
+    },
+    {
+      "tool": "debug_unicorn_coverage_granularity_align_v2",
+      "input": {
+        "granularity": "cache_line",
+        "addr": 4101
+      },
+      "expected": "aligned==0x1000 for cache_line",
+      "actual": {
+        "aligned": 4096,
+        "display": "cache_line",
+        "source": "rustre_debug_unicorn::CoverageGranularity::align"
+      },
+      "pass": true,
+      "note": "cache_line align"
+    },
+    {
+      "tool": "debug_unicorn_region_perms_flags_v2",
+      "input": {
+        "preset": "r"
+      },
+      "expected": "read=True write=False execute=False",
+      "actual": {
+        "read": true,
+        "write": false,
+        "execute": false,
+        "source": "rustre_debug_unicorn::RegionPerms"
+      },
+      "pass": true,
+      "note": "preset='r'"
+    },
+    {
+      "tool": "debug_unicorn_region_perms_flags_v2",
+      "input": {
+        "preset": "rw"
+      },
+      "expected": "read=True write=True execute=False",
+      "actual": {
+        "read": true,
+        "write": true,
+        "execute": false,
+        "source": "rustre_debug_unicorn::RegionPerms"
+      },
+      "pass": true,
+      "note": "preset='rw'"
+    },
+    {
+      "tool": "debug_unicorn_region_perms_flags_v2",
+      "input": {
+        "preset": "rx"
+      },
+      "expected": "read=True write=False execute=True",
+      "actual": {
+        "read": true,
+        "write": false,
+        "execute": true,
+        "source": "rustre_debug_unicorn::RegionPerms"
+      },
+      "pass": true,
+      "note": "preset='rx'"
+    },
+    {
+      "tool": "debug_unicorn_region_perms_flags_v2",
+      "input": {
+        "preset": "rwx"
+      },
+      "expected": "read=True write=True execute=True",
+      "actual": {
+        "read": true,
+        "write": true,
+        "execute": true,
+        "source": "rustre_debug_unicorn::RegionPerms"
+      },
+      "pass": true,
+      "note": "preset='rwx'"
+    },
+    {
+      "tool": "debug_unicorn_mapped_region_contains_v2",
+      "input": {
+        "addr": 4096,
+        "size": 256,
+        "probe": 4176
+      },
+      "expected": "contains==True for probe in range",
+      "actual": {
+        "contains": true,
+        "end": 4351,
+        "overlaps": null,
+        "source": "rustre_debug_unicorn::MappedRegion"
+      },
+      "pass": true,
+      "note": "0x1050 in [0x1000, 0x1100)"
+    },
+    {
+      "tool": "debug_unicorn_memory_mapper_map_v2",
+      "input": {
+        "a_addr": 4096,
+        "a_size": 4096,
+        "b_addr": 12288,
+        "b_size": 4096
+      },
+      "expected": "count==2 total_bytes==0x2000",
+      "actual": {
+        "a_ok": true,
+        "b_ok": true,
+        "count": 2,
+        "total_bytes": 8192,
+        "source": "rustre_debug_unicorn::UnicornMemoryMapper"
+      },
+      "pass": true,
+      "note": "two non-overlapping regions"
+    },
+    {
+      "tool": "debug_unicorn_fault_injector_fire_v2",
+      "input": {
+        "address": 4096,
+        "kind": "mem_read_replace",
+        "param": 255,
+        "probe": 4096
+      },
+      "expected": "rule_count==1 and fired is not None",
+      "actual": {
+        "id": 1,
+        "rule_count": 1,
+        "total_fires": 1,
+        "fired": {
+          "kind": "mem_read_replace",
+          "param": 255
+        },
+        "source": "rustre_debug_unicorn::FaultInjector"
+      },
+      "pass": true,
+      "note": "fault fires on matching address"
+    },
+    {
+      "tool": "debug_unicorn_fault_rule_should_fire_v2",
+      "input": {
+        "address": 4096,
+        "probe": 4096
+      },
+      "expected": "should_fire==True",
+      "actual": {
+        "should_fire": true,
+        "display": "FaultRule[1] addr=0x1000 kind=mem_read_replace fires=0/0",
+        "source": "rustre_debug_unicorn::FaultRule::should_fire"
+      },
+      "pass": true,
+      "note": "addr=0x1000 probe=0x1000"
+    },
+    {
+      "tool": "debug_unicorn_fault_rule_should_fire_v2",
+      "input": {
+        "address": 4096,
+        "probe": 8192
+      },
+      "expected": "should_fire==False",
+      "actual": {
+        "should_fire": false,
+        "display": "FaultRule[1] addr=0x1000 kind=mem_read_replace fires=0/0",
+        "source": "rustre_debug_unicorn::FaultRule::should_fire"
+      },
+      "pass": true,
+      "note": "addr=0x1000 probe=0x2000"
+    },
+    {
+      "tool": "debug_unicorn_snapshot_manager_save_v2",
+      "input": {
+        "label": "test_snap",
+        "seq": 42
+      },
+      "expected": "count==1 labels==['test_snap']",
+      "actual": {
+        "id": 1,
+        "count": 1,
+        "labels": [
+          "test_snap"
+        ],
+        "snap": "Snapshot[1] \"test_snap\" @ seq=42 mem_bytes=0",
+        "source": "rustre_debug_unicorn::SnapshotManager::save"
+      },
+      "pass": true,
+      "note": "single snapshot saved"
+    },
+    {
+      "tool": "debug_unicorn_symbol_table_prefix_v2",
+      "input": {
+        "symbols": [
+          {
+            "addr": 4096,
+            "name": "main"
+          },
+          {
+            "addr": 8192,
+            "name": "malloc"
+          }
+        ],
+        "prefix": "ma"
+      },
+      "expected": "count==2 prefix_hits has 2 entries",
+      "actual": {
+        "count": 2,
+        "prefix_hits": [
+          "main",
+          "malloc"
+        ],
+        "resolved": null,
+        "source": "rustre_debug_unicorn::SymbolTable::search_prefix"
+      },
+      "pass": true,
+      "note": "prefix 'ma' matches main and malloc"
+    },
+    {
+      "tool": "debug_unicorn_register_history_diff_v2",
+      "input": {
+        "a": {
+          "rax": 1,
+          "rbx": 2
+        },
+        "b": {
+          "rax": 1,
+          "rbx": 3
+        }
+      },
+      "expected": "len==2 and changed present (rbx differs)",
+      "actual": {
+        "len": 2,
+        "latest_pc": 4100,
+        "oldest_pc": 4096,
+        "changed": [
+          "rbx"
+        ],
+        "source": "rustre_debug_unicorn::RegisterSnapshot::diff"
+      },
+      "pass": true,
+      "note": "register diff"
+    },
+    {
+      "tool": "debug_unicorn_watch_kind_matches_v2",
+      "input": {
+        "addr": 4096,
+        "size": 8,
+        "kind": "read",
+        "probe_addr": 4100,
+        "probe_kind": "read"
+      },
+      "expected": "covers==True matches==True",
+      "actual": {
+        "display": "WP[1] 0x1000+8 read hits=0",
+        "covers": true,
+        "matches": true,
+        "source": "rustre_debug_unicorn::Watchpoint::matches"
+      },
+      "pass": true,
+      "note": "probe inside range, same kind"
+    },
+    {
+      "tool": "debug_unicorn_trace_entry_bytes_v2",
+      "input": {
+        "address": 4096,
+        "raw_hex": "90",
+        "mnemonic": "nop"
+      },
+      "expected": "bytes_len==1 raw_len==1 for single byte",
+      "actual": {
+        "bytes_len": 1,
+        "raw_len": 1,
+        "display": "[000000] 0x0000000000001000  nop",
+        "source": "rustre_debug_unicorn::TraceEntry::bytes"
+      },
+      "pass": true,
+      "note": "single byte NOP"
+    },
+    {
+      "tool": "debug_unicorn_coverage_map_ratio_v2",
+      "input": {
+        "regions": [
+          [
+            4096,
+            4352
+          ]
+        ],
+        "hits": [
+          4096,
+          4112,
+          4128
+        ]
+      },
+      "expected": "covered_count==3 and coverage_ratio present",
+      "actual": {
+        "covered_count": 3,
+        "coverage_ratio": 0.01171875,
+        "sorted": [
+          4096,
+          4112,
+          4128
+        ],
+        "source": "rustre_debug_unicorn::CoverageMap::coverage_ratio"
+      },
+      "pass": true,
+      "note": "3/256 ratio"
+    },
+    {
+      "tool": "debug_macos_fat_header_parse",
+      "input": {
+        "hex": "cafebabe00000002"
+      },
+      "expected": "parsed/arches/magic present (may be parsed=false for short input)",
+      "actual": {
+        "parsed": false,
+        "arches": [],
+        "source": "rustre_debug_macos::FatHeader::parse"
+      },
+      "pass": true,
+      "note": "FAT Mach-O header parse"
+    },
+    {
+      "tool": "debug_macos_breakpoint_manager_round_trip",
+      "input": {
+        "address": 4096,
+        "original_byte": 204
+      },
+      "expected": "contained=True removed=0xCC contained_after_remove=False",
+      "actual": {
+        "address": 4096,
+        "inserted_byte": 204,
+        "contained": true,
+        "removed": 204,
+        "contained_after_remove": false,
+        "source": "rustre_debug_macos::BreakpointManager"
+      },
+      "pass": true,
+      "note": "insert+remove round-trip"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_to_unix_str",
+      "input": {
+        "bits": 5
+      },
+      "expected": "unix_str=='r-x' as_raw==5 for bits=5 (R+X)",
+      "actual": {
+        "bits": 5,
+        "unix_str": "r-x",
+        "as_raw": 5,
+        "source": "rustre_debug_macos::MachVmProtection::to_unix_str"
+      },
+      "pass": true,
+      "note": "R(1)+X(4)=5 -> r-x"
+    },
+    {
+      "tool": "debug_windows_decode_load_dll",
+      "input": {
+        "base": 268435456,
+        "path": "ntdll.dll",
+        "pid": 1,
+        "tid": 1
+      },
+      "expected": "stop_reason contains 'LibraryLoad'",
+      "actual": {
+        "stop_reason": "LibraryLoad { path: \"ntdll.dll\", base: Address(268435456) }",
+        "source": "rustre_debug_windows::DebugEventDecoder::decode_load_dll"
+      },
+      "pass": true,
+      "note": "DLL load decode"
+    },
+    {
+      "tool": "debug_macos_parse_load_commands",
+      "input": {
+        "n_cmds": 0,
+        "hex": "0000000000000000"
+      },
+      "expected": "count==0 commands==[]",
+      "actual": {
+        "count": 0,
+        "commands": [],
+        "source": "rustre_debug_macos::parse_load_commands"
+      },
+      "pass": true,
+      "note": "0 load commands"
+    },
+    {
+      "tool": "debug_macos_extract_dylibs",
+      "input": {
+        "n_cmds": 0,
+        "hex": "0000000000000000"
+      },
+      "expected": "count==0 dylibs==[]",
+      "actual": {
+        "count": 0,
+        "dylibs": [],
+        "source": "rustre_debug_macos::extract_dylibs"
+      },
+      "pass": true,
+      "note": "0 LC_LOAD_DYLIB entries"
+    },
+    {
+      "tool": "debug_macos_extract_uuid",
+      "input": {
+        "n_cmds": 0,
+        "hex": "0000000000000000"
+      },
+      "expected": "found==False uuid==None",
+      "actual": {
+        "found": false,
+        "uuid": null,
+        "source": "rustre_debug_macos::extract_uuid"
+      },
+      "pass": true,
+      "note": "no LC_UUID in empty load commands"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_as_u32",
+      "input": {
+        "value": 1
+      },
+      "expected": "as_u32==1 name=='EXC_BAD_ACCESS'",
+      "actual": {
+        "value": 1,
+        "name": "EXC_BAD_ACCESS",
+        "as_u32": 1,
+        "is_typically_fatal": true,
+        "source": "rustre_debug_macos::MachExceptionType::as_u32"
+      },
+      "pass": true,
+      "note": "round-trip from_u32/as_u32 = 1"
+    },
+    {
+      "tool": "debug_macos_fat_header_slice_for",
+      "input": {
+        "hex": "cafebabe00000000",
+        "cpu_type": 7
+      },
+      "expected": "parsed field present, slice==None for empty FAT",
+      "actual": {
+        "parsed": false,
+        "cpu_type_query": "i386",
+        "slice": null,
+        "source": "rustre_debug_macos::FatHeader::slice_for"
+      },
+      "pass": true,
+      "note": "empty FAT header (0 arches), query cpu_type=7 (i386)"
+    },
+    {
+      "tool": "debug_macos_macho_header_parse",
+      "input": {
+        "hex": "cefaedfe0000000000000000000000000000000000000000"
+      },
+      "expected": "header field present (may be None for truncated input)",
+      "actual": {
+        "header": null,
+        "source": "rustre_debug_macos::MachoHeader::parse"
+      },
+      "pass": true,
+      "note": "truncated Mach-O header -> None"
+    }
+  ],
+  "skipped_tools": []
+}

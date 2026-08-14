@@ -1,0 +1,20 @@
+{
+  "crate": "rustre-trace",
+  "protocol": "unknown",
+  "source_count": 0,
+  "sink_count": 0,
+  "sinks": [],
+  "total_packets": 0,
+  "sync_packets": 0,
+  "sync_ratio_pct": 0.0,
+  "dropped_packets": 0,
+  "drop_ratio_pct": 0.0,
+  "instructions_traced": 0,
+  "branches": 0,
+  "exceptions": 0,
+  "cycles": 0,
+  "ipc": 0.0,
+  "timestamp_count": 0,
+  "decode_error_count": 0,
+  "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace.json"
+}

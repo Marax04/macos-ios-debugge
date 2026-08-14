@@ -1,0 +1,27 @@
+[package]
+name = "rustre-net-proxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-net = { path = "../rustre-net" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+rcgen = "0.13"
+rustls = { version = "0.23", features = ["ring"] }
+rustls-pemfile = "2"
+tokio-rustls = "0.26"
+
+[lints]
+workspace = true

@@ -1,0 +1,255 @@
+__int64 sub_1400A5040();
+__int64 sub_1400E01D0();
+__int64 sub_1400F27F0();
+__int64 sub_140103DF0();
+__int64 sub_14002EDF0();
+__int64 sub_1400972B0();
+__int64 sub_1400B09D0();
+__int64 sub_1400A8CE1();
+__int64 sub_1400B0C90();
+__int64 sub_1400A8DAD();
+extern __int64 off_14011A486;
+extern __int64 off_140108030;
+extern __int64 off_140108038;
+
+__int64 __fastcall sub_1400AA935() {
+    __int64 rsp;
+    int v_100;
+    int v_130;
+    int v_150;
+    int v_170;
+    int v_178;
+    int v_1f8;
+    int v_20;
+    int v_218;
+    int v_21c;
+    int v_220;
+    int v_224;
+    int v_234;
+    int v_244;
+    int v_28;
+    int v_2c0;
+    int v_2c8;
+    int v_2d0;
+    int v_2f0;
+    int v_430;
+    int v_440;
+    int v_450;
+    int v_454;
+    int v_45c;
+    int v_460;
+    int v_470;
+    int v_4a0;
+    int v_4b0;
+    int v_4d0;
+    int v_4d8;
+    int v_4e0;
+    int v_610;
+    int v_614;
+    int v_61c;
+    int v_61d;
+    int v_620;
+    int v_624;
+    int v_630;
+    int v_7c;
+    int v_80;
+    int v_98;
+    int v_c0;
+    int v_c8;
+    int v_d30;
+    int v_d40;
+    int v_d50;
+    int v_d60;
+    int v_d70;
+    int v_d80;
+    int v_d90;
+    int v_da0;
+    int v_db0;
+    int v_dc0;
+    int v_dd0;
+    int v_de0;
+    int v_df0;
+    int v_e0;
+    int v_e00;
+    int v_e10;
+    int v_e20;
+    int v_e8;
+    int v_f8;
+    __int64 v4;
+    __int64 v2;
+    __int64 v3;
+    __int64 v5;
+    __int64 v14;
+    __m128i xmm0;
+    __int64 result;
+    __int64 *src;
+    __int64 v12;
+    __int64 v13;
+    __int64 v10;
+    __int64 v9;
+    __int64 v8;
+    __m128i xmm1;
+    __m128i xmm2;
+    __m128i xmm3;
+    __int64 v11;
+
+    v4 = (0 /* unresolved: flags == */) ? 1 : 0;
+    v_28 = v5;
+    v_20 = v11;
+    v2 = rsp + 704;
+    v3 = rsp + 680;
+    sub_1400A5040(v2, v3, v10, v_c8);
+    v5 = v_2d0;
+    v14 = (v5 == 0) ? 1 : 0;
+    v14 |= v4;
+    if (v14 != 1) {
+        xmm0 = _mm_setzero_si128();
+        _mm_store_si128((__m128i *)&v_e20, xmm0);
+        _mm_store_si128((__m128i *)&v_e10, xmm0);
+        _mm_store_si128((__m128i *)&v_e00, xmm0);
+        _mm_store_si128((__m128i *)&v_df0, xmm0);
+        _mm_store_si128((__m128i *)&v_de0, xmm0);
+        _mm_store_si128((__m128i *)&v_dd0, xmm0);
+        _mm_store_si128((__m128i *)&v_dc0, xmm0);
+        _mm_store_si128((__m128i *)&v_db0, xmm0);
+        _mm_store_si128((__m128i *)&v_da0, xmm0);
+        _mm_store_si128((__m128i *)&v_d90, xmm0);
+        _mm_store_si128((__m128i *)&v_d80, xmm0);
+        _mm_store_si128((__m128i *)&v_d70, xmm0);
+        _mm_store_si128((__m128i *)&v_d60, xmm0);
+        _mm_store_si128((__m128i *)&v_d50, xmm0);
+        _mm_store_si128((__m128i *)&v_d40, xmm0);
+        _mm_store_si128((__m128i *)&v_d30, xmm0);
+        result = 0;
+        src = (__int64 *)v_98;
+        do {
+            v2 = *(src + result + 592);
+            *(__int64 *)(rsp + v2 + 0xD30) = result;
+            v2 = *(src + result + 593);
+            v3 = result + 1;
+            *(__int64 *)(rsp + v2 + 0xD30) = v3;
+            v2 = *(src + result + 594);
+            v3 = result + 2;
+            *(__int64 *)(rsp + v2 + 0xD30) = v3;
+            v2 = *(src + result + 595);
+            v3 = result + 3;
+            *(__int64 *)(rsp + v2 + 0xD30) = v3;
+            /* cmp result , 252 */;
+            result += 4;
+        } while ((result != 0));
+        src = *(src + 0x450);
+        v4 = rsp + 0x5F0;
+        v3 = rsp + 0xD30;
+        sub_1400E01D0(v4, v3, src);
+        v_61d = 1;
+        v12 = rsp + 0xAA0;
+        sub_1400F27F0(v12, v4, 310);
+        v2 = rsp + 0x4D0;
+        sub_140103DF0(v2, v12);
+        v2 = v_4e0;
+        result = 0xFFFFFFFF;
+        v_c8 = v2;
+        if (v2 < result) result = v2;
+        v_130 = result;
+        v12 = v5;
+        v12 <<= 5;
+        if ((v12 < 0)) JUMPOUT(0x1400a5b72);
+        sub_14002EDF0(8, v12);
+        if (result == 0) JUMPOUT(0x1400a5b48);
+        v4 = result;
+        v_20 = v12;
+        v_28 = 0xC0000040;
+        v3 = &off_14011A486;
+        v2 = rsp + 840;
+        sub_1400972B0(v2, v3, 8, result);
+        v13 = result;
+        v13 >>= 32;
+        if ((result & 1) == 0) JUMPOUT(0x1400ab7b0);
+        /* shld $16, %result, %v13 */;
+        ((__int64 (*)())off_140108030)();
+        ((__int64 (*)())off_140108038)(result, 0, v4);
+        if (v_4d0 != 0) {
+            v4 = v_4d8;
+            ((__int64 (*)())off_140108030)();
+            ((__int64 (*)())off_140108038)(result, 0, v4);
+        }
+        v12 = 8;
+        if (v_2c0 != 0) {
+            v4 = v_2c8;
+            ((__int64 (*)())off_140108030)();
+            ((__int64 (*)())off_140108038)(result, 0, v4);
+        } else {
+        }
+        v4 = v_1f8;
+        if (v_100 != 0) {
+            ((__int64 (*)())off_140108030)();
+            ((__int64 (*)())off_140108038)(result, 0, v11);
+        }
+        v2 = rsp + 0x5D0;
+        sub_1400B09D0(v2);
+        if (v14 == 0) {
+            xmm0 = _mm_setzero_si128();
+            _mm_store_si128((__m128i *)&v_430, xmm0);
+            v_440 = 0;
+            v10 = v_7c;
+            v9 = v_e0;
+            v14 = v_80;
+            if (v10 == 0) JUMPOUT(0x1400a8ccd);
+            return sub_1400A8CE1();
+        } else {
+            v_170 = 0;
+            v_2f0 = 0;
+            v_f8 = 0;
+            v8 = v_e0;
+            v14 = v_80;
+            v12 = v_218;
+            v13 = v_21c;
+            v10 = v_220;
+            result = v_244;
+            v_610 = result;
+            xmm0 = _mm_loadu_si128((__m128i *)&v_234);
+            xmm1 = _mm_loadu_si128((__m128i *)&v_224);
+            xmm2 = _mm_load_si128((__m128i *)&v_4a0);
+            xmm3 = _mm_load_si128((__m128i *)&v_4b0);
+            _mm_storeu_si128((__m128i *)&v_614, xmm2);
+            _mm_storeu_si128((__m128i *)&v_624, xmm3);
+            _mm_store_si128((__m128i *)&v_430, xmm1);
+            _mm_store_si128((__m128i *)&v_440, xmm0);
+            result = v_610;
+            v_450 = result;
+            result = v_614;
+            v_454 = result;
+            result = v_61c;
+            v_45c = result;
+            xmm0 = _mm_load_si128((__m128i *)&v_620);
+            _mm_store_si128((__m128i *)&v_460, xmm0);
+            result = v_630;
+            v_470 = result;
+            if (v_7c == 0) {
+                ((__int64 (*)())off_140108030)();
+                ((__int64 (*)())off_140108038)(result, 0, v4);
+            }
+            if (v_e8 != 0) {
+                v4 = off_140108030;
+                ((__int64 (*)())v4)();
+                v5 = off_140108038;
+                src = (__int64 *)v_178;
+                ((__int64 (*)())v5)(result, 0, src);
+                ((__int64 (*)())v4)();
+                src = (__int64 *)v_150;
+                ((__int64 (*)())v5)(result, 0, src);
+            }
+            v2 = rsp + 608;
+            sub_1400B0C90(v2);
+            if (v_c0 != 0) JUMPOUT(0x1400a8d97);
+            return sub_1400A8DAD();
+        }
+    } else {
+        v12 = 12;
+        if (v_2c0 != 0) {
+            return v12;
+        }
+        return v12;
+    }
+    return result;
+}

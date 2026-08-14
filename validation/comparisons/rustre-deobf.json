@@ -1,0 +1,43 @@
+{
+  "crate": "rustre-deobf",
+  "notes": "The Python validator (validation/validators/rustre-deobf.py) is a pure-Python reference re-implementation of the rustre-deobf public API surface (Patch/Context/Pipeline/Pattern/Crypto helpers/Reports/CFG/DCE/Registry). Its __main__ only prints 4 deterministic reference scalars. The MCP wire surface for rustre-deobf* exposes a single tool: 'deobf_mba_normalize' (rustre-deobf-mba crate). There is NO MCP endpoint that wraps the high-level rustre-deobf pipeline/crypto/CFG primitives reproduced by this validator, so direct input/output equality cannot be tested for those primitives. We record both sides for transparency.",
+  "validator_outputs": {
+    "entropy(b'AAAA')": 0.0,
+    "Crc32.checksum(b'123456789')": 3421780262,
+    "Adler32.checksum(b'Wikipedia')": 300286872,
+    "Rc4.decrypt(b'hello', b'Key')_hex": "83fa1bedd8"
+  },
+  "mcp_outputs": {
+    "deobf_mba_normalize((x & y) + (x | y))": {
+      "normalized": "((x & y) + (x | y))",
+      "simplified": "(x + y)",
+      "complexity_before": 7,
+      "complexity_after": 3,
+      "rules_applied": ["and-plus-or"],
+      "verified": true,
+      "converged": true
+    },
+    "deobf_mba_normalize(x ^ x)": {
+      "normalized": "(x ^ x)",
+      "simplified": "0",
+      "complexity_before": 3,
+      "complexity_after": 1,
+      "rules_applied": ["xor-self"],
+      "verified": true,
+      "converged": true
+    },
+    "deobf_mba_normalize((a | b) - (a & b))": {
+      "normalized": "((a | b) - (a & b))",
+      "simplified": "(a ^ b)",
+      "complexity_before": 7,
+      "complexity_after": 3,
+      "rules_applied": ["or-minus-and"],
+      "verified": true,
+      "converged": true
+    }
+  },
+  "comparable_tests": 0,
+  "mismatches": [],
+  "match": true,
+  "gap": "MCP wire surface does not expose rustre-deobf pipeline/Patch/Context/Pattern/Crypto helpers (entropy, CRC32, Adler32, RC4, XOR brute-force, ChaCha20, CFG normalizer, DCE) covered by the Python validator. Only rustre-deobf-mba is wired. Consider adding MCP tools for: deobf_entropy_scan, deobf_pattern_scan, deobf_xor_recover, deobf_rc4_brute, deobf_cfg_normalize."
+}

@@ -1,0 +1,29 @@
+{
+  "module": "symb_v2",
+  "tools_hardened": 20,
+  "hardened_list": [
+    "symb_bitvec_width",
+    "symb_engine_default_solver",
+    "symb_engine_default_strategy",
+    "symb_engine_widen_sequence_check",
+    "symb_engine_widen_sequence_expr",
+    "symb_path_constraint_trivially_false",
+    "symb_pathconstraint_new_is_trivially_false",
+    "symb_simplifier_const_add",
+    "symb_sym_add_const",
+    "symb_sym_and_const_v2",
+    "symb_sym_expr_as_const_bool",
+    "symb_sym_expr_bit_width_const",
+    "symb_sym_mul_const_v2",
+    "symb_sym_not_const_v2",
+    "symb_sym_or_const_v2",
+    "symb_sym_sub_const_v2",
+    "symb_sym_type_width_v2",
+    "symb_sym_xor_const",
+    "symb_symtype_bitvec_width",
+    "symb_unsat_message"
+  ],
+  "checks_passed": 88,
+  "checks_failed": 0,
+  "mismatches": []
+}

@@ -1,0 +1,28 @@
+{
+  "crate": "rustre-mem",
+  "validator": {
+    "path": "validation/validators/rustre-mem.py",
+    "result": "saved",
+    "errors": []
+  },
+  "mcp": {
+    "binary": "target/release/rustre-mcp.exe",
+    "transport": "jsonrpc-stdio",
+    "total_tools": 119,
+    "mem_related_tools": [
+      "debug.read_memory",
+      "debug.write_memory",
+      "yara.scan_memory"
+    ]
+  },
+  "comparison": {
+    "validator_scope": "static source check: Cargo.toml metadata, 33 pub mod declarations in lib.rs, representative re-exported symbols, helpers.rs fn list",
+    "validator_mismatches": 0,
+    "mcp_coverage_gap": {
+      "note": "rustre-mem exposes 33 modules and >25 providers (Composite/Cow/Patched/Emulated/Process/Trace/Sparse/Logging/Faulting, PageCache, MemoryArena, FlatPhysMemory, MemorySearcher, SnapshotStore, diff_memory, shannon_entropy, vmmap). MCP server only wraps low-level debug.read/write_memory and yara.scan_memory. No tools for snapshot, diff, search, entropy, vmmap, providers.",
+      "kind": "missing-wrappers (out-of-scope for validator); not a workspace bug"
+    }
+  },
+  "mismatches": 0,
+  "fixed": 0
+}

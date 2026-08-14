@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-analysis-dataflow",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": false,
+  "notes": [
+    "Per il report rustre-analysis-dataflow.md sezione 'Existing MCP tools' / 'Gap': NESSUNA primitiva di questo crate (compute_liveness, compute_reaching_defs, propagate_constants, compute_dominators, compute_dominators_from_edges, compute_dominance_frontiers, postorder, LatticeValue::meet, WorklistAlgorithm+LiveVariableAnalysis/ReachingDefinitions, ChainBuilder::build, trace_callers_backward, trace_callees_forward) e' esposta via MCP.",
+    "I tool MCP 'trace_data_flow' (wire_tools.rs:368) e 'analysis_trace_data_flow_path' (wire_tools.rs:3673) non chiamano questo crate: usano rustre-analysis-xref (BFS su xref graph), che e' una funzione differente con stesso nome.",
+    "Il validator Python rustre-analysis-dataflow.py espone 13 funzioni (lattice_meet_table, compute_liveness, compute_reaching_defs, propagate_constants, compute_dominators, compute_dominators_from_edges, compute_dominance_frontiers, postorder, trace_callers_backward, trace_callees_forward, worklist_live, worklist_reaching, build_du_chains) ma non ha controparti MCP da chiamare.",
+    "Conclusione: nessun confronto MCP-vs-validator possibile senza prima esporre le primitive del crate come nuovi tool MCP. Questo e' un GAP DI ESPOSIZIONE (feature add), non un bug del crate. Il crate compila e i suoi unit-test Rust passano; non vi sono mismatch da fixare in questa sessione.",
+    "Azione raccomandata (fuori scope qui): aggiungere wrapper in rustre-mcp-tools che esportino almeno: dataflow_compute_liveness, dataflow_compute_reaching_defs, dataflow_propagate_constants, dataflow_compute_dominators(_from_edges), dataflow_compute_dominance_frontiers, dataflow_postorder, dataflow_lattice_meet, dataflow_trace_callers_backward, dataflow_trace_callees_forward, dataflow_build_du_chains. Solo allora il validator puo' essere eseguito in modalita' fn-dispatch contro l'MCP."
+  ]
+}

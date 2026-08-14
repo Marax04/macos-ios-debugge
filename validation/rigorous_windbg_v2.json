@@ -1,0 +1,697 @@
+{
+  "category": "windbg",
+  "tools_hardened": 12,
+  "tools_passed": 47,
+  "tools_failed": 0,
+  "tools_skipped": 4,
+  "results": [
+    {
+      "tool": "windbg_kdnet_packet_checksum",
+      "args": {
+        "data_hex": "00000000"
+      },
+      "status": "PASS",
+      "expected": {
+        "checksum": 0
+      },
+      "actual": {
+        "checksum": 0
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_checksum",
+      "args": {
+        "data_hex": "deadbeef"
+      },
+      "status": "PASS",
+      "expected": {
+        "checksum": 824
+      },
+      "actual": {
+        "checksum": 824
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_checksum",
+      "args": {
+        "data_hex": "ffffffff"
+      },
+      "status": "PASS",
+      "expected": {
+        "checksum": 1020
+      },
+      "actual": {
+        "checksum": 1020
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_checksum",
+      "args": {
+        "data_hex": "01020304"
+      },
+      "status": "PASS",
+      "expected": {
+        "checksum": 10
+      },
+      "actual": {
+        "checksum": 10
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "breakpoint"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 3
+      },
+      "actual": {
+        "type_id": 3
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "statechange"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 4
+      },
+      "actual": {
+        "type_id": 4
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "manipulatestate"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 5
+      },
+      "actual": {
+        "type_id": 5
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "controlrequest"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 6
+      },
+      "actual": {
+        "type_id": 6
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "acknowledge"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 0
+      },
+      "actual": {
+        "type_id": 0
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "resend"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 1
+      },
+      "actual": {
+        "type_id": 1
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_type_id",
+      "args": {
+        "kind": "debug"
+      },
+      "status": "PASS",
+      "expected": {
+        "type_id": 2
+      },
+      "actual": {
+        "type_id": 2
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 0
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "Acknowledge"
+      },
+      "actual": {
+        "kind": "Acknowledge"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 1
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "Resend"
+      },
+      "actual": {
+        "kind": "Resend"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 2
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "Debug"
+      },
+      "actual": {
+        "kind": "Debug"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 3
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "Breakpoint"
+      },
+      "actual": {
+        "kind": "Breakpoint"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 4
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "StateChange"
+      },
+      "actual": {
+        "kind": "StateChange"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 5
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "ManipulateState"
+      },
+      "actual": {
+        "kind": "ManipulateState"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 6
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": "ControlRequest"
+      },
+      "actual": {
+        "kind": "ControlRequest"
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_from_id",
+      "args": {
+        "type_id": 99
+      },
+      "status": "PASS",
+      "expected": {
+        "kind": null
+      },
+      "actual": {
+        "kind": null
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_encode",
+      "args": {
+        "packet_id": 0,
+        "data_hex": "00000000"
+      },
+      "status": "PASS",
+      "expected": {
+        "bytes_hex": "3030303002000400000000000000000000000000",
+        "byte_count": 4,
+        "checksum": 0,
+        "verified": true
+      },
+      "actual": {
+        "bytes_hex": "3030303002000400000000000000000000000000",
+        "byte_count": 4,
+        "checksum": 0,
+        "verified": true
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_encode",
+      "args": {
+        "packet_id": 1,
+        "data_hex": "deadbeef"
+      },
+      "status": "PASS",
+      "expected": {
+        "bytes_hex": "30303030020004000100000038030000deadbeef",
+        "byte_count": 4,
+        "checksum": 824,
+        "verified": true
+      },
+      "actual": {
+        "bytes_hex": "30303030020004000100000038030000DEADBEEF",
+        "byte_count": 4,
+        "checksum": 824,
+        "verified": true
+      }
+    },
+    {
+      "tool": "windbg_kdnet_packet_encode",
+      "args": {
+        "packet_id": 0,
+        "data_hex": ""
+      },
+      "status": "PASS",
+      "expected": {
+        "bytes_hex": "30303030020000000000000000000000",
+        "byte_count": 0,
+        "checksum": 0,
+        "verified": true
+      },
+      "actual": {
+        "bytes_hex": "30303030020000000000000000000000",
+        "byte_count": 0,
+        "checksum": 0,
+        "verified": true
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 0
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "Unused"
+      },
+      "actual": {
+        "name": "Unused"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 3
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "ThreadList"
+      },
+      "actual": {
+        "name": "ThreadList"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 4
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "ModuleList"
+      },
+      "actual": {
+        "name": "ModuleList"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 5
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "MemoryList"
+      },
+      "actual": {
+        "name": "MemoryList"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 6
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "Exception"
+      },
+      "actual": {
+        "name": "Exception"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 7
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "SystemInfo"
+      },
+      "actual": {
+        "name": "SystemInfo"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 9
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "Memory64List"
+      },
+      "actual": {
+        "name": "Memory64List"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 15
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "MiscInfo"
+      },
+      "actual": {
+        "name": "MiscInfo"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 16
+      },
+      "status": "PASS",
+      "expected": {
+        "name": "MemoryInfoList"
+      },
+      "actual": {
+        "name": "MemoryInfoList"
+      }
+    },
+    {
+      "tool": "windbg_minidump_stream_type_name",
+      "args": {
+        "stream_id": 999
+      },
+      "status": "PASS",
+      "expected": {
+        "name": null
+      },
+      "actual": {
+        "name": null
+      }
+    },
+    {
+      "tool": "windbg_dbg_module_info_contains",
+      "args": {
+        "base": 5368709120,
+        "size": 65536,
+        "addr": 5368729600
+      },
+      "status": "PASS",
+      "expected": {
+        "contains": true
+      },
+      "actual": {
+        "contains": true
+      }
+    },
+    {
+      "tool": "windbg_dbg_module_info_contains",
+      "args": {
+        "base": 5368709120,
+        "size": 65536,
+        "addr": 5368774656
+      },
+      "status": "PASS",
+      "expected": {
+        "contains": false
+      },
+      "actual": {
+        "contains": false
+      }
+    },
+    {
+      "tool": "windbg_dbg_module_info_contains",
+      "args": {
+        "base": 5368709120,
+        "size": 65536,
+        "addr": 5368709119
+      },
+      "status": "PASS",
+      "expected": {
+        "contains": false
+      },
+      "actual": {
+        "contains": false
+      }
+    },
+    {
+      "tool": "windbg_dbg_module_info_contains",
+      "args": {
+        "base": 5368709120,
+        "size": 65536,
+        "addr": 5368709120
+      },
+      "status": "PASS",
+      "expected": {
+        "contains": true
+      },
+      "actual": {
+        "contains": true
+      }
+    },
+    {
+      "tool": "windbg_dbg_module_info_contains",
+      "args": {
+        "base": 5368709120,
+        "size": 65536,
+        "addr": 5368774655
+      },
+      "status": "PASS",
+      "expected": {
+        "contains": true
+      },
+      "actual": {
+        "contains": true
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_standard_count",
+      "args": {},
+      "status": "PASS",
+      "expected": {
+        "count": 15
+      },
+      "actual": {
+        "count": 15
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "!analyze"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!analyze",
+          "description": "Automatic crash analysis",
+          "dll_name": "ext.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!analyze",
+          "description": "Automatic crash analysis",
+          "dll_name": "ext.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "analyze"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!analyze",
+          "description": "Automatic crash analysis",
+          "dll_name": "ext.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!analyze",
+          "description": "Automatic crash analysis",
+          "dll_name": "ext.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "!heap"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!heap",
+          "description": "Heap inspection",
+          "dll_name": "ext.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!heap",
+          "description": "Heap inspection",
+          "dll_name": "ext.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "!teb"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!teb",
+          "description": "Thread environment block",
+          "dll_name": "ext.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!teb",
+          "description": "Thread environment block",
+          "dll_name": "ext.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "!peb"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!peb",
+          "description": "Process environment block",
+          "dll_name": "ext.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!peb",
+          "description": "Process environment block",
+          "dll_name": "ext.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "!process"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": {
+          "name": "!process",
+          "description": "Process information",
+          "dll_name": "nt.dll"
+        }
+      },
+      "actual": {
+        "command": {
+          "name": "!process",
+          "description": "Process information",
+          "dll_name": "nt.dll"
+        }
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "unknown"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": null
+      },
+      "actual": {
+        "command": null
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "dbgeng"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": null
+      },
+      "actual": {
+        "command": null
+      }
+    },
+    {
+      "tool": "windbg_extension_registry_find",
+      "args": {
+        "name": "ntsdexts"
+      },
+      "status": "PASS",
+      "expected": {
+        "command": null
+      },
+      "actual": {
+        "command": null
+      }
+    }
+  ]
+}

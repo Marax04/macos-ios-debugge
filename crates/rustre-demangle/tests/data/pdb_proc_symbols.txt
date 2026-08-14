@@ -1,0 +1,311 @@
+$xdatasym
+1'::filt$0
+_CxxThrowException
+_OptionsStorage
+_RTC_Initialize
+_RTC_Terminate
+__C_specific_handler
+__CxxFrameHandler3
+__chkstk
+__current_exception
+__current_exception_context
+__isa_available_init
+__local_stdio_printf_options
+__local_stdio_scanf_options
+__p___argc
+__p___argv
+__p__commode
+__scrt_acquire_startup_lock
+__scrt_common_main_seh
+__scrt_fastfail
+__scrt_get_dyn_tls_dtor_callback
+__scrt_get_dyn_tls_init_callback
+__scrt_initialize_crt
+__scrt_initialize_default_local_stdio_options
+__scrt_initialize_mta
+__scrt_initialize_onexit_tables
+__scrt_initialize_type_info
+__scrt_initialize_winrt
+__scrt_is_managed_app
+__scrt_is_nonwritable_in_current_image
+__scrt_is_nonwritable_in_current_image$filt$0
+__scrt_is_ucrt_dll_in_use
+__scrt_is_user_matherr_present
+__scrt_release_startup_lock
+__scrt_set_unhandled_exception_filter
+__scrt_stub_for_acrt_initialize
+__scrt_stub_for_acrt_uninitialize
+__scrt_stub_for_initialize_mta
+__scrt_unhandled_exception_filter
+__scrt_uninitialize_crt
+__security_init_cookie
+__setusermatherr
+_c_exit
+_cexit
+_configthreadlocale
+_configure_narrow_argv
+_crt_atexit
+_exit
+_get_initial_narrow_environment
+_get_startup_argv_mode
+_get_startup_commit_mode
+_get_startup_file_mode
+_get_startup_new_mode
+_get_startup_thread_locale_mode
+_guard_check_icall_nop
+_guard_dispatch_icall_nop
+_guard_xfg_dispatch_icall_nop
+_initialize_denormal_control
+_initialize_invalid_parameter_handler
+_initialize_narrow_environment
+_initialize_onexit_table
+_initterm
+_initterm_e
+_matherr
+_onexit
+_register_onexit_function
+_register_thread_local_exe_atexit_callback
+_seh_filter_exe
+_set_app_type
+_set_fmode
+_set_new_mode
+_should_initialize_environment
+alloc::alloc::handle_alloc_error
+alloc::raw_vec::RawVec::grow_one<tuple$<ptr_mut$<u8>,void (*)(ptr_mut$<u8>)>,std::alloc::System>
+alloc::raw_vec::RawVec::grow_one<u16,alloc::alloc::Global>
+alloc::raw_vec::RawVecInner::finish_grow<alloc::alloc::Global>
+alloc::raw_vec::RawVecInner::finish_grow<std::alloc::System>
+alloc::raw_vec::RawVecInner::grow_amortized<std::alloc::System>
+alloc::raw_vec::capacity_overflow
+alloc::raw_vec::handle_error
+alloc::raw_vec::impl$4::reserve::do_reserve_and_handle<alloc::alloc::Global>
+alloc::string::impl$63::write_char
+alloc::string::impl$63::write_str
+alloc::sync::Arc::drop_slow<std::sync::poison::mutex::Mutex<alloc::vec::Vec<u8,alloc::alloc::Global> >,alloc::alloc::Global>
+alloc::sync::Arc::drop_slow<std::thread::thread::Inner,std::alloc::System>
+alloc::vec::Vec::extend_desugared<u16,alloc::alloc::Global,std::os::windows::ffi::EncodeWide>
+alloc::wtf8::Wtf8Buf::from_wide
+atexit
+core::any::impl$0::type_id<alloc::string::String>
+core::any::impl$0::type_id<ref$<str$> >
+core::cell::impl$29::fmt
+core::cell::panic_already_borrowed
+core::char::methods::impl$0::escape_debug_ext
+core::fmt::Formatter::debug_list
+core::fmt::Formatter::debug_struct_field1_finish
+core::fmt::Formatter::debug_struct_field2_finish
+core::fmt::Formatter::debug_tuple_field1_finish
+core::fmt::Formatter::pad
+core::fmt::Formatter::pad_integral
+core::fmt::Formatter::write_str
+core::fmt::Write::write_char<std::io::default_write_fmt::Adapter<alloc::vec::Vec<u8,alloc::alloc::Global> > >
+core::fmt::Write::write_char<std::io::default_write_fmt::Adapter<std::io::cursor::Cursor<ref_mut$<slice2$<u8> > > > >
+core::fmt::Write::write_char<std::io::default_write_fmt::Adapter<std::sys::stdio::windows::Stderr> >
+core::fmt::Write::write_fmt<alloc::string::String>
+core::fmt::Write::write_fmt<core::fmt::builders::PadAdapter>
+core::fmt::Write::write_fmt<std::io::default_write_fmt::Adapter<alloc::vec::Vec<u8,alloc::alloc::Global> > >
+core::fmt::Write::write_fmt<std::io::default_write_fmt::Adapter<std::io::cursor::Cursor<ref_mut$<slice2$<u8> > > > >
+core::fmt::Write::write_fmt<std::io::default_write_fmt::Adapter<std::sys::stdio::windows::Stderr> >
+core::fmt::builders::DebugList::finish
+core::fmt::builders::DebugSet::entry
+core::fmt::builders::DebugStruct::field
+core::fmt::builders::impl$2::write_char
+core::fmt::builders::impl$2::write_str
+core::fmt::impl$10::fmt
+core::fmt::impl$12::pad_integral::write_prefix
+core::fmt::impl$13::write_char
+core::fmt::impl$19::fmt
+core::fmt::impl$20::fmt
+core::fmt::impl$21::fmt
+core::fmt::impl$22::fmt
+core::fmt::impl$28::fmt<core::ffi::c_void>
+core::fmt::impl$80::fmt<dyn$<core::fmt::Debug> >
+core::fmt::impl$80::fmt<enum2$<core::option::Option<u8> > >
+core::fmt::impl$80::fmt<tuple$<> >
+core::fmt::impl$80::fmt<u8>
+core::fmt::impl$80::fmt<usize>
+core::fmt::impl$82::fmt<core::panic::location::Location>
+core::fmt::impl$82::fmt<str$>
+core::fmt::impl$83::fmt<dyn$<core::panic::PanicPayload> >
+core::fmt::num::imp::impl$0::fmt
+core::fmt::num::imp::impl$10::fmt
+core::fmt::num::imp::impl$15::fmt
+core::fmt::num::impl$10::fmt
+core::fmt::num::impl$16::fmt
+core::fmt::num::impl$18::fmt
+core::fmt::num::impl$63::fmt
+core::fmt::num::impl$8::fmt
+core::fmt::pointer_fmt_inner
+core::fmt::write
+core::num::error::impl$7::fmt
+core::ops::function::FnOnce::call_once<std::rt::lang_start::closure_env$0<tuple$<> >,tuple$<> >
+core::ops::function::FnOnce::call_once<std::sync::once::impl$2::call_once::closure_env$0<std::rt::cleanup::closure_env$0>,tuple$<ref$<std::sync::once::OnceState> > >
+core::ops::function::FnOnce::call_once<std::sync::once::impl$2::call_once_force::closure_env$0<std::sync::once_lock::impl$0::initialize::closure_env$0<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::io::stdio::cleanup::closure_env$0>,never$> >,tuple$<ref$<std::sync::once::OnceState> > >
+core::ops::function::FnOnce::call_once<std::sys::backtrace::_print_fmt::closure$1::closure_env$0,tuple$<ref$<std::backtrace_rs::symbolize::Symbol> > >
+core::ops::function::FnOnce::call_once<std::sys::backtrace::_print_fmt::closure_env$0,tuple$<ref_mut$<core::fmt::Formatter>,enum2$<std::backtrace_rs::types::BytesOrWideString> > >
+core::ops::range::impl$1::fmt<usize>
+core::option::unwrap_failed
+core::panic::PanicPayload::as_str<std::panicking::begin_panic::Payload<ref$<str$> > >
+core::panicking::assert_failed<usize,usize>
+core::panicking::assert_failed_inner
+core::panicking::panic
+core::panicking::panic_bounds_check
+core::panicking::panic_cannot_unwind
+core::panicking::panic_fmt
+core::panicking::panic_nounwind
+core::panicking::panic_nounwind_fmt
+core::ptr::drop_in_place<alloc::boxed::Box<dyn$<core::any::Any,core::marker::Send>,alloc::alloc::Global> >
+core::ptr::drop_in_place<alloc::string::String>
+core::ptr::drop_in_place<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<u8,alloc::alloc::Global> >,alloc::alloc::Global> >
+core::ptr::drop_in_place<alloc::vec::Vec<u8,alloc::alloc::Global> >
+core::ptr::drop_in_place<enum2$<core::result::Result<tuple$<>,std::io::error::Error> > >
+core::ptr::drop_in_place<std::io::buffered::bufwriter::impl$1::flush_buf::BufGuard>
+core::ptr::drop_in_place<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> >
+core::ptr::drop_in_place<std::io::default_write_fmt::Adapter<std::io::cursor::Cursor<ref_mut$<slice2$<u8> > > > >
+core::ptr::drop_in_place<std::io::error::Error>
+core::ptr::drop_in_place<std::panicking::panic_handler::FormatStringPayload>
+core::ptr::drop_in_place<std::sync::nonpoison::rwlock::RwLockReadGuard<enum2$<std::panicking::Hook> > >
+core::ptr::drop_in_place<std::sync::poison::mutex::MutexGuard<alloc::vec::Vec<u8,alloc::alloc::Global> > >
+core::ptr::drop_in_place<std::sync::reentrant_lock::ReentrantLockGuard<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > > >
+core::ptr::drop_in_place<std::sys::backtrace::_print_fmt::closure_env$0>
+core::result::unwrap_failed
+core::slice::index::slice_index_fail
+core::slice::memchr::memchr_aligned
+core::str::converts::from_utf8
+core::str::count::char_count_general_case
+core::str::count::do_count_chars
+core::str::error::impl$11::fmt
+core::str::pattern::StrSearcher::new
+core::str::pattern::impl$31::is_contained_in
+core::str::pattern::simd_contains::closure$2
+core::str::slice_error_fail
+core::str::slice_error_fail_rt
+core::unicode::printable::is_printable
+core::unicode::unicode_data::grapheme_extend::lookup_slow
+core::wtf8::impl$4::fmt
+exit
+free
+is_initialized_as_dll
+mainCRTStartup
+memcmp
+memcpy
+memmove
+memset
+module_local_at_quick_exit_table
+module_local_atexit_table
+module_local_atexit_table_initialized
+operator delete
+panic_unwind::__rust_panic_cleanup
+panic_unwind::__rust_start_panic
+panic_unwind::imp::exception_cleanup
+panic_unwind::imp::exception_copy
+panic_unwind::imp::throw_exception
+post_pgo_initialization
+post_pgo_initializer
+pre_c_initialization
+pre_c_initializer
+pre_cpp_initialization
+pre_cpp_initializer
+sample3_struct_loop::accumulate
+sample3_struct_loop::main
+sample8_rust_features::compute
+sample8_rust_features::main
+scalar deleting destructor'
+std::alloc::_::__rust_alloc_error_handler
+std::alloc::__default_lib_allocator::__rdl_alloc
+std::alloc::__default_lib_allocator::__rdl_dealloc
+std::alloc::__default_lib_allocator::__rdl_realloc
+std::alloc::default_alloc_error_hook
+std::alloc::rust_oom
+std::alloc::rust_oom::closure$0
+std::backtrace_rs::dbghelp::enum_loaded_modules_callback
+std::backtrace_rs::print::BacktraceFrameFmt::print_raw_with_column
+std::backtrace_rs::symbolize::dbghelp::resolve
+std::backtrace_rs::symbolize::dbghelp::resolve_with_inline
+std::backtrace_rs::symbolize::impl$4::fmt
+std::env::_var_os
+std::env::current_dir
+std::io::Write::is_write_vectored<std::sys::stdio::windows::Stderr>
+std::io::Write::write_all<std::sys::stdio::windows::Stderr>
+std::io::Write::write_all_vectored<std::sys::stdio::windows::Stderr>
+std::io::Write::write_fmt<alloc::vec::Vec<u8,alloc::alloc::Global> >
+std::io::Write::write_fmt<std::sys::stdio::windows::Stderr>
+std::io::Write::write_vectored<std::sys::stdio::windows::Stderr>
+std::io::buffered::bufwriter::BufWriter::flush_buf<std::io::stdio::StdoutRaw>
+std::io::default_write_fmt::impl$0::write_str<alloc::vec::Vec<u8,alloc::alloc::Global> >
+std::io::default_write_fmt::impl$0::write_str<std::io::cursor::Cursor<ref_mut$<slice2$<u8> > > >
+std::io::default_write_fmt::impl$0::write_str<std::sys::stdio::windows::Stderr>
+std::io::impls::impl$11::flush<alloc::alloc::Global>
+std::io::impls::impl$11::is_write_vectored<alloc::alloc::Global>
+std::io::impls::impl$11::write<alloc::alloc::Global>
+std::io::impls::impl$11::write_all<alloc::alloc::Global>
+std::io::impls::impl$11::write_all_vectored<alloc::alloc::Global>
+std::io::impls::impl$11::write_vectored<alloc::alloc::Global>
+std::io::stdio::try_set_output_capture
+std::panic::get_backtrace_style
+std::panicking::__rust_drop_panic
+std::panicking::__rust_foreign_exception
+std::panicking::catch_unwind::cleanup
+std::panicking::default_hook
+std::panicking::default_hook::closure$0
+std::panicking::panic_count::increase
+std::panicking::panic_count::is_zero_slow_path
+std::panicking::panic_handler
+std::panicking::panic_handler::closure$0
+std::panicking::panic_handler::impl$1::get
+std::panicking::panic_handler::impl$1::take_box
+std::panicking::panic_handler::impl$2::fmt
+std::panicking::panic_handler::impl$3::as_str
+std::panicking::panic_handler::impl$3::get
+std::panicking::panic_handler::impl$3::take_box
+std::panicking::panic_handler::impl$4::fmt
+std::panicking::panic_with_hook
+std::panicking::payload_as_str
+std::panicking::rust_panic
+std::path::Components::as_path
+std::path::Components::len_before_body
+std::path::Components::parse_next_component_back
+std::path::Path::_strip_prefix
+std::path::Path::is_absolute
+std::path::impl$124::eq
+std::path::impl$20::next
+std::process::exit
+std::rt::cleanup
+std::rt::handle_rt_panic<isize>
+std::rt::lang_start::closure$0<tuple$<> >
+std::rt::lang_start_internal
+std::sync::once::impl$2::call_once::closure$0<std::rt::cleanup::closure_env$0>
+std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::io::stdio::cleanup::closure_env$0>,never$> >
+std::sync::once_lock::OnceLock::initialize<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> > >,std::io::stdio::cleanup::closure_env$0>,never$>
+std::sync::poison::mutex::Mutex::lock<alloc::vec::Vec<u8,alloc::alloc::Global> >
+std::sys::alloc::windows::process_heap_alloc
+std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+std::sys::backtrace::__rust_end_short_backtrace<std::alloc::rust_oom::closure_env$0,never$>
+std::sys::backtrace::__rust_end_short_backtrace<std::panicking::panic_handler::closure_env$0,never$>
+std::sys::backtrace::_print_fmt::closure$0
+std::sys::backtrace::_print_fmt::closure$1::closure$0
+std::sys::backtrace::impl$0::print::impl$0::fmt
+std::sys::backtrace::lock
+std::sys::backtrace::output_filename
+std::sys::exit::exit
+std::sys::pal::windows::c::SetThreadDescription::fallback
+std::sys::pal::windows::c::SetThreadDescription::load
+std::sys::pal::windows::handle::Handle::synchronous_write
+std::sys::pal::windows::stack_overflow::vectored_handler
+std::sys::pal::windows::to_u16s::inner
+std::sys::path::windows_prefix::parse_prefix
+std::sys::stdio::windows::impl$7::flush
+std::sys::stdio::windows::impl$7::write
+std::sys::stdio::windows::write
+std::sys::stdio::windows::write_valid_utf8_to_console
+std::sys::sync::mutex::futex::Mutex::lock_contended
+std::sys::sync::once::futex::Once::call
+std::sys::sync::rwlock::futex::RwLock::read_contended
+std::sys::sync::rwlock::futex::RwLock::wake_writer_or_readers
+std::sys::thread_local::guard::windows::tls_callback
+std::sys::thread_local::native::eager::Storage::initialize<core::cell::Cell<enum2$<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<u8,alloc::alloc::Global> >,alloc::alloc::Global> > > > >
+std::sys::thread_local::native::eager::destroy<core::cell::Cell<enum2$<core::option::Option<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<u8,alloc::alloc::Global> >,alloc::alloc::Global> > > > >
+std::thread::current::with_current_name::closure$0<std::panicking::default_hook::closure$0::closure_env$0,tuple$<> >
+std::thread::current::with_current_name::closure$0<std::sys::pal::windows::stack_overflow::vectored_handler::closure_env$0,tuple$<> >
+std::thread::id::impl$0::new::exhausted
+terminate

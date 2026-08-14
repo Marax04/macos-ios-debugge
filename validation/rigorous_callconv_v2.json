@@ -1,0 +1,122 @@
+{
+  "module": "callconv",
+  "tools_hardened": 17,
+  "tools_passed": 20,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "callconv_sysv_x64_name",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_msvc_x64_name",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_sysv_x64",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_msvc_x64",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_aapcs64",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_cdecl_x86_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_stdcall_x86_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_fastcall_x86_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_thiscall_x86_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_vectorcall_x64_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_aapcs32_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_mips_o32_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_riscv64_lp64d_name_v2",
+      "args": {},
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_sysv_x64_is_arg_register",
+      "args": {
+        "reg": "rdi"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_sysv_x64_is_arg_register",
+      "args": {
+        "reg": "rbx"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_msvc_x64_is_callee_saved",
+      "args": {
+        "reg": "rbx"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_msvc_x64_is_callee_saved",
+      "args": {
+        "reg": "rax"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_sysv_x64_arg_register_at",
+      "args": {
+        "n": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_sysv_x64_arg_register_at",
+      "args": {
+        "n": 5
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "callconv_aapcs64_arg_register_count",
+      "args": {},
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "tool": "triage_entropy_packing_indicators",
+    "reason": "Heuristic PE-parsing result depends on the target binary's section layout; no byte-exact Python reference is feasible without a full PE parser. SKIP."
+  },
+  {
+    "tool": "triage_entropy_survey_binary_path",
+    "reason": "Aggregates block-level stats over the real target binary; result changes if binary changes. SKIP."
+  },
+  {
+    "tool": "triage_entropy_report_path",
+    "reason": "Reads a path from disk and aggregates EntropyReport; requires the target binary to be present and is not deterministic across machines. SKIP."
+  },
+  {
+    "tool": "triage_entropy_histogram_path",
+    "reason": "Full 256-bucket histogram of a disk file; output is structurally correct but not independently verifiable without reimplementing PE I/O. SKIP."
+  },
+  {
+    "tool": "triage_entropy_analyze_blocks_path",
+    "reason": "Block entropy over disk file; non-deterministic across machines and binary versions. SKIP."
+  },
+  {
+    "tool": "triage_die_get_entry_point_bytes",
+    "reason": "Reads PE entry-point bytes from the target binary; requires PE parsing and is machine-specific. SKIP."
+  },
+  {
+    "tool": "triage_die_read_pe_sections",
+    "reason": "Returns PE section table from the target binary; requires PE parsing. SKIP."
+  },
+  {
+    "tool": "triage_die_check_imports",
+    "reason": "Searches PE import table; requires PE parsing and is binary-specific. SKIP."
+  },
+  {
+    "tool": "triage_die_scanner_scan",
+    "reason": "Full DIE detector scan; depends on embedded YAML rule database and binary heuristics. Nondeterministic across rule-database versions. SKIP."
+  },
+  {
+    "tool": "triage_die_detector_with_defaults_detect",
+    "reason": "Full detector pipeline; depends on embedded rules. SKIP."
+  },
+  {
+    "tool": "triage_die_database_load_defaults_count",
+    "reason": "Returns count of embedded YAML rules; changes when rules are updated. SKIP."
+  },
+  {
+    "tool": "triage_die_packer_full_analysis",
+    "reason": "Multi-heuristic packer analysis combining entropy and PE structure; no concise Python reference. SKIP."
+  },
+  {
+    "tool": "triage_entropy_analyzer_analyze_path",
+    "reason": "Reads disk file, runs full EntropyAnalyzer pipeline. SKIP (path-dependent)."
+  },
+  {
+    "tool": "triage_entropy_report_summary_path",
+    "reason": "Reads disk file. SKIP (path-dependent)."
+  },
+  {
+    "tool": "triage_entropy_report_display_path",
+    "reason": "Reads disk file. SKIP (path-dependent)."
+  }
+]

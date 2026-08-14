@@ -1,0 +1,4616 @@
+//! Cross-cutting MCP tool wrappers wired during the wire-mcp phase.
+//!
+//! Each tool here exposes a previously-implemented analysis primitive
+//! (gap A / D / F / G / H / I / J / K) as a structured-output MCP tool.
+//! Handlers are thin wrappers that delegate to the underlying analysis
+//! crate and return JSON suitable for direct consumption by external
+//! clients (Claude, IDE plugins, agents).
+
+use async_trait::async_trait;
+use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
+use serde_json::{json, Value};
+
+use crate::{args_to_bytes, hex_encode};
+
+// ─── Shared helpers ─────────────────────────────────────────────────────────
+
+fn extract_byte_array(
+    args: &Value,
+    key: &str,
+    hex_key: &str,
+) -> Result<Vec<u8>, McpError> {
+    if let Some(arr) = args.get(key).and_then(Value::as_array) {
+        return arr
+            .iter()
+            .map(|v| {
+                v.as_u64()
+                    .ok_or_else(|| McpError::InvalidParams(format!("{key}: not integer")))
+                    .and_then(|n| {
+                        u8::try_from(n).map_err(|_| {
+                            McpError::InvalidParams(format!("{key}: byte out of range"))
+                        })
+                    })
+            })
+            .collect();
+    }
+    if let Some(hex) = args.get(hex_key).and_then(Value::as_str) {
+        return crate::hex_decode(hex);
+    }
+    Err(McpError::InvalidParams(format!(
+        "missing '{key}' or '{hex_key}'"
+    )))
+}
+
+// ─── gap G — loader_core_md5 ────────────────────────────────────────────────
+
+/// Compute the canonical MD5 used by the loader / triage pipelines.
+///
+/// Mirrors `rustre_loader::md5`, which is the same MD5 that triage
+/// embeds into `TriageResult.md5` / `TriageReport.md5`.
+pub struct LoaderCoreMd5Tool;
+
+impl LoaderCoreMd5Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "loader_core_md5".to_string(),
+            description:
+                "Compute MD5 over arbitrary bytes using the canonical loader \
+                 hash routine (same digest used by triage and RichLoadResult)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for LoaderCoreMd5Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let digest = rustre_loader::md5(&data);
+        Ok(ToolResult::text(
+            json!({
+                "md5": digest,
+                "bytes": data.len(),
+                "source": "rustre_loader::md5",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap D — analysis_xref_call_graph / get_xrefs_to / get_xrefs_from ───────
+
+fn build_xref_index(args: &Value) -> Result<rustre_analysis_xref::BinaryXrefIndex, McpError> {
+    let code = args_to_bytes(args)?;
+    let base = args.get("base").and_then(Value::as_u64).unwrap_or(0);
+    let arch = args
+        .get("arch")
+        .and_then(Value::as_str)
+        .unwrap_or("x86_64");
+    Ok(rustre_analysis_xref::BinaryXrefIndex::build_from_binary(
+        &code, base, arch,
+    ))
+}
+
+/// Build the inter-procedural call graph from a byte buffer.
+pub struct AnalysisXrefCallGraphTool;
+
+impl AnalysisXrefCallGraphTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_xref_call_graph".to_string(),
+            description:
+                "Build a directed call-graph (edges = E8/E9/Jcc + indirect FF /2 \
+                 placeholders) from raw code bytes via rustre-analysis-xref."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "base":  { "type": "integer", "description": "Base VA of the code buffer" },
+                    "arch":  { "type": "string", "enum": ["x86", "x86_64"] }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisXrefCallGraphTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let idx = build_xref_index(&args)?;
+        let mut nodes: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        let mut edges: Vec<Value> = Vec::new();
+        for src in idx.all_sources() {
+            for x in idx.xrefs_from(src) {
+                if matches!(
+                    x.kind,
+                    rustre_analysis_xref::SimpleXrefKind::Call
+                        | rustre_analysis_xref::SimpleXrefKind::Jump
+                ) {
+                    nodes.insert(x.from);
+                    nodes.insert(x.to);
+                    edges.push(json!({
+                        "from": x.from,
+                        "to": x.to,
+                        "kind": format!("{:?}", x.kind),
+                        "instr_len": x.instr_len,
+                    }));
+                }
+            }
+        }
+        Ok(ToolResult::text(
+            json!({
+                "node_count": nodes.len(),
+                "edge_count": edges.len(),
+                "nodes": nodes.into_iter().collect::<Vec<_>>(),
+                "edges": edges,
+                "total_xrefs": idx.total(),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+pub struct AnalysisXrefGetXrefsToTool;
+
+impl AnalysisXrefGetXrefsToTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_xref_get_xrefs_to".to_string(),
+            description:
+                "Return every xref whose target is `addr` (callers + jumpers + \
+                 data refs). Scans bytes via rustre-analysis-xref."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["addr"],
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "base":  { "type": "integer" },
+                    "arch":  { "type": "string" },
+                    "addr":  { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisXrefGetXrefsToTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let addr = args
+            .get("addr")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?;
+        let idx = build_xref_index(&args)?;
+        let xrefs: Vec<Value> = idx
+            .xrefs_to(addr)
+            .iter()
+            .map(|x| {
+                json!({
+                    "from": x.from,
+                    "to": x.to,
+                    "kind": format!("{:?}", x.kind),
+                    "instr_len": x.instr_len,
+                })
+            })
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "addr": addr,
+                "count": xrefs.len(),
+                "xrefs": xrefs,
+                "callers": idx.callers_of(addr),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+pub struct AnalysisXrefGetXrefsFromTool;
+
+impl AnalysisXrefGetXrefsFromTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_xref_get_xrefs_from".to_string(),
+            description:
+                "Return every xref originating at `addr` (callees + jump \
+                 targets + data refs)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["addr"],
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "base":  { "type": "integer" },
+                    "arch":  { "type": "string" },
+                    "addr":  { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisXrefGetXrefsFromTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let addr = args
+            .get("addr")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?;
+        let idx = build_xref_index(&args)?;
+        let xrefs: Vec<Value> = idx
+            .xrefs_from(addr)
+            .iter()
+            .map(|x| {
+                json!({
+                    "from": x.from,
+                    "to": x.to,
+                    "kind": format!("{:?}", x.kind),
+                    "instr_len": x.instr_len,
+                })
+            })
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "addr": addr,
+                "count": xrefs.len(),
+                "xrefs": xrefs,
+                "callees": idx.callees_of(addr),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap D extra — call_graph_root_functions / string_ref_counts ────────────
+
+fn extract_u64_array(args: &Value, key: &str) -> Result<Vec<u64>, McpError> {
+    let arr = args
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| McpError::InvalidParams(format!("missing '{key}'")))?;
+    arr.iter()
+        .map(|v| {
+            v.as_u64()
+                .ok_or_else(|| McpError::InvalidParams(format!("{key}: not integer")))
+        })
+        .collect()
+}
+
+pub struct AnalysisXrefCallGraphRootFunctionsTool;
+
+impl AnalysisXrefCallGraphRootFunctionsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_xref_call_graph_root_functions".to_string(),
+            description:
+                "Return call-graph root functions: entries from `function_entries` \
+                 that have **zero** incoming direct CALL xrefs in the static scan \
+                 of the supplied code bytes. Note: based on E8 direct-call scanning \
+                 only; functions reached solely via indirect dispatch will appear as \
+                 roots. Supply the full set of detected function entries for accurate \
+                 results."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["function_entries"],
+                "properties": {
+                    "bytes":            { "type": "array", "items": { "type": "integer" } },
+                    "hex":              { "type": "string" },
+                    "base":             { "type": "integer", "description": "Base VA of the code buffer" },
+                    "arch":             { "type": "string", "enum": ["x86", "x86_64"] },
+                    "function_entries": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "description": "All discovered function-entry VAs"
+                    }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisXrefCallGraphRootFunctionsTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let entries = extract_u64_array(&args, "function_entries")?;
+        let idx = build_xref_index(&args)?;
+        let roots = idx.root_functions(&entries);
+        Ok(ToolResult::text(
+            json!({
+                "roots": roots,
+                "count": roots.len(),
+                "function_entries_count": entries.len(),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+pub struct AnalysisXrefStringRefCountsTool;
+
+impl AnalysisXrefStringRefCountsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_xref_string_ref_counts".to_string(),
+            description:
+                "Count how many xrefs target each supplied string-literal address \
+                 in the static scan of the supplied code bytes. Pass the discovered \
+                 string base addresses from rustre-analysis-string; this tool only \
+                 aggregates references, it does not perform string discovery."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["string_addrs"],
+                "properties": {
+                    "bytes":        { "type": "array", "items": { "type": "integer" } },
+                    "hex":          { "type": "string" },
+                    "base":         { "type": "integer" },
+                    "arch":         { "type": "string", "enum": ["x86", "x86_64"] },
+                    "string_addrs": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "description": "Base VAs of string literals to count refs for"
+                    }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisXrefStringRefCountsTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let addrs = extract_u64_array(&args, "string_addrs")?;
+        let idx = build_xref_index(&args)?;
+        let counts = idx.count_string_refs(addrs.iter().copied());
+        let total_refs: usize = counts.values().sum();
+        let mut counts_obj = serde_json::Map::new();
+        for addr in &addrs {
+            let c = counts.get(addr).copied().unwrap_or(0);
+            counts_obj.insert(addr.to_string(), Value::from(c));
+        }
+        Ok(ToolResult::text(
+            json!({
+                "counts": Value::Object(counts_obj),
+                "total_refs": total_refs,
+                "string_count": addrs.len(),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap F — analysis_fn_detect_extra (find leaf fns missing from .pdata) ───
+
+pub struct AnalysisFnDetectExtraTool;
+
+impl AnalysisFnDetectExtraTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_fn_detect_extra".to_string(),
+            description:
+                "Find extra (leaf) functions present in .text but not covered \
+                 by .pdata RUNTIME_FUNCTION entries. Caller supplies raw \
+                 .pdata + .text bytes plus the .text base VA and PE image base."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["pdata", "text", "text_base", "image_base"],
+                "properties": {
+                    "pdata":      { "type": "array", "items": { "type": "integer" } },
+                    "pdata_hex":  { "type": "string" },
+                    "text":       { "type": "array", "items": { "type": "integer" } },
+                    "text_hex":   { "type": "string" },
+                    "text_base":  { "type": "integer" },
+                    "image_base": { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisFnDetectExtraTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_analysis_fn::{find_extra_pdata_funcs, parse_pdata};
+        use rustre_core::address::{Address, AddressRange};
+
+        let pdata = extract_byte_array(&args, "pdata", "pdata_hex")?;
+        let text = extract_byte_array(&args, "text", "text_hex")?;
+        let text_base = args
+            .get("text_base")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'text_base'".into()))?;
+        let image_base = args
+            .get("image_base")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'image_base'".into()))?;
+
+        let entries = parse_pdata(&pdata);
+        let text_range = AddressRange::new(
+            Address::new(text_base),
+            Address::new(text_base + text.len() as u64),
+        );
+        let (extras, stats) =
+            find_extra_pdata_funcs(Address::new(image_base), text_range, &text, &entries);
+
+        let extras_json: Vec<Value> = extras
+            .iter()
+            .map(|fb| {
+                json!({
+                    "start_va": fb.start.as_u64(),
+                    "end_va":   fb.end.map(|e| e.as_u64()),
+                    "size":     fb.byte_size(),
+                    "prologue": fb.name.clone().unwrap_or_default(),
+                    "confidence": format!("{:?}", fb.confidence),
+                })
+            })
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "extras": extras_json,
+                "stats": {
+                    "gaps_scanned": stats.gaps_scanned,
+                    "prologue_matches": stats.prologue_matches,
+                    "candidates_validated": stats.candidates_validated,
+                    "pdata_count": stats.pdata_count,
+                }
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap J — decompiler_core_batch_decompile ────────────────────────────────
+
+pub struct DecompilerCoreBatchDecompileTool;
+
+impl DecompilerCoreBatchDecompileTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "decompiler_core_batch_decompile".to_string(),
+            description:
+                "Decompile every detected function in a binary on-disk via \
+                 BatchDecompiler. Writes per-function .c files plus summary.json \
+                 to `out_dir` and returns success/fail stats."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["binary_path", "out_dir"],
+                "properties": {
+                    "binary_path":   { "type": "string" },
+                    "out_dir":       { "type": "string" },
+                    "threads":       { "type": "integer", "minimum": 0 },
+                    "max_functions": { "type": "integer", "minimum": 0 }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DecompilerCoreBatchDecompileTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_decompiler::batch_decompiler::{BatchConfig, BatchDecompiler};
+
+        let binary_path = args
+            .get("binary_path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'binary_path'".into()))?
+            .to_string();
+        let out_dir = args
+            .get("out_dir")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'out_dir'".into()))?
+            .to_string();
+
+        let mut cfg = BatchConfig::default();
+        if let Some(t) = args.get("threads").and_then(Value::as_u64) {
+            cfg.threads = t as usize;
+        }
+        if let Some(m) = args.get("max_functions").and_then(Value::as_u64) {
+            cfg.max_functions = m as usize;
+        }
+
+        let result = BatchDecompiler::decompile_all_from_binary(
+            std::path::Path::new(&binary_path),
+            std::path::Path::new(&out_dir),
+            &cfg,
+        )
+        .map_err(|e| McpError::InternalError(format!("batch decompile failed: {e}")))?;
+
+        Ok(ToolResult::text(
+            json!({
+                "binary_path": binary_path,
+                "out_dir": out_dir,
+                "decompiled": result.stats.functions_decompiled,
+                "failed":     result.stats.functions_failed,
+                "elapsed_ms": result.elapsed_ms,
+                "success_rate": result.success_rate(),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap A — flirt_apply_auto ───────────────────────────────────────────────
+
+pub struct FlirtApplyAutoTool;
+
+impl FlirtApplyAutoTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "flirt_apply_auto".to_string(),
+            description:
+                "Apply the built-in baseline FLIRT signature packs (MSVC CRT + \
+                 Rust stdlib) to a PE on disk and return the resolved renames \
+                 plus library-vs-user classification."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["binary_path"],
+                "properties": {
+                    "binary_path": { "type": "string" },
+                    "min_confidence": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Override DEFAULT_MIN_CONFIDENCE (70)"
+                    }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for FlirtApplyAutoTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_core::address::{Address, AddressRange};
+        use rustre_core::binary_view::{Memory, Segment};
+        use rustre_core::permissions::Permissions;
+        use rustre_loader_pe::flirt_autoname;
+
+        let binary_path = args
+            .get("binary_path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'binary_path'".into()))?;
+        let min_conf = args
+            .get("min_confidence")
+            .and_then(Value::as_u64)
+            .map(|n| n as u8)
+            .unwrap_or(flirt_autoname::DEFAULT_MIN_CONFIDENCE);
+
+        // Load via decompiler entry which routes through rustre-loader-pe.
+        let load = rustre_decompiler::load_binary(std::path::Path::new(binary_path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        // Build a Memory map from RichLoadResult's sections + raw data so the
+        // flirt scanner can walk executable bytes.
+        let mut mem = Memory::new();
+        for s in &load.sections {
+            let off = s.raw_offset as usize;
+            let sz = s.raw_size as usize;
+            if off >= load.data.len() {
+                continue;
+            }
+            let end = (off + sz).min(load.data.len());
+            let data = load.data[off..end].to_vec();
+            // Treat any section named like a code section as exec; this hook
+            // intentionally errs on the side of inclusion so signature scans
+            // do not silently skip a section.
+            let mut perms = Permissions::READ;
+            let is_code = s.name == ".text"
+                || s.name == "__text"
+                || s.name == "CODE"
+                || s.name.starts_with(".text");
+            if is_code {
+                perms |= Permissions::EXECUTE;
+            }
+            mem.add_segment(Segment {
+                range: AddressRange::new(
+                    Address::new(s.virtual_addr),
+                    Address::new(s.virtual_addr + u64::from(s.virtual_size)),
+                ),
+                permissions: perms,
+                data,
+            });
+        }
+
+        let packs = flirt_autoname::baseline_packs();
+        let (renames, stats) = flirt_autoname::apply_packs(&mem, &packs, min_conf);
+
+        // Feature K — propagate library/user classification into a freshly
+        // built FunctionTable; every FLIRT rename becomes a FunctionDef and
+        // its `is_library` flag is flipped by the propagation pass.
+        let mut table = rustre_core::binary_view::FunctionTable::new();
+        for r in &renames {
+            table.add_function(rustre_core::binary_view::FunctionDef::new(
+                Address::new(r.address),
+                r.name.clone(),
+            ));
+        }
+        let marks: Vec<rustre_flirt_apply::LibraryMark> = renames
+            .iter()
+            .filter(|r| !r.lib.is_empty())
+            .map(|r| rustre_flirt_apply::LibraryMark {
+                address: r.address,
+                lib_name: r.lib.clone(),
+            })
+            .collect();
+        let prop_stats =
+            rustre_analysis_fn::apply_library_marks(&mut table, &marks, &[]);
+
+        let renames_json: Vec<Value> = renames
+            .iter()
+            .map(|r| {
+                let lo = table
+                    .get_function_at(Address::new(r.address))
+                    .and_then(|f| f.library_origin.clone());
+                json!({
+                    "address":        r.address,
+                    "address_hex":    format!("0x{:x}", r.address),
+                    "name":           r.name,
+                    "lib":            r.lib,
+                    "confidence":     r.confidence,
+                    "pattern_length": r.pattern_length,
+                    "classification": if lo.is_some() { "library" } else { "user" },
+                    "library_origin": lo,
+                })
+            })
+            .collect();
+
+        let by_lib = table.library_breakdown();
+
+        Ok(ToolResult::text(
+            json!({
+                "binary_path":    binary_path,
+                "min_confidence": min_conf,
+                "renames":        renames_json,
+                "stats": {
+                    "scanned": stats.scanned,
+                    "matched": stats.matched,
+                    "applied": stats.applied,
+                    "skipped": stats.skipped,
+                },
+                "pack_count":      packs.len(),
+                "library_symbols": renames.len(),
+                "library_count":   table.count_library(),
+                "user_count":      table.count_user(),
+                "by_lib":          by_lib,
+                "propagation": {
+                    "considered":           prop_stats.considered,
+                    "marked":               prop_stats.marked,
+                    "missing":              prop_stats.missing,
+                    "thunk_targets_marked": prop_stats.thunk_targets_marked,
+                },
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── feature K — function_list_by_kind ──────────────────────────────────────
+
+pub struct FunctionListByKindTool;
+
+impl FunctionListByKindTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "function_list_by_kind".to_string(),
+            description:
+                "After flirt_apply_auto labels functions as library code, list \
+                 functions filtered by kind (library / user / all) and \
+                 optionally by library name. Mirrors the library-vs-user split \
+                 shown by mainstream disassemblers."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["binary_path"],
+                "properties": {
+                    "binary_path":    { "type": "string" },
+                    "kind":           { "type": "string", "enum": ["library", "user", "all"] },
+                    "lib_name":       { "type": "string" },
+                    "limit":          { "type": "integer", "minimum": 0 },
+                    "min_confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for FunctionListByKindTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_core::address::{Address, AddressRange};
+        use rustre_core::binary_view::{FunctionDef, FunctionTable, Memory, Segment};
+        use rustre_core::permissions::Permissions;
+        use rustre_loader_pe::flirt_autoname;
+
+        let binary_path = args
+            .get("binary_path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'binary_path'".into()))?;
+        let kind = args
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("all")
+            .to_string();
+        let lib_filter = args
+            .get("lib_name")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|n| n as usize)
+            .unwrap_or(usize::MAX);
+        let min_conf = args
+            .get("min_confidence")
+            .and_then(Value::as_u64)
+            .map(|n| n as u8)
+            .unwrap_or(flirt_autoname::DEFAULT_MIN_CONFIDENCE);
+
+        let load = rustre_decompiler::load_binary(std::path::Path::new(binary_path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        let mut mem = Memory::new();
+        for s in &load.sections {
+            let off = s.raw_offset as usize;
+            let sz = s.raw_size as usize;
+            if off >= load.data.len() {
+                continue;
+            }
+            let end = (off + sz).min(load.data.len());
+            let data = load.data[off..end].to_vec();
+            let mut perms = Permissions::READ;
+            let is_code = s.name == ".text"
+                || s.name == "__text"
+                || s.name == "CODE"
+                || s.name.starts_with(".text");
+            if is_code {
+                perms |= Permissions::EXECUTE;
+            }
+            mem.add_segment(Segment {
+                range: AddressRange::new(
+                    Address::new(s.virtual_addr),
+                    Address::new(s.virtual_addr + u64::from(s.virtual_size)),
+                ),
+                permissions: perms,
+                data,
+            });
+        }
+
+        let packs = flirt_autoname::baseline_packs();
+        let (renames, _) = flirt_autoname::apply_packs(&mem, &packs, min_conf);
+
+        let mut table = FunctionTable::new();
+        for r in &renames {
+            table.add_function(FunctionDef::new(Address::new(r.address), r.name.clone()));
+        }
+        let marks: Vec<rustre_flirt_apply::LibraryMark> = renames
+            .iter()
+            .filter(|r| !r.lib.is_empty())
+            .map(|r| rustre_flirt_apply::LibraryMark {
+                address: r.address,
+                lib_name: r.lib.clone(),
+            })
+            .collect();
+        let _ = rustre_analysis_fn::apply_library_marks(&mut table, &marks, &[]);
+
+        let total = table.len();
+        let lib_count = table.count_library();
+        let user_count = table.count_user();
+        let by_lib = table.library_breakdown();
+
+        let filtered: Vec<&FunctionDef> = match kind.as_str() {
+            "library" => table.iter_library().collect(),
+            "user" => table.iter_user().collect(),
+            _ => table.iter_functions().collect(),
+        };
+        let mut rows: Vec<Value> = filtered
+            .into_iter()
+            .filter(|f| match &lib_filter {
+                Some(lib) => f.library_origin.as_deref() == Some(lib.as_str()),
+                None => true,
+            })
+            .map(|f| {
+                json!({
+                    "address":        f.address.as_u64(),
+                    "address_hex":    format!("0x{:x}", f.address.as_u64()),
+                    "name":           f.name,
+                    "is_library":     f.is_library,
+                    "library_origin": f.library_origin,
+                })
+            })
+            .collect();
+
+        if rows.len() > limit {
+            rows.truncate(limit);
+        }
+
+        Ok(ToolResult::text(
+            json!({
+                "binary_path": binary_path,
+                "kind":        kind,
+                "lib_name":    lib_filter,
+                "total":       total,
+                "library":     lib_count,
+                "user":        user_count,
+                "by_lib":      by_lib,
+                "functions":   rows,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap H — noreturn_infer ─────────────────────────────────────────────────
+
+pub struct NoreturnInferTool;
+
+impl NoreturnInferTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "noreturn_infer".to_string(),
+            description:
+                "Run the gap-H NoreturnDetector against a caller-supplied list \
+                 of function records. Returns the addresses inferred as \
+                 noreturn (panic/abort/ExitProcess/tail-callers thereof)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["functions"],
+                "properties": {
+                    "functions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["address"],
+                            "properties": {
+                                "address": { "type": "integer" },
+                                "name":    { "type": "string" },
+                                "body_hex":{ "type": "string" }
+                            }
+                        }
+                    },
+                    "arch": { "type": "string", "enum": ["x86_64", "x86_32", "arm64"] },
+                    "propagation_threshold": { "type": "number" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for NoreturnInferTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_analysis_fn::noreturn_detector::{
+            DetectorArch, FunctionRecord, NoreturnDetector,
+        };
+        use rustre_core::address::Address;
+
+        let arch = match args.get("arch").and_then(Value::as_str).unwrap_or("x86_64") {
+            "x86_32" => DetectorArch::X86_32,
+            "arm64" => DetectorArch::Arm64,
+            _ => DetectorArch::X86_64,
+        };
+        let threshold = args
+            .get("propagation_threshold")
+            .and_then(Value::as_f64)
+            .map(|f| f as f32)
+            .unwrap_or(0.80);
+
+        let mut det = NoreturnDetector::new().with_arch(arch).with_threshold(threshold);
+
+        let arr = args
+            .get("functions")
+            .and_then(Value::as_array)
+            .ok_or_else(|| McpError::InvalidParams("missing 'functions'".into()))?;
+        for v in arr {
+            let addr = v
+                .get("address")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| McpError::InvalidParams("function missing 'address'".into()))?;
+            let name = v
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let body = v
+                .get("body_hex")
+                .and_then(Value::as_str)
+                .map(|s| crate::hex_decode(s).unwrap_or_default())
+                .unwrap_or_default();
+            let mut rec = FunctionRecord::new(Address::new(addr), body);
+            if !name.is_empty() {
+                rec.name = Some(name);
+            }
+            det.add_function(rec);
+        }
+
+        let noreturn = det.run();
+        let mut sorted: Vec<u64> = noreturn.into_iter().collect();
+        sorted.sort_unstable();
+
+        Ok(ToolResult::text(
+            json!({
+                "noreturn_count": sorted.len(),
+                "noreturn_addresses": sorted,
+                "propagation_threshold": threshold,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap I — recover_structs (lifts to MCP via raw instructions) ───────────
+
+pub struct RecoverStructsTool;
+
+impl RecoverStructsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "decompiler_recover_structs".to_string(),
+            description:
+                "Run the gap-I struct-field recovery pass over a function. \
+                 Returns recovered struct candidates (stack frames, heap roots, \
+                 register-rooted memory clusters) with field offsets and widths."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["binary_path", "addr"],
+                "properties": {
+                    "binary_path": { "type": "string" },
+                    "addr":        { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for RecoverStructsTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let binary_path = args
+            .get("binary_path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'binary_path'".into()))?;
+        let addr = args
+            .get("addr")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?;
+
+        let mut opts = rustre_decompiler::DecompOptions::default();
+        opts.passes.emit_struct_fields = true;
+
+        let func =
+            rustre_decompiler::decompile_function_from_binary(
+                std::path::Path::new(binary_path),
+                addr,
+                opts,
+            )
+            .map_err(|e| McpError::InternalError(format!("decompile failed: {e}")))?;
+
+        // Surface recovered structs from the function's variables and annotations.
+        let vars: Vec<Value> = func
+            .variables
+            .iter()
+            .map(|v| {
+                json!({
+                    "name": v.name,
+                    "type": v.type_str,
+                    "is_parameter": v.is_parameter,
+                    "storage": format!("{:?}", v.storage),
+                })
+            })
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "binary_path": binary_path,
+                "addr":        addr,
+                "name":        func.name,
+                "variables":   vars,
+                "variable_count": func.variables.len(),
+                "source": func.pseudo_code,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── gap E — stack_frame_report (async wrapper around builtin sync tool) ────
+
+pub struct StackFrameReportAsyncTool;
+
+impl StackFrameReportAsyncTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "decompiler_stack_frame_report".to_string(),
+            description:
+                "Build a stack-frame report (locals, prologue/epilogue, \
+                 struct-on-stack candidates) for a function from a \
+                 caller-supplied instruction list."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["function_addr", "instructions"],
+                "properties": {
+                    "function_addr": { "type": "integer" },
+                    "instructions":  { "type": "array" },
+                    "arch":          { "type": "string" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for StackFrameReportAsyncTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use crate::builtin_tools::StackFrameReportTool;
+        use crate::tool_executor::ToolHandler as SyncToolHandler;
+        let v = StackFrameReportTool
+            .execute(&args)
+            .map_err(|e| McpError::InternalError(e))?;
+        Ok(ToolResult::text(v.to_string()))
+    }
+}
+
+// ─── patch_pe_security_summary ──────────────────────────────────────────────
+
+/// Expose `pe_security_summary_from_path` as an MCP tool.
+///
+/// When no in-memory session buffer is available the MCP wrapper must load the
+/// binary from the caller-supplied `path` — exactly what `_from_path` does.
+pub struct PatchPeSecuritySummaryTool;
+
+impl PatchPeSecuritySummaryTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "patch_pe_security_summary".to_string(),
+            description:
+                "Parse a PE binary and return its security flags (ASLR, DEP, CFG, \
+                 SEH, signing) from the optional-header DllCharacteristics field."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": { "type": "string", "description": "Absolute path to the PE binary" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PatchPeSecuritySummaryTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let summary = rustre_patch::pe_security_summary_from_path(path)
+            .map_err(|e| McpError::InternalError(format!("pe_security_summary: {e}")))?;
+        Ok(ToolResult::text(
+            json!({
+                "path": path,
+                "aslr":                 summary.flags.aslr(),
+                "dep":                  summary.flags.dep(),
+                "cfg":                  summary.flags.cfg(),
+                "force_integrity":      summary.flags.force_integrity(),
+                "no_seh":               summary.flags.no_seh(),
+                "no_isolation":         summary.flags.no_isolation(),
+                "no_bind":              summary.flags.no_bind(),
+                "terminal_server_aware":summary.flags.terminal_server_aware(),
+                "is_64bit":             summary.is_64bit,
+                "dll_characteristics":  summary.dll_characteristics,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── patch_patch_find_code_caves ─────────────────────────────────────────────
+
+/// Expose `find_code_caves_from_path` as an MCP tool.
+///
+/// Loads the file at `path` directly so the tool works without an active
+/// session buffer, mirroring the `loader_pe_*` path-accepting convention.
+pub struct PatchFindCodeCavesTool;
+
+impl PatchFindCodeCavesTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "patch_patch_find_code_caves".to_string(),
+            description:
+                "Scan a PE or ELF binary for executable code caves (aligned runs \
+                 of 0x00/0xCC/0x90 padding bytes) suitable for inline detour stubs."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path":     { "type": "string",  "description": "Absolute path to the binary" },
+                    "min_size": { "type": "integer",  "description": "Minimum cave size in bytes (default 16)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PatchFindCodeCavesTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let min_size = args
+            .get("min_size")
+            .and_then(Value::as_u64)
+            .map(|n| n as usize)
+            .unwrap_or(16);
+        let caves = rustre_patch::find_code_caves_from_path(path, min_size)
+            .map_err(|e| McpError::InternalError(format!("find_code_caves: {e}")))?;
+        let caves_json: Vec<Value> = caves
+            .iter()
+            .map(|c| {
+                json!({
+                    "section":        c.section,
+                    "file_offset":    c.file_offset,
+                    "virtual_address":c.virtual_address,
+                    "size":           c.size,
+                    "fill_byte":      c.fill_byte,
+                })
+            })
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "path":     path,
+                "min_size": min_size,
+                "count":    caves_json.len(),
+                "caves":    caves_json,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── triage_entropy_packing_indicators ───────────────────────────────────────
+
+/// Expose `PackingDetector::detect_packing_indicators_from_path` as an MCP tool.
+///
+/// Loads the binary from `path` and walks the real PE import descriptor table
+/// to count DLLs, so the import-count heuristic works on large PEs whose
+/// import tables fall beyond any fixed probe window.
+pub struct TriageEntropyPackingIndicatorsTool;
+
+impl TriageEntropyPackingIndicatorsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "triage_entropy_packing_indicators".to_string(),
+            description:
+                "Detect common packing/obfuscation indicators in a binary: high \
+                 .text entropy, UPX magic, known packer section names, few \
+                 real imports (PE import-descriptor walk), and data overlays."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["path"],
+                "properties": {
+                    "path": { "type": "string", "description": "Absolute path to the binary" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for TriageEntropyPackingIndicatorsTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let indicators =
+            rustre_triage_entropy::PackingDetector::detect_packing_indicators_from_path(path)
+                .map_err(|e| McpError::InternalError(format!("packing_indicators: {e}")))?;
+        Ok(ToolResult::text(
+            json!({
+                "path":              path,
+                "is_likely_packed":  !indicators.is_empty(),
+                "indicator_count":   indicators.len(),
+                "indicators":        indicators,
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── demangle — is_constructor / is_destructor ──────────────────────────────
+
+/// Return `true` if the mangled symbol denotes a constructor.
+pub struct DemangleIsConstructorTool;
+
+impl DemangleIsConstructorTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "demangle_is_constructor".to_string(),
+            description:
+                "Return true if the given mangled symbol names a C++/Rust constructor \
+                 (delegates to rustre_demangle::is_constructor)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "mangled": { "type": "string" }
+                },
+                "required": ["mangled"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DemangleIsConstructorTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let mangled = args
+            .get("mangled")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'mangled'".to_string()))?;
+        let is_ctor = rustre_demangle::is_constructor(mangled);
+        Ok(ToolResult::text(
+            json!({
+                "mangled": mangled,
+                "is_constructor": is_ctor,
+                "source": "rustre_demangle::is_constructor",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Return `true` if the mangled symbol denotes a destructor.
+pub struct DemangleIsDestructorTool;
+
+impl DemangleIsDestructorTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "demangle_is_destructor".to_string(),
+            description:
+                "Return true if the given mangled symbol names a C++/Rust destructor \
+                 (delegates to rustre_demangle::is_destructor)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "mangled": { "type": "string" }
+                },
+                "required": ["mangled"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DemangleIsDestructorTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let mangled = args
+            .get("mangled")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'mangled'".to_string()))?;
+        let is_dtor = rustre_demangle::is_destructor(mangled);
+        Ok(ToolResult::text(
+            json!({
+                "mangled": mangled,
+                "is_destructor": is_dtor,
+                "source": "rustre_demangle::is_destructor",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── arm64_align_up / arm64_align_down ──────────────────────────────────────
+
+/// Expose `rustre_arch_arm64::align_up` as an MCP tool.
+pub struct Arm64AlignUpTool;
+
+impl Arm64AlignUpTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm64_align_up".to_string(),
+            description: "Align a u64 value up to the given power-of-two alignment (ARM64 helper).".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["value", "align"],
+                "properties": {
+                    "value": { "type": "integer", "description": "Value to align" },
+                    "align": { "type": "integer", "description": "Alignment (power of two)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Arm64AlignUpTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let value = args.get("value").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'value'".into()))?;
+        let align = args.get("align").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'align'".into()))?;
+        let out = rustre_arch_arm64::align_up(value, align);
+        Ok(ToolResult::text(json!({ "value": value, "align": align, "aligned": out }).to_string()))
+    }
+}
+
+/// Expose `rustre_arch_arm64::align_down` as an MCP tool.
+pub struct Arm64AlignDownTool;
+
+impl Arm64AlignDownTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm64_align_down".to_string(),
+            description: "Align a u64 value down to the given power-of-two alignment (ARM64 helper).".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["value", "align"],
+                "properties": {
+                    "value": { "type": "integer", "description": "Value to align" },
+                    "align": { "type": "integer", "description": "Alignment (power of two)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Arm64AlignDownTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let value = args.get("value").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'value'".into()))?;
+        let align = args.get("align").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'align'".into()))?;
+        let out = rustre_arch_arm64::align_down(value, align);
+        Ok(ToolResult::text(json!({ "value": value, "align": align, "aligned": out }).to_string()))
+    }
+}
+
+// ─── rustre-db wrappers ─────────────────────────────────────────────────────
+
+/// Return the count of canonical base-schema migrations from `rustre_db`.
+pub struct DbBaseMigrationsCountTool;
+
+impl DbBaseMigrationsCountTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "db_base_migrations_count".to_string(),
+            description:
+                "Return the number of canonical base-schema migrations \
+                 registered by rustre_db::base_migrations()."
+                    .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DbBaseMigrationsCountTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let migs = rustre_db::base_migrations();
+        Ok(ToolResult::text(
+            json!({
+                "count":  migs.len(),
+                "source": "rustre_db::base_migrations",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Return the (version, name) list of canonical base-schema migrations.
+pub struct DbBaseMigrationsListTool;
+
+impl DbBaseMigrationsListTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "db_base_migrations_list".to_string(),
+            description:
+                "List the (version, name) pairs of every canonical base-schema \
+                 migration returned by rustre_db::base_migrations()."
+                    .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DbBaseMigrationsListTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let migs = rustre_db::base_migrations();
+        let entries: Vec<Value> = migs
+            .iter()
+            .map(|m| json!({ "version": m.version.0, "name": m.name }))
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "count":      entries.len(),
+                "migrations": entries,
+                "source":     "rustre_db::base_migrations",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── ADB wrappers ───────────────────────────────────────────────────────────
+
+pub struct AdbComputeCrc32Tool;
+
+impl AdbComputeCrc32Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "adb_compute_crc32".to_string(),
+            description: "Compute the ADB wire-protocol CRC (byte-sum mod 2^32) over a hex-encoded payload."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["hex"],
+                "properties": {
+                    "hex": { "type": "string", "description": "Hex-encoded payload bytes" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AdbComputeCrc32Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let hex = args
+            .get("hex")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'hex'".into()))?;
+        let clean: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
+        if clean.len() % 2 != 0 {
+            return Err(McpError::InvalidParams("hex length must be even".into()));
+        }
+        let mut bytes = Vec::with_capacity(clean.len() / 2);
+        for i in (0..clean.len()).step_by(2) {
+            let b = u8::from_str_radix(&clean[i..i + 2], 16)
+                .map_err(|e| McpError::InvalidParams(format!("bad hex: {e}")))?;
+            bytes.push(b);
+        }
+        let crc = rustre_adb::compute_crc32(&bytes);
+        Ok(ToolResult::text(
+            json!({ "len": bytes.len(), "crc32": crc }).to_string(),
+        ))
+    }
+}
+
+pub struct AdbParseLogcatTool;
+
+impl AdbParseLogcatTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "adb_parse_logcat".to_string(),
+            description: "Parse logcat output text (brief or threadtime format) into structured entries."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["output"],
+                "properties": {
+                    "output": { "type": "string", "description": "Raw logcat output text" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AdbParseLogcatTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let output = args
+            .get("output")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'output'".into()))?;
+        let entries = rustre_adb::parse_logcat_output(output);
+        Ok(ToolResult::text(
+            json!({ "count": entries.len(), "entries": entries }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-x86: disassemble_and_lift / lift_to_llil wrappers ──────────
+
+/// Decode + lift every instruction via [`rustre_arch_x86::disassemble_and_lift`].
+pub struct ArchX86DisassembleAndLiftTool;
+
+impl ArchX86DisassembleAndLiftTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_x86_disassemble_and_lift".to_string(),
+            description:
+                "Linear-decode + lift every instruction in the byte buffer \
+                 using rustre_arch_x86::disassemble_and_lift."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "ip":    { "type": "integer" },
+                    "bits":  { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchX86DisassembleAndLiftTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let ip = args.get("ip").and_then(Value::as_u64).unwrap_or(0);
+        let bits_u = args.get("bits").and_then(Value::as_u64).unwrap_or(64);
+        let bits: u8 = u8::try_from(bits_u)
+            .map_err(|_| McpError::InvalidParams("bits out of range".into()))?;
+        let out = rustre_arch_x86::disassemble_and_lift(&data, ip, bits);
+        let items: Vec<Value> = out
+            .into_iter()
+            .map(|(addr, ops)| json!({ "ip": addr, "op_count": ops.len() }))
+            .collect();
+        Ok(ToolResult::text(
+            json!({
+                "count": items.len(),
+                "instructions": items,
+                "bytes": data.len(),
+                "ip": ip,
+                "bits": bits,
+                "source_hex": hex_encode(&data),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Decode one iced-x86 instruction and lift via [`rustre_arch_x86::lift_to_llil`].
+pub struct ArchX86LiftToLlilTool;
+
+impl ArchX86LiftToLlilTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_x86_lift_to_llil".to_string(),
+            description:
+                "Decode one x86 instruction from bytes and lift it to LLIL \
+                 via rustre_arch_x86::lift_to_llil."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "ip":    { "type": "integer" },
+                    "bits":  { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchX86LiftToLlilTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let ip = args.get("ip").and_then(Value::as_u64).unwrap_or(0);
+        let bits_u = args.get("bits").and_then(Value::as_u64).unwrap_or(64);
+        let bits: u32 = u32::try_from(bits_u)
+            .map_err(|_| McpError::InvalidParams("bits out of range".into()))?;
+        if data.is_empty() {
+            return Err(McpError::InvalidParams("empty byte buffer".into()));
+        }
+        let mut decoder = iced_x86::Decoder::with_ip(
+            bits,
+            &data,
+            ip,
+            iced_x86::DecoderOptions::NONE,
+        );
+        let instr = decoder.decode();
+        if instr.is_invalid() {
+            return Err(McpError::InvalidParams(format!(
+                "iced-x86 could not decode bytes at {:#x}",
+                ip
+            )));
+        }
+        let ops = rustre_arch_x86::lift_to_llil(&instr);
+        Ok(ToolResult::text(
+            json!({
+                "ip": instr.ip(),
+                "len": instr.len(),
+                "op_count": ops.len(),
+                "bytes": data.len(),
+                "bits": bits,
+                "source_hex": hex_encode(&data),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-avr wrappers ───────────────────────────────────────────────
+
+/// Expose `rustre_arch_avr::encode_nop` as an MCP tool.
+pub struct AvrEncodeNopTool;
+
+impl AvrEncodeNopTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "avr_encode_nop".to_string(),
+            description: "Return the 16-bit AVR encoding of the NOP instruction.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AvrEncodeNopTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let word = rustre_arch_avr::encode_nop();
+        Ok(ToolResult::text(
+            json!({ "word": word, "hex": format!("{:04X}", word) }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_avr::encode_ret` as an MCP tool.
+pub struct AvrEncodeRetTool;
+
+impl AvrEncodeRetTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "avr_encode_ret".to_string(),
+            description: "Return the 16-bit AVR encoding of the RET instruction.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AvrEncodeRetTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let word = rustre_arch_avr::encode_ret();
+        Ok(ToolResult::text(
+            json!({ "word": word, "hex": format!("{:04X}", word) }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-msp430 wrappers ────────────────────────────────────────────
+
+/// Expose `rustre_arch_msp430::reg_name` as an MCP tool.
+pub struct Msp430RegNameTool;
+
+impl Msp430RegNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "msp430_reg_name".to_string(),
+            description: "Return the canonical MSP430 register name for a register index (0..=15).".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["reg"],
+                "properties": {
+                    "reg": { "type": "integer", "description": "Register index (0..=15)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Msp430RegNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let reg = args.get("reg").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'reg'".into()))?;
+        let name = rustre_arch_msp430::reg_name(reg as u8);
+        Ok(ToolResult::text(json!({ "reg": reg, "name": name }).to_string()))
+    }
+}
+
+/// Expose `rustre_arch_msp430::bw_suffix` as an MCP tool.
+pub struct Msp430BwSuffixTool;
+
+impl Msp430BwSuffixTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "msp430_bw_suffix".to_string(),
+            description: "Return the MSP430 byte/word mnemonic suffix ('.B' or '.W') for a BW bit.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["bw"],
+                "properties": {
+                    "bw": { "type": "integer", "description": "BW bit (0 = word, non-zero = byte)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Msp430BwSuffixTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let bw = args.get("bw").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'bw'".into()))?;
+        let suffix = rustre_arch_msp430::bw_suffix(bw as u8);
+        Ok(ToolResult::text(json!({ "bw": bw, "suffix": suffix }).to_string()))
+    }
+}
+
+// ─── rustre-arch-6502 wrappers ──────────────────────────────────────────────
+
+/// Expose `rustre_arch_6502::cycles` as an MCP tool.
+pub struct Arch6502CyclesTool;
+
+impl Arch6502CyclesTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch6502_cycles".to_string(),
+            description: "Return base cycle count for a 6502 opcode, plus optional page-crossing penalty.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["opcode"],
+                "properties": {
+                    "opcode": { "type": "integer", "description": "Opcode byte (0-255)" },
+                    "crossed_page": { "type": "boolean", "description": "Whether a page boundary is crossed" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Arch6502CyclesTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let opcode = args.get("opcode").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'opcode'".into()))?;
+        let crossed_page = args.get("crossed_page").and_then(Value::as_bool).unwrap_or(false);
+        let opcode_u8 = u8::try_from(opcode & 0xFF).unwrap_or(0);
+        let cycles = rustre_arch_6502::cycles(opcode_u8, crossed_page);
+        Ok(ToolResult::text(json!({
+            "opcode": opcode_u8,
+            "crossed_page": crossed_page,
+            "cycles": cycles
+        }).to_string()))
+    }
+}
+
+/// Expose `rustre_arch_6502::branch_target` as an MCP tool.
+pub struct Arch6502BranchTargetTool;
+
+impl Arch6502BranchTargetTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch6502_branch_target".to_string(),
+            description: "Compute the target address of a 6502 relative branch given PC and instruction bytes (hex).".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["pc", "hex"],
+                "properties": {
+                    "pc": { "type": "integer", "description": "Program counter of the branch instruction" },
+                    "hex": { "type": "string", "description": "Instruction bytes as hex (at least opcode + offset)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Arch6502BranchTargetTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let pc = args.get("pc").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'pc'".into()))?;
+        let bytes = args_to_bytes(&args)?;
+        let target = rustre_arch_6502::branch_target(pc, &bytes);
+        Ok(ToolResult::text(json!({
+            "pc": pc,
+            "hex": hex_encode(&bytes),
+            "target": target
+        }).to_string()))
+    }
+}
+
+// ─── JVM bytecode decode tools ──────────────────────────────────────────────
+
+/// Decode a single JVM bytecode instruction via [`rustre_arch_jvm::JvmInstr::decode`].
+pub struct ArchJvmDecodeTool;
+
+impl ArchJvmDecodeTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_jvm_decode".to_string(),
+            description: "Decode one JVM bytecode instruction from bytes via \
+                          rustre_arch_jvm::JvmInstr::decode."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchJvmDecodeTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let (instr, size) = rustre_arch_jvm::JvmInstr::decode(&data)
+            .map_err(|e| McpError::InvalidParams(e.to_string()))?;
+        Ok(ToolResult::text(
+            json!({
+                "mnemonic": instr.mnemonic,
+                "operands": instr.operands,
+                "size": size,
+                "source_hex": hex_encode(&data),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Decode a single JVM bytecode instruction at a given pc offset via
+/// [`rustre_arch_jvm::JvmInstr::decode_at`].
+pub struct ArchJvmDecodeAtTool;
+
+impl ArchJvmDecodeAtTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_jvm_decode_at".to_string(),
+            description: "Decode one JVM bytecode instruction at a pc offset via \
+                          rustre_arch_jvm::JvmInstr::decode_at."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes":     { "type": "array", "items": { "type": "integer" } },
+                    "hex":       { "type": "string" },
+                    "pc_offset": { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchJvmDecodeAtTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let pc_offset = args
+            .get("pc_offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let (instr, size) = rustre_arch_jvm::JvmInstr::decode_at(&data, pc_offset)
+            .map_err(|e| McpError::InvalidParams(e.to_string()))?;
+        Ok(ToolResult::text(
+            json!({
+                "mnemonic": instr.mnemonic,
+                "operands": instr.operands,
+                "size": size,
+                "pc_offset": pc_offset,
+                "source_hex": hex_encode(&data),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── m68k_decode_instr / m68k_variant_info ──────────────────────────────────
+
+/// Expose `rustre_arch_68k::decode_68k` as an MCP tool: decode a single
+/// Motorola 68k instruction from hex bytes at a given PC.
+pub struct M68kDecodeInstrTool;
+
+impl M68kDecodeInstrTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "m68k_decode_instr".to_string(),
+            description: "Decode a single Motorola 68000 instruction from hex bytes at the given PC.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["bytes"],
+                "properties": {
+                    "bytes": { "type": "string", "description": "Instruction bytes (hex or base64)" },
+                    "pc": { "type": "integer", "description": "Program counter of the instruction (default 0)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for M68kDecodeInstrTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let bytes = args_to_bytes(&args)
+            .map_err(|e| McpError::InvalidParams(format!("bad 'bytes': {e}")))?;
+        let pc = args.get("pc").and_then(Value::as_u64).unwrap_or(0);
+        let (mnemonic, operands, size, flags) = rustre_arch_68k::decode_68k(&bytes, pc)
+            .map_err(|e| McpError::ToolError(format!("decode_68k failed: {e}")))?;
+        Ok(ToolResult::text(
+            json!({
+                "pc": pc,
+                "mnemonic": mnemonic,
+                "operands": operands,
+                "size": size,
+                "flags": format!("{flags:?}"),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_68k::Mc68kVariant` capability queries as an MCP tool.
+pub struct M68kVariantInfoTool;
+
+impl M68kVariantInfoTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "m68k_variant_info".to_string(),
+            description: "Report capability flags (FPU/MMU/32-bit/address-space) for a Motorola 68k variant.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["variant"],
+                "properties": {
+                    "variant": {
+                        "type": "string",
+                        "description": "One of: 68000, 68010, 68020, 68030, 68040, 68060, ColdFire"
+                    }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for M68kVariantInfoTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let name = args.get("variant").and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'variant'".into()))?;
+        let v = match name {
+            "68000" => rustre_arch_68k::Mc68kVariant::M68000,
+            "68010" => rustre_arch_68k::Mc68kVariant::M68010,
+            "68020" => rustre_arch_68k::Mc68kVariant::M68020,
+            "68030" => rustre_arch_68k::Mc68kVariant::M68030,
+            "68040" => rustre_arch_68k::Mc68kVariant::M68040,
+            "68060" => rustre_arch_68k::Mc68kVariant::M68060,
+            "ColdFire" | "coldfire" => rustre_arch_68k::Mc68kVariant::ColdFire,
+            other => return Err(McpError::InvalidParams(format!("unknown variant '{other}'"))),
+        };
+        Ok(ToolResult::text(
+            json!({
+                "variant": v.name(),
+                "has_fpu": v.has_fpu(),
+                "has_mmu": v.has_mmu(),
+                "is_32bit": v.is_32bit(),
+                "has_bitfield": v.has_bitfield(),
+                "address_space_bytes": v.address_space_bytes(),
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_arm::sreg` (VFP single-precision register name) as an MCP tool.
+pub struct ArmSregNameTool;
+
+impl ArmSregNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm_sreg_name".to_string(),
+            description: "Return the ARM VFP single-precision register name (s0..s31) for a numeric index.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["n"],
+                "properties": {
+                    "n": { "type": "integer", "description": "Register index (0..31)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArmSregNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let n = args.get("n").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'n'".into()))? as u32;
+        let name = rustre_arch_arm::sreg(n);
+        Ok(ToolResult::text(json!({ "n": n, "name": name }).to_string()))
+    }
+}
+
+/// Expose `rustre_arch_arm::dreg` (VFP double-precision register name) as an MCP tool.
+pub struct ArmDregNameTool;
+
+impl ArmDregNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm_dreg_name".to_string(),
+            description: "Return the ARM VFP double-precision register name (d0..d31) for a numeric index.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["n"],
+                "properties": {
+                    "n": { "type": "integer", "description": "Register index (0..31)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArmDregNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let n = args.get("n").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'n'".into()))? as u32;
+        let name = rustre_arch_arm::dreg(n);
+        Ok(ToolResult::text(json!({ "n": n, "name": name }).to_string()))
+    }
+}
+
+// ─── rustre-arch-riscv wrappers ─────────────────────────────────────────────
+
+/// Expose `rustre_arch_riscv::rv_brev8_32` as an MCP tool.
+pub struct RvBrev8_32Tool;
+
+impl RvBrev8_32Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "rv_brev8_32".to_string(),
+            description: "Apply the RISC-V brev8 bit-reverse-within-bytes operation to a 32-bit value.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": { "val": { "type": "integer" } },
+                "required": ["val"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for RvBrev8_32Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let val = args
+            .get("val")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'val'".into()))?
+            as u32;
+        let out = rustre_arch_riscv::rv_brev8_32(val);
+        Ok(ToolResult::text(
+            json!({ "input": val, "output": out, "hex": format!("{:08X}", out) }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_riscv::rv_c_classify` as an MCP tool.
+pub struct RvCClassifyTool;
+
+impl RvCClassifyTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "rv_c_classify".to_string(),
+            description: "Classify a 16-bit RISC-V compressed instruction halfword.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": { "hw": { "type": "integer" } },
+                "required": ["hw"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for RvCClassifyTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let hw = args
+            .get("hw")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'hw'".into()))?
+            as u16;
+        let class = rustre_arch_riscv::rv_c_classify(hw);
+        Ok(ToolResult::text(
+            json!({ "hw": hw, "class": class }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-luajit wrappers ────────────────────────────────────────────
+
+/// Expose `rustre_arch_luajit::instr_op` as an MCP tool.
+pub struct LuajitInstrOpTool;
+
+impl LuajitInstrOpTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "luajit_instr_op".to_string(),
+            description: "Extract the opcode byte from a raw 32-bit LuaJIT instruction word.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["word"],
+                "properties": {
+                    "word": { "type": "integer", "description": "Raw 32-bit LuaJIT instruction word" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for LuajitInstrOpTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let word = args.get("word").and_then(Value::as_u64).ok_or_else(|| {
+            McpError::InvalidParams("missing 'word' (integer)".to_string())
+        })?;
+        let word = u32::try_from(word & 0xffff_ffff).unwrap_or(0);
+        let op = rustre_arch_luajit::instr_op(word);
+        Ok(ToolResult::text(
+            json!({ "op": op, "hex": format!("{:02X}", op) }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_luajit::instr_a` as an MCP tool.
+pub struct LuajitInstrATool;
+
+impl LuajitInstrATool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "luajit_instr_a".to_string(),
+            description: "Extract the A operand byte from a raw 32-bit LuaJIT instruction word.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["word"],
+                "properties": {
+                    "word": { "type": "integer", "description": "Raw 32-bit LuaJIT instruction word" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for LuajitInstrATool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let word = args.get("word").and_then(Value::as_u64).ok_or_else(|| {
+            McpError::InvalidParams("missing 'word' (integer)".to_string())
+        })?;
+        let word = u32::try_from(word & 0xffff_ffff).unwrap_or(0);
+        let a = rustre_arch_luajit::instr_a(word);
+        Ok(ToolResult::text(
+            json!({ "a": a, "hex": format!("{:02X}", a) }).to_string(),
+        ))
+    }
+}
+
+// ─── PPC encoders (rustre_arch_ppc) ────────────────────────────────────────
+
+/// Expose `rustre_arch_ppc::encode_bl` as an MCP tool.
+pub struct PpcEncodeBlTool;
+
+impl PpcEncodeBlTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "ppc_encode_bl".to_string(),
+            description: "Encode a PowerPC BL (branch-and-link) instruction from a 4-byte-aligned displacement.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["disp"],
+                "properties": {
+                    "disp": { "type": "integer", "description": "Signed branch displacement (bytes, multiple of 4)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PpcEncodeBlTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let disp = args.get("disp").and_then(Value::as_i64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'disp'".into()))?;
+        let d = i32::try_from(disp)
+            .map_err(|_| McpError::InvalidParams("'disp' out of i32 range".into()))?;
+        if d % 4 != 0 {
+            return Err(McpError::InvalidParams("'disp' must be a multiple of 4".into()));
+        }
+        let encoded = rustre_arch_ppc::encode_bl(d);
+        Ok(ToolResult::text(
+            json!({ "disp": d, "encoded": encoded, "hex": format!("{encoded:08X}") }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_ppc::encode_lis` as an MCP tool.
+pub struct PpcEncodeLisTool;
+
+impl PpcEncodeLisTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "ppc_encode_lis".to_string(),
+            description: "Encode a PowerPC LIS rd,imm (load-immediate-shifted) instruction.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["rd", "imm"],
+                "properties": {
+                    "rd": { "type": "integer", "description": "Destination GPR (0..=31)" },
+                    "imm": { "type": "integer", "description": "Signed 16-bit immediate" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PpcEncodeLisTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let rd = args.get("rd").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'rd'".into()))?;
+        let imm = args.get("imm").and_then(Value::as_i64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'imm'".into()))?;
+        let rd_u = u32::try_from(rd)
+            .map_err(|_| McpError::InvalidParams("'rd' out of u32 range".into()))?;
+        let imm_i = i32::try_from(imm)
+            .map_err(|_| McpError::InvalidParams("'imm' out of i32 range".into()))?;
+        if !(-32768..=32767).contains(&imm_i) {
+            return Err(McpError::InvalidParams("'imm' out of signed 16-bit range".into()));
+        }
+        let encoded = rustre_arch_ppc::encode_lis(rd_u, imm_i);
+        Ok(ToolResult::text(
+            json!({ "rd": rd_u, "imm": imm_i, "encoded": encoded, "hex": format!("{encoded:08X}") }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-lua — Lua 5.4 field extraction ─────────────────────────────
+
+/// Extract the 17-bit `Bx` field from a Lua 5.4 instruction word.
+pub struct ArchLuaGetBx54Tool;
+
+impl ArchLuaGetBx54Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_lua_get_bx54".to_string(),
+            description:
+                "Extract the 17-bit unsigned Bx field from a Lua 5.4 iABx instruction word \
+                 via rustre_arch_lua::get_bx54."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "word": { "type": "integer", "description": "Lua 5.4 instruction word (u32)" }
+                },
+                "required": ["word"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchLuaGetBx54Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let word = args
+            .get("word")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'word' (u32)".into()))?;
+        let word_u32 = u32::try_from(word)
+            .map_err(|_| McpError::InvalidParams("'word' out of u32 range".into()))?;
+        let bx = rustre_arch_lua::get_bx54(word_u32);
+        Ok(ToolResult::text(
+            json!({
+                "word": word_u32,
+                "bx": bx,
+                "source": "rustre_arch_lua::get_bx54",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Extract the 25-bit `Ax` field from a Lua 5.4 instruction word.
+pub struct ArchLuaGetAx54Tool;
+
+impl ArchLuaGetAx54Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_lua_get_ax54".to_string(),
+            description:
+                "Extract the 25-bit unsigned Ax field from a Lua 5.4 iAx instruction word \
+                 (used by EXTRAARG) via rustre_arch_lua::get_ax54."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "word": { "type": "integer", "description": "Lua 5.4 instruction word (u32)" }
+                },
+                "required": ["word"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchLuaGetAx54Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let word = args
+            .get("word")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'word' (u32)".into()))?;
+        let word_u32 = u32::try_from(word)
+            .map_err(|_| McpError::InvalidParams("'word' out of u32 range".into()))?;
+        let ax = rustre_arch_lua::get_ax54(word_u32);
+        Ok(ToolResult::text(
+            json!({
+                "word": word_u32,
+                "ax": ax,
+                "source": "rustre_arch_lua::get_ax54",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Encode a SPARC NOP instruction word.
+pub struct SparcEncodeNopTool;
+
+impl SparcEncodeNopTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_sparc_encode_nop".to_string(),
+            description: "Encode a SPARC NOP (SETHI 0,%g0) instruction word via \
+                          rustre_arch_sparc::encode_nop."
+                .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for SparcEncodeNopTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let word = rustre_arch_sparc::encode_nop();
+        Ok(ToolResult::text(
+            json!({
+                "word": word,
+                "hex": format!("0x{word:08X}"),
+                "source": "rustre_arch_sparc::encode_nop",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Encode a SPARC CALL instruction word from a PC-relative displacement.
+pub struct SparcEncodeCallTool;
+
+impl SparcEncodeCallTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_sparc_encode_call".to_string(),
+            description: "Encode a SPARC Format 1 CALL instruction word from a 4-byte-aligned \
+                          PC-relative displacement via rustre_arch_sparc::encode_call."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "disp": { "type": "integer", "description": "PC-relative displacement in bytes (i32, 4-byte aligned)" }
+                },
+                "required": ["disp"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for SparcEncodeCallTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let disp = args
+            .get("disp")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'disp' (i32)".into()))?;
+        let disp_i32 = i32::try_from(disp)
+            .map_err(|_| McpError::InvalidParams("'disp' out of i32 range".into()))?;
+        if disp_i32 % 4 != 0 {
+            return Err(McpError::InvalidParams(
+                "'disp' must be 4-byte aligned".into(),
+            ));
+        }
+        let word = rustre_arch_sparc::encode_call(disp_i32);
+        Ok(ToolResult::text(
+            json!({
+                "disp": disp_i32,
+                "word": word,
+                "hex": format!("0x{word:08X}"),
+                "source": "rustre_arch_sparc::encode_call",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-z80 wrappers ───────────────────────────────────────────────
+
+/// Expose `rustre_arch_z80::encode_nop` as an MCP tool.
+pub struct Z80EncodeNopTool;
+
+impl Z80EncodeNopTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "z80_encode_nop".to_string(),
+            description: "Return the Z80 encoding of the NOP instruction.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Z80EncodeNopTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let bytes = rustre_arch_z80::encode_nop();
+        Ok(ToolResult::text(
+            json!({ "bytes": bytes.to_vec(), "hex": format!("{:02X}", bytes[0]) }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_z80::encode_halt` as an MCP tool.
+pub struct Z80EncodeHaltTool;
+
+impl Z80EncodeHaltTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "z80_encode_halt".to_string(),
+            description: "Return the Z80 encoding of the HALT instruction.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for Z80EncodeHaltTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let bytes = rustre_arch_z80::encode_halt();
+        Ok(ToolResult::text(
+            json!({ "bytes": bytes.to_vec(), "hex": format!("{:02X}", bytes[0]) }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-mips wrappers ──────────────────────────────────────────────
+
+/// Expose `rustre_arch_mips::encode_nop` as an MCP tool.
+pub struct MipsEncodeNopTool;
+
+impl MipsEncodeNopTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "mips_encode_nop".to_string(),
+            description: "Return the 32-bit MIPS encoding of the NOP instruction.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for MipsEncodeNopTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let word = rustre_arch_mips::encode_nop();
+        Ok(ToolResult::text(
+            json!({ "word": word, "hex": format!("{:08X}", word) }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_arch_mips::gpr` as an MCP tool.
+pub struct MipsGprNameTool;
+
+impl MipsGprNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "mips_gpr_name".to_string(),
+            description: "Return the canonical MIPS GPR name for a register index (0..31)."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "index": { "type": "integer", "minimum": 0, "maximum": 31 }
+                },
+                "required": ["index"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for MipsGprNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let idx = args
+            .get("index")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'index' (0..31)".into()))?;
+        let idx_us = usize::try_from(idx)
+            .map_err(|_| McpError::InvalidParams("'index' out of range".into()))?;
+        if idx_us > 31 {
+            return Err(McpError::InvalidParams("'index' must be 0..31".into()));
+        }
+        let name = rustre_arch_mips::gpr(idx_us);
+        Ok(ToolResult::text(
+            json!({ "index": idx_us, "name": name }).to_string(),
+        ))
+    }
+}
+
+fn wire_hex_decode_cil(s: &str) -> Result<Vec<u8>, McpError> {
+    let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    let cleaned = cleaned.strip_prefix("0x").unwrap_or(&cleaned).to_string();
+    if cleaned.len() % 2 != 0 {
+        return Err(McpError::InvalidParams("hex string has odd length".into()));
+    }
+    (0..cleaned.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&cleaned[i..i + 2], 16)
+                .map_err(|e| McpError::InvalidParams(format!("bad hex: {e}")))
+        })
+        .collect()
+}
+
+/// Decode a .NET compressed unsigned integer from a signature blob.
+pub struct ArchCilDecodeCompressedUintTool;
+
+impl ArchCilDecodeCompressedUintTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_cil_decode_compressed_uint".to_string(),
+            description:
+                "Decode a .NET ECMA-335 compressed unsigned integer from a signature blob via \
+                 rustre_arch_cil::decode_compressed_uint. Returns (value, bytes_consumed)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "data_hex": { "type": "string", "description": "Signature blob bytes as hex string" }
+                },
+                "required": ["data_hex"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchCilDecodeCompressedUintTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let s = args
+            .get("data_hex")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'data_hex' string".into()))?;
+        let bytes = wire_hex_decode_cil(s)?;
+        match rustre_arch_cil::decode_compressed_uint(&bytes) {
+            Ok((value, consumed)) => Ok(ToolResult::text(
+                json!({
+                    "value": value,
+                    "consumed": consumed,
+                    "source": "rustre_arch_cil::decode_compressed_uint",
+                })
+                .to_string(),
+            )),
+            Err(e) => Err(McpError::InvalidParams(format!("decode error: {e}"))),
+        }
+    }
+}
+
+/// Compute the maximum local slot index referenced by a CIL method body.
+pub struct ArchCilMaxLocalSlotTool;
+
+impl ArchCilMaxLocalSlotTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_cil_max_local_slot".to_string(),
+            description:
+                "Scan a CIL method body and return the highest local-variable slot index \
+                 referenced via rustre_arch_cil::cil_max_local_slot."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "code_hex": { "type": "string", "description": "CIL method body bytes as hex string" }
+                },
+                "required": ["code_hex"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchCilMaxLocalSlotTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let s = args
+            .get("code_hex")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'code_hex' string".into()))?;
+        let bytes = wire_hex_decode_cil(s)?;
+        match rustre_arch_cil::cil_max_local_slot(&bytes) {
+            Ok(max_slot) => Ok(ToolResult::text(
+                json!({
+                    "max_slot": max_slot,
+                    "source": "rustre_arch_cil::cil_max_local_slot",
+                })
+                .to_string(),
+            )),
+            Err(e) => Err(McpError::InvalidParams(format!("decode error: {e}"))),
+        }
+    }
+}
+
+/// Decode a Wasm value type byte via `rustre_arch_wasm::WasmValueType::from_byte`.
+pub struct ArchWasmValueTypeFromByteTool;
+
+impl ArchWasmValueTypeFromByteTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_wasm_valtype_from_byte".to_string(),
+            description:
+                "Decode a Wasm value type byte to its name via \
+                 rustre_arch_wasm::WasmValueType::from_byte."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "byte": { "type": "integer", "description": "Wasm valtype byte (u8)" }
+                },
+                "required": ["byte"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchWasmValueTypeFromByteTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let byte = args
+            .get("byte")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'byte' (u8)".into()))?;
+        let b = u8::try_from(byte)
+            .map_err(|_| McpError::InvalidParams("'byte' out of u8 range".into()))?;
+        let name = rustre_arch_wasm::WasmValueType::from_byte(b).map(|v| v.name());
+        Ok(ToolResult::text(
+            json!({
+                "byte": b,
+                "name": name,
+                "source": "rustre_arch_wasm::WasmValueType::from_byte",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Decode a Wasm section id byte via `rustre_arch_wasm::WasmSectionId::from_byte`.
+pub struct ArchWasmSectionIdFromByteTool;
+
+impl ArchWasmSectionIdFromByteTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_wasm_section_id_from_byte".to_string(),
+            description:
+                "Decode a Wasm section id byte to its name via \
+                 rustre_arch_wasm::WasmSectionId::from_byte."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "byte": { "type": "integer", "description": "Wasm section id byte (u8)" }
+                },
+                "required": ["byte"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchWasmSectionIdFromByteTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let byte = args
+            .get("byte")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'byte' (u8)".into()))?;
+        let b = u8::try_from(byte)
+            .map_err(|_| McpError::InvalidParams("'byte' out of u8 range".into()))?;
+        let name = rustre_arch_wasm::WasmSectionId::from_byte(b).map(|s| s.name());
+        Ok(ToolResult::text(
+            json!({
+                "byte": b,
+                "name": name,
+                "source": "rustre_arch_wasm::WasmSectionId::from_byte",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Format a DEX virtual register name via `rustre_arch_dex::dex_vreg`.
+pub struct ArchDexVregTool;
+
+impl ArchDexVregTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_dex_vreg".to_string(),
+            description: "Format a DEX virtual register name via rustre_arch_dex::dex_vreg."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "n": { "type": "integer", "description": "Register index (u8)" }
+                },
+                "required": ["n"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchDexVregTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let n = args
+            .get("n")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'n' (u8)".into()))?;
+        let n = u8::try_from(n)
+            .map_err(|_| McpError::InvalidParams("'n' out of u8 range".into()))?;
+        let name = rustre_arch_dex::dex_vreg(n);
+        Ok(ToolResult::text(
+            json!({
+                "n": n,
+                "name": name,
+                "source": "rustre_arch_dex::dex_vreg",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Format a DEX parameter register name via `rustre_arch_dex::dex_preg`.
+pub struct ArchDexPregTool;
+
+impl ArchDexPregTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arch_dex_preg".to_string(),
+            description: "Format a DEX parameter register name via rustre_arch_dex::dex_preg."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "n": { "type": "integer", "description": "Parameter register index (u8)" }
+                },
+                "required": ["n"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArchDexPregTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let n = args
+            .get("n")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'n' (u8)".into()))?;
+        let n = u8::try_from(n)
+            .map_err(|_| McpError::InvalidParams("'n' out of u8 range".into()))?;
+        let name = rustre_arch_dex::dex_preg(n);
+        Ok(ToolResult::text(
+            json!({
+                "n": n,
+                "name": name,
+                "source": "rustre_arch_dex::dex_preg",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-il-lift wrappers ────────────────────────────────────────────────
+
+/// Expose `rustre_il_lift::LifterRegistry::with_defaults().arch_names()` as MCP.
+pub struct IlLiftSupportedArchesTool;
+
+impl IlLiftSupportedArchesTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "il_lift_supported_arches".to_string(),
+            description: "List all architecture names registered in the default IL lifter registry.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for IlLiftSupportedArchesTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let reg = rustre_il_lift::LifterRegistry::with_defaults();
+        let names: Vec<String> = reg.arch_names().into_iter().map(|s| s.to_string()).collect();
+        Ok(ToolResult::text(
+            json!({ "arches": names }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_il_lift::LifterRegistry::with_defaults().len()` as MCP.
+pub struct IlLiftArchCountTool;
+
+impl IlLiftArchCountTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "il_lift_arch_count".to_string(),
+            description: "Number of architectures registered in the default IL lifter registry.".to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for IlLiftArchCountTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let reg = rustre_il_lift::LifterRegistry::with_defaults();
+        Ok(ToolResult::text(
+            json!({ "count": reg.len() }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-arch-bpf wrappers ───────────────────────────────────────────────
+
+/// Expose `rustre_arch_bpf::lookup_helper` as an MCP tool.
+pub struct BpfLookupHelperTool;
+
+impl BpfLookupHelperTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "bpf_lookup_helper".to_string(),
+            description: "Look up a BPF helper by its numeric ID.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": { "type": "integer", "description": "Helper ID" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for BpfLookupHelperTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let id = args
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'id'".into()))? as u32;
+        let out = match rustre_arch_bpf::lookup_helper(id) {
+            Some(h) => json!({
+                "found": true,
+                "id": h.id,
+                "name": h.name,
+                "proto": h.proto,
+                "may_sleep": h.may_sleep,
+                "pkt_access": h.pkt_access,
+            }),
+            None => json!({ "found": false }),
+        };
+        Ok(ToolResult::text(out.to_string()))
+    }
+}
+
+/// Expose `rustre_arch_bpf::lookup_helper_by_name` as an MCP tool.
+pub struct BpfLookupHelperByNameTool;
+
+impl BpfLookupHelperByNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "bpf_lookup_helper_by_name".to_string(),
+            description: "Look up a BPF helper by its exact name.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": { "type": "string", "description": "Helper name" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for BpfLookupHelperByNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let name = args
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'name'".into()))?;
+        let out = match rustre_arch_bpf::lookup_helper_by_name(name) {
+            Some(h) => json!({
+                "found": true,
+                "id": h.id,
+                "name": h.name,
+                "proto": h.proto,
+                "may_sleep": h.may_sleep,
+                "pkt_access": h.pkt_access,
+            }),
+            None => json!({ "found": false }),
+        };
+        Ok(ToolResult::text(out.to_string()))
+    }
+}
+
+// ─── rustre-il-passes wrappers ─────────────────────────────────────────────
+
+/// Expose `rustre_il_passes::count_instrs` as an MCP tool.
+///
+/// The wire wrapper does not currently serialize a full `LlilFunction` across
+/// the JSON boundary; instead it evaluates the pass over a fresh, empty
+/// function (`LlilFunction::default()`) so callers can validate that the
+/// pass wiring links correctly and returns `0` for the trivial case.
+pub struct IlPassesCountInstrsTool;
+
+impl IlPassesCountInstrsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "il_passes_count_instrs".to_string(),
+            description: "Count the total number of LLIL instructions in a (default/empty) LlilFunction via rustre_il_passes::count_instrs.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for IlPassesCountInstrsTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let func = rustre_il_llil::LlilFunction::default();
+        let n = rustre_il_passes::count_instrs(&func);
+        Ok(ToolResult::text(
+            json!({ "count": n, "source": "rustre_il_passes::count_instrs" }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_il_passes::count_constants` as an MCP tool.
+pub struct IlPassesCountConstantsTool;
+
+impl IlPassesCountConstantsTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "il_passes_count_constants".to_string(),
+            description: "Count the number of distinct constant values in a (default/empty) LlilFunction via rustre_il_passes::count_constants.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {}
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for IlPassesCountConstantsTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let func = rustre_il_llil::LlilFunction::default();
+        let n = rustre_il_passes::count_constants(&func);
+        Ok(ToolResult::text(
+            json!({ "count": n, "source": "rustre_il_passes::count_constants" }).to_string(),
+        ))
+    }
+}
+
+// ─── rustre-hex-pattern wire tools ──────────────────────────────────────────
+
+pub struct HexPatternCrc16IbmTool;
+
+impl HexPatternCrc16IbmTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_pattern_crc16_ibm".to_string(),
+            description:
+                "Compute CRC-16/IBM (poly 0x8005, reflected) over the input bytes via \
+                 rustre_hex_pattern::crc16_ibm."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "description": "Byte values (u8) to hash"
+                    }
+                },
+                "required": ["bytes"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexPatternCrc16IbmTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let arr = args
+            .get("bytes")
+            .and_then(Value::as_array)
+            .ok_or_else(|| McpError::InvalidParams("missing 'bytes' array".into()))?;
+        let mut buf = Vec::with_capacity(arr.len());
+        for v in arr {
+            let n = v
+                .as_u64()
+                .ok_or_else(|| McpError::InvalidParams("byte not integer".into()))?;
+            buf.push(
+                u8::try_from(n)
+                    .map_err(|_| McpError::InvalidParams("byte out of u8 range".into()))?,
+            );
+        }
+        let crc = rustre_hex_pattern::crc16_ibm(&buf);
+        Ok(ToolResult::text(
+            json!({
+                "len": buf.len(),
+                "crc16": crc,
+                "crc16_hex": format!("{crc:04X}"),
+                "source": "rustre_hex_pattern::crc16_ibm",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+pub struct HexPatternParseTool;
+
+impl HexPatternParseTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_pattern_parse".to_string(),
+            description:
+                "Parse an IDA/HxD-style pattern string via rustre_hex_pattern::Pattern::parse \
+                 and report length, exact-byte count, wildcard count, specificity, and \
+                 canonical hex form."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Pattern string with hex bytes and '?' wildcards"
+                    }
+                },
+                "required": ["pattern"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexPatternParseTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let pat_str = args
+            .get("pattern")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'pattern' string".into()))?;
+        let pat = rustre_hex_pattern::Pattern::parse(pat_str)
+            .map_err(|e| McpError::InvalidParams(format!("parse error: {e}")))?;
+        Ok(ToolResult::text(
+            json!({
+                "len": pat.len(),
+                "exact_count": pat.exact_count(),
+                "wildcard_count": pat.wildcard_count(),
+                "specificity": pat.specificity(),
+                "canonical": pat.to_hex_string(),
+                "source": "rustre_hex_pattern::Pattern::parse",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-events wrappers ─────────────────────────────────────────────────
+
+/// Report the initial receiver_count of a freshly-created EventBus.
+pub struct EventsBusNewDefaultTool;
+
+impl EventsBusNewDefaultTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "events_bus_new_default".to_string(),
+            description:
+                "Construct a rustre_events::EventBus via new_default() and report its \
+                 initial receiver_count and total_sent."
+                    .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for EventsBusNewDefaultTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let bus = rustre_events::EventBus::new_default();
+        Ok(ToolResult::text(
+            json!({
+                "receiver_count": bus.receiver_count(),
+                "total_sent": bus.total_sent(),
+                "source": "rustre_events::EventBus::new_default",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Report the initial count of a freshly-created EventLogger.
+pub struct EventsLoggerNewTool;
+
+impl EventsLoggerNewTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "events_logger_new".to_string(),
+            description:
+                "Construct a rustre_events::EventLogger with the given max_size and \
+                 report its initial count (always 0)."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "max_size": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["max_size"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for EventsLoggerNewTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let max_size = args
+            .get("max_size")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'max_size' integer".into()))?
+            as usize;
+        let logger = rustre_events::EventLogger::new(max_size);
+        Ok(ToolResult::text(
+            json!({
+                "max_size": max_size,
+                "count": logger.count(),
+                "source": "rustre_events::EventLogger::new",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-hex-template — WAV / RIFF chunk templates ───────────────────────
+
+/// Return the built-in WAV template's field count and name.
+pub struct HexTemplateWavTool;
+
+impl HexTemplateWavTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_template_wav".to_string(),
+            description: "Return metadata (name, description, field count) for the built-in \
+                          WAV template via rustre_hex_template::template_wav."
+                .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexTemplateWavTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let t = rustre_hex_template::template_wav();
+        Ok(ToolResult::text(
+            json!({
+                "name": t.name,
+                "description": t.description,
+                "field_count": t.fields.len(),
+                "source": "rustre_hex_template::template_wav",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Return the built-in RIFF chunk template's field count and name.
+pub struct HexTemplateRiffChunkTool;
+
+impl HexTemplateRiffChunkTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_template_riff_chunk".to_string(),
+            description: "Return metadata (name, description, field count) for the built-in \
+                          RIFF chunk header template via rustre_hex_template::template_riff_chunk."
+                .to_string(),
+            input_schema: json!({ "type": "object", "properties": {} }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexTemplateRiffChunkTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let t = rustre_hex_template::template_riff_chunk();
+        Ok(ToolResult::text(
+            json!({
+                "name": t.name,
+                "description": t.description,
+                "field_count": t.fields.len(),
+                "source": "rustre_hex_template::template_riff_chunk",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── rustre-mem wrappers ────────────────────────────────────────────────────
+
+/// Expose `rustre_mem::shannon_entropy` as an MCP tool.
+pub struct MemShannonEntropyTool;
+
+impl MemShannonEntropyTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "mem_shannon_entropy".to_string(),
+            description: "Compute Shannon entropy (bits/byte, 0.0..=8.0) of a hex byte buffer via rustre_mem::shannon_entropy.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "hex": { "type": "string", "description": "Hex-encoded input bytes" },
+                    "bytes": { "type": "array", "items": { "type": "integer" }, "description": "Alternative: raw byte array" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for MemShannonEntropyTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let bytes = args_to_bytes(&args)?;
+        let entropy = rustre_mem::shannon_entropy(&bytes);
+        Ok(ToolResult::text(
+            json!({ "len": bytes.len(), "entropy": entropy, "source": "rustre_mem::shannon_entropy" }).to_string(),
+        ))
+    }
+}
+
+/// Expose `rustre_mem::page_index` as an MCP tool.
+pub struct MemPageIndexTool;
+
+impl MemPageIndexTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "mem_page_index".to_string(),
+            description: "Compute the page index for an address given a page size (rustre_mem::page_index).".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "required": ["addr", "page_size"],
+                "properties": {
+                    "addr": { "type": "integer", "description": "Address (u64)" },
+                    "page_size": { "type": "integer", "description": "Page size (non-zero)" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for MemPageIndexTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let addr = args.get("addr").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'addr'".into()))?;
+        let page_size = args.get("page_size").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'page_size'".into()))?;
+        if page_size == 0 {
+            return Err(McpError::InvalidParams("'page_size' must be non-zero".into()));
+        }
+        let idx = rustre_mem::page_index(rustre_core::address::Address::new(addr), page_size);
+        Ok(ToolResult::text(
+            json!({ "addr": addr, "page_size": page_size, "page_index": idx, "source": "rustre_mem::page_index" }).to_string(),
+        ))
+    }
+}
+
+// ─── hex-view — format_hex_dump / format_hex_dump_ansi ──────────────────────
+
+/// Format bytes as a classic xxd-style plain hex dump.
+pub struct HexViewFormatHexDumpTool;
+
+impl HexViewFormatHexDumpTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_view_format_hex_dump".to_string(),
+            description:
+                "Format bytes as a classic xxd-style plain-text hex dump starting at base_offset."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "base_offset": { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexViewFormatHexDumpTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let base_offset = args
+            .get("base_offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let dump = rustre_hex_view::format_hex_dump(&data, base_offset);
+        Ok(ToolResult::text(
+            json!({
+                "dump": dump,
+                "len": data.len(),
+                "source": "rustre_hex_view::format_hex_dump",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+/// Format bytes as an ANSI-coloured hex dump.
+pub struct HexViewFormatHexDumpAnsiTool;
+
+impl HexViewFormatHexDumpAnsiTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "hex_view_format_hex_dump_ansi".to_string(),
+            description:
+                "Format bytes as an ANSI-coloured hex dump starting at base_offset."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes": { "type": "array", "items": { "type": "integer" } },
+                    "hex":   { "type": "string" },
+                    "base_offset": { "type": "integer" }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for HexViewFormatHexDumpAnsiTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data = args_to_bytes(&args)?;
+        let base_offset = args
+            .get("base_offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let dump = rustre_hex_view::format_hex_dump_ansi(&data, base_offset);
+        Ok(ToolResult::text(
+            json!({
+                "dump": dump,
+                "len": data.len(),
+                "source": "rustre_hex_view::format_hex_dump_ansi",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── PE editor wire tools ────────────────────────────────────────────────────
+
+fn pe_editor_hex_decode(s: &str) -> Result<Vec<u8>, McpError> {
+    let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    if !cleaned.len().is_multiple_of(2) {
+        return Err(McpError::InvalidParams("hex length must be even".into()));
+    }
+    (0..cleaned.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&cleaned[i..i + 2], 16)
+                .map_err(|e| McpError::InvalidParams(format!("bad hex: {e}")))
+        })
+        .collect()
+}
+
+fn pe_editor_hex_encode(b: &[u8]) -> String {
+    let mut s = String::with_capacity(b.len() * 2);
+    for byte in b {
+        s.push_str(&format!("{byte:02x}"));
+    }
+    s
+}
+
+pub struct PeXorSectionTool;
+
+impl PeXorSectionTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "pe_editor_xor_section".to_string(),
+            description:
+                "XOR a byte buffer with a repeating key via rustre_pe_editor::xor_section. \
+                 Inputs are hex-encoded strings; returns the XOR'd bytes as hex."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "data_hex": {"type": "string", "description": "Hex-encoded data buffer"},
+                    "key_hex":  {"type": "string", "description": "Hex-encoded XOR key (non-empty)"}
+                },
+                "required": ["data_hex", "key_hex"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PeXorSectionTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let data_hex = args.get("data_hex").and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'data_hex'".into()))?;
+        let key_hex = args.get("key_hex").and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'key_hex'".into()))?;
+        let mut data = pe_editor_hex_decode(data_hex)?;
+        let key = pe_editor_hex_decode(key_hex)?;
+        if key.is_empty() {
+            return Err(McpError::InvalidParams("key must be non-empty".into()));
+        }
+        rustre_pe_editor::xor_section(&mut data, &key);
+        Ok(ToolResult::text(
+            json!({
+                "len": data.len(),
+                "out_hex": pe_editor_hex_encode(&data),
+                "source": "rustre_pe_editor::xor_section",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+pub struct PeCertHeaderBytesTool;
+
+impl PeCertHeaderBytesTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "pe_editor_cert_header_bytes".to_string(),
+            description:
+                "Serialize a WIN_CERTIFICATE header via \
+                 rustre_pe_editor::CertificateHeader::new(payload_len).to_bytes() \
+                 and return the 8-byte little-endian header as hex."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "payload_len": {"type": "integer", "minimum": 0, "description": "PKCS#7 payload length in bytes"}
+                },
+                "required": ["payload_len"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for PeCertHeaderBytesTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let payload_len = args.get("payload_len").and_then(Value::as_u64)
+            .ok_or_else(|| McpError::InvalidParams("missing 'payload_len' u32".into()))?;
+        let payload_len = u32::try_from(payload_len)
+            .map_err(|_| McpError::InvalidParams("payload_len exceeds u32".into()))?;
+        let hdr = rustre_pe_editor::CertificateHeader::new(payload_len);
+        let bytes = hdr.to_bytes();
+        Ok(ToolResult::text(
+            json!({
+                "dw_length": hdr.dw_length,
+                "w_revision": hdr.w_revision,
+                "w_certificate_type": hdr.w_certificate_type,
+                "bytes_hex": pe_editor_hex_encode(&bytes),
+                "source": "rustre_pe_editor::CertificateHeader::new().to_bytes()",
+            })
+            .to_string(),
+        ))
+    }
+}
+
+// ─── Registration helper ────────────────────────────────────────────────────
+
+/// All wire-mcp cross-cutting tools as `Box<dyn ToolHandler>` with their
+/// `ToolDefinition`s, ready for `ToolRegistry::register`.
+#[must_use]
+pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
+    vec![
+        (PeXorSectionTool::definition(), Box::new(PeXorSectionTool)),
+        (PeCertHeaderBytesTool::definition(), Box::new(PeCertHeaderBytesTool)),
+        (HexViewFormatHexDumpTool::definition(), Box::new(HexViewFormatHexDumpTool)),
+        (HexViewFormatHexDumpAnsiTool::definition(), Box::new(HexViewFormatHexDumpAnsiTool)),
+        (MemShannonEntropyTool::definition(), Box::new(MemShannonEntropyTool)),
+        (MemPageIndexTool::definition(), Box::new(MemPageIndexTool)),
+        (EventsBusNewDefaultTool::definition(), Box::new(EventsBusNewDefaultTool)),
+        (EventsLoggerNewTool::definition(), Box::new(EventsLoggerNewTool)),
+        (HexTemplateWavTool::definition(), Box::new(HexTemplateWavTool)),
+        (HexTemplateRiffChunkTool::definition(), Box::new(HexTemplateRiffChunkTool)),
+        (HexPatternCrc16IbmTool::definition(), Box::new(HexPatternCrc16IbmTool)),
+        (HexPatternParseTool::definition(), Box::new(HexPatternParseTool)),
+        (IlPassesCountInstrsTool::definition(), Box::new(IlPassesCountInstrsTool)),
+        (IlPassesCountConstantsTool::definition(), Box::new(IlPassesCountConstantsTool)),
+        (BpfLookupHelperTool::definition(), Box::new(BpfLookupHelperTool)),
+        (BpfLookupHelperByNameTool::definition(), Box::new(BpfLookupHelperByNameTool)),
+        (IlLiftSupportedArchesTool::definition(), Box::new(IlLiftSupportedArchesTool)),
+        (IlLiftArchCountTool::definition(), Box::new(IlLiftArchCountTool)),
+        (MipsEncodeNopTool::definition(), Box::new(MipsEncodeNopTool)),
+        (MipsGprNameTool::definition(), Box::new(MipsGprNameTool)),
+        (ArchDexVregTool::definition(), Box::new(ArchDexVregTool)),
+        (ArchDexPregTool::definition(), Box::new(ArchDexPregTool)),
+        (
+            ArchCilDecodeCompressedUintTool::definition(),
+            Box::new(ArchCilDecodeCompressedUintTool),
+        ),
+        (
+            ArchCilMaxLocalSlotTool::definition(),
+            Box::new(ArchCilMaxLocalSlotTool),
+        ),
+        (ArchLuaGetBx54Tool::definition(), Box::new(ArchLuaGetBx54Tool)),
+        (ArchLuaGetAx54Tool::definition(), Box::new(ArchLuaGetAx54Tool)),
+        (PpcEncodeBlTool::definition(), Box::new(PpcEncodeBlTool)),
+        (PpcEncodeLisTool::definition(), Box::new(PpcEncodeLisTool)),
+        (RvBrev8_32Tool::definition(), Box::new(RvBrev8_32Tool)),
+        (RvCClassifyTool::definition(), Box::new(RvCClassifyTool)),
+        (ArmSregNameTool::definition(), Box::new(ArmSregNameTool)),
+        (ArmDregNameTool::definition(), Box::new(ArmDregNameTool)),
+        (M68kDecodeInstrTool::definition(), Box::new(M68kDecodeInstrTool)),
+        (M68kVariantInfoTool::definition(), Box::new(M68kVariantInfoTool)),
+        (ArchJvmDecodeTool::definition(), Box::new(ArchJvmDecodeTool)),
+        (ArchJvmDecodeAtTool::definition(), Box::new(ArchJvmDecodeAtTool)),
+        (Arch6502CyclesTool::definition(), Box::new(Arch6502CyclesTool)),
+        (Arch6502BranchTargetTool::definition(), Box::new(Arch6502BranchTargetTool)),
+        (Msp430RegNameTool::definition(), Box::new(Msp430RegNameTool)),
+        (Msp430BwSuffixTool::definition(), Box::new(Msp430BwSuffixTool)),
+        (AvrEncodeNopTool::definition(), Box::new(AvrEncodeNopTool)),
+        (AvrEncodeRetTool::definition(), Box::new(AvrEncodeRetTool)),
+        (Z80EncodeNopTool::definition(), Box::new(Z80EncodeNopTool)),
+        (Z80EncodeHaltTool::definition(), Box::new(Z80EncodeHaltTool)),
+        (SparcEncodeNopTool::definition(), Box::new(SparcEncodeNopTool)),
+        (SparcEncodeCallTool::definition(), Box::new(SparcEncodeCallTool)),
+        (
+            ArchX86DisassembleAndLiftTool::definition(),
+            Box::new(ArchX86DisassembleAndLiftTool),
+        ),
+        (
+            ArchX86LiftToLlilTool::definition(),
+            Box::new(ArchX86LiftToLlilTool),
+        ),
+        (AdbComputeCrc32Tool::definition(), Box::new(AdbComputeCrc32Tool)),
+        (AdbParseLogcatTool::definition(), Box::new(AdbParseLogcatTool)),
+        (Arm64AlignUpTool::definition(), Box::new(Arm64AlignUpTool)),
+        (Arm64AlignDownTool::definition(), Box::new(Arm64AlignDownTool)),
+        (LoaderCoreMd5Tool::definition(), Box::new(LoaderCoreMd5Tool)),
+        (
+            AnalysisXrefCallGraphTool::definition(),
+            Box::new(AnalysisXrefCallGraphTool),
+        ),
+        (
+            AnalysisXrefGetXrefsToTool::definition(),
+            Box::new(AnalysisXrefGetXrefsToTool),
+        ),
+        (
+            AnalysisXrefGetXrefsFromTool::definition(),
+            Box::new(AnalysisXrefGetXrefsFromTool),
+        ),
+        (
+            AnalysisXrefCallGraphRootFunctionsTool::definition(),
+            Box::new(AnalysisXrefCallGraphRootFunctionsTool),
+        ),
+        (
+            AnalysisXrefStringRefCountsTool::definition(),
+            Box::new(AnalysisXrefStringRefCountsTool),
+        ),
+        (
+            AnalysisFnDetectExtraTool::definition(),
+            Box::new(AnalysisFnDetectExtraTool),
+        ),
+        (
+            DecompilerCoreBatchDecompileTool::definition(),
+            Box::new(DecompilerCoreBatchDecompileTool),
+        ),
+        (FlirtApplyAutoTool::definition(), Box::new(FlirtApplyAutoTool)),
+        (
+            FunctionListByKindTool::definition(),
+            Box::new(FunctionListByKindTool),
+        ),
+        (NoreturnInferTool::definition(), Box::new(NoreturnInferTool)),
+        (RecoverStructsTool::definition(), Box::new(RecoverStructsTool)),
+        (
+            StackFrameReportAsyncTool::definition(),
+            Box::new(StackFrameReportAsyncTool),
+        ),
+        (SurveyBinaryTool::definition(), Box::new(SurveyBinaryTool)),
+        (
+            PatchPeSecuritySummaryTool::definition(),
+            Box::new(PatchPeSecuritySummaryTool),
+        ),
+        (
+            PatchFindCodeCavesTool::definition(),
+            Box::new(PatchFindCodeCavesTool),
+        ),
+        (
+            TriageEntropyPackingIndicatorsTool::definition(),
+            Box::new(TriageEntropyPackingIndicatorsTool),
+        ),
+        (
+            AnalysisFnDetectFunctionsPathTool::definition(),
+            Box::new(AnalysisFnDetectFunctionsPathTool),
+        ),
+        (
+            AnalysisStringScanPathTool::definition(),
+            Box::new(AnalysisStringScanPathTool),
+        ),
+        (
+            AnalysisCryptoScanPathTool::definition(),
+            Box::new(AnalysisCryptoScanPathTool),
+        ),
+        (
+            DemangleIsConstructorTool::definition(),
+            Box::new(DemangleIsConstructorTool),
+        ),
+        (
+            DemangleIsDestructorTool::definition(),
+            Box::new(DemangleIsDestructorTool),
+        ),
+        (
+            DbBaseMigrationsCountTool::definition(),
+            Box::new(DbBaseMigrationsCountTool),
+        ),
+        (
+            DbBaseMigrationsListTool::definition(),
+            Box::new(DbBaseMigrationsListTool),
+        ),
+        (LuajitInstrOpTool::definition(), Box::new(LuajitInstrOpTool)),
+        (LuajitInstrATool::definition(), Box::new(LuajitInstrATool)),
+        (
+            ArchWasmValueTypeFromByteTool::definition(),
+            Box::new(ArchWasmValueTypeFromByteTool),
+        ),
+        (
+            ArchWasmSectionIdFromByteTool::definition(),
+            Box::new(ArchWasmSectionIdFromByteTool),
+        ),
+    ]
+}
+
+// ─── Adapter: bridge async ToolHandler -> sync McpToolHandler ───────────────
+
+/// Adapts a [`Box<dyn ToolHandler>`] (async, returns `ToolResult`) to the
+/// sync [`rustre_mcp_server::McpToolHandler`] trait expected by the
+/// executor inside [`rustre_mcp_server::RustReMcpServer`].
+///
+/// The async `call` is driven on the current tokio runtime via
+/// `Handle::block_on` (the MCP server's executor is invoked from synchronous
+/// dispatch points but always runs inside a tokio runtime — see
+/// `run_stdio` / `run_http`).
+struct WireToolAdapter {
+    name: String,
+    inner: Box<dyn rustre_mcp_server::ToolHandler>,
+}
+
+impl rustre_mcp_server::McpToolHandler for WireToolAdapter {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn execute(
+        &self,
+        params: Value,
+    ) -> Result<Value, rustre_mcp_server::McpToolError> {
+        // We are called from inside a tokio worker that is in turn driving
+        // the rmcp `call_tool` future. Re-entering the *same* runtime via
+        // `Handle::block_on` would deadlock (and `block_in_place` only
+        // works on the multi-thread flavour, which the umbrella binary
+        // happens to use but other embedders may not). Run the async
+        // wire-tool body to completion on a tiny dedicated current-thread
+        // runtime built in a separate OS thread instead — this is safe
+        // regardless of which runtime called us and never re-enters the
+        // outer scheduler.
+        let inner = &*self.inner;
+        let result = std::thread::scope(|s| {
+            s.spawn(|| {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("build dedicated current-thread runtime for wire tool");
+                rt.block_on(inner.call(params))
+            })
+            .join()
+            .expect("wire-tool worker thread panicked")
+        });
+        match result {
+            Ok(tr) => {
+                // Flatten the ToolResult content blocks into a single JSON
+                // value. Handlers in this module always emit a single
+                // text content block holding a JSON string, so try to
+                // re-parse it; fall back to the raw text otherwise.
+                if let Some(rustre_mcp_server::ContentBlock::Text { text }) =
+                    tr.content.first()
+                {
+                    if let Ok(v) = serde_json::from_str::<Value>(text) {
+                        return Ok(v);
+                    }
+                    return Ok(Value::String(text.clone()));
+                }
+                Ok(serde_json::json!({ "is_error": tr.is_error }))
+            }
+            Err(e) => Err(rustre_mcp_server::McpToolError::ExecutionFailed(
+                e.to_string(),
+            )),
+        }
+    }
+}
+
+/// Map a wire-tool [`ToolDefinition`] to a server [`McpToolDef`] in the
+/// `Analysis` category (good default — all current wire tools are analysis
+/// or triage primitives).
+fn wire_def_to_catalog(def: &rustre_mcp_server::ToolDefinition) -> rustre_mcp_server::McpToolDef {
+    rustre_mcp_server::McpToolDef::new(
+        def.name.clone(),
+        def.description.clone(),
+        def.input_schema.clone(),
+        rustre_mcp_server::ToolCategory::Analysis,
+    )
+}
+
+/// Install every handler returned by [`all_wire_handlers`] into the given
+/// server, registering each one in both the catalog and the executor.
+///
+/// Callers should invoke this once, before wrapping the inner server in the
+/// rmcp facade (`RustREMcpServer::from_inner`), so the freshly added tools
+/// are visible to `list_tools`.
+pub fn wire_into_server(server: &mut rustre_mcp_server::RustReMcpServer) {
+    for (def, handler) in all_wire_handlers() {
+        let catalog = wire_def_to_catalog(&def);
+        let adapter = WireToolAdapter {
+            name: def.name.clone(),
+            inner: handler,
+        };
+        server.register_external_tool(catalog, Box::new(adapter));
+    }
+}
+
+// ─── survey_binary — aggregator tool ────────────────────────────────────────
+
+/// One-shot binary triage aggregator.
+///
+/// Accepts `session_id` (ignored for now — reserved for future session store
+/// integration) and `path` (required: on-disk file to load transiently).
+/// Calls multiple sub-routines and merges their results into a single JSON
+/// object.  Every sub-call is wrapped so that a failure in one step never
+/// aborts the overall response — the error string is placed under that key.
+pub struct SurveyBinaryTool;
+
+impl SurveyBinaryTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "survey_binary".to_string(),
+            description:
+                "One-shot binary triage: load a file and merge results from \
+                 the loader, import/section tables, string extraction, function \
+                 detection, entropy analysis, and call-target scan into a single \
+                 JSON object.  Sub-call failures are recorded per-key rather than \
+                 aborting the whole response."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Reserved: session identifier (unused — pass path instead)"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the binary file to survey"
+                    }
+                }
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for SurveyBinaryTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_analysis_fn::{
+            CallTargetCollector, DetectedArch, MemorySlice, detect_functions,
+        };
+        use rustre_core::address::Address;
+        use rustre_triage::{FileKind, StringHeuristics, analyze_section_entropy, detect_file_kind};
+
+        // ── Resolve path ───────────────────────────────────────────────────
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+
+        // ── Load the binary ────────────────────────────────────────────────
+        let load = rustre_decompiler::load_binary(std::path::Path::new(path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        let data: &[u8] = &load.data;
+
+        // ── Detect format ──────────────────────────────────────────────────
+        let file_kind = detect_file_kind(data);
+
+        // ── loader ─────────────────────────────────────────────────────────
+        // Use RichLoadResult fields (already parsed by rustre_decompiler::load_binary)
+        // and augment PE files with extra detail via rustre_loader_pe::PeInfo.
+        let loader_val: Value = (|| -> Value {
+            let base = json!({
+                "kind": format!("{file_kind:?}"),
+                "format": load.format,
+                "arch": load.arch,
+                "bits": load.bits,
+                "endian": load.endian,
+                "entry_point": load.entry_point,
+                "base_address": load.base_address,
+                "section_count": load.sections.len(),
+                "import_count": load.imports.len(),
+                "export_count": load.exports.len(),
+            });
+            // For PE files, attempt to add richer loader data.
+            match file_kind {
+                FileKind::Pe32
+                | FileKind::Pe64
+                | FileKind::Exe
+                | FileKind::Dll
+                | FileKind::Sys => {
+                    match rustre_loader_pe::PeInfo::parse(data) {
+                        Ok(info) => json!({
+                            "kind": format!("{file_kind:?}"),
+                            "format": load.format,
+                            "arch": format!("{:?}", info.machine),
+                            "bits": load.bits,
+                            "endian": "little",
+                            "entry_point": info.entry_point,
+                            "image_base": info.image_base,
+                            "is_dll": info.is_dll(),
+                            "is_64bit": info.is_64bit(),
+                            "checksum": info.checksum,
+                            "section_count": info.sections.len(),
+                            "import_count": info.imports.len(),
+                            "export_count": info.exports.len(),
+                        }),
+                        Err(e) => {
+                            let mut v = base;
+                            v["pe_parse_warning"] = json!(e);
+                            v
+                        }
+                    }
+                }
+                _ => base,
+            }
+        })();
+
+        // ── imports ────────────────────────────────────────────────────────
+        let imports_val: Value = (|| -> Value {
+            let imports: Vec<Value> = load
+                .imports
+                .iter()
+                .map(|i| {
+                    json!({
+                        "dll": i.dll,
+                        "name": i.name,
+                        "addr": i.addr,
+                        "ordinal": i.ordinal,
+                    })
+                })
+                .collect();
+            json!({
+                "count": imports.len(),
+                "imports": imports,
+            })
+        })();
+
+        // ── sections ───────────────────────────────────────────────────────
+        let sections_val: Value = (|| -> Value {
+            let sections: Vec<Value> = load
+                .sections
+                .iter()
+                .map(|s| {
+                    json!({
+                        "name": s.name,
+                        "virtual_addr": s.virtual_addr,
+                        "virtual_size": s.virtual_size,
+                        "raw_offset": s.raw_offset,
+                        "raw_size": s.raw_size,
+                        "flags": s.flags,
+                    })
+                })
+                .collect();
+            json!({
+                "count": sections.len(),
+                "sections": sections,
+            })
+        })();
+
+        // ── strings_top20 ──────────────────────────────────────────────────
+        // Each hit is decorated with the computed virtual address (VA) by
+        // resolving its file offset against the section table when one is
+        // available; on formats with no section info we fall back to
+        // `image_base + offset` so the VA field is always populated.
+        let strings_val: Value = (|| -> Value {
+            let all = StringHeuristics::extract_strings(data, 6);
+            let image_base = load.base_address;
+            let sections = &load.sections;
+            let off_to_va = |off: u64| -> u64 {
+                for s in sections {
+                    let raw_off = s.raw_offset;
+                    let raw_size = s.raw_size;
+                    if off >= raw_off && off < raw_off + raw_size {
+                        return image_base + s.virtual_addr + (off - raw_off);
+                    }
+                }
+                image_base + off
+            };
+            let top: Vec<Value> = all
+                .iter()
+                .take(20)
+                .map(|s| {
+                    let off = s.offset as u64;
+                    json!({
+                        "value": s.value,
+                        "offset": s.offset,
+                        "va": off_to_va(off),
+                        "encoding": format!("{:?}", s.encoding),
+                    })
+                })
+                .collect();
+            json!({
+                "total": all.len(),
+                "strings_top20": top,
+            })
+        })();
+
+        // ── function_count ─────────────────────────────────────────────────
+        let function_count_val: Value = (|| -> Value {
+            let arch = match &load.arch as &str {
+                "x86_64" | "amd64" | "x86-64" => DetectedArch::X86_64,
+                "x86" | "i386" | "i686" => DetectedArch::X86_32,
+                "arm64" | "aarch64" => DetectedArch::Arm64,
+                _ => DetectedArch::Unknown,
+            };
+            let base = load.base_address;
+            let mem = MemorySlice::new(Address::new(base), data);
+            let set = detect_functions(arch, &mem);
+            json!({
+                "function_count": set.functions.len(),
+                "arch": load.arch,
+            })
+        })();
+
+        // ── entropy_top ────────────────────────────────────────────────────
+        let entropy_val: Value = (|| -> Value {
+            let mut blocks = analyze_section_entropy(data);
+            blocks.sort_by(|a, b| b.entropy.partial_cmp(&a.entropy).unwrap_or(std::cmp::Ordering::Equal));
+            let top: Vec<Value> = blocks
+                .iter()
+                .take(10)
+                .map(|b| {
+                    json!({
+                        "name": b.name,
+                        "offset": b.offset,
+                        "size": b.size,
+                        "entropy": b.entropy,
+                        "rating": format!("{:?}", b.rating),
+                    })
+                })
+                .collect();
+            json!({
+                "block_count": blocks.len(),
+                "entropy_top": top,
+            })
+        })();
+
+        // ── call_targets_count ─────────────────────────────────────────────
+        let call_targets_val: Value = (|| -> Value {
+            let arch = match &load.arch as &str {
+                "x86_64" | "amd64" | "x86-64" => DetectedArch::X86_64,
+                "x86" | "i386" | "i686" => DetectedArch::X86_32,
+                "arm64" | "aarch64" => DetectedArch::Arm64,
+                _ => DetectedArch::Unknown,
+            };
+            let base = load.base_address;
+            let mem = MemorySlice::new(Address::new(base), data);
+            let targets = CallTargetCollector::new(arch).collect(&mem);
+            json!({ "call_targets_count": targets.len() })
+        })();
+
+        // ── Merge ──────────────────────────────────────────────────────────
+        let result = json!({
+            "path": path,
+            "file_size": data.len(),
+            "file_kind": format!("{file_kind:?}"),
+            "loader": loader_val,
+            "imports": imports_val,
+            "sections": sections_val,
+            "strings_top20": strings_val,
+            "function_count": function_count_val,
+            "entropy_top": entropy_val,
+            "call_targets_count": call_targets_val,
+        });
+
+        Ok(ToolResult::text(result.to_string()))
+    }
+}
+
+// ─── analysis_fn_detect_functions_path — path-based wrapper ────────────────
+
+/// Path-based wrapper around `rustre_analysis_fn::detect_functions`.
+///
+/// The existing `analysis_fn_detect_extra` tool only accepts inline byte
+/// arrays / hex strings, which is unusable on real binaries.  This tool
+/// loads the file with `rustre_decompiler::load_binary`, picks the arch
+/// out of the loader report, and emits per-function `(start, end,
+/// confidence, source, name)` records that already carry virtual
+/// addresses.
+pub struct AnalysisFnDetectFunctionsPathTool;
+
+impl AnalysisFnDetectFunctionsPathTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_fn_detect_functions_path".to_string(),
+            description:
+                "Detect function boundaries in a binary on disk.  Loads the \
+                 file, infers architecture from the loader report, and runs \
+                 the full multi-strategy detector.  Returns a list of \
+                 functions with virtual addresses, confidence levels, and \
+                 the detection source for each one."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the binary file"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Optional cap on the number of functions returned (default 5000)"
+                    }
+                },
+                "required": ["path"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisFnDetectFunctionsPathTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(5000);
+
+        let load = rustre_decompiler::load_binary(std::path::Path::new(path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        // The whole-load detector iterates every executable section with the
+        // correct VA, merges symbol-table hints, and deduplicates. Calling
+        // `detect_functions` on a flat MemorySlice over `load.data` would
+        // produce nonsense addresses because raw file offsets are not VAs.
+        let boundaries = rustre_decompiler::detect_functions_in_load(&load);
+
+        let total = boundaries.len();
+        let funcs: Vec<Value> = boundaries
+            .iter()
+            .take(limit)
+            .map(|f| {
+                json!({
+                    "start": f.start.as_u64(),
+                    "end": f.end.map(|e| e.as_u64()),
+                    "confidence": format!("{:?}", f.confidence),
+                    "source": format!("{:?}", f.source),
+                    "name": f.name,
+                })
+            })
+            .collect();
+
+        let result = json!({
+            "path": path,
+            "arch": load.arch,
+            "image_base": load.base_address,
+            "function_count": total,
+            "returned": funcs.len(),
+            "functions": funcs,
+        });
+        Ok(ToolResult::text(result.to_string()))
+    }
+}
+
+// ─── analysis_string_scan_path — path-based wrapper ────────────────────────
+
+/// Path-based wrapper around `rustre_analysis_string::StringScanner`.
+///
+/// Loads the binary, iterates the loader's section table, and runs the
+/// scanner against each readable section with the correct section VA as
+/// `base`, so every emitted `FoundString` carries an accurate virtual
+/// address.  Useful for direct cross-referencing with disassembly output.
+pub struct AnalysisStringScanPathTool;
+
+impl AnalysisStringScanPathTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_string_scan_path".to_string(),
+            description:
+                "Scan a binary on disk for ASCII / UTF-8 / UTF-16 strings.  \
+                 Walks the loader section table and reports each hit with \
+                 its virtual address, encoding, length and value — \
+                 equivalent to IDA's strings window."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the binary file"
+                    },
+                    "min_length": {
+                        "type": "integer",
+                        "description": "Minimum character count for a string to be reported (default 5)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of strings returned (default 10000)"
+                    }
+                },
+                "required": ["path"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisStringScanPathTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_analysis_string::{StringScanner, StringScannerConfig};
+        use rustre_core::address::Address;
+
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let min_length = args
+            .get("min_length")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(5);
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(10_000);
+
+        let load = rustre_decompiler::load_binary(std::path::Path::new(path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        let image_base = load.base_address;
+        let mut cfg = StringScannerConfig::default();
+        cfg.min_length = min_length;
+        let scanner = StringScanner::new(cfg);
+
+        let mut all = Vec::new();
+        if load.sections.is_empty() {
+            // No section table — fall back to scanning the whole file as
+            // one block based at `image_base`.
+            all.extend(scanner.scan(Address::new(image_base), &load.data));
+        } else {
+            for sec in &load.sections {
+                let start = usize::try_from(sec.raw_offset).unwrap_or(usize::MAX);
+                let size = usize::try_from(sec.raw_size).unwrap_or(0);
+                let end = start.saturating_add(size).min(load.data.len());
+                if start >= end {
+                    continue;
+                }
+                let va_base = image_base + sec.virtual_addr;
+                all.extend(scanner.scan(Address::new(va_base), &load.data[start..end]));
+            }
+        }
+        // Stable order by VA.
+        all.sort_by_key(|s| s.address.as_u64());
+
+        let total = all.len();
+        let out: Vec<Value> = all
+            .into_iter()
+            .take(limit)
+            .map(|s| {
+                json!({
+                    "va": s.address.as_u64(),
+                    "length": s.length,
+                    "encoding": format!("{:?}", s.encoding),
+                    "value": s.value,
+                })
+            })
+            .collect();
+
+        let result = json!({
+            "path": path,
+            "image_base": image_base,
+            "total": total,
+            "returned": out.len(),
+            "strings": out,
+        });
+        Ok(ToolResult::text(result.to_string()))
+    }
+}
+
+// ─── analysis_crypto_scan_path — findcrypt with section-resolved VA ────────
+
+/// Path-based findcrypt: scans every loader section for known crypto
+/// constants (AES S-box, SHA-1/256/512 IV+K, MD5 IVs, RSA exponents,
+/// Curve25519 / NIST primes, ChaCha20 sigma, …) and reports each hit with
+/// its file offset, section-resolved virtual address, endianness, and
+/// matched algorithm set. Additionally runs a BigNum / RSA-modulus
+/// heuristic that flags long runs of zero bytes followed by high-entropy
+/// blocks — typical of embedded RSA keys or DH primes the constant table
+/// can't catch.
+pub struct AnalysisCryptoScanPathTool;
+
+impl AnalysisCryptoScanPathTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "analysis_crypto_scan_path".to_string(),
+            description:
+                "Findcrypt-style scan. Loads the binary, walks every \
+                 section, matches against the full crypto-constant table \
+                 (LE+BE), and additionally flags BigNum / RSA-modulus \
+                 candidates via a zero-block heuristic. Each hit carries \
+                 a section-resolved VA suitable for cross-reference with \
+                 disassembly."
+                    .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the binary file"
+                    },
+                    "min_confidence": {
+                        "type": "integer",
+                        "description": "Filter out constants below this confidence (0..100, default 0)"
+                    },
+                    "bignum_min_zeros": {
+                        "type": "integer",
+                        "description": "Minimum run length of zero bytes to flag a BigNum candidate (default 48)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum total findings returned (default 5000)"
+                    }
+                },
+                "required": ["path"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AnalysisCryptoScanPathTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        use rustre_crypto_id::constant_scanner::{ConstSectionInfo, ConstantScanner};
+
+        let path = args
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;
+        let min_conf = args
+            .get("min_confidence")
+            .and_then(Value::as_u64)
+            .map(|v| v as u8)
+            .unwrap_or(0);
+        let bignum_min_zeros = args
+            .get("bignum_min_zeros")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(48);
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(5000);
+
+        let load = rustre_decompiler::load_binary(std::path::Path::new(path))
+            .map_err(|e| McpError::InternalError(format!("load failed: {e}")))?;
+
+        let sections: Vec<ConstSectionInfo> = load
+            .sections
+            .iter()
+            .map(|s| ConstSectionInfo {
+                file_offset: s.raw_offset,
+                file_size: s.raw_size,
+                virtual_address: load.base_address + s.virtual_addr,
+            })
+            .collect();
+
+        let mut scanner = ConstantScanner::new();
+        scanner.set_min_confidence(min_conf);
+        let hits = scanner.scan_with_sections(&load.data, &sections);
+
+        let mut findings: Vec<Value> = hits
+            .iter()
+            .map(|h| {
+                json!({
+                    "kind": "constant",
+                    "name": h.constant_name,
+                    "algorithms": h.algorithms,
+                    "constant_type": format!("{:?}", h.constant_type),
+                    "endian": format!("{:?}", h.endian),
+                    "confidence": h.confidence,
+                    "file_offset": h.file_offset,
+                    "length": h.length,
+                    "va": h.va,
+                })
+            })
+            .collect();
+
+        // BigNum / RSA-modulus heuristic: scan each section for a window
+        // that starts with `bignum_min_zeros` consecutive zero bytes
+        // immediately preceding a high-entropy ≥64-byte payload. Real RSA
+        // moduli embedded as little-endian arrays show exactly this
+        // shape; so do DH/ECDH primes encoded with leading zero padding.
+        for sec in &load.sections {
+            let start = usize::try_from(sec.raw_offset).unwrap_or(usize::MAX);
+            let size = usize::try_from(sec.raw_size).unwrap_or(0);
+            let end = start.saturating_add(size).min(load.data.len());
+            if start >= end { continue; }
+            let slice = &load.data[start..end];
+            let mut i = 0usize;
+            while i + bignum_min_zeros + 64 <= slice.len() {
+                if slice[i] != 0 { i += 1; continue; }
+                let mut zlen = 0usize;
+                while i + zlen < slice.len() && slice[i + zlen] == 0 { zlen += 1; }
+                if zlen >= bignum_min_zeros {
+                    let tail_start = i + zlen;
+                    let tail_end = (tail_start + 256).min(slice.len());
+                    let tail = &slice[tail_start..tail_end];
+                    // Reject tails that are themselves mostly zero or
+                    // low-entropy ascii: count distinct nonzero bytes.
+                    let mut seen = [false; 256];
+                    let mut distinct = 0usize;
+                    for &b in tail { if b != 0 && !seen[b as usize] { seen[b as usize] = true; distinct += 1; } }
+                    if distinct >= 24 {
+                        let file_off = start + i;
+                        let va = load.base_address + sec.virtual_addr + i as u64;
+                        findings.push(json!({
+                            "kind": "bignum_candidate",
+                            "name": "BIGNUM_ZERO_PADDED",
+                            "algorithms": ["RSA", "DH", "ECDH"],
+                            "constant_type": "FieldPrime",
+                            "endian": "Neutral",
+                            "confidence": 55,
+                            "file_offset": file_off,
+                            "length": zlen + tail.len(),
+                            "va": va,
+                            "zero_run": zlen,
+                            "tail_distinct_bytes": distinct,
+                        }));
+                    }
+                    i += zlen.max(1);
+                } else {
+                    i += zlen.max(1);
+                }
+            }
+        }
+
+        let total = findings.len();
+        findings.truncate(limit);
+
+        let result = json!({
+            "path": path,
+            "image_base": load.base_address,
+            "section_count": load.sections.len(),
+            "total": total,
+            "returned": findings.len(),
+            "findings": findings,
+        });
+        Ok(ToolResult::text(result.to_string()))
+    }
+}
+
+// Re-export the silenced `hex_encode` helper as `pub use` so it is wired in
+// via the wire module (avoids a dead-code warning for the import above when
+// no future tool consumes it).
+#[allow(dead_code)]
+pub(crate) fn _ensure_hex_encode_wired() -> String {
+    hex_encode(&[0u8])
+}

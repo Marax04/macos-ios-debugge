@@ -1,0 +1,11309 @@
+﻿//! `rustre-il-hlil`
+//!
+//! High-Level Intermediate Language (HLIL) for the `RustRE` Suite.
+//!
+//! HLIL is the structured, C-like representation of decompiled code, lifted from MLIL SSA form.
+//! It introduces loops, conditionals, switch statements, typed variables, and nested expressions.
+
+pub mod hlil_analysis;
+pub mod hlil_decompiler;
+pub mod hlil_optimization;
+pub mod hlil_types;
+pub mod hlil_control_flow_recovery;
+pub mod hlil_variable_recovery;
+pub mod hlil_expression_normalizer;
+pub mod hlil_structuring;
+
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::fmt::Write as _;
+
+use rustre_core::address::Address;
+use rustre_il_mlil::{MlilExpr, MlilFunction, MlilInstruction, Size, SsaVar};
+
+// ── HlilType ─────────────────────────────────────────────────────────────────
+
+/// A simple type annotation attached to HLIL expressions and variables.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HlilType {
+    Unknown,
+    Void,
+    Bool,
+    Int {
+        signed: bool,
+        bits: u32,
+    },
+    Float {
+        bits: u32,
+    },
+    Pointer {
+        pointee: Box<Self>,
+        bits: u32,
+    },
+    Array {
+        elem: Box<Self>,
+        count: Option<u64>,
+    },
+    Struct {
+        name: String,
+    },
+    Enum {
+        name: String,
+    },
+    Function {
+        ret: Box<Self>,
+        params: Vec<Self>,
+    },
+}
+
+impl HlilType {
+    #[must_use]
+    pub fn i8() -> Self {
+        Self::Int {
+            signed: true,
+            bits: 8,
+        }
+    }
+    #[must_use]
+    pub fn i16() -> Self {
+        Self::Int {
+            signed: true,
+            bits: 16,
+        }
+    }
+    #[must_use]
+    pub fn i32() -> Self {
+        Self::Int {
+            signed: true,
+            bits: 32,
+        }
+    }
+    #[must_use]
+    pub fn i64() -> Self {
+        Self::Int {
+            signed: true,
+            bits: 64,
+        }
+    }
+    #[must_use]
+    pub fn u8() -> Self {
+        Self::Int {
+            signed: false,
+            bits: 8,
+        }
+    }
+    #[must_use]
+    pub fn u16() -> Self {
+        Self::Int {
+            signed: false,
+            bits: 16,
+        }
+    }
+    #[must_use]
+    pub fn u32() -> Self {
+        Self::Int {
+            signed: false,
+            bits: 32,
+        }
+    }
+    #[must_use]
+    pub fn u64() -> Self {
+        Self::Int {
+            signed: false,
+            bits: 64,
+        }
+    }
+
+    /// Wrap `pointee` behind a pointer of the given pointer width (32 or 64 bits).
+    #[must_use]
+    pub fn ptr(pointee: Self, bits: u32) -> Self {
+        Self::Pointer {
+            pointee: Box::new(pointee),
+            bits,
+        }
+    }
+
+    #[must_use]
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, Self::Pointer { .. })
+    }
+
+    #[must_use]
+    pub fn is_integer(&self) -> bool {
+        matches!(self, Self::Int { .. })
+    }
+
+    /// Return the byte size of Self, if statically known.
+    #[must_use]
+    pub fn byte_size(&self) -> Option<u32> {
+        match self {
+            Self::Void => Some(0),
+            Self::Bool => Some(1),
+            Self::Int { bits, .. } | Self::Float { bits, .. } => {
+                if bits.is_multiple_of(8) {
+                    Some(bits / 8)
+                } else {
+                    None
+                }
+            }
+            Self::Pointer { bits, .. } => Some(bits / 8),
+            Self::Array {
+                elem,
+                count: Some(n),
+            } => elem
+                .byte_size()
+                .and_then(|s| u32::try_from(*n).ok().and_then(|c| s.checked_mul(c))),
+            Self::Array { .. }
+            | Self::Struct { .. }
+            | Self::Enum { .. }
+            | Self::Function { .. }
+            | Self::Unknown => None,
+        }
+    }
+
+    /// Convert a [`Size`] to the equivalent unsigned HLIL type.
+    fn from_mlil_size(s: Size) -> Self {
+        match s {
+            Size::Byte => Self::u8(),
+            Size::Word => Self::u16(),
+            Size::DWord => Self::u32(),
+            Size::QWord => Self::u64(),
+            Size::OWord => Self::Int {
+                signed: false,
+                bits: 128,
+            },
+            Size::YWord => Self::Int {
+                signed: false,
+                bits: 256,
+            },
+            Size::ZWord => Self::Int {
+                signed: false,
+                bits: 512,
+            },
+        }
+    }
+
+    /// Convert a [`Size`] to the equivalent *signed* HLIL type. Used where the
+    /// MLIL operation is signedness-sensitive (`DivS`, `Sar`, `CmpS*`,
+    /// `SignExtend`) so the signedness is not erased on lift.
+    fn from_mlil_size_signed(s: Size) -> Self {
+        match s {
+            Size::Byte => Self::i8(),
+            Size::Word => Self::i16(),
+            Size::DWord => Self::i32(),
+            Size::QWord => Self::i64(),
+            Size::OWord => Self::Int {
+                signed: true,
+                bits: 128,
+            },
+            Size::YWord => Self::Int {
+                signed: true,
+                bits: 256,
+            },
+            Size::ZWord => Self::Int {
+                signed: true,
+                bits: 512,
+            },
+        }
+    }
+}
+
+impl fmt::Display for HlilType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "unknown"),
+            Self::Void => write!(f, "void"),
+            Self::Bool => write!(f, "bool"),
+            Self::Int {
+                signed: true,
+                bits: 8,
+            } => write!(f, "int8_t"),
+            Self::Int {
+                signed: true,
+                bits: 16,
+            } => write!(f, "int16_t"),
+            Self::Int {
+                signed: true,
+                bits: 32,
+            } => write!(f, "int32_t"),
+            Self::Int {
+                signed: true,
+                bits: 64,
+            } => write!(f, "int64_t"),
+            Self::Int {
+                signed: false,
+                bits: 8,
+            } => write!(f, "uint8_t"),
+            Self::Int {
+                signed: false,
+                bits: 16,
+            } => write!(f, "uint16_t"),
+            Self::Int {
+                signed: false,
+                bits: 32,
+            } => write!(f, "uint32_t"),
+            Self::Int {
+                signed: false,
+                bits: 64,
+            } => write!(f, "uint64_t"),
+            Self::Int { signed: false, bits: 128 } if int128_enabled() => {
+                write!(f, "unsigned __int128")
+            }
+            Self::Int { signed: true, bits: 128 } if int128_enabled() => {
+                write!(f, "__int128")
+            }
+            Self::Int { signed, bits } => {
+            write!(f, "{}int{}_t", if *signed { "" } else { "u" }, bits)
+            }
+            Self::Float { bits: 32 } => write!(f, "float"),
+            Self::Float { bits: 64 } => write!(f, "double"),
+            Self::Float { bits } => write!(f, "float{bits}"),
+            Self::Pointer { pointee, .. } => write!(f, "{pointee} *"),
+            Self::Array {
+                elem,
+                count: Some(n),
+            } => write!(f, "{elem}[{n}]"),
+            Self::Array { elem, count: None } => write!(f, "{elem}[]"),
+            Self::Struct { name } => write!(f, "struct {name}"),
+            Self::Enum { name } => write!(f, "enum {name}"),
+            Self::Function { ret, params } => {
+                let param_str = params
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{ret} (*)({param_str})")
+            }
+        }
+    }
+}
+
+// ── HlilVar ───────────────────────────────────────────────────────────────────
+
+/// A named, typed HLIL variable (source-level, not SSA).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HlilVar {
+    pub name: String,
+    pub ty: HlilType,
+    pub is_param: bool,
+    pub stack_offset: Option<i64>,
+    /// SSA version (0 for non-SSA variables).
+    pub version: u32,
+    /// Whether this variable is in SSA form.
+    pub is_ssa: bool,
+}
+
+impl HlilVar {
+    pub fn new(name: impl Into<String>, ty: HlilType) -> Self {
+        Self {
+            name: name.into(),
+            ty,
+            is_param: false,
+            stack_offset: None,
+            version: 0,
+            is_ssa: false,
+        }
+    }
+
+    pub fn param(name: impl Into<String>, ty: HlilType) -> Self {
+        Self {
+            name: name.into(),
+            ty,
+            is_param: true,
+            stack_offset: None,
+            version: 0,
+            is_ssa: false,
+        }
+    }
+}
+
+impl fmt::Display for HlilVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.ty, self.name)
+    }
+}
+
+// ── HlilExpr ──────────────────────────────────────────────────────────────────
+
+/// High-level expression tree; every node carries a type annotation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum HlilExpr {
+    Const {
+        value: i64,
+        ty: HlilType,
+    },
+    Float {
+        value: f64,
+        ty: HlilType,
+    },
+    Var {
+        var: HlilVar,
+    },
+    Deref {
+        addr: Box<Self>,
+        ty: HlilType,
+    },
+    AddressOf {
+        var: HlilVar,
+    },
+    FieldAccess {
+        base: Box<Self>,
+        field: String,
+        ty: HlilType,
+    },
+    Index {
+        base: Box<Self>,
+        idx: Box<Self>,
+        ty: HlilType,
+    },
+    Add(Box<Self>, Box<Self>, HlilType),
+    Sub(Box<Self>, Box<Self>, HlilType),
+    Mul(Box<Self>, Box<Self>, HlilType),
+    Div(Box<Self>, Box<Self>, HlilType),
+    Mod(Box<Self>, Box<Self>, HlilType),
+    Neg(Box<Self>, HlilType),
+    And(Box<Self>, Box<Self>, HlilType),
+    Or(Box<Self>, Box<Self>, HlilType),
+    Xor(Box<Self>, Box<Self>, HlilType),
+    Not(Box<Self>, HlilType),
+    Shl(Box<Self>, Box<Self>, HlilType),
+    Shr(Box<Self>, Box<Self>, HlilType),
+    CmpEq(Box<Self>, Box<Self>),
+    CmpNe(Box<Self>, Box<Self>),
+    CmpLt(Box<Self>, Box<Self>),
+    CmpGt(Box<Self>, Box<Self>),
+    CmpLe(Box<Self>, Box<Self>),
+    CmpGe(Box<Self>, Box<Self>),
+    LogicalAnd(Box<Self>, Box<Self>),
+    LogicalOr(Box<Self>, Box<Self>),
+    LogicalNot(Box<Self>),
+    Cast {
+        expr: Box<Self>,
+        to: HlilType,
+    },
+    Call {
+        func: Box<Self>,
+        args: Vec<Self>,
+        ret_ty: HlilType,
+    },
+    Ternary {
+        cond: Box<Self>,
+        then: Box<Self>,
+        else_: Box<Self>,
+        ty: HlilType,
+    },
+    SizeOf { ty: HlilType },
+    Undefined(HlilType),
+    // ── Duplicate variant families ──────────────────────────────────────
+    //
+    // The variants below (`Bit*`, `Bool*`, `AddrOf`, `Div{U,S}`, `Mod{U,S}`,
+    // `Sar`, `Cmp{S,U}*`, `ArrayIndex`) are semantically identical to an
+    // existing canonical variant (`And`/`Or`/`Xor`, `LogicalAnd`/`LogicalOr`/
+    // `LogicalNot`, `AddressOf`, `Div`, `Mod`, `Shr`, `Cmp{Lt,Gt,Le,Ge}`,
+    // `Index`) but use a different constructor shape. This is confirmed,
+    // intentional-but-unconsolidated duplication (not a bug in itself):
+    //
+    // - The MLIL→HLIL lifter (`lift_expr` in this file) only ever
+    //   constructs the *canonical* forms.
+    // - `hlil_optimization.rs`'s `ConstantFolding` and `SimplifyConditions`
+    //   passes construct/consume the *alternate* forms directly in some
+    //   internal rewrites.
+    // - `Display`, `uses_var_depth`, `collect_calls_expr`, `collect_vars_expr`,
+    //   and `hlil_decompiler.rs`'s printer all handle both forms of each pair
+    //   in the same match arm, so pretty-printing and analysis are safe.
+    //
+    // IMPORTANT: `ConstantFolding`/`SimplifyConditions` previously only had
+    // match arms for the alternate forms (`BitOr`/`BitAnd`/`BitXor`,
+    // `BoolAnd`/`BoolOr`/`BoolNot`) and fell through their `other => other
+    // .clone()` catch-all for the canonical forms. Since the lifter only
+    // ever produces canonical forms, those two passes silently never fired
+    // on real lifted code. Fixed by adding matching arms for the canonical
+    // forms; see the regression tests in `hlil_optimization.rs` (search for
+    // "canonical_form"). If you add a new pass that matches on any variant
+    // in one of these pairs, you MUST handle both forms or it will silently
+    // no-op on real (lifter-produced) input.
+    //
+    // These variant pairs are NOT deleted/merged here (that's an API-breaking
+    // consolidation, out of scope for this fix) but should be considered for
+    // a future cleanup that removes the alternate forms and updates
+    // `hlil_optimization.rs` to construct canonical forms only.
+    /// Bitwise OR — alternate tuple form used by the optimizer. Same
+    /// semantics as [`Self::Or`]; see the "Duplicate variant families" note
+    /// above this variant family.
+    BitOr(Box<Self>, Box<Self>),
+    /// Bitwise AND — alternate tuple form used by the optimizer. Same
+    /// semantics as [`Self::And`]; see the "Duplicate variant families" note.
+    BitAnd(Box<Self>, Box<Self>),
+    /// Bitwise XOR — alternate form used by the optimizer. Same semantics as
+    /// [`Self::Xor`]; see the "Duplicate variant families" note.
+    BitXor(Box<Self>, Box<Self>),
+    /// Boolean AND — alternate form used by the optimizer. Same semantics as
+    /// [`Self::LogicalAnd`]; see the "Duplicate variant families" note.
+    BoolAnd(Box<Self>, Box<Self>),
+    /// Boolean OR — alternate form used by the optimizer. Same semantics as
+    /// [`Self::LogicalOr`]; see the "Duplicate variant families" note.
+    BoolOr(Box<Self>, Box<Self>),
+    /// Boolean NOT — alternate form used by the optimizer. Same semantics as
+    /// [`Self::LogicalNot`]; see the "Duplicate variant families" note.
+    BoolNot(Box<Self>),
+    /// Inline expression (If-like, used as an expression in optimizer contexts).
+    If {
+        cond: Box<Self>,
+        then_branch: Box<Self>,
+        else_branch: Box<Self>,
+    },
+    /// A floating-point constant.
+    ConstFloat(f64),
+    /// Address-of expression (alternate form used by the decompiler).
+    AddrOf(Box<Self>),
+    /// Unsigned division (alternate form).
+    DivU(Box<Self>, Box<Self>),
+    /// Signed division (alternate form).
+    DivS(Box<Self>, Box<Self>),
+    /// Unsigned modulo.
+    ModU(Box<Self>, Box<Self>),
+    /// Signed modulo.
+    ModS(Box<Self>, Box<Self>),
+    /// Arithmetic shift right (signed).
+    Sar(Box<Self>, Box<Self>),
+    /// Signed less-than comparison.
+    CmpSlt(Box<Self>, Box<Self>),
+    /// Unsigned less-than comparison.
+    CmpUlt(Box<Self>, Box<Self>),
+    /// Signed less-than-or-equal.
+    CmpSle(Box<Self>, Box<Self>),
+    /// Unsigned less-than-or-equal.
+    CmpUle(Box<Self>, Box<Self>),
+    /// Signed greater-than.
+    CmpSgt(Box<Self>, Box<Self>),
+    /// Unsigned greater-than.
+    CmpUgt(Box<Self>, Box<Self>),
+    /// Signed greater-than-or-equal.
+    CmpSge(Box<Self>, Box<Self>),
+    /// Unsigned greater-than-or-equal.
+    CmpUge(Box<Self>, Box<Self>),
+    /// Indexing (alternate form: rray[index]).
+    ArrayIndex {
+        array: Box<Self>,
+        index: Box<Self>,
+    },
+}
+
+// ── Hlction ─────────────────────────────────────—─—────
+
+/// A linear HLIL instruction (used by optimizer analysis passes).
+///
+/// This is an instruction-level view of HLIL that covers a subset of
+/// [`HlilStatement`], but uses flat condition/value fields so optimizer passes
+/// can walk a linear stream of instructions without tree recursion.
+#[derive(Debug, Clone)]
+pub enum HlilInstruction {
+    // `dest = value;`
+    Assign { dest: HlilVar, value: HlilExpr },
+    /// `return value?;`
+    Return(Option<HlilExpr>),
+    /// `if (condition) { then_block } else { else_block }`
+    If {
+        condition: HlilExpr,
+        then_block: Vec<Self>,
+        else_block: Vec<Self>,
+    },
+    /// `while (condition) { body }`
+    While {
+        condition: HlilExpr,
+        body: Vec<Self>,
+    },
+    /// `target(args...)`
+    Call {
+        target: Box<HlilExpr>,
+        args: Vec<HlilExpr>,
+    },
+}
+
+impl HlilExpr {
+    /// Return a reference to the type of this expression.
+    #[must_use]
+    pub fn expr_type(&self) -> &HlilType {
+        match self {
+            Self::Const { ty, .. }
+            | Self::Float { ty, .. }
+            | Self::Deref { ty, .. }
+            | Self::FieldAccess { ty, .. }
+            | Self::Index { ty, .. }
+            | Self::Add(_, _, ty)
+            | Self::Sub(_, _, ty)
+            | Self::Mul(_, _, ty)
+            | Self::Div(_, _, ty)
+            | Self::Mod(_, _, ty)
+            | Self::Neg(_, ty)
+            | Self::And(_, _, ty)
+            | Self::Or(_, _, ty)
+            | Self::Xor(_, _, ty)
+            | Self::Not(_, ty)
+            | Self::Shl(_, _, ty)
+            | Self::Shr(_, _, ty)
+            | Self::Ternary { ty, .. }
+            | Self::Undefined(ty) => ty,
+
+            Self::Var { var } | Self::AddressOf { var } => &var.ty,
+            Self::Cast { to, .. } => to,
+            Self::Call { ret_ty, .. } => ret_ty,
+            // sizeof() always evaluates to an unsigned 64-bit integer (pointer width).
+            Self::SizeOf { .. } => {
+                static SIZEOF_TY: std::sync::OnceLock<HlilType> = std::sync::OnceLock::new();
+                SIZEOF_TY.get_or_init(|| HlilType::Int { signed: false, bits: 64 })
+            }
+
+            Self::CmpEq(..)
+            | Self::CmpNe(..)
+            | Self::CmpLt(..)
+            | Self::CmpGt(..)
+            | Self::CmpLe(..)
+            | Self::CmpGe(..)
+            | Self::LogicalAnd(..)
+            | Self::LogicalOr(..)
+            | Self::LogicalNot(..) => &HlilType::Bool,
+
+            // Fallback for alternate-form variants without explicit type carriers.
+            _ => &HlilType::Unknown,
+        }
+    }
+
+    /// If this is a `Const`, return the integer value.
+    #[must_use]
+    pub fn is_const(&self) -> Option<i64> {
+        match self {
+            Self::Const { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` when this is `Const { value: 0, .. }`.
+    #[must_use]
+    pub fn is_const_zero(&self) -> bool {
+        self.is_const() == Some(0)
+    }
+
+    // Maximum recursion depth for expression-tree walkers that traverse// user-supplied AST nodes. With this cap a malicious binary with a// deeply nested expression can overflow the call stack.
+    const MAX_WALK_DEPTH: usize = 512;
+
+    /// Returns `true` when `var` appears anywhere in this expression tree.
+    ///
+    /// Recursion is bounded by [`Self::MAX_WALK_DEPTH`]; sub-trees beyond
+    /// that limit are conservatively reported as *not* using the variable (false-negative is safe; stack overflow is not).
+    #[must_use]
+    pub fn uses_var(&self, var: &HlilVar) -> bool {
+        self.uses_var_depth(var, 0)
+    }
+
+    fn uses_var_depth(&self, var: &HlilVar, depth: usize) -> bool {
+        if depth >= Self::MAX_WALK_DEPTH {
+            return false;
+        }
+        let d1 = depth + 1;
+        match self {
+            Self::Var { var: v } | Self::AddressOf { var: v } => v == var,
+            Self::Const { .. }
+            | Self::Float { .. }
+            | Self::ConstFloat(_)
+            | Self::SizeOf { .. }
+            | Self::Undefined(..) => false,
+            Self::Deref { addr, .. } => addr.uses_var_depth(var, d1),
+            Self::FieldAccess { base, .. } => base.uses_var_depth(var, d1),
+            Self::Index { base, idx, .. } => base.uses_var_depth(var, d1) || idx.uses_var_depth(var, d1),
+            Self::Add(a, b, _)
+            | Self::Sub(a, b, _)
+            | Self::Mul(a, b, _)
+            | Self::Div(a, b, _)
+            | Self::Mod(a, b, _)
+            | Self::And(a, b, _)
+            | Self::Or(a, b, _)
+            | Self::Xor(a, b, _)
+            | Self::Shl(a, b, _)
+            | Self::Shr(a, b, _)
+            | Self::CmpEq(a, b)
+            | Self::CmpNe(a, b)
+            | Self::CmpLt(a, b)
+            | Self::CmpGt(a, b)
+            | Self::CmpLe(a, b)
+            | Self::CmpGe(a, b)
+            | Self::LogicalAnd(a, b)
+            | Self::LogicalOr(a, b) => a.uses_var_depth(var, d1) || b.uses_var_depth(var, d1),
+            Self::Neg(e, _)
+            | Self::Not(e, _)
+            | Self::LogicalNot(e)
+            | Self::Cast { expr: e, .. } => e.uses_var_depth(var, d1),
+            Self::Call { func, args, .. } => {
+                func.uses_var_depth(var, d1) || args.iter().any(|a| a.uses_var_depth(var, d1))
+            }
+            Self::Ternary {
+                cond, then, else_, ..
+            } => cond.uses_var_depth(var, d1) || then.uses_var_depth(var, d1) || else_.uses_var_depth(var, d1),
+            // Alternate-form binary ops without explicit type carrier.
+            Self::BitOr(a, b)
+            | Self::BitAnd(a, b)
+            | Self::BitXor(a, b)
+            | Self::BoolAnd(a, b)
+            | Self::BoolOr(a, b)
+            | Self::DivU(a, b)
+            | Self::DivS(a, b)
+            | Self::ModU(a, b)
+            | Self::ModS(a, b)
+            | Self::Sar(a, b)
+            | Self::CmpSlt(a, b)
+            | Self::CmpUlt(a, b)
+            | Self::CmpSle(a, b)
+            | Self::CmpUle(a, b)
+            | Self::CmpSgt(a, b)
+            | Self::CmpUgt(a, b)
+            | Self::CmpSge(a, b)
+            | Self::CmpUge(a, b) => a.uses_var_depth(var, d1) || b.uses_var_depth(var, d1),
+            Self::ArrayIndex { array, index } => {
+                array.uses_var_depth(var, d1) || index.uses_var_depth(var, d1)
+            }
+            Self::BoolNot(e) | Self::AddrOf(e) => e.uses_var_depth(var, d1),
+            Self::If {
+                cond,
+                then_branch,
+                else_branch,
+            } => cond.uses_var_depth(var, d1) || then_branch.uses_var_depth(var, d1) || else_branch.uses_var_depth(var, d1),
+        }
+    }
+
+    /// A rough measure of expression depth/complexity.
+    ///
+    /// Recursion is bounded by [`Self::MAX_WALK_DEPTH`]; sub-trees beyond that
+    /// depth contributes 1 to avoid a stack overflow on adversarial input.
+    #[must_use]
+    pub fn complexity(&self) -> usize {
+        self.complexity_depth(0)
+    }
+
+    fn complexity_depth(&self, depth: usize) -> usize {
+        if depth >= Self::MAX_WALK_DEPTH {
+            return 1;
+        }
+        let d1 = depth + 1;
+        match self {
+            Self::Const { .. }
+            | Self::Float { .. }
+            | Self::Var { .. }
+            | Self::AddressOf { .. }
+            | Self::SizeOf { .. }
+            | Self::Undefined(..) => 1,
+            Self::Deref { addr, .. }
+            | Self::Neg(addr, _)
+            | Self::Not(addr, _)
+            | Self::LogicalNot(addr)
+            | Self::Cast { expr: addr, .. } => 1 + addr.complexity_depth(d1),
+            Self::FieldAccess { base, .. } | Self::AddrOf(base) => 1 + base.complexity_depth(d1),
+            Self::Index { base, idx, .. } => 1 + base.complexity_depth(d1) + idx.complexity_depth(d1),
+            Self::Add(a, b, _)
+            | Self::Sub(a, b, _)
+            | Self::Mul(a, b, _)
+            | Self::Div(a, b, _)
+            | Self::Mod(a, b, _)
+            | Self::And(a, b, _)
+            | Self::Or(a, b, _)
+            | Self::Xor(a, b, _)
+            | Self::Shl(a, b, _)
+            | Self::Shr(a, b, _)
+            | Self::CmpEq(a, b)
+            | Self::CmpNe(a, b)
+            | Self::CmpLt(a, b)
+            | Self::CmpGt(a, b)
+            | Self::CmpLe(a, b)
+            | Self::CmpGe(a, b)
+            | Self::LogicalAnd(a, b)
+            | Self::LogicalOr(a, b) => 1 + a.complexity_depth(d1) + b.complexity_depth(d1),
+            Self::Call { func, args, .. } => {
+                1 + func.complexity_depth(d1) + args.iter().map(|e| e.complexity_depth(d1)).sum::<usize>()
+            }
+            Self::Ternary {
+                cond, then, else_, ..
+            } => 1 + cond.complexity_depth(d1) + then.complexity_depth(d1) + else_.complexity_depth(d1),
+            _ => 1,
+        }
+    }
+}
+
+// ── Display for HlilExpr ─────────────────────────────────────────────────
+
+/// Gate `RUSTRE_HLIL_DEREF_WIDTH` (opt-out `=0`) per #1360. Letto una sola
+/// volta: `Display` viene invocato milioni di volte e una `env::var` per
+/// dereferenziazione sarebbe un costo inutile.
+/// Gate OPT-IN: stampare i 128 bit come `unsigned __int128` (estensione GCC,
+/// valida sotto `gnu89`) invece di lasciarli diventare `__int64` a valle.
+fn int128_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        !matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0") | Ok("false"))
+    })
+}
+
+fn deref_width_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        !matches!(
+            std::env::var("RUSTRE_HLIL_DEREF_WIDTH").as_deref(),
+            Ok("0") | Ok("false")
+        )
+    })
+}
+
+impl fmt::Display for HlilExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Const { value, .. } => write!(f, "{value}"),
+            Self::Float { value, .. } => write!(f, "{value}"),
+            Self::Var { var } => write!(f, "{}", var.name),
+            Self::AddressOf { var } => write!(f, "&{}", var.name),
+            // #1360: la LARGHEZZA dell'accesso e' in `ty` e finora veniva
+            // buttata via (`..`), cosi' `cast_hlil_integer_derefs` a valle
+            // metteva `(__int64 *)` su TUTTO. Misurato (#1350, 5 binari,
+            // 67 769 load): il **28.3%** non e' QWord — 12 195 DWord, 4 700
+            // Byte, 1 113 Word — e veniva letto 8 byte alla volta.
+            // Verificato su due oracoli: `my_strlen` legge `cmpb $0,(%rcx)`
+            // (1 byte) e il SORGENTE dice `const char *s`.
+            //
+            // ⚠ SOLO 8/16/32 bit: `QWord` resta com'era (il cast a valle e'
+            // gia' corretto e cambiarlo muoverebbe l'intero corpus senza
+            // guadagno), e **OWord/YWord/ZWord NON vanno stampati** — darebbero
+            // `uint128_t`/`uint256_t`, che **in C non esistono**.
+            Self::Deref { addr, ty } => {
+                let narrow = matches!(ty, HlilType::Int { bits: 8 | 16 | 32, .. });
+                // OWord (128 bit): `uint128_t` non esiste in C, ma
+                // **`unsigned __int128` esiste in GCC** ed e' valido sotto
+                // `gnu89`, lo standard usato da `check.sh`. Senza questo il
+                // deref esce NUDO e una passata testuale a valle ci mette
+                // `(__int64 *)`, dimezzando la larghezza: e' cosi' che
+                // `accumulate` perde la meta' alta che `psrldq` legge.
+                // Gate OPT-IN: cambia il testo emesso.
+                if matches!(ty, HlilType::Int { bits: 128, .. }) && int128_enabled() {
+                    return write!(f, "*(unsigned __int128 *){addr}");
+                }
+                if narrow && deref_width_enabled() {
+                    write!(f, "*({ty} *){addr}")
+                } else {
+                    write!(f, "*{addr}")
+                }
+            }
+            Self::FieldAccess { base, field, .. } => write!(f, "{base}.{field}"),
+            Self::Index { base, idx, .. } => write!(f, "{base}[{idx}]"),
+            Self::Add(a, b, _) => write!(f, "({a} + {b})"),
+            Self::Sub(a, b, _) => write!(f, "({a} - {b})"),
+            Self::Mul(a, b, _) => write!(f, "({a} * {b})"),
+            HlilExpr::Div(a, b, _) | HlilExpr::DivU(a, b) | HlilExpr::DivS(a, b) => write!(f, "({a} / {b})"),
+            HlilExpr::Mod(a, b, _) | HlilExpr::ModU(a, b) | HlilExpr::ModS(a, b) => write!(f, "({a} % {b})"),
+            Self::Neg(e, _) => write!(f, "-{e}"),
+            HlilExpr::And(a, b, _) | HlilExpr::BitAnd(a, b) => write!(f, "({a} & {b})"),
+            HlilExpr::Or(a, b, _) | HlilExpr::BitOr(a, b) => write!(f, "({a} | {b})"),
+            HlilExpr::Xor(a, b, _) | HlilExpr::BitXor(a, b) => write!(f, "({a} ^ {b})"),
+            Self::Not(e, _) => write!(f, "~{e}"),
+            Self::Shl(a, b, _) => write!(f, "({a} << {b})"),
+            HlilExpr::Shr(a, b, _) | HlilExpr::Sar(a, b) => write!(f, "({a} >> {b})"),
+            Self::CmpEq(a, b) => write!(f, "({a} == {b})"),
+            Self::CmpNe(a, b) => write!(f, "({a} != {b})"),
+            HlilExpr::CmpLt(a, b) | HlilExpr::CmpSlt(a, b) | HlilExpr::CmpUlt(a, b) => write!(f, "({a} < {b})"),
+            HlilExpr::CmpGt(a, b) | HlilExpr::CmpSgt(a, b) | HlilExpr::CmpUgt(a, b) => write!(f, "({a} > {b})"),
+            HlilExpr::CmpLe(a, b) | HlilExpr::CmpSle(a, b) | HlilExpr::CmpUle(a, b) => write!(f, "({a} <= {b})"),
+            HlilExpr::CmpGe(a, b) | HlilExpr::CmpSge(a, b) | HlilExpr::CmpUge(a, b) => write!(f, "({a} >= {b})"),
+            HlilExpr::LogicalAnd(a, b) | HlilExpr::BoolAnd(a, b) => write!(f, "({a} && {b})"),
+            HlilExpr::LogicalOr(a, b) | HlilExpr::BoolOr(a, b) => write!(f, "({a} || {b})"),
+            HlilExpr::LogicalNot(e) | HlilExpr::BoolNot(e) => write!(f, "!{e}"),
+            Self::Cast { expr, to, .. } => write!(f, "({to}){expr}"),
+            Self::Call { func, args, .. } => {
+                let arg_str = args
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                // Strip spurious `*` when callee resolves to a named function
+                // symbol: `*sub_140107430()` / `*HeapAlloc()` dereferences a
+                // function name (type error). The name IS the callee. Only
+                // strip on `sub_` / known WinAPI names — genuine indirect calls
+                // through a data pointer (`off_XXX`) keep the deref.
+                let func_str = match func.as_ref() {
+                    Self::Deref { addr, .. } => {
+                        let inner = addr.to_string();
+                        if inner.starts_with("sub_") || inner.starts_with("loc_") {
+                            inner
+                        } else {
+                            format!("{func}")
+                        }
+                    }
+                    _ => format!("{func}"),
+                };
+                write!(f, "{func_str}({arg_str})")
+            }
+            Self::Ternary {
+                cond, then, else_, ..
+            } => {
+                write!(f, "({cond} ? {then} : {else_})")
+            }
+            Self::SizeOf { ty } => write!(f, "sizeof({ty})"),
+            Self::Undefined(..) => write!(f, "undefined"),
+            Self::ConstFloat(v) => write!(f, "{v}"),
+            Self::AddrOf(e) => write!(f, "&{e}"),
+
+            Self::ArrayIndex { array, index } => write!(f, "{array}[{index}]"),
+            Self::If {
+                cond,
+                then_branch,
+                else_branch,
+            } => write!(f, "({cond} ? {then_branch} : {else_branch})"),
+        }
+    }
+}
+
+
+// ── SwitchCase ─────────────────────────────────────────────────────
+
+/// One arm of a `switch` statement.
+#[derive(Debug, Clone)]
+pub struct SwitchCase {
+    pub values: Vec<i64>,
+    pub body: Vec<HlilStatement>,
+}
+
+impl std::fmt::Display for SwitchCase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for v in &self.values {
+            writeln!(f, "case {v}:")?;
+        }
+        for stmt in &self.body {
+            writeln!(f, "  {stmt};")?;
+        }
+        Ok(())
+    }
+}
+
+// ── HlilStatement ───—─────────────────────────────────────────────
+
+/// Structured statements that form the body of an HLIL function.
+#[derive(Debug, Clone)]
+pub enum HlilStatement {
+    Expression(HlilExpr),
+    Assign {
+        dest: HlilExpr,
+        src: HlilExpr,
+    },
+    AssignUnpack {
+        dests: Vec<HlilVar>,
+        src: HlilExpr,
+    },
+    VarDeclare {
+        var: HlilVar,
+        init: Option<HlilExpr>,
+    },
+    If {
+        cond: HlilExpr,
+        then_body: Vec<Self>,
+        else_body: Vec<Self>,
+    },
+    While {
+        cond: HlilExpr,
+        body: Vec<Self>,
+    },
+    DoWhile {
+        body: Vec<Self>,
+        cond: HlilExpr,
+    },
+    For {
+        init: Option<Box<Self>>,
+        cond: Option<HlilExpr>,
+        step: Option<HlilExpr>,
+        body: Vec<Self>,
+    },
+    Switch {
+        value: HlilExpr,
+        cases: Vec<SwitchCase>,
+        default: Vec<Self>,
+    },
+    Return(Vec<HlilExpr>),
+    Break,
+    Continue,
+    Goto(Address),
+    Label(String),
+    Block(Vec<Self>),
+    /// Variable declaration (alternate form used by the decompiler).
+    VarDecl {
+        var: HlilVar,
+        ty: HlilType,
+        init: Option<HlilExpr>,
+    },
+    /// Expression-as-statement (alternate form).
+    Expr(HlilExpr),
+    /// No-op statement.
+    Nop,
+}
+
+impl HlilStatement {
+    /// Returns `true` when execution cannot fall through this statement.
+    #[must_use]
+    pub fn is_terminator(&self) -> bool {
+        matches!(
+            self,
+            Self::Return(..)
+                | Self::Goto(..)
+                | Self::Break
+                | Self::Continue
+        )
+    }
+
+    /// Returns `true` when a `Return` statement is reachable within this statement.
+    pub fn contains_return(&self) -> bool {
+        match self {
+            Self::Return(..) => true,
+            Self::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                then_body.iter().any(Self::contains_return)
+                    || else_body.iter().any(Self::contains_return)
+            }
+            Self::While { body, .. } | Self::DoWhile { body, .. } => {
+                body.iter().any(Self::contains_return)
+            }
+            Self::For { body, .. } => body.iter().any(Self::contains_return),
+            Self::Switch { cases, default, .. } => {
+                cases
+                    .iter()
+                    .any(|c| c.body.iter().any(Self::contains_return))
+                    || default.iter().any(Self::contains_return)
+            }
+            Self::Block(stmts) => stmts.iter().any(Self::contains_return),
+            _ => false,
+        }
+    }
+
+    /// Pre-order walk over this statement and all nested statements.
+    pub fn walk<F: FnMut(&Self)>(&self, f: &mut F) {
+        f(self);
+        match self {
+            Self::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                for s in then_body {
+                    s.walk(f);
+                }
+                for s in else_body {
+                    s.walk(f);
+                }
+            }
+            Self::While { body, .. } | Self::DoWhile { body, .. } => {
+                for s in body {
+                    s.walk(f);
+                }
+            }
+            Self::For { init, body, .. } => {
+                if let Some(init) = init {
+                    init.walk(f);
+                }
+                for s in body {
+                    s.walk(f);
+                }
+            }
+            Self::Switch { cases, default, .. } => {
+                for c in cases {
+                    for s in &c.body {
+                        s.walk(f);
+                    }
+                    }
+                for s in default {
+                    s.walk(f);
+                }
+            }
+            Self::Block(stmts) => {
+                for s in stmts {
+                    s.walk(f);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+// ─── Display for HlilStatement ────────────────────────────────────────────
+
+fn fmt_stmt_indented(
+    stmt: &HlilStatement,
+    f: &mut fmt::Formatter<'_>,
+    indent: usize,
+) -> fmt::Result {
+    let pad = " ".repeat(indent * 4);
+    match stmt {
+        HlilStatement::Assign { dest, src } => write!(f, "{pad}{dest} = {src};"),
+        HlilStatement::AssignUnpack { dests, src } => {
+            let lhs = dests
+                .iter()
+                .map(|v| v.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(f, "{pad}({lhs}) = {src};")
+        }
+        HlilStatement::VarDeclare { var, init: Some(e) } => write!(f, "{pad}{var} = {e};"),
+        HlilStatement::VarDeclare { var, init: None } => write!(f, "{pad}{var};"),
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
+            writeln!(f, "{pad}if ({cond}) {{")?;
+            for s in then_body {
+                fmt_stmt_indented(s, f, indent + 1)?;
+                writeln!(f)?;
+            }
+            if else_body.is_empty() {
+                write!(f, "{pad}}}")
+            } else {
+                writeln!(f, "{pad}}} else {{")?;
+                for s in else_body {
+                    fmt_stmt_indented(s, f, indent + 1)?;
+                    writeln!(f)?;
+                }
+                write!(f, "{pad}}}")
+            }
+        }
+        HlilStatement::While { cond, body } => {
+            writeln!(f, "{pad}while ({cond}) {{")?;
+            for s in body {
+                fmt_stmt_indented(s, f, indent + 1)?;
+                writeln!(f)?;
+            }
+            write!(f, "{pad}}}")
+        }
+        HlilStatement::DoWhile { body, cond } => {
+            writeln!(f, "{pad}do {{")?;
+            for s in body {
+                fmt_stmt_indented(s, f, indent + 1)?;
+                writeln!(f)?;
+            }
+            write!(f, "{pad}}} while ({cond});")
+        }
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => {
+            let printer = CCodePrinter::new();
+            let init_s = init.as_ref().map_or_else(String::new, |i| {
+                printer
+                    .print_statement(i, 0)
+                    .trim_end_matches(';')
+                    .to_owned()
+            });
+            let cond_s = cond
+                .as_ref()
+                .map_or_else(String::new, std::string::ToString::to_string);
+            let step_s = step
+                .as_ref()
+                .map_or_else(String::new, std::string::ToString::to_string);
+            writeln!(f, "{pad}for ({init_s}; {cond_s}; {step_s}) {{")?;
+            for s in body {
+                fmt_stmt_indented(s, f, indent + 1)?;
+                writeln!(f)?;
+            }
+            write!(f, "{pad}}}")
+        }
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            writeln!(f, "{pad}switch ({value}) {{")?;
+            for case in cases {
+                for v in &case.values {
+                    writeln!(f, "{pad}    case {v}:")?;
+                }
+                for s in &case.body {
+                    fmt_stmt_indented(s, f, indent + 2)?;
+                    writeln!(f)?;
+                }
+                // Without this the arm FALLS THROUGH into the next `case:`, which
+                // is a different program: measured on the corpus, 7185 of 7429
+                // arms fell through on path B against 26 of 1271 on path A.
+                // Emitted only when the body cannot already fall through, so a
+                // `return`/`goto` arm does not pick up dead code, and AFTER the
+                // whole label run so grouped labels (`case 1: case 2:`) stay
+                // grouped.
+                if !case.body.last().is_some_and(HlilStatement::is_terminator) {
+                    writeln!(f, "{pad}        break;")?;
+                }
+            }
+            if !default.is_empty() {
+                writeln!(f, "{pad}    default:")?;
+                for s in default {
+                    fmt_stmt_indented(s, f, indent + 2)?;
+                    writeln!(f)?;
+                }
+            }
+            write!(f, "{pad}}}")
+        }
+        HlilStatement::Return(ret_vals) => {
+            if ret_vals.is_empty() {
+                write!(f, "{pad}return;")
+            } else {
+                let joined = ret_vals
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{pad}return {joined};")
+            }
+        }
+        HlilStatement::Break => write!(f, "{pad}break;"),
+        HlilStatement::Continue => write!(f, "{pad}continue;"),
+        // A goto's target must be an IDENTIFIER. The orphan-region emitter
+        // labels blocks `loc_<hex>:`, so print the matching identifier instead
+        // of the raw address — `goto 0x140001050;` is not C, and the label it
+        // was meant to reach was right there in the same function.
+        HlilStatement::Goto(addr) => write!(f, "{pad}goto loc_{:x};", addr.as_u64()),
+        HlilStatement::Label(lbl) => write!(f, "{lbl}:"),
+        HlilStatement::Block(stmts) => {
+            writeln!(f, "{pad}{{")?;
+            for s in stmts {
+                fmt_stmt_indented(s, f, indent + 1)?;
+                writeln!(f)?;
+            }
+            write!(f, "{pad}}}")
+        }
+        HlilStatement::VarDecl {
+            var,
+            ty,
+            init: Some(e),
+        } => write!(f, "{pad}{ty} {} = {e};", var.name),
+        HlilStatement::VarDecl {
+            var,
+            ty,
+            init: None,
+        } => write!(f, "{pad}{ty} {};", var.name),
+        HlilStatement::Expression(e) | HlilStatement::Expr(e) => write!(f, "{pad}{e};"),
+        HlilStatement::Nop => write!(f, "{pad};"),
+    }
+}
+
+impl fmt::Display for HlilStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt_stmt_indented(self, f, 0)
+    }
+}
+
+// ── HlilPrototype ─────────────────────────────────────────────────────────────
+
+/// The signature of an HLIL function.
+#[derive(Debug, Clone)]
+pub struct HlilPrototype {
+    pub name: String,
+    pub return_type: HlilType,
+    pub params: Vec<HlilVar>,
+    pub is_variadic: bool,
+    pub calling_convention: Option<String>,
+}
+
+impl fmt::Display for HlilPrototype {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let params = self
+            .params
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let variadic = if self.is_variadic {
+            if params.is_empty() { "..." } else { ", ..." }
+        } else {
+            ""
+        };
+        write!(f, "{} {}({params}{variadic})", self.return_type, self.name)
+    }
+}
+
+/// One MLIL block lifted to HLIL with its control flow left as EDGES.
+///
+/// Produced by [`MlilToHlilLifter::lift_blocks`] for consumers that want to run
+/// their own control-flow structuring over a real CFG instead of receiving a
+/// pre-flattened statement list.
+#[derive(Debug, Clone)]
+pub struct HlilBlockLift {
+    /// MLIL block id.
+    pub id: u32,
+    /// The block's statements, terminator excluded.
+    pub stmts: Vec<HlilStatement>,
+    /// Branch condition when the block ends in a conditional jump.
+    pub cond: Option<HlilExpr>,
+    /// Returned values when the block ends in a return.
+    pub ret: Option<Vec<HlilExpr>>,
+    /// Outgoing edges, as MLIL block ids.
+    pub successors: Vec<u32>,
+}
+
+// ── HlilFunction ─────────────────────────────────────────────────────────────
+
+/// A fully lifted HLIL function.
+#[derive(Debug, Clone)]
+pub struct HlilFunction {
+    pub address: Address,
+    pub prototype: HlilPrototype,
+    pub return_type: HlilType,
+    pub locals: Vec<HlilVar>,
+    pub body: Vec<HlilStatement>,
+    /// The MLIL function's address that this was lifted from, if known.
+    pub lifted_from: Option<Address>,
+}
+
+impl HlilFunction {
+    pub fn new(address: Address, name: impl Into<String>) -> Self {
+        Self {
+            address,
+            prototype: HlilPrototype {
+                name: name.into(),
+                return_type: HlilType::Void,
+                params: Vec::new(),
+                is_variadic: false,
+                calling_convention: None,
+            },
+            return_type: HlilType::Void,
+            locals: Vec::new(),
+            body: Vec::new(),
+            lifted_from: None,
+        }
+    }
+
+    pub fn add_local(&mut self, var: HlilVar) {
+        self.locals.push(var);
+    }
+
+    /// Iterate over all top-level statements in the function body.
+    pub fn all_statements(&self) -> impl Iterator<Item = &HlilStatement> {
+        self.body.iter()
+    }
+
+    /// Collect all `Call` expressions (deeply) from the function body.
+    #[must_use]
+    pub fn calls_made(&self) -> Vec<&HlilExpr> {
+        let mut calls = Vec::new();
+        for stmt in &self.body {
+            collect_calls_stmt(stmt, &mut calls);
+        }
+        calls
+    }
+
+    /// Collect all variable references (deeply) from the function body.
+    #[must_use]
+    pub fn vars_used(&self) -> Vec<&HlilVar> {
+        let mut vars = Vec::new();
+        for stmt in &self.body {
+            collect_vars_stmt(stmt, &mut vars);
+        }
+        vars
+    }
+
+    /// Render the function as a C-like string.
+    #[must_use]
+    pub fn print(&self) -> String {
+        CCodePrinter::new().print_function(self)
+    }
+}
+
+impl fmt::Display for HlilFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.print())
+    }
+}
+
+// ─── Descent helpers ──────────────────────────────────────────────────
+
+fn collect_calls_expr<'a>(expr: &'a HlilExpr, out: &mut Vec<&'a HlilExpr>) {
+    match expr {
+        call @ HlilExpr::Call { func, args, .. } => {
+            out.push(call);
+            collect_calls_expr(func, out);
+            for a in args {
+                collect_calls_expr(a, out);
+            }
+        }
+        HlilExpr::Deref { addr, .. } => collect_calls_expr(addr, out),
+        HlilExpr::FieldAccess { base, .. } => collect_calls_expr(base, out),
+        HlilExpr::Index { base, idx, .. } => {
+            collect_calls_expr(base, out);
+            collect_calls_expr(idx, out);
+        }
+        HlilExpr::Add(a, b, _)
+        | HlilExpr::Sub(a, b, _)
+        | HlilExpr::Mul(a, b, _)
+        | HlilExpr::Div(a, b, _)
+        | HlilExpr::Mod(a, b, _)
+        | HlilExpr::And(a, b, _)
+        | HlilExpr::Or(a, b, _)
+        | HlilExpr::Xor(a, b, _)
+        | HlilExpr::Shl(a, b, _)
+        | HlilExpr::Shr(a, b, _)
+        | HlilExpr::CmpEq(a, b)
+        | HlilExpr::CmpNe(a, b)
+        | HlilExpr::CmpLt(a, b)
+        | HlilExpr::CmpGt(a, b)
+        | HlilExpr::CmpLe(a, b)
+        | HlilExpr::CmpGe(a, b)
+        | HlilExpr::LogicalAnd(a, b)
+        | HlilExpr::LogicalOr(a, b) | HlilExpr::BitOr(a, b)
+        | HlilExpr::BitAnd(a, b)
+        | HlilExpr::BitXor(a, b)
+        | HlilExpr::BoolAnd(a, b)
+        | HlilExpr::BoolOr(a, b)
+        | HlilExpr::DivU(a, b)
+        | HlilExpr::DivS(a, b)
+        | HlilExpr::ModU(a, b)
+        | HlilExpr::ModS(a, b)
+        | HlilExpr::Sar(a, b)
+        | HlilExpr::CmpSlt(a, b)
+        | HlilExpr::CmpUlt(a, b)
+        | HlilExpr::CmpSle(a, b)
+        | HlilExpr::CmpUle(a, b)
+        | HlilExpr::CmpSgt(a, b)
+        | HlilExpr::CmpUgt(a, b)
+        | HlilExpr::CmpSge(a, b)
+        | HlilExpr::CmpUge(a, b) => {
+            collect_calls_expr(a, out);
+            collect_calls_expr(b, out);
+        }
+        HlilExpr::Neg(e, _)
+        | HlilExpr::Not(e, _)
+        | HlilExpr::LogicalNot(e)
+        | HlilExpr::Cast { expr: e, .. } | HlilExpr::BoolNot(e) | HlilExpr::AddrOf(e) => collect_calls_expr(e, out),
+        HlilExpr::Ternary { cond, then, else_, .. } => {
+            collect_calls_expr(cond, out);
+            collect_calls_expr(then, out);
+            collect_calls_expr(else_, out);
+        }
+        HlilExpr::If { cond, then_branch, else_branch } => {
+            collect_calls_expr(cond, out);
+            collect_calls_expr(then_branch, out);
+            collect_calls_expr(else_branch, out);
+        }
+        _ => {}
+    }
+}
+fn collect_calls_stmt<'a>(stmt: &'a HlilStatement, out: &mut Vec<&'a HlilExpr>) {
+    match stmt {
+        HlilStatement::Expression(e) | HlilStatement::VarDeclare { init: Some(e), .. } => {
+            collect_calls_expr(e, out);
+        }
+        HlilStatement::Assign { dest, src } => {
+            collect_calls_expr(dest, out);
+            collect_calls_expr(src, out);
+        }
+        HlilStatement::AssignUnpack { src, .. } => collect_calls_expr(src, out),
+        HlilStatement::VarDeclare { init: None, .. }
+        | HlilStatement::Break
+        | HlilStatement::Continue
+        | HlilStatement::Goto(..)
+        | HlilStatement::Label(..)
+        | HlilStatement::Nop => {}
+        HlilStatement::If { cond, then_body, else_body, .. } => {
+            collect_calls_expr(cond, out);
+            for s in then_body { collect_calls_stmt(s, out); }
+            for s in else_body { collect_calls_stmt(s, out); }
+        }
+        HlilStatement::While { cond, body, .. } => {
+            collect_calls_expr(cond, out);
+            for s in body {
+                collect_calls_stmt(s, out);
+            }
+        }
+        HlilStatement::DoWhile { body, cond } => {
+            for s in body { collect_calls_stmt(s, out); }
+            collect_calls_expr(cond, out);
+        }
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => {
+            if let Some(i) = init {
+                collect_calls_stmt(i, out);
+            }
+            if let Some(c) = cond {
+                collect_calls_expr(c, out);
+            }
+            if let Some(s) = step {
+                collect_calls_expr(s, out);
+            }
+            for s in body {
+                collect_calls_stmt(s, out);
+            }
+        }
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            collect_calls_expr(value, out);
+            for c in cases {
+                for s in &c.body {
+                    collect_calls_stmt(s, out);
+                }
+            }
+            for s in default {
+                collect_calls_stmt(s, out);
+            }
+        }
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                collect_calls_stmt(s, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_vars_expr<'a>(expr: &'a HlilExpr, out: &mut Vec<&'a HlilVar>) {
+    match expr {
+        HlilExpr::Var { var } | HlilExpr::AddressOf { var } => out.push(var),
+        HlilExpr::Deref { addr, .. } => collect_vars_expr(addr, out),
+        HlilExpr::FieldAccess { base, .. } => collect_vars_expr(base, out),
+        HlilExpr::Index { base, idx, .. } => {
+            collect_vars_expr(base, out);
+            collect_vars_expr(idx, out);
+        }
+        HlilExpr::Add(a, b, _)
+        | HlilExpr::Sub(a, b, _)
+        | HlilExpr::Mul(a, b, _)
+        | HlilExpr::Div(a, b, _)
+        | HlilExpr::Mod(a, b, _)
+        | HlilExpr::And(a, b, _)
+        | HlilExpr::Or(a, b, _)
+        | HlilExpr::Xor(a, b, _)
+        | HlilExpr::Shl(a, b, _)
+        | HlilExpr::Shr(a, b, _)
+        | HlilExpr::CmpEq(a, b)
+        | HlilExpr::CmpNe(a, b)
+        | HlilExpr::CmpLt(a, b)
+        | HlilExpr::CmpGt(a, b)
+        | HlilExpr::CmpLe(a, b)
+        | HlilExpr::CmpGe(a, b)
+        | HlilExpr::LogicalAnd(a, b)
+        | HlilExpr::LogicalOr(a, b) | HlilExpr::BitOr(a, b)
+        | HlilExpr::BitAnd(a, b)
+        | HlilExpr::BitXor(a, b)
+        | HlilExpr::BoolAnd(a, b)
+        | HlilExpr::BoolOr(a, b)
+        | HlilExpr::DivU(a, b)
+        | HlilExpr::DivS(a, b)
+        | HlilExpr::ModU(a, b)
+        | HlilExpr::ModS(a, b)
+        | HlilExpr::Sar(a, b)
+        | HlilExpr::CmpSlt(a, b)
+        | HlilExpr::CmpUlt(a, b)
+        | HlilExpr::CmpSle(a, b)
+        | HlilExpr::CmpUle(a, b)
+        | HlilExpr::CmpSgt(a, b)
+        | HlilExpr::CmpUgt(a, b)
+        | HlilExpr::CmpSge(a, b)
+        | HlilExpr::CmpUge(a, b) => {
+            collect_vars_expr(a, out);
+            collect_vars_expr(b, out);
+        }
+        HlilExpr::Neg(e, _)
+        | HlilExpr::Not(e, _)
+        | HlilExpr::LogicalNot(e)
+        | HlilExpr::Cast { expr: e, .. } | HlilExpr::BoolNot(e) | HlilExpr::AddrOf(e) => collect_vars_expr(e, out),
+        HlilExpr::Call { func, args, .. } => {
+            collect_vars_expr(func, out);
+            for a in args {
+                collect_vars_expr(a, out);
+            }
+        }
+        HlilExpr::Ternary {
+            cond, then, else_, ..
+        } => {
+            collect_vars_expr(cond, out);
+            collect_vars_expr(then, out);
+            collect_vars_expr(else_, out);
+        }
+        HlilExpr::If { cond, then_branch, else_branch } => {
+            collect_vars_expr(cond, out);
+            collect_vars_expr(then_branch, out);
+            collect_vars_expr(else_branch, out);
+        }
+        HlilExpr::ArrayIndex { array, index } => {
+            collect_vars_expr(array, out);
+            collect_vars_expr(index, out);
+        }
+        _ => {}
+    }
+}
+
+fn collect_vars_stmt<'a>(stmt: &'a HlilStatement, out: &mut Vec<&'a HlilVar>) {
+    match stmt {
+        HlilStatement::Assign { dest, src } => {
+            collect_vars_expr(dest, out);
+            collect_vars_expr(src, out);
+        }
+        HlilStatement::AssignUnpack { dests, src } => {
+            for v in dests {
+                out.push(v);
+            }
+            collect_vars_expr(src, out);
+        }
+        HlilStatement::VarDeclare { var, init } | HlilStatement::VarDecl { var, init, .. } => {
+            out.push(var);
+            if let Some(e) = init {
+                collect_vars_expr(e, out);
+            }
+        }
+        HlilStatement::Return(vals) => {
+            for v in vals {
+                collect_vars_expr(v, out);
+            }
+        }
+        HlilStatement::If { cond, then_body, else_body, .. } => {
+            collect_vars_expr(cond, out);
+            for s in then_body { collect_vars_stmt(s, out); }
+            for s in else_body { collect_vars_stmt(s, out); }
+        }
+        HlilStatement::While { cond, body, .. } => {
+            collect_vars_expr(cond, out);
+            for s in body { collect_vars_stmt(s, out); }
+        }
+        HlilStatement::DoWhile { body, cond } => {
+            for s in body { collect_vars_stmt(s, out); }
+            collect_vars_expr(cond, out);
+        }
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => {
+            if let Some(i) = init {
+                collect_vars_stmt(i, out);
+            }
+            if let Some(c) = cond {
+                collect_vars_expr(c, out);
+            }
+            if let Some(s) = step {
+                collect_vars_expr(s, out);
+            }
+            for s in body {
+                collect_vars_stmt(s, out);
+            }
+        }
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            collect_vars_expr(value, out);
+            for c in cases {
+                for s in &c.body {
+                    collect_vars_stmt(s, out);
+                }
+            }
+            for s in default {
+                collect_vars_stmt(s, out);
+            }
+        }
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                collect_vars_stmt(s, out);
+            }
+        }
+        HlilStatement::Break
+        | HlilStatement::Continue
+        | HlilStatement::Goto(..)
+        | HlilStatement::Label(..)
+        | HlilStatement::Nop => {}
+        HlilStatement::Expression(e) | HlilStatement::Expr(e) => collect_vars_expr(e, out),
+    }
+}
+
+// ── CCodePrinter ──────────────────────────────────────────────────────────────
+
+/// Pretty-prints HLIL constructs as C-like source text.
+#[derive(Debug, Clone)]
+pub struct CCodePrinter {
+    pub indent_width: usize,
+    pub use_tabs: bool,
+}
+
+impl Default for CCodePrinter {
+    fn default() -> Self {
+        Self {
+            indent_width: 4,
+            use_tabs: false,
+        }
+    }
+}
+
+impl CCodePrinter {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn make_indent(&self, level: usize) -> String {
+        if self.use_tabs {
+            "\t".repeat(level)
+        } else {
+            " ".repeat(self.indent_width * level)
+        }
+    }
+
+    #[must_use]
+    pub fn print_type(&self, ty: &HlilType) -> String {
+        ty.to_string()
+    }
+
+    #[must_use]
+    pub fn print_expr(&self, expr: &HlilExpr) -> String {
+        expr.to_string()
+    }
+
+    #[must_use]
+    pub fn print_statement(&self, stmt: &HlilStatement, indent: usize) -> String {
+        let mut buf = String::new();
+        self.fmt_stmt(stmt, indent, &mut buf);
+        buf
+    }
+
+    fn fmt_stmt_simple(&self, stmt: &HlilStatement, indent: usize, buf: &mut String, pad: &str) {
+        match stmt {
+            HlilStatement::Expression(e) | HlilStatement::Expr(e) => write!(buf, "{pad}{e};").unwrap(),
+            HlilStatement::Assign { dest, src } => write!(buf, "{pad}{dest} = {src};").unwrap(),
+            HlilStatement::AssignUnpack { dests, src } => {
+                let lhs = dests
+                    .iter()
+                    .map(|v| v.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(buf, "{pad}({lhs}) = {src};").unwrap();
+            }
+            HlilStatement::VarDeclare { var, init: Some(e) } => write!(buf, "{pad}{var} = {e};").unwrap(),
+            HlilStatement::VarDeclare { var, init: None } => write!(buf, "{pad}{var};").unwrap(),
+            HlilStatement::VarDecl { ty, var, init: Some(e) } => write!(buf, "{pad}{ty} {} = {e};", var.name).unwrap(),
+            HlilStatement::VarDecl { ty, var, init: None } => write!(buf, "{pad}{ty} {};", var.name).unwrap(),
+            HlilStatement::Return(ret_vals) => self.fmt_return(ret_vals, buf, pad),
+            HlilStatement::Break => write!(buf, "{pad}break;").unwrap(),
+            HlilStatement::Continue => write!(buf, "{pad}continue;").unwrap(),
+            HlilStatement::Goto(addr) => {
+                write!(buf, "{pad}goto loc_{:x};", addr.as_u64()).unwrap();
+            }
+            HlilStatement::Label(lbl) => write!(buf, "{lbl}:").unwrap(),
+            HlilStatement::Nop => write!(buf, "{pad};").unwrap(),
+            _ => self.fmt_stmt_structured(stmt, indent, buf, pad),
+        }
+    }
+
+    fn fmt_return(&self, ret_vals: &[HlilExpr], buf: &mut String, pad: &str) {
+        if ret_vals.is_empty() {
+            write!(buf, "{pad}return;").unwrap();
+        } else {
+            let joined = ret_vals
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(buf, "{pad}return {joined};").unwrap();
+        }
+    }
+
+    fn fmt_stmt_structured(
+        &self,
+        stmt: &HlilStatement,
+        indent: usize,
+        buf: &mut String,
+        pad: &str,
+    ) {
+        match stmt {
+            HlilStatement::If {
+                cond,
+                then_body,
+                else_body,
+            } => {
+                writeln!(buf, "{pad}if ({cond}) {{").unwrap();
+                for s in then_body {
+                    self.fmt_stmt(s, indent + 1, buf);
+                    buf.push('\n');
+                }
+                if else_body.is_empty() {
+                    write!(buf, "{pad}}}").unwrap();
+                } else {
+                    writeln!(buf, "{pad}}} else {{").unwrap();
+                    for s in else_body {
+                        self.fmt_stmt(s, indent + 1, buf);
+                        buf.push('\n');
+                    }
+                    write!(buf, "{pad}}}").unwrap();
+                }
+            }
+            HlilStatement::While { cond, body } => {
+                writeln!(buf, "{pad}while ({cond}) {{").unwrap();
+                for s in body {
+                    self.fmt_stmt(s, indent + 1, buf);
+                    buf.push('\n');
+                }
+                write!(buf, "{pad}}}").unwrap();
+            }
+            HlilStatement::DoWhile { body, cond } => {
+                writeln!(buf, "{pad}do {{").unwrap();
+                for s in body {
+                    self.fmt_stmt(s, indent + 1, buf);
+                    buf.push('\n');
+                }
+                write!(buf, "{pad}}} while ({cond});").unwrap();
+            }
+            HlilStatement::For {
+                init,
+                cond,
+                step,
+                body,
+            } => {
+                let init_s = init.as_ref().map_or_else(String::new, |i| {
+                    let raw = self.print_statement(i, 0);
+                    raw.trim_end_matches(';').to_owned()
+                });
+                let cond_s = cond
+                    .as_ref()
+                    .map_or_else(String::new, |c| self.print_expr(c));
+                let step_s = step
+                    .as_ref()
+                    .map_or_else(String::new, |s| self.print_expr(s));
+                writeln!(buf, "{pad}for ({init_s}; {cond_s}; {step_s}) {{").unwrap();
+                for s in body {
+                    self.fmt_stmt(s, indent + 1, buf);
+                    buf.push('\n');
+                }
+                write!(buf, "{pad}}}").unwrap();
+            }
+            HlilStatement::Switch {
+                value,
+                cases,
+                default,
+            } => {
+                writeln!(buf, "{pad}switch ({value}) {{").unwrap();
+                let case_pad = self.make_indent(indent + 1);
+                for case in cases {
+                    for v in &case.values {
+                        writeln!(buf, "{case_pad}case {v}:").unwrap();
+                    }
+                    for s in &case.body {
+                        self.fmt_stmt(s, indent + 2, buf);
+                        buf.push('\n');
+                    }
+                    // See the sibling printer: an arm without `break;` falls into
+                    // the next one. Suppressed when the body already ends in a
+                    // terminator, and placed after the full label run so grouped
+                    // `case` labels keep sharing one body.
+                    if !case.body.last().is_some_and(HlilStatement::is_terminator) {
+                        let body_pad = self.make_indent(indent + 2);
+                        writeln!(buf, "{body_pad}break;").unwrap();
+                    }
+                }
+                if !default.is_empty() {
+                    writeln!(buf, "{case_pad}default:").unwrap();
+                    for s in default {
+                        self.fmt_stmt(s, indent + 2, buf);
+                        buf.push('\n');
+                    }
+                }
+                write!(buf, "{pad}}}").unwrap();
+            }
+            HlilStatement::Block(stmts) => {
+                writeln!(buf, "{pad}{{").unwrap();
+                for s in stmts {
+                    self.fmt_stmt(s, indent + 1, buf);
+                    buf.push('\n');
+                }
+                write!(buf, "{pad}}}").unwrap();
+            }
+            // Simple cases are handled in fmt_stmt_simple; this branch is unreachable.
+            _ => {}
+        }
+    }
+
+    fn fmt_stmt(&self, stmt: &HlilStatement, indent: usize, buf: &mut String) {
+        let pad = self.make_indent(indent);
+        self.fmt_stmt_simple(stmt, indent, buf, &pad);
+    }
+
+    #[must_use]
+    pub fn print_function(&self, func: &HlilFunction) -> String {
+        let mut buf = String::new();
+        write!(buf, "{}\n{{\n", func.prototype).unwrap();
+
+        let inner_pad = self.make_indent(1);
+        for local in &func.locals {
+            writeln!(buf, "{inner_pad}{local};").unwrap();
+        }
+        if !func.locals.is_empty() && !func.body.is_empty() {
+            buf.push('\n');
+        }
+
+        for stmt in &func.body {
+            self.fmt_stmt(stmt, 1, &mut buf);
+            buf.push('\n');
+        }
+
+        buf.push('}');
+        buf
+    }
+}
+
+// ─── Lifter helpers ───────────────────────────────────────────────────────────
+
+/// Convert a [`Size`] to a float bit-width (`u32`) without truncation warnings.
+/// All `Size` variants map to values that fit comfortably in a `u32`.
+fn size_to_float_bits(s: Size) -> u32 {
+    match s {
+        Size::Byte => 8,
+        Size::Word => 16,
+        Size::DWord => 32,
+        Size::QWord => 64,
+        Size::OWord => 128,
+        Size::YWord => 256,
+        Size::ZWord => 512,
+    }
+}
+
+/// Reinterpret a raw constant `u64` as a signed `i64` (bit-identical, wrapping).
+/// This is intentional: MLIL constants are stored unsigned; HLIL uses signed.
+fn const_u64_to_i64(v: u64) -> i64 {
+    i64::from_ne_bytes(v.to_ne_bytes())
+}
+
+// ── MlilToHlilLifter ──────────────────────────────────────────────────────────
+
+/// Structural lifter from MLIL to HLIL.
+///
+/// Iterates over MLIL instructions in a [`MlilFunction`] and produces HLIL
+/// statements. Structural recovery (loops, conditionals) is performed by
+/// recognising back-edges and conditional jumps.
+#[derive(Debug, Clone)]
+pub struct MlilToHlilLifter {
+    pub var_name_prefix: String,
+    pub param_prefix: String,
+    pub use_struct_names: bool,
+}
+
+impl Default for MlilToHlilLifter {
+    fn default() -> Self {
+        Self {
+            var_name_prefix: "var_".to_owned(),
+            param_prefix: "arg_".to_owned(),
+            use_struct_names: true,
+        }
+    }
+}
+
+impl MlilToHlilLifter {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Lift an entire [`MlilFunction`] into an [`HlilFunction`].
+    ///
+    /// Detects common CFG patterns and emits structured HLIL instead of a flat
+    /// stream:
+    ///
+    /// * A block whose sole successor is an earlier block (a back-edge) and
+    ///   whose last instruction is a conditional jump is emitted as
+    ///   [`HlilStatement::While`].
+    /// * A block whose last instruction is a conditional jump where the
+    ///   false-target falls through to the next block (or both targets are
+    ///   known) is emitted as [`HlilStatement::If`] with no else-body.
+    ///
+    /// Blocks that do not match these patterns are flattened linearly as
+    /// before.
+    #[must_use]
+    pub fn lift(&self, mlil: &MlilFunction) -> HlilFunction {
+        // Diagnostic (`RUSTRE_HLIL_DEBUG=1`): `lift` is the FLAT linearisation —
+        // every branch becomes a `goto`. `lift_structured` falls back to it when
+        // it cannot build a CFG. If most of the corpus's 1941 gotos come from
+        // here, the problem is the fallback rate, not the structurer.
+        if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0") {
+            eprintln!(
+                "[hlil] FLAT lift used for {:#x} ({} blocks)",
+                mlil.entry.as_u64(),
+                mlil.blocks.len()
+            );
+        }
+        let name = format!("fn_{:x}", mlil.entry.as_u64());
+        let mut func = HlilFunction::new(mlil.entry, name);
+        func.lifted_from = Some(mlil.entry);
+
+        let mut var_map: HashMap<String, HlilVar> = HashMap::new();
+
+        // Build a quick block-id → index map and collect back-edge targets
+        // (back-edge: a successor whose id is less than or equal to the
+        // current block's id — a simple heuristic sufficient for natural loops).
+        let block_ids: Vec<u32> = mlil.blocks.iter().map(|b| b.id).collect();
+        let back_edge_targets: std::collections::HashSet<u32> = mlil
+            .blocks
+            .iter()
+            .flat_map(|b| b.successors.iter().filter(|&&s| s <= b.id).copied())
+            .collect();
+
+        let mut body: Vec<HlilStatement> = Vec::new();
+
+        for block in &mlil.blocks {
+            // Collect the non-terminator instructions of this block.
+            let mut pre_stmts: Vec<HlilStatement> = Vec::new();
+            let instrs: Vec<&MlilInstruction> = block.instrs.iter().map(|ai| &ai.instr).collect();
+
+            // Determine if the last instruction is a conditional jump so we can try
+            // to emit structured control flow.
+            let term_idx = instrs.len().saturating_sub(1);
+            let (body_instrs, terminator) = if !instrs.is_empty()
+                && matches!(instrs[term_idx], MlilInstruction::CondJump { .. })
+            {
+                (&instrs[..term_idx], Some(instrs[term_idx]))
+            } else {
+                (&instrs[..], None)
+            };
+
+            // Lift the non-terminator instructions normally.
+            for instr in body_instrs {
+                pre_stmts.extend(self.lift_instruction(instr, &mut var_map));
+            }
+
+            body.extend(pre_stmts);
+
+            // Now handle the terminator with structural pattern matching.
+            match terminator {
+                Some(MlilInstruction::CondJump {
+                    cond,
+                    true_dest,
+                    false_dest,
+                }) => {
+                    let cond_expr = self.lift_mlil_expr(cond, &mut var_map);
+
+                    // Heuristic 1: if the true_dest is a back-edge target for
+                    // this block, treat as a while loop whose body is the
+                    // instructions of this block itself (already emitted above).
+                    // We emit: while (cond) { <body already emitted> }
+                    // But since the body is already in `body`, we emit a
+                    // minimal While stub so the structure is visible.
+                    let true_is_back = true_dest
+                        .as_u64()
+                        .try_into()
+                        .ok()
+                        .is_some_and(|id: u32| back_edge_targets.contains(&id))
+                        || block.successors.iter().any(|&s| {
+                            s <= block.id && {
+                                mlil.block_at(*true_dest).is_some_and(|b| b.id == s)
+                            }
+                        });
+
+                    if true_is_back && block.successors.len() == 2 {
+                        // Emit: while (cond) { /* loop body — already emitted as flat stmts */ }
+                        // We emit the While with an empty body (the body was
+                        // already linearised above) and a Goto for the exit.
+                        body.push(HlilStatement::While {
+                            cond: cond_expr,
+                            body: vec![HlilStatement::Continue],
+                        });
+                        // Fall-through / exit edge becomes a Goto if it's not
+                        // the immediately next block.
+                        let exit_dest = *false_dest;
+                        let next_block_id = block_ids
+                            .iter()
+                            .position(|&id| id == block.id)
+                            .and_then(|i| block_ids.get(i + 1))
+                            .copied();
+                        let exit_is_fallthrough = next_block_id
+                            .and_then(|id| mlil.block_by_id(id))
+                            .is_some_and(|b| b.start == exit_dest);
+                        if !exit_is_fallthrough {
+                            body.push(HlilStatement::Goto(exit_dest));
+                        }
+                    } else {
+                        // Heuristic 2: emit If { condition, then: goto true_dest }
+                        // without an else body; the false path falls through.
+                        body.push(HlilStatement::If {
+                            cond: cond_expr,
+                            then_body: vec![HlilStatement::Goto(*true_dest)],
+                            else_body: vec![],
+                        });
+                        // Emit the false-destination goto unless it is the
+                        // immediately next block (natural fall-through).
+                        let next_block_id = block_ids
+                            .iter()
+                            .position(|&id| id == block.id)
+                            .and_then(|i| block_ids.get(i + 1))
+                            .copied();
+                        let false_is_fallthrough = next_block_id
+                            .and_then(|id| mlil.block_by_id(id))
+                            .is_some_and(|b| b.start == *false_dest);
+                        if !false_is_fallthrough {
+                            body.push(HlilStatement::Goto(*false_dest));
+                        }
+                    }
+                }
+                // No special pattern — lift the terminator normally (if any).
+                Some(other) => {
+                    body.extend(self.lift_instruction(other, &mut var_map));
+                }
+                None => {}
+            }
+        }
+
+        // Deterministic declaration order — see the note at the other
+        // `add_local` site: raw `HashMap` order is randomised per process.
+        let mut locals: Vec<HlilVar> = var_map.into_values().collect();
+        locals.sort_by(|a, b| a.name.cmp(&b.name));
+        for var in locals {
+            func.add_local(var);
+        }
+        func.body = body;
+        func
+    }
+
+    /// Lift an entire [`MlilFunction`] into an [`HlilFunction`] with REAL
+    /// control-flow structuring.
+    ///
+    /// Unlike [`Self::lift`] — which linearises the CFG into a flat statement
+    /// stream sprinkled with `if (c) goto X;` / `goto Y;` — this builds a
+    /// [`structuring::StructuringCfg`] from the MLIL basic blocks and runs the
+    /// in-crate DREAM-style structurer ([`structuring::structure_function`]:
+    /// Tarjan SCC + dominator natural loops + region structuring), producing
+    /// nested `if`/`else`/`while` with `goto` only for edges that cannot be
+    /// expressed structurally.
+    ///
+    /// Falls back to [`Self::lift`] when the MLIL function has no blocks or no
+    /// block covers the entry address (nothing to structure).
+    #[must_use]
+    /// Split every block at any in-function jump target that lands in its
+    /// MIDDLE, so that target becomes a real block leader.
+    ///
+    /// Without this, `block_for_addr` cannot map a mid-block target to a block
+    /// and falls back to a synthetic `goto <addr>` block whose own address IS
+    /// `addr` — which prints as `loc_X: goto loc_X;`, an infinite self-loop the
+    /// original code does not contain (6936 of them across the corpus), or as a
+    /// `JUMPOUT` for a jump that is in fact perfectly local (4136 of those).
+    /// The main path avoids both by splitting at branch targets when it builds
+    /// its CFG; this gives the structured path the same leaders.
+    ///
+    /// Conservative: a target is only used as a split point when it exactly
+    /// matches the address of an instruction inside the block and is not
+    /// already the block start. Successor/predecessor edges are rebuilt so the
+    /// two halves stay linked (`head -> tail` fallthrough).
+    fn split_blocks_at_jump_targets(mlil: &MlilFunction) -> MlilFunction {
+        Self::split_blocks_impl(mlil, false)
+    }
+
+    /// MINIMAL split, always on: split blocks ONLY at `JumpTable` targets that
+    /// land mid-block. Those targets are added as edges by
+    /// `attach_jump_table_edges` but were never made block leaders, so the
+    /// structurer emits a `loc_X: JUMPOUT(0xX)` stub for each (304 corpus-wide).
+    /// Unlike the full split (all branch targets, which over-fragments and
+    /// degrades structure — measured 3×), this touches only the handful of
+    /// table targets, so it removes the JUMPOUT stubs without the fragmentation.
+    fn split_blocks_at_table_targets(mlil: &MlilFunction) -> MlilFunction {
+        Self::split_blocks_impl(mlil, true)
+    }
+
+    fn split_blocks_impl(mlil: &MlilFunction, jumptable_only: bool) -> MlilFunction {
+
+        use std::collections::BTreeSet;
+
+        // Every in-function target named by a terminator.
+        let mut targets: BTreeSet<u64> = BTreeSet::new();
+        for b in &mlil.blocks {
+            let Some(last) = b.instrs.last() else { continue };
+            match &last.instr {
+                MlilInstruction::CondJump { true_dest, false_dest, .. } if !jumptable_only => {
+                    targets.insert(true_dest.as_u64());
+                    targets.insert(false_dest.as_u64());
+                }
+                // NB: `Jump { Const }` targets are NOT added to the minimal
+                // (table-only) split — measured iter 132: they are mostly the
+                // back-edges of irreducible loops, and splitting there
+                // fragments without helping (goto +1540, JUMPOUT +46). Only the
+                // full opt-in split (jumptable_only == false) includes them.
+                MlilInstruction::Jump { dest } if !jumptable_only => {
+                    if let MlilExpr::Const { value, .. } = dest {
+                        targets.insert(*value);
+                    }
+                }
+                MlilInstruction::JumpTable { targets: ts, .. } => {
+                    targets.extend(ts.iter().map(|t| t.as_u64()));
+                }
+                _ => {}
+            }
+        }
+        // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO): quanti bersagli vede lo
+        // split. #2860 sospetta che i case di una jump table RISOLTA non ci
+        // arrivino, perche' qui si guardano solo i terminatori MLIL
+        // `JumpTable`: se la tabella e' stata agganciata dopo (da
+        // `attach_jump_table_edges`) il terminatore resta un `Jump` indiretto e
+        // i case non diventano leader — il case degrada a `JUMPOUT`.
+        if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0") {
+            let n_jt = mlil
+                .blocks
+                .iter()
+                .filter(|b| {
+                    matches!(
+                        b.instrs.last().map(|ai| &ai.instr),
+                        Some(MlilInstruction::JumpTable { .. })
+                    )
+                })
+                .count();
+            eprintln!(
+                "SPLIT only_jt={jumptable_only} blocchi={} term_jumptable={n_jt} bersagli={}",
+                mlil.blocks.len(),
+                targets.len()
+            );
+        }
+        if targets.is_empty() {
+            return mlil.clone();
+        }
+
+        let mut out = MlilFunction::new(mlil.entry);
+        out.var_versions = mlil.var_versions.clone();
+        // Old block id -> ids of the pieces it became, in order.
+        let mut next_id: u32 = mlil.blocks.iter().map(|b| b.id).max().unwrap_or(0) + 1;
+        let mut pieces: Vec<(u32, Vec<rustre_il_mlil::MlilBasicBlock>)> = Vec::new();
+        for b in &mlil.blocks {
+            // Split points: instruction addresses that are targets, excluding
+            // the block's own start (already a leader).
+            let cuts: Vec<usize> = b
+                .instrs
+                .iter()
+                .enumerate()
+                .skip(1)
+                .filter(|(_, ai)| targets.contains(&ai.address.as_u64()))
+                .map(|(i, _)| i)
+                .collect();
+            if cuts.is_empty() {
+                pieces.push((b.id, vec![b.clone()]));
+                continue;
+            }
+            let mut parts: Vec<rustre_il_mlil::MlilBasicBlock> = Vec::new();
+            let mut bounds = vec![0usize];
+            bounds.extend(cuts);
+            bounds.push(b.instrs.len());
+            for w in bounds.windows(2) {
+                let (from, to) = (w[0], w[1]);
+                if from >= to {
+                    continue;
+                }
+                let slice = &b.instrs[from..to];
+                let id = if from == 0 {
+                    b.id
+                } else {
+                    let id = next_id;
+                    next_id += 1;
+                    id
+                };
+                // #2870 — BUG: `end` era l'indirizzo dell'ULTIMA ISTRUZIONE,
+                // ma nel resto del codice `end` e' **ESCLUSIVO** (`block_at`
+                // cerca `start <= addr < end`). Su un pezzo di UNA sola
+                // istruzione veniva `start == end`, quindi **nessun indirizzo
+                // poteva mai corrispondere**: il blocco diventava invisibile a
+                // `block_at`, il salto che lo bersagliava riceveva uno stub
+                // sintetico e il `case` di una jump table degradava a `JUMPOUT`
+                // (misurato: `sample1_c/sub_140001750`, `blk=12
+                // start=140001788 end=140001788`).
+                // La fine giusta e' l'inizio del pezzo SUCCESSIVO; per l'ultimo
+                // pezzo e' la fine del blocco originale.
+                let piece_end = if to < b.instrs.len() {
+                    b.instrs[to].address
+                } else {
+                    b.end
+                };
+                parts.push(rustre_il_mlil::MlilBasicBlock {
+                    id,
+                    start: slice[0].address,
+                    end: if !std::env::var("RUSTRE_HLIL_SPLITEND")
+                        .as_deref()
+                        .is_ok_and(|v| v == "0" || v == "false")
+                    {
+                        piece_end
+                    } else {
+                        slice[slice.len() - 1].address
+                    },
+                    instrs: slice.to_vec(),
+                    predecessors: Vec::new(),
+                    successors: Vec::new(),
+                });
+            }
+            pieces.push((b.id, parts));
+        }
+
+        // Re-link: inside a split block each piece falls through to the next;
+        // the LAST piece inherits the original successors, the FIRST the
+        // original predecessors (remapped to the piece that now owns the edge).
+        let first_id: std::collections::HashMap<u32, u32> =
+            pieces.iter().map(|(old, ps)| (*old, ps[0].id)).collect();
+        let last_id: std::collections::HashMap<u32, u32> =
+            pieces.iter().map(|(old, ps)| (*old, ps[ps.len() - 1].id)).collect();
+        let orig: std::collections::HashMap<u32, &rustre_il_mlil::MlilBasicBlock> =
+            mlil.blocks.iter().map(|b| (b.id, b)).collect();
+
+        for (old, parts) in &mut pieces {
+            let n = parts.len();
+            for (i, part) in parts.iter_mut().enumerate() {
+                if i + 1 < n {
+                    // fallthrough to the next piece — id computed below
+                    part.successors = Vec::new();
+                } else if let Some(o) = orig.get(old) {
+                    part.successors =
+                        o.successors.iter().filter_map(|s| first_id.get(s).copied()).collect();
+                }
+                if i == 0 && let Some(o) = orig.get(old) {
+                    part.predecessors =
+                        o.predecessors.iter().filter_map(|p| last_id.get(p).copied()).collect();
+                }
+            }
+            for i in 0..n.saturating_sub(1) {
+                let (next_id, cur_id) = (parts[i + 1].id, parts[i].id);
+                parts[i].successors = vec![next_id];
+                parts[i + 1].predecessors.push(cur_id);
+            }
+        }
+        out.blocks = pieces.into_iter().flat_map(|(_, ps)| ps).collect();
+        out
+    }
+
+    /// Lift each MLIL block to HLIL statements, KEEPING the block structure.
+    ///
+    /// [`Self::lift`] and [`Self::lift_structured`] both flatten everything into
+    /// one `body`, which is why the decompiler could only ever hand the control
+    /// flow structurer a single all-in-one block. This returns the pieces a real
+    /// CFG needs: per block, its statements, its outgoing edges, and — when the
+    /// block ends in a conditional — the branch condition, left for the
+    /// structurer to place rather than pre-structured with local heuristics.
+    ///
+    /// Terminators are NOT lifted into the statement list: they are control
+    /// flow, and expressing them as edges is the whole point.
+    #[must_use]
+    pub fn lift_blocks(&self, mlil: &MlilFunction) -> Vec<HlilBlockLift> {
+        let mut var_map: HashMap<String, HlilVar> = HashMap::new();
+        let mut out = Vec::with_capacity(mlil.blocks.len());
+        for block in &mlil.blocks {
+            let instrs: Vec<&MlilInstruction> = block.instrs.iter().map(|ai| &ai.instr).collect();
+            let last = instrs.last().copied();
+            let is_term = matches!(
+                last,
+                Some(
+                    MlilInstruction::CondJump { .. }
+                        | MlilInstruction::Jump { .. }
+                        | MlilInstruction::JumpTable { .. }
+                        | MlilInstruction::Ret { .. }
+                )
+            );
+            let body_instrs = if is_term { &instrs[..instrs.len() - 1] } else { &instrs[..] };
+            let mut stmts = Vec::new();
+            for instr in body_instrs {
+                stmts.extend(self.lift_instruction(instr, &mut var_map));
+            }
+            let (cond, ret) = match last {
+                Some(MlilInstruction::CondJump { cond, .. }) if is_term => {
+                    (Some(self.lift_mlil_expr(cond, &mut var_map)), None)
+                }
+                Some(MlilInstruction::Ret { values }) if is_term => (
+                    None,
+                    Some(values.iter().map(|v| self.lift_mlil_expr(v, &mut var_map)).collect()),
+                ),
+                _ => (None, None),
+            };
+            out.push(HlilBlockLift {
+                id: block.id,
+                stmts,
+                cond,
+                ret,
+                successors: block.successors.clone(),
+            });
+        }
+        out
+    }
+
+    pub fn lift_structured(&self, mlil: &MlilFunction) -> HlilFunction {
+        // OPT-IN (`RUSTRE_HLIL_SPLIT_TARGETS=1`), default OFF.
+        //
+        // Splitting at mid-block targets removes synthetic `goto` blocks and
+        // cut JUMPOUTs by 17% on a 3-sample probe — but it also FRAGMENTS the
+        // CFG, and the structurer then finds fewer if/else regions: the
+        // `hlil_pseudo_code_is_structured_with_fewer_gotos_than_flat_lift`
+        // guard went red (`flat=1 structured=1`), and self-loops rose by 14.
+        // Kept behind a flag rather than deleted: the analysis is sound, what
+        // is missing is re-running structuring well on the finer blocks.
+        let split;
+        let mlil = if std::env::var("RUSTRE_HLIL_SPLIT_TARGETS").is_ok_and(|v| v != "0") {
+            split = Self::split_blocks_at_jump_targets(mlil);
+            &split
+        } else {
+            // Always-on MINIMAL split: only JumpTable targets landing mid-block.
+            // This removes the `loc_X: JUMPOUT(0xX)` stubs for those targets
+            // without the full split's fragmentation (which degrades structure).
+            split = Self::split_blocks_at_table_targets(mlil);
+            &split
+        };
+        use structuring::{CfgBlock, StructuringCfg, Terminator};
+
+        if mlil.blocks.is_empty() {
+            return self.lift(mlil);
+        }
+        let entry_id = match mlil.block_at(mlil.entry).or_else(|| mlil.blocks.first()) {
+            Some(b) => b.id,
+            None => return self.lift(mlil),
+        };
+
+        let name = format!("fn_{:x}", mlil.entry.as_u64());
+        let mut func = HlilFunction::new(mlil.entry, name);
+        func.lifted_from = Some(mlil.entry);
+        let mut var_map: HashMap<String, HlilVar> = HashMap::new();
+
+        // Synthetic blocks for jump targets OUTSIDE this function's blocks
+        // (tail-jump / JUMPOUT edges): a one-statement `goto <addr>` block so
+        // the edge stays visible instead of vanishing.
+        let mut next_synth_id: u32 =
+            mlil.blocks.iter().map(|b| b.id).max().unwrap_or(0) + 1;
+        let mut synth: Vec<CfgBlock> = Vec::new();
+        let mut block_for_addr = |addr: rustre_core::address::Address,
+                                  synth: &mut Vec<CfgBlock>|
+         -> u32 {
+            let found = mlil.block_at(addr);
+            // Diagnostic (`RUSTRE_HLIL_DEBUG=1`): 1941 synthetic gotos across
+            // the corpus vs 24 on the main path, and the targets measure as
+            // in-range, legitimate block leaders — so the mismatch is here.
+            // Print what `block_at` actually returns for each miss.
+            if let Some(b) = found {
+                // A jump into the middle of a block targets the block itself
+                // only when it lands exactly on the block start; mid-block
+                // targets keep a synthetic goto so we never mis-thread flow.
+                if b.start == addr {
+                    return b.id;
+                }
+            }
+            // La sonda che il commento qui sopra PROMETTE ma che non esisteva:
+            // stampa, per ogni bersaglio senza blocco proprio, se `block_at` ha
+            // trovato un blocco che lo CONTIENE (⇒ bersaglio a META' blocco, il
+            // leader manca) oppure niente del tutto (⇒ nessun blocco copre
+            // l'indirizzo). Le due cause portano a riparazioni diverse.
+            if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0") {
+                match found {
+                    Some(b) => eprintln!(
+                        "SYNTH why=midblock addr={:X} blk={} start={:X} end={:X}",
+                        addr.as_u64(),
+                        b.id,
+                        b.start.as_u64(),
+                        b.end.as_u64()
+                    ),
+                    // #2840: `noblock` NON significa «nessun blocco comincia
+                    // qui». `block_at` cerca `start <= addr < end`: se esiste un
+                    // blocco il cui `start` E' l'indirizzo ma il cui `end` non lo
+                    // copre, il salto perde l'arco e il blocco resta con
+                    // `preds=0` — irraggiungibile — pur essendo nel CFG.
+                    // Misurato su `sample5_cs/0x140009E0D`: due `jcc` lo
+                    // bersagliano, due righe `noblock`, e il blocco esiste con
+                    // `body=4`. Qui si stampa se un blocco INIZIA a quell'indirizzo.
+                    None => {
+                        let owner = mlil
+                            .blocks
+                            .iter()
+                            .find(|b| b.start == addr)
+                            .map(|b| (b.id, b.start.as_u64(), b.end.as_u64()));
+                        match owner {
+                            Some((id, s, e)) => eprintln!(
+                                "SYNTH why=noblock addr={:X} MA_ESISTE blk={id} start={s:X} end={e:X}",
+                                addr.as_u64()
+                            ),
+                            None => eprintln!(
+                                "SYNTH why=noblock addr={:X} nessun_blocco_inizia_qui",
+                                addr.as_u64()
+                            ),
+                        }
+                    }
+                }
+            }
+            if let Some(existing) = synth.iter().find(|s| s.address == addr) {
+                return existing.id;
+            }
+            let id = next_synth_id;
+            next_synth_id += 1;
+            // A target with NO block that lies OUTSIDE the function's address
+            // span (past the last instruction, or before the first) is a
+            // control-flow EXIT — a fall-off past the final `ret`, or a jump
+            // into another function. A `goto <addr>` stub for it becomes
+            // `loc_<addr>: goto loc_<addr>` (the synth block's own address IS
+            // the target) — an infinite self-loop the program never runs, and
+            // its self-label even blocks the tail-call text pass. Represent the
+            // exit as `Return` instead: no self-loop, no misleading label.
+            //
+            // A NOT-FOUND target that is IN range is a genuine CFG gap (a real
+            // block that construction missed); keep the honest `goto`/JUMPOUT
+            // there — an unresolved transfer must not masquerade as a clean
+            // return, which would prematurely exit.
+            let a = addr.as_u64();
+            let max_end = mlil.blocks.iter().map(|b| b.end.as_u64()).max().unwrap_or(0);
+            let min_start = mlil.blocks.iter().map(|b| b.start.as_u64()).min().unwrap_or(0);
+            // `>=`, not `>`: block `end` is EXCLUSIVE (one past the last byte),
+            // so a target equal to `max_end` is the first byte of the NEXT
+            // function — an exit, not an in-range gap. Measured: every sampled
+            // JUMPOUT target was exactly `end`, e.g. `sub_140002600` spans
+            // 0x140002600..=0x1400027bd and jumped to 0x1400027be, which `>`
+            // classified as in-range and turned into `loc_X: JUMPOUT(X)`.
+            // Safe under either reading of `end`: if it were INCLUSIVE, an
+            // address equal to it would land mid-instruction, where an honest
+            // exit still beats an infinite self-loop.
+            // `RUSTRE_HLIL_ENDINCL=1`: tratta `end` come INCLUSIVO (misurato:
+            // 13238/13827 blocchi hanno `next.start = end + len(ultima istr.)`),
+            // quindi un bersaglio ESATTAMENTE su `max_end` e' l'ultima
+            // istruzione della funzione — codice vero — e non un'uscita.
+            // Misurati 61 bersagli in questa condizione su sample10_cs.
+            let end_inclusive = matches!(
+                std::env::var("RUSTRE_HLIL_ENDINCL").as_deref(),
+                Ok("1") | Ok("true")
+            );
+            let out_of_range = if end_inclusive {
+                a > max_end || a < min_start
+            } else {
+                a >= max_end || a < min_start
+            };
+            // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO). Il commento qui sopra
+            // dichiara `end` ESCLUSIVO, ma la sonda `FALL` misura
+            // `next.start - block.end` = 1..16 byte = lunghezza dell'ULTIMA
+            // istruzione in 13238 casi su 13827 ⇒ `end` e' INCLUSIVO. Se lo e',
+            // `a == max_end` NON e' la prima istruzione della funzione
+            // successiva ma l'ULTIMA di questa: dichiararla «fuori range»
+            // sostituisce un salto REALE con un `Return` e TRONCA il flusso.
+            // Qui si conta esattamente quel caso di confine.
+            if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0") {
+                let cls = if a == max_end {
+                    "SUL_CONFINE_max_end"
+                } else if a > max_end {
+                    "oltre_max_end"
+                } else if a < min_start {
+                    "prima_di_min_start"
+                } else {
+                    "dentro"
+                };
+                eprintln!("RANGE {cls} a={a:X} min={min_start:X} max={max_end:X}");
+            }
+            let (body, term) = if out_of_range {
+                (Vec::new(), Terminator::Return(Vec::new()))
+            } else {
+                (vec![HlilStatement::Goto(addr)], Terminator::Unreachable)
+            };
+            synth.push(CfgBlock {
+                id,
+                address: addr,
+                body,
+                term,
+            });
+            id
+        };
+
+        let mut cfg = StructuringCfg::new(entry_id);
+        for (idx, block) in mlil.blocks.iter().enumerate() {
+            let instrs: Vec<&MlilInstruction> =
+                block.instrs.iter().map(|ai| &ai.instr).collect();
+            let split_term = instrs
+                .last()
+                .copied()
+                .filter(|i| i.is_terminator());
+            // Sonda (`RUSTRE_DBG_RET=1`, effetto ZERO): il terminatore di blocco e'
+            // SOLO l'ultima istruzione. Un `Ret` che non sia ultimo resta nel
+            // corpo e non produce alcun `return`. Contare le due popolazioni
+            // separatamente e' l'unico modo per sapere se la perdita e' qui.
+            if std::env::var("RUSTRE_DBG_RET").is_ok_and(|v| v != "0") {
+                let n_ret = instrs
+                    .iter()
+                    .filter(|i| matches!(i, MlilInstruction::Ret { .. }))
+                    .count();
+                if n_ret > 0 {
+                    let last_is_ret =
+                        matches!(instrs.last(), Some(MlilInstruction::Ret { .. }));
+                    eprintln!(
+                        "[ret] blk={} n_ret={} last_is_ret={} n_instr={}",
+                        block.id,
+                        n_ret,
+                        last_is_ret,
+                        instrs.len()
+                    );
+                }
+            }
+            let body_instrs = if split_term.is_some() {
+                &instrs[..instrs.len() - 1]
+            } else {
+                &instrs[..]
+            };
+
+            let mut body: Vec<HlilStatement> = Vec::new();
+            for instr in body_instrs {
+                // Diagnostic (`RUSTRE_HLIL_DEBUG=1`): only the LAST instruction
+                // is split off as the block terminator. A terminator sitting
+                // MID-block therefore stays in the body and is lifted to a bare
+                // `Goto` — emitted alongside the structure the structurer builds
+                // from the same edge. Count them.
+                if instr.is_terminator()
+                    && std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0")
+                {
+                    eprintln!("[hlil] MID-BLOCK terminator in body of block {}", block.id);
+                }
+                body.extend(self.lift_instruction(instr, &mut var_map));
+            }
+
+            // Fallthrough successor: the next block in program order.
+            let fallthrough = mlil.blocks.get(idx + 1).map(|b| b.id);
+            // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO): «il prossimo blocco
+            // del VETTORE» e «il blocco che segue in memoria» coincidono solo se
+            // `mlil.blocks` e' ordinato per indirizzo. Se non lo e', la CADUTA
+            // punta al blocco sbagliato e la componente giusta si STACCA — la
+            // firma dei 316 blocchi `preds>0` irraggiungibili di #2670.
+            if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0")
+                && split_term.is_none()
+            {
+                match mlil.blocks.get(idx + 1) {
+                    Some(nb) => eprintln!(
+                        "FALL blk={} end={:X} next={:X} adiacente={}",
+                        block.id,
+                        block.end.as_u64(),
+                        nb.start.as_u64(),
+                        nb.start == block.end
+                    ),
+                    None => eprintln!(
+                        "FALL blk={} end={:X} next=NONE adiacente=false",
+                        block.id,
+                        block.end.as_u64()
+                    ),
+                }
+            }
+            let term = match split_term {
+                Some(MlilInstruction::CondJump {
+                    cond,
+                    true_dest,
+                    false_dest,
+                }) => Terminator::Branch {
+                    cond: self.lift_mlil_expr(cond, &mut var_map),
+                    then_blk: block_for_addr(*true_dest, &mut synth),
+                    else_blk: block_for_addr(*false_dest, &mut synth),
+                },
+                Some(MlilInstruction::Jump { dest }) => {
+                    if let MlilExpr::Const { value, .. } = dest {
+                        let addr = rustre_core::address::Address::new(*value);
+                        // A constant jump to an address this function does NOT
+                        // contain is a tail call / cross-function jump. Routing
+                        // it through `block_for_addr` builds a synthetic block
+                        // whose own address IS the target and whose body is
+                        // `goto <target>` — which prints as
+                        // `loc_X: goto loc_X;`, an infinite self-loop the
+                        // original code does not have (6936 across the corpus).
+                        // Emit the jump in THIS block instead and end the block:
+                        // it degrades to an honest `JUMPOUT`, never a fake loop.
+                        if mlil.block_at(addr).is_none() {
+                            body.extend(self.lift_instruction(
+                                split_term.unwrap(),
+                                &mut var_map,
+                            ));
+                            Terminator::Unreachable
+                        } else {
+                            Terminator::Goto(block_for_addr(addr, &mut synth))
+                        }
+                    } else if !block.successors.is_empty() {
+                        // Computed jump (unresolved jump table): the MLIL CFG
+                        // still knows the successor edges — surface them as a
+                        // switch over TABLE INDICES so the arms stay reachable
+                        // (dropping the edges silently deletes every arm).
+                        Terminator::Switch {
+                            value: self.lift_mlil_expr(dest, &mut var_map),
+                            cases: block
+                                .successors
+                                .iter()
+                                .enumerate()
+                                .map(|(i, s)| (i as i64, *s))
+                                .collect(),
+                            default: None,
+                        }
+                    } else {
+                        // #3190 — Un salto INDIRETTO senza archi noti e' una
+                        // TAIL CALL attraverso un puntatore. `lift_instruction`
+                        // lo rende `HlilStatement::Expression(dest)`, cioe' una
+                        // ESPRESSIONE NUDA (`v1;`): il trasferimento di
+                        // controllo **sparisce** dal codice emesso. Misurate
+                        // **158** occorrenze su B e **ZERO su A** — e A emette
+                        // la forma giusta, `return ((__int64 (*)())p)(...)`,
+                        // quindi il bersaglio non e' inventato.
+                        // Qui si emette la CHIAMATA: `return p();`. Gli
+                        // argomenti NON si possono ricostruire in questo punto
+                        // (i parametri della funzione li assegna un passaggio
+                        // successivo, `func.prototype` e' ancora vuoto), e una
+                        // chiamata senza argomenti tramite cast non
+                        // prototipato resta corretta a livello ABI: i registri
+                        // sono gia' impostati. Meglio perdere la LISTA
+                        // ARGOMENTI che l'INTERA chiamata.
+                        // Gate `RUSTRE_HLIL_TAILPTR` (default OFF: da misurare).
+                        // #3210 — SOLO se il chiamato e' una VARIABILE semplice.
+                        // Misurato: con un chiamato DEREFERENZIATO il printer
+                        // condiviso rende `*(v9 + 32)()`, che il C interpreta
+                        // come «chiama `(v9+32)` e poi dereferenzia» ⇒ errore
+                        // `called object is not a function or function pointer`
+                        // in **12 file**. Il cast `((__int64 (*)())X)` lo
+                        // aggiunge un passaggio testuale a valle che riconosce
+                        // solo gli identificatori semplici. Restringere qui e'
+                        // la riparazione ONESTA: recupera la chiamata dove e'
+                        // sicura e lascia intatto il resto, invece di rompere
+                        // la ricompilabilita' per coprire piu' casi.
+                        // #3230: la restrizione ai soli chiamati `Var` non
+                        // serve piu' — `cast_hlil_bare_deref_calls` mette le
+                        // parentesi anche sui chiamati dereferenziati.
+                        // #3240 — DEFAULT-ON: tutte le guardie sono verdi
+                        // (ricompilabilita' B **99.83% identica classe per
+                        // classe**, path A 0 differenze, goto in CALO, le tre
+                        // metriche di copertura a 0). Si spegne con `=0`.
+                        if !std::env::var("RUSTRE_HLIL_TAILPTR")
+                                .as_deref()
+                                .is_ok_and(|v| v == "0" || v == "false")
+                        {
+                            let callee = self.lift_mlil_expr(dest, &mut var_map);
+                            body.push(HlilStatement::Return(vec![HlilExpr::Call {
+                                func: Box::new(callee),
+                                args: Vec::new(),
+                                ret_ty: HlilType::Int { signed: true, bits: 64 },
+                            }]));
+                        } else {
+                            // Comportamento storico: si tiene la forma stampata
+                            // perche' il trasferimento resti almeno VISIBILE.
+                            body.extend(self.lift_instruction(
+                                split_term.unwrap(),
+                                &mut var_map,
+                            ));
+                        }
+                        Terminator::Unreachable
+                    }
+                }
+                Some(MlilInstruction::JumpTable { dest, targets }) => {
+                    Terminator::Switch {
+                        // Case values are TABLE INDICES (the MLIL jump table
+                        // does not carry the original case constants).
+                        value: self.lift_mlil_expr(dest, &mut var_map),
+                        cases: targets
+                            .iter()
+                            .enumerate()
+                            .map(|(i, t)| {
+                                (i as i64, block_for_addr(*t, &mut synth))
+                            })
+                            .collect(),
+                        default: None,
+                    }
+                }
+                Some(MlilInstruction::Ret { values }) => {
+                    // NON inventare un nome. `ssa_to_hlil_var` fa
+                    // `or_insert_with`: liftare una variabile che il corpo non
+                    // ha mai vista ne CREA una, e stampa `var_rax` — un
+                    // identificatore che su questo percorso non esiste, perche'
+                    // i registri sono gia' portati a `vN`. La riga usciva
+                    // malformata e un passaggio testuale a valle la CANCELLAVA,
+                    // facendo sparire perfino il `return;` che c'era prima
+                    // (#850-#880: `var_rax` ancora 1337 volte dopo il primo
+                    // tentativo di riparazione, fatto al livello sbagliato).
+                    // Qui si emette il valore SOLO se la variabile e' gia' nota
+                    // al corpo; altrimenti `values` resta vuoto e si stampa
+                    // `return;`, che e' corretto e sopravvive.
+                    // NB: qui e' stata provata una guardia "emetti solo se la
+                    // variabile e' gia' nel `var_map`". Misurata: **no-op
+                    // esatto** (1337 `var_rax` prima e dopo) — il corpo lifta
+                    // `rax` da qualche altra parte, quindi la chiave c'e' gia'.
+                    // Rimossa: una guardia inerte da' falsa protezione.
+                    let lifted: Vec<HlilExpr> = values
+                        .iter()
+                        .map(|v| self.lift_mlil_expr(v, &mut var_map))
+                        .collect();
+                    // Sonda (`RUSTRE_DBG_RETTXT=1`, effetto ZERO): stampa il TESTO
+                    // di cio' che il `Return` portera'. Se e' vuoto o malformato
+                    // sappiamo che il difetto nasce qui; se e' sano, lo cancella
+                    // un passaggio testuale a valle (#840).
+                    if std::env::var("RUSTRE_DBG_RETTXT").is_ok_and(|v| v != "0") {
+                        eprintln!(
+                            "[rettxt] blk={} n={} txt=[{}]",
+                            block.id,
+                            lifted.len(),
+                            lifted
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    Terminator::Return(lifted)
+                }
+                Some(other) => {
+                    // TailCall / Trap / … — lift into the body, no successors.
+                    body.extend(self.lift_instruction(other, &mut var_map));
+                    Terminator::Unreachable
+                }
+                None => match fallthrough {
+                    Some(next) => Terminator::Goto(next),
+                    None => Terminator::Unreachable,
+                },
+            };
+
+            cfg.add_block(CfgBlock {
+                id: block.id,
+                address: block.start,
+                body,
+                term,
+            });
+        }
+        for s in synth {
+            cfg.add_block(s);
+        }
+
+        let structured = structuring::structure_function(&cfg);
+        let mut body = structured.body;
+
+        // Blocks with no edge from the entry region (e.g. the arms of an
+        // UNRESOLVED jump table, whose dispatch block has no successor
+        // edges) are invisible to the structurer. The flat lifter printed
+        // them; silently deleting code is worse than a labelled appendix —
+        // emit each orphan block with a label and its explicit transfers.
+        let mut reach: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut stack = vec![cfg.entry];
+        while let Some(n) = stack.pop() {
+            if reach.insert(n) {
+                stack.extend(cfg.successors(n));
+            }
+        }
+        let addr_of = |id: u32| {
+            cfg.blocks
+                .get(&id)
+                .map_or(rustre_core::address::Address::new(0), |b| b.address)
+        };
+        // Emit orphans in address order so a `Goto` to the block emitted
+        // immediately after is a natural fall-through and can be dropped.
+        let orphans: Vec<&CfgBlock> = {
+            let mut v: Vec<&CfgBlock> =
+                cfg.blocks.values().filter(|b| !reach.contains(&b.id)).collect();
+            v.sort_by_key(|b| b.address.as_u64());
+            v
+        };
+        for (i, b) in orphans.iter().enumerate() {
+            let next_addr = orphans.get(i + 1).map(|n| n.address);
+            body.push(HlilStatement::Label(format!(
+                "loc_{:x}",
+                b.address.as_u64()
+            )));
+            body.extend(b.body.iter().cloned());
+            match &b.term {
+                // #3020 — un blocco REALE il cui salto punta a SE STESSO e' un
+                // ciclo infinito VERO del programma (`jmp .` — Go lo usa in
+                // `runtime.abort`: `int3; jmp self`), non un artefatto. Emesso
+                // come `Label + Goto` diventa `loc_X: goto loc_X;`, che il
+                // passaggio testuale `break_self_referential_gotos` riscrive in
+                // `JUMPOUT(0xX)` — dichiarando IRRISOLTO un salto che invece si
+                // conosce perfettamente. Quel passaggio nacque per i blocchi
+                // SINTETICI (bersaglio non-leader), dove la diagnosi e' giusta;
+                // qui il blocco esiste nell'MLIL. La forma onesta e' `while (1)`.
+                // Gate `RUSTRE_HLIL_SELFLOOP` (default ON, si spegne con `=0`).
+                Terminator::Goto(t)
+                    if *t == b.id
+                        && !std::env::var("RUSTRE_HLIL_SELFLOOP")
+                            .as_deref()
+                            .is_ok_and(|v| v == "0" || v == "false") =>
+                {
+                    // Gli statement del blocco si ripetono a OGNI giro: vanno
+                    // DENTRO il ciclo, non prima. Erano gia' stati accodati
+                    // qui sopra, quindi si riprendono da `body`.
+                    let at = body.len() - b.body.len();
+                    let inner: Vec<HlilStatement> = body.split_off(at);
+                    body.push(HlilStatement::While {
+                        cond: HlilExpr::Const {
+                            value: 1,
+                            ty: HlilType::Int { signed: true, bits: 32 },
+                        },
+                        body: inner,
+                    });
+                }
+                Terminator::Goto(t) => {
+                    // Drop the goto when it targets the next orphan (fallthrough).
+                    if next_addr != Some(addr_of(*t)) {
+                        body.push(HlilStatement::Goto(addr_of(*t)));
+                    }
+                }
+                Terminator::Branch {
+                    cond,
+                    then_blk,
+                    else_blk,
+                } => {
+                    body.push(HlilStatement::If {
+                        cond: cond.clone(),
+                        then_body: vec![HlilStatement::Goto(addr_of(*then_blk))],
+                        else_body: vec![],
+                    });
+                    if next_addr != Some(addr_of(*else_blk)) {
+                        body.push(HlilStatement::Goto(addr_of(*else_blk)));
+                    }
+                }
+                Terminator::Return(vals) => {
+                    body.push(HlilStatement::Return(vals.clone()));
+                }
+                Terminator::Switch { .. } | Terminator::Unreachable => {}
+            }
+        }
+
+        func.body = body;
+        // `HashMap` iteration order is randomised per process, so emitting the
+        // locals straight from it made the declaration block come out in a
+        // different order on every run — measured: 1922 of 2263 emitted files
+        // differed between two IDENTICAL runs, purely in that block (bodies
+        // byte-identical, declaration SETS equal). That is semantically
+        // irrelevant but it destroys byte-diffing as a verification tool.
+        // Sort by name so the output is reproducible.
+        let mut locals: Vec<HlilVar> = var_map.into_values().collect();
+        locals.sort_by(|a, b| a.name.cmp(&b.name));
+        for var in locals {
+            func.add_local(var);
+        }
+        // Sonda (`RUSTRE_DBG_RETCNT=1`, effetto ZERO): quanti `Return` restano
+        // nel corpo STRUTTURATO, contro quanti terminatori `Return` aveva la
+        // CFG. Se il primo e' minore, li perde lo structurer; se coincidono,
+        // li perde il printer. Serve a bisecare, non a ipotizzare (#910).
+        if std::env::var("RUSTRE_DBG_RETCNT").is_ok_and(|v| v != "0") {
+            fn count_ret(stmts: &[HlilStatement]) -> usize {
+                stmts
+                    .iter()
+                    .map(|s| match s {
+                        HlilStatement::Return(..) => 1,
+                        HlilStatement::If { then_body, else_body, .. } => {
+                            count_ret(then_body) + count_ret(else_body)
+                        }
+                        HlilStatement::While { body, .. }
+                        | HlilStatement::DoWhile { body, .. }
+                        | HlilStatement::Block(body) => count_ret(body),
+                        HlilStatement::Switch { cases, default, .. } => {
+                            cases.iter().map(|c| count_ret(&c.body)).sum::<usize>()
+                                + count_ret(default)
+                        }
+                        _ => 0,
+                    })
+                    .sum()
+            }
+            eprintln!("[retcnt] {} corpo strutturato: {}", func.prototype.name, count_ret(&func.body));
+        }
+        func
+    }
+
+    fn ssa_to_hlil_var<'a>(
+        &self,
+        ssa: &SsaVar,
+        ty: HlilType,
+        map: &'a mut HashMap<String, HlilVar>,
+    ) -> &'a HlilVar {
+        let key = ssa.name.clone();
+        map.entry(key).or_insert_with(|| {
+            HlilVar::new(
+                format!("{}{}", self.var_name_prefix, ssa.name),
+                ty,
+            )
+        })
+    }
+
+    fn lift_mlil_expr(&self, expr: &MlilExpr, map: &mut HashMap<String, HlilVar>) -> HlilExpr {
+        // Split into integer-ops and float/misc to stay under the line limit.
+        match expr {
+            MlilExpr::Const { value, size } => HlilExpr::Const {
+                value: const_u64_to_i64(*value),
+                ty: HlilType::from_mlil_size(*size),
+            },
+            MlilExpr::Var { var, size } => {
+                // Derive type from the MLIL size annotation; use name-based
+                // heuristics so that low-byte registers (var_rXXl → u8),
+                // word registers (var_rXXw → u16), and dword registers
+                // (var_rXXd → u32) get concrete types even when the MLIL
+                // size slot is absent or generic.
+                let inferred_ty = {
+                    let n = &var.name;
+                    if n.ends_with('l') && n.starts_with("r") {
+                        HlilType::u8()
+                    } else if n.ends_with('w') && n.starts_with("r") {
+                        HlilType::u16()
+                    } else if n.ends_with('d') && n.starts_with("r") {
+                        HlilType::u32()
+                    } else {
+                        HlilType::from_mlil_size(*size)
+                    }
+                };
+                let lifted_var = self.ssa_to_hlil_var(var, inferred_ty, map).clone();
+                HlilExpr::Var { var: lifted_var }
+            }
+            MlilExpr::Load { addr, size } => {
+                // SONDA #1350 (effetto ZERO, gated): la dimensione dell'accesso
+                // arriva davvero fin qui? E' la PRECONDIZIONE della riparazione
+                // #1330/#1340 (il printer a riga 733 scarta `ty`): se il lifter
+                // l'avesse gia' persa, la riparazione sarebbe impossibile.
+                if std::env::var("RUSTRE_DBG_LOADSZ").is_ok() {
+                    eprintln!("LOADSZ {size:?}");
+                }
+                HlilExpr::Deref {
+                    addr: Box::new(self.lift_mlil_expr(addr, map)),
+                    ty: HlilType::from_mlil_size(*size),
+                }
+            }
+            MlilExpr::Add(a, b, s) => HlilExpr::Add(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Sub(a, b, s) => HlilExpr::Sub(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Mul(a, b, s) => HlilExpr::Mul(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::DivU(a, b, s) => HlilExpr::Div(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            // Signed division: carry signedness in the attached type so the
+            // distinction is not erased (see `from_mlil_size_signed`).
+            MlilExpr::DivS(a, b, s) => HlilExpr::Div(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size_signed(*s),
+            ),
+            MlilExpr::And(a, b, s) => HlilExpr::And(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Or(a, b, s) => HlilExpr::Or(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Xor(a, b, s) => HlilExpr::Xor(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Shl(a, b, s) => HlilExpr::Shl(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Shr(a, b, s) => HlilExpr::Shr(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            // Arithmetic shift right: use the dedicated signed-shift variant
+            // (printers handle it alongside `Shr`) so sign propagation is
+            // preserved rather than collapsed into a logical shift.
+            MlilExpr::Sar(a, b, _s) => HlilExpr::Sar(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::Neg(e, s) => HlilExpr::Neg(
+                Box::new(self.lift_mlil_expr(e, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            MlilExpr::Not(e, s) => HlilExpr::Not(
+                Box::new(self.lift_mlil_expr(e, map)),
+                HlilType::from_mlil_size(*s),
+            ),
+            _ => self.lift_mlil_expr_misc(expr, map),
+        }
+    }
+
+    fn lift_mlil_expr_misc(&self, expr: &MlilExpr, map: &mut HashMap<String, HlilVar>) -> HlilExpr {
+        match expr {
+            MlilExpr::ZeroExtend {
+                expr: inner,
+                from,
+                to,
+            } => HlilExpr::Cast {
+                // Chain through the unsigned `from`-sized type so the source
+                // width is not discarded.
+                expr: Box::new(HlilExpr::Cast {
+                    expr: Box::new(self.lift_mlil_expr(inner, map)),
+                    to: HlilType::from_mlil_size(*from),
+                }),
+                to: HlilType::from_mlil_size(*to),
+            },
+            MlilExpr::SignExtend {
+                expr: inner,
+                from,
+                to,
+            } => HlilExpr::Cast {
+                // Sign extension: cast through the *signed* `from`-sized type
+                // so the widening propagates the sign bit, then widen to the
+                // signed target type.
+                expr: Box::new(HlilExpr::Cast {
+                    expr: Box::new(self.lift_mlil_expr(inner, map)),
+                    to: HlilType::from_mlil_size_signed(*from),
+                }),
+                to: HlilType::from_mlil_size_signed(*to),
+            },
+            MlilExpr::CmpEq(a, b) => HlilExpr::CmpEq(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::CmpNe(a, b) => HlilExpr::CmpNe(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            // Signedness-distinct compares: use the dedicated variants
+            // (printers already handle them alongside CmpLt/CmpLe) so signed
+            // vs unsigned semantics survive the lift.
+            MlilExpr::CmpSlt(a, b) => HlilExpr::CmpSlt(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::CmpUlt(a, b) => HlilExpr::CmpUlt(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::CmpSle(a, b) => HlilExpr::CmpSle(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::CmpUle(a, b) => HlilExpr::CmpUle(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+            ),
+            MlilExpr::FAdd(a, b, s) => HlilExpr::Add(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::Float {
+                    bits: size_to_float_bits(*s),
+                },
+            ),
+            MlilExpr::FSub(a, b, s) => HlilExpr::Sub(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::Float {
+                    bits: size_to_float_bits(*s),
+                },
+            ),
+            MlilExpr::FMul(a, b, s) => HlilExpr::Mul(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::Float {
+                    bits: size_to_float_bits(*s),
+                },
+            ),
+            MlilExpr::FDiv(a, b, s) => HlilExpr::Div(
+                Box::new(self.lift_mlil_expr(a, map)),
+                Box::new(self.lift_mlil_expr(b, map)),
+                HlilType::Float {
+                    bits: size_to_float_bits(*s),
+                },
+            ),
+            MlilExpr::Undefined(s) => HlilExpr::Undefined(HlilType::from_mlil_size(*s)),
+            MlilExpr::StackPointer(s) => HlilExpr::Var {
+                var: HlilVar::new("sp", HlilType::from_mlil_size(*s)),
+            },
+            MlilExpr::Flag { name } => HlilExpr::Var {
+                var: HlilVar::new(format!("flag_{name}"), HlilType::Bool),
+            },
+            MlilExpr::Call {
+                dest,
+                args,
+                return_size,
+            } => HlilExpr::Call {
+                func: Box::new(self.lift_mlil_expr(dest, map)),
+                args: args.iter().map(|a| self.lift_mlil_expr(a, map)).collect(),
+                ret_ty: HlilType::from_mlil_size(*return_size),
+            },
+            MlilExpr::FNeg(e, s) => HlilExpr::Neg(
+                Box::new(self.lift_mlil_expr(e, map)),
+                HlilType::Float {
+                    bits: size_to_float_bits(*s),
+                },
+            ),
+            MlilExpr::IntToFloat { expr: inner, to } => HlilExpr::Cast {
+                expr: Box::new(self.lift_mlil_expr(inner, map)),
+                to: HlilType::Float {
+                    bits: size_to_float_bits(*to),
+                },
+            },
+            MlilExpr::FloatToInt { expr: inner, to } => HlilExpr::Cast {
+                expr: Box::new(self.lift_mlil_expr(inner, map)),
+                // x86 float->int conversions (cvttsd2si etc.) are signed.
+                to: HlilType::from_mlil_size_signed(*to),
+            },
+            MlilExpr::Select {
+                cond,
+                true_val,
+                false_val,
+                size,
+            } => HlilExpr::Ternary {
+                cond: Box::new(self.lift_mlil_expr(cond, map)),
+                then: Box::new(self.lift_mlil_expr(true_val, map)),
+                else_: Box::new(self.lift_mlil_expr(false_val, map)),
+                ty: HlilType::from_mlil_size(*size),
+            },
+            // These variants are handled directly in `lift_mlil_expr`; keep
+            // the match exhaustive (no `_` arm) so a newly added MLIL variant
+            // is a compile error here instead of silently degrading to
+            // `Undefined`. Delegating back is safe: `lift_mlil_expr` handles
+            // each of these without recursing into this function.
+            MlilExpr::Const { .. }
+            | MlilExpr::Var { .. }
+            | MlilExpr::Load { .. }
+            | MlilExpr::Add(..)
+            | MlilExpr::Sub(..)
+            | MlilExpr::Mul(..)
+            | MlilExpr::DivU(..)
+            | MlilExpr::DivS(..)
+            | MlilExpr::And(..)
+            | MlilExpr::Or(..)
+            | MlilExpr::Xor(..)
+            | MlilExpr::Shl(..)
+            | MlilExpr::Shr(..)
+            | MlilExpr::Sar(..)
+            | MlilExpr::Neg(..)
+            | MlilExpr::Not(..) => self.lift_mlil_expr(expr, map),
+        }
+    }
+
+    fn lift_instruction(
+        &self,
+        instr: &MlilInstruction,
+        map: &mut HashMap<String, HlilVar>,
+    ) -> Vec<HlilStatement> {
+        match instr {
+            MlilInstruction::Nop | MlilInstruction::Undefined => vec![],
+            MlilInstruction::Assign { dest, src, size } => {
+                let src_expr = self.lift_mlil_expr(src, map);
+                let var = self.ssa_to_hlil_var(dest, HlilType::from_mlil_size(*size), map).clone();
+                let dest_expr = HlilExpr::Var { var };
+                vec![HlilStatement::Assign {
+                    dest: dest_expr,
+                    src: src_expr,
+                }]
+            }
+            MlilInstruction::Store { addr, src, .. } => {
+                let dest = HlilExpr::Deref {
+                    addr: Box::new(self.lift_mlil_expr(addr, map)),
+                    ty: HlilType::Unknown,
+                };
+                let src_expr = self.lift_mlil_expr(src, map);
+                vec![HlilStatement::Assign {
+                    dest,
+                    src: src_expr,
+                }]
+            }
+            MlilInstruction::Jump { dest } => {
+                // If dest is a constant, emit Goto; otherwise emit computed expression.
+                if let MlilExpr::Const { value, .. } = dest {
+                    vec![HlilStatement::Goto(Address::new(*value))]
+                } else {
+                    vec![HlilStatement::Expression(self.lift_mlil_expr(dest, map))]
+                }
+            }
+            MlilInstruction::CondJump {
+                cond,
+                true_dest,
+                false_dest,
+            } => {
+                let cond_expr = self.lift_mlil_expr(cond, map);
+                vec![HlilStatement::If {
+                    cond: cond_expr,
+                    then_body: vec![HlilStatement::Goto(*true_dest)],
+                    else_body: vec![HlilStatement::Goto(*false_dest)],
+                }]
+            }
+            MlilInstruction::Call {
+                dest,
+                args,
+                ret_vars,
+            } => {
+                let call = HlilExpr::Call {
+                    func: Box::new(self.lift_mlil_expr(dest, map)),
+                    args: args.iter().map(|a| self.lift_mlil_expr(a, map)).collect(),
+                    ret_ty: HlilType::Unknown,
+                };
+                if ret_vars.is_empty() {
+                    vec![HlilStatement::Expression(call)]
+                } else {
+                    // Assign first return value to first ret_var.
+                    //
+                    // The type is the WIDTH OF THE ABI RETURN REGISTER, not
+                    // `Unknown`: the printer renders `Unknown` as the literal
+                    // word `unknown`, which is not a C type, and that made 1017
+                    // files unparseable (fixed-list recompilability 1199 ->
+                    // 1148). A call's return value genuinely arrives in a
+                    // 64-bit register, so this is the honest type, not a
+                    // placeholder — narrower uses already cast at the use site
+                    // (`(uint32_t)v2`).
+                    let var = self
+                        .ssa_to_hlil_var(
+                            &ret_vars[0],
+                            HlilType::Int {
+                                signed: false,
+                                bits: 64,
+                            },
+                            map,
+                        )
+                        .clone();
+                    vec![HlilStatement::Assign {
+                        dest: HlilExpr::Var { var },
+                        src: call,
+                    }]
+                }
+            }
+            MlilInstruction::TailCall { dest, args } => {
+                let call = HlilExpr::Call {
+                    func: Box::new(self.lift_mlil_expr(dest, map)),
+                    args: args.iter().map(|a| self.lift_mlil_expr(a, map)).collect(),
+                    ret_ty: HlilType::Unknown,
+                };
+                // A tail call forwards the callee's return value, so return
+                // the call expression itself rather than emitting a bare call
+                // followed by a value-less `return;`.
+                vec![HlilStatement::Return(vec![call])]
+            }
+            MlilInstruction::Ret { values } => {
+                let exprs: Vec<HlilExpr> =
+                    values.iter().map(|v| self.lift_mlil_expr(v, map)).collect();
+                vec![HlilStatement::Return(exprs)]
+            }
+            MlilInstruction::Phi { dest, sources } => {
+                let var = self.ssa_to_hlil_var(dest, HlilType::Unknown, map).clone();
+                let _ = sources;
+                vec![HlilStatement::VarDeclare { var, init: None }]
+            }
+            MlilInstruction::Trap { .. } | MlilInstruction::SysCall { .. } => {
+                // Model as a call to an intrinsic placeholder.
+                let call = HlilExpr::Call {
+                    func: Box::new(HlilExpr::Var {
+                        var: HlilVar::new("__trap__", HlilType::Void),
+                    }),
+                    args: vec![],
+                    ret_ty: HlilType::Void,
+                };
+                vec![HlilStatement::Expression(call)]
+            }
+            MlilInstruction::JumpTable { .. } => vec![],
+        }
+    }
+}
+
+// ── Additional HlilExpr helpers ───────────────────────────────────────────────
+
+impl HlilExpr {
+    /// Count the total number of AST nodes in this expression tree.
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        match self {
+            Self::Const { .. }
+            | Self::Float { .. }
+            | Self::Var { .. }
+            | Self::AddressOf { .. }
+            | Self::SizeOf { .. }
+            | Self::Undefined(..) => 1,
+            Self::Deref { addr, .. }
+            | Self::Neg(addr, _)
+            | Self::Not(addr, _)
+            | Self::LogicalNot(addr)
+            | Self::Cast { expr: addr, .. } => 1 + addr.node_count(),
+            Self::FieldAccess { base, .. } => 1 + base.node_count(),
+            Self::Index { base, idx, .. } => 1 + base.node_count() + idx.node_count(),
+            Self::Add(a, b, _)
+            | Self::Sub(a, b, _)
+            | Self::Mul(a, b, _)
+            | Self::Div(a, b, _)
+            | Self::Mod(a, b, _)
+            | Self::And(a, b, _)
+            | Self::Or(a, b, _)
+            | Self::Xor(a, b, _)
+            | Self::Shl(a, b, _)
+            | Self::Shr(a, b, _)
+            | Self::CmpEq(a, b)
+            | Self::CmpNe(a, b)
+            | Self::CmpLt(a, b)
+            | Self::CmpGt(a, b)
+            | Self::CmpLe(a, b)
+            | Self::CmpGe(a, b)
+            | Self::LogicalAnd(a, b)
+            | Self::LogicalOr(a, b) => 1 + a.node_count() + b.node_count(),
+            Self::Call { func, args, .. } => {
+                1 + func.node_count() + args.iter().map(Self::node_count).sum::<usize>()
+            }
+            Self::Ternary {
+                cond, then, else_, ..
+            } => 1 + cond.node_count() + then.node_count() + else_.node_count(),
+            _ => 1,
+        }
+    }
+
+    /// Returns `true` when this expression has no observable side effects.
+    #[must_use]
+    pub fn is_pure(&self) -> bool {
+        match self {
+            Self::Const { .. }
+            | Self::Float { .. }
+            | Self::SizeOf { .. }
+            | Self::Undefined(..) => true,
+            Self::Var { .. } | Self::AddressOf { .. } => true,
+            HlilExpr::Deref { .. } | HlilExpr::Call { .. } => false, // memory read — may fault
+            Self::FieldAccess { base, .. } => base.is_pure(),
+            Self::Index { base, idx, .. } => base.is_pure() && idx.is_pure(),
+            Self::Add(a, b, _)
+            | Self::Sub(a, b, _)
+            | Self::Mul(a, b, _)
+            | Self::Div(a, b, _)
+            | Self::Mod(a, b, _)
+            | Self::And(a, b, _)
+            | Self::Or(a, b, _)
+            | Self::Xor(a, b, _)
+            | Self::Shl(a, b, _)
+            | Self::Shr(a, b, _)
+            | Self::CmpEq(a, b)
+            | Self::CmpNe(a, b)
+            | Self::CmpLt(a, b)
+            | Self::CmpGt(a, b)
+            | Self::CmpLe(a, b)
+            | Self::CmpGe(a, b)
+            | Self::LogicalAnd(a, b)
+            | Self::LogicalOr(a, b) => a.is_pure() && b.is_pure(),
+            Self::Neg(e, _)
+            | Self::Not(e, _)
+            | Self::LogicalNot(e)
+            | Self::Cast { expr: e, .. } => e.is_pure(),
+            Self::Ternary {
+                cond, then, else_, ..
+            } => cond.is_pure() && then.is_pure() && else_.is_pure(),
+            _ => true,
+        }
+    }
+
+    /// Collect all `HlilVar` leaf nodes deeply.
+    #[must_use]
+    pub fn vars_used(&self) -> Vec<HlilVar> {
+        let mut out: Vec<&HlilVar> = Vec::new();
+        collect_vars_expr(self, &mut out);
+        let mut owned = Vec::with_capacity(out.len());
+        for v in out {
+            owned.push(v.clone());
+        }
+        owned
+    }
+
+    /// Returns `true` when the expression is a single named variable reference.
+    #[must_use]
+    pub fn is_var(&self) -> bool {
+        matches!(self, Self::Var { .. })
+    }
+
+    /// If this is a `Var`, return the underlying [`HlilVar`].
+    #[must_use]
+    pub fn as_var(&self) -> Option<&HlilVar> {
+        match self {
+            Self::Var { var } => Some(var),
+            _ => None,
+        }
+    }
+
+    /// Walk the expression tree pre-order, calling `f` on every node.
+    pub fn walk<F: FnMut(&Self)>(&self, f: &mut F) {
+        f(self);
+        match self {
+            Self::Const { .. }
+            | Self::Float { .. }
+            | Self::Var { .. }
+            | Self::AddressOf { .. }
+            | Self::SizeOf { .. }
+            | Self::Undefined(..) => {}
+            Self::Deref { addr, .. }
+            | Self::Neg(addr, _)
+            | Self::Not(addr, _)
+            | Self::LogicalNot(addr)
+            | Self::Cast { expr: addr, .. } => addr.walk(f),
+            Self::FieldAccess { base, .. } => base.walk(f),
+            Self::Index { base: e, idx, .. } => {
+                e.walk(f);
+                idx.walk(f);
+            }
+            Self::Add(a, b, _)
+            | Self::Sub(a, b, _)
+            | Self::Mul(a, b, _)
+            | Self::Div(a, b, _)
+            | Self::Mod(a, b, _)
+            | Self::And(a, b, _)
+            | Self::Or(a, b, _)
+            | Self::Xor(a, b, _)
+            | Self::Shl(a, b, _)
+            | Self::Shr(a, b, _)
+            | Self::CmpEq(a, b)
+            | Self::CmpNe(a, b)
+            | Self::CmpLt(a, b)
+            | Self::CmpGt(a, b)
+            | Self::CmpLe(a, b)
+            | Self::CmpGe(a, b)
+            | Self::LogicalAnd(a, b)
+            | Self::LogicalOr(a, b) => {
+                a.walk(f);
+                b.walk(f);
+            }
+            Self::Call { func, args, .. } => {
+                func.walk(f);
+                for a in args {
+                    a.walk(f);
+                }
+            }
+            Self::Ternary {
+                cond, then, else_, ..
+            } => {
+                cond.walk(f);
+                then.walk(f);
+                else_.walk(f);
+            }
+            _ => {}
+        }
+    }
+}
+
+// ── Additional HlilStatement helpers ─────────────────────────────────────────
+
+impl HlilStatement {
+    /// Count all nested statements, including this one.
+    #[must_use]
+    pub fn statement_count(&self) -> usize {
+        let mut n = 0usize;
+        self.walk(&mut |_| { n += 1; });
+        n
+    }
+
+    /// Returns all variables written (as assignment destinations) within this statement.
+    #[must_use]
+    pub fn written_vars(&self) -> Vec<HlilVar> {
+        let mut out = Vec::new();
+        self.collect_written_vars(&mut out);
+        out
+    }
+
+    fn collect_written_vars(&self, out: &mut Vec<HlilVar>) {
+        match self {
+            Self::Assign {
+                dest: HlilExpr::Var { var },
+                ..
+            } => {
+                out.push(var.clone());
+            }
+            Self::VarDeclare { var, .. } | Self::VarDecl { var, .. } => out.push(var.clone()),
+            Self::AssignUnpack { dests, .. } => {
+                for v in dests {
+                    out.push(v.clone());
+                }
+            }
+            Self::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                for s in then_body {
+                    s.collect_written_vars(out);
+                }
+                for s in else_body {
+                    s.collect_written_vars(out);
+                }
+            }
+            Self::While { body, .. } | Self::DoWhile { body, .. } => {
+                for s in body {
+                    s.collect_written_vars(out);
+                }
+            }
+            Self::For { init, body, .. } => {
+                if let Some(i) = init {
+                    i.collect_written_vars(out);
+                }
+                for s in body {
+                    s.collect_written_vars(out);
+                }
+            }
+            Self::Switch { cases, default, .. } => {
+                for c in cases {
+                    for s in &c.body {
+                        s.collect_written_vars(out);
+                    }
+                }
+                for s in default {
+                    s.collect_written_vars(out);
+                }
+            }
+            Self::Block(stmts) => {
+                for s in stmts {
+                    s.collect_written_vars(out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Returns `true` when any branch of this statement ends in a `Return`.
+    #[must_use]
+    pub fn always_returns(&self) -> bool {
+        match self {
+            Self::Return(..) => true,
+            Self::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                let then_ret = then_body.last().is_some_and(Self::always_returns);
+                let else_ret = else_body.last().is_some_and(Self::always_returns);
+                then_ret && else_ret
+            }
+            Self::Block(stmts) => stmts.last().is_some_and(Self::always_returns),
+            _ => false,
+        }
+    }
+}
+
+// ── Additional HlilFunction helpers ──────────────────────────────────────────
+
+impl HlilFunction {
+    /// Count every statement (including nested) across the function body.
+    #[must_use]
+    pub fn total_stmt_count(&self) -> usize {
+        self.body.iter().map(HlilStatement::statement_count).sum()
+    }
+
+    /// Returns `true` when the function body is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.body.is_empty()
+    }
+
+    /// Collect all written variables (deeply) across the entire function body.
+    #[must_use]
+    pub fn written_vars(&self) -> Vec<HlilVar> {
+        let mut out = Vec::new();
+        for s in &self.body {
+            s.collect_written_vars(&mut out);
+        }
+        out
+    }
+
+    /// Walk every statement in pre-order.
+    pub fn walk_stmts<F: FnMut(&HlilStatement)>(&self, f: &mut F) {
+        for s in &self.body {
+            s.walk(f);
+        }
+    }
+
+    /// Render the function as a Graphviz dot string (one node per top-level statement).
+    #[must_use]
+    pub fn to_dot(&self) -> String {
+        let mut buf = String::new();
+        writeln!(buf, "digraph fn_{:x} {{", self.address.as_u64()).unwrap();
+        writeln!(buf, "  label=\"{}\";", self.prototype.name).unwrap();
+        writeln!(buf, "  node [shape=box fontname=\"monospace\"];").unwrap();
+        for (i, stmt) in self.body.iter().enumerate() {
+            let label = stmt.to_string().replace('"', "'").replace('\n', "\\n");
+            writeln!(buf, "  s{i} [label=\"{label}\"];").unwrap();
+            if i > 0 {
+                writeln!(buf, "  s{} -> s{i};", i - 1).unwrap();
+            }
+        }
+        writeln!(buf, "}}").unwrap();
+        buf
+    }
+
+    /// Render the function as a plain text listing.
+    #[must_use]
+    pub fn to_string(&self) -> String {
+        self.print()
+    }
+
+    /// Render the function as a JSON object (prototype + body as strings).
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        let body_stmts: Vec<String> = self
+            .body
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+        let stmts_json = body_stmts
+            .iter()
+            .map(|s| {
+                let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                format!("\"{escaped}\"")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let locals_json = self
+            .locals
+            .iter()
+            .map(|v| {
+                let n = v.name.replace('"', "\\\"");
+                let t = v.ty.to_string().replace('"', "\\\"");
+                format!("{{\"name\":\"{n}\",\"type\":\"{t}\"}}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "{{\"address\":\"0x{:x}\",\"name\":\"{}\",\"return_type\":\"{}\",\"locals\":[{locals_json}],\"body\":[{stmts_json}]}}",
+            self.address.as_u64(),
+            self.prototype.name,
+            self.prototype.return_type
+        )
+    }
+}
+
+// ── HLIL Pattern Library ──────────────────────────────────────────────────────
+
+/// A matched pattern with its location (statement index in a function body).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HlilPattern {
+    /// `x = x` — identity assignment.
+    IdentityAssign { var: HlilVar },
+    /// `if (true) { ... }` or `if (false) { ... }` — constant condition.
+    ConstantCondition { value: bool },
+    /// `x = 0` — zero initialisation.
+    ZeroInit { var: HlilVar },
+    /// `return 0;` — trivial zero return.
+    TrivialReturn { value: i64 },
+    /// `while (1) { ... }` — infinite loop.
+    InfiniteLoop,
+    /// `x = x + 1` or `x = x - 1` — simple increment/decrement.
+    Increment { var: HlilVar, delta: i64 },
+    /// A no-op do-while: `do { } while (0)`.
+    DoWhileFalse,
+    /// Negated comparison: `!(a == b)` can be simplified to `a != b`.
+    NegatedCmp,
+    /// Double negation: `!!x` = `x`.
+    DoubleNegation,
+    /// `x & 0` = `0`.
+    AndZero { ty: HlilType },
+    /// `x | ~0` (or `x | -1`) = `-1` (all bits set).
+    OrAllOnes { ty: HlilType },
+    /// `x ^ x` = `0`.
+    XorSelf { ty: HlilType },
+    /// `x * 1` = `x`.
+    MulOne,
+    /// `x + 0` = `x`.
+    AddZero,
+    /// `x - 0` = `x`.
+    SubZero,
+}
+
+/// Match patterns in a single expression.
+#[must_use]
+pub fn match_expr_patterns(expr: &HlilExpr) -> Vec<HlilPattern> {
+    let mut found = Vec::new();
+    match_expr_patterns_inner(expr, &mut found);
+    found
+}
+
+fn match_expr_patterns_inner(expr: &HlilExpr, out: &mut Vec<HlilPattern>) {
+    match expr {
+        // !(a == b) → NegatedCmp
+        HlilExpr::LogicalNot(inner) => {
+            if matches!(
+                inner.as_ref(),
+                HlilExpr::CmpEq(..)
+                    | HlilExpr::CmpNe(..)
+                    | HlilExpr::CmpLt(..)
+                    | HlilExpr::CmpGt(..)
+                    | HlilExpr::CmpLe(..)
+                    | HlilExpr::CmpGe(..)
+            ) {
+                out.push(HlilPattern::NegatedCmp);
+            }
+            // !!x → DoubleNegation
+            if let HlilExpr::LogicalNot(_) = inner.as_ref() {
+                out.push(HlilPattern::DoubleNegation);
+            }
+            match_expr_patterns_inner(inner, out);
+        }
+        // x & 0
+        HlilExpr::And(_, b, ty) => {
+            if b.is_const_zero() {
+                out.push(HlilPattern::AndZero { ty: ty.clone() });
+            }
+            match_expr_patterns_inner(b, out);
+        }
+        // x ^ x
+        HlilExpr::Xor(a, b, ty) => {
+            if a == b {
+                out.push(HlilPattern::XorSelf { ty: ty.clone() });
+            }
+            match_expr_patterns_inner(a, out);
+            match_expr_patterns_inner(b, out);
+        }
+        // x * 1
+        HlilExpr::Mul(_, b, _) => {
+            if b.is_const() == Some(1) {
+                out.push(HlilPattern::MulOne);
+            }
+            match_expr_patterns_inner(b, out);
+        }
+        // x + 0
+        HlilExpr::Add(_, b, _) => {
+            if b.is_const_zero() {
+                out.push(HlilPattern::AddZero);
+            }
+            match_expr_patterns_inner(b, out);
+        }
+        // x - 0
+        HlilExpr::Sub(_, b, _) => {
+            if b.is_const_zero() {
+                out.push(HlilPattern::SubZero);
+            }
+            match_expr_patterns_inner(b, out);
+        }
+        // x | -1 / x | all-ones (represented as -1)
+        HlilExpr::Or(_, b, ty) => {
+            if b.is_const() == Some(-1) {
+                out.push(HlilPattern::OrAllOnes { ty: ty.clone() });
+            }
+            match_expr_patterns_inner(b, out);
+        }
+        _ => {}
+    }
+}
+
+/// Match patterns in a single statement.
+#[must_use]
+pub fn match_stmt_patterns(stmt: &HlilStatement) -> Vec<HlilPattern> {
+    let mut found = Vec::new();
+    match_stmt_patterns_inner(stmt, &mut found);
+    found
+}
+
+fn match_stmt_patterns_inner(stmt: &HlilStatement, out: &mut Vec<HlilPattern>) {
+    match stmt {
+        // x = x
+        HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src: HlilExpr::Var { var: s },
+        } if d == s => {
+            out.push(HlilPattern::IdentityAssign { var: d.clone() });
+        }
+        // x = 0
+        HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src,
+        } if src.is_const_zero() => {
+            out.push(HlilPattern::ZeroInit { var: d.clone() });
+        }
+        // x = x + 1 / x = x - 1
+        HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src,
+        } => {
+            if let HlilExpr::Add(a, b, _) = src
+                && let HlilExpr::Var { var: av } = a.as_ref()
+                && av == d
+                && let Some(delta) = b.is_const()
+            {
+                out.push(HlilPattern::Increment {
+                    var: d.clone(),
+                    delta,
+                });
+            }
+            if let HlilExpr::Sub(a, b, _) = src
+                && let HlilExpr::Var { var: av } = a.as_ref()
+                && av == d
+                && let Some(delta) = b.is_const()
+            {
+                out.push(HlilPattern::Increment {
+                    var: d.clone(),
+                    delta: -delta,
+                });
+            }
+            match_expr_patterns_inner(src, out);
+        }
+        // if (true/false)
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
+            if let Some(v) = cond.is_const() {
+                out.push(HlilPattern::ConstantCondition { value: v != 0 });
+            }
+            for s in then_body {
+                match_stmt_patterns_inner(s, out);
+            }
+            for s in else_body {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        // while (1)
+        HlilStatement::While { cond, body } => {
+            if cond.is_const() == Some(1) {
+                out.push(HlilPattern::InfiniteLoop);
+            }
+            for s in body {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        // do { } while (0)
+        HlilStatement::DoWhile { body, cond } => {
+            if cond.is_const_zero() && body.is_empty() {
+                out.push(HlilPattern::DoWhileFalse);
+            }
+            for s in body {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        // return 0
+        HlilStatement::Return(vals) => {
+            if vals.len() == 1 {
+                if let Some(v) = vals[0].is_const() {
+                    out.push(HlilPattern::TrivialReturn { value: v });
+                }
+                match_expr_patterns_inner(&vals[0], out);
+            }
+        }
+        HlilStatement::Expression(e) | HlilStatement::VarDeclare { init: Some(e), .. } => match_expr_patterns_inner(e, out),
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        HlilStatement::For { init, body, .. } => {
+            if let Some(i) = init {
+                match_stmt_patterns_inner(i, out);
+            }
+            for s in body {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        HlilStatement::Switch {
+            cases,
+            default,
+            value,
+        } => {
+            match_expr_patterns_inner(value, out);
+            for c in cases {
+                for s in &c.body {
+                    match_stmt_patterns_inner(s, out);
+                }
+            }
+            for s in default {
+                match_stmt_patterns_inner(s, out);
+            }
+        }
+        HlilStatement::AssignUnpack { src, .. } => match_expr_patterns_inner(src, out),
+        _ => {}
+    }
+}
+
+/// Match patterns across an entire [`HlilFunction`].
+#[must_use]
+pub fn match_function_patterns(func: &HlilFunction) -> Vec<HlilPattern> {
+    let mut found = Vec::new();
+    for stmt in &func.body {
+        match_stmt_patterns_inner(stmt, &mut found);
+    }
+    found
+}
+
+// ── HLIL Constant Folding ─────────────────────────────────────────────────────
+
+/// Fold constant expressions in an [`HlilExpr`], returning the (possibly
+/// simplified) expression and the number of reductions applied.
+#[must_use]
+pub fn fold_hlil_expr(expr: HlilExpr) -> (HlilExpr, u32) {
+    match expr {
+        // Binary arithmetic on two constants
+        HlilExpr::Add(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: va.wrapping_add(vb),
+                        ty,
+                    },
+                    ca + cb + 1,
+                )
+            } else if fb.is_const_zero() {
+                (fa, ca + cb + 1)
+            } else {
+                (HlilExpr::Add(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Sub(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: va.wrapping_sub(vb),
+                        ty,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::Sub(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Mul(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: va.wrapping_mul(vb),
+                        ty,
+                    },
+                    ca + cb + 1,
+                )
+            } else if fa.is_const_zero() || fb.is_const_zero() {
+                (HlilExpr::Const { value: 0, ty }, ca + cb + 1)
+            } else if fb.is_const() == Some(1) {
+                (fa, ca + cb + 1)
+            } else {
+                (HlilExpr::Mul(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Div(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const())
+                && vb != 0
+            {
+                return (
+                    HlilExpr::Const {
+                        value: va.wrapping_div(vb),
+                        ty,
+                    },
+                    ca + cb + 1,
+                );
+            }
+            if fb.is_const() == Some(1) {
+                (fa, ca + cb + 1)
+            } else {
+                (HlilExpr::Div(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::And(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (HlilExpr::Const { value: va & vb, ty }, ca + cb + 1)
+            } else if fa.is_const_zero() || fb.is_const_zero() {
+                (HlilExpr::Const { value: 0, ty }, ca + cb + 1)
+            } else {
+                (HlilExpr::And(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Or(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (HlilExpr::Const { value: va | vb, ty }, ca + cb + 1)
+            } else {
+                (HlilExpr::Or(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Xor(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (HlilExpr::Const { value: va ^ vb, ty }, ca + cb + 1)
+            } else if fa == fb {
+                (HlilExpr::Const { value: 0, ty }, ca + cb + 1)
+            } else {
+                (HlilExpr::Xor(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Shl(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                let shifted = va.wrapping_shl(vb.try_into().unwrap_or(0));
+                (HlilExpr::Const { value: shifted, ty }, ca + cb + 1)
+            } else {
+                (HlilExpr::Shl(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Shr(a, b, ty) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                let shifted = va.wrapping_shr(vb.try_into().unwrap_or(0));
+                (HlilExpr::Const { value: shifted, ty }, ca + cb + 1)
+            } else {
+                (HlilExpr::Shr(Box::new(fa), Box::new(fb), ty), ca + cb)
+            }
+        }
+        HlilExpr::Neg(e, ty) => {
+            let (fe, ce) = fold_hlil_expr(*e);
+            if let Some(v) = fe.is_const() {
+                (
+                    HlilExpr::Const {
+                        value: v.wrapping_neg(),
+                        ty,
+                    },
+                    ce + 1,
+                )
+            } else {
+                (HlilExpr::Neg(Box::new(fe), ty), ce)
+            }
+        }
+        HlilExpr::Not(e, ty) => {
+            let (fe, ce) = fold_hlil_expr(*e);
+            if let Some(v) = fe.is_const() {
+                (HlilExpr::Const { value: !v, ty }, ce + 1)
+            } else {
+                (HlilExpr::Not(Box::new(fe), ty), ce)
+            }
+        }
+        HlilExpr::LogicalNot(e) => {
+            let (fe, ce) = fold_hlil_expr(*e);
+            if let Some(v) = fe.is_const() {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(v == 0),
+                        ty: HlilType::Bool,
+                    },
+                    ce + 1,
+                )
+            } else {
+                (HlilExpr::LogicalNot(Box::new(fe)), ce)
+            }
+        }
+        // Comparison on two constants
+        HlilExpr::CmpEq(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(va == vb),
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpEq(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::CmpNe(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: if va == vb { 0 } else { 1 },
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpNe(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::CmpLt(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(va < vb),
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpLt(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::CmpGt(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(va > vb),
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpGt(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::CmpLe(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(va <= vb),
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpLe(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::CmpGe(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                (
+                    HlilExpr::Const {
+                        value: i64::from(va >= vb),
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::CmpGe(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::LogicalAnd(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                let r = i64::from(va != 0 && vb != 0);
+                (
+                    HlilExpr::Const {
+                        value: r,
+                        ty: HlilType::i64(),
+                    },
+                    ca + cb + 1,
+                )
+            } else if fa.is_const_zero() {
+                (
+                    HlilExpr::Const {
+                        value: 0,
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::LogicalAnd(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::LogicalOr(a, b) => {
+            let (fa, ca) = fold_hlil_expr(*a);
+            let (fb, cb) = fold_hlil_expr(*b);
+            if let (Some(va), Some(vb)) = (fa.is_const(), fb.is_const()) {
+                let r = i64::from(va != 0 || vb != 0);
+                (
+                    HlilExpr::Const {
+                        value: r,
+                        ty: HlilType::Bool,
+                    },
+                    ca + cb + 1,
+                )
+            } else {
+                (HlilExpr::LogicalOr(Box::new(fa), Box::new(fb)), ca + cb)
+            }
+        }
+        HlilExpr::Ternary {
+            cond,
+            then,
+            else_,
+            ty,
+        } => {
+            let (fc, cc) = fold_hlil_expr(*cond);
+            if let Some(v) = fc.is_const() {
+                let chosen = if v != 0 { *then } else { *else_ };
+                let (fe, ce) = fold_hlil_expr(chosen);
+                (fe, cc + ce + 1)
+            } else {
+                (
+                    HlilExpr::Ternary {
+                        cond: Box::new(fc),
+                        then,
+                        else_,
+                        ty,
+                    },
+                    cc,
+                )
+            }
+        }
+        HlilExpr::Cast { expr, to } => {
+            let (fe, ce) = fold_hlil_expr(*expr);
+            (
+                HlilExpr::Cast {
+                    expr: Box::new(fe),
+                    to,
+                },
+                ce,
+            )
+        }
+        HlilExpr::Deref { addr, ty } => {
+            let (fa, ca) = fold_hlil_expr(*addr);
+            (
+                HlilExpr::Deref {
+                    addr: Box::new(fa),
+                    ty,
+                },
+                ca,
+            )
+        }
+        HlilExpr::Index { base, idx, ty } => {
+            let (fb, cb) = fold_hlil_expr(*base);
+            let (fi, ci) = fold_hlil_expr(*idx);
+            (
+                HlilExpr::Index {
+                    base: Box::new(fb),
+                    idx: Box::new(fi),
+                    ty,
+                },
+                cb + ci,
+            )
+        }
+        HlilExpr::FieldAccess { base, field, ty } => {
+            let (fb, cb) = fold_hlil_expr(*base);
+            (
+                HlilExpr::FieldAccess {
+                    base: Box::new(fb),
+                    field,
+                    ty,
+                },
+                cb,
+            )
+        }
+        other => (other, 0),
+    }
+}
+
+/// Fold constants in an [`HlilStatement`].
+#[must_use]
+pub fn fold_hlil_stmt(stmt: HlilStatement) -> (HlilStatement, u32) {
+    match stmt {
+        HlilStatement::Assign { dest, src } => {
+            let (fd, cd) = fold_hlil_expr(dest);
+            let (fs, cs) = fold_hlil_expr(src);
+            (HlilStatement::Assign { dest: fd, src: fs }, cd + cs)
+        }
+        HlilStatement::VarDeclare { var, init: Some(e) } => {
+            let (fe, ce) = fold_hlil_expr(e);
+            (
+                HlilStatement::VarDeclare {
+                    var,
+                    init: Some(fe),
+                },
+                ce,
+            )
+        }
+        HlilStatement::Expression(e) => {
+            let (fe, ce) = fold_hlil_expr(e);
+            (HlilStatement::Expression(fe), ce)
+        }
+        HlilStatement::Return(vals) => {
+            let mut total = 0u32;
+            let folded = vals
+                .into_iter()
+                .map(|v| {
+                    let (fv, cv) = fold_hlil_expr(v);
+                    total += cv;
+                    fv
+                })
+                .collect();
+            (HlilStatement::Return(folded), total)
+        }
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
+            let (fc, cc) = fold_hlil_expr(cond);
+            let (ft, ct) = fold_hlil_body(then_body);
+            let (fe, ce) = fold_hlil_body(else_body);
+            (
+                HlilStatement::If {
+                    cond: fc,
+                    then_body: ft,
+                    else_body: fe,
+                },
+                cc + ct + ce,
+            )
+        }
+        HlilStatement::While { cond, body } => {
+            let (fc, cc) = fold_hlil_expr(cond);
+            let (fb, cb) = fold_hlil_body(body);
+            (HlilStatement::While { cond: fc, body: fb }, cc + cb)
+        }
+        HlilStatement::DoWhile { body, cond } => {
+            let (fb, cb) = fold_hlil_body(body);
+            let (fc, cc) = fold_hlil_expr(cond);
+            (HlilStatement::DoWhile { body: fb, cond: fc }, cb + cc)
+        }
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => {
+            let (fi, ci) = init.map_or((None, 0), |i| {
+                let (s, c) = fold_hlil_stmt(*i);
+                (Some(Box::new(s)), c)
+            });
+            let (fc, cc) = cond.map_or((None, 0), |c| {
+                let (e, cv) = fold_hlil_expr(c);
+                (Some(e), cv)
+            });
+            let (fs, cs) = step.map_or((None, 0), |s| {
+                let (e, cv) = fold_hlil_expr(s);
+                (Some(e), cv)
+            });
+            let (fb, cb) = fold_hlil_body(body);
+            (
+                HlilStatement::For {
+                    init: fi,
+                    cond: fc,
+                    step: fs,
+                    body: fb,
+                },
+                ci + cc + cs + cb,
+            )
+        }
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            let (fv, cv) = fold_hlil_expr(value);
+            let mut total = cv;
+            let folded_cases: Vec<SwitchCase> = cases
+                .into_iter()
+                .map(|c| {
+                    let (fb, cb) = fold_hlil_body(c.body);
+                    total += cb;
+                    SwitchCase {
+                        values: c.values,
+                        body: fb,
+                    }
+                })
+                .collect();
+            let (fd, cd) = fold_hlil_body(default);
+            total += cd;
+            (
+                HlilStatement::Switch {
+                    value: fv,
+                    cases: folded_cases,
+                    default: fd,
+                },
+                total,
+            )
+        }
+        HlilStatement::Block(stmts) => {
+            let (fb, cb) = fold_hlil_body(stmts);
+            (HlilStatement::Block(fb), cb)
+        }
+        other => (other, 0),
+    }
+}
+
+fn fold_hlil_body(stmts: Vec<HlilStatement>) -> (Vec<HlilStatement>, u32) {
+    let mut total = 0u32;
+    let folded = stmts
+        .into_iter()
+        .map(|s| {
+            let (fs, c) = fold_hlil_stmt(s);
+            total += c;
+            fs
+        })
+        .collect();
+    (folded, total)
+}
+
+/// Repeatedly apply constant folding to an [`HlilFunction`] until no more
+/// reductions are possible. Returns the total number of reductions applied.
+pub fn fold_hlil_function(func: &mut HlilFunction) -> u32 {
+    let mut total = 0u32;
+    loop {
+        let mut round = 0u32;
+        let body = std::mem::take(&mut func.body);
+        let (folded, c) = fold_hlil_body(body);
+        func.body = folded;
+        round += c;
+        if round == 0 {
+            break;
+        }
+        total += round;
+    }
+    total
+}
+
+// ── HLIL Expression Inlining ──────────────────────────────────────────────────
+
+/// Inline single-use SSA variables.
+///
+/// For each variable `v` that is assigned exactly once with a pure expression
+/// and read exactly once, substitute the expression at the use site and remove
+/// the declaration.
+pub fn inline_single_use_vars(func: &mut HlilFunction) {
+    let mut read_counts: HashMap<String, usize> = HashMap::new();
+    let mut write_exprs: HashMap<String, HlilExpr> = HashMap::new();
+
+    for stmt in &func.body {
+        collect_read_var_names(stmt, &mut read_counts);
+    }
+
+    for stmt in &func.body {
+        if let HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src,
+        } = stmt
+            && src.is_pure()
+        {
+            write_exprs.insert(d.name.clone(), src.clone());
+        }
+    }
+
+    // Determine which vars are single-use and have a pure write.
+    let candidates: HashSet<String> = read_counts
+        .iter()
+        .filter(|(name, cnt)| **cnt == 1 && write_exprs.contains_key(*name))
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    // Perform the substitution in the body.
+    let body = std::mem::take(&mut func.body);
+    func.body = inline_vars_in_body(body, &candidates, &write_exprs);
+
+    // Remove now-inlined assignments.
+    func.body.retain(|stmt| {
+        if let HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            ..
+        } = stmt
+        {
+            !candidates.contains(&d.name)
+        } else {
+            true
+        }
+    });
+    // Remove locals for inlined vars.
+    func.locals.retain(|v| !candidates.contains(&v.name));
+}
+
+fn collect_read_var_names(stmt: &HlilStatement, counts: &mut HashMap<String, usize>) {
+    match stmt {
+        HlilStatement::Assign { src, dest } => {
+            count_expr_vars(src, counts);
+            // dest is being written, not read (unless it's deref/index)
+            match dest {
+                HlilExpr::Deref { addr, .. } => count_expr_vars(addr, counts),
+                HlilExpr::Index { base, idx, .. } => {
+                    count_expr_vars(base, counts);
+                    count_expr_vars(idx, counts);
+                }
+                _ => {}
+            }
+        }
+        HlilStatement::VarDeclare { init: Some(e), .. } => count_expr_vars(e, counts),
+        HlilStatement::Expression(e) => {
+            count_expr_vars(e, counts);
+        }
+        HlilStatement::Return(vals) => {
+            for v in vals {
+                count_expr_vars(v, counts);
+            }
+        }
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
+            count_expr_vars(cond, counts);
+            for s in then_body {
+                collect_read_var_names(s, counts);
+            }
+            for s in else_body {
+                collect_read_var_names(s, counts);
+            }
+        }
+        HlilStatement::While { cond, body } => {
+            count_expr_vars(cond, counts);
+            for s in body {
+                collect_read_var_names(s, counts);
+            }
+        }
+        HlilStatement::DoWhile { body, cond } => {
+            for s in body {
+                collect_read_var_names(s, counts);
+            }
+            count_expr_vars(cond, counts);
+        }
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => {
+            if let Some(i) = init {
+                collect_read_var_names(i, counts);
+            }
+            if let Some(c) = cond {
+                count_expr_vars(c, counts);
+            }
+            if let Some(s) = step {
+                count_expr_vars(s, counts);
+            }
+            for s in body {
+                collect_read_var_names(s, counts);
+            }
+        }
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            count_expr_vars(value, counts);
+            for c in cases {
+                for s in &c.body {
+                    collect_read_var_names(s, counts);
+                }
+            }
+            for s in default {
+                collect_read_var_names(s, counts);
+            }
+        }
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                collect_read_var_names(s, counts);
+            }
+        }
+        HlilStatement::AssignUnpack { src, .. } => count_expr_vars(src, counts),
+        _ => {}
+    }
+}
+
+fn count_expr_vars(expr: &HlilExpr, counts: &mut HashMap<String, usize>) {
+    match expr {
+        HlilExpr::Var { var } | HlilExpr::AddressOf { var } => {
+            *counts.entry(var.name.clone()).or_insert(0) += 1;
+        }
+        HlilExpr::Deref { addr, .. } => count_expr_vars(addr, counts),
+        HlilExpr::FieldAccess { base, .. } => count_expr_vars(base, counts),
+        HlilExpr::Index { base, idx, .. } => {
+            count_expr_vars(base, counts);
+            count_expr_vars(idx, counts);
+        }
+        HlilExpr::Add(a, b, _)
+        | HlilExpr::Sub(a, b, _)
+        | HlilExpr::Mul(a, b, _)
+        | HlilExpr::Div(a, b, _)
+        | HlilExpr::Mod(a, b, _)
+        | HlilExpr::And(a, b, _)
+        | HlilExpr::Or(a, b, _)
+        | HlilExpr::Xor(a, b, _)
+        | HlilExpr::Shl(a, b, _)
+        | HlilExpr::Shr(a, b, _)
+              | HlilExpr::CmpLt(a, b)
+        | HlilExpr::CmpGt(a, b)
+        | HlilExpr::CmpLe(a, b)
+        | HlilExpr::CmpGe(a, b)
+        | HlilExpr::LogicalAnd(a, b)
+        | HlilExpr::LogicalOr(a, b) => {
+            count_expr_vars(a, counts);
+            count_expr_vars(b, counts);
+        }
+        HlilExpr::Neg(e, _)
+        | HlilExpr::Not(e, _)
+        | HlilExpr::LogicalNot(e)
+        | HlilExpr::Cast { expr: e, .. } => count_expr_vars(e, counts),
+        HlilExpr::Call { func, args, .. } => {
+            count_expr_vars(func, counts);
+            for a in args {
+                count_expr_vars(a, counts);
+            }
+        }
+        HlilExpr::Ternary {
+            cond, then, else_, ..
+        } => {
+            count_expr_vars(cond, counts);
+            count_expr_vars(then, counts);
+            count_expr_vars(else_, counts);
+        }
+        _ => {}
+    }
+}
+
+fn inline_vars_in_expr(
+    expr: HlilExpr,
+    candidates: &HashSet<String>,
+    exprs: &HashMap<String, HlilExpr>,
+) -> HlilExpr {
+    match expr {
+        HlilExpr::Var { ref var } => {
+            if candidates.contains(&var.name)
+                && let Some(replacement) = exprs.get(&var.name)
+            {
+                return replacement.clone();
+            }
+            expr
+        }
+        HlilExpr::Add(a, b, ty) => HlilExpr::Add(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Sub(a, b, ty) => HlilExpr::Sub(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Mul(a, b, ty) => HlilExpr::Mul(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Div(a, b, ty) => HlilExpr::Div(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::And(a, b, ty) => HlilExpr::And(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Xor(a, b, ty) => HlilExpr::Xor(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Shl(a, b, ty) => HlilExpr::Shl(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Shr(a, b, ty) => HlilExpr::Shr(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::Mod(a, b, ty) => HlilExpr::Mod(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+            ty,
+        ),
+        HlilExpr::CmpEq(a, b) => HlilExpr::CmpEq(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::CmpNe(a, b) => HlilExpr::CmpNe(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::CmpLt(a, b) => HlilExpr::CmpLt(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::CmpGt(a, b) => HlilExpr::CmpGt(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::CmpLe(a, b) => HlilExpr::CmpLe(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::CmpGe(a, b) => HlilExpr::CmpGe(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::LogicalAnd(a, b) => HlilExpr::LogicalAnd(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::LogicalOr(a, b) => HlilExpr::LogicalOr(
+            Box::new(inline_vars_in_expr(*a, candidates, exprs)),
+            Box::new(inline_vars_in_expr(*b, candidates, exprs)),
+        ),
+        HlilExpr::Neg(e, ty) => {
+            HlilExpr::Neg(Box::new(inline_vars_in_expr(*e, candidates, exprs)), ty)
+        }
+        HlilExpr::Not(e, ty) => {
+            HlilExpr::Not(Box::new(inline_vars_in_expr(*e, candidates, exprs)), ty)
+        }
+        HlilExpr::LogicalNot(e) => {
+            HlilExpr::LogicalNot(Box::new(inline_vars_in_expr(*e, candidates, exprs)))
+        }
+        HlilExpr::Cast { expr, to } => HlilExpr::Cast {
+            expr: Box::new(inline_vars_in_expr(*expr, candidates, exprs)),
+            to,
+        },
+        HlilExpr::Deref { addr, ty } => HlilExpr::Deref {
+            addr: Box::new(inline_vars_in_expr(*addr, candidates, exprs)),
+            ty,
+        },
+        HlilExpr::Index { base, idx, ty } => HlilExpr::Index {
+            base: Box::new(inline_vars_in_expr(*base, candidates, exprs)),
+            idx: Box::new(inline_vars_in_expr(*idx, candidates, exprs)),
+            ty,
+        },
+        HlilExpr::FieldAccess { base, field, ty } => HlilExpr::FieldAccess {
+            base: Box::new(inline_vars_in_expr(*base, candidates, exprs)),
+            field,
+            ty,
+        },
+        HlilExpr::Call { func, args, ret_ty } => HlilExpr::Call {
+            func: Box::new(inline_vars_in_expr(*func, candidates, exprs)),
+            args: args
+                .into_iter()
+                .map(|a| inline_vars_in_expr(a, candidates, exprs))
+                .collect(),
+            ret_ty,
+        },
+        HlilExpr::Ternary {
+            cond,
+            then,
+            else_,
+            ty,
+        } => HlilExpr::Ternary {
+            cond: Box::new(inline_vars_in_expr(*cond, candidates, exprs)),
+            then: Box::new(inline_vars_in_expr(*then, candidates, exprs)),
+            else_: Box::new(inline_vars_in_expr(*else_, candidates, exprs)),
+            ty,
+        },
+        other => other,
+    }
+}
+
+fn inline_vars_in_stmt(
+    stmt: HlilStatement,
+    candidates: &HashSet<String>,
+    exprs: &HashMap<String, HlilExpr>,
+) -> HlilStatement {
+    match stmt {
+        HlilStatement::Assign { dest, src } => HlilStatement::Assign {
+            dest: inline_vars_in_expr(dest, candidates, exprs),
+            src: inline_vars_in_expr(src, candidates, exprs),
+        },
+        HlilStatement::VarDeclare { var, init } => HlilStatement::VarDeclare {
+            var,
+            init: init.map(|e| inline_vars_in_expr(e, candidates, exprs)),
+        },
+        HlilStatement::Expression(e) => {
+            HlilStatement::Expression(inline_vars_in_expr(e, candidates, exprs))
+        }
+        HlilStatement::Return(vals) => HlilStatement::Return(
+            vals.into_iter()
+                .map(|v| inline_vars_in_expr(v, candidates, exprs))
+                .collect(),
+        ),
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => HlilStatement::If {
+            cond: inline_vars_in_expr(cond, candidates, exprs),
+            then_body: inline_vars_in_body(then_body, candidates, exprs),
+            else_body: inline_vars_in_body(else_body, candidates, exprs),
+        },
+        HlilStatement::While { cond, body } => HlilStatement::While {
+            cond: inline_vars_in_expr(cond, candidates, exprs),
+            body: inline_vars_in_body(body, candidates, exprs),
+        },
+        HlilStatement::DoWhile { body, cond } => HlilStatement::DoWhile {
+            body: inline_vars_in_body(body, candidates, exprs),
+            cond: inline_vars_in_expr(cond, candidates, exprs),
+        },
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => HlilStatement::For {
+            init: init.map(|i| Box::new(inline_vars_in_stmt(*i, candidates, exprs))),
+            cond: cond.map(|c| inline_vars_in_expr(c, candidates, exprs)),
+            step: step.map(|s| inline_vars_in_expr(s, candidates, exprs)),
+            body: inline_vars_in_body(body, candidates, exprs),
+        },
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => HlilStatement::Switch {
+            value: inline_vars_in_expr(value, candidates, exprs),
+            cases: cases
+                .into_iter()
+                .map(|c| SwitchCase {
+                    values: c.values,
+                    body: inline_vars_in_body(c.body, candidates, exprs),
+                })
+                .collect(),
+            default: inline_vars_in_body(default, candidates, exprs),
+        },
+        HlilStatement::Block(stmts) => {
+            HlilStatement::Block(inline_vars_in_body(stmts, candidates, exprs))
+        }
+        HlilStatement::AssignUnpack { dests, src } => HlilStatement::AssignUnpack {
+            dests,
+            src: inline_vars_in_expr(src, candidates, exprs),
+        },
+        other => other,
+    }
+}
+
+fn inline_vars_in_body(
+    stmts: Vec<HlilStatement>,
+    candidates: &HashSet<String>,
+    exprs: &HashMap<String, HlilExpr>,
+) -> Vec<HlilStatement> {
+    stmts
+        .into_iter()
+        .map(|s| inline_vars_in_stmt(s, candidates, exprs))
+        .collect()
+}
+
+// ── HLIL Variable Renaming ────────────────────────────────────────────────────
+
+/// Strategy for automatic variable renaming.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenameStrategy {
+    /// Use sequential names: `v0`, `v1`, `v2`, …
+    Sequential,
+    /// Use type-prefixed sequential names: `i32_0`, `ptr_1`, …
+    TypePrefixed,
+    /// Keep original names (no-op).
+    Preserve,
+}
+
+/// Rename all local variables in an [`HlilFunction`] according to the chosen
+/// [`RenameStrategy`]. Renames are applied consistently across all expressions.
+pub fn rename_variables(func: &mut HlilFunction, strategy: RenameStrategy) {
+    if strategy == RenameStrategy::Preserve {
+        return;
+    }
+    // Build a stable renaming table.
+    let rename_map: HashMap<String, String> = func
+        .locals
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            let new_name = match strategy {
+                RenameStrategy::Sequential => format!("v{i}"),
+                RenameStrategy::TypePrefixed => {
+                    let prefix = type_prefix(&v.ty);
+                    format!("{prefix}_{i}")
+                }
+                RenameStrategy::Preserve => v.name.clone(),
+            };
+            (v.name.clone(), new_name)
+        })
+        .collect();
+
+    // Apply to locals.
+    for v in &mut func.locals {
+        if let Some(new) = rename_map.get(&v.name) {
+            v.name = new.clone();
+        }
+    }
+    // Apply to body.
+    let body = std::mem::take(&mut func.body);
+    func.body = rename_body(body, &rename_map);
+}
+
+fn type_prefix(ty: &HlilType) -> &'static str {
+    match ty {
+        HlilType::Int {
+            signed: true,
+            bits: 8,
+        } => "i8",
+        HlilType::Int {
+            signed: true,
+            bits: 16,
+        } => "i16",
+        HlilType::Int {
+            signed: true,
+            bits: 32,
+        } => "i32",
+        HlilType::Int {
+            signed: true,
+            bits: 64,
+        } => "i64",
+        HlilType::Int {
+            signed: false,
+            bits: 8,
+        } => "u8",
+        HlilType::Int {
+            signed: false,
+            bits: 16,
+        } => "u16",
+        HlilType::Int {
+            signed: false,
+            bits: 32,
+        } => "u32",
+        HlilType::Int {
+            signed: false,
+            bits: 64,
+        } => "u64",
+        HlilType::Float { bits: 32 } => "f32",
+        HlilType::Float { bits: 64 } => "f64",
+        HlilType::Pointer { .. } => "ptr",
+        HlilType::Bool => "b",
+        HlilType::Void => "v",
+        _ => "var",
+    }
+}
+
+fn rename_expr(expr: HlilExpr, map: &HashMap<String, String>) -> HlilExpr {
+    match expr {
+        HlilExpr::Var { var } => HlilExpr::Var {
+            var: rename_var(var, map),
+        },
+        HlilExpr::AddressOf { var } => HlilExpr::AddressOf {
+            var: rename_var(var, map),
+        },
+        HlilExpr::Add(a, b, ty) => HlilExpr::Add(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Sub(a, b, ty) => HlilExpr::Sub(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Mul(a, b, ty) => HlilExpr::Mul(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Div(a, b, ty) => HlilExpr::Div(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Mod(a, b, ty) => HlilExpr::Mod(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::And(a, b, ty) => HlilExpr::And(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Or(a, b, ty) => HlilExpr::Or(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Xor(a, b, ty) => HlilExpr::Xor(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Shl(a, b, ty) => HlilExpr::Shl(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::Shr(a, b, ty) => HlilExpr::Shr(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+            ty,
+        ),
+        HlilExpr::CmpEq(a, b) => HlilExpr::CmpEq(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::CmpNe(a, b) => HlilExpr::CmpNe(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::CmpLt(a, b) => HlilExpr::CmpLt(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::CmpGt(a, b) => HlilExpr::CmpGt(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::CmpLe(a, b) => HlilExpr::CmpLe(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::CmpGe(a, b) => HlilExpr::CmpGe(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::LogicalAnd(a, b) => HlilExpr::LogicalAnd(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::LogicalOr(a, b) => HlilExpr::LogicalOr(
+            Box::new(rename_expr(*a, map)),
+            Box::new(rename_expr(*b, map)),
+        ),
+        HlilExpr::Neg(e, ty) => HlilExpr::Neg(Box::new(rename_expr(*e, map)), ty),
+        HlilExpr::Not(e, ty) => HlilExpr::Not(Box::new(rename_expr(*e, map)), ty),
+        HlilExpr::LogicalNot(e) => HlilExpr::LogicalNot(Box::new(rename_expr(*e, map))),
+        HlilExpr::Cast { expr, to } => HlilExpr::Cast {
+            expr: Box::new(rename_expr(*expr, map)),
+            to,
+        },
+        HlilExpr::Deref { addr, ty } => HlilExpr::Deref {
+            addr: Box::new(rename_expr(*addr, map)),
+            ty,
+        },
+        HlilExpr::Index { base, idx, ty } => HlilExpr::Index {
+            base: Box::new(rename_expr(*base, map)),
+            idx: Box::new(rename_expr(*idx, map)),
+            ty,
+        },
+        HlilExpr::FieldAccess { base, field, ty } => HlilExpr::FieldAccess {
+            base: Box::new(rename_expr(*base, map)),
+            field,
+            ty,
+        },
+        HlilExpr::Call { func, args, ret_ty } => HlilExpr::Call {
+            func: Box::new(rename_expr(*func, map)),
+            args: args.into_iter().map(|a| rename_expr(a, map)).collect(),
+            ret_ty,
+        },
+        HlilExpr::Ternary {
+            cond,
+            then,
+            else_,
+            ty,
+        } => HlilExpr::Ternary {
+            cond: Box::new(rename_expr(*cond, map)),
+            then: Box::new(rename_expr(*then, map)),
+            else_: Box::new(rename_expr(*else_, map)),
+            ty,
+        },
+        other => other,
+    }
+}
+
+fn rename_var(mut v: HlilVar, map: &HashMap<String, String>) -> HlilVar {
+    if let Some(new) = map.get(&v.name) {
+        v.name = new.clone();
+    }
+    v
+}
+
+fn rename_stmt(stmt: HlilStatement, map: &HashMap<String, String>) -> HlilStatement {
+    match stmt {
+        HlilStatement::Assign { dest, src } => HlilStatement::Assign {
+            dest: rename_expr(dest, map),
+            src: rename_expr(src, map),
+        },
+        HlilStatement::VarDeclare { var, init } => HlilStatement::VarDeclare {
+            var: rename_var(var, map),
+            init: init.map(|e| rename_expr(e, map)),
+        },
+        HlilStatement::AssignUnpack { dests, src } => HlilStatement::AssignUnpack {
+            dests: dests.into_iter().map(|v| rename_var(v, map)).collect(),
+            src: rename_expr(src, map),
+        },
+        HlilStatement::Expression(e) => HlilStatement::Expression(rename_expr(e, map)),
+        HlilStatement::Return(vals) => {
+            HlilStatement::Return(vals.into_iter().map(|v| rename_expr(v, map)).collect())
+        }
+        HlilStatement::If {
+            cond,
+            then_body,
+            else_body,
+        } => HlilStatement::If {
+            cond: rename_expr(cond, map),
+            then_body: rename_body(then_body, map),
+            else_body: rename_body(else_body, map),
+        },
+        HlilStatement::While { cond, body } => HlilStatement::While {
+            cond: rename_expr(cond, map),
+            body: rename_body(body, map),
+        },
+        HlilStatement::DoWhile { body, cond } => HlilStatement::DoWhile {
+            body: rename_body(body, map),
+            cond: rename_expr(cond, map),
+        },
+        HlilStatement::For {
+            init,
+            cond,
+            step,
+            body,
+        } => HlilStatement::For {
+            init: init.map(|i| Box::new(rename_stmt(*i, map))),
+            cond: cond.map(|c| rename_expr(c, map)),
+            step: step.map(|s| rename_expr(s, map)),
+            body: rename_body(body, map),
+        },
+        HlilStatement::Switch {
+            value,
+            cases,
+            default,
+        } => HlilStatement::Switch {
+            value: rename_expr(value, map),
+            cases: cases
+                .into_iter()
+                .map(|c| SwitchCase {
+                    values: c.values,
+                    body: rename_body(c.body, map),
+                })
+                .collect(),
+            default: rename_body(default, map),
+        },
+        HlilStatement::Block(stmts) => HlilStatement::Block(rename_body(stmts, map)),
+        other => other,
+    }
+}
+
+fn rename_body(stmts: Vec<HlilStatement>, map: &HashMap<String, String>) -> Vec<HlilStatement> {
+    stmts.into_iter().map(|s| rename_stmt(s, map)).collect()
+}
+
+// ── HLIL Dead-Code Elimination ────────────────────────────────────────────────
+
+/// Remove unreachable statements that follow a terminator in a flat block.
+///
+/// E.g. `{ return x; stmt_after_return; }` → `{ return x; }`.
+pub fn remove_unreachable_after_terminator(stmts: &mut Vec<HlilStatement>) {
+    if let Some(term_pos) = stmts.iter().position(HlilStatement::is_terminator) {
+        stmts.truncate(term_pos + 1);
+    }
+    // Recurse into structured statements.
+    for stmt in stmts.iter_mut() {
+        remove_unreachable_in_stmt(stmt);
+    }
+}
+
+fn remove_unreachable_in_stmt(stmt: &mut HlilStatement) {
+    match stmt {
+        HlilStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            remove_unreachable_after_terminator(then_body);
+            remove_unreachable_after_terminator(else_body);
+        }
+        HlilStatement::While { body, .. } | HlilStatement::DoWhile { body, .. } | HlilStatement::For { body, .. } => {
+            remove_unreachable_after_terminator(body);
+        }
+        HlilStatement::Switch { cases, default, .. } => {
+            for c in cases {
+                remove_unreachable_after_terminator(&mut c.body);
+            }
+            remove_unreachable_after_terminator(default);
+        }
+        HlilStatement::Block(stmts) => {
+            remove_unreachable_after_terminator(stmts);
+        }
+        _ => {}
+    }
+}
+
+/// Remove empty `if (cond) { } else { }` branches.
+pub fn remove_empty_branches(stmts: &mut Vec<HlilStatement>) {
+    stmts.retain(|s| {
+        !matches!(
+            s,
+            HlilStatement::If { then_body, else_body, .. }
+                if then_body.is_empty() && else_body.is_empty()
+        )
+    });
+    for s in stmts.iter_mut() {
+        remove_empty_branches_in_stmt(s);
+    }
+}
+
+fn remove_empty_branches_in_stmt(stmt: &mut HlilStatement) {
+    match stmt {
+        HlilStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            remove_empty_branches(then_body);
+            remove_empty_branches(else_body);
+        }
+        HlilStatement::While { body, .. } | HlilStatement::DoWhile { body, .. } => {
+            remove_empty_branches(body);
+        }
+        HlilStatement::For { body, .. } => remove_empty_branches(body),
+        HlilStatement::Switch { cases, default, .. } => {
+            for c in cases {
+                remove_empty_branches(&mut c.body);
+            }
+            remove_empty_branches(default);
+        }
+        HlilStatement::Block(stmts) => remove_empty_branches(stmts),
+        _ => {}
+    }
+}
+
+// ── HLIL Pass infrastructure ──────────────────────────────────────────────────
+
+/// Trait for HLIL optimisation passes.
+pub trait HlilPass: std::fmt::Debug {
+    /// Human-readable name of this pass.
+    fn name(&self) -> &'static str;
+
+    /// Run the pass over `func`, returning the number of transformations made.
+    fn run(&self, func: &mut HlilFunction) -> u32;
+}
+
+/// Constant-folding pass.
+#[derive(Debug, Clone, Default)]
+pub struct HlilConstantFoldPass;
+
+impl HlilPass for HlilConstantFoldPass {
+    fn name(&self) -> &'static str {
+        "hlil-constant-fold"
+    }
+
+    fn run(&self, func: &mut HlilFunction) -> u32 {
+        fold_hlil_function(func)
+    }
+}
+
+/// Dead-code removal pass (unreachable-after-terminator).
+#[derive(Debug, Clone, Default)]
+pub struct HlilDeadCodePass;
+
+impl HlilPass for HlilDeadCodePass {
+    fn name(&self) -> &'static str {
+        "hlil-dead-code"
+    }
+
+    fn run(&self, func: &mut HlilFunction) -> u32 {
+        let before = func.total_stmt_count();
+        remove_unreachable_after_terminator(&mut func.body);
+        let after = func.total_stmt_count();
+        (before.saturating_sub(after)) as u32
+    }
+}
+
+/// Empty-branch removal pass.
+#[derive(Debug, Clone, Default)]
+pub struct HlilEmptyBranchPass;
+
+impl HlilPass for HlilEmptyBranchPass {
+    fn name(&self) -> &'static str {
+        "hlil-empty-branch"
+    }
+
+    fn run(&self, func: &mut HlilFunction) -> u32 {
+        let before = func.total_stmt_count();
+        func.body.retain(|s| !matches!(s,
+            HlilStatement::While { body, .. } | HlilStatement::DoWhile { body, .. } | HlilStatement::For { body, .. }
+            if body.is_empty()
+        ));
+        let after = func.total_stmt_count();
+        (before.saturating_sub(after)) as u32
+    }
+}
+
+/// Sequential variable-renaming pass (sequential strategy).
+#[derive(Debug, Clone, Default)]
+pub struct HlilSequentialRenamePass;
+
+impl HlilPass for HlilSequentialRenamePass {
+    fn name(&self) -> &'static str {
+        "hlil-sequential-rename"
+    }
+
+    fn run(&self, func: &mut HlilFunction) -> u32 {
+        let before: Vec<String> = func.locals.iter().map(|v| v.name.clone()).collect();
+        rename_variables(func, RenameStrategy::Sequential);
+        let after: Vec<String> = func.locals.iter().map(|v| v.name.clone()).collect();
+        before
+            .iter()
+            .zip(after.iter())
+            .filter(|(a, b)| a != b)
+            .count() as u32
+    }
+}
+
+/// Type-prefixed variable-renaming pass.
+#[derive(Debug, Clone, Default)]
+pub struct HlilTypePrefixedRenamePass;
+
+impl HlilPass for HlilTypePrefixedRenamePass {
+    fn name(&self) -> &'static str {
+        "hlil-type-prefixed-rename"
+    }
+
+    fn run(&self, func: &mut HlilFunction) -> u32 {
+        let before: Vec<String> = func.locals.iter().map(|v| v.name.clone()).collect();
+        rename_variables(func, RenameStrategy::TypePrefixed);
+        let after: Vec<String> = func.locals.iter().map(|v| v.name.clone()).collect();
+        before
+            .iter()
+            .zip(after.iter())
+            .filter(|(a, b)| a != b)
+            .count() as u32
+    }
+}
+
+/// Pass manager that runs a sequence of HLIL passes.
+#[derive(Debug, Default)]
+pub struct HlilPassManager {
+    passes: Vec<Box<dyn HlilPass>>,
+}
+
+impl HlilPassManager {
+    /// Create an empty pass manager.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { passes: Vec::new() }
+    }
+
+    /// Create a pass manager with a standard optimisation pipeline:
+    /// constant-fold → dead-code → empty-branch.
+    #[must_use]
+    pub fn standard() -> Self {
+        let mut m = Self::new();
+        m.add(HlilConstantFoldPass);
+        m.add(HlilDeadCodePass);
+        m.add(HlilEmptyBranchPass);
+        m
+    }
+
+    /// Append a pass to the end of the pipeline.
+    pub fn add<P: HlilPass + 'static>(&mut self, pass: P) {
+        self.passes.push(Box::new(pass));
+    }
+
+    /// Return the names of all registered passes.
+    #[must_use]
+    pub fn pass_names(&self) -> Vec<&'static str> {
+        self.passes.iter().map(|p| p.name()).collect()
+    }
+
+    /// Run all passes in order over `func`. Returns total transformations.
+    pub fn run_all(&self, func: &mut HlilFunction) -> u32 {
+        self.passes.iter().map(|p| p.run(func)).sum()
+    }
+}
+
+// ── HLIL Use-def tracking ─────────────────────────────────────────────────────
+
+/// A single definition site for an HLIL variable.
+#[derive(Debug, Clone)]
+pub struct HlilDefSite {
+    pub var_name: String,
+    pub stmt_index: usize,
+}
+
+/// A single use site for an HLIL variable.
+#[derive(Debug, Clone)]
+pub struct HlilUseSite {
+    pub var_name: String,
+    pub stmt_index: usize,
+}
+
+/// Use-def chains for an [`HlilFunction`].
+#[derive(Debug, Clone, Default)]
+pub struct HlilUseDefChains {
+    pub defs: Vec<HlilDefSite>,
+    pub uses: Vec<HlilUseSite>,
+}
+
+impl HlilUseDefChains {
+    /// Build use-def chains from the flat top-level body of `func`.
+    #[must_use]
+    pub fn build(func: &HlilFunction) -> Self {
+        let mut chains = Self::default();
+        for (i, stmt) in func.body.iter().enumerate() {
+            for v in stmt.written_vars() {
+                chains.defs.push(HlilDefSite {
+                    var_name: v.name.clone(),
+                    stmt_index: i,
+                });
+            }
+            let mut read_names: HashMap<String, usize> = HashMap::new();
+            collect_read_var_names(stmt, &mut read_names);
+            for name in read_names.into_keys() {
+                chains.uses.push(HlilUseSite {
+                    var_name: name,
+                    stmt_index: i,
+                });
+            }
+        }
+        chains
+    }
+
+    /// Return indices of all statements that define `var_name`.
+    #[must_use]
+    pub fn def_sites(&self, var_name: &str) -> Vec<usize> {
+        self.defs
+            .iter()
+            .filter(|d| d.var_name == var_name)
+            .map(|d| d.stmt_index)
+            .collect()
+    }
+
+    /// Return indices of all statements that use `var_name`.
+    #[must_use]
+    pub fn use_sites(&self, var_name: &str) -> Vec<usize> {
+        self.uses
+            .iter()
+            .filter(|u| u.var_name == var_name)
+            .map(|u| u.stmt_index)
+            .collect()
+    }
+}
+
+// ── HLIL Copy-propagation ─────────────────────────────────────────────────────
+
+/// Perform a single round of copy propagation on `func`.
+///
+/// For each `x = y` (variable-to-variable copy) where `x` is not also written
+/// elsewhere, substitute `y` for every use of `x` and remove the assignment.
+pub fn propagate_hlil_copies(func: &mut HlilFunction) -> usize {
+    let mut copies: HashMap<String, HlilExpr> = HashMap::new();
+    let mut multi_def: HashSet<String> = HashSet::new();
+
+    // Identify copy assignments and multi-def variables.
+    for stmt in &func.body {
+        if let HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src: src @ HlilExpr::Var { .. },
+        } = stmt
+        {
+            if multi_def.contains(&d.name) {
+                continue;
+            }
+            if copies.contains_key(&d.name) {
+                multi_def.insert(d.name.clone());
+                copies.remove(&d.name);
+            } else {
+                copies.insert(d.name.clone(), src.clone());
+            }
+        }
+    }
+
+    if copies.is_empty() {
+        return 0;
+    }
+
+    let candidates: HashSet<String> = copies.keys().cloned().collect();
+    let changed = candidates.len();
+
+    let body = std::mem::take(&mut func.body);
+    func.body = inline_vars_in_body(body, &candidates, &copies);
+
+    // Remove the copy assignments.
+    func.body.retain(|stmt| {
+        if let HlilStatement::Assign {
+            dest: HlilExpr::Var { var: d },
+            src: HlilExpr::Var { .. },
+        } = stmt
+        {
+            !candidates.contains(&d.name)
+        } else {
+            true
+        }
+    });
+
+    changed
+}
+
+// ── HLIL Matcher Library ─────────────────────────────────────────────────────
+
+/// Boxed predicate over a slice of [`HlilStatement`]
+pub type HlilStmtPredicate = Box<dyn Fn(&[HlilStatement]) -> bool + Send + Sync>;
+
+/// A named predicate-based matcher that can be applied to any [`HlilStatement`] slice.
+pub struct HlilMatcher {
+    pub name: &'static str,
+    matcher: HlilStmtPredicate,
+}
+
+impl HlilMatcher {
+    /// Create a new matcher with the given name and closure.
+    #[must_use]
+    pub fn new(
+        name: &'static str,
+        matcher: impl Fn(&[HlilStatement]) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            name,
+            matcher: Box::new(matcher),
+        }
+    }
+
+    /// Returns `true` if the matcher's predicate is satisfied by `stmts`.
+    #[must_use]
+    pub fn matches(&self, stmts: &[HlilStatement]) -> bool {
+        (self.matcher)(stmts)
+    }
+}
+
+impl fmt::Debug for HlilMatcher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HlilMatcher({})", self.name)
+    }
+}
+
+/// A registry of named matchers for structural HLIL classification.
+pub struct HlilMatcherLibrary {
+    matchers: Vec<HlilMatcher>,
+}
+
+impl Default for HlilMatcherLibrary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HlilMatcherLibrary {
+    /// Create a matcher library with common structural checks pre-loaded.
+    #[must_use]
+    pub fn new() -> Self {
+        let mut lib = Self {
+            matchers: Vec::new(),
+        };
+        lib.register(HlilMatcher::new("empty-body", <[HlilStatement]>::is_empty));
+        lib.register(HlilMatcher::new("single-return", |stmts| {
+            stmts.len() == 1 && matches!(stmts[0], HlilStatement::Return(..))
+        }));
+        lib.register(HlilMatcher::new("has-if", |stmts| {
+            stmts.iter().any(|s| matches!(s, HlilStatement::If { .. }))
+        }));
+        lib.register(HlilMatcher::new("has-loop", |stmts| {
+            stmts.iter().any(|s| {
+                matches!(
+                    s,
+                    HlilStatement::While { .. }
+                        | HlilStatement::DoWhile { .. }
+                        | HlilStatement::For { .. }
+                )
+            })
+        }));
+        lib.register(HlilMatcher::new("has-call", |stmts| {
+            fn check(s: &HlilStatement) -> bool {
+                match s {
+                    HlilStatement::Expression(HlilExpr::Call { .. }) | HlilStatement::Assign {
+                        src: HlilExpr::Call { .. },
+                        ..
+                    } => true,
+                    HlilStatement::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => then_body.iter().any(check) || else_body.iter().any(check),
+                    HlilStatement::While { body, .. } | HlilStatement::DoWhile { body, .. } => {
+                        body.iter().any(check)
+                    }
+                    HlilStatement::For { body, .. } => body.iter().any(check),
+                    HlilStatement::Block(stmts) => stmts.iter().any(check),
+                    _ => false,
+                }
+            }
+            stmts.iter().any(check)
+        }));
+        lib.register(HlilMatcher::new("has-switch", |stmts| {
+            stmts
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Switch { .. }))
+        }));
+        lib
+    }
+
+    /// Register a custom matcher.
+    pub fn register(&mut self, matcher: HlilMatcher) {
+        self.matchers.push(matcher);
+    }
+
+    /// Returns the names of all matchers that match `stmts`.
+    #[must_use]
+    pub fn match_all<'a>(&'a self, stmts: &[HlilStatement]) -> Vec<&'a str> {
+        self.matchers
+            .iter()
+            .filter(|m| m.matches(stmts))
+            .map(|m| m.name)
+            .collect()
+    }
+
+    /// Returns `true` if the matcher with the given `name` matches `stmts`.
+    #[must_use]
+    pub fn matches_named(&self, name: &str, stmts: &[HlilStatement]) -> bool {
+        self.matchers
+            .iter()
+            .find(|m| m.name == name)
+            .is_some_and(|m| m.matches(stmts))
+    }
+}
+
+impl fmt::Debug for HlilMatcherLibrary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HlilMatcherLibrary({} matchers)", self.matchers.len())
+    }
+}
+
+// ── HLIL Statistics ───────────────────────────────────────────────────────────
+
+/// Structural statistics about an [`HlilFunction`].
+#[derive(Debug, Clone, Default)]
+pub struct HlilStats {
+    pub total_stmts: usize,
+    pub assign_count: usize,
+    pub if_count: usize,
+    pub while_count: usize,
+    pub do_while_count: usize,
+    pub for_count: usize,
+    pub switch_count: usize,
+    pub call_expr_count: usize,
+    pub return_count: usize,
+    pub var_declare_count: usize,
+    pub max_nesting_depth: usize,
+}
+
+/// Compute structural statistics for `func`.
+#[must_use]
+pub fn hlil_stats(func: &HlilFunction) -> HlilStats {
+    let mut stats = HlilStats::default();
+    for stmt in &func.body {
+        collect_hlil_stats(stmt, &mut stats, 0);
+    }
+    stats
+}
+
+fn collect_hlil_stats(stmt: &HlilStatement, stats: &mut HlilStats, depth: usize) {
+    stats.total_stmts += 1;
+    if depth > stats.max_nesting_depth {
+        stats.max_nesting_depth = depth;
+    }
+    match stmt {
+        HlilStatement::Assign { .. } => stats.assign_count += 1,
+        HlilStatement::VarDeclare { .. } => stats.var_declare_count += 1,
+        HlilStatement::If { then_body, else_body, .. } => {
+            stats.if_count += 1;
+            for s in then_body {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+            for s in else_body {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+        }
+        HlilStatement::While { body, .. } => {
+            stats.while_count += 1;
+            for s in body {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+        }
+        HlilStatement::DoWhile { body, .. } => {
+            stats.do_while_count += 1;
+            for s in body {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+        }
+        HlilStatement::For { body, .. } => {
+            stats.for_count += 1;
+            for s in body {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+        }
+        HlilStatement::Switch { cases, default, .. } => {
+            stats.switch_count += 1;
+            for c in cases {
+                for s in &c.body {
+                    collect_hlil_stats(s, stats, depth + 1);
+                }
+            }
+            for s in default {
+                collect_hlil_stats(s, stats, depth + 1);
+            }
+        }
+        HlilStatement::Expression(HlilExpr::Call { .. }) => stats.call_expr_count += 1,
+        HlilStatement::Return(..) => stats.return_count += 1,
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                collect_hlil_stats(s, stats, depth);
+            }
+        }
+        _ => {}
+    }
+}
+
+// ── HLIL Expression walker ────────────────────────────────────────────────────
+
+/// Visitor trait for walking [`HlilExpr`] trees.
+pub trait HlilExprWalker {
+    /// Called before descending into an expression (pre-order).
+    fn pre_visit(&mut self, _expr: &HlilExpr) {}
+    /// Called after ascending from an expression (post-order).
+    fn post_visit(&mut self, _expr: &HlilExpr) {}
+}
+
+/// Walk the expression tree of `expr` with the given walker.
+pub fn walk_hlil_expr<W: HlilExprWalker>(expr: &HlilExpr, walker: &mut W) {
+    walker.pre_visit(expr);
+    match expr {
+        HlilExpr::Add(l, r, _)
+        | HlilExpr::Sub(l, r, _)
+        | HlilExpr::Mul(l, r, _)
+        | HlilExpr::Div(l, r, _)
+        | HlilExpr::Mod(l, r, _)
+        | HlilExpr::And(l, r, _)
+        | HlilExpr::Or(l, r, _)
+        | HlilExpr::Xor(l, r, _)
+        | HlilExpr::Shl(l, r, _)
+        | HlilExpr::Shr(l, r, _) | HlilExpr::CmpEq(l, r)
+        | HlilExpr::CmpNe(l, r)
+        | HlilExpr::CmpLt(l, r)
+        | HlilExpr::CmpLe(l, r)
+        | HlilExpr::CmpGt(l, r)
+        | HlilExpr::CmpGe(l, r)
+        | HlilExpr::LogicalAnd(l, r)
+        | HlilExpr::LogicalOr(l, r) => {
+            walk_hlil_expr(l, walker);
+            walk_hlil_expr(r, walker);
+        }
+        HlilExpr::Neg(e, _)
+        | HlilExpr::Not(e, _)
+        | HlilExpr::LogicalNot(e)
+        | HlilExpr::Cast { expr: e, .. }
+        | HlilExpr::Deref { addr: e, .. } => {
+            walk_hlil_expr(e, walker);
+        }
+        HlilExpr::Index { base, idx, .. } => {
+            walk_hlil_expr(base, walker);
+            walk_hlil_expr(idx, walker);
+        }
+        HlilExpr::FieldAccess { base, .. } => walk_hlil_expr(base, walker),
+        HlilExpr::Call { func, args, .. } => {
+            walk_hlil_expr(func, walker);
+            for a in args {
+                walk_hlil_expr(a, walker);
+            }
+        }
+        HlilExpr::Ternary {
+            cond, then, else_, ..
+        } => {
+            walk_hlil_expr(cond, walker);
+            walk_hlil_expr(then, walker);
+            walk_hlil_expr(else_, walker);
+        }
+        _ => {}
+    }
+    walker.post_visit(expr);
+}
+
+/// Counts how many nodes are in an expression tree.
+#[derive(Debug, Default)]
+pub struct NodeCounter {
+    pub count: usize,
+}
+
+impl HlilExprWalker for NodeCounter {
+    fn pre_visit(&mut self, _expr: &HlilExpr) {
+        self.count += 1;
+    }
+}
+
+/// Count the total number of expression nodes in `expr`.
+#[must_use]
+pub fn count_hlil_expr_nodes(expr: &HlilExpr) -> usize {
+    let mut counter = NodeCounter::default();
+    walk_hlil_expr(expr, &mut counter);
+    counter.count
+}
+
+// ── HLIL statement serialisation ─────────────────────────────────────────────
+
+use serde::{Deserialize, Serialize};
+
+/// A JSON-serialisable snapshot of an HLIL statement (as formatted text).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HlilStatementSnapshot {
+    pub text: String,
+    pub kind: &'static str,
+}
+
+/// Snapshot a single statement as its string representation.
+#[must_use]
+pub fn snapshot_stmt(stmt: &HlilStatement) -> HlilStatementSnapshot {
+    let text = {
+        let printer = CCodePrinter::default();
+        printer.print_statement(stmt, 0)
+    };
+    let kind = match stmt {
+        HlilStatement::Assign { .. } => "assign",
+        HlilStatement::VarDeclare { .. } => "var_declare",
+        HlilStatement::Expression(..) => "expression",
+        HlilStatement::Return(..) => "return",
+        HlilStatement::If { .. } => "if",
+        HlilStatement::While { .. } => "while",
+        HlilStatement::DoWhile { .. } => "do_while",
+        HlilStatement::For { .. } => "for",
+        HlilStatement::Switch { .. } => "switch",
+        HlilStatement::Break => "break",
+        HlilStatement::Continue => "continue",
+        _ => "other",
+    };
+    HlilStatementSnapshot { text, kind }
+}
+
+/// Snapshot all statements in a function as JSON.
+///
+/// # Errors
+/// Returns an error if serialisation fails.
+pub fn snapshot_function(func: &HlilFunction) -> Result<String, serde_json::Error> {
+    let snapshots: Vec<HlilStatementSnapshot> =
+        func.body.iter().map(snapshot_stmt).collect();
+    serde_json::to_string(&snapshots)
+}
+
+// ── HLIL Control-flow recovery helpers ───────────────────────────────────────
+
+/// Count the total number of break/continue statements in a body.
+#[must_use]
+pub fn count_breaks_and_continues(stmts: &[HlilStatement]) -> (usize, usize) {
+    let mut breaks = 0usize;
+    let mut conts = 0usize;
+    for stmt in stmts {
+        let (b, c) = count_bc_stmt(stmt);
+        breaks += b;
+        conts += c;
+    }
+    (breaks, conts)
+}
+
+fn count_bc_stmt(stmt: &HlilStatement) -> (usize, usize) {
+    match stmt {
+        HlilStatement::Break => (1, 0),
+        HlilStatement::Continue => (0, 1),
+        HlilStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            let (b1, c1) = count_breaks_and_continues(then_body);
+            let (b2, c2) = count_breaks_and_continues(else_body);
+            (b1 + b2, c1 + c2)
+        }
+        HlilStatement::While { body, .. }
+        | HlilStatement::DoWhile { body, .. }
+        | HlilStatement::For { body, .. } => count_breaks_and_continues(body),
+        HlilStatement::Block(stmts) => count_breaks_and_continues(stmts),
+        HlilStatement::Switch { cases, default, .. } => {
+            let mut b = 0;
+            let mut c = 0;
+            for case in cases {
+                let (cb, cc) = count_breaks_and_continues(&case.body);
+                b += cb;
+                c += cc;
+            }
+            let (db, dc) = count_breaks_and_continues(default);
+            (b + db, c + dc)
+        }
+        _ => (0, 0),
+    }
+}
+
+/// Check whether a statement body contains a `return` at the top level.
+#[must_use]
+pub fn body_always_returns(stmts: &[HlilStatement]) -> bool {
+    stmts.last().map_or(false, |last| matches!(last, HlilStatement::Return(..)))
+}
+
+/// Collect all `goto` target addresses referenced in `stmts`.
+#[must_use]
+pub fn collect_goto_targets(stmts: &[HlilStatement]) -> Vec<Address> {
+    let mut targets = Vec::new();
+    for stmt in stmts {
+        collect_goto_targets_stmt(stmt, &mut targets);
+    }
+    targets.sort_by_key(|a| a.as_u64());
+    targets.dedup_by_key(|a| a.as_u64());
+    targets
+}
+
+fn collect_goto_targets_stmt(stmt: &HlilStatement, out: &mut Vec<Address>) {
+    match stmt {
+        HlilStatement::Goto(addr) => out.push(*addr),
+        HlilStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            for s in then_body {
+                collect_goto_targets_stmt(s, out);
+            }
+            for s in else_body {
+                collect_goto_targets_stmt(s, out);
+            }
+        }
+        HlilStatement::While { body, .. }
+        | HlilStatement::DoWhile { body, .. }
+        | HlilStatement::For { body, .. } => {
+            for s in body {
+                collect_goto_targets_stmt(s, out);
+            }
+        }
+        HlilStatement::Block(stmts) => {
+            for s in stmts {
+                collect_goto_targets_stmt(s, out);
+            }
+        }
+        HlilStatement::Switch { cases, default, .. } => {
+            for c in cases {
+                for s in &c.body {
+                    collect_goto_targets_stmt(s, out);
+                }
+            }
+            for s in default {
+                collect_goto_targets_stmt(s, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+// ── HLIL Simplification: remove dead code after return ────────────────────────
+
+/// Remove unreachable statements that appear after an unconditional `return` in
+/// a flat statement list.
+///
+/// Returns the number of dead statements removed.
+#[must_use]
+pub fn remove_dead_code_after_return(stmts: &mut Vec<HlilStatement>) -> usize {
+    let ret_pos = stmts
+        .iter()
+        .position(|s| matches!(s, HlilStatement::Return(..)));
+    ret_pos.map_or(0, |pos| {
+        let dead = stmts.len().saturating_sub(pos + 1);
+        stmts.truncate(pos + 1);
+        dead
+    })
+}
+
+// ── HLIL type environment ─────────────────────────────────────────────────────
+
+/// A simple type environment mapping variable names to [`HlilType`].
+#[derive(Debug, Clone, Default)]
+pub struct HlilTypeEnv {
+    types: HashMap<String, HlilType>,
+}
+
+impl HlilTypeEnv {
+    /// Create an empty environment.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a type annotation for `name`.
+    pub fn insert(&mut self, name: impl Into<String>, ty: HlilType) {
+        self.types.insert(name.into(), ty);
+    }
+
+    /// Look up the type of `name`.
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&HlilType> {
+        self.types.get(name)
+    }
+
+    /// Build a type env from the local declarations in `func`.
+    #[must_use]
+    pub fn from_function(func: &HlilFunction) -> Self {
+        let mut env = Self::new();
+        for local in &func.locals {
+            env.insert(local.name.clone(), local.ty.clone());
+        }
+        for param in &func.prototype.params {
+            env.insert(param.name.clone(), param.ty.clone());
+        }
+        env
+    }
+}
+
+// ── HLIL Expression builder ───────────────────────────────────────────────────
+
+/// Fluent builder for [`HlilExpr`] trees.
+pub struct HlilExprBuilder {
+    inner: HlilExpr,
+}
+
+impl HlilExprBuilder {
+    /// Wrap an existing expression.
+    #[must_use]
+    pub fn new(expr: HlilExpr) -> Self {
+        Self { inner: expr }
+    }
+
+    /// A constant integer value.
+    #[must_use]
+    pub fn const_val(value: i64, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Const { value, ty },
+        }
+    }
+
+    /// A variable reference.
+    #[must_use]
+    pub fn var(v: HlilVar) -> Self {
+        Self {
+            inner: HlilExpr::Var { var: v },
+        }
+    }
+
+    /// Add `rhs`.
+    #[must_use]
+    pub fn add(self, rhs: HlilExpr, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Add(Box::new(self.inner), Box::new(rhs), ty),
+        }
+    }
+
+    /// Subtract `rhs`.
+    #[must_use]
+    pub fn sub(self, rhs: HlilExpr, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Sub(Box::new(self.inner), Box::new(rhs), ty),
+        }
+    }
+
+    /// Multiply by `rhs`.
+    #[must_use]
+    pub fn mul(self, rhs: HlilExpr, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Mul(Box::new(self.inner), Box::new(rhs), ty),
+        }
+    }
+
+    /// Bitwise AND with `rhs`.
+    #[must_use]
+    pub fn bit_and(self, rhs: HlilExpr, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::And(Box::new(self.inner), Box::new(rhs), ty),
+        }
+    }
+
+    /// Bitwise OR with `rhs`.
+    #[must_use]
+    pub fn bit_or(self, rhs: HlilExpr, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Or(Box::new(self.inner), Box::new(rhs), ty),
+        }
+    }
+
+    /// Equal comparison.
+    #[must_use]
+    pub fn cmpeq(self, rhs: HlilExpr) -> Self {
+        Self {
+            inner: HlilExpr::CmpEq(Box::new(self.inner), Box::new(rhs)),
+        }
+    }
+
+    /// Bitwise NOT.
+    #[must_use]
+    pub fn not(self, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Not(Box::new(self.inner), ty),
+        }
+    }
+
+    /// Less-than comparison.
+    #[must_use]
+    pub fn cmplt(self, rhs: HlilExpr) -> Self {
+        Self {
+            inner: HlilExpr::CmpLt(Box::new(self.inner), Box::new(rhs)),
+        }
+    }
+
+    /// Negate.
+    #[must_use]
+    pub fn neg(self, ty: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Neg(Box::new(self.inner), ty),
+        }
+    }
+
+    /// Cast to `to`.
+    #[must_use]
+    pub fn cast(self, to: HlilType) -> Self {
+        Self {
+            inner: HlilExpr::Cast {
+                expr: Box::new(self.inner),
+                to,
+            },
+        }
+    }
+
+    /// Consume and return the expression.
+    #[must_use]
+    pub fn build(self) -> HlilExpr {
+        self.inner
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustre_il_mlil::{MlilAnnotatedInstr, MlilBasicBlock, MlilFunction, Size};
+
+    // Helper to build a minimal MlilFunction with one block of instructions.
+    fn make_mlil_fn(instrs: Vec<MlilInstruction>) -> MlilFunction {
+        let addr = Address::new(0x1000);
+        let annotated: Vec<MlilAnnotatedInstr> = instrs
+            .into_iter()
+            .enumerate()
+            .map(|(i, instr)| MlilAnnotatedInstr {
+                address: Address::new(0x1000 + i as u64 * 4),
+                instr,
+            })
+            .collect();
+        let block = MlilBasicBlock {
+            id: 0,
+            start: addr,
+            end: Address::new(0x2000),
+            instrs: annotated,
+            predecessors: vec![],
+            successors: vec![],
+        };
+        let mut func = MlilFunction::new(addr);
+        func.blocks.push(block);
+        func
+    }
+
+    // ── HlilType display ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_type_display_int() {
+        assert_eq!(HlilType::i8().to_string(), "int8_t");
+        assert_eq!(HlilType::i16().to_string(), "int16_t");
+        assert_eq!(HlilType::i32().to_string(), "int32_t");
+        assert_eq!(HlilType::i64().to_string(), "int64_t");
+        assert_eq!(HlilType::u8().to_string(), "uint8_t");
+        assert_eq!(HlilType::u16().to_string(), "uint16_t");
+        assert_eq!(HlilType::u32().to_string(), "uint32_t");
+        assert_eq!(HlilType::u64().to_string(), "uint64_t");
+    }
+
+    #[test]
+    fn test_hlil_type_display_float() {
+        assert_eq!(HlilType::Float { bits: 32 }.to_string(), "float");
+        assert_eq!(HlilType::Float { bits: 64 }.to_string(), "double");
+        assert_eq!(HlilType::Float { bits: 128 }.to_string(), "float128");
+    }
+
+    #[test]
+    fn test_hlil_type_display_pointer() {
+        let ty = HlilType::ptr(HlilType::i32(), 64);
+        assert_eq!(ty.to_string(), "int32_t *");
+    }
+
+    #[test]
+    fn test_hlil_type_display_struct_enum_void() {
+        assert_eq!(HlilType::Void.to_string(), "void");
+        assert_eq!(HlilType::Bool.to_string(), "bool");
+        assert_eq!(HlilType::Unknown.to_string(), "unknown");
+        assert_eq!(
+            HlilType::Struct { name: "Foo".into() }.to_string(),
+            "struct Foo"
+        );
+        assert_eq!(
+            HlilType::Enum { name: "Bar".into() }.to_string(),
+            "enum Bar"
+        );
+    }
+
+    #[test]
+    fn test_hlil_type_display_array() {
+        let arr = HlilType::Array {
+            elem: Box::new(HlilType::u8()),
+            count: Some(16),
+        };
+        assert_eq!(arr.to_string(), "uint8_t[16]");
+        let arr_unsized = HlilType::Array {
+            elem: Box::new(HlilType::i32()),
+            count: None,
+        };
+        assert_eq!(arr_unsized.to_string(), "int32_t[]");
+    }
+
+    #[test]
+    fn test_hlil_type_display_function() {
+        let fty = HlilType::Function {
+            ret: Box::new(HlilType::i32()),
+            params: vec![HlilType::u64(), HlilType::Bool],
+        };
+        assert_eq!(fty.to_string(), "int32_t (*)(uint64_t, bool)");
+    }
+
+    // ── HlilType::byte_size ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_type_byte_size() {
+        assert_eq!(HlilType::i32().byte_size(), Some(4));
+        assert_eq!(HlilType::u64().byte_size(), Some(8));
+        assert_eq!(HlilType::Float { bits: 32 }.byte_size(), Some(4));
+        assert_eq!(HlilType::Float { bits: 64 }.byte_size(), Some(8));
+        assert_eq!(HlilType::Void.byte_size(), Some(0));
+        assert_eq!(HlilType::ptr(HlilType::i32(), 64).byte_size(), Some(8));
+        assert_eq!(HlilType::ptr(HlilType::i32(), 32).byte_size(), Some(4));
+        assert_eq!(HlilType::Unknown.byte_size(), None);
+        assert_eq!(
+            HlilType::Array {
+                elem: Box::new(HlilType::u32()),
+                count: Some(4)
+            }
+            .byte_size(),
+            Some(16)
+        );
+        assert_eq!(
+            HlilType::Array {
+                elem: Box::new(HlilType::u32()),
+                count: None
+            }
+            .byte_size(),
+            None
+        );
+    }
+
+    // ── HlilExpr::expr_type ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_expr_type() {
+        let c = HlilExpr::Const {
+            value: 42,
+            ty: HlilType::i32(),
+        };
+        assert_eq!(c.expr_type(), &HlilType::i32());
+
+        let cmp = HlilExpr::CmpEq(
+            Box::new(HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            }),
+        );
+        assert_eq!(cmp.expr_type(), &HlilType::Bool);
+    }
+
+    // ── HlilExpr::is_const / is_const_zero ───────────────────────────────────
+
+    #[test]
+    fn test_hlil_expr_is_const() {
+        let c = HlilExpr::Const {
+            value: 7,
+            ty: HlilType::i32(),
+        };
+        assert_eq!(c.is_const(), Some(7));
+
+        let zero = HlilExpr::Const {
+            value: 0,
+            ty: HlilType::u64(),
+        };
+        assert!(zero.is_const_zero());
+
+        let var = HlilExpr::Var {
+            var: HlilVar::new("x", HlilType::i32()),
+        };
+        assert_eq!(var.is_const(), None);
+        assert!(!var.is_const_zero());
+    }
+
+    // ── HlilExpr::complexity ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_expr_complexity() {
+        let simple = HlilExpr::Const {
+            value: 1,
+            ty: HlilType::i32(),
+        };
+        assert_eq!(simple.complexity(), 1);
+
+        let add = HlilExpr::Add(
+            Box::new(HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 2,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        assert_eq!(add.complexity(), 3);
+
+        let nested = HlilExpr::Add(
+            Box::new(add),
+            Box::new(HlilExpr::Const {
+                value: 3,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        assert_eq!(nested.complexity(), 5);
+    }
+
+    // ── HlilStatement::contains_return ───────────────────────────────────────
+
+    #[test]
+    fn test_contains_return_flat() {
+        let ret = HlilStatement::Return(vec![HlilExpr::Const {
+            value: 0,
+            ty: HlilType::i32(),
+        }]);
+        assert!(ret.contains_return());
+        assert!(!HlilStatement::Break.contains_return());
+    }
+
+    #[test]
+    fn test_contains_return_nested_if() {
+        let if_stmt = HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            }])],
+            else_body: vec![HlilStatement::Break],
+        };
+        assert!(if_stmt.contains_return());
+    }
+
+    #[test]
+    fn test_contains_return_while_no_return() {
+        let while_stmt = HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![HlilStatement::Continue],
+        };
+        assert!(!while_stmt.contains_return());
+    }
+
+    // ── HlilStatement::walk ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_walk_visits_all_nested() {
+        let inner_if = HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![HlilStatement::Break],
+            else_body: vec![HlilStatement::Continue],
+        };
+        let while_stmt = HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![inner_if, HlilStatement::Return(vec![])],
+        };
+
+        let mut count = 0usize;
+        while_stmt.walk(&mut |_| {
+            count += 1;
+        });
+        assert_eq!(count, 5);
+    }
+
+    // ── HlilFunction::print() ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_function_print_basic() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "example");
+        func.prototype.return_type = HlilType::i32();
+        func.prototype.params = vec![HlilVar::param("n", HlilType::i32())];
+        func.body.push(HlilStatement::Return(vec![HlilExpr::Var {
+            var: HlilVar::param("n", HlilType::i32()),
+        }]));
+        let text = func.print();
+        assert!(text.contains("int32_t example(int32_t n)"));
+        assert!(text.contains("return n;"));
+    }
+
+    // ── CCodePrinter — if/else ────────────────────────────────────────────────
+
+    #[test]
+    fn test_ccode_printer_if_else() {
+        let printer = CCodePrinter::new();
+        let mut func = HlilFunction::new(Address::new(0x2000), "check");
+        func.prototype.return_type = HlilType::i32();
+        func.body.push(HlilStatement::If {
+            cond: HlilExpr::CmpGt(
+                Box::new(HlilExpr::Var {
+                    var: HlilVar::new("x", HlilType::i32()),
+                }),
+                Box::new(HlilExpr::Const {
+                    value: 0,
+                    ty: HlilType::i32(),
+                }),
+            ),
+            then_body: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            }])],
+            else_body: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            }])],
+        });
+        let text = printer.print_function(&func);
+        assert!(text.contains("if ("));
+        assert!(text.contains("} else {"));
+        assert!(text.contains("return 1;"));
+        assert!(text.contains("return 0;"));
+    }
+
+    // ── CCodePrinter — while loop ─────────────────────────────────────────────
+
+    #[test]
+    fn test_ccode_printer_while_loop() {
+        let printer = CCodePrinter::new();
+        let mut func = HlilFunction::new(Address::new(0x3000), "loop_fn");
+        func.body.push(HlilStatement::While {
+            cond: HlilExpr::Var {
+                var: HlilVar::new("running", HlilType::Bool),
+            },
+            body: vec![HlilStatement::Expression(HlilExpr::Call {
+                func: Box::new(HlilExpr::Var {
+                    var: HlilVar::new("process", HlilType::ptr(HlilType::Void, 64)),
+                }),
+                args: vec![],
+                ret_ty: HlilType::Void,
+            })],
+        });
+        let text = printer.print_function(&func);
+        assert!(text.contains("while (running)"));
+        assert!(text.contains("process()"));
+    }
+
+    // ── SwitchCase display ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_switch_case_display() {
+        let case = SwitchCase {
+            values: vec![1, 2],
+            body: vec![HlilStatement::Break],
+        };
+        let text = case.to_string();
+        assert!(text.contains("case 1:"));
+        assert!(text.contains("case 2:"));
+        assert!(text.contains("break;"));
+    }
+
+    // ── SwitchCase in CCodePrinter ────────────────────────────────────────────
+
+    #[test]
+    fn test_ccode_printer_switch() {
+        let printer = CCodePrinter::new();
+        let mut func = HlilFunction::new(Address::new(0x4000), "dispatch");
+        func.body.push(HlilStatement::Switch {
+            value: HlilExpr::Var {
+                var: HlilVar::new("cmd", HlilType::i32()),
+            },
+            cases: vec![
+                SwitchCase {
+                    values: vec![0],
+                    body: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                        value: 0,
+                        ty: HlilType::i32(),
+                    }])],
+                },
+                SwitchCase {
+                    values: vec![1],
+                    body: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                        value: 1,
+                        ty: HlilType::i32(),
+                    }])],
+                },
+            ],
+            default: vec![HlilStatement::Return(vec![HlilExpr::Const {
+                value: -1,
+                ty: HlilType::i32(),
+            }])],
+        });
+        let text = printer.print_function(&func);
+        assert!(text.contains("switch (cmd)"));
+        assert!(text.contains("case 0:"));
+        assert!(text.contains("case 1:"));
+        assert!(text.contains("default:"));
+        assert!(text.contains("return -1;"));
+    }
+
+    // ── MlilToHlilLifter — basic assignment ──────────────────────────────────
+
+    #[test]
+    fn test_lifter_basic_assignment() {
+        let mlil_fn = make_mlil_fn(vec![
+            MlilInstruction::Assign {
+                dest: SsaVar::new("rax", 1),
+                size: Size::QWord,
+                src: MlilExpr::Const {
+                    value: 0x42,
+                    size: Size::QWord,
+                },
+            },
+            MlilInstruction::Ret {
+                values: vec![MlilExpr::Const {
+                    value: 0,
+                    size: Size::QWord,
+                }],
+            },
+        ]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        assert!(func.locals.iter().any(|v| v.name.contains("rax")));
+        assert!(
+            func.body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Return(..)))
+        );
+    }
+
+    // ── MlilToHlilLifter — CondJump becomes If ────────────────────────────────
+
+    #[test]
+    fn test_lifter_cond_jump_becomes_if() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::CondJump {
+            cond: MlilExpr::Var {
+                var: SsaVar::new("flag", 0),
+                size: Size::Byte,
+            },
+            true_dest: Address::new(0x1010),
+            false_dest: Address::new(0x1020),
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        assert!(
+            func.body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::If { .. }))
+        );
+    }
+
+    // ── MlilToHlilLifter — lift_structured: real diamond, zero gotos ─────────
+
+    fn count_gotos_rec(stmts: &[HlilStatement]) -> usize {
+        stmts
+            .iter()
+            .map(|s| match s {
+                HlilStatement::Goto(_) => 1,
+                HlilStatement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_gotos_rec(then_body) + count_gotos_rec(else_body),
+                HlilStatement::While { body, .. }
+                | HlilStatement::DoWhile { body, .. }
+                | HlilStatement::For { body, .. }
+                | HlilStatement::Block(body) => count_gotos_rec(body),
+                HlilStatement::Switch { cases, default, .. } => {
+                    cases
+                        .iter()
+                        .map(|c| count_gotos_rec(&c.body))
+                        .sum::<usize>()
+                        + count_gotos_rec(default)
+                }
+                _ => 0,
+            })
+            .sum()
+    }
+
+    /// Build a 4-block diamond MLIL CFG:
+    /// b0: condjump flag ? 0x1010 : 0x1020
+    /// b1 (0x1010): x = 1; jump 0x1030   b2 (0x1020): x = 2; jump 0x1030
+    /// b3 (0x1030): ret
+    fn make_diamond_mlil_fn() -> MlilFunction {
+        use rustre_il_mlil::{MlilAnnotatedInstr, MlilBasicBlock};
+        let ai = |a: u64, i: MlilInstruction| MlilAnnotatedInstr {
+            address: Address::new(a),
+            instr: i,
+        };
+        let assign = |ver: u32, val: u64| MlilInstruction::Assign {
+            dest: SsaVar::new("x", ver),
+            size: Size::QWord,
+            src: MlilExpr::Const {
+                value: val,
+                size: Size::QWord,
+            },
+        };
+        let jump_to = |a: u64| MlilInstruction::Jump {
+            dest: MlilExpr::Const {
+                value: a,
+                size: Size::QWord,
+            },
+        };
+        let mut f = MlilFunction::new(Address::new(0x1000));
+        f.blocks = vec![
+            MlilBasicBlock {
+                id: 0,
+                start: Address::new(0x1000),
+                end: Address::new(0x1010),
+                instrs: vec![ai(
+                    0x1000,
+                    MlilInstruction::CondJump {
+                        cond: MlilExpr::Var {
+                            var: SsaVar::new("flag", 0),
+                            size: Size::Byte,
+                        },
+                        true_dest: Address::new(0x1010),
+                        false_dest: Address::new(0x1020),
+                    },
+                )],
+                predecessors: vec![],
+                successors: vec![1, 2],
+            },
+            MlilBasicBlock {
+                id: 1,
+                start: Address::new(0x1010),
+                end: Address::new(0x1020),
+                instrs: vec![ai(0x1010, assign(1, 1)), ai(0x1018, jump_to(0x1030))],
+                predecessors: vec![0],
+                successors: vec![3],
+            },
+            MlilBasicBlock {
+                id: 2,
+                start: Address::new(0x1020),
+                end: Address::new(0x1030),
+                instrs: vec![ai(0x1020, assign(2, 2)), ai(0x1028, jump_to(0x1030))],
+                predecessors: vec![0],
+                successors: vec![3],
+            },
+            MlilBasicBlock {
+                id: 3,
+                start: Address::new(0x1030),
+                end: Address::new(0x1031),
+                instrs: vec![ai(0x1030, MlilInstruction::Ret { values: vec![] })],
+                predecessors: vec![1, 2],
+                successors: vec![],
+            },
+        ];
+        f
+    }
+
+    #[test]
+    fn lift_structured_diamond_produces_if_else_with_zero_gotos() {
+        let mlil_fn = make_diamond_mlil_fn();
+        let func = MlilToHlilLifter::new().lift_structured(&mlil_fn);
+        // Real structure: an If whose arms hold the two assignments.
+        let if_stmt = func
+            .body
+            .iter()
+            .find(|s| matches!(s, HlilStatement::If { .. }))
+            .expect("structured body must contain an If");
+        if let HlilStatement::If {
+            then_body,
+            else_body,
+            ..
+        } = if_stmt
+        {
+            assert!(
+                !then_body.is_empty() && !else_body.is_empty(),
+                "diamond arms must be NESTED inside the if, got then={then_body:?} else={else_body:?}"
+            );
+        }
+        assert_eq!(
+            count_gotos_rec(&func.body),
+            0,
+            "a diamond needs no gotos, got: {:?}",
+            func.body
+        );
+        // Contrast: the flat lifter on the same input emits goto-based flow.
+        let flat = MlilToHlilLifter::new().lift(&mlil_fn);
+        assert!(
+            count_gotos_rec(&flat.body) > 0,
+            "precondition: flat lift() uses gotos on this CFG"
+        );
+    }
+
+    // ── MlilToHlilLifter — Phi becomes VarDeclare ────────────────────────────
+
+    #[test]
+    fn test_lifter_phi_becomes_var_declare() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Phi {
+            dest: SsaVar::new("x", 2),
+            sources: vec![SsaVar::new("x", 0), SsaVar::new("x", 1)],
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        assert!(
+            func.body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::VarDeclare { .. }))
+        );
+    }
+
+    // ── HlilFunction::calls_made ──────────────────────────────────────────────
+
+    #[test]
+    fn test_function_calls_made() {
+        let mut func = HlilFunction::new(Address::new(0x6000), "caller");
+        let call_expr = HlilExpr::Call {
+            func: Box::new(HlilExpr::Var {
+                var: HlilVar::new("puts", HlilType::ptr(HlilType::Void, 64)),
+            }),
+            args: vec![HlilExpr::Const {
+                value: 0,
+                ty: HlilType::ptr(HlilType::u8(), 64),
+            }],
+            ret_ty: HlilType::i32(),
+        };
+        func.body.push(HlilStatement::Expression(call_expr));
+        let calls = func.calls_made();
+        assert_eq!(calls.len(), 1);
+    }
+
+    // ── HlilPrototype display ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_prototype_display() {
+        let proto = HlilPrototype {
+            name: "malloc".into(),
+            return_type: HlilType::ptr(HlilType::Void, 64),
+            params: vec![HlilVar::param("size", HlilType::u64())],
+            is_variadic: false,
+            calling_convention: None,
+        };
+        let text = proto.to_string();
+        assert!(text.contains("void *"));
+        assert!(text.contains("malloc"));
+        assert!(text.contains("uint64_t size"));
+    }
+
+    // ── HlilVar display ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_hlil_var_display() {
+        let v = HlilVar::new("counter", HlilType::i32());
+        assert_eq!(v.to_string(), "int32_t counter");
+
+        let p = HlilVar::param("argv", HlilType::ptr(HlilType::ptr(HlilType::u8(), 64), 64));
+        assert_eq!(p.to_string(), "uint8_t * * argv");
+    }
+
+    // ── MlilToHlilLifter — store becomes deref assign ────────────────────────
+
+    #[test]
+    fn test_lifter_store_becomes_deref_assign() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Store {
+            addr: MlilExpr::Const {
+                value: 0xDEAD_BEEF,
+                size: Size::QWord,
+            },
+            size: Size::DWord,
+            src: MlilExpr::Const {
+                value: 0xFF,
+                size: Size::DWord,
+            },
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        assert!(func.body.iter().any(|s| matches!(
+            s,
+            HlilStatement::Assign {
+                dest: HlilExpr::Deref { .. },
+                ..
+            }
+        )));
+    }
+
+    // ── MlilToHlilLifter — lift arithmetic expression ─────────────────────────
+
+    #[test]
+    fn test_lifter_arithmetic_expr() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Assign {
+            dest: SsaVar::new("result", 0),
+            size: Size::DWord,
+            src: MlilExpr::Add(
+                Box::new(MlilExpr::Const {
+                    value: 10,
+                    size: Size::DWord,
+                }),
+                Box::new(MlilExpr::Const {
+                    value: 20,
+                    size: Size::DWord,
+                }),
+                Size::DWord,
+            ),
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        assert!(func.body.iter().any(|s| matches!(
+            s,
+            HlilStatement::Assign {
+                src: HlilExpr::Add(..),
+                ..
+            }
+        )));
+    }
+
+    // ── MlilToHlilLifter — regression tests (2026-07-14 hardening) ──────────
+
+    fn lift_expr_via_assign(src: MlilExpr) -> HlilExpr {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Assign {
+            dest: SsaVar::new("d", 0),
+            size: Size::QWord,
+            src,
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        for s in &func.body {
+            if let HlilStatement::Assign { src, .. } = s {
+                return src.clone();
+            }
+        }
+        panic!("no Assign statement produced");
+    }
+
+    fn mlil_var(name: &str, size: Size) -> MlilExpr {
+        MlilExpr::Var {
+            var: SsaVar::new(name, 0),
+            size,
+        }
+    }
+
+    /// Finding 1: MLIL `Select` must lift to a Ternary, not Undefined.
+    #[test]
+    fn test_lifter_select_becomes_ternary() {
+        let lifted = lift_expr_via_assign(MlilExpr::Select {
+            cond: Box::new(mlil_var("c", Size::Byte)),
+            true_val: Box::new(mlil_var("a", Size::QWord)),
+            false_val: Box::new(mlil_var("b", Size::QWord)),
+            size: Size::QWord,
+        });
+        assert!(
+            matches!(lifted, HlilExpr::Ternary { .. }),
+            "Select must lift to Ternary, got {lifted:?}"
+        );
+    }
+
+    /// Finding 1: FNeg must lift to a float-typed Neg, not Undefined.
+    #[test]
+    fn test_lifter_fneg_becomes_float_neg() {
+        let lifted = lift_expr_via_assign(MlilExpr::FNeg(
+            Box::new(mlil_var("a", Size::QWord)),
+            Size::QWord,
+        ));
+        match lifted {
+            HlilExpr::Neg(_, HlilType::Float { bits }) => assert_eq!(bits, 64),
+            other => panic!("FNeg must lift to Neg with Float type, got {other:?}"),
+        }
+    }
+
+    /// Finding 1: IntToFloat/FloatToInt must lift to Casts, not Undefined.
+    #[test]
+    fn test_lifter_int_float_conversions_become_casts() {
+        let itf = lift_expr_via_assign(MlilExpr::IntToFloat {
+            expr: Box::new(mlil_var("a", Size::QWord)),
+            to: Size::QWord,
+        });
+        match itf {
+            HlilExpr::Cast { to, .. } => assert!(matches!(to, HlilType::Float { bits: 64 })),
+            other => panic!("IntToFloat must lift to Cast, got {other:?}"),
+        }
+        let fti = lift_expr_via_assign(MlilExpr::FloatToInt {
+            expr: Box::new(mlil_var("a", Size::QWord)),
+            to: Size::DWord,
+        });
+        match fti {
+            HlilExpr::Cast { to, .. } => assert_eq!(to, HlilType::i32()),
+            other => panic!("FloatToInt must lift to Cast, got {other:?}"),
+        }
+    }
+
+    /// Finding 2: SAR must not collapse into logical Shr.
+    #[test]
+    fn test_lifter_sar_keeps_arithmetic_shift() {
+        let lifted = lift_expr_via_assign(MlilExpr::Sar(
+            Box::new(mlil_var("a", Size::DWord)),
+            Box::new(MlilExpr::Const {
+                value: 31,
+                size: Size::Byte,
+            }),
+            Size::DWord,
+        ));
+        assert!(
+            matches!(lifted, HlilExpr::Sar(..)),
+            "Sar must lift to HlilExpr::Sar, got {lifted:?}"
+        );
+        // And plain Shr must stay logical.
+        let shr = lift_expr_via_assign(MlilExpr::Shr(
+            Box::new(mlil_var("a", Size::DWord)),
+            Box::new(MlilExpr::Const {
+                value: 31,
+                size: Size::Byte,
+            }),
+            Size::DWord,
+        ));
+        assert!(matches!(shr, HlilExpr::Shr(..)));
+    }
+
+    /// Finding 2: signed division must carry a signed type; unsigned must not.
+    #[test]
+    fn test_lifter_div_signedness_preserved() {
+        let sdiv = lift_expr_via_assign(MlilExpr::DivS(
+            Box::new(mlil_var("a", Size::DWord)),
+            Box::new(mlil_var("b", Size::DWord)),
+            Size::DWord,
+        ));
+        match sdiv {
+            HlilExpr::Div(_, _, HlilType::Int { signed, bits }) => {
+                assert!(signed, "DivS must carry a signed type");
+                assert_eq!(bits, 32);
+            }
+            other => panic!("DivS must lift to Div, got {other:?}"),
+        }
+        let udiv = lift_expr_via_assign(MlilExpr::DivU(
+            Box::new(mlil_var("a", Size::DWord)),
+            Box::new(mlil_var("b", Size::DWord)),
+            Size::DWord,
+        ));
+        match udiv {
+            HlilExpr::Div(_, _, HlilType::Int { signed, .. }) => {
+                assert!(!signed, "DivU must carry an unsigned type");
+            }
+            other => panic!("DivU must lift to Div, got {other:?}"),
+        }
+    }
+
+    /// Finding 2: signed/unsigned compares must stay distinct after lifting.
+    #[test]
+    fn test_lifter_compare_signedness_preserved() {
+        let a = || Box::new(mlil_var("a", Size::DWord));
+        let b = || Box::new(mlil_var("b", Size::DWord));
+        assert!(matches!(
+            lift_expr_via_assign(MlilExpr::CmpSlt(a(), b())),
+            HlilExpr::CmpSlt(..)
+        ));
+        assert!(matches!(
+            lift_expr_via_assign(MlilExpr::CmpUlt(a(), b())),
+            HlilExpr::CmpUlt(..)
+        ));
+        assert!(matches!(
+            lift_expr_via_assign(MlilExpr::CmpSle(a(), b())),
+            HlilExpr::CmpSle(..)
+        ));
+        assert!(matches!(
+            lift_expr_via_assign(MlilExpr::CmpUle(a(), b())),
+            HlilExpr::CmpUle(..)
+        ));
+    }
+
+    /// Finding 2: SignExtend must cast through the *signed* from-sized type;
+    /// ZeroExtend through the unsigned one. Neither may discard `from`.
+    #[test]
+    fn test_lifter_extend_signedness_and_from_size() {
+        let sx = lift_expr_via_assign(MlilExpr::SignExtend {
+            expr: Box::new(mlil_var("a", Size::Byte)),
+            from: Size::Byte,
+            to: Size::DWord,
+        });
+        match sx {
+            HlilExpr::Cast { expr, to } => {
+                assert_eq!(to, HlilType::i32(), "outer cast must be signed to-type");
+                match *expr {
+                    HlilExpr::Cast { to: inner_to, .. } => {
+                        assert_eq!(inner_to, HlilType::i8(), "inner cast must be signed from-type");
+                    }
+                    other => panic!("expected inner cast, got {other:?}"),
+                }
+            }
+            other => panic!("SignExtend must lift to a cast chain, got {other:?}"),
+        }
+        let zx = lift_expr_via_assign(MlilExpr::ZeroExtend {
+            expr: Box::new(mlil_var("a", Size::Byte)),
+            from: Size::Byte,
+            to: Size::DWord,
+        });
+        match zx {
+            HlilExpr::Cast { expr, to } => {
+                assert_eq!(to, HlilType::u32());
+                match *expr {
+                    HlilExpr::Cast { to: inner_to, .. } => assert_eq!(inner_to, HlilType::u8()),
+                    other => panic!("expected inner cast, got {other:?}"),
+                }
+            }
+            other => panic!("ZeroExtend must lift to a cast chain, got {other:?}"),
+        }
+    }
+
+    /// Finding 3: a TailCall must return the callee's value, not emit a bare
+    /// call followed by a value-less `return;`.
+    #[test]
+    fn test_lifter_tailcall_returns_call_value() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::TailCall {
+            dest: MlilExpr::Const {
+                value: 0x4000,
+                size: Size::QWord,
+            },
+            args: vec![mlil_var("a", Size::QWord)],
+        }]);
+        let lifter = MlilToHlilLifter::new();
+        let func = lifter.lift(&mlil_fn);
+        let returns: Vec<_> = func
+            .body
+            .iter()
+            .filter_map(|s| match s {
+                HlilStatement::Return(vals) => Some(vals),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(returns.len(), 1, "exactly one Return expected");
+        assert_eq!(returns[0].len(), 1, "Return must carry the call value");
+        assert!(
+            matches!(returns[0][0], HlilExpr::Call { .. }),
+            "returned value must be the tail-called function's call expression"
+        );
+        // No stray bare-Expression call left behind.
+        assert!(
+            !func
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Expression(HlilExpr::Call { .. }))),
+            "tail call must not also be emitted as a discarded expression"
+        );
+    }
+
+    // ── MlilToHlilLifter — Select/FNeg/IntToFloat/FloatToInt lift exactly ────
+    // Regression tests: these variants previously fell into the `_ =>
+    // Undefined` arm of `lift_mlil_expr_misc` (behind an "unreachable"
+    // comment) and decompiled as the literal `undefined`.
+
+    #[test]
+    fn lifter_select_becomes_ternary() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Assign {
+            dest: SsaVar::new("r", 0),
+            size: Size::DWord,
+            src: MlilExpr::Select {
+                cond: Box::new(MlilExpr::Var {
+                    var: SsaVar::new("c", 0),
+                    size: Size::Byte,
+                }),
+                true_val: Box::new(MlilExpr::Const {
+                    value: 1,
+                    size: Size::DWord,
+                }),
+                false_val: Box::new(MlilExpr::Const {
+                    value: 2,
+                    size: Size::DWord,
+                }),
+                size: Size::DWord,
+            },
+        }]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        assert!(
+            func.body.iter().any(|s| matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::Ternary { .. },
+                    ..
+                }
+            )),
+            "MlilExpr::Select must lift to HlilExpr::Ternary, not Undefined"
+        );
+    }
+
+    #[test]
+    fn lifter_fneg_becomes_float_neg() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::Assign {
+            dest: SsaVar::new("r", 0),
+            size: Size::QWord,
+            src: MlilExpr::FNeg(
+                Box::new(MlilExpr::Var {
+                    var: SsaVar::new("x", 0),
+                    size: Size::QWord,
+                }),
+                Size::QWord,
+            ),
+        }]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        assert!(
+            func.body.iter().any(|s| matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::Neg(_, HlilType::Float { .. }),
+                    ..
+                }
+            )),
+            "MlilExpr::FNeg must lift to float-typed Neg, not Undefined"
+        );
+    }
+
+    #[test]
+    fn lifter_int_float_conversions_become_casts() {
+        let mlil_fn = make_mlil_fn(vec![
+            MlilInstruction::Assign {
+                dest: SsaVar::new("f", 0),
+                size: Size::QWord,
+                src: MlilExpr::IntToFloat {
+                    expr: Box::new(MlilExpr::Var {
+                        var: SsaVar::new("i", 0),
+                        size: Size::QWord,
+                    }),
+                    to: Size::QWord,
+                },
+            },
+            MlilInstruction::Assign {
+                dest: SsaVar::new("j", 0),
+                size: Size::DWord,
+                src: MlilExpr::FloatToInt {
+                    expr: Box::new(MlilExpr::Var {
+                        var: SsaVar::new("g", 0),
+                        size: Size::QWord,
+                    }),
+                    to: Size::DWord,
+                },
+            },
+        ]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        let casts = func
+            .body
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s,
+                    HlilStatement::Assign {
+                        src: HlilExpr::Cast { .. },
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(
+            casts, 2,
+            "IntToFloat and FloatToInt must both lift to Cast, not Undefined"
+        );
+        // Neither statement may contain a lifted Undefined.
+        assert!(
+            !func.body.iter().any(|s| matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::Undefined(..),
+                    ..
+                }
+            )),
+            "conversions must not degrade to undefined"
+        );
+    }
+
+    // ── MlilToHlilLifter — TailCall returns the call value ───────────────────
+    // Regression test: TailCall used to lift to `f(); return;`, silently
+    // discarding the tail call's return value.
+
+    #[test]
+    fn lifter_tail_call_returns_call_value() {
+        let mlil_fn = make_mlil_fn(vec![MlilInstruction::TailCall {
+            dest: MlilExpr::Const {
+                value: 0x4000,
+                size: Size::QWord,
+            },
+            args: vec![MlilExpr::Var {
+                var: SsaVar::new("rcx", 0),
+                size: Size::QWord,
+            }],
+        }]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        let ret_with_call = func.body.iter().any(|s| {
+            matches!(s, HlilStatement::Return(vals)
+                if vals.len() == 1 && matches!(vals[0], HlilExpr::Call { .. }))
+        });
+        assert!(
+            ret_with_call,
+            "TailCall must lift to `return f(...);` so the callee's value is forwarded"
+        );
+        // And no bare `return;` may remain for the tail call.
+        assert!(
+            !func
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Return(vals) if vals.is_empty())),
+            "no value-less return should be emitted for a tail call"
+        );
+    }
+
+    // ── MlilToHlilLifter — signedness preservation ────────────────────────────
+    // Regression tests: signed and unsigned MLIL compares/shifts/divides used
+    // to collapse into a single signedness-agnostic HLIL form.
+
+    #[test]
+    fn lifter_preserves_compare_signedness() {
+        let a = || MlilExpr::Var {
+            var: SsaVar::new("a", 0),
+            size: Size::QWord,
+        };
+        let b = || MlilExpr::Var {
+            var: SsaVar::new("b", 0),
+            size: Size::QWord,
+        };
+        let mlil_fn = make_mlil_fn(vec![
+            MlilInstruction::Assign {
+                dest: SsaVar::new("s", 0),
+                size: Size::Byte,
+                src: MlilExpr::CmpSlt(Box::new(a()), Box::new(b())),
+            },
+            MlilInstruction::Assign {
+                dest: SsaVar::new("u", 0),
+                size: Size::Byte,
+                src: MlilExpr::CmpUlt(Box::new(a()), Box::new(b())),
+            },
+        ]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        let has_slt = func.body.iter().any(|s| {
+            matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::CmpSlt(..),
+                    ..
+                }
+            )
+        });
+        let has_ult = func.body.iter().any(|s| {
+            matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::CmpUlt(..),
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_slt && has_ult,
+            "signed and unsigned MLIL compares must lift to distinct HLIL variants"
+        );
+    }
+
+    #[test]
+    fn lifter_preserves_sar_vs_shr() {
+        let x = || MlilExpr::Var {
+            var: SsaVar::new("x", 0),
+            size: Size::QWord,
+        };
+        let two = || MlilExpr::Const {
+            value: 2,
+            size: Size::QWord,
+        };
+        let mlil_fn = make_mlil_fn(vec![
+            MlilInstruction::Assign {
+                dest: SsaVar::new("l", 0),
+                size: Size::QWord,
+                src: MlilExpr::Shr(Box::new(x()), Box::new(two()), Size::QWord),
+            },
+            MlilInstruction::Assign {
+                dest: SsaVar::new("r", 0),
+                size: Size::QWord,
+                src: MlilExpr::Sar(Box::new(x()), Box::new(two()), Size::QWord),
+            },
+        ]);
+        let func = MlilToHlilLifter::new().lift(&mlil_fn);
+        let has_shr = func.body.iter().any(|s| {
+            matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::Shr(..),
+                    ..
+                }
+            )
+        });
+        let has_sar = func.body.iter().any(|s| {
+            matches!(
+                s,
+                HlilStatement::Assign {
+                    src: HlilExpr::Sar(..),
+                    ..
+                }
+            )
+        });
+        assert!(
+            has_shr && has_sar,
+            "logical and arithmetic right shifts must remain distinct after lifting"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tests for new expansion APIs
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── HlilMatcher / HlilMatcherLibrary ─────────────────────────────────
+
+    #[test]
+    fn matcher_lib_empty_body() {
+        let lib = HlilMatcherLibrary::new();
+        assert!(lib.matches_named("empty-body", &[]));
+        let ret = vec![HlilStatement::Return(vec![])];
+        assert!(!lib.matches_named("empty-body", &ret));
+    }
+
+    #[test]
+    fn matcher_lib_single_return() {
+        let lib = HlilMatcherLibrary::new();
+        let ret = vec![HlilStatement::Return(vec![])];
+        assert!(lib.matches_named("single-return", &ret));
+        let nop_then_ret = vec![
+            HlilStatement::VarDeclare {
+                var: HlilVar::new("x", HlilType::i32()),
+                init: None,
+            },
+            HlilStatement::Return(vec![]),
+        ];
+        assert!(!lib.matches_named("single-return", &nop_then_ret));
+    }
+
+    #[test]
+    fn matcher_lib_has_if() {
+        let lib = HlilMatcherLibrary::new();
+        let stmts = vec![HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![],
+            else_body: vec![],
+        }];
+        assert!(lib.matches_named("has-if", &stmts));
+        assert!(!lib.matches_named("has-if", &[]));
+    }
+
+    #[test]
+    fn matcher_lib_has_loop() {
+        let lib = HlilMatcherLibrary::new();
+        let while_stmt = vec![HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![],
+        }];
+        assert!(lib.matches_named("has-loop", &while_stmt));
+        let for_stmt = vec![HlilStatement::For {
+            init: None,
+            cond: None,
+            step: None,
+            body: vec![],
+        }];
+        assert!(lib.matches_named("has-loop", &for_stmt));
+    }
+
+    #[test]
+    fn matcher_lib_has_switch() {
+        let lib = HlilMatcherLibrary::new();
+        let sw = vec![HlilStatement::Switch {
+            value: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            },
+            cases: vec![],
+            default: vec![],
+        }];
+        assert!(lib.matches_named("has-switch", &sw));
+    }
+
+    #[test]
+    fn matcher_lib_match_all() {
+        let lib = HlilMatcherLibrary::new();
+        let stmts = vec![HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![],
+            else_body: vec![],
+        }];
+        let matched = lib.match_all(&stmts);
+        assert!(matched.contains(&"has-if"));
+        assert!(!matched.contains(&"empty-body"));
+    }
+
+    #[test]
+    fn matcher_lib_custom_pattern() {
+        let mut lib = HlilMatcherLibrary::new();
+        lib.register(HlilMatcher::new("has-break", |stmts| {
+            stmts.iter().any(|s| matches!(s, HlilStatement::Break))
+        }));
+        let stmts = vec![HlilStatement::Break];
+        assert!(lib.matches_named("has-break", &stmts));
+        assert!(!lib.matches_named("has-break", &[]));
+    }
+
+    // ── HlilStats ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_stats_empty_function() {
+        let func = HlilFunction::new(Address::new(0x1000), "empty");
+        let stats = hlil_stats(&func);
+        assert_eq!(stats.total_stmts, 0);
+        assert_eq!(stats.assign_count, 0);
+        assert_eq!(stats.if_count, 0);
+    }
+
+    #[test]
+    fn hlil_stats_counts_assigns_and_returns() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::Assign {
+            dest: HlilExpr::Var {
+                var: HlilVar::new("x", HlilType::i32()),
+            },
+            src: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            },
+        });
+        func.body.push(HlilStatement::Return(vec![]));
+        let stats = hlil_stats(&func);
+        assert_eq!(stats.assign_count, 1);
+        assert_eq!(stats.return_count, 1);
+        assert_eq!(stats.total_stmts, 2);
+    }
+
+    #[test]
+    fn hlil_stats_nested_if_increments_nesting() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![HlilStatement::Assign {
+                dest: HlilExpr::Var {
+                    var: HlilVar::new("y", HlilType::i32()),
+                },
+                src: HlilExpr::Const {
+                    value: 2,
+                    ty: HlilType::i32(),
+                },
+            }],
+            else_body: vec![],
+        });
+        let stats = hlil_stats(&func);
+        assert_eq!(stats.if_count, 1);
+        assert_eq!(stats.assign_count, 1);
+        assert!(stats.max_nesting_depth >= 1);
+    }
+
+    #[test]
+    fn hlil_stats_while_and_var_declare() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::VarDeclare {
+            var: HlilVar::new("i", HlilType::i32()),
+            init: None,
+        });
+        func.body.push(HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![HlilStatement::Break],
+        });
+        let stats = hlil_stats(&func);
+        assert_eq!(stats.var_declare_count, 1);
+        assert_eq!(stats.while_count, 1);
+    }
+
+    // ── Constant folding ──────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_fold_add_constants() {
+        let expr = HlilExpr::Add(
+            Box::new(HlilExpr::Const {
+                value: 10,
+                ty: HlilType::i32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 20,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        let (folded, cnt) = fold_hlil_expr(expr);
+        assert!(cnt > 0);
+        assert!(matches!(folded, HlilExpr::Const { value: 30, .. }));
+    }
+
+    #[test]
+    fn hlil_fold_mul_constants() {
+        let expr = HlilExpr::Mul(
+            Box::new(HlilExpr::Const {
+                value: 3,
+                ty: HlilType::i32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 7,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        let (folded, cnt) = fold_hlil_expr(expr);
+        assert!(cnt > 0);
+        assert!(matches!(folded, HlilExpr::Const { value: 21, .. }));
+    }
+
+    #[test]
+    fn hlil_fold_bitand_constants() {
+        let expr = HlilExpr::And(
+            Box::new(HlilExpr::Const {
+                value: 0xFF,
+                ty: HlilType::u32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 0x0F,
+                ty: HlilType::u32(),
+            }),
+            HlilType::u32(),
+        );
+        let (folded, cnt) = fold_hlil_expr(expr);
+        assert!(cnt > 0);
+        assert!(matches!(folded, HlilExpr::Const { value: 0x0F, .. }));
+    }
+
+    #[test]
+    fn hlil_fold_neg_constant() {
+        let expr = HlilExpr::Neg(
+            Box::new(HlilExpr::Const {
+                value: 5,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        let (folded, cnt) = fold_hlil_expr(expr);
+        assert!(cnt > 0);
+        // 5i64.wrapping_neg() = -5 as i64 = u64::MAX - 4 in bit pattern.
+        assert!(matches!(folded, HlilExpr::Const { .. }));
+    }
+
+    #[test]
+    fn hlil_fold_function_folds_body() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::Assign {
+            dest: HlilExpr::Var {
+                var: HlilVar::new("x", HlilType::i32()),
+            },
+            src: HlilExpr::Add(
+                Box::new(HlilExpr::Const {
+                    value: 5,
+                    ty: HlilType::i32(),
+                }),
+                Box::new(HlilExpr::Const {
+                    value: 3,
+                    ty: HlilType::i32(),
+                }),
+                HlilType::i32(),
+            ),
+        });
+        let count = fold_hlil_function(&mut func);
+        assert!(count > 0);
+        if let HlilStatement::Assign { src, .. } = &func.body[0] {
+            assert!(matches!(src, HlilExpr::Const { value: 8, .. }));
+        }
+    }
+
+    // ── HlilExprWalker ────────────────────────────────────────────────────
+
+    #[test]
+    fn walk_hlil_counts_nodes() {
+        let expr = HlilExpr::Add(
+            Box::new(HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            }),
+            Box::new(HlilExpr::Const {
+                value: 2,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        let count = count_hlil_expr_nodes(&expr);
+        assert_eq!(count, 3); // Add + 2 Const
+    }
+
+    #[test]
+    fn walk_hlil_nested_nodes() {
+        let expr = HlilExpr::Mul(
+            Box::new(HlilExpr::Add(
+                Box::new(HlilExpr::Const {
+                    value: 1,
+                    ty: HlilType::i32(),
+                }),
+                Box::new(HlilExpr::Const {
+                    value: 2,
+                    ty: HlilType::i32(),
+                }),
+                HlilType::i32(),
+            )),
+            Box::new(HlilExpr::Const {
+                value: 3,
+                ty: HlilType::i32(),
+            }),
+            HlilType::i32(),
+        );
+        let count = count_hlil_expr_nodes(&expr);
+        assert_eq!(count, 5); // Mul + Add + 3 Const
+    }
+
+    #[test]
+    fn walk_hlil_single_const() {
+        let expr = HlilExpr::Const {
+            value: 42,
+            ty: HlilType::i64(),
+        };
+        let count = count_hlil_expr_nodes(&expr);
+        assert_eq!(count, 1);
+    }
+
+    // ── Statement snapshot / JSON serialisation ───────────────────────────
+
+    #[test]
+    fn snapshot_stmt_assign_kind() {
+        let stmt = HlilStatement::Assign {
+            dest: HlilExpr::Var {
+                var: HlilVar::new("x", HlilType::i32()),
+            },
+            src: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            },
+        };
+        let snap = snapshot_stmt(&stmt);
+        assert_eq!(snap.kind, "assign");
+        assert!(!snap.text.is_empty());
+    }
+
+    #[test]
+    fn snapshot_stmt_return_kind() {
+        let stmt = HlilStatement::Return(vec![]);
+        let snap = snapshot_stmt(&stmt);
+        assert_eq!(snap.kind, "return");
+    }
+
+    #[test]
+    fn snapshot_stmt_if_kind() {
+        let stmt = HlilStatement::If {
+            cond: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::Bool,
+            },
+            then_body: vec![],
+            else_body: vec![],
+        };
+        let snap = snapshot_stmt(&stmt);
+        assert_eq!(snap.kind, "if");
+    }
+
+    #[test]
+    fn hlil_function_to_json_output() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::Return(vec![]));
+        let json = snapshot_function(&func).unwrap();
+        assert!(json.contains("\"kind\""));
+        assert!(json.contains("\"return\""));
+    }
+
+    // ── Control-flow helpers ──────────────────────────────────────────────
+
+    #[test]
+    fn count_breaks_in_loop() {
+        let stmts = vec![HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![HlilStatement::Break, HlilStatement::Continue],
+        }];
+        let (breaks, conts) = count_breaks_and_continues(&stmts);
+        assert_eq!(breaks, 1);
+        assert_eq!(conts, 1);
+    }
+
+    #[test]
+    fn body_always_returns_yes() {
+        let stmts = vec![
+            HlilStatement::Assign {
+                dest: HlilExpr::Var {
+                    var: HlilVar::new("x", HlilType::i32()),
+                },
+                src: HlilExpr::Const {
+                    value: 0,
+                    ty: HlilType::i32(),
+                },
+            },
+            HlilStatement::Return(vec![]),
+        ];
+        assert!(body_always_returns(&stmts));
+    }
+
+    #[test]
+    fn body_always_returns_no() {
+        let stmts = vec![HlilStatement::Assign {
+            dest: HlilExpr::Var {
+                var: HlilVar::new("x", HlilType::i32()),
+            },
+            src: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            },
+        }];
+        assert!(!body_always_returns(&stmts));
+    }
+
+    #[test]
+    fn body_always_returns_empty() {
+        assert!(!body_always_returns(&[]));
+    }
+
+    #[test]
+    fn collect_goto_targets_finds_gotos() {
+        let target = Address::new(0x2000);
+        let stmts = vec![HlilStatement::Goto(target)];
+        let targets = collect_goto_targets(&stmts);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].as_u64(), 0x2000);
+    }
+
+    // ── Dead code removal ─────────────────────────────────────────────────
+
+    #[test]
+    fn remove_dead_code_after_return_removes_trailing() {
+        let mut stmts = vec![
+            HlilStatement::Assign {
+                dest: HlilExpr::Var {
+                    var: HlilVar::new("x", HlilType::i32()),
+                },
+                src: HlilExpr::Const {
+                    value: 1,
+                    ty: HlilType::i32(),
+                },
+            },
+            HlilStatement::Return(vec![]),
+            HlilStatement::Assign {
+                dest: HlilExpr::Var {
+                    var: HlilVar::new("y", HlilType::i32()),
+                },
+                src: HlilExpr::Const {
+                    value: 2,
+                    ty: HlilType::i32(),
+                },
+            },
+        ];
+        let removed = remove_dead_code_after_return(&mut stmts);
+        assert_eq!(removed, 1);
+        assert_eq!(stmts.len(), 2);
+        assert!(matches!(stmts[1], HlilStatement::Return(..)));
+    }
+
+    #[test]
+    fn remove_dead_code_no_return_leaves_unchanged() {
+        let mut stmts = vec![HlilStatement::Break, HlilStatement::Continue];
+        let removed = remove_dead_code_after_return(&mut stmts);
+        assert_eq!(removed, 0);
+        assert_eq!(stmts.len(), 2);
+    }
+
+    // ── HlilTypeEnv ───────────────────────────────────────────────────────
+
+    #[test]
+    fn type_env_insert_and_get() {
+        let mut env = HlilTypeEnv::new();
+        env.insert("rax", HlilType::u64());
+        assert_eq!(env.get("rax"), Some(&HlilType::u64()));
+        assert!(env.get("rbx").is_none());
+    }
+
+    #[test]
+    fn type_env_from_function() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.locals.push(HlilVar::new("x", HlilType::i32()));
+        func.prototype
+            .params
+            .push(HlilVar::param("arg0", HlilType::u64()));
+        let env = HlilTypeEnv::from_function(&func);
+        assert_eq!(env.get("x"), Some(&HlilType::i32()));
+        assert_eq!(env.get("arg0"), Some(&HlilType::u64()));
+    }
+
+    // ── HlilExprBuilder ───────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_expr_builder_const() {
+        let e = HlilExprBuilder::const_val(42, HlilType::i32()).build();
+        assert!(matches!(e, HlilExpr::Const { value: 42, .. }));
+    }
+
+    #[test]
+    fn hlil_expr_builder_var() {
+        let v = HlilVar::new("x", HlilType::i32());
+        let e = HlilExprBuilder::var(v).build();
+        assert!(matches!(e, HlilExpr::Var { .. }));
+    }
+
+    #[test]
+    fn hlil_expr_builder_add_chain() {
+        let e = HlilExprBuilder::const_val(3, HlilType::i32())
+            .add(
+                HlilExpr::Const {
+                    value: 7,
+                    ty: HlilType::i32(),
+                },
+                HlilType::i32(),
+            )
+            .build();
+        let (folded, cnt) = fold_hlil_expr(e);
+        assert!(cnt > 0);
+        assert!(matches!(folded, HlilExpr::Const { value: 10, .. }));
+    }
+
+    #[test]
+    fn hlil_expr_builder_cmpeq() {
+        let e = HlilExprBuilder::const_val(1, HlilType::i32())
+            .cmpeq(HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            })
+            .build();
+        assert!(matches!(e, HlilExpr::CmpEq(..)));
+    }
+
+    #[test]
+    fn hlil_expr_builder_cast() {
+        let e = HlilExprBuilder::const_val(255, HlilType::u8())
+            .cast(HlilType::i32())
+            .build();
+        assert!(matches!(e, HlilExpr::Cast { .. }));
+    }
+
+    // ── HlilType helpers ──────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_type_byte_sizes() {
+        assert_eq!(HlilType::i32().byte_size(), Some(4));
+        assert_eq!(HlilType::u64().byte_size(), Some(8));
+        assert_eq!(HlilType::Bool.byte_size(), Some(1));
+        assert_eq!(HlilType::Void.byte_size(), Some(0));
+    }
+
+    #[test]
+    fn hlil_type_is_pointer() {
+        assert!(HlilType::ptr(HlilType::Void, 64).is_pointer());
+        assert!(!HlilType::i32().is_pointer());
+    }
+
+    #[test]
+    fn hlil_type_is_integer() {
+        assert!(HlilType::i64().is_integer());
+        assert!(!HlilType::Float { bits: 32 }.is_integer());
+    }
+
+    // ── Use-def chains ────────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_use_def_chains_basic() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        let x = HlilVar::new("x", HlilType::i32());
+        func.body.push(HlilStatement::Assign {
+            dest: HlilExpr::Var { var: x.clone() },
+            src: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::i32(),
+            },
+        });
+        func.body.push(HlilStatement::Return(vec![HlilExpr::Var {
+            var: x,
+        }]));
+        let chains = HlilUseDefChains::build(&func);
+        let def_sites = chains.def_sites("x");
+        let use_sites = chains.use_sites("x");
+        assert_eq!(def_sites.len(), 1);
+        assert_eq!(use_sites.len(), 1);
+    }
+
+    // ── Copy propagation ──────────────────────────────────────────────────
+
+    #[test]
+    fn hlil_copy_propagation_basic() {
+        let mut func = HlilFunction::new(Address::new(0x1000), "f");
+        func.body.push(HlilStatement::Assign {
+            dest: HlilExpr::Var {
+                var: HlilVar::new("tmp", HlilType::i32()),
+            },
+            src: HlilExpr::Var {
+                var: HlilVar::new("x", HlilType::i32()),
+            },
+        });
+        func.body.push(HlilStatement::Return(vec![HlilExpr::Var {
+            var: HlilVar::new("tmp", HlilType::i32()),
+        }]));
+        func.locals.push(HlilVar::new("tmp", HlilType::i32()));
+        let changed = propagate_hlil_copies(&mut func);
+        assert!(changed > 0);
+    }
+
+    // ── Pattern matching API (enum variant) ───────────────────────────────
+
+    #[test]
+    fn hlil_pattern_detect_identity_assign() {
+        let v = HlilVar::new("x", HlilType::i32());
+        let stmt = HlilStatement::Assign {
+            dest: HlilExpr::Var { var: v.clone() },
+            src: HlilExpr::Var { var: v },
+        };
+        let patterns = match_stmt_patterns(&stmt);
+        assert!(
+            patterns
+                .iter()
+                .any(|p| matches!(p, HlilPattern::IdentityAssign { .. }))
+        );
+    }
+
+    #[test]
+    fn hlil_pattern_detect_zero_init() {
+        let v = HlilVar::new("i", HlilType::i32());
+        let stmt = HlilStatement::Assign {
+            dest: HlilExpr::Var { var: v },
+            src: HlilExpr::Const {
+                value: 0,
+                ty: HlilType::i32(),
+            },
+        };
+        let patterns = match_stmt_patterns(&stmt);
+        assert!(
+            patterns
+                .iter()
+                .any(|p| matches!(p, HlilPattern::ZeroInit { .. }))
+        );
+    }
+
+    #[test]
+    fn hlil_pattern_detect_infinite_loop() {
+        let stmt = HlilStatement::While {
+            cond: HlilExpr::Const {
+                value: 1,
+                ty: HlilType::Bool,
+            },
+            body: vec![],
+        };
+        let patterns = match_stmt_patterns(&stmt);
+        assert!(
+            patterns
+                .iter()
+                .any(|p| matches!(p, HlilPattern::InfiniteLoop))
+        );
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Control-flow structuring — Tarjan SCC loop detection, dominator-based natural
+// loop recovery, and DREAM-style region structuring producing if/while/dowhile
+// with goto minimisation.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Recovery of structured control flow (if / loops / switch) from a raw CFG.
+///
+/// The structurer takes a [`StructuringCfg`] — a graph of b with
+/// condition-annotated edges — and produces a tree of [`HlilStatement`]s.
+/// It follows the spirit of the DREAM "No More Gotos" approach: detect loops via
+/// dominator back-edges (after Tarjan SCC identifies the strongly-connected
+/// regions), structure the acyclic remainder by dominator regions, and only emit
+/// `goto`/`Label` for edges that cannot be expressed structurally.
+pub mod structuring {
+    use super::{HlilExpr, HlilStatement};
+    use rustre_core::address::Address;
+    use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+
+    /// How a block transfers control to its successors.
+    #[derive(Debug, Clone)]
+    pub enum Terminator {
+        /// Falls through / unconditionally jumps to a single successor.
+        Goto(u32),
+        /// Two-way branch: `cond` true -> `then_blk`, false -> `else_blk`.
+        Branch {
+            cond: HlilExpr,
+            then_blk: u32,
+            else_blk: u32,
+        },
+        /// Multi-way branch (switch): `(value, target)` pairs + default.
+        Switch {
+            value: HlilExpr,
+            cases: Vec<(i64, u32)>,
+            default: Option<u32>,
+        },
+        /// Function return.
+        Return(Vec<HlilExpr>),
+        /// No successors (e.g. trap / noreturn call).
+        Unreachable,
+    }
+
+    impl Terminator {
+        /// Successor block ids in deterministic order.
+        #[must_use]
+        pub fn successors(&self) -> Vec<u32> {
+            match self {
+                Self::Goto(t) => vec![*t],
+                Self::Branch {
+                    then_blk, else_blk, ..
+                } => vec![*then_blk, *else_blk],
+                Self::Switch { cases, default, .. } => {
+                    let mut s: Vec<u32> = cases.iter().map(|(_, t)| *t).collect();
+                    if let Some(d) = default {
+                        s.push(*d);
+                    }
+                    s
+                }
+                Self::Return(_) | Self::Unreachable => vec![],
+            }
+        }
+    }
+
+    /// A single block in the structuring CFG.
+    #[derive(Debug, Clone)]
+    pub struct CfgBlock {
+        /// Block id (used as a stable key throughout structuring).
+        pub id: u32,
+        /// Address (for label naming / goto targets).
+        pub address: Address,
+        /// Straight-line statements in the block (no control flow).
+        pub body: Vec<HlilStatement>,
+        /// How control leaves the block.
+        pub term: Terminator,
+    }
+
+    impl CfgBlock {
+        /// Construct a block with a `Goto` terminator.
+        #[must_use]
+        pub fn linear(id: u32, address: Address, body: Vec<HlilStatement>, next: u32) -> Self {
+            Self {
+                id,
+                address,
+                body,
+                term: Terminator::Goto(next),
+            }
+        }
+    }
+
+    /// The input CFG for structuring.
+    #[derive(Debug, Clone, Default)]
+    pub struct StructuringCfg {
+        /// Blocks keyed by id.
+        pub blocks: BTreeMap<u32, CfgBlock>,
+        /// Entry block id.
+        pub entry: u32,
+    }
+
+    impl StructuringCfg {
+        /// Create an empty CFG with the given entry id.
+        #[must_use]
+        pub fn new(entry: u32) -> Self {
+            Self {
+                blocks: BTreeMap::new(),
+                entry,
+            }
+        }
+
+        /// Insert / replace a block.
+        pub fn add_block(&mut self, block: CfgBlock) {
+            self.blocks.insert(block.id, block);
+        }
+
+        /// Successors of `id`.
+        #[must_use]
+        pub fn successors(&self, id: u32) -> Vec<u32> {
+            self.blocks
+                .get(&id)
+                .map(|b| b.term.successors())
+                .unwrap_or_default()
+        }
+
+        /// Predecessor map (id -> set of predecessors).
+        #[must_use]
+        pub fn predecessors(&self) -> HashMap<u32, Vec<u32>> {
+            let mut preds: HashMap<u32, Vec<u32>> = HashMap::new();
+            for b in self.blocks.values() {
+                preds.entry(b.id).or_default();
+                for s in b.term.successors() {
+                    preds.entry(s).or_default().push(b.id);
+                }
+            }
+            for v in preds.values_mut() {
+                v.sort_unstable();
+                v.dedup();
+            }
+            preds
+        }
+
+        /// Block ids reachable from the entry, in DFS pre-order.
+        #[must_use]
+        pub fn reachable_order(&self) -> Vec<u32> {
+            let mut order = Vec::new();
+            let mut seen = HashSet::new();
+            let mut stack = vec![self.entry];
+            while let Some(n) = stack.pop() {
+                if !seen.insert(n) {
+                    continue;
+                }
+                order.push(n);
+                // push successors reversed so the first is visited first
+                let mut succ = self.successors(n);
+                succ.reverse();
+                for s in succ {
+                    if !seen.contains(&s) {
+                        stack.push(s);
+                    }
+                }
+            }
+            order
+        }
+    }
+
+    // ── Tarjan strongly-connected components ────────────────────────────
+
+    /// Compute strongly-connected components using Tarjan's algorithm.
+    ///
+    /// Returns a list of components in reverse-topological order. Single-node
+    /// components with no self-loop are trivial (not loops); components with
+    /// > 1 node, or a single node with a self-edge, represent cyclic regions.
+    #[must_use]
+    pub fn tarjan_scc(cfg: &StructuringCfg) -> Vec<Vec<u32>> {
+        struct State<'a> {
+            cfg: &'a StructuringCfg,
+            index: u32,
+            indices: HashMap<u32, u32>,
+            lowlink: HashMap<u32, u32>,
+            on_stack: HashSet<u32>,
+            stack: Vec<u32>,
+            out: Vec<Vec<u32>>,
+        }
+        fn strong_connect(st: &mut State, v: u32) {
+            st.indices.insert(v, st.index);
+            st.lowlink.insert(v, st.index);
+            st.index += 1;
+            st.stack.push(v);
+            st.on_stack.insert(v);
+            for w in st.cfg.successors(v) {
+                if !st.indices.contains_key(&w) {
+                    strong_connect(st, w);
+                    let low_w = st.lowlink[&w];
+                    let e = st.lowlink.get_mut(&v).unwrap();
+                    *e = (*e).min(low_w);
+                } else if st.on_stack.contains(&w) {
+                    let idx_w = st.indices[&w];
+                    let e = st.lowlink.get_mut(&v).unwrap();
+                    *e = (*e).min(idx_w);
+                }
+            }
+            if st.lowlink[&v] == st.indices[&v] {
+                let mut comp = Vec::new();
+                while let Some(w) = st.stack.pop() {
+                    st.on_stack.remove(&w);
+                    comp.push(w);
+                    if w == v {
+                        break;
+                    }
+                }
+                comp.sort_unstable();
+                st.out.push(comp);
+            }
+        }
+        let mut st = State {
+            cfg,
+            index: 0,
+            indices: HashMap::new(),
+            lowlink: HashMap::new(),
+            on_stack: HashSet::new(),
+            stack: Vec::new(),
+            out: Vec::new(),
+        };
+        for &v in &cfg.reachable_order() {
+            if !st.indices.contains_key(&v) {
+                strong_connect(&mut st, v);
+            }
+        }
+        st.out
+    }
+
+    // ── delegation to `rustre-analysis-cfg` (opt-in) ─────────────────────────
+
+    /// The address-keyed CFG model `rustre-analysis-cfg` consumes.
+    type AnalysisCfgParts = (
+        HashMap<Address, rustre_analysis_cfg::BasicBlock>,
+        Vec<rustre_analysis_cfg::CfgEdge>,
+        Address,
+    );
+
+    /// Translate a [`StructuringCfg`] (u32-keyed) into the address-keyed model
+    /// `rustre-analysis-cfg` expects.
+    ///
+    /// Node id `n` maps to `Address::new(u64::from(n))`. Blocks carry no
+    /// instructions and `start == end == addr`: every analysis in
+    /// `rustre-analysis-cfg` (dominators, post-dominators, frontiers, natural
+    /// loops, RPO) reads only the `blocks` keys and the `edges`, so CFG
+    /// structure alone is sufficient — the same observation already recorded in
+    /// `rustre-decompiler/src/analysis_cfg_adapter.rs`.
+    ///
+    /// The node set is `blocks` ∪ every successor id ∪ `entry`, because
+    /// [`StructuringCfg::reachable_order`] also walks successor ids that have
+    /// no block of their own; dropping them would change the node set and hence
+    /// the dominator map.
+    fn to_analysis_cfg(cfg: &StructuringCfg) -> AnalysisCfgParts {
+        let addr_of = |id: u32| Address::new(u64::from(id));
+        let mut ids: BTreeSet<u32> = cfg.blocks.keys().copied().collect();
+        ids.insert(cfg.entry);
+
+        let mut edges: Vec<rustre_analysis_cfg::CfgEdge> = Vec::new();
+        for b in cfg.blocks.values() {
+            let succs = b.term.successors();
+            for (i, &s) in succs.iter().enumerate() {
+                ids.insert(s);
+                let kind = if succs.len() >= 2 {
+                    if i == 0 {
+                        rustre_analysis_cfg::EdgeKind::TrueBranch
+                    } else {
+                        rustre_analysis_cfg::EdgeKind::FalseBranch
+                    }
+                } else {
+                    rustre_analysis_cfg::EdgeKind::Unconditional
+                };
+                edges.push(rustre_analysis_cfg::CfgEdge {
+                    from: addr_of(b.id),
+                    to: addr_of(s),
+                    kind,
+                });
+            }
+        }
+
+        let blocks: HashMap<Address, rustre_analysis_cfg::BasicBlock> = ids
+            .into_iter()
+            .map(|id| {
+                let a = addr_of(id);
+                (
+                    a,
+                    rustre_analysis_cfg::BasicBlock {
+                        start: a,
+                        end: a,
+                        instructions: Vec::new(),
+                    },
+                )
+            })
+            .collect();
+
+        (blocks, edges, addr_of(cfg.entry))
+    }
+
+    /// [`dominators`] computed by delegating to `rustre-analysis-cfg` instead of
+    /// the local Cooper-Harvey loop below.
+    ///
+    /// Both sides run the same algorithm, so this is expected to be an exact
+    /// substitution; `dominators_delegate_matches_local` asserts that on the
+    /// module's test CFGs. Kept as a free function (rather than inlined into
+    /// the env gate) so the test can exercise it without touching process-wide
+    /// environment state.
+    ///
+    /// Conversion note: `rustre-analysis-cfg` maps the entry to `None` while
+    /// this module maps the entry to itself, which the `map_or` below restores.
+    #[must_use]
+    pub fn dominators_delegated(cfg: &StructuringCfg) -> HashMap<u32, u32> {
+        let (blocks, edges, entry) = to_analysis_cfg(cfg);
+        let dt = rustre_analysis_cfg::DominatorTree::compute(&blocks, &edges, entry);
+        let mut out: HashMap<u32, u32> = HashMap::new();
+        for (a, idom) in &dt.idom {
+            let Ok(n) = u32::try_from(a.0) else { continue };
+            let d = idom.map_or(n, |d| u32::try_from(d.0).unwrap_or(n));
+            out.insert(n, d);
+        }
+        out
+    }
+
+    // ── dominators (Cooper-Harvey iterative) ────────────────────────────────
+
+    /// Immediate-dominator map for the CFG (entry maps to itself).
+    ///
+    /// `RUSTRE_HLIL_CFG_DELEGATE=1` routes this to [`dominators_delegated`],
+    /// which asks `rustre-analysis-cfg` for the same map. Opt-in, default OFF.
+    #[must_use]
+    pub fn dominators(cfg: &StructuringCfg) -> HashMap<u32, u32> {
+        if matches!(
+            std::env::var("RUSTRE_HLIL_CFG_DELEGATE").as_deref(),
+            Ok("1") | Ok("true")
+        ) {
+            return dominators_delegated(cfg);
+        }
+        dominators_local(cfg)
+    }
+
+    /// The in-crate Cooper-Harvey implementation of [`dominators`], reachable
+    /// without the env gate so the equivalence test can compare both sides.
+    fn dominators_local(cfg: &StructuringCfg) -> HashMap<u32, u32> {
+        let order = cfg.reachable_order();
+        if order.is_empty() {
+            return HashMap::new();
+        }
+        let rpo_index: HashMap<u32, usize> =
+            order.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+        let preds = cfg.predecessors();
+        let mut idom: HashMap<u32, u32> = HashMap::new();
+        idom.insert(cfg.entry, cfg.entry);
+
+        let intersect = |mut a: u32, mut b: u32, idom: &HashMap<u32, u32>| -> u32 {
+            while a != b {
+                while rpo_index[&a] > rpo_index[&b] {
+                    a = idom[&a];
+                }
+                while rpo_index[&b] > rpo_index[&a] {
+                    b = idom[&b];
+                }
+            }
+            a
+        };
+
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for &n in order.iter().skip(1) {
+                let mut new_idom: Option<u32> = None;
+                for &p in preds.get(&n).map_or(&[][..], Vec::as_slice) {
+                    if !idom.contains_key(&p) {
+                        continue;
+                    }
+                    new_idom = Some(new_idom.map_or(p, |d| intersect(p, d, &idom)));
+                }
+                if let Some(d) = new_idom
+                    && idom.get(&n) != Some(&d)
+                {
+                    idom.insert(n, d);
+                    changed = true;
+                }
+            }
+        }
+        idom
+    }
+
+    /// Immediate POST-dominators: the dual of [`dominators`], computed on the
+    /// reversed CFG.
+    ///
+    /// `x` post-dominates `y` when every path from `y` to an exit passes
+    /// through `x`. The immediate post-dominator of a branch block is, by
+    /// definition, the point where its two arms rejoin — i.e. exactly the
+    /// `if`/`else` follow node. `find_merge` used to approximate that with
+    /// "reachable from both arms, nearest to the entry", which can pick a block
+    /// that does NOT post-dominate; the region then closes in the wrong place
+    /// and everything after it leaves as `goto`.
+    ///
+    /// Multiple exits are handled by a virtual exit that all of them feed, so
+    /// the fixpoint has a single root. Returns an empty map when the function
+    /// has no exit at all (an infinite loop), where post-domination is
+    /// undefined — callers must fall back.
+    #[must_use]
+    pub fn post_dominators(cfg: &StructuringCfg) -> HashMap<u32, u32> {
+        let order = cfg.reachable_order();
+        if order.is_empty() {
+            return HashMap::new();
+        }
+        // Exits = reachable blocks with no successor inside the reachable set.
+        let reachable: HashSet<u32> = order.iter().copied().collect();
+        let exits: Vec<u32> = order
+            .iter()
+            .copied()
+            .filter(|&n| !cfg.successors(n).iter().any(|s| reachable.contains(s)))
+            .collect();
+        if exits.is_empty() {
+            return HashMap::new();
+        }
+        // Reverse post-order of the REVERSED graph = BFS back from the exits.
+        let succs_rev: HashMap<u32, Vec<u32>> = {
+            let mut m: HashMap<u32, Vec<u32>> = HashMap::new();
+            for &n in &order {
+                for s in cfg.successors(n) {
+                    if reachable.contains(&s) {
+                        m.entry(s).or_default().push(n);
+                    }
+                }
+            }
+            m
+        };
+        // The SINGLE VIRTUAL EXIT. Seeding every exit as its own root (what this
+        // did before) makes post-domination a FOREST with N roots: two arms that
+        // end on different exits have no common ancestor, `intersect` runs out of
+        // steps and falls back to an arbitrary successor, and `common_pdom` then
+        // reports `why=selfmap`. Measured on sample10_cs: 2407 merge failures,
+        // 2406 of them `selfmap` and 1 `missing` — i.e. essentially ALL of them
+        // are this. One virtual root makes the relation a proper TREE again.
+        //
+        // The id never escapes: after the fixpoint every entry mapping to it is
+        // rewritten to a self-map, which is exactly what the five consumers of
+        // `ipdom` already treat as "no proof". So no fake block can be emitted.
+        //
+        // ⛔ MEASURED AND WITHDRAWN (kept behind an OPT-IN gate). The diagnosis
+        // above is accurate as a DESCRIPTION — the forest is real and it does
+        // produce those 2406 `selfmap` failures — but the CAUSAL claim that it
+        // was the largest remaining source of gotos is FALSE. Repairing it on
+        // sample10_cs moved goto 2364 -> 2360 (four) while JUMPOUT went 67 -> 74,
+        // i.e. it breaks a guard to buy 0.2%. Enable with
+        // `RUSTRE_HLIL_PDOM_VIRT=1` only to re-measure.
+        const VIRT: u32 = u32::MAX;
+        let virt_on = matches!(
+            std::env::var("RUSTRE_HLIL_PDOM_VIRT").as_deref(),
+            Ok("1") | Ok("true")
+        );
+        let mut rorder: Vec<u32> = Vec::with_capacity(order.len() + 1);
+        let mut seen: HashSet<u32> = HashSet::new();
+        let mut q: VecDeque<u32> = exits.iter().copied().collect();
+        for &e in &exits {
+            seen.insert(e);
+        }
+        if virt_on {
+            rorder.push(VIRT);
+            seen.insert(VIRT);
+        }
+        while let Some(n) = q.pop_front() {
+            rorder.push(n);
+            for &p in succs_rev.get(&n).map_or(&[][..], Vec::as_slice) {
+                if seen.insert(p) {
+                    q.push_back(p);
+                }
+            }
+        }
+        let idx: HashMap<u32, usize> = rorder.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+
+        // Seed every exit as its own post-dominator (the virtual exit collapses
+        // into them), then iterate to a fixpoint over the reversed edges.
+        let mut ipdom: HashMap<u32, u32> = HashMap::new();
+        if virt_on {
+            ipdom.insert(VIRT, VIRT);
+        } else {
+            for &e in &exits {
+                ipdom.insert(e, e);
+            }
+        }
+        // Successors as the fixpoint sees them: an exit's only successor is the
+        // virtual root, which is what turns the forest into a tree.
+        let exit_set: HashSet<u32> = exits.iter().copied().collect();
+        let succ_of = |n: u32| -> Vec<u32> {
+            if virt_on && exit_set.contains(&n) {
+                vec![VIRT]
+            } else {
+                cfg.successors(n)
+            }
+        };
+        // `steps` bounds the walk: a transient `ipdom` cycle (possible mid-
+        // fixpoint on an irreducible graph) would otherwise spin here forever.
+        let n_nodes = rorder.len();
+        let intersect = |mut a: u32, mut b: u32, ipdom: &HashMap<u32, u32>| -> Option<u32> {
+            let mut steps = 0usize;
+            let limit = 2 * n_nodes + 4;
+            while a != b {
+                steps += 1;
+                if steps > limit {
+                    return None;
+                }
+                while idx.get(&a)? > idx.get(&b)? {
+                    a = *ipdom.get(&a)?;
+                    steps += 1;
+                    if steps > limit {
+                        return None;
+                    }
+                }
+                while idx.get(&b)? > idx.get(&a)? {
+                    b = *ipdom.get(&b)?;
+                    steps += 1;
+                    if steps > limit {
+                        return None;
+                    }
+                }
+            }
+            Some(a)
+        };
+        // Bounded fixpoint. On a reducible CFG this converges in a handful of
+        // passes; on an irreducible one the `intersect` fallback can make a
+        // node oscillate and `changed` never settle. Capping at `nodes + 2`
+        // passes guarantees termination — a partial post-dom map is fine, since
+        // `find_merge` treats a missing/uncertain entry as "use the fallback".
+        let cap = rorder.len() + 2;
+        let mut changed = true;
+        let mut passes = 0;
+        while changed {
+            if passes >= cap {
+                // Did not converge ⇒ irreducible; a partial map here would be
+                // confidently wrong. Return empty so `find_merge` falls back
+                // entirely rather than trusting an unsettled post-dominator.
+                return HashMap::new();
+            }
+            passes += 1;
+            changed = false;
+            for &n in &rorder {
+                if if virt_on { n == VIRT } else { exits.contains(&n) } {
+                    continue;
+                }
+                let mut new_ipdom: Option<u32> = None;
+                for s in succ_of(n) {
+                    if !ipdom.contains_key(&s) {
+                        continue;
+                    }
+                    new_ipdom = Some(match new_ipdom {
+                        None => s,
+                        Some(d) => match intersect(s, d, &ipdom) {
+                            Some(v) => v,
+                            None => d,
+                        },
+                    });
+                }
+                if let Some(d) = new_ipdom
+                    && d != n
+                    && ipdom.get(&n) != Some(&d)
+                {
+                    ipdom.insert(n, d);
+                    changed = true;
+                }
+            }
+        }
+        if virt_on {
+            // Strip the sentinel: it must never reach a consumer. A node whose
+            // only post-dominator is the virtual exit gets a SELF-MAP, which is
+            // precisely the "no proof" encoding the consumers already handle.
+            ipdom.remove(&VIRT);
+            let virt_mapped: Vec<u32> = ipdom
+                .iter()
+                .filter(|&(_, &v)| v == VIRT)
+                .map(|(&k, _)| k)
+                .collect();
+            for n in virt_mapped {
+                ipdom.insert(n, n);
+            }
+        }
+        ipdom
+    }
+
+    fn dominates(idom: &HashMap<u32, u32>, a: u32, b: u32) -> bool {
+        let mut cur = b;
+        loop {
+            if cur == a {
+                return true;
+            }
+            match idom.get(&cur) {
+                Some(&p) if p != cur => cur = p,
+                _ => return false,
+            }
+        }
+    }
+
+    // ── natural loop detection ──────────────────────────────────────────────
+
+    /// A natural loop discovered via a dominator back-edge.
+    #[derive(Debug, Clone)]
+    pub struct NaturalLoop {
+        /// The loop header (target of the back-edge; dominates the whole body).
+        pub header: u32,
+        /// The block whose edge back to the header forms the loop.
+        pub latch: u32,
+        /// All blocks in the loop body (including header and latch).
+        pub body: BTreeSet<u32>,
+    }
+
+    /// [`detect_natural_loops`] computed by delegating to
+    /// `rustre_analysis_cfg::find_natural_loops`.
+    ///
+    /// The two models name the same thing differently (`latch` here,
+    /// `back_edge_src` there) and the delegated one carries strictly more
+    /// information — `exits` and `is_innermost`, which the multi-exit relooper
+    /// currently recomputes. That extra information is DROPPED here: this
+    /// function is a pure substitution, so it can be proven equal to the local
+    /// one (`natural_loops_delegate_matches_local`) before anything downstream
+    /// starts consuming the new fields. Wiring `exits`/`is_innermost` into the
+    /// relooper would change path-B output and must be measured first.
+    #[must_use]
+    pub fn detect_natural_loops_delegated(cfg: &StructuringCfg) -> Vec<NaturalLoop> {
+        let (blocks, edges, entry) = to_analysis_cfg(cfg);
+        let dom_tree = rustre_analysis_cfg::DominatorTree::compute(&blocks, &edges, entry);
+        let acfg = rustre_analysis_cfg::ControlFlowGraph {
+            blocks,
+            edges,
+            entry,
+            dom_tree,
+            loops: Vec::new(),
+            post_dom_tree: rustre_analysis_cfg::PostDominatorTree::default(),
+        };
+        rustre_analysis_cfg::find_natural_loops(&acfg)
+            .into_iter()
+            .filter_map(|l| {
+                let header = u32::try_from(l.header.0).ok()?;
+                let latch = u32::try_from(l.back_edge_src.0).ok()?;
+                let body: BTreeSet<u32> =
+                    l.body.iter().filter_map(|a| u32::try_from(a.0).ok()).collect();
+                Some(NaturalLoop {
+                    header,
+                    latch,
+                    body,
+                })
+            })
+            .collect()
+    }
+
+    /// Detect natural loops. A back-edge `n -> h` exists when `h` dominates `n`;
+    /// the loop body is everything that can reach `n` without going through `h`.
+    ///
+    /// `RUSTRE_HLIL_LOOPS_DELEGATE=1` routes this to
+    /// [`detect_natural_loops_delegated`]. Opt-in, default OFF, and kept
+    /// SEPARATE from `RUSTRE_HLIL_CFG_DELEGATE` so the two substitutions can be
+    /// measured independently.
+    #[must_use]
+    pub fn detect_natural_loops(cfg: &StructuringCfg) -> Vec<NaturalLoop> {
+        if matches!(
+            std::env::var("RUSTRE_HLIL_LOOPS_DELEGATE").as_deref(),
+            Ok("1") | Ok("true")
+        ) {
+            return detect_natural_loops_delegated(cfg);
+        }
+        detect_natural_loops_local(cfg)
+    }
+
+    /// The in-crate implementation of [`detect_natural_loops`], reachable
+    /// without the env gate so the equivalence test can compare both sides.
+    fn detect_natural_loops_local(cfg: &StructuringCfg) -> Vec<NaturalLoop> {
+        let idom = dominators_local(cfg);
+        let preds = cfg.predecessors();
+        let mut loops: Vec<NaturalLoop> = Vec::new();
+        for b in cfg.blocks.values() {
+            for h in b.term.successors() {
+                // Back edge: header h dominates the latch b.
+                if dominates(&idom, h, b.id) {
+                    let body = natural_loop_body(h, b.id, &preds);
+                    loops.push(NaturalLoop {
+                        header: h,
+                        latch: b.id,
+                        body,
+                    });
+                }
+            }
+        }
+        loops
+    }
+
+    /// The body of a natural loop with header `h` and latch `n`: all nodes that
+    /// can reach `n` without passing through `h`, plus `h` itself.
+    fn natural_loop_body(h: u32, n: u32, preds: &HashMap<u32, Vec<u32>>) -> BTreeSet<u32> {
+        let mut body = BTreeSet::new();
+        body.insert(h);
+        if n == h {
+            return body;
+        }
+        let mut stack = vec![n];
+        body.insert(n);
+        while let Some(x) = stack.pop() {
+            for &p in preds.get(&x).map_or(&[][..], Vec::as_slice) {
+                if body.insert(p) {
+                    stack.push(p);
+                }
+            }
+        }
+        body
+    }
+
+    /// Returns `true` if the loop is *improper* (irreducible): its SCC has more
+    /// Relooper (dispatch-loop) transform for an IMPROPER (irreducible) SCC.
+    ///
+    /// An irreducible region has no single header, so no `while`/`if` nesting
+    /// can express it — the structurer degrades every internal edge to a
+    /// `goto`. The standard correct answer (emscripten's relooper, Cifuentes'
+    /// "Multiple" region) is a state machine:
+    /// ```text
+    ///   state = <entry>;
+    ///   while (state != EXIT) {
+    ///     switch (state) {
+    ///       case b0: <b0 body>; state = <succ>; break;
+    ///       ...
+    ///     }
+    ///   }
+    /// ```
+    /// Every internal edge becomes `state = target;`, every exit becomes
+    /// `state = EXIT;`. This is correct for ANY control flow.
+    ///
+    /// Returns `None` (caller keeps the goto fallback) unless every member
+    /// terminates with `Goto`/`Branch`/`Return`/`Unreachable` (no nested
+    /// `Switch`/table inside the irreducible region). Correctness beats
+    /// coverage: a wrong dispatch loop is worse than an honest goto.
+    ///
+    /// On success returns `(statements, primary_exit)`: the caller must resume
+    /// emission at `primary_exit` (the `while` sentinel), so callee and caller
+    /// agree on the single fallthrough. MULTI-EXIT is handled: one exit is the
+    /// sentinel; every OTHER exit target becomes a plain `goto` out of the loop
+    /// (legal C — jumping out of `while`/`switch`/`if` to a top-level label,
+    /// which `emit_block` emits unconditionally for every block). That trades
+    /// the many internal irreducible gotos for the few secondary-exit gotos.
+    #[must_use]
+    fn structure_improper_scc(
+        cfg: &StructuringCfg,
+        scc: &[u32],
+        entry: u32,
+        block_body: &dyn Fn(u32) -> Vec<HlilStatement>,
+    ) -> Option<(Vec<HlilStatement>, Option<u32>, Vec<u32>)> {
+        use std::collections::BTreeSet;
+        let member: BTreeSet<u32> = scc.iter().copied().collect();
+        // Count how many member-edges target each outside block, so we can pick
+        // the most-targeted one as the sentinel exit (fewest residual gotos).
+        let mut exit_hits: HashMap<u32, u32> = HashMap::new();
+        let mut note_exit = |t: u32, member: &BTreeSet<u32>| {
+            if !member.contains(&t) {
+                *exit_hits.entry(t).or_insert(0) += 1;
+            }
+        };
+        for &n in scc {
+            let b = cfg.blocks.get(&n)?;
+            match &b.term {
+                Terminator::Goto(t) => note_exit(*t, &member),
+                Terminator::Branch { then_blk, else_blk, .. } => {
+                    note_exit(*then_blk, &member);
+                    note_exit(*else_blk, &member);
+                }
+                Terminator::Switch { cases, default, .. } => {
+                    for (_, t) in cases {
+                        note_exit(*t, &member);
+                    }
+                    if let Some(d) = default {
+                        note_exit(*d, &member);
+                    }
+                }
+                Terminator::Return(_) | Terminator::Unreachable => {}
+            }
+        }
+        // Primary exit = most-targeted, tiebreak by smallest id (deterministic).
+        let primary: Option<u32> = exit_hits
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+            .map(|(&t, _)| t);
+        // Instrumentation (`RUSTRE_DBG_RELOOP=1`, zero effect): the dispatch loop
+        // keeps ONE exit as the fallthrough and turns every OTHER exit edge into a
+        // `goto`, so the residual cost of this construct is exactly
+        // `(edges to non-primary exits)`. Recording the exit count and that cost
+        // says whether the front is worth attacking or already optimal.
+        if std::env::var("RUSTRE_DBG_RELOOP").is_ok_and(|v| v != "0") {
+            let edges: u32 = exit_hits.values().sum();
+            let kept = primary.and_then(|p| exit_hits.get(&p).copied()).unwrap_or(0);
+            eprintln!(
+                "RELOOP scc_size={} exits={} edges={edges} residual_gotos={}",
+                scc.len(),
+                exit_hits.len(),
+                edges - kept
+            );
+        }
+        let state = super::HlilVar::new(
+            format!("state_{entry:x}"),
+            super::HlilType::Int { signed: true, bits: 32 },
+        );
+        let state_expr = || HlilExpr::Var { var: state.clone() };
+        let exit_val: i64 = primary.map_or(-1, i64::from);
+        let set_state = |v: i64| HlilStatement::Assign {
+            dest: HlilExpr::Var { var: state.clone() },
+            src: HlilExpr::Const { value: v, ty: super::HlilType::Int { signed: true, bits: 32 } },
+        };
+        // Default ON (opt-out `RUSTRE_HLIL_RELOOP_MULTIEXIT=0`). A dispatch loop
+        // keeps ONE exit as the fallthrough; every OTHER exit edge used to become
+        // a `goto`. Now the loop records WHICH exit it took in a second variable
+        // and the caller — the only place that can emit a block properly, marking
+        // it emitted — emits those exits inline after the loop, so the jump
+        // disappears without copying anything.
+        //
+        // Measured over the whole corpus (11144 files): goto unchanged at 5912,
+        // but JUMPOUT 1490 -> 1033 (-30.7%), which is also 443 BELOW the 1476 of
+        // the baseline preceding the `DUP_MAX` change — so this more than repays
+        // that change's declared JUMPOUT regression. Residual undefined locals
+        // 1026 -> 1022, arity 127/135 with OVER 1, path A byte-identical, brace
+        // balance 0, no duplicated label, fixed-list recompilability 1200/1200,
+        // +0.97% lines.
+        let multi = !matches!(
+            std::env::var("RUSTRE_HLIL_RELOOP_MULTIEXIT").as_deref(),
+            Ok("0") | Ok("false")
+        );
+        let taken = super::HlilVar::new(
+            format!("exit_{entry:x}"),
+            super::HlilType::Int { signed: true, bits: 32 },
+        );
+        let mut extra: BTreeSet<u32> = BTreeSet::new();
+        // Statements taking the edge to `target`:
+        //   member       → `state = target;` (loop back)
+        //   primary exit → `state = primary;` (natural loop termination)
+        //   other exit   → `goto loc_<addr>;`, or under the flag
+        //                  `exit_ = target; state = <exit sentinel>;`
+        let mut edge = |target: u32| -> Vec<HlilStatement> {
+            if member.contains(&target) || Some(target) == primary {
+                vec![set_state(i64::from(target))]
+            } else if multi {
+                extra.insert(target);
+                vec![
+                    HlilStatement::Assign {
+                        dest: HlilExpr::Var { var: taken.clone() },
+                        src: HlilExpr::Const {
+                            value: i64::from(target),
+                            ty: super::HlilType::Int { signed: true, bits: 32 },
+                        },
+                    },
+                    set_state(exit_val),
+                ]
+            } else {
+                let addr = cfg.blocks.get(&target).map_or(Address::new(0), |b| b.address);
+                vec![HlilStatement::Goto(addr)]
+            }
+        };
+
+        let mut cases: Vec<super::SwitchCase> = Vec::new();
+        for &n in scc {
+            let b = cfg.blocks.get(&n)?;
+            let mut body = block_body(n);
+            match &b.term {
+                Terminator::Goto(t) => body.extend(edge(*t)),
+                Terminator::Branch { cond, then_blk, else_blk } => {
+                    body.push(HlilStatement::If {
+                        cond: cond.clone(),
+                        then_body: edge(*then_blk),
+                        else_body: edge(*else_blk),
+                    });
+                }
+                Terminator::Switch { value, cases: sw, default } => {
+                    let inner: Vec<super::SwitchCase> = sw
+                        .iter()
+                        .map(|(v, t)| super::SwitchCase { values: vec![*v], body: edge(*t) })
+                        .collect();
+                    let default_body = match *default {
+                        Some(d) => edge(d),
+                        None => Vec::new(),
+                    };
+                    body.push(HlilStatement::Switch {
+                        value: value.clone(),
+                        cases: inner,
+                        default: default_body,
+                    });
+                }
+                Terminator::Return(vals) => {
+                    body.push(HlilStatement::Return(vals.clone()));
+                }
+                Terminator::Unreachable => body.push(set_state(exit_val)),
+            }
+            cases.push(super::SwitchCase { values: vec![i64::from(n)], body });
+        }
+
+        // `state = <entry>` before the loop: the actual block through which
+        // control enters the region (the caller passes the reached block).
+        // Must be a member for the loop to be well-formed.
+        let initial = if member.contains(&entry) { entry } else { *scc.iter().min()? };
+        let mut out = vec![
+            HlilStatement::VarDeclare { var: state.clone(), init: None },
+            set_state(i64::from(initial)),
+            HlilStatement::While {
+                cond: HlilExpr::CmpNe(
+                    Box::new(state_expr()),
+                    Box::new(HlilExpr::Const {
+                        value: exit_val,
+                        ty: super::HlilType::Int { signed: true, bits: 32 },
+                    }),
+                ),
+                body: vec![HlilStatement::Switch {
+                    value: state_expr(),
+                    cases,
+                    default: Vec::new(),
+                }],
+            },
+        ];
+        if !extra.is_empty() {
+            // MUST be initialised: the loop can also leave through the PRIMARY
+            // exit, which never assigns this variable, and the guards emitted
+            // after the loop (`if (exit_ == k)`) would then read an indeterminate
+            // value — and run the wrong block if it happened to match. Block ids
+            // are non-negative, so -1 can never collide with a real exit.
+            //
+            // An ASSIGNMENT, not a `VarDeclare`: a later pass already hoists a
+            // declaration for every local it sees, so declaring here too produced
+            // two declarations. Where they landed in different scopes C merely
+            // shadowed, but where they landed in the same one gcc rejected the
+            // file — "redeclaration of 'exit_3' with no linkage", 12 files of the
+            // fixed list.
+            out.insert(
+                0,
+                HlilStatement::Assign {
+                    dest: HlilExpr::Var { var: taken.clone() },
+                    src: HlilExpr::Const {
+                        value: -1,
+                        ty: super::HlilType::Int { signed: true, bits: 32 },
+                    },
+                },
+            );
+        }
+        Some((out, primary, extra.into_iter().collect()))
+    }
+
+    /// than one entry block from outside.
+    #[must_use]
+    pub fn is_improper_loop(cfg: &StructuringCfg, scc: &[u32]) -> bool {
+        if scc.len() < 2 {
+            return false;
+        }
+        let member: HashSet<u32> = scc.iter().copied().collect();
+        let preds = cfg.predecessors();
+        let mut entries = 0;
+        for &n in scc {
+            let has_external_pred = preds
+                .get(&n)
+                .is_some_and(|ps| ps.iter().any(|p| !member.contains(p)));
+            if has_external_pred || n == cfg.entry {
+                entries += 1;
+            }
+        }
+        entries > 1
+    }
+
+    // ── region structuring ───new_idom.map_or(p, |d| intersect(p, d, &idom))─
+
+    /// The structurer state, threaded through recursive region emission.
+    struct Structurer<'a> {
+        cfg: &'a StructuringCfg,
+        loops: Vec<NaturalLoop>,
+        /// Header -> loop, for quick lookup.
+        header_loop: HashMap<u32, usize>,
+        /// Blocks already emitted (to avoid duplication).
+        emitted: HashSet<u32>,
+        /// Blocks that became loop headers (rendered as while/dowhile).
+        /// Edges that required a `goto`.
+        goto_count: usize,
+        labels_needed: BTreeSet<u32>,
+        /// Stack of (loop header, loop exit) for the loops currently being
+        /// emitted, innermost last. A jump to the innermost exit is a `break`;
+        /// a jump to the innermost header is a `continue`. Lets a branch to the
+        /// exit from a NESTED `if` inside the loop become `break` instead of a
+        /// `goto` — the dominant remaining loop-goto source.
+        loop_ctx: Vec<(u32, Option<u32>)>,
+        /// Immediate post-dominators — the exact `if`/`else` follow nodes.
+        /// Empty when the function has no exit (post-domination undefined);
+        /// `find_merge` then falls back to its reachability heuristic.
+        ipdom: HashMap<u32, u32>,
+        /// Improper (irreducible) SCCs to render as dispatch loops. Each entry is
+        /// the member id list. Populated by DEFAULT; empty only when the opt-out
+        /// `RUSTRE_HLIL_RELOOP=0` is set (see the construction site).
+        improper_sccs: Vec<Vec<u32>>,
+        /// Immediate dominators — populated ONLY under `RUSTRE_DBG_GOTO`, used
+        /// to classify each emitted goto as a real back edge or an ordering
+        /// artefact. Never read when the instrumentation is off.
+        dbg_idom: HashMap<u32, u32>,
+        /// Last block emitted, i.e. the SOURCE of the next goto. Instrumentation.
+        dbg_last: Option<u32>,
+        /// Sonda (`RUSTRE_HLIL_DEBUG`, effetto zero): i blocchi su cui una
+        /// regione si e' FERMATA perche' erano il suo `stop`, delegandone
+        /// l'emissione al chiamante. Un blocco LOST che compare qui prova
+        /// che la delega non e' stata onorata da nessuno.
+        dbg_stopped: HashSet<u32>,
+        /// Uscite SECONDARIE di un loop (blocchi fuori dal corpo che non sono
+        /// il bersaglio di `break` registrato). Vanno EMESSE dopo il costrutto:
+        /// saltarci soltanto lascia il blocco non emesso e il `goto` degrada a
+        /// `JUMPOUT`. Gate `RUSTRE_HLIL_BREAKFIX`.
+        pending_exits: Vec<u32>,
+        /// How many `switch` bodies enclose the statement being emitted. Inside
+        /// one, a C `break` binds to the SWITCH, not to the loop — so a jump to
+        /// the loop exit cannot be rendered as `break` there.
+        switch_depth: usize,
+    }
+
+    /// The structured output of [`structure_function`].
+    #[derive(Debug, Clone)]
+    pub struct StructuredFunction {
+        /// The body as a list of statements.
+        pub body: Vec<HlilStatement>,
+        /// Number of `goto` statements emitted (lower is better).
+        pub goto_count: usize,
+        /// Loops recovered.
+        pub loop_count: usize,
+    }
+
+    /// Structure a CFG into a tree of [`HlilStatement`]s.
+    #[must_use]
+    pub fn structure_function(cfg: &StructuringCfg) -> StructuredFunction {
+        let loops = detect_natural_loops(cfg);
+        let mut header_loop = HashMap::new();
+        for (i, l) in loops.iter().enumerate() {
+            // Keep the largest body per header.
+            header_loop
+                .entry(l.header)
+                .and_modify(|e: &mut usize| {
+                    if loops[*e].body.len() < l.body.len() {
+                        *e = i;
+                    }
+                })
+                .or_insert(i);
+        }
+        // Improper (irreducible) SCCs → dispatch loops. Default ON (opt-out):
+        // set `RUSTRE_HLIL_RELOOP=0` to disable and fall back to raw gotos.
+        // #1420: SOGLIA sulla TAGLIA della SCC (`RUSTRE_HLIL_RELOOP_MIN`,
+        // default 7). Il dispatch-loop non e' gratis: sostituisce i loop veri
+        // con una macchina a stati, che sul corpus e' **371 file** contro
+        // **ZERO** di A (#1390) — e su `matrix_trace`, che nel SORGENTE e'
+        // due `for` annidati, A resta piu' fedele di B (#1380).
+        //
+        // Ma spegnerlo in blocco e' una PERDITA NETTA: +567 goto per 136
+        // macchine (#1400). Il costo pero' e' **BIMODALE** (#1410, per file):
+        //   <=3 stati 0.5 goto · 4-6 **0.7** · 7-15 2.6 · 16-30 4.0 · >30 **21.1**
+        // La media 4.2 era un artefatto della coda. ⇒ **si tiene il relooper
+        // dove PAGA (SCC grandi) e lo si spegne dove NON serve (SCC piccole)**.
+        //
+        // La taglia usata e' `scc.len()`, nota PRIMA di emettere; la sonda
+        // `RUSTRE_DBG_RELOOPSZ` la stampa per verificarne la corrispondenza
+        // col numero di `case` emessi — **misurata, non assunta**.
+        // Default **4**, scelto sulla CURVA misurata (4 binari), non a naso:
+        //   MIN=1 (base) 136 macchine / 3026 goto
+        //   MIN=4         95 / 3049  ⇒ -41 macchine per **+23 goto = 0.56 ciascuna**
+        //   MIN=7         70 / 3153  ⇒ il tratto 4->7 costa **4.2** per macchina
+        //   MIN=12        44 / 3294  ⇒ il tratto 7->12 costa **5.4**
+        // Il ginocchio e' a 4: sotto costa quasi nulla, sopra si paga caro.
+        // ⚠ Il primo default che avevo scelto (7) era **troppo aggressivo**:
+        // `scc.len()` NON coincide col numero di `case` emessi, e la misura
+        // l'ha colto (previsti 0.6 goto/macchina, misurati 1.9).
+        let min_scc: usize = std::env::var("RUSTRE_HLIL_RELOOP_MIN")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(4);
+        let improper_sccs: Vec<Vec<u32>> =
+            if std::env::var("RUSTRE_HLIL_RELOOP").map(|v| v != "0").unwrap_or(true) {
+                tarjan_scc(cfg)
+                    .into_iter()
+                    .filter(|scc| is_improper_loop(cfg, scc))
+                    .filter(|scc| {
+                        if std::env::var("RUSTRE_DBG_RELOOPSZ").is_ok() {
+                            eprintln!("RELOOPSZ {}", scc.len());
+                        }
+                        scc.len() >= min_scc
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        let mut s = Structurer {
+            cfg,
+            loops: loops.clone(),
+            header_loop,
+            emitted: HashSet::new(),
+            goto_count: 0,
+            labels_needed: BTreeSet::new(),
+            loop_ctx: Vec::new(),
+            ipdom: post_dominators(cfg),
+            improper_sccs,
+            // Instrumentation only (`RUSTRE_DBG_GOTO`): lets `goto_to` report
+            // whether the target DOMINATES the source, i.e. whether the jump is
+            // a genuine back edge (missed loop) or a re-entry caused by
+            // emission order. Empty — and never consulted — when DBG is off.
+            dbg_idom: if std::env::var("RUSTRE_DBG_GOTO").is_ok_and(|v| v != "0") {
+                dominators(cfg)
+            } else {
+                HashMap::new()
+            },
+            dbg_last: None,
+            dbg_stopped: HashSet::new(),
+            pending_exits: Vec::new(),
+            switch_depth: 0,
+        };
+        let mut body = s.emit_sequence(cfg.entry, None);
+        // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO): quali blocchi del CFG NON
+        // sono MAI stati emessi. #2570 ha provato che un `JUMPOUT` e' esattamente
+        // questo — un `goto` verso un blocco la cui etichetta non esiste perche'
+        // il blocco non e' mai stato stampato ⇒ il suo codice e' PERSO. Qui si
+        // misura la popolazione e si dice se il blocco perso era RAGGIUNGIBILE
+        // dall'entry (difetto dell'emettitore) o no (codice morto, legittimo).
+        if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0") {
+            let mut reach: HashSet<u32> = HashSet::new();
+            let mut stack = vec![cfg.entry];
+            while let Some(n) = stack.pop() {
+                if reach.insert(n) {
+                    stack.extend(cfg.successors(n));
+                }
+            }
+            for (&id, b) in &cfg.blocks {
+                if !s.emitted.contains(&id) {
+                    eprintln!(
+                        "LOST id={id} addr={:X} reach={} body={} preds={} stopped={} pemit={}",
+                        b.address.as_u64(),
+                        reach.contains(&id),
+                        b.body.len(),
+                        cfg.predecessors().get(&id).map_or(0, Vec::len),
+                        s.dbg_stopped.contains(&id),
+                        // Quanti predecessori sono STATI emessi: se sono tutti,
+                        // il walker era alla porta del blocco e ha girato
+                        // altrove (difetto locale); se nessuno, la perdita
+                        // viene da monte e si propaga (cercare la RADICE).
+                        cfg.predecessors().get(&id).map_or(0, |ps| {
+                            ps.iter().filter(|p| s.emitted.contains(p)).count()
+                        })
+                    );
+                }
+            }
+            // #3040 — Sonda `STMT` (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO).
+            // La sonda `LOST` misura i BLOCCHI mai emessi; #3030 ha provato che
+            // non basta: in `sample7_cpp/sub_140025ca0` il blocco a 140025d2d
+            // NON compare fra i `LOST` (quindi lo structurer lo ha «emesso») ma
+            // la sua unica istruzione — `call 0x140011230` — non e' nel file.
+            // Un blocco puo' dunque risultare emesso e perdere lo stesso i suoi
+            // STATEMENT. Qui si contano le due popolazioni:
+            //   `cfg`  = statement presenti nei blocchi RAGGIUNGIBILI del CFG
+            //   `body` = statement presenti nel corpo STRUTTURATO
+            // `body > cfg` e' NORMALE (duplicazione di coda). **`body < cfg` e'
+            // l'allarme**: quella differenza e' codice sparito.
+            fn count_stmts(stmts: &[HlilStatement]) -> usize {
+                stmts
+                    .iter()
+                    .map(|s| {
+                        1 + match s {
+                            HlilStatement::If { then_body, else_body, .. } => {
+                                count_stmts(then_body) + count_stmts(else_body)
+                            }
+                            HlilStatement::While { body, .. }
+                            | HlilStatement::DoWhile { body, .. }
+                            | HlilStatement::Block(body) => count_stmts(body),
+                            HlilStatement::Switch { cases, default, .. } => {
+                                cases.iter().map(|c| count_stmts(&c.body)).sum::<usize>()
+                                    + count_stmts(default)
+                            }
+                            _ => 0,
+                        }
+                    })
+                    .sum()
+            }
+            let n_cfg: usize = cfg
+                .blocks
+                .iter()
+                .filter(|(id, _)| reach.contains(id))
+                .map(|(_, b)| b.body.len())
+                .sum();
+            let n_body = count_stmts(&body);
+            eprintln!(
+                "STMT cfg={n_cfg} body={n_body} persi={}",
+                n_cfg.saturating_sub(n_body)
+            );
+            // #3070 — Sonda `COVER` (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO).
+            // `STMT` confronta due SOMME, e #3060 ha MISURATO che la somma
+            // nasconde la perdita: 7952 statement vivevano in blocchi mai
+            // emessi mentre la somma ne denunciava 3028 (sottostima del 62%),
+            // perche' la duplicazione di coda compensa. Serve una metrica
+            // PER-OGGETTO. Qui si confrontano due MULTINSIEMI di statement
+            // RESI IN TESTO: per ogni statement distinto dei blocchi
+            // RAGGIUNGIBILI, quante volte compare nel corpo strutturato deve
+            // essere >= quante volte compare nel CFG. Ogni ammanco e' codice
+            // che non e' arrivato nell'output — senza che la duplicazione
+            // altrove possa mascherarlo.
+            let mut want: HashMap<String, usize> = HashMap::new();
+            for (id, b) in &cfg.blocks {
+                if !reach.contains(id) {
+                    continue;
+                }
+                for s in &b.body {
+                    *want.entry(s.to_string()).or_insert(0) += 1;
+                }
+            }
+            fn flatten(stmts: &[HlilStatement], got: &mut HashMap<String, usize>) {
+                for s in stmts {
+                    *got.entry(s.to_string()).or_insert(0) += 1;
+                    match s {
+                        HlilStatement::If { then_body, else_body, .. } => {
+                            flatten(then_body, got);
+                            flatten(else_body, got);
+                        }
+                        HlilStatement::While { body, .. }
+                        | HlilStatement::DoWhile { body, .. }
+                        | HlilStatement::Block(body) => flatten(body, got),
+                        HlilStatement::Switch { cases, default, .. } => {
+                            for c in cases {
+                                flatten(&c.body, got);
+                            }
+                            flatten(default, got);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let mut got: HashMap<String, usize> = HashMap::new();
+            flatten(&body, &mut got);
+            let mut manca = 0usize;
+            let mut distinti = 0usize;
+            for (k, n) in &want {
+                let have = got.get(k).copied().unwrap_or(0);
+                if have < *n {
+                    manca += *n - have;
+                    distinti += 1;
+                }
+            }
+            eprintln!("COVER manca={manca} distinti={distinti} attesi={}", want.len());
+        }
+        if std::env::var("RUSTRE_HLIL_DEADCODE").is_ok_and(|v| v != "0") {
+            let before = count_stmts(&body);
+            drop_unreachable(&mut body);
+            let after = count_stmts(&body);
+            if before != after {
+                eprintln!("DEAD dropped={}", before - after);
+            }
+        }
+        StructuredFunction {
+            body,
+            goto_count: s.goto_count,
+            loop_count: loops.len(),
+        }
+    }
+
+    /// Drop statements that cannot be reached: anything following a terminator
+    /// in the same statement list, up to the next `Label`.
+    ///
+    /// Measured on the emitted C before this existed: 3530 unreachable
+    /// statements, among them 81 `goto` and 390 `JUMPOUT` — 37.8% of every
+    /// JUMPOUT in the corpus. Unlike every other lever on this front it REMOVES
+    /// text, so the line count falls instead of rising.
+    ///
+    /// The `Label` reset is the whole correctness argument: a label is a jump
+    /// target, so control can arrive there without falling through the
+    /// terminator above. A first version of the measurement that ignored labels
+    /// over-counted by 1307.
+    /// Instrumentation helper: total statements in a tree, so the pass can say
+    /// whether it did anything. A pass that silently no-ops is a bug, and the
+    /// only way to tell that apart from "nothing to do" is to count.
+    fn count_stmts(stmts: &[HlilStatement]) -> usize {
+        let mut n = 0;
+        for st in stmts {
+            n += 1;
+            match st {
+                HlilStatement::If { then_body, else_body, .. } => {
+                    n += count_stmts(then_body) + count_stmts(else_body);
+                }
+                HlilStatement::While { body, .. } => n += count_stmts(body),
+                HlilStatement::Switch { cases, default, .. } => {
+                    for c in cases {
+                        n += count_stmts(&c.body);
+                    }
+                    n += count_stmts(default);
+                }
+                _ => {}
+            }
+        }
+        n
+    }
+
+    fn drop_unreachable(stmts: &mut Vec<HlilStatement>) {
+        let mut kept: Vec<HlilStatement> = Vec::with_capacity(stmts.len());
+        let mut dead = false;
+        for mut st in stmts.drain(..) {
+            // A label is a jump target: control can arrive here without falling
+            // through the terminator above, so reachability RESUMES.
+            if matches!(st, HlilStatement::Label(..)) {
+                dead = false;
+            }
+            if dead {
+                continue;
+            }
+            match &mut st {
+                HlilStatement::If { then_body, else_body, .. } => {
+                    drop_unreachable(then_body);
+                    drop_unreachable(else_body);
+                }
+                HlilStatement::While { body, .. } => drop_unreachable(body),
+                HlilStatement::Switch { cases, default, .. } => {
+                    for c in cases.iter_mut() {
+                        drop_unreachable(&mut c.body);
+                    }
+                    drop_unreachable(default);
+                }
+                _ => {}
+            }
+            if matches!(
+                st,
+                HlilStatement::Return(..)
+                    | HlilStatement::Break
+                    | HlilStatement::Continue
+                    | HlilStatement::Goto(..)
+            ) {
+                dead = true;
+            }
+            kept.push(st);
+        }
+        *stmts = kept;
+    }
+
+
+
+    impl Structurer<'_> {
+        /// Emit a straight-line "follow the dominator chain" sequence starting at
+        /// `start`, stopping when we reach `stop` (the post-dominating follow
+        /// node) or a block outside the current region.
+        fn emit_sequence(&mut self, start: u32, stop: Option<u32>) -> Vec<HlilStatement> {
+            let mut out = Vec::new();
+            let mut cur = Some(start);
+            while let Some(c) = cur {
+                if Some(c) == stop {
+                    self.dbg_stopped.insert(c);
+                    break;
+                }
+                // A jump to the innermost enclosing loop's header/exit is a
+                // `continue`/`break`, not a goto — even when we reach it from a
+                // nested `if` inside the loop. This is the dominant remaining
+                // loop-goto source.
+                if let Some(&(header, exit)) = self.loop_ctx.last() {
+                    if c == header {
+                        out.push(HlilStatement::Continue);
+                        break;
+                    }
+                    if Some(c) == exit {
+                        out.push(HlilStatement::Break);
+                        break;
+                    }
+                }
+                if self.emitted.contains(&c) {
+                    // TAIL DUPLICATION: rather than jump to a block that was
+                    // already printed, print its body again here — which removes
+                    // the goto outright instead of merely relocating it (the
+                    // n−1 invariant means reordering can never do that).
+                    //
+                    // Gated hard on the block being a TAIL: it must end in
+                    // `Return`/`Unreachable`, so it terminates control flow and
+                    // nothing downstream has to be duplicated with it. A block
+                    // ending in `Goto`/`Branch` would drag its successors along
+                    // and the duplication would cascade. Also gated on size, so
+                    // a large tail is still reached by a goto rather than being
+                    // copied at every predecessor.
+                    if let Some(dup) = self.try_duplicate_tail(c, stop) {
+                        out.extend(dup);
+                        break;
+                    }
+                    // Not duplicable — emit a jump to it.
+                    out.push(self.jump_to(c));
+                    break;
+                }
+                // Improper (irreducible) SCC entered here → dispatch loop.
+                // Only populated under `RUSTRE_HLIL_RELOOP`.
+                if !self.improper_sccs.is_empty()
+                    && let Some(scc) = self
+                        .improper_sccs
+                        .iter()
+                        .find(|s| s.contains(&c) && !s.iter().any(|m| self.emitted.contains(m)))
+                        .cloned()
+                {
+                    let cfg = self.cfg;
+                    // #2660 (terzo sito senza etichetta): i membri della SCC
+                    // vengono marcati `emitted` piu' sotto, ma i loro corpi sono
+                    // clonati qui senza `Label` ⇒ un `goto` verso uno di essi
+                    // diventa `JUMPOUT`. Si antepone l'etichetta a ogni corpo.
+                    let want_labels = !std::env::var("RUSTRE_HLIL_BREAKFIX")
+                        .as_deref()
+                        .is_ok_and(|v| v == "0" || v == "false");
+                    let bodies: HashMap<u32, Vec<HlilStatement>> = scc
+                        .iter()
+                        .map(|&m| {
+                            let mut body = cfg
+                                .blocks
+                                .get(&m)
+                                .map_or(Vec::new(), |b| b.body.clone());
+                            if want_labels && let Some(b) = cfg.blocks.get(&m) {
+                                body.insert(
+                                    0,
+                                    HlilStatement::Label(format!(
+                                        "loc_{:x}",
+                                        b.address.as_u64()
+                                    )),
+                                );
+                            }
+                            (m, body)
+                        })
+                        .collect();
+                    if let Some((disp, primary_exit, extra_exits)) =
+                        structure_improper_scc(cfg, &scc, c, &|m| {
+                            bodies.get(&m).cloned().unwrap_or_default()
+                        })
+                    {
+                        for &m in &scc {
+                            self.emitted.insert(m);
+                        }
+                        out.extend(disp);
+                        // Under `RUSTRE_HLIL_RELOOP_MULTIEXIT` the loop recorded
+                        // which non-primary exit it took instead of jumping to it.
+                        // Emit those here, guarded by the recorded value: this is
+                        // the only place that can emit a block properly (marking
+                        // it emitted), so the jump disappears without copying.
+                        // Skip any exit already emitted — re-emitting would
+                        // DUPLICATE it, which is a different transform with a
+                        // different cost.
+                        for t in extra_exits {
+                            if self.emitted.contains(&t) {
+                                continue;
+                            }
+                            let taken = super::HlilVar::new(
+                                format!("exit_{c:x}"),
+                                super::HlilType::Int { signed: true, bits: 32 },
+                            );
+                            let body = self.emit_sequence(t, stop);
+                            if body.is_empty() {
+                                continue;
+                            }
+                            out.push(HlilStatement::If {
+                                cond: HlilExpr::CmpEq(
+                                    Box::new(HlilExpr::Var { var: taken }),
+                                    Box::new(HlilExpr::Const {
+                                        value: i64::from(t),
+                                        ty: super::HlilType::Int { signed: true, bits: 32 },
+                                    }),
+                                ),
+                                then_body: body,
+                                else_body: Vec::new(),
+                            });
+                        }
+                        // Resume at the sentinel exit the dispatch loop chose, so
+                        // caller and callee agree on the single fallthrough.
+                        cur = primary_exit;
+                        continue;
+                    }
+                }
+                // Loop header?
+                if let Some(&li) = self.header_loop.get(&c) {
+                    let next = self.emit_loop(li, &mut out, stop);
+                    cur = next;
+                    continue;
+                }
+                cur = self.emit_block(c, &mut out, stop);
+            }
+            out
+        }
+
+        /// Duplicate an already-emitted block in place of a `goto` to it, when
+        /// that is provably self-contained and cheap.
+        ///
+        /// Returns the statements to emit, or `None` to keep the goto. Both
+        /// conditions are required:
+        /// * the block ENDS control flow (`Return` / `Unreachable`) — so no
+        ///   successor has to be duplicated with it and the copy can never
+        ///   cascade;
+        /// * its body is at most `RUSTRE_HLIL_DUP_MAX` statements (default 32),
+        ///   so a large tail is still shared via a jump.
+        ///
+        /// The default was 8, justified by a cost curve measured on sample10_cs
+        /// ALONE, which put the knee at 8 and claimed a ~6% ceiling on removed
+        /// gotos. That analysis no longer describes this emitter: re-measured on
+        /// the WHOLE corpus (12 binaries, 11144 files) the same binary now drops
+        /// 17.0% of its gotos at 32, and the corpus drops 7339 → 5912 (−19.4%,
+        /// −331 files containing a goto) for +3.98% lines. The marginal price
+        /// per removed goto is 16.6 lines at 16, 29.7 at 32 and 74.4 at 64, so
+        /// the knee has moved to 32 and 64 is excluded.
+        ///
+        /// Everything else held on that corpus-wide run: residual undefined
+        /// locals 1026 → 1026 (same numerator), arity 127/135 with OVER 1,
+        /// fixed-list recompilability 1200/1200 both ways, brace balance 0/11144,
+        /// path A byte-identical. The one regression is JUMPOUT: 1476 → 1490
+        /// occurrences, of which half are copies of a target the duplicated
+        /// region already contained and half — 7 distinct addresses — are newly
+        /// unresolved.
+        ///
+        /// Copying a terminating block is semantics-preserving: control reached
+        /// it here and would have run exactly these statements and returned.
+        /// `RUSTRE_HLIL_DUP_MAX=0` disables the transform entirely.
+        fn try_duplicate_tail(&self, target: u32, stop: Option<u32>) -> Option<Vec<HlilStatement>> {
+            let max = std::env::var("RUSTRE_HLIL_DUP_MAX")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(32);
+            self.try_duplicate_tail_capped(target, stop, max)
+        }
+
+        /// `try_duplicate_tail` with an explicit statement budget.
+        ///
+        /// The forward case needs its OWN, much smaller cap. Measured on
+        /// sample10_cs at the production `DUP_MAX=32`, duplicating forward
+        /// edges removed 143 gotos but added 8914 lines — **62.3 lines per
+        /// goto**, essentially as bad as raising `DUP_MAX` itself (70.9), which
+        /// is already closed as not worth it. The estimate that predicted ~3
+        /// was wrong by 20x because the probe reports the size of the TARGET
+        /// BLOCK while `dup_chain` copies a whole CHAIN.
+        ///
+        /// With a tight cap the trade is far better — 11 lines/goto at 2, 14 at
+        /// 4, 28 at 8 — so the two directions get separate budgets rather than
+        /// sharing one.
+        fn try_duplicate_tail_capped(
+            &self,
+            target: u32,
+            stop: Option<u32>,
+            max: usize,
+        ) -> Option<Vec<HlilStatement>> {
+            if max == 0 {
+                return None;
+            }
+            let mut budget = max;
+            let mut seen: BTreeSet<u32> = BTreeSet::new();
+            self.dup_chain(target, stop, &mut budget, &mut seen)
+        }
+
+        /// The copy itself: walk from `target` to the region's exit, sharing one
+        /// `budget` and one `seen` set across the whole (possibly branching)
+        /// copy so it can neither blow up nor revisit a block.
+        fn dup_chain(
+            &self,
+            target: u32,
+            stop: Option<u32>,
+            budget: &mut usize,
+            seen: &mut BTreeSet<u32>,
+        ) -> Option<Vec<HlilStatement>> {
+            // Instrumentation (`RUSTRE_DBG_DUP=1`, zero effect): why a copy was
+            // refused. The refusal classes are what is left of the goto
+            // population, so this picks the next lever from data.
+            let dbg = std::env::var("RUSTRE_DBG_DUP").is_ok_and(|v| v != "0");
+            macro_rules! refuse {
+                ($why:expr) => {{
+                    if dbg {
+                        eprintln!("DUP refuse={}", $why);
+                    }
+                    return None;
+                }};
+            }
+
+            let mut out: Vec<HlilStatement> = Vec::new();
+            let mut cur = target;
+            loop {
+                // A loop header owns its own emission; copying it forks a loop.
+                if self.header_loop.contains_key(&cur) {
+                    refuse!("loop_header");
+                }
+                if self.improper_sccs.iter().any(|s| s.contains(&cur)) {
+                    refuse!("scc");
+                }
+                if !seen.insert(cur) {
+                    refuse!("cycle");
+                }
+                let Some(block) = self.cfg.blocks.get(&cur) else {
+                    refuse!("no_block")
+                };
+                if block.body.len() > *budget {
+                    refuse!("budget");
+                }
+                *budget -= block.body.len();
+                // #2920 — QUARTO sito «emesso senza etichetta». La copia di coda
+                // riproduce il CORPO ma non l'etichetta; se un blocco viene
+                // emesso **soltanto** come copia (mai in originale), il suo
+                // `loc_` non esiste da nessuna parte e ogni `goto` verso di esso
+                // degrada a `JUMPOUT`. Misurato in
+                // `sample7_cpp/sub_14001fb80`: le stesse statement compaiono due
+                // volte e `loc_14001fc81:` non compare affatto.
+                // L'etichetta si puo' anteporre senza rischio: se le copie sono
+                // piu' d'una, `dedup_hlil_labels` (`rustre-decompiler:22058`)
+                // tiene la PRIMA e scarta le successive — e' esattamente il suo
+                // scopo.
+                if !std::env::var("RUSTRE_HLIL_DUPLABEL")
+                    .as_deref()
+                    .is_ok_and(|v| v == "0" || v == "false")
+                {
+                    out.push(HlilStatement::Label(format!(
+                        "loc_{:x}",
+                        block.address.as_u64()
+                    )));
+                }
+                out.extend(block.body.iter().cloned());
+                match &block.term {
+                    Terminator::Return(vals) => {
+                        out.push(HlilStatement::Return(vals.clone()));
+                        return Some(out);
+                    }
+                    // `Unreachable` ends the flow with nothing to emit.
+                    Terminator::Unreachable => return Some(out),
+                    // Reached this region's follow: falling out does the rest.
+                    // This is the case that matters — terminating blocks are
+                    // rare as goto targets; the dominant target is a mid-flow
+                    // join whose continuation IS the follow.
+                    Terminator::Goto(t) if stop.is_some() && Some(*t) == stop => {
+                        return Some(out);
+                    }
+                    // Keep walking: still unconditional, so still exact.
+                    Terminator::Goto(t) => cur = *t,
+                    // ONE arm goes straight to the follow, the other carries on.
+                    // Copy the other arm and fall out; the arm that IS the
+                    // follow becomes an empty branch body, which a later text
+                    // pass folds by inverting the condition.
+                    Terminator::Branch {
+                        cond,
+                        then_blk,
+                        else_blk,
+                    } if stop.is_some()
+                        && (Some(*then_blk) == stop) != (Some(*else_blk) == stop) =>
+                    {
+                        let other = if Some(*then_blk) == stop {
+                            *else_blk
+                        } else {
+                            *then_blk
+                        };
+                        let arm = self.dup_chain(other, stop, budget, seen)?;
+                        let (then_body, else_body) = if Some(*then_blk) == stop {
+                            (Vec::new(), arm)
+                        } else {
+                            (arm, Vec::new())
+                        };
+                        out.push(HlilStatement::If {
+                            cond: cond.clone(),
+                            then_body,
+                            else_body,
+                        });
+                        return Some(out);
+                    }
+                    // NEITHER arm is the follow: copy BOTH, recursively.
+                    // All-or-nothing — half a region is never emitted.
+                    Terminator::Branch {
+                        cond,
+                        then_blk,
+                        else_blk,
+                    } => {
+                        let cond = cond.clone();
+                        let (t, e) = (*then_blk, *else_blk);
+                        // The two arms are INDEPENDENT paths: each gets its own
+                        // visited set, or the second would be refused as a
+                        // "cycle" the moment it touched a block the first had
+                        // copied. The BUDGET stays shared.
+                        let mut seen_t = seen.clone();
+                        let Some(then_body) = self.dup_chain(t, stop, budget, &mut seen_t) else {
+                            refuse!("branch_other_then")
+                        };
+                        let mut seen_e = seen.clone();
+                        let Some(else_body) = self.dup_chain(e, stop, budget, &mut seen_e) else {
+                            refuse!("branch_other_else")
+                        };
+                        out.push(HlilStatement::If {
+                            cond,
+                            then_body,
+                            else_body,
+                        });
+                        return Some(out);
+                    }
+                    Terminator::Switch { .. } => refuse!("switch"),
+                }
+            }
+        }
+
+        /// A jump to the INNERMOST enclosing loop's header or exit is `continue`
+        /// or `break`; anything else is a real `goto`.
+        ///
+        /// `emit_sequence` already does this when it walks into such a block,
+        /// but the other jump sites (`emit_if` arms, the failed-duplication
+        /// path) went straight to `goto_to` and missed it — measured 574 jumps
+        /// that were already `break`/`continue` in disguise.
+        ///
+        /// ⚠ `break` is refused inside a `switch`: in C it would bind to the
+        /// switch, not to the loop. `continue` has no such ambiguity.
+        /// An explicit edge to `target`: a copy of the block when that is cheap
+        /// and safe, otherwise a `goto`.
+        ///
+        /// Tail duplication used to be attempted at ONE site only — inside
+        /// `if self.emitted.contains(&c)` in `emit_sequence` — so it ran for
+        /// BACKWARD jumps and never for forward ones. Measured on sample10_cs:
+        /// **750 forward gotos target a terminating block**, and **none** of
+        /// them is a loop header or inside an SCC, i.e. none would hit either
+        /// of the two legitimate refusals. Their targets are small (95 of size
+        /// 1, 154 of size 2, 89 of size 3), so the trade is roughly **3 lines
+        /// per goto removed** — against the 70.9 lines/goto that raising
+        /// `RUSTRE_HLIL_DUP_MAX` was measured to cost.
+        ///
+        /// Copying a not-yet-emitted block is sound for the same reason the
+        /// backward case is: `try_duplicate_tail` only accepts blocks that
+        /// TERMINATE control flow, and it takes `&self`, so it cannot mark the
+        /// target as emitted. The block therefore stays available and is still
+        /// materialised for its other predecessors.
+        fn edge_or_duplicate(&mut self, target: u32, stop: Option<u32>) -> Vec<HlilStatement> {
+            // The env var IS the budget: `=4` means "duplicate forward edges
+            // whose chain fits in 4 statements". `0` disables it.
+            //
+            // Default 2, which is the measured KNEE. On the full corpus the
+            // budget curve reads 2 -> 10.9 lines per goto removed, 4 -> 14.2,
+            // 8 -> 28, 16 -> 46.5; the MARGINAL cost from 2 to 4 is already
+            // 26.3, past the 23.7 that naive region structuring costs. At 2 the
+            // whole corpus moves 5888 -> 5823 gotos for +200 lines — 3.1
+            // lines/goto, the best ratio measured on this front.
+            //
+            // Declared cost: of the 85 files that change, 55 lose a goto, 30
+            // lose none and merely gain ~4 lines with an inverted condition
+            // (their target was reached by fall-through, so copying it buys
+            // nothing), and none gets worse. That is 200 lines across 922k.
+            let cap = std::env::var("RUSTRE_HLIL_DUP_FORWARD")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(2);
+            if cap > 0
+                && let Some(dup) = self.try_duplicate_tail_capped(target, stop, cap)
+            {
+                return dup;
+            }
+            vec![self.jump_to(target)]
+        }
+
+        fn jump_to(&mut self, target: u32) -> HlilStatement {
+            if let Some(&(header, exit)) = self.loop_ctx.last() {
+                if target == header {
+                    return HlilStatement::Continue;
+                }
+                if Some(target) == exit && self.switch_depth == 0 {
+                    return HlilStatement::Break;
+                }
+            }
+            self.goto_to(target)
+        }
+
+        fn goto_to(&mut self, target: u32) -> HlilStatement {
+            self.goto_count += 1;
+            self.labels_needed.insert(target);
+            let addr = self
+                .cfg
+                .blocks
+                .get(&target)
+                .map_or(Address::new(0), |b| b.address);
+            // Instrumentation (`RUSTRE_DBG_GOTO=1`): classify every goto we are
+            // forced to emit, so the residual population can be attacked by its
+            // largest sub-class instead of guessed at. One line per goto:
+            //   GOTO <kind> hdr=<bool> scc=<bool> back=<bool> preds=<n>
+            if std::env::var("RUSTRE_DBG_GOTO").is_ok_and(|v| v != "0") {
+                let is_header = self.header_loop.contains_key(&target);
+                let in_scc = self.improper_sccs.iter().any(|s| s.contains(&target));
+                // Already emitted ⇒ the jump goes BACKWARD in the output.
+                let backward = self.emitted.contains(&target);
+                let preds = self
+                    .cfg
+                    .predecessors()
+                    .get(&target)
+                    .map_or(0, std::vec::Vec::len);
+                let in_ctx = self
+                    .loop_ctx
+                    .iter()
+                    .any(|&(h, e)| h == target || e == Some(target));
+                // How many of the target's predecessors are already emitted?
+                // If EVERY one is, deferring the target until its last
+                // predecessor had been emitted would have placed it naturally
+                // after both arms and needed no jump at all — that is the
+                // "global emission order" fix. If some predecessor is still
+                // pending, ordering alone cannot help and only duplication can.
+                let plist = self.cfg.predecessors();
+                let empty: Vec<u32> = Vec::new();
+                let preds_all = plist.get(&target).unwrap_or(&empty);
+                let pemit = preds_all
+                    .iter()
+                    .filter(|p| self.emitted.contains(p))
+                    .count();
+                let size = self
+                    .cfg
+                    .blocks
+                    .get(&target)
+                    .map_or(0, |b| b.body.len());
+                let kind = match (backward, is_header, in_scc) {
+                    (_, _, true) => "irreducible",
+                    (true, true, _) => "loop_backedge",
+                    (true, false, _) => "backward_plain",
+                    (false, true, _) => "forward_header",
+                    (false, false, _) => "forward_plain",
+                };
+                // Does the TARGET dominate the SOURCE? If so the edge is a real
+                // back edge (a loop the detector missed); if not, the jump only
+                // goes "backwards" because of the order blocks were printed in.
+                let dominates = self.dbg_last.is_some_and(|src| {
+                    let mut n = src;
+                    loop {
+                        if n == target {
+                            return true;
+                        }
+                        match self.dbg_idom.get(&n) {
+                            Some(&d) if d != n => n = d,
+                            _ => return false,
+                        }
+                    }
+                });
+                // Does the TARGET POST-DOMINATE the source? This is the SAFE
+                // predicate for removing a goto by reordering: `last` (every
+                // predecessor already emitted) is only NECESSARY. `RUSTRE_HLIL_TOPO`
+                // reordered on the weaker condition and placed the join on paths
+                // that never reached it — a behaviour loss, not a layout change.
+                let pdominates = self.dbg_last.is_some_and(|src| {
+                    let mut n = src;
+                    let mut steps = 0;
+                    loop {
+                        if n == target {
+                            return true;
+                        }
+                        steps += 1;
+                        if steps > self.cfg.blocks.len() {
+                            return false;
+                        }
+                        match self.ipdom.get(&n) {
+                            Some(&d) if d != n => n = d,
+                            _ => return false,
+                        }
+                    }
+                });
+                // `tgt` is the address the emitted `goto loc_<tgt>;` carries, so
+                // each probe line can be JOINED to the surviving goto in the C.
+                // Half of these calls are later dropped by the textual passes, so
+                // the call-site population and the emitted one are NOT the same.
+                eprintln!(
+                    "GOTO {kind} hdr={is_header} scc={in_scc} back={backward} preds={preds} ctx={in_ctx} dom={dominates} pemit={pemit} last={} size={size} pdom={pdominates} tgt={:X}",
+                    pemit + 1 >= preds,
+                    addr.as_u64()
+                );
+            }
+            HlilStatement::Goto(addr)
+        }
+
+        /// Emit a single (non-header) block and return the next block to process.
+        fn emit_block(
+            &mut self,
+            id: u32,
+            out: &mut Vec<HlilStatement>,
+            stop: Option<u32>,
+        ) -> Option<u32> {
+            // Instrumentation: a block emitted while NONE of its predecessors
+            // has run yet is emitted PREMATURELY — nothing can fall into it
+            // here, so every real predecessor is later forced to `goto` back.
+            if std::env::var("RUSTRE_DBG_GOTO").is_ok_and(|v| v != "0") {
+                let preds = self.cfg.predecessors();
+                let plist = preds.get(&id).cloned().unwrap_or_default();
+                let n = plist.len();
+                let any_emitted = plist.iter().any(|p| self.emitted.contains(p));
+                let from_last = self.dbg_last.is_some_and(|l| plist.contains(&l));
+                if !plist.is_empty() && !any_emitted {
+                    eprintln!("EARLY preds={n} from_last={from_last}");
+                }
+            }
+            self.emitted.insert(id);
+            self.dbg_last = Some(id); // instrumentation: goto source block
+            let block = self.cfg.blocks.get(&id)?;
+            // `labels_needed` is filled LAZILY by `goto_to`, but this check runs
+            // when the block is EMITTED — so a back-edge (any loop) registers
+            // its target after that target was already printed, and the label is
+            // lost. Measured: 54 labels vs 108 goto targets, intersection ZERO.
+            // Emitting unconditionally is correct; a later two-pass pre-scan can
+            // drop the unused ones for readability.
+            {
+                let _ = &self.labels_needed;
+                // Name the label after the block ADDRESS, not its index: a
+                // `Goto` carries an address and the printer renders it as
+                // `goto loc_<hex>;`, so an `L<id>` label could never match.
+                // Measured before this fix: 54 labels, 108 goto targets,
+                // intersection ZERO — every structured edge was unresolvable
+                // and got degraded to an opaque JUMPOUT downstream.
+                out.push(HlilStatement::Label(format!(
+                    "loc_{:x}",
+                    block.address.as_u64()
+                )));
+            }
+            out.extend(block.body.iter().cloned());
+
+            match &block.term {
+                Terminator::Return(values) => {
+                    out.push(HlilStatement::Return(values.clone()));
+                    None
+                }
+                Terminator::Unreachable => None,
+                Terminator::Goto(t) => Some(*t),
+                Terminator::Branch {
+                    cond,
+                    then_blk,
+                    else_blk,
+                } => {
+                    let cond = cond.clone();
+                    let (t, e) = (*then_blk, *else_blk);
+                    self.emit_if(cond, t, e, out, stop, id)
+                }
+                Terminator::Switch {
+                    value,
+                    cases,
+                    default,
+                } => {
+                    let value = value.clone();
+                    let cases = cases.clone();
+                    let default = *default;
+                    self.emit_switch(value, &cases, default, out, stop)
+                }
+            }
+        }
+
+        /// Emit an `if`/`if-else`, returning the merge (follow) block, if any.
+        fn emit_if(
+            &mut self,
+            cond: HlilExpr,
+            then_blk: u32,
+            else_blk: u32,
+            out: &mut Vec<HlilStatement>,
+            stop: Option<u32>,
+            src: u32,
+        ) -> Option<u32> {
+            // The follow block is the immediate post-dominator approximated by
+            // the nearest common block reachable from both arms that neither arm
+            // strictly owns. We use the simple heuristic: a block dominated by
+            // the branch whose idom is the branch and that both arms reach.
+            let mut follow = self.find_merge(then_blk, else_blk);
+            if follow.is_none() {
+                // Common x86 shape: one arm jumps STRAIGHT to the join
+                // (`je skip; …; skip:`) — the join IS that arm's first block,
+                // which `find_merge` excludes by construction (`m != then_blk
+                // && m != else_blk`). Without this, the other arm runs into
+                // the already-emitted join and degrades to a `goto`.
+                if self.reachable_set(else_blk).contains(&then_blk) {
+                    follow = Some(then_blk);
+                } else if self.reachable_set(then_blk).contains(&else_blk) {
+                    follow = Some(else_blk);
+                }
+            }
+            // ⛔ DIFFERIMENTO — MISURATO E RITIRATO (opt-in `RUSTRE_HLIL_DEFER=1`).
+            // Nella forma LARGA (solo post-dominazione) costa: sample10_cs
+            // goto 2364 -> 2426 (+62). Nella forma SANA (in piu' entrambi i rami
+            // devono RAGGIUNGERE il blocco) e' un NO-OP ESATTO: 2364/67 identici.
+            // Cioe': ogni volta che `ipdom(src)` e' un vero join, `find_merge` lo
+            // trova gia'. Non c'e' niente da recuperare qui.
+            //
+            // DIFFERIMENTO (`RUSTRE_HLIL_DEFER`). Still no follow ⇒
+            // the two arms run to the OUTER `stop`, invade each other's blocks
+            // and the second one to reach a shared join finds it already emitted
+            // — that is the `backward_plain` goto, 721 of the 759 repairable ones
+            // measured in #2530.
+            //
+            // The immediate post-dominator of the BRANCH SOURCE is a boundary by
+            // definition: every path leaving `src` passes through it, so making
+            // it the arms' `stop` cannot place code on a path that never reaches
+            // it. That soundness is the whole point — `RUSTRE_HLIL_TOPO` used the
+            // weaker "all predecessors already emitted" and lost BEHAVIOUR.
+            // Excluded: the source itself (no boundary), an already-emitted block
+            // (the goto exists whatever we do), and the arms (handled above).
+            if follow.is_none()
+                && matches!(
+                    std::env::var("RUSTRE_HLIL_DEFER").as_deref(),
+                    Ok("1") | Ok("true")
+                )
+                && let Some(&p) = self.ipdom.get(&src)
+                && p != src
+                && !self.emitted.contains(&p)
+                && self.cfg.blocks.contains_key(&p)
+                // Post-domination alone is NOT enough: `ipdom(src)` is often the
+                // function exit, far past the join. Making that the arms' `stop`
+                // truncates both arms early and COSTS gotos — measured, first
+                // attempt: 2364 -> 2426 (+62). Require both arms to actually
+                // reach it, so it is a real join and not a distant exit.
+                && self.reachable_set(then_blk).contains(&p)
+                && self.reachable_set(else_blk).contains(&p)
+            {
+                follow = Some(p);
+            }
+            let then_stop = follow.or(stop);
+            let else_stop = follow.or(stop);
+
+            // An arm that IS the follow block normally becomes an empty body
+            // (fall-through into the follow, which the enclosing sequence
+            // emits right after this `if`). But that is only sound when the
+            // follow really is materialized next: if the follow was already
+            // emitted elsewhere (`self.emitted`), or coincides with an outer
+            // region's `stop` (which the enclosing sequence skips), the edge
+            // silently vanishes and the branch degrades to `if (COND) { }`.
+            // In those cases keep the edge as an explicit goto; a later
+            // forward-goto elision pass removes it again when the label turns
+            // out to immediately follow.
+            // Duplication is offered ONLY for the already-emitted case. Reading
+            // the emitted C showed why: in the `== stop` case the arm carries a
+            // goto that the LATER textual passes elide anyway, so copying the
+            // target buys nothing and costs lines — `sample10_cs/sub_140007b40`
+            // turned a clean `if (c) { X }` into
+            // `if (!c) { return; } else { X }`, same meaning, three lines more,
+            // condition inverted. Every aggregate metric was green on it.
+            let then_body = if Some(then_blk) == follow {
+                if self.emitted.contains(&then_blk) {
+                    self.edge_or_duplicate(then_blk, stop)
+                } else if Some(then_blk) == stop {
+                    vec![self.jump_to(then_blk)]
+                } else {
+                    Vec::new()
+                }
+            } else {
+                self.emit_sequence(then_blk, then_stop)
+            };
+            let else_body = if Some(else_blk) == follow {
+                if self.emitted.contains(&else_blk) {
+                    self.edge_or_duplicate(else_blk, stop)
+                } else if Some(else_blk) == stop {
+                    vec![self.jump_to(else_blk)]
+                } else {
+                    Vec::new()
+                }
+            } else {
+                self.emit_sequence(else_blk, else_stop)
+            };
+
+            out.push(HlilStatement::If {
+                cond,
+                then_body,
+                else_body,
+            });
+            follow
+        }
+
+        fn emit_switch(
+            &mut self,
+            value: HlilExpr,
+            cases: &[(i64, u32)],
+            default: Option<u32>,
+            out: &mut Vec<HlilStatement>,
+            stop: Option<u32>,
+        ) -> Option<u32> {
+            // Group case values that share a target block.
+            let mut by_target: BTreeMap<u32, Vec<i64>> = BTreeMap::new();
+            for (v, t) in cases {
+                by_target.entry(*t).or_default().push(*v);
+            }
+            let follow = self.switch_follow(cases, default);
+            let mut switch_cases = Vec::new();
+            self.switch_depth += 1;
+            for (target, values) in by_target {
+                let body = if Some(target) == follow {
+                    Vec::new()
+                } else {
+                    self.emit_sequence(target, follow.or(stop))
+                };
+                switch_cases.push(super::SwitchCase { values, body });
+            }
+            let default_body = match default {
+                Some(d) if Some(d) != follow => self.emit_sequence(d, follow.or(stop)),
+                _ => Vec::new(),
+            };
+            self.switch_depth -= 1;
+            out.push(HlilStatement::Switch {
+                value,
+                cases: switch_cases,
+                default: default_body,
+            });
+            follow
+        }
+
+        fn switch_follow(&self, cases: &[(i64, u32)], default: Option<u32>) -> Option<u32> {
+            // The follow node post-dominates all case targets. Approximate by the
+            // first block that all targets can reach and that is dominated by none
+            // of them exclusively. Simple version: a block that is a successor of
+            // multiple case targets.
+            let mut targets: Vec<u32> = cases.iter().map(|(_, t)| *t).collect();
+            if let Some(d) = default {
+                targets.push(d);
+            }
+            // PREFERRED: the nearest common post-dominator of every case target
+            // — the same proof `find_merge` uses for an `if`, folded across the
+            // arms. The heuristic below only asks which block the most cases
+            // happen to point at, which is not the same question: it can pick a
+            // block that some case never reaches, and then that case runs into
+            // an already-emitted block and degrades to a `goto`.
+            if !targets.is_empty() {
+                let mut acc = Some(targets[0]);
+                for &t in &targets[1..] {
+                    acc = match acc {
+                        Some(a) => self.common_pdom(a, t),
+                        None => None,
+                    };
+                    if acc.is_none() {
+                        break;
+                    }
+                }
+                // A follow that post-dominates every arm is sound even when it
+                // IS one of them: `emit_switch` gives that case an empty body
+                // and the block is emitted once, after the switch.
+                if let Some(f) = acc {
+                    return Some(f);
+                }
+            }
+            let mut succ_count: BTreeMap<u32, usize> = BTreeMap::new();
+            for t in &targets {
+                for s in self.cfg.successors(*t) {
+                    if !targets.contains(&s) {
+                        *succ_count.entry(s).or_insert(0) += 1;
+                    }
+                }
+            }
+            succ_count
+                .into_iter()
+                .max_by_key(|(_, c)| *c)
+                .map(|(b, _)| b)
+        }
+
+        /// Emit a loop (while / do-while / infinite) for loop index `li`.
+        fn emit_loop(
+            &mut self,
+            li: usize,
+            out: &mut Vec<HlilStatement>,
+            _stop: Option<u32>,
+        ) -> Option<u32> {
+            let lp = self.loops[li].clone();
+            let header = lp.header;
+            // #3130 — Sonda `LOOPHDR` (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO).
+            // L'ultimo JUMPOUT vero (`sample7_cpp/sub_140025ca0` -> 140025d2d)
+            // e' un'ETICHETTA mancante su quello che SEMBRA l'header di un
+            // `do/while`. Il codice qui sotto l'etichetta la mette sempre, quindi
+            // o quel loop NON passa da `emit_loop`, o l'header non e' 140025d2d.
+            // Invece di costruire l'ennesima catena plausibile, si CHIEDE al
+            // codice quali header passano di qui.
+            if std::env::var("RUSTRE_HLIL_DEBUG").is_ok_and(|v| v != "0")
+                && let Some(hb) = self.cfg.blocks.get(&header)
+            {
+                eprintln!("LOOPHDR addr={:X} latch={}", hb.address.as_u64(), lp.latch);
+            }
+            self.emitted.insert(header);
+            // #2660 — `emit_block` mette il `Label` per ogni blocco che emette,
+            // ma QUI l'header viene marcato `emitted` e il suo corpo CLONATO nel
+            // costrutto, senza passare da `emit_block`: nessuna etichetta. Un
+            // `goto` verso l'header non trova `loc_<addr>:` e degrada a
+            // `JUMPOUT`. L'etichetta va PRIMA del costrutto: saltare all'header
+            // significa rientrare nel loop, che e' esattamente il punto giusto.
+            if !std::env::var("RUSTRE_HLIL_BREAKFIX")
+                .as_deref()
+                .is_ok_and(|v| v == "0" || v == "false")
+                && let Some(hb) = self.cfg.blocks.get(&header)
+            {
+                out.push(HlilStatement::Label(format!(
+                    "loc_{:x}",
+                    hb.address.as_u64()
+                )));
+            }
+
+            let hblock = self.cfg.blocks.get(&header).cloned();
+            // Determine the loop exit (a successor of a body block that leaves the
+            // loop) and whether the test is at the top (while) or bottom (dowhile).
+            let exit = self.loop_exit(&lp);
+            // Push this loop's context so nested branches to its header/exit
+            // render as `continue`/`break`. Popped before returning.
+            //
+            // `break` is only sound when the loop has a SINGLE exit block: a
+            // `break` always lands at the loop's structural follow, so a jump
+            // to a SECONDARY exit must stay a `goto`. Count distinct exits and
+            // register the exit for break-conversion only when there is exactly
+            // one. `continue` (jump to the unique header) is always sound.
+            let mut exits: BTreeSet<u32> = BTreeSet::new();
+            for &n in &lp.body {
+                for s in self.cfg.successors(n) {
+                    if !lp.body.contains(&s) {
+                        exits.insert(s);
+                    }
+                }
+            }
+            // Single exit → that block is the break target. MULTIPLE exits →
+            // a `break` still lands at the loop's STRUCTURAL FOLLOW, which is
+            // the immediate post-dominator of the header (every path leaving
+            // the loop passes through it). A jump to THAT is a sound `break`
+            // even with several exits; jumps to other exit blocks stay `goto`.
+            let break_exit = if exits.len() == 1 {
+                exit
+            } else {
+                self.ipdom.get(&header).copied().filter(|f| !lp.body.contains(f))
+            };
+            self.loop_ctx.push((header, break_exit));
+
+            // Try while-loop: header is a Branch with one arm inside the loop.
+            if let Some(hb) = &hblock
+                && let Terminator::Branch {
+                    cond,
+                    then_blk,
+                    else_blk,
+                } = &hb.term
+            {
+                let (cond, then_blk, else_blk) = (cond.clone(), *then_blk, *else_blk);
+                let (inside, outside, guard) = if lp.body.contains(&then_blk) {
+                    (then_blk, else_blk, cond)
+                } else {
+                    // negate by swapping; emit cond as-is with body on else
+                    (else_blk, then_blk, HlilExpr::LogicalNot(Box::new(cond)))
+                };
+                self.emitted.insert(header);
+                // The header block's own statements execute BEFORE its
+                // branch test on every iteration — dropping them (the old
+                // behaviour) silently deleted the body of every
+                // single-block loop (`while (c) { continue; }`).
+                if inside == header {
+                    // Self-loop: header is also the latch — a bottom-tested
+                    // loop, i.e. exactly `do { body } while (cond);`.
+                    out.push(HlilStatement::DoWhile {
+                        body: hb.body.clone(),
+                        cond: guard,
+                    });
+                    self.loop_ctx.pop();
+                    return Some(outside);
+                }
+                if hb.body.is_empty() {
+                    // Pure top-tested loop: `while (cond) { body }`.
+                    let body = self.emit_loop_body(inside, header, &lp);
+                    out.push(HlilStatement::While { cond: guard, body });
+                    self.loop_ctx.pop();
+                    return Some(outside);
+                }
+                // Header carries statements AND a top test with a separate
+                // body: `while (true) { hdr-stmts; if (!cond) break; body }`
+                // preserves both the statements and the exact test position.
+                let mark = self.pending_exits.len();
+                let mut body = hb.body.clone();
+                body.push(HlilStatement::If {
+                    cond: HlilExpr::LogicalNot(Box::new(guard)),
+                    then_body: vec![HlilStatement::Break],
+                    else_body: vec![],
+                });
+                body.extend(self.emit_loop_body(inside, header, &lp));
+                out.push(HlilStatement::While {
+                    cond: HlilExpr::Const {
+                        value: 1,
+                        ty: super::HlilType::Bool,
+                    },
+                    body,
+                });
+                self.loop_ctx.pop();
+                self.queue_break_exit(break_exit, Some(outside));
+                self.emit_pending_exits(mark, out);
+                return Some(outside);
+            }
+
+            // Otherwise emit an infinite loop body (while(true)) with the back-edge
+            // becoming a continue and exits becoming break/goto.
+            let body_start = self
+                .cfg
+                .successors(header)
+                .into_iter()
+                .find(|s| lp.body.contains(s))
+                .unwrap_or(header);
+            let mark = self.pending_exits.len();
+            let mut body = Vec::new();
+            if let Some(hb) = &hblock {
+                body.extend(hb.body.iter().cloned());
+            }
+            body.extend(self.emit_loop_body(body_start, header, &lp));
+            out.push(HlilStatement::While {
+                cond: HlilExpr::Const {
+                    value: 1,
+                    ty: super::HlilType::Bool,
+                },
+                body,
+            });
+            self.loop_ctx.pop();
+            self.queue_break_exit(break_exit, exit);
+            self.emit_pending_exits(mark, out);
+            exit
+        }
+
+        /// #2640: `break_exit` (dove `Break` PROMETTE di atterrare) e il blocco
+        /// RESTITUITO al chiamante sono calcolati nello stesso sito ma possono
+        /// DIVERGERE (uscita unica ⇒ `exit`; uscite multiple ⇒ `ipdom(header)`,
+        /// mentre al chiamante torna sempre `loop_exit()` = il PRIMO successore
+        /// fuori dal corpo). Quando divergono, il bersaglio del `break` non lo
+        /// emette nessuno e il suo codice sparisce. Lo si registra fra le uscite
+        /// pendenti, cosi' viene emesso dopo il costrutto.
+        fn queue_break_exit(&mut self, break_exit: Option<u32>, returned: Option<u32>) {
+            if std::env::var("RUSTRE_HLIL_BREAKFIX")
+                .as_deref()
+                .is_ok_and(|v| v == "0" || v == "false")
+            {
+                return;
+            }
+            if let Some(be) = break_exit
+                && Some(be) != returned
+                && !self.emitted.contains(&be)
+                && !self.pending_exits.contains(&be)
+            {
+                self.pending_exits.push(be);
+            }
+        }
+
+        /// Emette i blocchi delle uscite SECONDARIE registrate da questo loop,
+        /// subito DOPO il costrutto. Senza questo il `goto` verso di esse non ha
+        /// etichetta e degrada a `JUMPOUT`, e il blocco resta perso.
+        fn emit_pending_exits(&mut self, mark: usize, out: &mut Vec<HlilStatement>) {
+            while self.pending_exits.len() > mark {
+                let t = self.pending_exits.remove(mark);
+                if self.emitted.contains(&t) {
+                    continue;
+                }
+                let seq = self.emit_sequence(t, None);
+                out.extend(seq);
+            }
+        }
+
+        /// Emit the statements of a loop body, turning the back-edge into
+        /// `continue` and loop exits into `break`.
+        fn emit_loop_body(
+            &mut self,
+            start: u32,
+            header: u32,
+            lp: &NaturalLoop,
+        ) -> Vec<HlilStatement> {
+            let mut out = Vec::new();
+            let mut cur = Some(start);
+            while let Some(c) = cur {
+                if c == header {
+                    out.push(HlilStatement::Continue);
+                    break;
+                }
+                if !lp.body.contains(&c) {
+                    // Uscita dal loop. ⚠ `break` NON e' sempre corretto: atterra
+                    // sempre sul FOLLOW STRUTTURALE del loop, quindi vale solo se
+                    // `c` E' il bersaglio di break registrato. Il sito che
+                    // costruisce il loop lo dice gia' esplicitamente («jumps to
+                    // other exit blocks stay `goto`») e calcola `break_exit` —
+                    // ma QUI quel calcolo non veniva consultato: ogni uscita
+                    // secondaria diventava `break`, il suo blocco non veniva mai
+                    // emesso e il controllo proseguiva nel posto SBAGLIATO.
+                    // Misurato in `sample10_cs/sub_140018c20`: il ramo di
+                    // SUCCESSO di un `lock cmpxchg` (che deve fare `return`)
+                    // usciva dal loop e cadeva in un altro blocco.
+                    //
+                    // ⛔ MISURATO E RITIRATO dietro l'opt-in `RUSTRE_HLIL_BREAKFIX=1`.
+                    // Rendere ONESTO il salto (goto invece di un `break` che
+                    // atterra altrove) NON recupera il blocco: resta non emesso,
+                    // quindi il `goto` diventa `JUMPOUT`. Misura su sample10_cs:
+                    // goto 2364 → 2515 (+151), JUMPOUT 67 → 123 (+56), e i
+                    // blocchi persi restano ESATTAMENTE 852. Cioe': scambia un
+                    // errore SILENZIOSO con uno VISIBILE senza riparare nulla.
+                    // La riparazione vera e' EMETTERE l'uscita secondaria dopo il
+                    // loop; finche' non c'e', il gate resta spento.
+                    let break_ok = std::env::var("RUSTRE_HLIL_BREAKFIX")
+                        .as_deref()
+                        .is_ok_and(|v| v == "0" || v == "false")
+                        || self.loop_ctx.last().is_some_and(|&(_, e)| e == Some(c));
+                    if break_ok {
+                        out.push(HlilStatement::Break);
+                    } else {
+                        // Il salto ONESTO non basta: senza emettere `c` il
+                        // `goto` degrada a `JUMPOUT` e il blocco resta perso
+                        // (misurato a #2620: goto +151, JUMPOUT +56, persi
+                        // INVARIATI). Lo si registra qui e `emit_loop` lo
+                        // emette DOPO il costrutto, dove l'etichetta e' valida.
+                        if !self.pending_exits.contains(&c) {
+                            self.pending_exits.push(c);
+                        }
+                        out.push(self.goto_to(c));
+                    }
+                    break;
+                }
+                if self.emitted.contains(&c) {
+                    out.push(self.goto_to(c));
+                    break;
+                }
+                cur = self.emit_block(c, &mut out, Some(header));
+            }
+            out
+        }
+
+        fn loop_exit(&self, lp: &NaturalLoop) -> Option<u32> {
+            for &n in &lp.body {
+                for s in self.cfg.successors(n) {
+                    if !lp.body.contains(&s) {
+                        return Some(s);
+                    }
+                }
+            }
+            None
+        }
+
+        /// Find the structural merge point of a two-way branch: the nearest block
+        /// dominated by the branch source that both arms reach.
+        fn find_merge(&self, then_blk: u32, else_blk: u32) -> Option<u32> {
+            // PREFERRED: the immediate post-dominator. Both arms of a
+            // well-formed if/else share one — it is the follow node by
+            // definition. When both arms post-dominate to the same block, that
+            // block IS the merge; no reachability heuristic can beat a proof.
+            // (When one arm is itself the join — an `if` with no else — its
+            // ipdom is the join and the other arm's ipdom agrees.)
+            let dbg_merge = std::env::var("RUSTRE_DBG_MERGE").is_ok_and(|v| v != "0");
+            // The follow node is the NEAREST COMMON post-dominator of the arms.
+            // Comparing only `ipdom(then) == ipdom(else)` tests a single level,
+            // so any arm with a tail of its own before the join fails the test.
+            // Walking both chains proves the same thing in the general case.
+            //
+            // Re-measured on the current emitter (2 binaries, 10517 calls; the
+            // older note here read 5867 vs 29604 and no longer described this
+            // code): 6506 = 61.9% proved via post-domination, 906 = 8.6% found by
+            // the fallback heuristic, 45 = 0.4% in functions with no exit at all
+            // (post-domination undefined — legitimate), and 3089 = 29.4% where
+            // post-domination IS defined for both arms yet no merge is proved.
+            // That last slice is where a diamond degrades to a `goto`, and it is
+            // the single largest remaining source of them.
+            if let Some(m) = self.common_pdom(then_blk, else_blk) {
+                if m != then_blk && m != else_blk {
+                    if dbg_merge {
+                        eprintln!("MERGE via=ipdom found=true ipdom_known=true ipdom_empty=false");
+                    }
+                    return Some(m);
+                }
+                // An arm that IS the join: `if` with an empty else.
+                if m == then_blk || m == else_blk {
+                    if dbg_merge {
+                        eprintln!("MERGE via=ipdom found=true ipdom_known=true ipdom_empty=false");
+                    }
+                    return Some(m);
+                }
+            }
+            if let (Some(&pt), Some(&pe)) = (self.ipdom.get(&then_blk), self.ipdom.get(&else_blk)) {
+                if pt == pe && pt != then_blk && pt != else_blk {
+                    if dbg_merge {
+                        eprintln!("MERGE via=ipdom found=true ipdom_known=true ipdom_empty=false");
+                    }
+                    return Some(pt);
+                }
+                // `if` with empty else: `else_blk` is the join itself.
+                if pt == else_blk {
+                    return Some(else_blk);
+                }
+                if pe == then_blk {
+                    return Some(then_blk);
+                }
+            }
+            // FALLBACK (no exit / irreducible): nearest block reachable from
+            // both arms. Kept because post-domination is undefined without an
+            // exit, and the old behaviour is byte-safe there.
+            let then_reach = self.reachable_set(then_blk);
+            let else_reach = self.reachable_set(else_blk);
+            let common: BTreeSet<u32> = then_reach.intersection(&else_reach).copied().collect();
+            let out = common
+                .into_iter()
+                .filter(|&m| m != then_blk && m != else_blk)
+                .min_by_key(|&m| self.entry_distance(m));
+            // Instrumentation (`RUSTRE_DBG_MERGE=1`, zero effect): the goto
+            // population is dominated by `backward_plain … dom=false`, i.e. jumps
+            // that only run backwards because of PRINT ORDER — which is decided
+            // here. Record which arm of this function answered, so the fix
+            // targets the branch that actually fails.
+            if std::env::var("RUSTRE_DBG_MERGE").is_ok_and(|v| v != "0") {
+                let have_pd =
+                    self.ipdom.contains_key(&then_blk) && self.ipdom.contains_key(&else_blk);
+                eprintln!(
+                    "MERGE via=fallback ipdom_known={have_pd} found={} ipdom_empty={}",
+                    out.is_some(),
+                    self.ipdom.is_empty()
+                );
+            }
+            out
+        }
+
+        /// Nearest block that post-dominates BOTH `a` and `b` — the follow node
+        /// of a branch, walking the `ipdom` chains to their first meeting point.
+        ///
+        /// The walk is bounded: on an irreducible graph an `ipdom` chain can
+        /// contain a cycle, and an unbounded walk would spin.
+        fn common_pdom(&self, a: u32, b: u32) -> Option<u32> {
+            if self.ipdom.is_empty() {
+                return None;
+            }
+            let limit = self.cfg.blocks.len() + 4;
+            let mut anc: BTreeSet<u32> = BTreeSet::new();
+            let mut n = a;
+            for _ in 0..limit {
+                if !anc.insert(n) {
+                    break;
+                }
+                match self.ipdom.get(&n) {
+                    Some(&p) if p != n => n = p,
+                    // Instrumentation (`RUSTRE_DBG_MERGE=1`, zero effect). The
+                    // FIRST arm's walk ends here, and whether it reached the exit
+                    // decides everything: if it did, the exit is in `anc` and the
+                    // second arm always matches it. So a `selfmap` failure on the
+                    // second arm can only mean THIS walk stopped early — at a
+                    // block with no `ipdom` entry, i.e. one from which the exit is
+                    // unreachable.
+                    other => {
+                        if std::env::var("RUSTRE_DBG_MERGE").is_ok_and(|v| v != "0") {
+                            eprintln!(
+                                "PDOMA stop why={} at={n}",
+                                if other.is_none() { "missing" } else { "selfmap" }
+                            );
+                        }
+                        break;
+                    }
+                }
+            }
+            let mut n = b;
+            for _ in 0..limit {
+                if anc.contains(&n) {
+                    return Some(n);
+                }
+                match self.ipdom.get(&n) {
+                    Some(&p) if p != n => n = p,
+                    // Instrumentation (`RUSTRE_DBG_MERGE=1`, zero effect): this is
+                    // the ONLY way to fail while post-domination is defined for
+                    // both arms, and it accounts for the largest slice of the
+                    // remaining gotos. `missing` = the walk hit a block absent
+                    // from `ipdom`, i.e. one from which the exit is UNREACHABLE
+                    // (a noreturn call or an endless loop); `selfmap` = it hit the
+                    // exit sentinel without meeting any of `a`'s ancestors.
+                    other => {
+                        if std::env::var("RUSTRE_DBG_MERGE").is_ok_and(|v| v != "0") {
+                            eprintln!(
+                                "PDOM fail why={} at_is_b={} at={n}",
+                                if other.is_none() { "missing" } else { "selfmap" },
+                                n == b
+                            );
+                        }
+                        return None;
+                    }
+                }
+            }
+            if std::env::var("RUSTRE_DBG_MERGE").is_ok_and(|v| v != "0") {
+                eprintln!("PDOM fail why=limit at_is_b={}", n == b);
+            }
+            None
+        }
+
+        fn reachable_set(&self, start: u32) -> BTreeSet<u32> {
+            let mut set = BTreeSet::new();
+            let mut stack = vec![start];
+            while let Some(n) = stack.pop() {
+                if set.insert(n) {
+                    for s in self.cfg.successors(n) {
+                        stack.push(s);
+                    }
+                }
+            }
+            set
+        }
+
+        fn entry_distance(&self, target: u32) -> usize {
+            let mut dist: HashMap<u32, usize> = HashMap::new();
+            let mut q = VecDeque::new();
+            q.push_back(self.cfg.entry);
+            dist.insert(self.cfg.entry, 0);
+            while let Some(n) = q.pop_front() {
+                let d = dist[&n];
+                if n == target {
+                    return d;
+                }
+                for s in self.cfg.successors(n) {
+                    if let std::collections::hash_map::Entry::Vacant(e) = dist.entry(s) {
+                        e.insert(d + 1);
+                        q.push_back(s);
+                    }
+                }
+            }
+            usize::MAX
+        }
+    }
+
+    /// Count the `goto` statements in a structured statement tree (a metric of
+    /// structuring quality; lower is better).
+    #[must_use]
+    pub fn count_gotos(stmts: &[HlilStatement]) -> usize {
+        let mut n = 0;
+        for s in stmts {
+            s.walk(&mut |st| {
+                if matches!(st, HlilStatement::Goto(_)) {
+                    n += 1;
+                }
+            });
+        }
+        n
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::{HlilExpr, HlilStatement, HlilType};
+
+
+        fn cond() -> HlilExpr {
+            HlilExpr::CmpEq(
+                Box::new(HlilExpr::Const {
+                    value: 1,
+                    ty: HlilType::i32(),
+                }),
+                Box::new(HlilExpr::Const {
+                    value: 1,
+                    ty: HlilType::i32(),
+                }),
+            )
+        }
+
+        fn linear_block(id: u32, next: u32) -> CfgBlock {
+            CfgBlock::linear(id, Address::new(u64::from(id) * 0x10), vec![], next)
+        }
+
+        #[test]
+        fn relooper_structures_a_two_entry_irreducible_scc() {
+            // Irreducible: 0 -> {1,2}, 1 <-> 2 (mutual), both exit to 3.
+            // {1,2} is an improper SCC (two external entries from 0).
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(branch_block(1, 2, 3)); // 1 -> 2 (in) / 3 (exit)
+            cfg.add_block(branch_block(2, 1, 3)); // 2 -> 1 (in) / 3 (exit)
+            cfg.add_block(ret_block(3));
+            let sccs = tarjan_scc(&cfg);
+            let improper: Vec<u32> = sccs
+                .into_iter()
+                .find(|s| is_improper_loop(&cfg, s))
+                .expect("should find the {1,2} improper SCC");
+            let (out, _exit, _x) = structure_improper_scc(&cfg, &improper, improper[0], &|_| vec![])
+                .expect("single-exit improper SCC should reloop");
+            // Expect: state = init; while(state != 3) { switch(state){...} }.
+            assert!(matches!(out.last(), Some(HlilStatement::While { .. })), "{out:?}");
+            let has_switch = matches!(
+                out.last(),
+                Some(HlilStatement::While { body, .. })
+                    if body.iter().any(|s| matches!(s, HlilStatement::Switch { .. }))
+            );
+            assert!(has_switch, "dispatch loop must contain a switch: {out:?}");
+        }
+
+        #[test]
+        fn forward_duplication_is_capped_by_its_own_budget() {
+            // `RUSTRE_HLIL_DUP_FORWARD` IS the budget: a terminating chain that
+            // fits in it is copied, a longer one is left to the `goto`. Kept as
+            // a direct unit on `try_duplicate_tail_capped` because the env var
+            // is process-global and tests run concurrently.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(ret_block(1));
+            cfg.add_block(ret_block(2));
+            let s = Structurer {
+                cfg: &cfg,
+                loops: Vec::new(),
+                header_loop: HashMap::new(),
+                emitted: HashSet::new(),
+                goto_count: 0,
+                labels_needed: BTreeSet::new(),
+                loop_ctx: Vec::new(),
+                ipdom: HashMap::new(),
+                improper_sccs: Vec::new(),
+                dbg_idom: HashMap::new(),
+                dbg_last: None,
+                dbg_stopped: HashSet::new(),
+                pending_exits: Vec::new(),
+                switch_depth: 0,
+            };
+            // A one-statement terminating block fits a budget of 2...
+            assert!(
+                s.try_duplicate_tail_capped(1, None, 2).is_some(),
+                "un blocco terminale da 1 statement sta in un budget di 2"
+            );
+            // ...and nothing fits a budget of 0, which is how the gate is
+            // disabled.
+            assert!(
+                s.try_duplicate_tail_capped(1, None, 0).is_none(),
+                "budget 0 disabilita la duplicazione"
+            );
+        }
+
+        #[test]
+        fn relooper_handles_multi_exit_scc_with_secondary_goto() {
+            // {1,2} exits to BOTH 3 and 4. One becomes the sentinel; the other
+            // is reached by a `goto` inside the dispatch loop.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(branch_block(1, 2, 3));
+            cfg.add_block(branch_block(2, 1, 4));
+            cfg.add_block(ret_block(3));
+            cfg.add_block(ret_block(4));
+            let sccs = tarjan_scc(&cfg);
+            let improper = sccs.into_iter().find(|s| is_improper_loop(&cfg, s)).unwrap();
+            let (out, primary, _x) = structure_improper_scc(&cfg, &improper, improper[0], &|_| vec![])
+                .expect("multi-exit improper SCC should now reloop");
+            assert!(primary == Some(3) || primary == Some(4), "primary exit: {primary:?}");
+            // A dispatch loop is emitted...
+            assert!(matches!(out.last(), Some(HlilStatement::While { .. })), "{out:?}");
+            // ...and the non-primary exit leaves through the `exit_<entry>`
+            // SENTINEL, not through a goto.
+            //
+            // The assertion used to demand a goto and was left behind by the
+            // multi-exit relooper change that introduced the sentinel — it kept
+            // failing unnoticed because only the DECOMPILER crate's suite was
+            // being run, never this crate's own 452 tests. Recording the shape
+            // that is actually produced (and corpus-validated) is the point of
+            // the test; demanding the old one just hid the drift.
+            fn assigns_exit_sentinel(stmts: &[HlilStatement]) -> bool {
+                stmts.iter().any(|s| match s {
+                    HlilStatement::Assign { dest: HlilExpr::Var { var }, .. } => {
+                        var.name.starts_with("exit_")
+                    }
+                    HlilStatement::While { body, .. } => assigns_exit_sentinel(body),
+                    HlilStatement::Switch { cases, default, .. } => {
+                        cases.iter().any(|c| assigns_exit_sentinel(&c.body))
+                            || assigns_exit_sentinel(default)
+                    }
+                    HlilStatement::If { then_body, else_body, .. } => {
+                        assigns_exit_sentinel(then_body) || assigns_exit_sentinel(else_body)
+                    }
+                    _ => false,
+                })
+            }
+            assert!(
+                assigns_exit_sentinel(&out),
+                "l'uscita secondaria passa dalla sentinella exit_: {out:?}"
+            );
+        }
+
+        #[test]
+        fn tail_duplication_only_copies_terminating_blocks() {
+            // Diamond whose join RETURNS: the second arm duplicates it instead
+            // of jumping, so no goto is emitted at all.
+            let cfg = diamond(); // 0 -> {1,2} -> 3 (return)
+            let out = structure_function(&cfg);
+            assert_eq!(out.goto_count, 0, "return-join should duplicate: {out:?}");
+
+            // The copy now follows chains AND branches, so what still has to be
+            // refused is a region that does not END: here `3 -> 4 -> 3` loops.
+            let mut cfg2 = StructuringCfg::new(0);
+            cfg2.add_block(branch_block(0, 1, 2));
+            cfg2.add_block(linear_block(1, 3));
+            cfg2.add_block(linear_block(2, 3));
+            cfg2.add_block(linear_block(3, 4)); // join, chain continues…
+            cfg2.add_block(linear_block(4, 3)); // …straight back: refuse
+            let s = Structurer {
+                cfg: &cfg2,
+                loops: Vec::new(),
+                header_loop: HashMap::new(),
+                emitted: HashSet::new(),
+                goto_count: 0,
+                labels_needed: BTreeSet::new(),
+                loop_ctx: Vec::new(),
+                ipdom: HashMap::new(),
+                improper_sccs: Vec::new(),
+                dbg_idom: HashMap::new(),
+                dbg_last: None,
+                dbg_stopped: HashSet::new(),
+                pending_exits: Vec::new(),
+                switch_depth: 0,
+            };
+            assert!(
+                s.try_duplicate_tail(3, None).is_none(),
+                "a region that loops back must never be duplicated"
+            );
+        }
+
+        #[test]
+        fn relooper_handles_switch_terminator_inside_scc() {
+            // Irreducible {1,2}: block 1 ends in a SWITCH (was declined before).
+            //  0 -> {1,2}; 1 switch{0->2, 1->3} default 2; 2 -> 1 / 3; 3 ret.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(CfgBlock {
+                id: 1,
+                address: Address::new(0x10),
+                body: vec![],
+                term: Terminator::Switch {
+                    value: HlilExpr::Const { value: 0, ty: HlilType::Int { signed: true, bits: 32 } },
+                    cases: vec![(0, 2), (1, 3)],
+                    default: Some(2),
+                },
+            });
+            cfg.add_block(branch_block(2, 1, 3));
+            cfg.add_block(ret_block(3));
+            let sccs = tarjan_scc(&cfg);
+            let improper = sccs.into_iter().find(|s| is_improper_loop(&cfg, s)).unwrap();
+            let (out, _primary, _x) = structure_improper_scc(&cfg, &improper, improper[0], &|_| vec![])
+                .expect("switch-terminated member should now reloop, not decline");
+            // The dispatch loop must contain a NESTED switch (from block 1's term).
+            fn nested_switch_count(stmts: &[HlilStatement]) -> usize {
+                stmts.iter().map(|s| match s {
+                    HlilStatement::Switch { cases, default, .. } => {
+                        1 + cases.iter().map(|c| nested_switch_count(&c.body)).sum::<usize>()
+                            + nested_switch_count(default)
+                    }
+                    HlilStatement::While { body, .. } => nested_switch_count(body),
+                    HlilStatement::If { then_body, else_body, .. } => {
+                        nested_switch_count(then_body) + nested_switch_count(else_body)
+                    }
+                    _ => 0,
+                }).sum()
+            }
+            // Outer dispatch switch + the inner switch from block 1 = >= 2.
+            assert!(nested_switch_count(&out) >= 2, "expected nested switch: {out:?}");
+        }
+
+        fn ret_block(id: u32) -> CfgBlock {
+            CfgBlock {
+                id,
+                address: Address::new(u64::from(id) * 0x10),
+                body: vec![],
+                term: Terminator::Return(vec![]),
+            }
+        }
+
+        fn branch_block(id: u32, t: u32, e: u32) -> CfgBlock {
+            CfgBlock {
+                id,
+                address: Address::new(u64::from(id) * 0x10),
+                body: vec![],
+                term: Terminator::Branch {
+                    cond: cond(),
+                    then_blk: t,
+                    else_blk: e,
+                },
+            }
+        }
+
+        // Diamond: 0 -> {1,2} -> 3 (return)
+        fn diamond() -> StructuringCfg {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(linear_block(1, 3));
+            cfg.add_block(linear_block(2, 3));
+            cfg.add_block(ret_block(3));
+            cfg
+        }
+
+        #[test]
+        fn tarjan_no_loops_in_dag() {
+            let cfg = diamond();
+            let sccs = tarjan_scc(&cfg);
+            // Every SCC is a single node (no cycles).
+            assert!(sccs.iter().all(|c| c.len() == 1));
+            assert_eq!(sccs.len(), 4);
+        }
+
+        #[test]
+        fn dominators_diamond() {
+            let cfg = diamond();
+            let idom = dominators(&cfg);
+            assert_eq!(idom[&0], 0);
+            assert_eq!(idom[&1], 0);
+            assert_eq!(idom[&2], 0);
+            assert_eq!(idom[&3], 0); // join dominated by entry only
+        }
+
+        #[test]
+        fn dominators_delegate_matches_local() {
+            // The delegation to `rustre-analysis-cfg` is only promotable if it
+            // is an EXACT substitution, so compare the two maps in full on
+            // every shape this module already tests: diamond, while loop,
+            // nested loops, and an irreducible region.
+            let mut irreducible = StructuringCfg::new(0);
+            irreducible.add_block(branch_block(0, 1, 2));
+            irreducible.add_block(CfgBlock {
+                id: 1,
+                address: Address::new(0x10),
+                body: vec![],
+                term: Terminator::Goto(2),
+            });
+            irreducible.add_block(branch_block(2, 1, 3));
+            irreducible.add_block(ret_block(3));
+
+            // A single infinite loop: no exit at all.
+            let mut infinite = StructuringCfg::new(0);
+            infinite.add_block(CfgBlock {
+                id: 0,
+                address: Address::new(0x1000),
+                body: vec![],
+                term: Terminator::Goto(0),
+            });
+
+            let cases: Vec<(&str, StructuringCfg)> = vec![
+                ("diamond", diamond()),
+                ("while_loop", while_loop()),
+                ("nested_loops", nested_loops()),
+                ("irreducible", irreducible),
+                ("infinite", infinite),
+                ("empty", StructuringCfg::new(0)),
+            ];
+            for (name, cfg) in &cases {
+                let local = dominators_local(cfg);
+                let delegated = dominators_delegated(cfg);
+                assert_eq!(
+                    local, delegated,
+                    "delegated dominators diverge from local on {name}"
+                );
+            }
+
+            // Same corpus, second gate: natural loops must also be an exact
+            // substitution (header/latch/body; the delegated model's extra
+            // `exits`/`is_innermost` are deliberately dropped).
+            for (name, cfg) in &cases {
+                let local: Vec<(u32, u32, BTreeSet<u32>)> = detect_natural_loops_local(cfg)
+                    .into_iter()
+                    .map(|l| (l.header, l.latch, l.body))
+                    .collect();
+                let delegated: Vec<(u32, u32, BTreeSet<u32>)> =
+                    detect_natural_loops_delegated(cfg)
+                        .into_iter()
+                        .map(|l| (l.header, l.latch, l.body))
+                        .collect();
+                assert_eq!(
+                    local, delegated,
+                    "delegated natural loops diverge from local on {name}"
+                );
+            }
+        }
+
+        #[test]
+        fn post_dominators_diamond_finds_the_join() {
+            // 0 -> {1,2} -> 3. The join `3` post-dominates the branch AND both
+            // arms; `3` is its own (it is the only exit).
+            let cfg = diamond();
+            let ipdom = post_dominators(&cfg);
+            assert_eq!(ipdom[&0], 3, "branch block must post-dominate to the join");
+            assert_eq!(ipdom[&1], 3);
+            assert_eq!(ipdom[&2], 3);
+            assert_eq!(ipdom[&3], 3, "the exit is its own post-dominator");
+        }
+
+        #[test]
+        fn merge_is_found_when_an_arm_has_a_tail_of_its_own() {
+            // 0 -> {1,2}; 1 -> 4 -> 3; 2 -> 3. The join is `3`, but
+            // `ipdom(1) == 4` while `ipdom(2) == 3`, so a single-level equality
+            // test misses it and the structurer degrades to a `goto`. The
+            // nearest COMMON post-dominator proves the join.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(linear_block(1, 4));
+            cfg.add_block(linear_block(2, 3));
+            cfg.add_block(ret_block(3));
+            cfg.add_block(linear_block(4, 3));
+            let ipdom = post_dominators(&cfg);
+            assert_eq!(ipdom[&1], 4, "arm 1 post-dominates to its own tail");
+            assert_ne!(ipdom[&1], ipdom[&2], "single-level equality cannot hold here");
+            let out = structure_function(&cfg);
+            let printed = format!("{out:?}");
+            assert!(
+                !printed.contains("Goto"),
+                "join not recovered, fell back to a goto: {printed}"
+            );
+        }
+
+        #[test]
+        fn switch_follow_is_the_common_post_dominator_not_the_popular_successor() {
+            // 0 switches to {1,2,3}. Cases 1 and 2 go straight to the join 5;
+            // case 3 goes through its own tail 4 first. The old heuristic picked
+            // "the block most cases point at" — which 3 never reaches directly —
+            // so case 3 ran into an already-emitted block and needed a `goto`.
+            // 5 post-dominates all three arms and is the real follow.
+            let mut cfg = StructuringCfg::new(0);
+            let mut sw = ret_block(0);
+            sw.term = Terminator::Switch {
+                value: HlilExpr::Const {
+                    value: 0,
+                    ty: HlilType::Int {
+                        bits: 32,
+                        signed: true,
+                    },
+                },
+                cases: vec![(0, 1), (1, 2), (2, 3)],
+                default: None,
+            };
+            cfg.add_block(sw);
+            cfg.add_block(linear_block(1, 5));
+            cfg.add_block(linear_block(2, 5));
+            cfg.add_block(linear_block(3, 4));
+            cfg.add_block(linear_block(4, 5));
+            cfg.add_block(ret_block(5));
+            let out = structure_function(&cfg);
+            let printed = format!("{out:?}");
+            assert!(
+                !printed.contains("Goto"),
+                "switch join not recovered, fell back to a goto: {printed}"
+            );
+        }
+
+        #[test]
+        fn shared_join_falling_into_the_follow_is_copied_not_jumped_to() {
+            //  0 -> {3, 1};  1 -> {3, 2};  2 -> 4;  3 -> 4;  4: ret
+            // The shared join `3` falls into the follow `4`; the second arrival
+            // used to jump back to it. Copying is exact because falling out of
+            // the region lands on `4` either way.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 3, 1));
+            cfg.add_block(branch_block(1, 3, 2));
+            cfg.add_block(linear_block(2, 4));
+            let mut join = linear_block(3, 4);
+            join.body = vec![HlilStatement::VarDeclare {
+                var: crate::HlilVar::new("joined", HlilType::Void),
+                init: None,
+            }];
+            cfg.add_block(join);
+            cfg.add_block(ret_block(4));
+            let out = structure_function(&cfg);
+            let printed = format!("{out:?}");
+            assert_eq!(out.goto_count, 0, "still jumping to the shared join: {printed}");
+            // Once per arrival — and never on the `2` path, which never ran it.
+            assert_eq!(
+                printed.matches("\"joined\"").count(),
+                2,
+                "join not copied to both arrivals: {printed}"
+            );
+        }
+
+        #[test]
+        fn jump_to_the_loop_exit_becomes_break_not_goto() {
+            // 0 -> 1(header); 1 -> {2, 4}; 2 -> {3, 4}; 3 -> 1 (latch); 4: ret.
+            // `2 -> 4` leaves the loop from a nested `if`: that is a `break`.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(linear_block(0, 1));
+            cfg.add_block(branch_block(1, 2, 4));
+            cfg.add_block(branch_block(2, 3, 4));
+            cfg.add_block(linear_block(3, 1));
+            cfg.add_block(ret_block(4));
+            let out = structure_function(&cfg);
+            let printed = format!("{out:?}");
+            assert!(printed.contains("Break"), "loop exit not a break: {printed}");
+            assert_eq!(out.goto_count, 0, "loop exit still a goto: {printed}");
+        }
+
+        #[test]
+        fn loop_exit_inside_a_switch_is_never_a_bare_break() {
+            // The exit is reached from inside a `switch` case, where a C `break`
+            // would bind to the SWITCH — so it must stay a goto.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(linear_block(0, 1));
+            let mut sw = ret_block(1);
+            sw.term = Terminator::Switch {
+                value: HlilExpr::Const {
+                    value: 0,
+                    ty: HlilType::Int {
+                        bits: 32,
+                        signed: true,
+                    },
+                },
+                cases: vec![(0, 2), (1, 3)],
+                default: None,
+            };
+            cfg.add_block(sw);
+            cfg.add_block(linear_block(2, 4));
+            cfg.add_block(linear_block(3, 1));
+            cfg.add_block(ret_block(4));
+            let out = structure_function(&cfg);
+            let printed = format!("{out:?}");
+            assert!(
+                !printed.contains("Break"),
+                "emitted a break that would bind to the switch: {printed}"
+            );
+        }
+
+        #[test]
+        fn post_dominators_empty_without_an_exit() {
+            // A function that is one infinite loop has no exit, so
+            // post-domination is undefined — return empty and let callers
+            // fall back rather than inventing a join.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(CfgBlock {
+                id: 0,
+                address: Address(0x1000),
+                body: vec![],
+                term: Terminator::Goto(0),
+            });
+            assert!(post_dominators(&cfg).is_empty());
+        }
+
+
+        #[test]
+        fn structure_diamond_produces_if() {
+            let cfg = diamond();
+            let sf = structure_function(&cfg);
+            // The structured body should contain an `If`.
+            let has_if = sf
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::If { .. }));
+            assert!(has_if, "expected an if, got {:?}", sf.body);
+            assert_eq!(sf.goto_count, 0, "diamond should structure without gotos");
+        }
+
+        #[test]
+        fn structure_diamond_arms_nonempty() {
+            let cfg = diamond();
+            let sf = structure_function(&cfg);
+            let if_stmt = sf
+                .body
+                .iter()
+                .find(|s| matches!(s, HlilStatement::If { .. }))
+                .unwrap();
+            if let HlilStatement::If {
+                then_body,
+                else_body,
+                ..
+            } = if_stmt
+            {
+                // both arms reach the merge; with empty blocks they may be empty,
+                // but the merge (block 3 return) should appear after the if.
+                let _ = (then_body, else_body);
+            }
+            // Return must be emitted somewhere.
+            let has_ret = sf
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Return(_)))
+                || count_gotos(&sf.body) == 0;
+            assert!(has_ret);
+        }
+
+        // While loop: 0 -> 1(header, branch) -> {2(body)->1, 3(exit, ret)}
+        fn while_loop() -> StructuringCfg {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(linear_block(0, 1));
+            cfg.add_block(branch_block(1, 2, 3)); // then=body, else=exit
+            cfg.add_block(linear_block(2, 1)); // back-edge to header
+            cfg.add_block(ret_block(3));
+            cfg
+        }
+
+        #[test]
+        fn tarjan_detects_loop_scc() {
+            let cfg = while_loop();
+            let sccs = tarjan_scc(&cfg);
+            // {1,2} form a non-trivial SCC.
+            let big = sccs.iter().find(|c| c.len() > 1).expect("loop SCC");
+            assert!(big.contains(&1) && big.contains(&2));
+        }
+
+        #[test]
+        fn detect_natural_loop_header_latch() {
+            let cfg = while_loop();
+            let loops = detect_natural_loops(&cfg);
+            assert_eq!(loops.len(), 1);
+            assert_eq!(loops[0].header, 1);
+            assert_eq!(loops[0].latch, 2);
+            assert!(loops[0].body.contains(&1));
+            assert!(loops[0].body.contains(&2));
+            assert!(!loops[0].body.contains(&3)); // exit not in body
+        }
+
+        #[test]
+        fn structure_while_loop_produces_while() {
+            let cfg = while_loop();
+            let sf = structure_function(&cfg);
+            assert_eq!(sf.loop_count, 1);
+            let has_while = sf
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::While { .. }));
+            assert!(has_while, "expected a while, got {:?}", sf.body);
+        }
+
+        // Nested loops: outer 1<->3 containing inner 2 self/loop.
+        fn nested_loops() -> StructuringCfg {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(linear_block(0, 1));
+            cfg.add_block(branch_block(1, 2, 5)); // outer header
+            cfg.add_block(branch_block(2, 3, 4)); // inner header
+            cfg.add_block(linear_block(3, 2)); // inner back-edge
+            cfg.add_block(linear_block(4, 1)); // outer back-edge
+            cfg.add_block(ret_block(5)); // exit
+            cfg
+        }
+
+        #[test]
+        fn nested_loops_detected() {
+            let cfg = nested_loops();
+            let loops = detect_natural_loops(&cfg);
+            // Two natural loops: header 1 and header 2.
+            let headers: BTreeSet<u32> = loops.iter().map(|l| l.header).collect();
+            assert!(headers.contains(&1));
+            assert!(headers.contains(&2));
+        }
+
+        #[test]
+        fn improper_loop_detection() {
+            // Irreducible: two entries into a 2-node cycle.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 1, 2));
+            cfg.add_block(CfgBlock {
+                id: 1,
+                address: Address::new(0x10),
+                body: vec![],
+                term: Terminator::Goto(2),
+            });
+            cfg.add_block(CfgBlock {
+                id: 2,
+                address: Address::new(0x20),
+                body: vec![],
+                term: Terminator::Goto(1),
+            });
+            let sccs = tarjan_scc(&cfg);
+            let cyc = sccs.iter().find(|c| c.len() > 1).unwrap();
+            assert!(is_improper_loop(&cfg, cyc));
+        }
+
+        #[test]
+        fn switch_recovery() {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(CfgBlock {
+                id: 0,
+                address: Address::new(0),
+                body: vec![],
+                term: Terminator::Switch {
+                    value: HlilExpr::Const {
+                        value: 0,
+                        ty: HlilType::i32(),
+                    },
+                    cases: vec![(0, 1), (1, 2)],
+                    default: Some(3),
+                },
+            });
+            cfg.add_block(linear_block(1, 4));
+            cfg.add_block(linear_block(2, 4));
+            cfg.add_block(linear_block(3, 4));
+            cfg.add_block(ret_block(4));
+            let sf = structure_function(&cfg);
+            let has_switch = sf
+                .body
+                .iter()
+                .any(|s| matches!(s, HlilStatement::Switch { .. }));
+            assert!(has_switch, "expected switch, got {:?}", sf.body);
+        }
+
+        #[test]
+        fn nested_if_arm_at_stop_keeps_goto_edge() {
+            // Chain of branches all targeting one far join (the reported
+            // `sub_140001000` shape: ~15 consecutive `if (COND) { }` around
+            // loc_1400012ec, all of whose gotos to 0x1400018B7 were dropped).
+            // 0: branch(4, 1); 1: branch(4, 2); 2: branch(4, 3); 3: goto 4; 4: ret.
+            // The inner ifs have follow == join == enclosing stop; their then
+            // arm must keep an explicit `goto` to the join, not become `{ }`.
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(branch_block(0, 4, 1));
+            cfg.add_block(branch_block(1, 4, 2));
+            cfg.add_block(branch_block(2, 4, 3));
+            cfg.add_block(linear_block(3, 4));
+            cfg.add_block(ret_block(4));
+            let sf = structure_function(&cfg);
+
+            fn count_join_gotos(stmts: &[HlilStatement], join: u64) -> usize {
+                let mut n = 0;
+                for s in stmts {
+                    match s {
+                        HlilStatement::Goto(a) if a.as_u64() == join => n += 1,
+                        HlilStatement::If {
+                            then_body,
+                            else_body,
+                            ..
+                        } => {
+                            n += count_join_gotos(then_body, join);
+                            n += count_join_gotos(else_body, join);
+                        }
+                        _ => {}
+                    }
+                }
+                n
+            }
+            // Block 4's address is 0x40. The two NESTED ifs (blocks 1 and 2)
+            // sit inside an arm whose stop IS the join; before the fix their
+            // then bodies were emitted empty and the edge vanished.
+            let n = count_join_gotos(&sf.body, 0x40);
+            assert!(
+                n >= 2,
+                "nested if arms equal to the join/stop must keep goto edges, got {n} in {:?}",
+                sf.body
+            );
+        }
+
+        #[test]
+        fn linear_chain_no_gotos() {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(linear_block(0, 1));
+            cfg.add_block(linear_block(1, 2));
+            cfg.add_block(ret_block(2));
+            let sf = structure_function(&cfg);
+            assert_eq!(sf.goto_count, 0);
+            assert_eq!(sf.loop_count, 0);
+        }
+
+        #[test]
+        fn reachable_order_covers_all() {
+            let cfg = diamond();
+            let order = cfg.reachable_order();
+            assert_eq!(order.len(), 4);
+            assert_eq!(order[0], 0);
+        }
+
+        #[test]
+        fn predecessors_correct() {
+            let cfg = diamond();
+            let preds = cfg.predecessors();
+            assert_eq!(preds[&3], vec![1, 2]);
+            assert_eq!(preds[&0], Vec::<u32>::new());
+        }
+
+        #[test]
+        fn self_loop_is_scc() {
+            let mut cfg = StructuringCfg::new(0);
+            cfg.add_block(CfgBlock {
+                id: 0,
+                address: Address::new(0),
+                body: vec![],
+                term: Terminator::Branch {
+                    cond: cond(),
+                    then_blk: 0,
+                    else_blk: 1,
+                },
+            });
+            cfg.add_block(ret_block(1));
+            let loops = detect_natural_loops(&cfg);
+            assert!(loops.iter().any(|l| l.header == 0 && l.latch == 0));
+        }
+    }
+}

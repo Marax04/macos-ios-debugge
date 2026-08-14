@@ -1,0 +1,58 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 264
+expression: "render_corpus(\"SSE / x87 (64-bit)\", 64, corpus)"
+---
+# SSE / x87 (64-bit)
+
+== movaps xmm0, xmm1 (bits=64) ==
+-- movaps xmm0,xmm1 [0f 28 c1]
+   0x1000: xmm0.16 = xmm1.16
+
+== movaps xmm0, [rax] (bits=64) ==
+-- movaps xmm0,[rax] [0f 28 00]
+   0x1000: xmm0.16 = [rax.8].16
+
+== movd xmm0, eax (bits=64) ==
+-- movd xmm0,eax [66 0f 6e c0]
+   0x1000: xmm0.16 = zx(low(rax.8, 4), 4->16)
+
+== movq xmm0, rax (bits=64) ==
+-- movq xmm0,rax [66 48 0f 6e c0]
+   0x1000: xmm0.16 = zx(rax.8, 8->16)
+
+== addss xmm0, xmm1 (bits=64) ==
+-- addss xmm0,xmm1 [f3 0f 58 c1]
+   0x1000: xmm0.16 = (xmm0.16 + xmm1.16).16
+
+== addsd xmm0, xmm1 (bits=64) ==
+-- addsd xmm0,xmm1 [f2 0f 58 c1]
+   0x1000: xmm0.16 = (xmm0.16 + xmm1.16).16
+
+== mulsd xmm2, xmm3 (bits=64) ==
+-- mulsd xmm2,xmm3 [f2 0f 59 d3]
+   0x1000: xmm2.16 = (xmm2.16 * xmm3.16).16
+
+== xorps xmm0, xmm0 (bits=64) ==
+-- xorps xmm0,xmm0 [0f 57 c0]
+   0x1000: xmm0.16 = (xmm0.16 ^ xmm0.16).16
+
+== fld qword [rax] (bits=64) ==
+-- fld qword ptr [rax] [dd 00]
+   0x1000: fld([rax.8].8)
+
+== fld st(1) (bits=64) ==
+-- fld st(1) [d9 c1]
+   0x1000: fld(st1.16)
+
+== fadd st(0), st(1) (bits=64) ==
+-- fadd st,st(1) [d8 c1]
+   0x1000: st0.16 = fadd(st0.16, st1.16).16
+
+== faddp st(1), st(0) (bits=64) ==
+-- faddp [de c1]
+   0x1000: st1.16 = faddp(st1.16, st0.16).16
+
+== fstp qword [rax] (bits=64) ==
+-- fstp qword ptr [rax] [dd 18]
+   0x1000: [rax.8].8 = fstp([rax.8].8).8

@@ -1,0 +1,145 @@
+{
+  "category": "malpedia",
+  "tools": [
+    {
+      "tool": "malpedia_tlsh_distance",
+      "pass": true
+    },
+    {
+      "tool": "malpedia_batch_lookup",
+      "pass": true
+    },
+    {
+      "tool": "malpedia_check_ruleset_quality",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_alias_resolve",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_classify_family",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_signature_score",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_text",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_db_search",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_db_find_by_hash",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_attribution_method_display",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_platform_prefix",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_api_key_is_valid",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_search_query_build",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_classifier_score_all",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_get_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_get_yara_rules",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_search_by_hash",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_list_actors",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_has_sample",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_local_db_populate_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_api_key_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_stats_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_actor_attribution_add_evidence",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_actor_spec_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_sample_spec_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_signature_score_result",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_alias_resolver_count",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_local_db_list_families",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_search_query_exec",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_family_response",
+      "pass": true
+    }
+  ],
+  "mismatches": [],
+  "passed": 34,
+  "failed": 0,
+  "skipped": 0
+}

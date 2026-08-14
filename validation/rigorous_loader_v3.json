@@ -1,0 +1,773 @@
+﻿{
+  "module": "loader",
+  "round": "v3",
+  "tools_hardened": 66,
+  "checks_run": 76,
+  "checks_passed": 76,
+  "checks_failed": 0,
+  "skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "loader_console_is_nes",
+      "label": "NES magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_console_is_nes",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_console_xor_checksum",
+      "label": "xor(deadbeef)=0x22",
+      "status": "PASS",
+      "expected": 34,
+      "actual": 34
+    },
+    {
+      "tool": "loader_console_xor_checksum",
+      "label": "xor(0x00)=0",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "loader_console_xor_checksum",
+      "label": "xor(ab)=0xab",
+      "status": "PASS",
+      "expected": 171,
+      "actual": 171
+    },
+    {
+      "tool": "loader_console_detect_format",
+      "label": "returns format key",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_console_detect_format",
+      "label": "NES magic->nes",
+      "status": "PASS",
+      "expected": "nes",
+      "actual": "nes"
+    },
+    {
+      "tool": "loader_firmware_detect_kind",
+      "label": "returns kind",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_firmware_detect_binary_arch",
+      "label": "returns arch",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_firmware_detect_rtos",
+      "label": "returns rtos",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_luajit_is_luajit",
+      "label": "LuaJIT magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_luajit_is_luajit",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_lua_opcode_name",
+      "label": "lua5.1 op0=MOVE",
+      "status": "PASS",
+      "expected": "MOVE",
+      "actual": "MOVE"
+    },
+    {
+      "tool": "loader_lua_opcode_name",
+      "label": "lua5.1 op1=LOADK",
+      "status": "PASS",
+      "expected": "LOADK",
+      "actual": "LOADK"
+    },
+    {
+      "tool": "loader_lua_read_string",
+      "label": "lua 'hello'",
+      "status": "PASS",
+      "expected": "hello",
+      "actual": "hello"
+    },
+    {
+      "tool": "loader_dotnet_has_clr_header",
+      "label": "random->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet",
+      "label": "BSJB->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_dotnet_has_clr_header_wire",
+      "label": "random->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet_wire",
+      "label": "BSJB->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet_wire",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_macho_arch_from_cputype",
+      "label": "cputype=12 has arch",
+      "status": "PASS",
+      "expected": true,
+      "actual": "arm"
+    },
+    {
+      "tool": "loader_macho_arch_from_cputype",
+      "label": "cputype=ARM64",
+      "status": "PASS",
+      "expected": true,
+      "actual": "arm64"
+    },
+    {
+      "tool": "loader_macho_subtype_name",
+      "label": "ARM sub=0->subtype_name",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_java_is_jar",
+      "label": "PK magic->is_jar key",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_java_is_jar",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_java_parse_class",
+      "label": "CAFEBABE stub",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "error": "truncated data",
+        "source": "rustre_loader_java::JavaClass::parse"
+      }
+    },
+    {
+      "tool": "loader_android_verify_dex_checksum",
+      "label": "DEX with correct adler32->ok",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_pe_is_signed",
+      "label": "cargo-zyphora->unsigned",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_pe_pdb_path",
+      "label": "cargo-zyphora pdb ends .pdb",
+      "status": "PASS",
+      "expected": true,
+      "actual": "cargo_zyphora.pdb"
+    },
+    {
+      "tool": "loader_pe_parse_info",
+      "label": "cargo-zyphora parsed",
+      "status": "PASS",
+      "expected": true,
+      "actual": [
+        "parsed",
+        "machine",
+        "subsystem",
+        "image_base",
+        "entry_point"
+      ]
+    },
+    {
+      "tool": "loader_pe_entry_points",
+      "label": "returns entry_points",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "count": 2,
+        "entry_points": [
+          {
+            "va": 5369700460,
+            "kind": "entry"
+          },
+          {
+            "va": 5368897744,
+            "kind": "tls_callback"
+          }
+        ],
+        "source": "rustre_loader_pe::PeInfo::entry_points"
+      }
+    },
+    {
+      "tool": "loader_pe_imports_from_dll",
+      "label": "kernel32 entries",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "count": 65
+      }
+    },
+    {
+      "tool": "loader_elf_info_summary",
+      "label": "non-ELF handled",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": false,
+        "error": "Invalid magic number: 0xefbeaddeefbeadde",
+        "source": "rustre_loader_elf::ElfInfo::parse"
+      }
+    },
+    {
+      "tool": "loader_elf_parse_info",
+      "label": "non-ELF handled",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": false,
+        "error": "Invalid magic number: 0xefbeaddeefbeadde",
+        "source": "rustre_loader_elf::ElfInfo::parse"
+      }
+    },
+    {
+      "tool": "loader_elf_plt_entries",
+      "label": "non-ELF handled",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "count": 0,
+        "entries": [],
+        "parse_error": "Invalid magic number: 0xefbeaddeefbeadde",
+        "source": "rustre_loader_elf::ElfInfo::plt_entries"
+      }
+    },
+    {
+      "tool": "loader_export_info_named",
+      "label": "named export",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_export_info_forwarded",
+      "label": "forwarded export",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "name": "TestFwd",
+        "addr": 0,
+        "ordinal": 1,
+        "forwarded_to": "ntdll.RtlAllocateHeap",
+        "source": "rustre_loader::ExportInfo::forwarded"
+      }
+    },
+    {
+      "tool": "loader_import_info_named",
+      "label": "named import",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "dll": "kernel32.dll",
+        "name": "CreateFile",
+        "addr": 0,
+        "ordinal": null,
+        "source": "rustre_loader::ImportInfo::named"
+      }
+    },
+    {
+      "tool": "loader_import_info_ordinal",
+      "label": "ordinal import",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "dll": "kernel32.dll",
+        "name": "",
+        "addr": 0,
+        "ordinal": 1,
+        "source": "rustre_loader::ImportInfo::ordinal"
+      }
+    },
+    {
+      "tool": "loader_section_info_new",
+      "label": "section .text",
+      "status": "PASS",
+      "expected": ".text",
+      "actual": ".text"
+    },
+    {
+      "tool": "loader_symbol_info_new",
+      "label": "symbol main",
+      "status": "PASS",
+      "expected": "main",
+      "actual": "main"
+    },
+    {
+      "tool": "loader_detected_format_display",
+      "label": "display field",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_format_detector_new_empty",
+      "label": "creates empty",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "Unknown",
+        "source": "rustre_loader::FormatDetector::new+detect"
+      }
+    },
+    {
+      "tool": "loader_format_detector_detect",
+      "label": "detect->result",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "Unknown",
+        "bytes": 4,
+        "source": "rustre_loader::FormatDetector::detect"
+      }
+    },
+    {
+      "tool": "loader_format_detector_all_flags",
+      "label": "returns flags dict",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "Unknown",
+        "is_elf": false,
+        "is_pe": false,
+        "is_macho": false,
+        "is_java_class": false,
+        "bytes": 4,
+        "source": "rustre_loader::FormatDetector"
+      }
+    },
+    {
+      "tool": "loader_format_detector_probe_all_bools",
+      "label": "returns bools dict",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "is_elf": false,
+        "is_pe": false,
+        "is_macho": false,
+        "is_java_class": false,
+        "format": "Unknown",
+        "source": "rustre_loader::FormatDetector::{is_elf,is_pe,is_macho,is_java_class}"
+      }
+    },
+    {
+      "tool": "loader_multi_format_registry_new",
+      "label": "creates",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "loader_names": [],
+        "source": "rustre_loader::MultiFormatRegistry::new"
+      }
+    },
+    {
+      "tool": "loader_multi_format_registry_is_empty",
+      "label": "empty_registry_is_empty=True",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_multi_format_registry_len",
+      "label": "returns len field",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "len": 7,
+        "is_empty": false,
+        "names": [
+          "elf",
+          "pe",
+          "wasm",
+          "macho",
+          "lua",
+          "java-class",
+          "android-dex"
+        ],
+        "source": "rustre_loader::default_multi_format_registry"
+      }
+    },
+    {
+      "tool": "loader_multi_format_registry_loader_names",
+      "label": "returns names",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "names": [
+          "elf",
+          "pe",
+          "wasm",
+          "macho",
+          "lua",
+          "java-class",
+          "android-dex"
+        ],
+        "len": 7,
+        "source": "rustre_loader::MultiFormatRegistry::loader_names"
+      }
+    },
+    {
+      "tool": "loader_multi_format_registry_find",
+      "label": "find pe->found",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "name": "pe",
+        "found": true,
+        "registry_len": 7,
+        "source": "rustre_loader::MultiFormatRegistry::find"
+      }
+    },
+    {
+      "tool": "loader_default_multi_format_registry_count",
+      "label": "len>0",
+      "status": "PASS",
+      "expected": true,
+      "actual": 7
+    },
+    {
+      "tool": "loader_multi_format_probe_all",
+      "label": "probe_all->result",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "results": [],
+        "bytes": 4,
+        "source": "rustre_loader::MultiFormatRegistry::probe_all"
+      }
+    },
+    {
+      "tool": "loader_multi_loader_input_to_bytes",
+      "label": "hex->bytes",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "len": 4,
+        "source": "rustre_loader::MultiLoaderInput::to_bytes"
+      }
+    },
+    {
+      "tool": "loader_coordinator_new",
+      "label": "creates",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "loader_count": 0,
+        "source": "rustre_loader::LoaderCoordinator::new"
+      }
+    },
+    {
+      "tool": "loader_coordinator_new_with_registry",
+      "label": "creates with registry",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "loader_count": 0,
+        "source": "rustre_loader::LoaderCoordinator::new_with_registry"
+      }
+    },
+    {
+      "tool": "loader_coordinator_loader_count",
+      "label": "count>=0",
+      "status": "PASS",
+      "expected": true,
+      "actual": 0
+    },
+    {
+      "tool": "loader_hub_coordinator_new_empty",
+      "label": "creates",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "loader_count": 0,
+        "source": "rustre_loader::LoaderCoordinator::new"
+      }
+    },
+    {
+      "tool": "loader_pipeline_new",
+      "label": "creates",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "name": "default",
+        "loader_count": 0,
+        "source": "rustre_loader::LoaderPipeline::new"
+      }
+    },
+    {
+      "tool": "loader_pipeline_name",
+      "label": "returns name",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "name": "test_pipeline",
+        "source": "rustre_loader::LoaderPipeline::name"
+      }
+    },
+    {
+      "tool": "loader_pipeline_loader_count",
+      "label": "count>=0",
+      "status": "PASS",
+      "expected": true,
+      "actual": 0
+    },
+    {
+      "tool": "loader_pipeline_detect_format",
+      "label": "detect->result",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "Unknown",
+        "bytes": 4,
+        "source": "rustre_loader::LoaderPipeline::detect_format"
+      }
+    },
+    {
+      "tool": "loader_auto_loader_detect_format",
+      "label": "returns format",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "Unknown",
+        "is_elf": false,
+        "is_macho": false,
+        "bytes": 4,
+        "source": "rustre_loader::AutoLoader::detect_format"
+      }
+    },
+    {
+      "tool": "loader_rich_load_result_new",
+      "label": "creates",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "_raw": "execution failed: execution failed: invalid params: args must contain 'bytes', 'hex', or 'path'"
+      }
+    },
+    {
+      "tool": "loader_rich_load_result_auto",
+      "label": "loads cargo-zyphora",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "format": "PE",
+        "arch": "x86_64",
+        "bits": 64,
+        "endian": "little",
+        "entry_point": 5369700460,
+        "base_address": 5368709120,
+        "sections": 5,
+        "symbols": 0,
+        "imports": 106,
+        "exports": 0,
+        "total_virtual_size": 1242331,
+        "sha256": "3e06974ab60293af31a2814db69527f515af3868588f9b2bf761e19fbff87988",
+        "source": "rustre_loader::MultiFormatRegistry::auto_load"
+      }
+    },
+    {
+      "tool": "loader_rich_load_result_hashes",
+      "label": "returns hashes",
+      "status": "PASS",
+      "expected": true,
+      "actual": [
+        "sha256",
+        "md5",
+        "len",
+        "source"
+      ]
+    },
+    {
+      "tool": "loader_rich_load_result_total_virtual_size",
+      "label": "total=0x6000=24576",
+      "status": "PASS",
+      "expected": 24576,
+      "actual": 24576
+    },
+    {
+      "tool": "loader_rich_load_result_section_at",
+      "label": "va=0x2000 in .text",
+      "status": "PASS",
+      "expected": ".text",
+      "actual": ".text"
+    },
+    {
+      "tool": "loader_macho_parse",
+      "label": "minimal Mach-O",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": true,
+        "arch": "arm64",
+        "file_type": "MH_EXECUTE",
+        "is_fat": false,
+        "is_pie": false,
+        "segments": 0,
+        "symbols": 0,
+        "imports": 0,
+        "exports": 0,
+        "dylibs": 0,
+        "source": "rustre_loader_macho::MachoParser::parse"
+      }
+    },
+    {
+      "tool": "loader_macho_parse_fat",
+      "label": "non-fat->slices=[]",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_macho_parse_summary",
+      "label": "minimal Mach-O summary",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": true,
+        "arch": "arm64",
+        "file_type": "MH_EXECUTE",
+        "is_fat": false,
+        "is_pie": false,
+        "segments": 0,
+        "symbols": 0,
+        "imports": 0,
+        "exports": 0,
+        "dylibs": 0,
+        "load_commands": 0,
+        "function_starts": 0,
+        "has_code_signature": false,
+        "uuid": null,
+        "source": "rustre_loader_macho::MachoParser::parse"
+      }
+    },
+    {
+      "tool": "loader_wasm_parse",
+      "label": "WASM magic",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": true,
+        "version": 1,
+        "types": 0,
+        "imports": 0,
+        "functions_defined": 0,
+        "functions_total": 0,
+        "exports": 0,
+        "memories": 0,
+        "globals": 0,
+        "data_segments": 0,
+        "custom_sections": 0,
+        "has_name_section": false,
+        "start_function": null,
+        "source": "rustre_loader_wasm::WasmParser::parse"
+      }
+    },
+    {
+      "tool": "loader_wasm_stats",
+      "label": "WASM stats",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "parsed": true,
+        "function_count": 0,
+        "code_size": 0,
+        "data_size": 0,
+        "has_dwarf": false,
+        "has_name_section": false,
+        "most_complex_function": null,
+        "source": "rustre_loader_wasm::WasmStats::compute"
+      }
+    },
+    {
+      "tool": "loader_ole_list_streams",
+      "label": "OLE->streams/error",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "count": 0,
+        "streams": [],
+        "parse_error": null,
+        "source": "rustre_loader_ole::OleDirectoryReader::list_streams"
+      }
+    },
+    {
+      "tool": "loader_ole_extract_macros",
+      "label": "OLE->macros",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "count": 0,
+        "macros": [],
+        "source": "rustre_loader_ole::OleMacroExtractor::extract_macros"
+      }
+    }
+  ],
+  "skip_list": []
+}

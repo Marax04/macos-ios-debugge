@@ -1,0 +1,6 @@
+{
+ "category": "survey_ghidra_pcode",
+ "checks_total": 15,
+ "checks_passed": 15,
+ "mismatches": []
+}

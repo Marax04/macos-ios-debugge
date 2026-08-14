@@ -1,0 +1,187 @@
+{
+  "category": "deobf",
+  "tools_in_category": 106,
+  "checks_total": 62,
+  "checks_passed": 62,
+  "checks_failed": 0,
+  "checks_skipped": 44,
+  "mismatches": [],
+  "skipped": [
+    {
+      "tool": "deobf_vm_handler_cluster",
+      "reason": "tool-error (structural): tool-error:execution failed: execution failed: invalid params: kinds"
+    },
+    {
+      "tool": "deobf_string_rotn_detect",
+      "reason": "tool-error (structural): tool-error:execution failed: execution failed: invalid params: missing 'text'"
+    },
+    {
+      "tool": "deobf_smc_code_mutation_tracker",
+      "reason": "requires code diff context"
+    },
+    {
+      "tool": "deobf_smc_dynamic_detector_events",
+      "reason": "requires live execution trace"
+    },
+    {
+      "tool": "deobf_smc_emu_registers_rw",
+      "reason": "requires emulator session"
+    },
+    {
+      "tool": "deobf_smc_emulated_trace",
+      "reason": "requires emulator+binary context"
+    },
+    {
+      "tool": "deobf_smc_layered_decrypt_all",
+      "reason": "output depends on binary analysis"
+    },
+    {
+      "tool": "deobf_smc_mock_trace",
+      "reason": "requires full project/binary context"
+    },
+    {
+      "tool": "deobf_smc_reconstructor_reconstruct",
+      "reason": "requires SMC region context"
+    },
+    {
+      "tool": "deobf_smc_stats_from_regions",
+      "reason": "requires region list context"
+    },
+    {
+      "tool": "deobf_smc_unpacked_region_detector",
+      "reason": "nondeterministic analysis"
+    },
+    {
+      "tool": "deobf_smc_unpacked_regions",
+      "reason": "nondeterministic analysis"
+    },
+    {
+      "tool": "deobf_smc_xor_chain_detect",
+      "reason": "requires analysis context"
+    },
+    {
+      "tool": "deobf_string_asm_detect_stack_strings_v3",
+      "reason": "requires disasm context"
+    },
+    {
+      "tool": "deobf_string_caesar_bruteforce",
+      "reason": "nondeterministic ranking"
+    },
+    {
+      "tool": "deobf_string_decode_base64_custom_v3",
+      "reason": "no independent ground truth available for this heuristic/analysis tool"
+    },
+    {
+      "tool": "deobf_string_detect_arith_obf_mlil_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_detect_decoder_helpers_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_detect_mlil_stack_strings_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_detect_rc4_ksa_mlil_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_detect_xor_encryption_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_detect_xor_key_length_ic",
+      "reason": "heuristic, nondeterministic"
+    },
+    {
+      "tool": "deobf_string_has_modified_utf8_null_v3",
+      "reason": "requires project context"
+    },
+    {
+      "tool": "deobf_string_rc4_inverse_ksa_v3",
+      "reason": "requires MLIL context"
+    },
+    {
+      "tool": "deobf_string_recover_stack_strings_v3",
+      "reason": "requires stack context"
+    },
+    {
+      "tool": "deobf_string_score_plaintext_v3",
+      "reason": "requires project context"
+    },
+    {
+      "tool": "deobf_string_to_display_string_v3",
+      "reason": "requires project context"
+    },
+    {
+      "tool": "deobf_string_utf_detect_anomalies_v3",
+      "reason": "requires project context"
+    },
+    {
+      "tool": "deobf_string_xor_detect_key_period",
+      "reason": "no independent ground truth available for this heuristic/analysis tool"
+    },
+    {
+      "tool": "deobf_vm_bytecode_regions",
+      "reason": "requires full bytecode blob"
+    },
+    {
+      "tool": "deobf_vm_deobf_pipeline_analyze",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_deprotect_simple",
+      "reason": "requires protector detection first"
+    },
+    {
+      "tool": "deobf_vm_detect_dispatcher",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_detector_analyze",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_dispatcher_detector_probe",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_handler_classify",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_handler_prologue_entropy",
+      "reason": "nondeterministic heuristic"
+    },
+    {
+      "tool": "deobf_vm_lifter_lift",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_lifter_remap",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_protector_detect",
+      "reason": "requires binary code context"
+    },
+    {
+      "tool": "deobf_vm_protector_sections",
+      "reason": "requires PE sections context"
+    },
+    {
+      "tool": "deobf_vm_state_flags",
+      "reason": "requires VM state object"
+    },
+    {
+      "tool": "deobf_vm_state_mem_roundtrip",
+      "reason": "requires VM state object"
+    },
+    {
+      "tool": "deobf_vm_state_simulate",
+      "reason": "requires VM state + ISA context"
+    }
+  ]
+}

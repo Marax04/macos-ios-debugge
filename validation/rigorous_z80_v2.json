@@ -1,0 +1,34 @@
+[
+  {
+    "tool": "z80_encode_nop",
+    "status": "PASS",
+    "actual_bytes": [
+      0
+    ],
+    "actual_hex": "00"
+  },
+  {
+    "tool": "z80_encode_halt",
+    "status": "PASS",
+    "actual_bytes": [
+      118
+    ],
+    "actual_hex": "76"
+  },
+  {
+    "tool": "z80_encode_ret",
+    "status": "PASS",
+    "actual_bytes": [
+      201
+    ],
+    "actual_hex": "C9"
+  },
+  {
+    "tool": "z80_encode_ei",
+    "status": "PASS",
+    "actual_bytes": [
+      251
+    ],
+    "actual_hex": "FB"
+  }
+]

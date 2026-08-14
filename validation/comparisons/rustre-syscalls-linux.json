@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-syscalls-linux",
+  "tests": 24,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-syscalls-linux (verificato in crates/rustre-mcp-tools/src/wire_tools.rs: nessun tool syscall/ptrace/seccomp Linux-side esposto; l'unica occorrenza di 'syscall' e' nella description dell'assembler x86 per la mnemonic). Validator Python self-tests eseguiti con successo (24 asserzioni: x86_64/aarch64 syscall name<->nr, lookup_x86_64_entry, errno_name, signal_name, af_name, ptrace_request_name, decode_open_flags, decode_mmap_prot/flags, decode_flags_by_name, format_retval, format_mmap_args, parse_proc_maps, parse_proc_status, AT_FDCWD, AARCH64_SPECIFIC_SYSCALLS). Le superfici ptrace/seccomp/interception richiedono kernel Linux live e sono out-of-scope per validator stdlib e per MCP stdio. Confronto MCP-vs-validator non eseguibile finche' non vengono esposti tool tipo syscalls_x86_64_name, syscalls_decode_open_flags, syscalls_parse_proc_maps.",
+  "gap": "missing_mcp_tools:syscalls_*_name,syscalls_decode_*,syscalls_parse_proc_*"
+}

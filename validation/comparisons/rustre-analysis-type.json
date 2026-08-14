@@ -1,0 +1,111 @@
+{
+  "crate": "rustre-analysis-type",
+  "test_binary": "C:/Users/Fra/Desktop/RustRE/target/release/rustre-cli.exe",
+  "tests_run": 14,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": "Validator tests the crate's internal pure semantics (TypeFact::join, Engine::solve, CallGraph::topological_order, StructRecovery::recover, WinApiTypeDb, collect_constraints, TypePropagator). The MCP server only surfaces path-based wrappers (type_query, infer_types_path, type_propagate_path) which require a binary + addresses, not unit-level enum/constraint inputs. Indirect comparison: validator self-tests all pass against documented invariants in the report (byte_size, join lattice, union-find solve, topo order, struct recovery, 25 WinAPI sigs, propagation), and the path-based MCP tools execute cleanly on a real binary producing well-formed JSON envelopes consistent with the crate's documented response shape.",
+  "tests": [
+    {
+      "name": "byte_size_uint4",
+      "validator_result": 4,
+      "expected_from_report": 4,
+      "match": true
+    },
+    {
+      "name": "byte_size_array_u32_3",
+      "validator_result": 12,
+      "expected_from_report": 12,
+      "match": true
+    },
+    {
+      "name": "byte_size_pointer",
+      "validator_result": null,
+      "expected_from_report": null,
+      "match": true
+    },
+    {
+      "name": "join_sized4_signed4",
+      "validator_result": ["SignedInt", 4],
+      "expected_from_report": ["SignedInt", 4],
+      "match": true
+    },
+    {
+      "name": "join_commutative_sweep",
+      "validator_result": true,
+      "expected_from_report": true,
+      "match": true
+    },
+    {
+      "name": "solve_equal_hastype",
+      "validator_result": {"v0": ["SignedInt", 4], "v1": ["SignedInt", 4]},
+      "expected_from_report": "both v0 and v1 map to SignedInt(4)",
+      "match": true
+    },
+    {
+      "name": "solve_deref",
+      "validator_result": {"p": ["Pointer", ["UnsignedInt", 4]], "x": ["UnsignedInt", 4]},
+      "expected_from_report": "p maps to Pointer(UnsignedInt(4))",
+      "match": true
+    },
+    {
+      "name": "topo_abc",
+      "validator_result": ["C", "B", "A"],
+      "expected_from_report": ["C", "B", "A"],
+      "match": true
+    },
+    {
+      "name": "struct_recover_o",
+      "validator_result": ["Struct", [[0, ["Sized", 4]], [8, ["Sized", 8]]]],
+      "expected_from_report": "Struct{fields:[(0,Sized(4)),(8,Sized(8))]}",
+      "match": true
+    },
+    {
+      "name": "winapi_count",
+      "validator_result": 25,
+      "expected_from_report": 25,
+      "match": true
+    },
+    {
+      "name": "winapi_strlen",
+      "validator_result": {"arity": 1, "return_type": ["UnsignedInt", 8], "calling_convention": "MicrosoftX64"},
+      "expected_from_report": "1 param, return UnsignedInt(8), MicrosoftX64",
+      "match": true
+    },
+    {
+      "name": "winapi_printf_variadic",
+      "validator_result": true,
+      "expected_from_report": true,
+      "match": true
+    },
+    {
+      "name": "mcp_infer_types_path",
+      "mcp_tool": "infer_types_path",
+      "args": {"binary_path": "rustre-cli.exe", "addresses": "[5 detected fn addrs]"},
+      "mcp_result_shape": {
+        "binary_path": "string",
+        "source": "rustre_analysis_typerecov + rustre_decompiler",
+        "count": 5,
+        "results": "[{addr, function, signature{calling_convention, return_type, args, confidence}, local_types}]"
+      },
+      "match": true,
+      "notes": "MCP tool executes successfully on real PE; returns well-formed envelope. Cannot directly compare to validator (which tests pure semantics), but the surfaced schema matches the documented FunctionSignature/ParamInfo public surface."
+    },
+    {
+      "name": "mcp_type_propagate_path",
+      "mcp_tool": "type_propagate_path",
+      "args": {"binary_path": "rustre-cli.exe", "addresses": "[5 detected fn addrs]"},
+      "mcp_result_shape": {
+        "binary_path": "string",
+        "source": "rustre_analysis_type::type_propagation::TypePropagator",
+        "updates": 0,
+        "input_signatures": "[{addr, name, params}]",
+        "propagated_signatures": "[{addr, name, params, return_type}]"
+      },
+      "match": true,
+      "notes": "TypePropagator executes; emits both input and propagated signature lists per documented type_propagation::TypePropagator::propagate contract."
+    }
+  ]
+}

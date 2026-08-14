@@ -1,0 +1,12 @@
+{
+  "crate": "rustre-sandbox-report",
+  "status": "no_mcp_surface",
+  "note": "Grep su C:/Users/Fra/Desktop/RustRE/crates/rustre-mcp-tools/src/wire_tools.rs per 'sandbox' (case-insensitive) restituisce zero match: nessun tool MCP espone rustre_sandbox_report::. Il validator Python (rustre-sandbox-report.py) e' una libreria di funzioni-mirror (sandbox_report_new, score_engine_compute, ioc_extractor_extract, html_report_builder_v2_build, json_report_from_sandbox_report, pdf_text_reporter_render, network_timeline_*, attack_mapping_*, ecc.) progettata per test in-process Rust vs Python, non per cross-check via JSON-RPC. Non esiste un percorso MCP equivalente da invocare. Confronto cross-MCP non applicabile.",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches": [],
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "match": true,
+  "integration_gap": "Per esporre questa crate via MCP servirebbe wirare tool tipo rustre_sandbox_report_build / rustre_sandbox_report_render_html / rustre_sandbox_report_extract_iocs che espongano SandboxReport, HtmlReportBuilder, IocExtractor, JsonReportBuilder, PdfTextReporter, NetworkTimeline."
+}

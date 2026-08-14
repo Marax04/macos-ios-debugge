@@ -1,0 +1,553 @@
+﻿{
+  "category": "diff",
+  "tools_hardened": 63,
+  "tools_passed": 75,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "diff_bindiff_jaccard_bb_score",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_bindiff_jaccard_bb_score",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_bindiff_jaccard_bb_score",
+      "status": "PASS",
+      "expected": 0.4285714,
+      "actual": 0.4285714328289032
+    },
+    {
+      "tool": "diff_bindiff_jaccard_bb_score",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5
+    },
+    {
+      "tool": "diff_bindiff_match_kind_is_reliable",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "kind=ExactHash (smoke)"
+    },
+    {
+      "tool": "diff_bindiff_match_kind_is_reliable",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": "kind=Heuristic (smoke)"
+    },
+    {
+      "tool": "diff_bindiff_match_kind_is_reliable",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "kind=NameMatch (smoke)"
+    },
+    {
+      "tool": "diff_bindiff_function_info_new",
+      "status": "PASS",
+      "expected": {
+        "address": 4096,
+        "bytes_crc32": 0,
+        "in_edges": 0,
+        "out_edges": 0,
+        "bb_count": 0
+      },
+      "actual": {
+        "address": 4096,
+        "bytes_crc32": 0,
+        "in_edges": 0,
+        "out_edges": 0,
+        "bb_count": 0
+      }
+    },
+    {
+      "tool": "diff_bindiff_similarity_score(self_named)",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_bindiff_similarity_score(self_unnamed)",
+      "status": "PASS",
+      "expected": 0.6,
+      "actual": 0.6,
+      "note": "name=0 lowers score"
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash(empty)",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash(chain3)",
+      "status": "PASS",
+      "expected": 13141921032047025725,
+      "actual": 13141921032047025725,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_cfg_similarity(identical)",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_bindiff_match_kind_priority(ExactHash)",
+      "status": "PASS",
+      "expected": 10,
+      "actual": 10,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_match_kind_priority(CfgHash)",
+      "status": "PASS",
+      "expected": 8,
+      "actual": 8,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_match_kind_priority(Heuristic)",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_function_info_can_match(self)",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_function_info_self_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_bindiff_hungarian_threshold",
+      "status": "PASS",
+      "expected": ">0",
+      "actual": 2000
+    },
+    {
+      "tool": "diff_bindiff_match_kind_display",
+      "status": "PASS",
+      "expected": "non-empty string",
+      "actual": "ExactHash"
+    },
+    {
+      "tool": "diff_bindiff_match_kind_summary",
+      "status": "PASS",
+      "expected": ">=3 variants",
+      "actual": 6
+    },
+    {
+      "tool": "diff_bindiff_match_kind_priority_order",
+      "status": "PASS",
+      "expected": ">=2 ordered variants",
+      "actual": 6
+    },
+    {
+      "tool": "diff_bindiff_hungarian_solve",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_bindiff_hungarian_dims",
+      "status": "PASS",
+      "expected": {
+        "original_rows": 2,
+        "original_cols": 2
+      },
+      "actual": {
+        "original_rows": 2,
+        "original_cols": 2
+      }
+    },
+    {
+      "tool": "diff_bindiff_bindiffer_defaults",
+      "status": "PASS",
+      "expected": "min_similarity in [0,1]",
+      "actual": 0.5
+    },
+    {
+      "tool": "diff_bindiff_function_features_similarity",
+      "status": "PASS",
+      "expected": "[0,1]",
+      "actual": 0.6000000238418579
+    },
+    {
+      "tool": "diff_bindiff_function_features_can_match",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": "smoke"
+    },
+    {
+      "tool": "diff_bindiff_function_features_default",
+      "status": "PASS",
+      "expected": 4096,
+      "actual": 4096
+    },
+    {
+      "tool": "diff_bindiff_cfg_hasher_compare",
+      "status": "PASS",
+      "expected": "hash_linear+hash_cfg present",
+      "actual": {
+        "hash_linear": 15657232601398921512,
+        "hash_cfg": 13141921032047025725
+      }
+    },
+    {
+      "tool": "diff_bindiff_match_matrix_build",
+      "status": "PASS",
+      "expected": {
+        "rows": 1,
+        "cols": 1
+      },
+      "actual": {
+        "rows": 1,
+        "cols": 1
+      }
+    },
+    {
+      "tool": "diff_bindiff_match_matrix_above_threshold",
+      "status": "PASS",
+      "expected": "count>=0",
+      "actual": 1
+    },
+    {
+      "tool": "diff_bindiff_match_matrix_greedy_assign",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'count': 1, 'pairs': [{'row': 0, 'col': 0, 'similarity': 0."
+    },
+    {
+      "tool": "diff_bindiff_match_functions_hungarian",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'count': 1, 'matches': [{'addr_a': 4096, 'addr_b': 8192, 's"
+    },
+    {
+      "tool": "diff_bindiff_match_functions_greedy",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'count': 1, 'matches': [{'addr_a': 4096, 'addr_b': 8192, 's"
+    },
+    {
+      "tool": "diff_bindiff_bindiff_engine_defaults",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'default_similar_threshold': 0.699999988079071, 'similar_th"
+    },
+    {
+      "tool": "diff_bindiff_bin_differ_min_similarity",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5
+    },
+    {
+      "tool": "diff_bindiff_bin_differ_propagation_toggle",
+      "status": "PASS",
+      "expected": {
+        "before": true,
+        "after": false
+      },
+      "actual": {
+        "before": true,
+        "after": false
+      }
+    },
+    {
+      "tool": "diff_bindiff_detailed_similarity",
+      "status": "PASS",
+      "expected": "[0,1]",
+      "actual": 0.6000000238418579
+    },
+    {
+      "tool": "diff_bindiff_binary_snapshot_new",
+      "status": "PASS",
+      "expected": {
+        "path": "test_binary",
+        "function_count": 0
+      },
+      "actual": {
+        "path": "test_binary",
+        "function_count": 0
+      }
+    },
+    {
+      "tool": "diff_bindiff_function_info_from_features",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'address': 8192, 'bytes_crc32': 0, 'in_edges': 0, 'out_edge"
+    },
+    {
+      "tool": "diff_bindiff_bindiffer_configure",
+      "status": "PASS",
+      "expected": 0.7,
+      "actual": 0.699999988079071
+    },
+    {
+      "tool": "diff_bindiff_function_info_flags",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "diff_bindiff_function_match_quality",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "diff_semantic_signature_compute",
+      "status": "PASS",
+      "expected": 4096,
+      "actual": 4096
+    },
+    {
+      "tool": "diff_semantic_matcher_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_semantic_matcher_are_equivalent",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "diff_semantic_differ_diff_function_pair",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_exports",
+      "status": "PASS",
+      "expected": "diff present",
+      "actual": "{'removed': [], 'added': [], 'moved': [], 'unchanged': []}"
+    },
+    {
+      "tool": "diff_semantic_minhash_new_wire",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "diff_semantic_lsh_index_new_wire",
+      "status": "PASS",
+      "expected": {
+        "num_bands": 5,
+        "rows_per_band": 2
+      },
+      "actual": {
+        "num_bands": 5,
+        "rows_per_band": 2
+      }
+    },
+    {
+      "tool": "diff_semantic_lsh_insert_query_wire",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'len': 1, 'candidates': [42], 'source': 'rustre_diff_semant"
+    },
+    {
+      "tool": "diff_semantic_call_graph_new_wire",
+      "status": "PASS",
+      "expected": "functions>=0",
+      "actual": 3
+    },
+    {
+      "tool": "diff_semantic_call_graph_leaf_root_wire",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'root_1000': True, 'leaf_2000': True, 'callees_1000': [8192"
+    },
+    {
+      "tool": "diff_semantic_fn_rename_heuristic_wire",
+      "status": "PASS",
+      "expected": 0.8,
+      "actual": 0.8
+    },
+    {
+      "tool": "diff_semantic_diff_engine_new_wire",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "diff_semantic_binary_diff_new_wire",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'lsh_len': 0, 'sigs_len': 0, 'source': 'rustre_diff_semanti"
+    },
+    {
+      "tool": "diff_semantic_features_from_empty_wire",
+      "status": "PASS",
+      "expected": {
+        "address": 4096,
+        "feature_count": 0
+      },
+      "actual": {
+        "address": 4096,
+        "feature_count": 0
+      }
+    },
+    {
+      "tool": "diff_semantic_features_similarity_wire",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_semantic_minhash_empty_elements_wire",
+      "status": "PASS",
+      "expected": {
+        "len": 4,
+        "all_max": true
+      },
+      "actual": {
+        "len": 4,
+        "all_max": true
+      }
+    },
+    {
+      "tool": "diff_semantic_jaccard_identical_wire",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_fp_new_wire",
+      "status": "PASS",
+      "expected": {
+        "addr": 4096,
+        "name": "test",
+        "size": 4
+      },
+      "actual": {
+        "addr": 4096,
+        "name": "test",
+        "size": 4
+      }
+    },
+    {
+      "tool": "diff_fp_similarity_wire(identical)",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_fp_similarity_wire(diff)",
+      "status": "PASS",
+      "expected": "[0,1)",
+      "actual": 0.475
+    },
+    {
+      "tool": "diff_fp_display_wire",
+      "status": "PASS",
+      "expected": "contains address",
+      "actual": "test@0x1000 sz=4"
+    },
+    {
+      "tool": "diff_func_match_identical_wire",
+      "status": "PASS",
+      "expected": {
+        "kind": "Identical",
+        "similarity": 1.0
+      },
+      "actual": {
+        "kind": "Identical",
+        "similarity": 1.0
+      }
+    },
+    {
+      "tool": "diff_func_match_similar_wire",
+      "status": "PASS",
+      "expected": "Similar",
+      "actual": "Similar"
+    },
+    {
+      "tool": "diff_func_match_renamed_wire",
+      "status": "PASS",
+      "expected": "Renamed",
+      "actual": "Renamed"
+    },
+    {
+      "tool": "diff_func_match_added_removed_wire",
+      "status": "PASS",
+      "expected": {
+        "added": "Added",
+        "removed": "Removed"
+      },
+      "actual": {
+        "added": "Added",
+        "removed": "Removed"
+      }
+    },
+    {
+      "tool": "diff_engine_run_wire(identical)",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "diff_engine_run_wire(diff)",
+      "status": "PASS",
+      "expected": "non-null",
+      "actual": "{'identical': 0, 'added': 1, 'removed': 1, 'changed': 0, 'si"
+    },
+    {
+      "tool": "diff_engine_debug_wire",
+      "status": "PASS",
+      "expected": "debug contains threshold",
+      "actual": "DiffEngine(threshold=0.6)"
+    },
+    {
+      "tool": "diff_change_type_display_wire",
+      "status": "PASS",
+      "expected": "all 4 display strings non-empty",
+      "actual": {
+        "added": "Added",
+        "removed": "Removed",
+        "unchanged": "Unchanged",
+        "modified": "Modified(75.0%)"
+      }
+    },
+    {
+      "tool": "diff_by_name_wire(identical)",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "diff_export_is_clean_wire(identical)",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "diff_export_is_clean_wire(diff)",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    }
+  ]
+}

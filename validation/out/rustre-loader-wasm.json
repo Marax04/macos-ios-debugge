@@ -1,0 +1,473 @@
+{
+  "crate": "rustre-loader-wasm",
+  "saved": false,
+  "checks": [
+    {
+      "name": "cargo.name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "cargo.edition_2024",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.rustre-core",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.tokio",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.async-trait",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.thiserror",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.serde",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dep.anyhow",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "dev-dep.serde_json",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WASM_MAGIC",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WASM_VERSION",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "MAX_SECTION_SIZE",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.InvalidMagic",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.UnsupportedVersion",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.InvalidSection",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.Leb128Error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.UnexpectedEof",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.InvalidUtf8",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmError.SectionTooLarge",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Leb128Decoder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_u32",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_i32",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_u64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_i64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_u8",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_bytes",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.read_name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.remaining",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "leb128.is_done",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmValType",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmFuncType",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmLimits",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmTableType",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmGlobalType",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmImportDesc",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmImport",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmExportDesc",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmExport",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmLocal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmFunction",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmGlobal",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmDataSegment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmCustomSection",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmNameSection",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmModule",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmParser",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmStats",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmLoader",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmOpcode",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "type.WasmArch",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.I32",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.I64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.F32",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.F64",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.V128",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.FuncRef",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "valtype.ExternRef",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.function_type",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.exported_function",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.exported_function_names",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.function_name",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.imports_from",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.memory_pages_min",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "module.has_start_function",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "WasmParser::parse",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "impl Loader",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "loader.can_load",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "loader.find_nested",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.function_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.import_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.export_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.data_size",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.code_size",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.global_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.memory_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.table_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.custom_section_count",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.has_name_section",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.has_dwarf",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stats.most_complex_function",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_analyzer",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_binary_parser",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_component_model",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_disassembler",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_module_loader",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_name_section",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_optimization_hints",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_security",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_disasm",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_validator",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_section_parser",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_type_decoder",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mod.wasm_import_export",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "errors": [],
+  "mismatches": 0
+}

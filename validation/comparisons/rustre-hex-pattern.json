@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-hex-pattern",
+  "tests_run": 28,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "No MCP tools expose the rustre-hex-pattern library API. Grep over rustre-mcp-server/src and rustre-mcp-tools/src for rustre_hex_pattern/HexPattern/SignaturePattern returned no matches; rustre-mcp-tools/src/search_tool.rs defines its own private PatternByte enum for binary_search_bytes (Exact/Any only, no nibble/alternation/captures/signature/database). The public surface of rustre-hex-pattern (Pattern parse with nibble wildcards, AlternationPattern, CompiledPattern/MaskedPattern, SignaturePattern with CRC-16/IBM, IDA .pat import/export, JSON exporter, PatternDatabase) is not reachable through any MCP tool. MCP-vs-validator comparison is not possible until wrapper tools are added. Validator (validation/validators/rustre-hex-pattern.py) self-tests pass standalone: 28/28 tests OK."
+}

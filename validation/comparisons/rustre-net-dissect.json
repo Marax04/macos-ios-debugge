@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-net-dissect",
+  "tests": 19,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-net-dissect (verificato grep su crates/rustre-mcp-tools e rustre-mcp: nessun riferimento a net_dissect/netdissect/dissect). Il crate fornisce dissector di protocollo (HTTP/TLS/DNS/ICMP/JA3/JA3S/DNP3/ICS/port-fingerprint) ma non e' esposto via JSON-RPC stdio dal binario rustre-mcp.exe. Validator Python eseguito con successo (19 self-test: byte_entropy x2, url_decode, chunked_decode, dnp3_crc16 x2, icmp_tunnel x2, scan_http_attacks, scan_http_attacks_decoded, dns_rtype_name, tls_version_name, icmp_type_name, is_ics_port x2, ics_protocol_for_port, fingerprint_protocol x3) - tutti passati. Confronto MCP-vs-validator non eseguibile finche' non viene esposto un tool tipo net_dissect_fingerprint_protocol / net_dissect_ja3 / net_dissect_scan_http_attacks. Stesso pattern di rustre-net-pcap e rustre-arch-bpf.",
+  "validator_output": {"crate": "rustre-net-dissect", "saved": true},
+  "gap": "missing_mcp_tool:net_dissect_*"
+}

@@ -1,0 +1,300 @@
+[
+  {
+    "tool": "ios_swift_is_mangled_wire",
+    "status": "PASS",
+    "input": "_$sSSmain",
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "ios_swift_is_mangled_wire",
+    "status": "PASS",
+    "input": "_$SsSb",
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "ios_swift_is_mangled_wire",
+    "status": "PASS",
+    "input": "_notswift",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_swift_is_mangled_wire",
+    "status": "PASS",
+    "input": "",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_swift_demangle_wire",
+    "status": "PASS",
+    "input": "_$sSS",
+    "expected": "Swift.String",
+    "actual": "Swift.String"
+  },
+  {
+    "tool": "ios_swift_demangle_wire",
+    "status": "PASS",
+    "input": "_$sSi",
+    "expected": "Swift.Int",
+    "actual": "Swift.Int"
+  },
+  {
+    "tool": "ios_swift_demangle_wire",
+    "status": "PASS",
+    "input": "_$sSb",
+    "expected": "Swift.Bool",
+    "actual": "Swift.Bool"
+  },
+  {
+    "tool": "ios_swift_demangle_wire",
+    "status": "PASS",
+    "input": "_$sSf",
+    "expected": "Swift.Float",
+    "actual": "Swift.Float"
+  },
+  {
+    "tool": "ios_swift_demangle_wire",
+    "status": "PASS",
+    "input": "_$sSd",
+    "expected": "Swift.Double",
+    "actual": "Swift.Double"
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "@:I",
+    "expected": [
+      "id",
+      "SEL",
+      "unsigned int"
+    ],
+    "actual": [
+      "id",
+      "SEL",
+      "unsigned int"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "v@:",
+    "expected": [
+      "void",
+      "id",
+      "SEL"
+    ],
+    "actual": [
+      "void",
+      "id",
+      "SEL"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "cifsqd",
+    "expected": [
+      "char",
+      "int",
+      "float",
+      "short",
+      "long long",
+      "double"
+    ],
+    "actual": [
+      "char",
+      "int",
+      "float",
+      "short",
+      "long long",
+      "double"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "CISQ",
+    "expected": [
+      "unsigned char",
+      "unsigned int",
+      "unsigned short",
+      "unsigned long long"
+    ],
+    "actual": [
+      "unsigned char",
+      "unsigned int",
+      "unsigned short",
+      "unsigned long long"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "^i",
+    "expected": [
+      "*int"
+    ],
+    "actual": [
+      "*int"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "*",
+    "expected": [
+      "char*"
+    ],
+    "actual": [
+      "char*"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "B",
+    "expected": [
+      "bool"
+    ],
+    "actual": [
+      "bool"
+    ]
+  },
+  {
+    "tool": "ios_decode_type_encoding_wire",
+    "status": "PASS",
+    "input": "#",
+    "expected": [
+      "Class"
+    ],
+    "actual": [
+      "Class"
+    ]
+  },
+  {
+    "tool": "ios_security_check_arc_usage_wire",
+    "status": "PASS",
+    "input": "empty",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_security_check_pie_enabled_wire",
+    "status": "PASS",
+    "input": "empty",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_security_check_stack_canary_wire",
+    "status": "PASS",
+    "input": "empty",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_security_check_debug_symbols_wire",
+    "status": "PASS",
+    "input": "empty",
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "ios_security_report_wire",
+    "status": "PASS",
+    "expected": {
+      "arc": false,
+      "pie": false,
+      "stack_canary": false,
+      "has_debug_symbols": false
+    },
+    "actual": {
+      "arc": false,
+      "pie": false,
+      "stack_canary": false,
+      "has_debug_symbols": false
+    }
+  },
+  {
+    "tool": "ios_class_dumper_extract_objc_classes_wire",
+    "status": "PASS",
+    "expected": [],
+    "actual": []
+  },
+  {
+    "tool": "ios_class_dumper_extract_swift_types_wire",
+    "status": "PASS",
+    "expected": [],
+    "actual": []
+  },
+  {
+    "tool": "ios_ipa_info_from_macho_wire",
+    "status": "PASS",
+    "expected": {
+      "bundle_id": "unknown",
+      "version": "unknown",
+      "min_os": "unknown",
+      "class_count": 0,
+      "method_count": 0,
+      "swift_class_count": 0,
+      "has_bitcode": false,
+      "architectures": []
+    },
+    "actual": {
+      "bundle_id": "unknown",
+      "version": "unknown",
+      "min_os": "unknown",
+      "class_count": 0,
+      "method_count": 0,
+      "swift_class_count": 0,
+      "has_bitcode": false,
+      "architectures": []
+    },
+    "full_response": {
+      "bundle_id": "unknown",
+      "version": "unknown",
+      "min_os": "unknown",
+      "class_count": 0,
+      "method_count": 0,
+      "swift_class_count": 0,
+      "has_bitcode": false,
+      "architectures": [],
+      "source": "rustre_mobile_ios::IpaInfo::from_macho"
+    }
+  },
+  {
+    "tool": "ios_parse_plist_wire",
+    "status": "PASS",
+    "expected": {
+      "bundle_id": "com.test.App",
+      "version": "2.3.4",
+      "min_ios": "15.0",
+      "permissions": []
+    },
+    "actual": {
+      "bundle_id": "com.test.App",
+      "version": "2.3.4",
+      "min_ios": "15.0",
+      "permissions": []
+    }
+  },
+  {
+    "tool": "ios_ipa_bundle_mock_wire",
+    "status": "PASS",
+    "expected": {
+      "bundle_id": "com.example.App",
+      "framework_count": 3,
+      "is_debuggable": false,
+      "system_frameworks": 2
+    },
+    "actual": {
+      "bundle_id": "com.example.App",
+      "framework_count": 3,
+      "is_debuggable": false,
+      "system_frameworks": 2
+    }
+  }
+]

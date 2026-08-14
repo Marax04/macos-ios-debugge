@@ -1,0 +1,29 @@
+﻿[package]
+license.workspace = true
+name = "rustre-crypto-oracle"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+# tokio is required as the async runtime for reqwest's async client used in
+# OracleVerifier::verify_oracle.  The "full" feature set is inherited from the
+# workspace definition and ensures the multi-thread scheduler and macros are
+# available to callers.
+tokio = { workspace = true }
+subtle = "2"
+getrandom = "0.2"
+ahash = { workspace = true }
+
+[lints]
+workspace = true

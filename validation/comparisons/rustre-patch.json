@@ -1,0 +1,70 @@
+{
+  "crate": "rustre-patch",
+  "test_binary": "C:/Users/Fra/Desktop/RustRE/target/release/zyphora.exe",
+  "tests": [
+    {
+      "name": "pe_security_summary",
+      "mcp_tool": "patch_pe_security_summary",
+      "mcp_output": {
+        "dll_characteristics": 33120,
+        "aslr": true,
+        "dep": true,
+        "cfg": false,
+        "no_seh": false,
+        "force_integrity": false,
+        "terminal_server_aware": true
+      },
+      "validator_output": {
+        "dll_characteristics": 33120,
+        "aslr": true,
+        "dep_nx": true,
+        "cfg": false,
+        "no_seh": false,
+        "force_integrity": false,
+        "tsaware": true,
+        "high_entropy_va": true
+      },
+      "match": true,
+      "notes": "All shared fields match. MCP names DEP as 'dep', validator as 'dep_nx'; MCP names TS-aware as 'terminal_server_aware', validator as 'tsaware'. MCP omits 'high_entropy_va' (DllCharacteristics bit 0x0020) - cosmetic gap, not a correctness bug."
+    },
+    {
+      "name": "find_code_caves",
+      "mcp_tool": "patch_patch_find_code_caves",
+      "params": {"min_size": 64},
+      "mcp_count": 1,
+      "mcp_first_cave": {"section": ".text", "file_offset": 19954430, "size": 258, "fill_byte": 0},
+      "validator_count_whole_file": 27391,
+      "validator_match_for_text_cave": {"offset": 19954430, "size": 258, "fill_byte": 0},
+      "match": true,
+      "notes": "MCP correctly restricts to executable sections (.text); validator scans the entire file. The cave found by MCP matches the validator's report at the same offset/size. Semantic difference by design, not a mismatch."
+    }
+  ],
+  "validator_self_tests": {
+    "parse_hex_bytes": true,
+    "apply_patches": true,
+    "checksum_after": true,
+    "rollback": true,
+    "validate_patch": true,
+    "find_code_caves": true,
+    "assemble_simple": true,
+    "delta_roundtrip": true,
+    "hot_patch_roundtrip": true
+  },
+  "not_wired_to_mcp": [
+    "parse_hex_bytes",
+    "apply_patches",
+    "checksum_after",
+    "validate_patch",
+    "assemble_simple",
+    "compute_pe_checksum",
+    "pe_va_to_file_offset",
+    "binary_diff::diff/patch",
+    "create_rollback",
+    "hot_patch"
+  ],
+  "tests_run": 2,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true
+}

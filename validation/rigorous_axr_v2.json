@@ -1,0 +1,87 @@
+{
+  "summary": {
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "tool_errors": 0,
+    "skipped": 0
+  },
+  "results": [
+    {
+      "tool": "axr_db_callers_of",
+      "status": "PASS",
+      "detail": "got=[256, 1024] expected=[256, 1024]"
+    },
+    {
+      "tool": "axr_db_callees_of",
+      "status": "PASS",
+      "detail": "got=[512, 768] expected=[512, 768]"
+    },
+    {
+      "tool": "axr_db_hot_functions",
+      "status": "PASS",
+      "detail": "got=[[512, 2], [768, 2]] expected=[[512, 2], [768, 2]]"
+    },
+    {
+      "tool": "axr_db_is_leaf_function",
+      "status": "PASS",
+      "detail": "got=True expected=True"
+    },
+    {
+      "tool": "axr_db_is_leaf_function",
+      "status": "PASS",
+      "detail": "got=False expected=False"
+    },
+    {
+      "tool": "axr_db_all_import_names",
+      "status": "PASS",
+      "detail": "got=['kernel32.dll!CreateFile', 'ntdll.dll!NtQuerySystemInformation'] expected=['kernel32.dll!CreateFile', 'ntdll.dll!NtQuerySystemInformation']"
+    },
+    {
+      "tool": "axr_db_all_strings",
+      "status": "PASS",
+      "detail": "got=['Hello, world!', 'error: invalid argument'] expected=['Hello, world!', 'error: invalid argument']"
+    },
+    {
+      "tool": "axr_db_to_json",
+      "status": "PASS",
+      "detail": "ok=True bytes=411"
+    },
+    {
+      "tool": "axr_graph_call_graph_stats",
+      "status": "PASS",
+      "detail": "got=(4,4) expected=(4,4)"
+    },
+    {
+      "tool": "axr_graph_reachable_from",
+      "status": "PASS",
+      "detail": "got=[256, 512, 768] count=3 expected=[256, 512, 768]"
+    },
+    {
+      "tool": "axr_graph_bfs_distances",
+      "status": "PASS",
+      "detail": "got={256: 0, 512: 1, 768: 1} expected={256: 0, 512: 1, 768: 1}"
+    },
+    {
+      "tool": "axr_graph_scc",
+      "status": "PASS",
+      "detail": "count=4 expected=4 all_singleton=True addrs=[256, 512, 768, 1024] expected_addrs=[256, 512, 768, 1024]"
+    },
+    {
+      "tool": "axr_graph_scc",
+      "status": "PASS",
+      "detail": "count=1 expected=1 size2_sccs=[[2560, 2816]]"
+    },
+    {
+      "tool": "axr_graph_topological_sort",
+      "status": "PASS",
+      "detail": "order=[1024, 256, 512, 768] is_valid=True"
+    },
+    {
+      "tool": "axr_graph_topological_sort",
+      "status": "PASS",
+      "detail": "order=None (expected null/None for cyclic graph)"
+    }
+  ],
+  "mismatches": []
+}

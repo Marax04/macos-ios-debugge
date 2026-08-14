@@ -1,0 +1,63 @@
+[
+  {
+    "tool": "pe_editor_xor_section",
+    "passed": true,
+    "expected": "74167232aaaaeeee",
+    "actual": "74167232aaaaeeee"
+  },
+  {
+    "tool": "pe_editor_cert_header_bytes",
+    "passed": true,
+    "expected": "0801000000020200",
+    "actual": "0801000000020200"
+  },
+  {
+    "tool": "pe_editor_rc4_process",
+    "passed": true,
+    "expected": "6c94ddeaf02ce21466789e97",
+    "actual": "6c94ddeaf02ce21466789e97"
+  },
+  {
+    "tool": "pe_editor_import_entry_display(named)",
+    "passed": true,
+    "expected": "kernel32.dll!VirtualAlloc",
+    "actual": "kernel32.dll!VirtualAlloc"
+  },
+  {
+    "tool": "pe_editor_import_entry_display(ordinal)",
+    "passed": true,
+    "expected": "kernel32.dll!#17",
+    "actual": "kernel32.dll!#17"
+  },
+  {
+    "tool": "pe_editor_patch_display",
+    "passed": true,
+    "expected": "Patch@0x1000[4]: nop sled",
+    "actual": "Patch@0x1000[4]: nop sled"
+  },
+  {
+    "tool": "pe_tools_compute_entropy(uniform)",
+    "passed": true,
+    "expected": 8.0,
+    "actual": 8.0
+  },
+  {
+    "tool": "pe_tools_compute_entropy(single-byte)",
+    "passed": true,
+    "expected": 0.0,
+    "actual": -0.0
+  },
+  {
+    "tool": "pe_tools_compute_entropy(arb)",
+    "passed": true,
+    "expected": 3.0,
+    "actual": 3.0
+  },
+  {
+    "tool": "pe_tools_compute_pe_checksum",
+    "passed": true,
+    "expected": 10813,
+    "actual": 10813,
+    "note": "idempotent after injecting computed checksum"
+  }
+]

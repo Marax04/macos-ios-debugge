@@ -1,0 +1,187 @@
+{
+  "category": "debug_windows",
+  "version": 3,
+  "date": "2026-07-11",
+  "validator": "C:/Users/Fra/AppData/Local/Temp/claude/C--Users-Fra-Desktop-RustRE/764a15c7-1c25-4bbe-bdd5-368fef428c0d/scratchpad/validate_debug_windows.py",
+  "summary": {
+    "tools_hardened": 22,
+    "total_test_cases": 60,
+    "passed": 60,
+    "failed": 0,
+    "errors": 0,
+    "mismatches": []
+  },
+  "tools": [
+    {
+      "tool": "debug_windows_is_committed",
+      "test_cases": [
+        {"args": {"state": 4096}, "expected_key": "is_committed", "expected": true, "status": "pass"},
+        {"args": {"state": 8192}, "expected_key": "is_committed", "expected": false, "status": "pass"},
+        {"args": {"state": 65536}, "expected_key": "is_committed", "expected": false, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_exception_name",
+      "test_cases": [
+        {"args": {"code": 2147483651}, "expected_key": "name", "expected": "EXCEPTION_BREAKPOINT", "status": "pass"},
+        {"args": {"code": 3221225477}, "expected_key": "name", "expected": "EXCEPTION_ACCESS_VIOLATION", "status": "pass"},
+        {"args": {"code": 2147483652}, "expected_key": "name", "expected": "EXCEPTION_SINGLE_STEP", "status": "pass"},
+        {"args": {"code": 3221226493}, "expected_key": "name", "expected": "EXCEPTION_STACK_OVERFLOW", "status": "pass"},
+        {"args": {"code": 305419896}, "expected_key": "name", "expected": "EXCEPTION_UNKNOWN", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_status_name",
+      "test_cases": [
+        {"args": {"code": 2147483651}, "expected_key": "name", "expected": "EXCEPTION_BREAKPOINT", "status": "pass"},
+        {"args": {"code": 3221226356}, "expected_key": "name", "expected": "STATUS_HEAP_CORRUPTION", "status": "pass"},
+        {"args": {"code": 3221226505}, "expected_key": "name", "expected": "STATUS_STACK_BUFFER_OVERRUN", "status": "pass"},
+        {"args": {"code": 1073741829}, "expected_key": "name", "expected": "DBG_CONTROL_C", "status": "pass"},
+        {"args": {"code": 305419896}, "expected_key": "name", "expected": "UNKNOWN_STATUS", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_is_continuable",
+      "test_cases": [
+        {"args": {"code": 2147483651}, "expected_key": "is_continuable", "expected": true, "status": "pass"},
+        {"args": {"code": 3221225509}, "expected_key": "is_continuable", "expected": false, "status": "pass"},
+        {"args": {"code": 3221225477}, "expected_key": "is_continuable", "expected": true, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_is_breakpoint_like",
+      "test_cases": [
+        {"args": {"code": 2147483651}, "expected_key": "is_breakpoint_like", "expected": true, "status": "pass"},
+        {"args": {"code": 2147483652}, "expected_key": "is_breakpoint_like", "expected": true, "status": "pass"},
+        {"args": {"code": 1073741829}, "expected_key": "is_breakpoint_like", "expected": true, "status": "pass"},
+        {"args": {"code": 3221225477}, "expected_key": "is_breakpoint_like", "expected": false, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_classify_exception",
+      "test_cases": [
+        {"args": {"code": 3221225477}, "expected_key": "class", "expected": "Memory", "status": "pass"},
+        {"args": {"code": 2147483651}, "expected_key": "class", "expected": "Debug", "status": "pass"},
+        {"args": {"code": 3221225620}, "expected_key": "class", "expected": "Arithmetic", "status": "pass"},
+        {"args": {"code": 3221225501}, "expected_key": "class", "expected": "Instruction", "status": "pass"},
+        {"args": {"code": 3221226493}, "expected_key": "class", "expected": "Stack", "status": "pass"},
+        {"args": {"code": 3221226356}, "expected_key": "class", "expected": "Heap", "status": "pass"},
+        {"args": {"code": 305419896}, "expected_key": "class", "expected": "Other", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_hwbp_condition_dr7",
+      "test_cases": [
+        {"args": {"condition": "execute"}, "expected_key": "dr7_cond", "expected": 0, "status": "pass"},
+        {"args": {"condition": "write"}, "expected_key": "dr7_cond", "expected": 1, "status": "pass"},
+        {"args": {"condition": "io_readwrite"}, "expected_key": "dr7_cond", "expected": 2, "status": "pass"},
+        {"args": {"condition": "readwrite"}, "expected_key": "dr7_cond", "expected": 3, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_hwbp_size_dr7",
+      "test_cases": [
+        {"args": {"size": "byte"}, "expected_key": "dr7_size", "expected": 0, "status": "pass"},
+        {"args": {"size": "word"}, "expected_key": "dr7_size", "expected": 1, "status": "pass"},
+        {"args": {"size": "dword"}, "expected_key": "dr7_size", "expected": 3, "status": "pass"},
+        {"args": {"size": "qword"}, "expected_key": "dr7_size", "expected": 2, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_wow64_trap_flag",
+      "notes": "TF is bit 8 of EFLAGS",
+      "test_cases": [
+        {"args": {"eflags": 256}, "expected_key": "trap_flag", "expected": true, "status": "pass"},
+        {"args": {"eflags": 0}, "expected_key": "trap_flag", "expected": false, "status": "pass"},
+        {"args": {"eflags": 770}, "expected_key": "trap_flag", "expected": true, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_wow64_set_trap_flag",
+      "test_cases": [
+        {"args": {"eflags": 0, "set": true}, "expected_key": "eflags_out", "expected": 256, "status": "pass"},
+        {"args": {"eflags": 511, "set": false}, "expected_key": "eflags_out", "expected": 255, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_protect_name",
+      "test_cases": [
+        {"args": {"protect": 4}, "expected_key": "name", "expected": "PAGE_READWRITE", "status": "pass"},
+        {"args": {"protect": 32}, "expected_key": "name", "expected": "PAGE_EXECUTE_READ", "status": "pass"},
+        {"args": {"protect": 1}, "expected_key": "name", "expected": "PAGE_NOACCESS", "status": "pass"},
+        {"args": {"protect": 258}, "expected_key": "name", "expected": "PAGE_READONLY", "status": "pass"},
+        {"args": {"protect": 0}, "expected_key": "name", "expected": "PAGE_NONE", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_region_perms",
+      "test_cases": [
+        {"args": {"state": 4096, "protect": 4}, "expected": {"is_committed": true, "readable": true, "writable": true, "executable": false}, "status": "pass"},
+        {"args": {"state": 4096, "protect": 32}, "expected": {"is_committed": true, "readable": true, "writable": false, "executable": true}, "status": "pass"},
+        {"args": {"state": 8192, "protect": 4}, "expected": {"is_committed": false, "readable": false, "writable": false, "executable": false}, "status": "pass"},
+        {"args": {"state": 4096, "protect": 1}, "expected": {"is_committed": true, "readable": false, "writable": false, "executable": false}, "status": "pass"},
+        {"args": {"state": 4096, "protect": 64}, "expected": {"is_committed": true, "readable": true, "writable": true, "executable": true}, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_memory_region_to_map",
+      "test_cases": [
+        {"args": {"base": 4096, "size": 4096, "state": 4096, "protect": 32, "type_": 131072}, "expected": {"base": 4096, "readable": true, "writable": false, "executable": true}, "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_exit_process",
+      "test_cases": [
+        {"args": {"exit_code": 42, "pid": 1234, "tid": 5678}, "expected": "stop_reason contains ProcessExit and 42", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_exit_thread",
+      "test_cases": [
+        {"args": {"tid": 99, "exit_code": 1, "pid": 1234}, "expected": "stop_reason contains ThreadExit and 99", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_create_thread",
+      "test_cases": [
+        {"args": {"tid": 77, "pid": 1234}, "expected": "stop_reason contains ThreadCreate and 77", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_load_dll",
+      "test_cases": [
+        {"args": {"base": 1879048192, "path": "C:\\test.dll", "pid": 1234, "tid": 5678}, "expected": "stop_reason contains LibraryLoad and test.dll", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_unload_dll",
+      "test_cases": [
+        {"args": {"base": 1879048192, "pid": 1234, "tid": 5678}, "expected": "stop_reason contains LibraryUnload and 0x70000000", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_decode_exception_full",
+      "test_cases": [
+        {"args": {"code": 2147483651, "address": 4198400, "is_first_chance": true, "pid": 1234, "tid": 5678}, "expected": "stop_reason contains Breakpoint and address 4198400", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_wow64_context_default",
+      "test_cases": [
+        {"args": {}, "expected": "all fields zero, trap_flag=false", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_wow64_context_to_register_set",
+      "test_cases": [
+        {"args": {"eax": 1, "ebx": 2, "ecx": 3, "edx": 4, "esp": 4096, "ebp": 8192, "eip": 4198400, "eflags": 512}, "expected": "pc=4198400,sp=4096,eax=1", "status": "pass"}
+      ]
+    },
+    {
+      "tool": "debug_windows_page_constants",
+      "test_cases": [
+        {"args": {}, "expected": "PAGE_NOACCESS=1,PAGE_READONLY=2,PAGE_READWRITE=4,MEM_COMMIT=4096", "status": "pass"}
+      ]
+    }
+  ]
+}

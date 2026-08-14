@@ -1,0 +1,17 @@
+{
+  "crate": "rustre-db",
+  "mcp_surface": "none",
+  "note": "rustre-db is a workspace library crate (SQLite connection pool, event store, index/migration managers, query builder, schema). It is NOT exposed via the MCP server: no references in crates/rustre-mcp-tools/src/ to db_connection, EventStore, DbIndexManager, DbMigrationManager, DbQueryBuilder, or rustre_db. JSON-RPC stdio comparison vs rustre-mcp.exe is therefore N/A.",
+  "validator": "validation/validators/rustre-db.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "functions_declared": 83,
+    "modules": ["db_connection", "db_events", "db_index_manager", "db_migration_manager", "db_query_builder", "db_schema"],
+    "source_cross_check": "All 83 declared functions located in crates/rustre-db/src/*.rs via regex impl+fn scan",
+    "missing_in_source": 0
+  },
+  "tests": 83,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

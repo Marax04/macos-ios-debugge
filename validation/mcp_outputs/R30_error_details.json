@@ -1,0 +1,428 @@
+[
+  {
+    "tool": "binary.info",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "binary.hexdump",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "binary.read",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "binary.search_bytes",
+    "input": {
+      "binary_id": "",
+      "pattern": ""
+    },
+    "message": "execution failed: invalid params: empty pattern"
+  },
+  {
+    "tool": "binary.search_strings",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "binary.entropy",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.full",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.function",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.basic_block",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.cross_refs",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.call_graph",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.strings",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.imports",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "analyze.exports",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "disasm.at",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "count": 5
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "disasm.function",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "decompile.function",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "decompile.rename_variable",
+    "input": {
+      "binary_id": "",
+      "func_addr": "",
+      "old_name": "",
+      "new_name": ""
+    },
+    "message": "execution failed: invalid params: invalid func_addr: "
+  },
+  {
+    "tool": "debug.launch",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: execution failed: failed to launch '': program path has no file name"
+  },
+  {
+    "tool": "debug.continue",
+    "input": {
+      "session_id": ""
+    },
+    "message": "execution failed: not found: debug session  not found"
+  },
+  {
+    "tool": "debug.set_breakpoint",
+    "input": {
+      "session_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: invalid params: missing 'address'"
+  },
+  {
+    "tool": "debug.remove_breakpoint",
+    "input": {
+      "session_id": "",
+      "bp_id": 0
+    },
+    "message": "execution failed: invalid params: missing 'bp_id'"
+  },
+  {
+    "tool": "debug.read_memory",
+    "input": {
+      "session_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "message": "execution failed: invalid params: missing 'binary_id'"
+  },
+  {
+    "tool": "debug.write_memory",
+    "input": {
+      "session_id": "",
+      "addr": 5368771180,
+      "data_base64": ""
+    },
+    "message": "execution failed: invalid params: missing 'binary_id'"
+  },
+  {
+    "tool": "yara.compile",
+    "input": {
+      "source": ""
+    },
+    "message": "execution failed: execution failed: YARA compile error: parse error at line 0: empty rule source"
+  },
+  {
+    "tool": "yara.scan_memory",
+    "input": {
+      "image_id": ""
+    },
+    "message": "execution failed: not found: image  not loaded"
+  },
+  {
+    "tool": "forensics.run_plugin",
+    "input": {
+      "image_id": "",
+      "plugin": ""
+    },
+    "message": "execution failed: not found: image  not loaded"
+  },
+  {
+    "tool": "kg.query",
+    "input": {
+      "sql": ""
+    },
+    "message": "execution failed: invalid params: Only SELECT statements are allowed in kg.query"
+  },
+  {
+    "tool": "kg.search",
+    "input": {
+      "text": ""
+    },
+    "message": "execution failed: invalid params: missing 'query'"
+  },
+  {
+    "tool": "kg.set_function_name",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "name": ""
+    },
+    "message": "execution failed: invalid params: missing 'addr'"
+  },
+  {
+    "tool": "kg.set_comment",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "text": ""
+    },
+    "message": "execution failed: invalid params: missing 'addr'"
+  },
+  {
+    "tool": "kg.get_function",
+    "input": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "message": "execution failed: invalid params: missing 'addr'"
+  },
+  {
+    "tool": "kg.list_functions",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "diff.compare",
+    "input": {
+      "a_id": "",
+      "b_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "crypto.identify",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "triage.analyze",
+    "input": {
+      "binary_id": ""
+    },
+    "message": "execution failed: not found: binary  not loaded"
+  },
+  {
+    "tool": "infer_types_path",
+    "input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "message": "execution failed: execution failed: invalid params: 'addresses' empty"
+  },
+  {
+    "tool": "type_propagate_path",
+    "input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "message": "execution failed: execution failed: invalid params: 'addresses' empty"
+  },
+  {
+    "tool": "type_infer",
+    "input": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "message": "execution failed: execution failed: invalid params: 'addresses' empty"
+  },
+  {
+    "tool": "patch_xor_region",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "length": 0,
+      "key": ""
+    },
+    "message": "execution failed: execution failed: invalid params: key: invalid hex byte string: empty input"
+  },
+  {
+    "tool": "patch_asm",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "asm": ""
+    },
+    "message": "execution failed: execution failed: internal error: patch_asm: unsupported asm mnemonic: "
+  },
+  {
+    "tool": "analysis_callees_path",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "message": "execution failed: execution failed: invalid params: missing 'function_address'"
+  },
+  {
+    "tool": "analysis_infer_types_path",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "message": "execution failed: execution failed: invalid params: missing 'function_address'"
+  },
+  {
+    "tool": "deobf_opaque_classify",
+    "input": {
+      "expression": "(x & y) + (x | y)",
+      "bits": 64
+    },
+    "message": "execution failed: execution failed: invalid params: opaque expr node must be an object"
+  },
+  {
+    "tool": "deobf_opaque_simplify",
+    "input": {
+      "expression": "(x & y) + (x | y)"
+    },
+    "message": "execution failed: execution failed: invalid params: opaque expr node must be an object"
+  },
+  {
+    "tool": "crypto_xor_decode",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "length": 0
+    },
+    "message": "execution failed: execution failed: invalid params: supply either 'key_hex' or 'auto=true'"
+  },
+  {
+    "tool": "analysis_trace_data_flow_path",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "direction": ""
+    },
+    "message": "execution failed: execution failed: invalid params: 'direction' must be 'backward' or 'forward'"
+  },
+  {
+    "tool": "diff_bindiff_similarity",
+    "input": {},
+    "message": "execution failed: execution failed: invalid params: missing 'a'"
+  },
+  {
+    "tool": "deobf_vmlift_lift_bytecode",
+    "input": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "message": "execution failed: execution failed: invalid params: lift error: Unknown opcode in bytecode"
+  },
+  {
+    "tool": "deobf_vmlift_pipeline",
+    "input": {
+      "bytecode": []
+    },
+    "message": "execution failed: execution failed: invalid params: pipeline error: bytecode buffer is empty \u2014 nothing to lift"
+  },
+  {
+    "tool": "macho_parse_header",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "message": "execution failed: execution failed: invalid params: not a Mach-O binary or header truncated"
+  },
+  {
+    "tool": "macho_parse_fat",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "message": "execution failed: execution failed: invalid params: not a FAT binary or header truncated"
+  },
+  {
+    "tool": "macho_load_commands",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "message": "execution failed: execution failed: invalid params: not a Mach-O binary or header truncated"
+  },
+  {
+    "tool": "macho_extract_dylibs",
+    "input": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "message": "execution failed: execution failed: invalid params: not a Mach-O binary or header truncated"
+  }
+]

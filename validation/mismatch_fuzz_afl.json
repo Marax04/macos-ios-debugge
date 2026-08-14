@@ -1,0 +1,17 @@
+{
+ "category": "fuzz_afl",
+ "tools_in_category": 22,
+ "checks_total": 7,
+ "checks_passed": 7,
+ "checks_skipped": 3,
+ "mismatches": [],
+ "tools_tested": [
+  "fuzz_afl_bit_flip_mutate",
+  "fuzz_afl_bitmap_summary[count_non_zero]",
+  "fuzz_afl_bitmap_summary[size]",
+  "fuzz_afl_bucket_hits",
+  "fuzz_afl_dict_info",
+  "fuzz_afl_dict_load",
+  "fuzz_afl_stats_parse"
+ ]
+}

@@ -1,0 +1,8 @@
+{
+  "category": "analysis_dataflow",
+  "tools_in_category": 14,
+  "checks_total": 17,
+  "checks_passed": 14,
+  "checks_skipped": 3,
+  "mismatches": []
+}

@@ -1,0 +1,110 @@
+{
+  "crate": "rustre-sandbox-extract",
+  "tests": 298,
+  "mcp_tools_available": 0,
+  "mismatches_count": 298,
+  "match": false,
+  "notes": "rustre-mcp.exe exposes 119 tools total, none related to rustre-sandbox-extract. The crate (behavior_extractor, c2_extractor, credential_harvester, crypto_key_finder, dropper_analysis, dropped_file_collector, file_artifact_collector, memory_artifact_dumper, network_artifact_extractor, sandbox_report_normalizer, malware_config_db, ransomware_detector, config_extractor, ransomware_analysis) has no MCP wire-up in rustre-mcp-tools/src/. Python validator smoke tests all pass (298 functions verified).",
+  "mismatches": [
+    {
+      "validator": "validator_file_op_histogram",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_reg_op_histogram",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_classify_ip",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_group_paths_by_parent",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_extract_iocs",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_extract_config",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_collect_artifacts",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_normalized_report_summary",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_normalized_report_has_signature_containing",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_normalized_report_unique_dst_ips",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_normalized_report_dns_queries",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_cuckoo",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_anyrun",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_triage",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_joe",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_hybrid",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_vt_behavior",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_sandbox_normalizer_normalize_generic",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    },
+    {
+      "validator": "validator_threat_level_from_score",
+      "mcp_tool": null,
+      "status": "no_mcp_counterpart"
+    }
+  ]
+}

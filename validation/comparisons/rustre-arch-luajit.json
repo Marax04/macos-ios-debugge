@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-arch-luajit",
+  "mcp_tools_found": [],
+  "note": "rustre-mcp-server does not expose any tools wired to rustre-arch-luajit (Grep on wire_tools.rs returned no matches). Crate is an internal arch backend used indirectly via generic disasm/analysis paths; no public MCP surface to compare. Validator runs as a stand-alone self-test of the documented bytecode/opcode behavior.",
+  "validator_self_test": "passed",
+  "tests": 0,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

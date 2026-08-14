@@ -1,0 +1,11 @@
+SIGPACK 1
+pack msvcrt-x64
+---
+4883EC28..............488D0D | 0 0 0000 9 | msvcrt | __security_init_cookie
+488B0D..............4881F900..............7510C3 | 0 0 0000 17 | msvcrt | __security_check_cookie
+4053488D0D..............488D05..............FF15 | 0 0 0000 18 | msvcrt | __scrt_common_main_seh
+4533C04C8D0D..............4533C9488D05 | 0 0 0000 14 | msvcrt | _initterm
+40534883EC2048895C24304885C97435488D0D | 0 0 0000 18 | msvcrt | malloc
+4053488D0D..............4885C97402FFD2 | 0 0 0000 14 | msvcrt | free
+4885C97411 | 0 0 0000 5 | msvcrt | _invalid_parameter_noinfo_noreturn
+40534883EC20488BD9E8 | 0 0 0000 10 | msvcrt | _CRT_INIT

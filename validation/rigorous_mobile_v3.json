@@ -1,0 +1,345 @@
+[
+  {
+    "tool": "mobile_registry_all",
+    "args": {},
+    "status": "PASS",
+    "expected": "backends list of mobile crate names",
+    "actual": "{\"backends\": [\"rustre-mobile-android\", \"rustre-mobile-apktool\", \"rustre-mobile-dyld\", \"rustre-mobile-ios\", \"rustre-mobile-ipa\", \"rustre-mobile-jadx\", \"rustre-mobile-smali\"], \"source\": \"rustre_mobile::registry::all\"}"
+  },
+  {
+    "tool": "mobile_registry_count",
+    "args": {},
+    "status": "PASS",
+    "expected": "count=7 (7 mobile backends)",
+    "actual": "{\"count\": 7, \"source\": \"rustre_mobile::registry::all\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_parse",
+    "args": {
+      "data_hex": "64796c645f763120202061726d363465000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "status": "PASS",
+    "expected": "magic='dyld_v1   arm64e', is_arm64=True",
+    "actual": "{\"magic\": \"dyld_v1   arm64e\", \"mapping_count\": 0, \"images_count\": 0, \"is_arm64\": true, \"platform_name\": \"unknown\", \"uuid\": \"00000000-0000-0000-0000-000000000000\", \"source\": \"rustre_mobile_dyld::DyldHeader::parse\"}"
+  },
+  {
+    "tool": "mobile_apktool_config_new",
+    "args": {
+      "apktool_path": "apktool",
+      "output_dir": "out"
+    },
+    "status": "PASS",
+    "expected": "config with default flags all False",
+    "actual": "{\"config\": {\"apktool_path\": \"apktool\", \"output_dir\": \"out\", \"no_src\": false, \"no_res\": false, \"force\": false}, \"source\": \"rustre_mobile_apktool::ApktoolConfig::new\"}"
+  },
+  {
+    "tool": "mobile_jadx_descriptor_to_type",
+    "args": {
+      "descriptor": "I"
+    },
+    "status": "PASS",
+    "expected": "I -> Int",
+    "actual": "{\"descriptor\": \"I\", \"type\": \"Int\", \"source\": \"rustre_mobile_jadx::descriptor_to_type\"}"
+  },
+  {
+    "tool": "mobile_jadx_descriptor_to_type",
+    "args": {
+      "descriptor": "V"
+    },
+    "status": "PASS",
+    "expected": "V -> Void",
+    "actual": "{\"descriptor\": \"V\", \"type\": \"Void\", \"source\": \"rustre_mobile_jadx::descriptor_to_type\"}"
+  },
+  {
+    "tool": "mobile_jadx_descriptor_to_type",
+    "args": {
+      "descriptor": "Ljava/lang/String;"
+    },
+    "status": "PASS",
+    "expected": "L -> Object",
+    "actual": "{\"descriptor\": \"Ljava/lang/String;\", \"type\": \"Object(\\\"java/lang/String\\\")\", \"source\": \"rustre_mobile_jadx::descriptor_to_type\"}"
+  },
+  {
+    "tool": "mobile_jadx_descriptor_to_type",
+    "args": {
+      "descriptor": "[B"
+    },
+    "status": "PASS",
+    "expected": "[B -> Array(Byte)",
+    "actual": "{\"descriptor\": \"[B\", \"type\": \"Array(Byte)\", \"source\": \"rustre_mobile_jadx::descriptor_to_type\"}"
+  },
+  {
+    "tool": "mobile_jadx_descriptor_to_type",
+    "args": {
+      "descriptor": ""
+    },
+    "status": "PASS",
+    "expected": "empty -> Unknown",
+    "actual": "{\"descriptor\": \"\", \"type\": \"Unknown\", \"source\": \"rustre_mobile_jadx::descriptor_to_type\"}"
+  },
+  {
+    "tool": "mobile_dyld_parse_dyld_magic",
+    "args": {
+      "data_hex": "64796c645f763120202061726d363465000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "status": "PASS",
+    "expected": "magic=dyld_v1   arm64e",
+    "actual": "{\"magic\": \"dyld_v1   arm64e\", \"source\": \"rustre_mobile_dyld::parse_dyld_magic\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_is_system_framework",
+    "args": {
+      "path": "/System/Library/x.dylib"
+    },
+    "status": "PASS",
+    "expected": "True for /System/Library/...",
+    "actual": "{\"is_system_framework\": true, \"path\": \"/System/Library/x.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::is_system_framework\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_is_system_framework",
+    "args": {
+      "path": "/usr/lib/libc.dylib"
+    },
+    "status": "PASS",
+    "expected": "True for /usr/lib/...",
+    "actual": "{\"is_system_framework\": true, \"path\": \"/usr/lib/libc.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::is_system_framework\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_is_system_framework",
+    "args": {
+      "path": "/private/tmp/app.dylib"
+    },
+    "status": "PASS",
+    "expected": "False for /private/tmp/...",
+    "actual": "{\"is_system_framework\": false, \"path\": \"/private/tmp/app.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::is_system_framework\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_is_swift_overlay",
+    "args": {
+      "path": "/usr/lib/swift/libswiftCore.dylib"
+    },
+    "status": "PASS",
+    "expected": "True for /usr/lib/swift/...",
+    "actual": "{\"is_swift_overlay\": true, \"path\": \"/usr/lib/swift/libswiftCore.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::is_swift_overlay\"}"
+  },
+  {
+    "tool": "mobile_dyld_image_is_swift_overlay",
+    "args": {
+      "path": "/usr/lib/libc.dylib"
+    },
+    "status": "PASS",
+    "expected": "False for non-swift path",
+    "actual": "{\"is_swift_overlay\": false, \"path\": \"/usr/lib/libc.dylib\", \"source\": \"rustre_mobile_dyld::DyldImage::is_swift_overlay\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_weak",
+    "args": {
+      "flags": 64
+    },
+    "status": "PASS",
+    "expected": "True for flags=0x40 (bit 6 set)",
+    "actual": "{\"is_weak\": true, \"flags\": 64, \"source\": \"rustre_mobile_dyld::DyldSymbol::is_weak\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_weak",
+    "args": {
+      "flags": 0
+    },
+    "status": "PASS",
+    "expected": "False for flags=0",
+    "actual": "{\"is_weak\": false, \"flags\": 0, \"source\": \"rustre_mobile_dyld::DyldSymbol::is_weak\"}"
+  },
+  {
+    "tool": "mobile_dyld_symbol_is_weak",
+    "args": {
+      "flags": 255
+    },
+    "status": "PASS",
+    "expected": "True for flags=0xFF (bit 6 set)",
+    "actual": "{\"is_weak\": true, \"flags\": 255, \"source\": \"rustre_mobile_dyld::DyldSymbol::is_weak\"}"
+  },
+  {
+    "tool": "mobile_dyld_header_uuid_string",
+    "args": {
+      "data_hex": "64796c645f763120202061726d363465000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "status": "PASS",
+    "expected": "uuid_string=00000000-0000-0000-0000-000000000000",
+    "actual": "{\"uuid_string\": \"00000000-0000-0000-0000-000000000000\", \"source\": \"rustre_mobile_dyld::DyldHeader::uuid_string\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_parsed_min_os",
+    "args": {},
+    "status": "PASS",
+    "expected": "min_os=[15, 0]",
+    "actual": "{\"min_os\": [15, 0], \"source\": \"rustre_mobile_ipa::InfoPlist::parsed_min_os\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_targets_iphone",
+    "args": {},
+    "status": "PASS",
+    "expected": "targets_iphone=True",
+    "actual": "{\"targets_iphone\": true, \"source\": \"rustre_mobile_ipa::InfoPlist::targets_iphone\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_codesign_flags",
+    "args": {},
+    "status": "PASS",
+    "expected": "is_developer_signed=True, is_adhoc=False",
+    "actual": "{\"is_developer_signed\": true, \"is_enterprise\": false, \"is_adhoc\": false, \"source\": \"rustre_mobile_ipa::CodeSignature\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_leaf_cert_apple",
+    "args": {},
+    "status": "PASS",
+    "expected": "apple_issued=True",
+    "actual": "{\"apple_issued\": true, \"subject\": \"Apple Development: Test Dev\", \"source\": \"rustre_mobile_ipa::CertInfo::is_apple_issued\"}"
+  },
+  {
+    "tool": "mobile_ipa_mock_binary_entries",
+    "args": {},
+    "status": "PASS",
+    "expected": "count=1, path=Payload/TestApp.app/TestApp",
+    "actual": "{\"binary_paths\": [\"Payload/TestApp.app/TestApp\"], \"count\": 1, \"source\": \"rustre_mobile_ipa::IpaPackage::binary_entries\"}"
+  },
+  {
+    "tool": "mobile_ipa_plist_read_string",
+    "args": {
+      "hex": "41424344454600",
+      "offset": 0
+    },
+    "status": "PASS",
+    "expected": "string field present (null for non-binary plist data)",
+    "actual": "{\"string\": null, \"source\": \"rustre_mobile_ipa::SimplePlistReader::read_string\"}"
+  },
+  {
+    "tool": "mobile_ipa_plist_find_key_value",
+    "args": {
+      "hex": "41424344454600",
+      "key": "CFBundleId"
+    },
+    "status": "PASS",
+    "expected": "value field present (null for non-binary plist data)",
+    "actual": "{\"value\": null, \"source\": \"rustre_mobile_ipa::SimplePlistReader::find_key_value\"}"
+  },
+  {
+    "tool": "mobile_ipa_plist_all_strings",
+    "args": {
+      "hex": "68656c6c6f00776f726c6400"
+    },
+    "status": "PASS",
+    "expected": "strings is a list (may be empty for non-standard data)",
+    "actual": "{\"strings\": [], \"count\": 0, \"source\": \"rustre_mobile_ipa::SimplePlistReader::all_strings\"}"
+  },
+  {
+    "tool": "mobile_ipa_info_plist_full_from_xml",
+    "args": {
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>com.test.App</string><key>CFBundleShortVersionString</key><string>1.0</string></dict></plist>"
+    },
+    "status": "PASS",
+    "expected": "info.bundle_id=com.test.App",
+    "actual": "{\"info\": {\"bundle_id\": \"com.test.App\", \"bundle_name\": \"\", \"bundle_version\": \"1.0\", \"min_os_version\": \"\", \"platform\": \"iPhoneOS\", \"supported_devices\": [], \"required_capabilities\": [], \"url_schemes\": [], \"background_modes\": []}, \"source\": \"rustre_mobile_ipa::InfoPlistFull::from_xml\"}"
+  },
+  {
+    "tool": "mobile_ipa_entitlements_from_plist",
+    "args": {
+      "hex": "00"
+    },
+    "status": "PASS",
+    "expected": "entitlements field present (empty/default for non-plist data)",
+    "actual": "{\"entitlements\": {\"application_identifier\": null, \"keychain_access_groups\": [], \"team_identifier\": null, \"get_task_allow\": false, \"aps_environment\": null, \"associated_domains\": []}, \"source\": \"rustre_mobile_ipa::Entitlements::from_plist\"}"
+  },
+  {
+    "tool": "mobile_jadx_cli_config_default",
+    "args": {},
+    "status": "PASS",
+    "expected": "jadx_path='jadx', deobfuscate=False",
+    "actual": "{\"jadx_path\": \"jadx\", \"deobfuscate\": false, \"no_res\": false, \"show_bad\": false, \"source\": \"rustre_mobile_jadx::CliJadxConfig::default\"}"
+  },
+  {
+    "tool": "mobile_jadx_cli_find_in_path",
+    "args": {},
+    "status": "PASS",
+    "expected": "found=null (jadx not in PATH)",
+    "actual": "{\"found\": null, \"source\": \"rustre_mobile_jadx::CliJadxRunner::find_jadx_in_path\"}"
+  },
+  {
+    "tool": "mobile_jadx_native_decompile_method",
+    "args": {
+      "instructions": [
+        "return-void"
+      ]
+    },
+    "status": "PASS",
+    "expected": "pseudo code contains 'return'",
+    "actual": "{\"source_len\": 79, \"pseudo\": \"// Decompiled by NativeDexDecompiler (no JADX)\\n// C.m\\nvoid m() {\\n    return;\\n}\\n\", \"source\": \"rustre_mobile_jadx::NativeDexDecompiler::decompile_method\"}"
+  },
+  {
+    "tool": "mobile_apktool_mock_decode",
+    "args": {
+      "apk": "test.apk",
+      "out": "out"
+    },
+    "status": "PASS",
+    "expected": "success=True, smali_count=2",
+    "actual": "{\"success\": true, \"smali_count\": 2, \"res_dir\": \"out/res\", \"source\": \"rustre_mobile_apktool::MockApktoolRunner::decode\"}"
+  },
+  {
+    "tool": "mobile_apktool_mock_build",
+    "args": {
+      "dir": "out",
+      "out": "test_new.apk"
+    },
+    "status": "PASS",
+    "expected": "success=True",
+    "actual": "{\"success\": true, \"apk_path\": \"test_new.apk/dist/app.apk\", \"source\": \"rustre_mobile_apktool::MockApktoolRunner::build\"}"
+  },
+  {
+    "tool": "mobile_apktool_cli_with_path",
+    "args": {
+      "path": "apktool"
+    },
+    "status": "PASS",
+    "expected": "apktool_path='apktool'",
+    "actual": "{\"apktool_path\": \"apktool\", \"source\": \"rustre_mobile_apktool::CliApktoolRunner::with_path\"}"
+  },
+  {
+    "tool": "mobile_smali_class_find_method",
+    "args": {
+      "class": "LFoo;",
+      "method": "<init>"
+    },
+    "status": "PASS",
+    "expected": "found=True for <init> in mock class",
+    "actual": "{\"method\": \"<init>\", \"found\": true, \"instr_count\": 2, \"source\": \"rustre_mobile_smali::SmaliClass::find_method\"}"
+  },
+  {
+    "tool": "mobile_smali_class_find_method",
+    "args": {
+      "class": "LFoo;",
+      "method": "execute"
+    },
+    "status": "PASS",
+    "expected": "found=True for execute in mock class",
+    "actual": "{\"method\": \"execute\", \"found\": true, \"instr_count\": 2, \"source\": \"rustre_mobile_smali::SmaliClass::find_method\"}"
+  },
+  {
+    "tool": "mobile_smali_class_find_method",
+    "args": {
+      "class": "LFoo;",
+      "method": "does_not_exist"
+    },
+    "status": "PASS",
+    "expected": "found=False for does_not_exist",
+    "actual": "{\"method\": \"does_not_exist\", \"found\": false, \"instr_count\": 0, \"source\": \"rustre_mobile_smali::SmaliClass::find_method\"}"
+  },
+  {
+    "tool": "mobile_smali_class_static_methods",
+    "args": {
+      "class": "LFoo;"
+    },
+    "status": "PASS",
+    "expected": "count=1, names=['execute']",
+    "actual": "{\"count\": 1, \"names\": [\"execute\"], \"source\": \"rustre_mobile_smali::SmaliClass::static_methods\"}"
+  }
+]

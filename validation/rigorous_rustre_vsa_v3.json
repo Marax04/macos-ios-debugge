@@ -1,0 +1,123 @@
+{
+  "category": "rustre_vsa",
+  "version": "v3",
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "rustre_vsa_valueset_interval",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"lo": 10, "hi": 100}, "check_key": "display", "expected": "[0xa, 0x64]/1"},
+        {"args": {"lo": 42, "hi": 42}, "check_key": "display", "expected": "{0x2a}"}
+      ],
+      "reference": "Python: if lo==hi => Concrete([lo]) else Range{lo,hi,stride=1}; display: {0xNN} for singleton, [lo,hi]/stride for range"
+    },
+    {
+      "tool": "rustre_vsa_valueset_strided",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"lo": 0, "hi": 100, "stride": 4}, "check_key": "display", "expected": "[0x0, 0x64]/4"}
+      ],
+      "reference": "Python: stride=max(stride,1); if lo==hi => singleton else Range"
+    },
+    {
+      "tool": "rustre_vsa_valueset_add",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"a": [1, 2], "b": [10]}, "check_key": "display", "expected": "{0xb, 0xc}"}
+      ],
+      "reference": "Python: Concrete x Concrete pairwise add, sorted, display as {0xNN, ...}"
+    },
+    {
+      "tool": "rustre_vsa_valueset_sub",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"a": [20, 30], "b": [5]}, "check_key": "display", "expected": "{0xf, 0x19}"}
+      ],
+      "reference": "Python: Concrete x Concrete pairwise sub"
+    },
+    {
+      "tool": "rustre_vsa_valueset_bitwise_and",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"a": [255, 15], "b": [240]}, "check_key": "display", "expected": "{0x0, 0xf0}"}
+      ],
+      "reference": "Python: Concrete x Concrete pairwise &"
+    },
+    {
+      "tool": "rustre_vsa_valueset_bitwise_or",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"a": [15], "b": [240]}, "check_key": "display", "expected": "{0xff}"}
+      ],
+      "reference": "Python: Concrete x Concrete pairwise |"
+    },
+    {
+      "tool": "rustre_vsa_valueset_contains",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"vals": [1, 2, 3], "v": 2}, "check_key": "contains", "expected": true}
+      ],
+      "reference": "Python: v in vals"
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_singleton",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"v": 42}, "checks": {"display": "{0x2a}", "lo": 42, "hi": 42, "is_singleton": true}}
+      ],
+      "reference": "Python: StridedInterval{lo:v, hi:v, stride:1}; display {0xNN}"
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_join",
+      "status": "PASS",
+      "test_cases": [
+        {
+          "args": {"a_lo": 2, "a_hi": 8, "a_stride": 2, "b_lo": 5, "b_hi": 15, "b_stride": 5},
+          "check_key": "display",
+          "expected": "[0x2, 0xf]/1",
+          "note": "join normalises stride via gcd(gcd(s1,s2),|b.lo-a.lo|)"
+        }
+      ],
+      "reference": "Python: lo=min(a.lo,b.lo); hi=max(a.hi,b.hi); stride=gcd(gcd(s1,s2),|b.lo-a.lo|); snap hi"
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_widen",
+      "status": "PASS",
+      "test_cases": [
+        {
+          "args": {"a_lo": 0, "a_hi": 10, "a_stride": 1, "b_lo": 0, "b_hi": 20, "b_stride": 1},
+          "check_key": "display",
+          "expected": "⊤",
+          "note": "hi expands to MAX => top"
+        }
+      ],
+      "reference": "Python: lo=0 if new.lo<old.lo else old.lo; hi=MAX if new.hi>old.hi else old.hi; => TOP when lo=0,hi=MAX"
+    },
+    {
+      "tool": "rustre_vsa_is_definitely_null",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"lo": 0, "hi": 0, "stride": 1}, "check_key": "is_definitely_null", "expected": true},
+        {"args": {"lo": 5, "hi": 5, "stride": 1}, "check_key": "is_definitely_null", "expected": false}
+      ],
+      "reference": "Python: is_singleton(si) and si.lo==0"
+    },
+    {
+      "tool": "rustre_vsa_may_be_out_of_bounds",
+      "status": "PASS",
+      "test_cases": [
+        {"args": {"lo": 10, "hi": 20, "stride": 1, "base": 5, "limit": 25}, "check_key": "may_be_out_of_bounds", "expected": false, "note": "10>=5 and 20<25 => in bounds"},
+        {"args": {"lo": 10, "hi": 30, "stride": 1, "base": 5, "limit": 25}, "check_key": "may_be_out_of_bounds", "expected": true, "note": "30>=25 => out of bounds"}
+      ],
+      "reference": "Python: if bottom=>false; if top=>true; else si.lo<base or si.hi>=limit"
+    }
+  ],
+  "summary": {
+    "total_tools": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "mismatches": []
+  }
+}

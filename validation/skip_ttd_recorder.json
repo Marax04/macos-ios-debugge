@@ -1,0 +1,9 @@
+{
+  "category": "ttd_recorder",
+  "skips": [
+    {
+      "tool": "ttd_recorder_validation_is_perfect",
+      "reason": "Requires a real .run TTD trace file on disk \u2014 no deterministic fixture available"
+    }
+  ]
+}

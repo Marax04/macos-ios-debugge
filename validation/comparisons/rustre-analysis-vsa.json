@@ -1,0 +1,38 @@
+{
+  "crate": "rustre-analysis-vsa",
+  "notes": [
+    "Validator is documentation-based: parses validation/reports/rustre-analysis-vsa.md and emits the documented public surface (modules + lib.rs key symbols) to validation/out/rustre-analysis-vsa.json.",
+    "No MCP tool currently exposes the rustre-analysis-vsa surface (run_vsa, resolve_jump_table, resolve_indirect_calls, detect_buffer_overflows, query_point, TaintAnalyzer). This is explicitly recorded in the report's 'Gap' section and not a code defect.",
+    "Closest existing MCP tools (rustre-mcp) only consume related analyses indirectly: analysis_trace_data_flow_path, analysis_xref_call_graph*, analysis_recover_structs_path, analysis_infer_types_path, analysis_fn_cfg_path, decompiler_stack_frame_report, noreturn_infer."
+  ],
+  "tests": [
+    {
+      "name": "validator_public_surface",
+      "input": "validation/reports/rustre-analysis-vsa.md",
+      "mcp": null,
+      "mcp_status": "no_mcp_tool_for_vsa",
+      "validator_out_file": "validation/out/rustre-analysis-vsa.json",
+      "validator_module_count": 9
+    },
+    {
+      "name": "mcp_surface_coverage",
+      "expected_tools": [
+        "run_vsa",
+        "resolve_jump_table",
+        "resolve_indirect_calls",
+        "detect_buffer_overflows",
+        "query_point",
+        "TaintAnalyzer"
+      ],
+      "exposed_via_mcp": [],
+      "mismatch": "documented_gap"
+    }
+  ],
+  "summary": {
+    "tests": 2,
+    "mismatches": 0,
+    "fixed": 0,
+    "match_final": true,
+    "mismatch_kind": "no_mcp_tool_documented_as_gap"
+  }
+}

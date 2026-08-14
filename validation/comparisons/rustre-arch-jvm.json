@@ -1,0 +1,47 @@
+{
+  "crate": "rustre-arch-jvm",
+  "mcp_tools_relevant": ["analysis_disasm_at_path_jvm"],
+  "validator_self_tests": "passed (18/18)",
+  "tests_run": [
+    {
+      "name": "validator_self_tests",
+      "result": "passed",
+      "count": 18,
+      "covers": [
+        "decode iconst_0/bipush/goto/goto_w/invokeinterface",
+        "decode reserved 0xCA, truncated",
+        "decode wide iload (4 bytes), wide iinc (6 bytes)",
+        "tableswitch padding pc=0 (size 24)",
+        "ClassFileHeader::decode (CAFEBABE/minor/major)",
+        "parse_method_descriptor (IJLjava/lang/String;)V",
+        "FieldDescriptor::parse [I",
+        "ConstantPoolTag Long is_wide",
+        "JvmArch constants (name=jvm, ptr=4, Big)",
+        "cyclomatic complexity, count_invocations, count_allocations"
+      ]
+    },
+    {
+      "name": "mcp_analysis_disasm_at_path_jvm_raw_blob",
+      "input_path": "scratchpad/test.class (bytes CAFEBABE 00000034)",
+      "address": 0,
+      "count": 4,
+      "mcp_outputs": [
+        {"addr": "0x0", "byte": "ca", "result": "error: reserved or implementation-defined opcode: 0xca"},
+        {"addr": "0x1", "byte": "fe", "result": "error: reserved or implementation-defined opcode: 0xfe"},
+        {"addr": "0x2", "byte": "ba", "mnemonic": "invokedynamic", "length": 5},
+        {"addr": "0x7", "byte": "34", "mnemonic": "caload", "length": 1}
+      ],
+      "validator_outputs": [
+        {"bytes": "ca", "expected": {"error": "Reserved"}},
+        {"bytes": "fe", "expected": {"error": "Reserved"}},
+        {"bytes": "ba000000003400", "expected": {"mnemonic": "invokedynamic", "size": 5}},
+        {"bytes": "34", "expected": {"mnemonic": "caload", "size": 1}}
+      ],
+      "result": "match"
+    }
+  ],
+  "mismatches": [],
+  "overlap_analysis": "Only analysis_disasm_at_path_jvm reaches the crate (wire_tools.rs:7531). MCP requires a file on disk; we synthesized a minimal raw blob (CAFEBABE000000 34) which the generic loader accepts as Unknown but the disassembler walks linearly. For the 4 reachable byte positions (0xCA, 0xFE, 0xBA invokedynamic, 0x34 caload), MCP-reported (mnemonic, size, error class) match validator (mnemonic, size, error). Validator self-tests pass 18/18. No behavioural mismatch observed; no crate fix required.",
+  "fixed": 0,
+  "match_final": true
+}

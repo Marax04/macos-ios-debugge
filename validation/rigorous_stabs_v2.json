@@ -1,0 +1,390 @@
+{
+  "summary": {
+    "tools_hardened": 6,
+    "tests_run": 54,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mismatches": [],
+  "all_results": [
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 132
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 160
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 224
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 248
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_name_for",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "f"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "F"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "g"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "s"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "r"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "p"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "t"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "T"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "v"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_type_code_from_char",
+      "args": {
+        "ch": "x"
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 36
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 32
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 38
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 64
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 160
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 100
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 68
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_symbol",
+      "args": {
+        "n_type": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 36
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 32
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 100
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 132
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 130
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 162
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 68
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 70
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 72
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 76
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 192
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 224
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 0
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_category",
+      "args": {
+        "n_type": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 100
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 132
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 130
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 162
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 36
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 68
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_source_file",
+      "args": {
+        "n_type": 1
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 68
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 70
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 72
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 76
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 36
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 100
+      },
+      "status": "PASS"
+    },
+    {
+      "tool": "stabs_is_line_number",
+      "args": {
+        "n_type": 1
+      },
+      "status": "PASS"
+    }
+  ]
+}

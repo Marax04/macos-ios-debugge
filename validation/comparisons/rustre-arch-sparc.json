@@ -1,0 +1,36 @@
+{
+  "crate": "rustre-arch-sparc",
+  "notes": "MCP exposes only `analysis_disasm_at_path` with arch='sparc' (path-aware disassembly via capstone, requiring a loaded binary with mapped sections). All validator functions (encoders, branch-target math, register window helpers, trap/condition/ASI tables, prologue/epilogue, leaf classifier, delay-slot detect, NOP/save/restore detection) are pure-math/internal helpers in the crate and are NOT exposed via the MCP surface. End-to-end MCP disasm not run: no SPARC ELF/binary sample available under the repository (no *sparc* samples).",
+  "mcp_tools_relevant": [
+    "analysis_disasm_at_path (arch=sparc)"
+  ],
+  "validator_outputs": {
+    "encode_nop()": 16777216,
+    "is_nop(0x01000000)": true,
+    "encode_call(0x1000)": 1073742848,
+    "encode_sethi(rd=1,imm22=0x12345)": 50406213,
+    "encode_bicc(ba,annul=false,disp=0x100)": 276824128,
+    "encode_jmpl(rs1=31,simm13=8,rd=0)": 2177359880,
+    "synth_mov_reg(8,9)": 2450522120,
+    "synth_clr(8)": 2416967680,
+    "build_return_seq()": [2177359880, 2179465216],
+    "build_prologue(96)": 2648948640,
+    "is_save(prologue(96))": true,
+    "reg_name(14)": "%fp",
+    "reg_name(30)": "%fp",
+    "freg_name(5)": "%f5",
+    "branch_target_call(0x1000, call+0x40)": 4160,
+    "total_physical_regs(8)": 136,
+    "classify_leaf([nop])": "Leaf",
+    "lookup_v8_trap(0x05)": "window_overflow",
+    "lookup_v9_trap(0x24)": "clean_window",
+    "lookup_condition(0x8)": "ba",
+    "lookup_asi(0x80)": "ASI_PRIMARY",
+    "has_delay_slot(call)": true
+  },
+  "mcp_outputs": {},
+  "mismatches": [],
+  "tests": 22,
+  "fixed": 0,
+  "match_final": true
+}

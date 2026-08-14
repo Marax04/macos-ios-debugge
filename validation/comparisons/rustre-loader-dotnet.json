@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-dotnet",
+  "tests_run": 15,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "validator_result": {"fixed": 15, "mismatches": 0},
+  "notes": [
+    "Nessun tool MCP loader_dotnet_* dedicato esiste in crates/rustre-mcp-tools/src (grep su loader_dotnet|dotnet_ non trova nulla). Le primitive del validator (has_clr_header, is_dotnet/BSJB scan, parse_method_body_header tiny+fat, read_compressed_uint ECMA 1/2/4-byte, decode_type_def_or_ref coded index, runtime_version_display, DotnetArch attrs, default base 0x00400000) sono funzioni interne del crate rustre-loader-dotnet, non endpoint JSON-RPC.",
+    "Stesso pattern di rustre-loader-pe, rustre-loader-elf, rustre-loader-macho: il dispatch del validator opera su input sintetici (PE costruiti, blob bytes) che nessun tool MCP accetta direttamente. Confronto MCP vs validator non applicabile 1:1.",
+    "Validator eseguito standalone: 15/15 PASS, 0 mismatch -> le primitive CIL/.NET sono coerenti con la spec ECMA-335 attesa.",
+    "Nessun fix da applicare al workspace; nessuna ricompilazione necessaria."
+  ]
+}

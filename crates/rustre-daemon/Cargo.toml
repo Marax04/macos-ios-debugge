@@ -1,0 +1,61 @@
+﻿[package]
+license.workspace = true
+name = "rustre-daemon"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rustre-daemon"
+path = "src/main.rs"
+
+[lib]
+name = "rustre_daemon"
+path = "src/lib.rs"
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-mcp-server = { path = "../rustre-mcp-server" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }
+bytes = { workspace = true }
+toml = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+uuid = { workspace = true }
+rand = { version = "0.8", features = ["getrandom"] }
+subtle = "2"
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+# Required: Windows OpenProcess/GetExitCodeProcess/OwnedHandle::from_raw_handle
+# are inherent FFI/unsafe operations. Every unsafe block has a SAFETY comment.
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"

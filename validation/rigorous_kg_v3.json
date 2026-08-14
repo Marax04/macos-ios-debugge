@@ -1,0 +1,22 @@
+{
+  "module": "kg",
+  "session": "2026-07-11",
+  "note": "All kg tools were fully hardened in rigorous_kg_v2.json (45 checks, 0 failures). No new kg.* tools found in rustre-mcp-server/src/lib.rs beyond the 7 already covered. This file records that the kg category is 100% covered with no additional work required.",
+  "tools_hardened": [
+    "kg.annotate",
+    "kg.set_function_name",
+    "kg.set_comment",
+    "kg.get_function",
+    "kg.list_functions",
+    "kg.query",
+    "kg.search"
+  ],
+  "tools_hardened_count": 7,
+  "new_tools_hardened_count": 0,
+  "checks_total": 45,
+  "checks_passed": 45,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "skipped": []
+}

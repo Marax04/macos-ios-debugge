@@ -1,0 +1,17 @@
+{
+  "crate": "rustre-emu",
+  "tests": 4,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Il crate rustre-emu espone interpreter strutturali (SimpleInterpreter x86, ArmThumbInterpreter, Mips32Interpreter), HeapEmulator, TaintEmulator, OsSyscallModel, LibraryStubEngine, backends_registry, mem_provider. Il server MCP (crates/rustre-mcp-tools/src/tool_catalog.rs) espone una sola tool emulation: 'emulate_function' che usa Unicorn (categoria ToolCategory::Emulation, tag 'emulate'). Nessun tool MCP wrappa la superficie pubblica di rustre-emu (SimpleInterpreter run, HeapEmulator malloc/free/double-free detection, linux_syscall_group, is_stubbed/stub_module, encode_itype, all_backends, find_provider). Il validator Python e' uno skeleton strutturale che mirrora l'API: non implementa semantica reale eseguibile compatibile con Unicorn. Confronto MCP-vs-validator behavioral non eseguibile. Self-test validator: OK (mov eax,0x41; hlt -> eax=0x41 HALT; HeapEmulator double_free detection; linux_syscall_group('read')==FILE_IO; is_stubbed('malloc'); encode_itype). Gap MCP gia' implicito: i wrapper interpreter/heap/taint del crate non sono esposti via MCP.",
+  "tests_run": [
+    "SimpleInterpreter: mov eax,0x41; hlt -> eax==0x41, reason==HALT",
+    "HeapEmulator: malloc(64)+free(addr)+free(addr) -> DOUBLE_FREE",
+    "linux_syscall_group('read') == FILE_IO; is_stubbed('malloc')==True; stub_module('LoadLibraryA')=='kernel32'",
+    "encode_itype(0x23,1,2,0x100) matches MIPS I-type bit layout"
+  ],
+  "mcp_tools_in_scope": ["emulate_function (Unicorn-backed, non confrontabile col skeleton)"],
+  "gap": "missing_mcp_tools:simple_interpreter_run,heap_emulator_*,taint_emulator_*,syscall_model_*,library_stub_call,backends_registry_list,mem_provider_list"
+}

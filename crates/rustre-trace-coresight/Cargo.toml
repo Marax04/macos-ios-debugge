@@ -1,0 +1,21 @@
+[package]
+license.workspace = true
+name = "rustre-trace-coresight"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+parking_lot = { workspace = true }
+libc = "0.2"
+
+[lints]
+workspace = true

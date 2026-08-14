@@ -1,0 +1,19 @@
+{
+  "crate": "rustre-analysis-typerecov",
+  "tests_run": 8,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": "Validator tests internal algebraic invariants (signature registry confidence, type_var_of determinism/monotonicity, union-find Eq/PointerOf/Size with conflict detection, struct recovery field layout, to_c_decl shape, merge idempotence, x86 mem-access displacement extraction). The crate's MCP surface (decompiler_recover_structs, analysis_recover_structs_path, decompiler_stack_frame_report) operates over real binaries rather than these primitives, so direct 1:1 MCP-vs-validator pairing is not applicable. Cross-checked instead against the crate's own unit tests: 76 passed / 0 failed in --release. Validator self-test output matches expected outcomes (sig_high=High, sig_medium=Medium, sig_low_absent=Low; uf_eq resolves all 3 vars to size=4; uf_conflict reports size conflict 4 vs 8; recover yields one struct with two 4-byte fields at offsets 0,4; merge idempotent=true).",
+  "tests": [
+    {"name": "sig_high",        "validator": "High",   "rust_unit": "High",   "match": true},
+    {"name": "sig_medium",      "validator": "Medium", "rust_unit": "Medium", "match": true},
+    {"name": "sig_low_absent",  "validator": "Low",    "rust_unit": "Low",    "match": true},
+    {"name": "type_var_of_determinism_monotonicity", "validator": "ok", "rust_unit": "ok", "match": true},
+    {"name": "unifier_transitive_eq",                "validator": "ok", "rust_unit": "ok", "match": true},
+    {"name": "unifier_size_conflict",                "validator": "error", "rust_unit": "error", "match": true},
+    {"name": "recover_structs_all_two_fields",       "validator": "ok", "rust_unit": "ok", "match": true},
+    {"name": "merge_structs_idempotent",             "validator": "true", "rust_unit": "true", "match": true}
+  ]
+}

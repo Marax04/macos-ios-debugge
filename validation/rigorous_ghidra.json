@@ -1,0 +1,7 @@
+{
+  "module": "ghidra",
+  "tools_hardened": 27,
+  "checks_passed": 35,
+  "checks_failed": 0,
+  "mismatches": []
+}

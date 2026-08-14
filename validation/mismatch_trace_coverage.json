@@ -1,0 +1,8 @@
+{
+  "category": "trace_coverage",
+  "tools_in_category": 52,
+  "checks_total": 52,
+  "checks_passed": 0,
+  "checks_skipped": 52,
+  "mismatches": []
+}

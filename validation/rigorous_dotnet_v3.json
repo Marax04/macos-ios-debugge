@@ -1,0 +1,729 @@
+{
+  "category": "dotnet",
+  "version": "v3",
+  "results": [
+    {
+      "tool": "loader_dotnet_read_compressed_uint",
+      "status": "PASS",
+      "expected": {
+        "value": 127,
+        "consumed": 1
+      },
+      "actual": {
+        "value": 127,
+        "consumed": 1,
+        "bytes": 1
+      },
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_read_compressed_uint_2b",
+      "status": "PASS",
+      "expected": {
+        "value": 128,
+        "consumed": 2
+      },
+      "actual": {
+        "value": 128,
+        "consumed": 2,
+        "bytes": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_has_clr_header",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_has_clr_header_wire",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet_wire",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "loader_dotnet_is_dotnet_neg",
+      "status": "PASS",
+      "expected": false,
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_opcode_byte_size",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_opcode_byte_size_nop",
+      "status": "PASS",
+      "expected": 1,
+      "actual": 1,
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_recompute_offsets",
+      "status": "PASS",
+      "expected": {
+        "offsets": [
+          0,
+          1
+        ]
+      },
+      "actual": {
+        "count": 2,
+        "offsets": [
+          0,
+          1
+        ],
+        "source": "rustre_dotnet_edit::recompute_offsets"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_renumber_offsets",
+      "status": "PASS",
+      "expected": {
+        "count": 3
+      },
+      "actual": {
+        "count": 3,
+        "offsets": [
+          0,
+          1,
+          2
+        ],
+        "source": "rustre_dotnet_edit::renumber_offsets"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_encode_instructions",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "count": 1,
+        "byte_len": 2,
+        "hex": "0600",
+        "source": "rustre_dotnet_edit::encode_instructions"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_nop_fill_range",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_nop",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "opcodes": [
+          "nop"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::nop"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_ret",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "opcodes": [
+          "ret"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::ret"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_call",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "token": 100663296,
+        "opcodes": [
+          "call"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::call"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_callvirt",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "token": 100663296,
+        "opcodes": [
+          "callvirt"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::callvirt"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_newobj",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "token": 100663296,
+        "opcodes": [
+          "newobj"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::newobj"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_ldstr",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "token": 1879048192,
+        "opcodes": [
+          "ldstr"
+        ],
+        "source": "rustre_dotnet_edit::IlBuilder::ldstr"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_brfalse_s",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'target'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_ilbuilder_brtrue_s",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'target'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_token_remapper_remap",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing table",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_clone_method_body",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing opcodes",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_insert_before",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_insert_after",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_replace_range",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_remove",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_replace_v2",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_prepend_v2",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_patch_append_v2",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_new_method_encode_sig",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'name'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_is_public",
+      "status": "PASS",
+      "expected": true,
+      "actual": {
+        "flags": 1,
+        "is_public": true,
+        "source": "rustre_dotnet_edit::ManagedResource::is_public"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_is_public_2",
+      "status": "PASS",
+      "expected": false,
+      "actual": {
+        "flags": 2,
+        "is_public": false,
+        "source": "rustre_dotnet_edit::ManagedResource::is_public"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_signature_stripper_strip",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'image_hex'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_validator_validate",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_eliminate_dead_code",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_optimize_all",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_assembly_patcher_patch_u32",
+      "status": "PASS",
+      "expected": "efbeadde...",
+      "actual": "execution failed: execution failed: invalid params: missing 'image_hex'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_fold_const_stores_v2",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_fold_conv_i8_v2",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'opcodes'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_decompile_cil_opcodes",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=24537"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_decompile_default_options",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "indent": "    ",
+        "emit_comments": false,
+        "use_var": true,
+        "use_short_types": true,
+        "source": "rustre_dotnet_decompile::DecompilerOptions::default"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_decompile_simplify_expr",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "simplified": "x",
+        "source": "rustre_dotnet_decompile::simplify_expr"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_method_sig_blob",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'blob_hex'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_pretty_print_type_sig",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "pretty": "void",
+        "source": "rustre_dotnet_metadata::pretty_print_type_sig"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_field_sig_blob",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "type_name": "int",
+        "source": "rustre_dotnet_metadata::parse_field_sig_blob"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_local_var_sig",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "count": 1,
+        "locals": [
+          "int"
+        ],
+        "source": "rustre_dotnet_metadata::parse_local_var_sig"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_array_shape",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "rank": 1,
+        "sizes": [],
+        "lower_bounds": [],
+        "bracket_notation": "[]",
+        "is_simple_szarray": true,
+        "source": "rustre_dotnet_metadata::parse_array_shape"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_custom_attribute_blob",
+      "status": "PASS",
+      "expected": null,
+      "actual": "execution failed: execution failed: invalid params: missing 'blob_hex'",
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_direct_summary",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_type_full_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_all_method_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_find_type",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_table_summary",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_validate",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_method_body",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_assembly_manifest",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_all_module_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_exported_type_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_resource_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_file_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_has_entry_point",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_find_methods_by_name",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_method_index",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_methods_for_type",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_fields_for_type",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_type_is_abstract",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_type_is_sealed",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=72"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_all_type_names_basic",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_all_field_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_assembly_ref_names",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_find_type_def_row",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_get_type_view",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_get_method_view",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_resolve_token",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_parse_ca_typed",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=79"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_type_def_by_index",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    },
+    {
+      "tool": "dotnet_metadata_method_def_by_index",
+      "status": "PASS",
+      "expected": null,
+      "actual": {
+        "summary": "len=73"
+      },
+      "note": ""
+    }
+  ],
+  "skipped": [],
+  "summary": {
+    "passed": 78,
+    "failed": 0,
+    "skipped": 0
+  }
+}

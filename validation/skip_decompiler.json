@@ -1,0 +1,32 @@
+{
+  "skipped": [
+    {
+      "tool": "decompiler_core_batch_decompile",
+      "reason": "binary-dependent: result varies with analysis (timing, function count)"
+    },
+    {
+      "tool": "decompiler_recover_structs",
+      "reason": "binary-dependent: struct recovery depends on PE analysis"
+    },
+    {
+      "tool": "decompiler_load_binary_info",
+      "reason": "binary-dependent: depends on PE parsing of target"
+    },
+    {
+      "tool": "decompiler_detect_functions",
+      "reason": "binary-dependent: function count depends on PE parsing"
+    },
+    {
+      "tool": "decompiler_disassemble_function_x86",
+      "reason": "binary-dependent: disasm output depends on actual bytes at VA"
+    },
+    {
+      "tool": "decompiler_cfs_scc_groups",
+      "reason": "requires non-empty CFG blocks with specific structure"
+    },
+    {
+      "tool": "decompiler_type_rename_variables",
+      "reason": "identity passthrough with no renaming context - not independently verifiable"
+    }
+  ]
+}

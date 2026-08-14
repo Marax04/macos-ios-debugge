@@ -1,0 +1,150 @@
+[
+  {
+    "tool": "lua_loader_lua_proto_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_all_strings_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_stats_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_disassemble_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_chunk_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_const_is_string",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_source_line",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_chunk_from_proto",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_arch_info",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_upvalue_desc_from_upvalue",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_all_strings_direct",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_total_instructions_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_const_type_counts_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_chunk_from_proto_fields_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_stats_from_proto_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_proto_walker_count_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_constant_index_get_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_disassemble_proto_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_opcode_layout",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_opcode_layout_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_opcode_layout",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_module_parse",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_proto_stats_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_disassemble_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_chunk_from_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_module_disasm_mock",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_read_string",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_loader_can_load",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_bytecode_loader_load",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_bytecode_parse",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_endian_to_core",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_header_to_endian",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_read_string_lua",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_is_lua_bytecode",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_header_parse",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_bc_header_parse",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  },
+  {
+    "tool": "lua_loader_lua_const_is_string_wx1",
+    "reason": "mock/internal-state-dependent or already covered by parallel test"
+  }
+]

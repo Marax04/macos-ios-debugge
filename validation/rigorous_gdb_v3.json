@@ -1,0 +1,10 @@
+{
+  "category": "gdb",
+  "note": "All 29 gdb_* tool names from wire_tools.rs were already fully covered in rigorous_gdb_v2.json (38 hardened checks + 4 skipped). No new tools to add.",
+  "tools_hardened": 0,
+  "tools_passed": 0,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "already_covered_by": "rigorous_gdb_v2.json"
+}

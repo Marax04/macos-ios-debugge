@@ -1,0 +1,506 @@
+{
+  "module": "mem",
+  "tools_hardened": 53,
+  "tools_passed": 53,
+  "tools_failed": 0,
+  "tools_skipped": 7,
+  "checks_passed": 66,
+  "checks_failed": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "mem_page_align_up",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771184,
+      "actual": 5368771184
+    },
+    {
+      "tool": "mem_page_align_down",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_page_index",
+      "status": "PASS",
+      "key": "page_index",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_page_containing",
+      "status": "PASS",
+      "key": "start",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_page_containing",
+      "status": "PASS",
+      "key": "end",
+      "expected": 5368771184,
+      "actual": 5368771184
+    },
+    {
+      "tool": "mem_page_range_indices",
+      "status": "PASS",
+      "key": "first_page_index",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_page_range_indices",
+      "status": "PASS",
+      "key": "last_page_index",
+      "expected": 671096407,
+      "actual": 671096407
+    },
+    {
+      "tool": "mem_shannon_entropy",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 3.0,
+      "actual": 3.0
+    },
+    {
+      "tool": "mem_shannon_entropy",
+      "status": "PASS",
+      "key": "len",
+      "expected": 64,
+      "actual": 64
+    },
+    {
+      "tool": "mem_shannon_entropy_wire",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 3.0,
+      "actual": 3.0
+    },
+    {
+      "tool": "mem_shannon_entropy_v3",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 4.321928094887363,
+      "actual": 4.321928094887363
+    },
+    {
+      "tool": "mem_shannon_entropy_v3",
+      "status": "PASS",
+      "key": "len",
+      "expected": 80,
+      "actual": 80
+    },
+    {
+      "tool": "mem_kx7_shannon_entropy_hex",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 4.321928094887363,
+      "actual": 4.321928094887363
+    },
+    {
+      "tool": "mem_kx7_shannon_entropy_len",
+      "status": "PASS",
+      "key": "len",
+      "expected": 80,
+      "actual": 80
+    },
+    {
+      "tool": "mem_ma_shannon_entropy_bytes_v4",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 4.321928094887363,
+      "actual": 4.321928094887363
+    },
+    {
+      "tool": "mem_shannon_entropy_from_bytes_v5",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 4.321928094887363,
+      "actual": 4.321928094887363
+    },
+    {
+      "tool": "mem_diff_bytes",
+      "status": "PASS",
+      "key": "count",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "mem_diff_bytes",
+      "status": "PASS",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "mem_kx7_diff_bytes_span_count",
+      "status": "PASS",
+      "key": "span_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "mem_diff_bytes_v3",
+      "status": "PASS",
+      "key": "span_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "mem_kx7_diff_bytes_total_len",
+      "status": "PASS",
+      "key": "total_len",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "tool": "mem_kx7_diff_bytes_change_ratio",
+      "status": "PASS",
+      "key": "ratio",
+      "expected": 0.25,
+      "actual": 0.25
+    },
+    {
+      "tool": "mem_diff_bytes_span_count_wire",
+      "status": "PASS",
+      "key": "span_count",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "mem_diff_bytes_at_base_wire2",
+      "status": "PASS",
+      "key": "span_count",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "mem_diff_bytes_total_changed_wire",
+      "status": "PASS",
+      "key": "total_changed",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "mem_kx7_diff_bytes_first_len",
+      "status": "PASS",
+      "key": "first_len",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "mem_kx7_diff_bytes_last_end",
+      "status": "PASS",
+      "key": "last_end",
+      "expected": -1,
+      "actual": -1
+    },
+    {
+      "tool": "mem_kx7_page_align_up",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771184,
+      "actual": 5368771184
+    },
+    {
+      "tool": "mem_kx7_page_align_down",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_kx7_page_index",
+      "status": "PASS",
+      "key": "page_index",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_kx7_page_containing",
+      "status": "PASS",
+      "key": "start",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_kx7_page_range_indices",
+      "status": "PASS",
+      "key": "first",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_kx7_page_range_indices",
+      "status": "PASS",
+      "key": "last",
+      "expected": 671096407,
+      "actual": 671096407
+    },
+    {
+      "tool": "mem_kx7_page_align_roundtrip",
+      "status": "PASS",
+      "key": "equal",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_kx7_page_span_count",
+      "status": "PASS",
+      "key": "pages",
+      "expected": 5,
+      "actual": 5
+    },
+    {
+      "tool": "mem_kx7_page_align_up_batch",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": [
+        5368771184,
+        5368771184,
+        5368771192
+      ],
+      "actual": [
+        5368771184,
+        5368771184,
+        5368771192
+      ]
+    },
+    {
+      "tool": "mem_page_align_up_v5",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771184,
+      "actual": 5368771184
+    },
+    {
+      "tool": "mem_page_align_down_v5",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_page_index_v5",
+      "status": "PASS",
+      "key": "index",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_page_containing_v5",
+      "status": "PASS",
+      "key": "page_base",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_page_range_indices_v5",
+      "status": "PASS",
+      "key": "first",
+      "expected": 671096397,
+      "actual": 671096397
+    },
+    {
+      "tool": "mem_shannon_entropy_from_bytes_v5",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 4.321928094887363,
+      "actual": 4.321928094887363
+    },
+    {
+      "tool": "mem_page_align_up_v3",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771184,
+      "actual": 5368771184
+    },
+    {
+      "tool": "mem_page_align_down_v3",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": 5368771176,
+      "actual": 5368771176
+    },
+    {
+      "tool": "mem_entropy_classify",
+      "status": "PASS",
+      "key": "classification",
+      "expected": "low (likely text/code)",
+      "actual": "low (likely text/code)"
+    },
+    {
+      "tool": "mem_entropy_classify_value_wire",
+      "status": "PASS",
+      "key": "classification",
+      "expected": "low (likely text/code)",
+      "actual": "low (likely text/code)"
+    },
+    {
+      "tool": "mem_entropy_block_classify_bytes_v4",
+      "status": "PASS",
+      "key": "classification",
+      "expected": "zero",
+      "actual": "zero"
+    },
+    {
+      "tool": "mem_entropy_block_classify_bytes_v4",
+      "status": "PASS",
+      "key": "entropy",
+      "expected": 3.0,
+      "actual": 3.0
+    },
+    {
+      "tool": "mem_perms_from_rwx",
+      "status": "PASS",
+      "key": "readable",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_perms_from_rwx",
+      "status": "PASS",
+      "key": "writable",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_perms_from_rwx",
+      "status": "PASS",
+      "key": "executable",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_perms_from_rwx",
+      "status": "PASS",
+      "key": "writable",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "mem_shannon_entropy_max_block_wire",
+      "status": "PASS",
+      "key": "max_entropy",
+      "expected": 3.0,
+      "actual": 3.0
+    },
+    {
+      "tool": "mem_page_align_up_many_wire",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": [
+        5368771184,
+        5368771184,
+        5368771192
+      ],
+      "actual": [
+        5368771184,
+        5368771184,
+        5368771192
+      ]
+    },
+    {
+      "tool": "mem_page_align_down_many_wire",
+      "status": "PASS",
+      "key": "aligned",
+      "expected": [
+        5368771176,
+        5368771176,
+        5368771184
+      ],
+      "actual": [
+        5368771176,
+        5368771176,
+        5368771184
+      ]
+    },
+    {
+      "tool": "mem_page_index_many_wire",
+      "status": "PASS",
+      "key": "indices",
+      "expected": [
+        671096397,
+        671096397,
+        671096398
+      ],
+      "actual": [
+        671096397,
+        671096397,
+        671096398
+      ]
+    },
+    {
+      "tool": "mem_kx7_snapshotdiff_json_roundtrip",
+      "status": "PASS",
+      "key": "roundtrip_regions",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "mem_virtual_provider_read_u8_v5",
+      "status": "PASS",
+      "key": "value",
+      "expected": 222,
+      "actual": 222
+    },
+    {
+      "tool": "mem_virtual_provider_read_u32_le_v5",
+      "status": "PASS",
+      "key": "value",
+      "expected": 4022250974,
+      "actual": 4022250974
+    },
+    {
+      "tool": "mem_virtual_provider_read_u64_le_v5",
+      "status": "PASS",
+      "key": "value",
+      "expected": 3684526140862410206,
+      "actual": 3684526140862410206
+    },
+    {
+      "tool": "mem_null_provider_read_v5",
+      "status": "PASS",
+      "key": "read_errored",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_region_kind_list",
+      "status": "PASS",
+      "key": "count",
+      "expected": 19,
+      "actual": 19
+    },
+    {
+      "tool": "mem_kx7_bytepattern_valid",
+      "status": "PASS",
+      "key": "valid",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "mem_kx7_bytepattern_valid",
+      "status": "PASS",
+      "key": "valid",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_ma_byte_pattern_exact_v4",
+      "status": "PASS",
+      "key": "matches",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "mem_ma_byte_pattern_exact_v4",
+      "status": "PASS",
+      "key": "matches",
+      "expected": false,
+      "actual": false
+    }
+  ]
+}

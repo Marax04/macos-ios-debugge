@@ -1,0 +1,17 @@
+{
+  "category": "vsa",
+  "skipped_tools": [
+    {
+      "tool": "analysis_vsa_resolve_jump_table",
+      "reason": "Requires live binary analysis session with a valid function VA in the loaded project. The result depends on the specific binary's CFG and is not independently computable from stdlib primitives."
+    },
+    {
+      "tool": "analysis_vsa_resolve_indirect_calls",
+      "reason": "Requires live binary analysis session with a valid function VA in the loaded project. Output is nondeterministic across binaries and depends on pointer analysis convergence."
+    },
+    {
+      "tool": "analysis_vsa_detect_buffer_overflows",
+      "reason": "Requires live binary analysis session with a valid function VA. Output depends on the specific binary's memory access patterns and cannot be independently verified with stdlib alone."
+    }
+  ]
+}

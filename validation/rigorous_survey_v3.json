@@ -1,0 +1,56 @@
+{
+  "category": "survey",
+  "generated": "2026-07-11",
+  "target_binary": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+  "tools": [
+    {
+      "tool": "survey_binary",
+      "status": "pass",
+      "method": "Python struct-module PE header parse vs MCP tool output",
+      "reference_fields": {
+        "file_size": 1244160,
+        "file_kind": "Pe64",
+        "section_count": 5,
+        "is_dll": false,
+        "is_64bit": true,
+        "bits": 64,
+        "endian": "little",
+        "entry_point_rva": 991340,
+        "image_base": 5368709120
+      },
+      "actual_loader": {
+        "kind": "Pe64",
+        "format": "PE",
+        "arch": "X64",
+        "bits": 64,
+        "endian": "little",
+        "entry_point": 5369700460,
+        "image_base": 5368709120,
+        "is_dll": false,
+        "is_64bit": true,
+        "checksum": 1263036,
+        "section_count": 5,
+        "import_count": 106,
+        "export_count": 0
+      },
+      "mismatches": [],
+      "checks_performed": [
+        "file_size",
+        "file_kind",
+        "loader.section_count",
+        "loader.is_dll",
+        "loader.is_64bit",
+        "loader.bits",
+        "loader.endian",
+        "loader.image_base",
+        "loader.entry_point (image_base + rva)"
+      ]
+    }
+  ],
+  "summary": {
+    "tools_hardened": 1,
+    "tools_passed": 1,
+    "tools_failed": 0,
+    "tools_skipped": 0
+  }
+}

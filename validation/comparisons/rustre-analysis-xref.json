@@ -1,0 +1,92 @@
+{
+  "crate": "rustre-analysis-xref",
+  "tests": [
+    {
+      "name": "E8_rel32@base",
+      "mcp": {
+        "addr": 4198400,
+        "count": 1,
+        "xrefs": [
+          {
+            "from": 4198400,
+            "to": 4198421,
+            "kind": "Call",
+            "instr_len": 5
+          }
+        ],
+        "callees": [
+          4198421
+        ]
+      },
+      "validator": [
+        {
+          "from": 4198400,
+          "to": 4198421,
+          "kind": "CodeCall",
+          "instr_size": 5,
+          "tag": null
+        }
+      ]
+    },
+    {
+      "name": "E9_rel32",
+      "mcp": {
+        "addr": 4198400,
+        "count": 1,
+        "xrefs": [
+          {
+            "from": 4198400,
+            "to": 4198437,
+            "kind": "Jump",
+            "instr_len": 5
+          }
+        ],
+        "callees": []
+      },
+      "validator": [
+        {
+          "from": 4198400,
+          "to": 4198437,
+          "kind": "CodeJump",
+          "instr_size": 5,
+          "tag": null
+        }
+      ]
+    },
+    {
+      "name": "E8_get_xrefs_to_target",
+      "mcp": {
+        "addr": 4198421,
+        "count": 1,
+        "xrefs": [
+          {
+            "from": 4198400,
+            "to": 4198421,
+            "kind": "Call",
+            "instr_len": 5
+          }
+        ],
+        "callers": [
+          4198400
+        ]
+      },
+      "validator_expect": [
+        {
+          "from": 4198400,
+          "to": 4198421,
+          "kind": "CodeCall"
+        }
+      ]
+    },
+    {
+      "name": "path_from_at_text_base",
+      "validator_total_in_text": 318810,
+      "mcp_at_base": {
+        "path": "C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe",
+        "address": 5368713216,
+        "count": 0,
+        "xrefs_from": []
+      }
+    }
+  ]
+}

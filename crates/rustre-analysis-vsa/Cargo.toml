@@ -1,0 +1,23 @@
+﻿[package]
+license.workspace = true
+name = "rustre-analysis-vsa"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-analysis = { path = "../rustre-analysis" }
+rustre-core = { path = "../rustre-core" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+petgraph = { workspace = true }
+async-trait = { workspace = true }
+
+[lints]
+workspace = true

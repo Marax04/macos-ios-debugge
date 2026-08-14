@@ -1,0 +1,145 @@
+[
+  {
+    "tool": "adf_lattice_value_meet_top",
+    "status": "PASS",
+    "args": {
+      "x": 7
+    },
+    "expected": "('const', 7)",
+    "actual": "('const', 7)"
+  },
+  {
+    "tool": "adf_lattice_value_meet_equal",
+    "status": "PASS",
+    "args": {
+      "a": 42
+    },
+    "expected": "('const', 42)",
+    "actual": "('const', 42)"
+  },
+  {
+    "tool": "adf_lattice_value_meet_different",
+    "status": "PASS",
+    "args": {
+      "a": 1,
+      "b": 2
+    },
+    "expected": "True",
+    "actual": "True"
+  },
+  {
+    "tool": "adf_statement_new",
+    "status": "PASS",
+    "args": {
+      "id": 5,
+      "def": "x",
+      "uses": [
+        "a",
+        "b"
+      ]
+    },
+    "expected": "{'id': 5, 'def': 'x', 'uses': ['a', 'b'], 'expr': None}",
+    "actual": "{'id': 5, 'def': 'x', 'uses': ['a', 'b'], 'expr': None}"
+  },
+  {
+    "tool": "adf_statement_with_expr",
+    "status": "PASS",
+    "args": {
+      "id": 3,
+      "expr": "a+b"
+    },
+    "expected": "{'id': 3, 'def': None, 'uses': [], 'expr': 'a+b'}",
+    "actual": "{'id': 3, 'expr': 'a+b'}"
+  },
+  {
+    "tool": "adf_linear_cfg_node_count",
+    "status": "PASS",
+    "args": {
+      "n": 4
+    },
+    "expected": "{'node_count': 4, 'entry': 0, 'exit': 3}",
+    "actual": "{'node_count': 4, 'entry': 0, 'exit': 3}"
+  },
+  {
+    "tool": "adf_compute_dominators_chain",
+    "status": "PASS",
+    "args": {
+      "n": 4
+    },
+    "expected": "[0, 0, 1, 2]",
+    "actual": "[0, 0, 1, 2]"
+  },
+  {
+    "tool": "adf_postorder_chain",
+    "status": "PASS",
+    "args": {
+      "n": 4
+    },
+    "expected": "[3, 2, 1, 0]",
+    "actual": "[3, 2, 1, 0]"
+  },
+  {
+    "tool": "adf_dominators_from_edges",
+    "status": "PASS",
+    "args": {
+      "n": 4,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "entry": 0
+    },
+    "expected": "[0, 0, 1, 2]",
+    "actual": "[0, 0, 1, 2]"
+  },
+  {
+    "tool": "adf_trace_callers_backward_simple",
+    "status": "PASS",
+    "args": {
+      "addr": 100,
+      "hops": 2,
+      "edges": [
+        [
+          200,
+          100
+        ],
+        [
+          300,
+          200
+        ]
+      ]
+    },
+    "expected": "2",
+    "actual": "2"
+  },
+  {
+    "tool": "adf_trace_callees_forward_simple",
+    "status": "PASS",
+    "args": {
+      "addr": 100,
+      "hops": 2,
+      "edges": [
+        [
+          100,
+          200
+        ],
+        [
+          200,
+          300
+        ]
+      ]
+    },
+    "expected": "2",
+    "actual": "2"
+  }
+]

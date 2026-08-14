@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-ole",
+  "tests_run": 14,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Validator rustre-loader-ole.py e' uno self-test stdlib: sintetizza un OLE2/CFB v3 minimale (header 512B + 1 FAT sector + 1 directory sector con Root Entry) e verifica (a) presenza dei simboli pubblici dichiarati nel report (is_ole, OLE_MAGIC, OleHeader, OleDirectoryEntry, OleFile, OleArch, OleLoader, OleStream, OleMacroExtractor, CfbReader, CfbDirEntry) in crates/rustre-loader-ole/src/lib.rs, (b) costanti strutturali dell'OLE sintetico (magic D0CF11E0A1B11AE1, sector_shift=9 -> 512, mini_sector_shift=6 -> 64, DIFAT[0]=0). Esito: saved=true, errors assenti.",
+    "Nessun tool MCP dedicato loader_ole_* esiste in crates/rustre-mcp-tools (grep su loader_ole / loader-ole = 0 match). Le API pubbliche del crate (is_ole, OleLoader, CfbReader, OleMacroExtractor, ...) non sono esposte come endpoint JSON-RPC su rustre-mcp.exe.",
+    "I tool MCP generici (binary_info, triage_analyze, analyze_strings, project_open, ...) non accettano un OLE/CFB sintetico in-memory ne' restituiscono i campi OLE-specifici (sector_shift, mini_cutoff, directory entries con type=5/2/1, macro streams) in forma confrontabile 1:1 con l'output del validator.",
+    "Conclusione coerente con rustre-loader-console / rustre-loader-pe / rustre-loader-elf / rustre-loader-macho: confronto MCP vs validator NON applicabile per questo crate. Nessun mismatch reale, nessun fix da applicare al workspace.",
+    "Verifica collaterale: cargo build -p rustre-loader-ole --release completa pulito (no warnings, no errors)."
+  ]
+}

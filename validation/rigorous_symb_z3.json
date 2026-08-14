@@ -1,0 +1,24 @@
+{
+  "module": "symb_z3",
+  "tools_hardened": 15,
+  "hardened_list": [
+    "symb_z3_concat_bw",
+    "symb_z3_const_bit_width",
+    "symb_z3_emit_smtlib2_const",
+    "symb_z3_eval_and_const",
+    "symb_z3_eval_concrete_add",
+    "symb_z3_eval_lshr_const",
+    "symb_z3_eval_mul",
+    "symb_z3_eval_or_const",
+    "symb_z3_eval_shl_const",
+    "symb_z3_eval_sub_const",
+    "symb_z3_eval_ult_const",
+    "symb_z3_eval_xor",
+    "symb_z3_extract_bit_width",
+    "symb_z3_parse_check_sat_raw",
+    "symb_z3_zero_ext_bw"
+  ],
+  "checks_passed": 58,
+  "checks_failed": 0,
+  "mismatches": []
+}

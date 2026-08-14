@@ -1,0 +1,7 @@
+{
+  "module": "events",
+  "tools_hardened": 12,
+  "checks_passed": 12,
+  "checks_failed": 0,
+  "mismatches": []
+}

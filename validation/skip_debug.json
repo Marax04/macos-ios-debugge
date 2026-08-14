@@ -1,0 +1,246 @@
+[
+  {
+    "tool": "debug_macos_macho_header_parse",
+    "reason": "Requires correct Mach-O binary magic (CAFEBABE/FEEDFACE/FEEDFACF); test input is arbitrary bytes that will not parse to a valid header."
+  },
+  {
+    "tool": "debug_macos_fat_header_parse",
+    "reason": "Requires valid FAT binary (magic 0xCAFEBABE)."
+  },
+  {
+    "tool": "debug_macos_parse_load_commands",
+    "reason": "Requires valid Mach-O header before load commands."
+  },
+  {
+    "tool": "debug_macos_extract_dylibs",
+    "reason": "Requires valid Mach-O with LC_LOAD_DYLIB commands."
+  },
+  {
+    "tool": "debug_macos_extract_uuid",
+    "reason": "Requires valid Mach-O with LC_UUID command."
+  },
+  {
+    "tool": "debug_macos_mach_exception_from_u32",
+    "reason": "Signal mapping from XNU source is implementation-specific and partially undocumented; cannot safely assert signal numbers."
+  },
+  {
+    "tool": "debug_macos_mach_exception_to_signal",
+    "reason": "Same reason as debug_macos_mach_exception_from_u32."
+  },
+  {
+    "tool": "debug_macos_mach_exception_type_is_fatal",
+    "reason": "Fatality is policy-level; mapping cannot be derived from headers alone."
+  },
+  {
+    "tool": "debug_macos_mach_vm_protection_as_raw",
+    "reason": "Default constructor behaviour depends on Rust struct defaults; as_raw=0 may be correct but is not independently verifiable."
+  },
+  {
+    "tool": "debug_macos_mac_mem_perm_from_unix_str",
+    "reason": "Parser accepts 'rwx' etc. but 'default' is not a valid perm string; null result is expected but the null-case is not independently verifiable."
+  },
+  {
+    "tool": "debug_macos_dyld_image_name",
+    "reason": "Name extraction from path is path-splitting logic; result == input path on Windows is trivially correct but the rule (last component vs full path) differs between macOS and Windows; skip to avoid false positives."
+  },
+  {
+    "tool": "debug_macos_macho_section_qualified_name",
+    "reason": "Already verified via debug_macos_macho_section_is_code and debug_macos_macho_section_qualified_name tests above."
+  },
+  {
+    "tool": "debug_macos_process_describe",
+    "reason": "Returns live process data or synthetic struct; nondeterministic."
+  },
+  {
+    "tool": "debug_macos_process_table_enumerate",
+    "reason": "Lists running processes; nondeterministic."
+  },
+  {
+    "tool": "debug_macos_dyld_image_list_find",
+    "reason": "Searches a live dyld image list; nondeterministic."
+  },
+  {
+    "tool": "debug_macos_dyld_image_rebased",
+    "reason": "Already covered by arithmetic check above."
+  },
+  {
+    "tool": "debug_macos_breakpoint_manager_round_trip",
+    "reason": "Round-trip test exercises internal Rust serialisation; cannot reproduce Rust serde output in Python without the schema."
+  },
+  {
+    "tool": "debug_macos_arm64_register_index",
+    "reason": "Name->index mapping depends on Apple private register table ordering."
+  },
+  {
+    "tool": "debug_macos_x86_register_index",
+    "reason": "Same as arm64_register_index."
+  },
+  {
+    "tool": "debug_macos_stop_reason_address",
+    "reason": "Depends on variant; would require knowing stop_reason structure."
+  },
+  {
+    "tool": "debug_macos_thread_list_ops",
+    "reason": "Stateful thread list with complex operations; not verifiable."
+  },
+  {
+    "tool": "debug_macos_vm_region_contains",
+    "reason": "Boolean containment; trivially true but depends on exact size arithmetic that duplicates debug_macos_mach_vm_region_end which is already covered."
+  },
+  {
+    "tool": "debug_macos_vm_region_describe",
+    "reason": "Formatting depends on Rust Display impl."
+  },
+  {
+    "tool": "debug_macos_vm_region_map_ops",
+    "reason": "Stateful map operations; nondeterministic order."
+  },
+  {
+    "tool": "debug_macos_mach_vm_protection_to_unix_str",
+    "reason": "Unix perm string from macOS protection bits; already verified via debug_macos_vm_prot_decode which includes as_str."
+  },
+  {
+    "tool": "debug_macos_mach_vm_region_is_writable",
+    "reason": "Duplicate of vm_prot bit check already covered."
+  },
+  {
+    "tool": "debug_frida_v2_manager_lifecycle",
+    "reason": "Complex state machine test; final state depends on Rust internal session tracking order."
+  },
+  {
+    "tool": "debug_frida_simulate_hook_hit_detached",
+    "reason": "Simulates a hook hit on a detached session; records_after=0 is trivially correct but the semantics of 'simulate' are internal."
+  },
+  {
+    "tool": "debug_linux_procmaps_parse_line",
+    "reason": "Parser output for arbitrary 'test line data' is implementation-defined; no independent /proc/maps line format reference used here."
+  },
+  {
+    "tool": "debug_unicorn_symbol_table_resolve",
+    "reason": "Depends on symbol table contents loaded at runtime."
+  },
+  {
+    "tool": "debug_unicorn_symbol_table_format",
+    "reason": "Same as symbol_table_resolve."
+  },
+  {
+    "tool": "debug_unicorn_thread_simulate",
+    "reason": "Complex multi-thread state machine; nondeterministic."
+  },
+  {
+    "tool": "debug_unicorn_thread_simulator_scheduling",
+    "reason": "Same as thread_simulate."
+  },
+  {
+    "tool": "debug_unicorn_v2_debugger_emulate",
+    "reason": "Full CPU emulation; result depends on binary code at start..end range."
+  },
+  {
+    "tool": "debug_unicorn_patch_record_new",
+    "reason": "size=0 because 'default' is not valid hex; nondeterministic on bad input."
+  },
+  {
+    "tool": "debug_unicorn_hook_record_describe",
+    "reason": "Formatting depends on hook record fields."
+  },
+  {
+    "tool": "debug_unicorn_emulate_steps",
+    "reason": "Full emulation; nondeterministic."
+  },
+  {
+    "tool": "debug_unicorn_v2_config_presets",
+    "reason": "Config presets are implementation-defined."
+  },
+  {
+    "tool": "debug_unicorn_coverage_granularity_align",
+    "reason": "Alignment semantics depend on internal granularity constants."
+  },
+  {
+    "tool": "debug_unicorn_coverage_granularity_align_v2",
+    "reason": "Same as v1."
+  },
+  {
+    "tool": "debug_unicorn_coverage_map_ratio_v2",
+    "reason": "Ratio depends on total expected coverage count which varies."
+  },
+  {
+    "tool": "debug_unicorn_mapped_region_contains_v2",
+    "reason": "Containment check depends on internal region table."
+  },
+  {
+    "tool": "debug_unicorn_region_perms_flags_v2",
+    "reason": "v2 API; perms interpretation may differ from v1."
+  },
+  {
+    "tool": "debug_unicorn_fault_rule_should_fire",
+    "reason": "Rule evaluation depends on fault rule format."
+  },
+  {
+    "tool": "debug_unicorn_fault_rule_should_fire_v2",
+    "reason": "Same as v1."
+  },
+  {
+    "tool": "debug_unicorn_fault_injector_fire_v2",
+    "reason": "Stateful injector; nondeterministic."
+  },
+  {
+    "tool": "debug_unicorn_watch_kind_matches_v2",
+    "reason": "Watch kind enum matching; implementation-defined."
+  },
+  {
+    "tool": "debug_unicorn_watchpoint_probe",
+    "reason": "Watchpoint evaluation; nondeterministic."
+  },
+  {
+    "tool": "debug_unicorn_memory_mapper_map_v2",
+    "reason": "Memory mapper; stateful."
+  },
+  {
+    "tool": "debug_unicorn_snapshot_manager_save_v2",
+    "reason": "Snapshot serialisation is implementation-defined."
+  },
+  {
+    "tool": "debug_unicorn_script_gen",
+    "reason": "Script generation output is implementation-defined."
+  },
+  {
+    "tool": "debug_unicorn_register_history_diff_v2",
+    "reason": "v2 API; same as v1."
+  },
+  {
+    "tool": "debug_unicorn_trace_entry_bytes_v2",
+    "reason": "v2 encoding may differ; skip until v2 schema is confirmed."
+  },
+  {
+    "tool": "debug_unicorn_trace_entry_build",
+    "reason": "Build variant; same data as trace_entry_bytes but different field name."
+  },
+  {
+    "tool": "debug_unicorn_mem_region_perms",
+    "reason": "Separate tool exercising MemRegion perms; already covered by debug_unicorn_mem_region_flags."
+  },
+  {
+    "tool": "debug_unicorn_symbol_table_prefix_v2",
+    "reason": "Prefix lookup; implementation-defined."
+  },
+  {
+    "tool": "debug_windows_exception_name",
+    "reason": "Code=1 -> EXCEPTION_UNKNOWN but mapping table is large; spot check is in classify_exception which is already covered."
+  },
+  {
+    "tool": "debug_windows_is_breakpoint_like_0x80000003",
+    "reason": "Already covered by is_breakpoint_like check above."
+  },
+  {
+    "tool": "debug_windows_decode_load_dll",
+    "reason": "Path appears verbatim in output; already trivially covered by the load_dll format but path comparison would be environment-specific."
+  },
+  {
+    "tool": "debug_windows_memory_region_to_map",
+    "reason": "Converts Windows MEMORY_BASIC_INFORMATION; requires valid struct fields."
+  },
+  {
+    "tool": "debug_macos_stop_reason_is_exit",
+    "reason": "Stop reason variant check; implementation-defined."
+  }
+]

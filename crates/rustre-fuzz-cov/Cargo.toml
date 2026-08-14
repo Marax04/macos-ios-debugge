@@ -1,0 +1,40 @@
+[package]
+name = "rustre-fuzz-cov"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-fuzz dependency intentionally omitted: rustre-fuzz is the umbrella crate
+# that aggregates the fuzz backends, so it depends on us, not the other way.
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_bytes = "0.11"
+rayon.workspace = true
+
+# This crate implements SanitizerCoverage and block-coverage runtimes that
+# expose `extern "C"` entry points (`__sanitizer_cov_trace_pc_guard`,
+# `__sanitizer_cov_trace_pc_guard_init`, the global block-coverage init/mark
+# helpers) and dereference raw guard/PC pointers handed to us by the
+# instrumented binary. Each of those crossings necessarily requires `unsafe`;
+# there is no way to express the same functionality without it. The
+# workspace-level `unsafe_code = "warn"` policy is correct as a default for the
+# rest of the project but is not actionable here. Mirror the pattern used by
+# `rustre-debug-windows` and opt this crate out at the package level instead
+# of annotating every individual call site.
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cargo = "warn"

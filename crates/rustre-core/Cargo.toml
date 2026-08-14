@@ -1,0 +1,27 @@
+﻿[package]
+license.workspace = true
+name = "rustre-core"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-events = { path = "../rustre-events" }
+rustre-knowledge = { path = "../rustre-knowledge" }
+rustre-db = { path = "../rustre-db" }
+bitflags = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }

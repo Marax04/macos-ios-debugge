@@ -1,0 +1,160 @@
+{
+  "category": "msp430",
+  "tools_hardened": 2,
+  "tools_passed": 2,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "records": [
+    {
+      "tool": "msp430_reg_name",
+      "status": "PASS",
+      "cases": [
+        {
+          "reg": 0,
+          "expected": "PC",
+          "actual": "PC",
+          "ok": true
+        },
+        {
+          "reg": 1,
+          "expected": "SP",
+          "actual": "SP",
+          "ok": true
+        },
+        {
+          "reg": 2,
+          "expected": "SR",
+          "actual": "SR",
+          "ok": true
+        },
+        {
+          "reg": 3,
+          "expected": "CG",
+          "actual": "CG",
+          "ok": true
+        },
+        {
+          "reg": 4,
+          "expected": "R4",
+          "actual": "R4",
+          "ok": true
+        },
+        {
+          "reg": 5,
+          "expected": "R5",
+          "actual": "R5",
+          "ok": true
+        },
+        {
+          "reg": 6,
+          "expected": "R6",
+          "actual": "R6",
+          "ok": true
+        },
+        {
+          "reg": 7,
+          "expected": "R7",
+          "actual": "R7",
+          "ok": true
+        },
+        {
+          "reg": 8,
+          "expected": "R8",
+          "actual": "R8",
+          "ok": true
+        },
+        {
+          "reg": 9,
+          "expected": "R9",
+          "actual": "R9",
+          "ok": true
+        },
+        {
+          "reg": 10,
+          "expected": "R10",
+          "actual": "R10",
+          "ok": true
+        },
+        {
+          "reg": 11,
+          "expected": "R11",
+          "actual": "R11",
+          "ok": true
+        },
+        {
+          "reg": 12,
+          "expected": "R12",
+          "actual": "R12",
+          "ok": true
+        },
+        {
+          "reg": 13,
+          "expected": "R13",
+          "actual": "R13",
+          "ok": true
+        },
+        {
+          "reg": 14,
+          "expected": "R14",
+          "actual": "R14",
+          "ok": true
+        },
+        {
+          "reg": 15,
+          "expected": "R15",
+          "actual": "R15",
+          "ok": true
+        },
+        {
+          "reg": 16,
+          "expected": "Rx",
+          "actual": "Rx",
+          "ok": true
+        },
+        {
+          "reg": 255,
+          "expected": "Rx",
+          "actual": "Rx",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "tool": "msp430_bw_suffix",
+      "status": "PASS",
+      "cases": [
+        {
+          "bw": 0,
+          "expected": ".W",
+          "actual": ".W",
+          "ok": true
+        },
+        {
+          "bw": 1,
+          "expected": ".B",
+          "actual": ".B",
+          "ok": true
+        },
+        {
+          "bw": 2,
+          "expected": ".B",
+          "actual": ".B",
+          "ok": true
+        },
+        {
+          "bw": 3,
+          "expected": ".B",
+          "actual": ".B",
+          "ok": true
+        },
+        {
+          "bw": 255,
+          "expected": ".B",
+          "actual": ".B",
+          "ok": true
+        }
+      ]
+    }
+  ]
+}

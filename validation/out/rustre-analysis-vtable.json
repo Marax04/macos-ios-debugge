@@ -1,0 +1,41 @@
+{
+  "crate": "rustre-analysis-vtable",
+  "saved": false,
+  "functions": [
+    {
+      "name": "VtableDetector.detect",
+      "ok": true,
+      "detail": "detected 1 vtable with 3 entries"
+    },
+    {
+      "name": "MsvcRttiDecoder.demangle_msvc",
+      "ok": true,
+      "detail": "demangle_msvc -> 'Foo::bar'"
+    },
+    {
+      "name": "demangler.demangle_itanium",
+      "ok": true,
+      "detail": "demangle_itanium -> 'foo::bar'"
+    },
+    {
+      "name": "ItaniumRttiDecoder.decode",
+      "ok": true,
+      "detail": "itanium decode -> RttiInfo(type_name='MyClass', base_classes=[], rtti_address=6291456, abi='Itanium')"
+    },
+    {
+      "name": "VtableDatabase.link_vtable_rtti",
+      "ok": true,
+      "detail": "linked=True found=1"
+    },
+    {
+      "name": "PureVirtualDetector.annotate",
+      "ok": true,
+      "detail": "annotated 1"
+    },
+    {
+      "name": "VtableComparer.diff",
+      "ok": true,
+      "detail": "diff=[(8, 4198416, 4198432)]"
+    }
+  ]
+}

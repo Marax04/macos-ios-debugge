@@ -1,0 +1,155 @@
+// inferred from 4 accesses on `ptr`
+struct Struct_1_t {
+    __int64 field_0; // offset 0
+    char field_8; // offset 8
+    char field_9; // offset 9
+    __int64 field_A; // offset 10
+};
+
+__int64 sub_1400F2C50();
+__int64 sub_1400F3326();
+__int64 sub_1400F1D90();
+__int64 sub_1400FD8F0();
+__int64 sub_14002EDF0();
+__int64 sub_1400FBBA2();
+extern __int64 off_140124988;
+
+__int64 __fastcall sub_1400FB300(int *a1) {
+    __int64 rsp;
+    int arg_4d;
+    int arg_8;
+    int v_120;
+    int v_128;
+    int v_1830;
+    int v_1840;
+    int v_1850;
+    int v_1860;
+    int v_20;
+    int v_218;
+    __int64 v_220;
+    int v_228;
+    int v_230;
+    __int64 v_238;
+    int v_240;
+    int v_248;
+    int v_28;
+    int v_30;
+    int v_38;
+    int v_40;
+    int v_57;
+    int v_788;
+    int v_790;
+    int v_7d3;
+    int v_7d4;
+    __int64 v_88;
+    int v_8d6;
+    int v_a0;
+    __int64 v_e0;
+    __int64 *dst;
+    __int64 *src;
+    __int64 result;
+    __int64 v5;
+    __int64 v6;
+    struct Struct_1_t *ptr;
+    __int64 v2;
+    __int64 v14;
+    __int64 v10;
+    __int64 *dst2;
+    __int64 *dst3;
+    __int64 i;
+    int v8;
+    int v9;
+    __m128i xmm9;
+    __m128i xmm8;
+    __m128i xmm7;
+    __m128i xmm6;
+
+    dst = (__int64 *)a1;
+    src = *a1;
+    result = (__int64)src + (__int64)src;
+    v5 = 4;
+    if (result >= 5) v5 = result;
+    v6 = arg_8;
+    v_28 = 816;
+    v_20 = 8;
+    a1 = rsp + 48;
+    sub_1400F2C50(a1, src, v6, v5);
+    if (v_30 == 1) {
+        a1 = (int *)v_38;
+        src = (__int64 *)v_40;
+        sub_1400F3326(a1, src);
+        sub_1400F1D90(0x1878);
+        _mm_store_si128((__m128i *)&v_1860, xmm9);
+        _mm_store_si128((__m128i *)&v_1850, xmm8);
+        _mm_store_si128((__m128i *)&v_1840, xmm7);
+        _mm_store_si128((__m128i *)&v_1830, xmm6);
+        ptr = (struct Struct_1_t *)v6;
+        dst = (__int64 *)a1;
+        v_e0 = (__int64)src;
+        v5 = *(src + 16);
+        a1 = rsp + 0x768;
+        sub_1400FD8F0(a1);
+        v2 = v_790;
+        if (v2 == 0) JUMPOUT(0x1400fd842);
+        v_128 = v5;
+        v_88 = (__int64)dst;
+        result = ptr->field_8;
+        v_57 = result;
+        dst = (__int64 *)result;
+        a1 =  + (__int64)(__int64)dst*8;
+        result = 0xF0A0100;
+        result >>= (__int64)a1;
+        v14 = v_788;
+        arg_4d = result;
+        v10 = ptr->field_0;
+        sub_14002EDF0(0, 11);
+        if (result == 0) JUMPOUT(0x1400fd852);
+        dst2 = (__int64 *)result;
+        result = 0x6563696C2D696C63;
+        *dst2 = result;
+        *(dst2 + 7) = 0x65736E65;
+        sub_14002EDF0(0, 8);
+        if (result == 0) JUMPOUT(0x1400fd861);
+        dst3 = (__int64 *)result;
+        result = 0x74736F682D696C63;
+        *dst3 = result;
+        v_218 = 11;
+        v_220 = (__int64)dst2;
+        v_228 = 11;
+        v_230 = 8;
+        v_238 = (__int64)dst3;
+        i = ptr->field_9;
+        a1 =  + i*8;
+        result = 0x400000;
+        result >>= (__int64)a1;
+        v_240 = 8;
+        v_248 = v10;
+        v6 = 0xA08080;
+        v6 >>= (__int64)a1;
+        src = 0x602010;
+        src = (__int64 *)((__int64)(__int64)src >> (__int64)a1);
+        v_120 = i;
+        i += i;
+        ++i;
+        v8 = 0xC88040;
+        v8 >>= (__int64)a1;
+        v9 = 0xC06020;
+        v9 >>= (__int64)a1;
+        a1 = (int *)dst;
+        dst = &off_140124988;
+        a1 = *(dst + (__int64)(__int64)a1*4);
+        a1 = (int *)((__int64)a1 + (__int64)dst);
+        v_a0 = v10;
+        JUMPOUT(a1);
+        result = ptr->field_A;
+        v_8d6 = 1;
+        v_7d3 = result;
+        v_7d4 = 5;
+        return sub_1400FBBA2();
+    } else {
+        result = v_38;
+        *(dst + 8) = result;
+        *dst = v5;
+        return result;
+    }
+}

@@ -1,0 +1,1 @@
+C:\Users\Fra\Desktop\RustRE\tests\decompiler_corpus\csproj\sample10\out\sample10_cs.exe

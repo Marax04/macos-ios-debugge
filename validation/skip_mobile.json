@@ -1,0 +1,84 @@
+[
+  {
+    "tool": "mobile_smali_reg_display",
+    "args": {
+      "num": 0
+    },
+    "reason": "TOOL_ERROR: tool not found: mobile_smali_reg_display"
+  },
+  {
+    "tool": "mobile_smali_reg_display",
+    "args": {
+      "num": 63
+    },
+    "reason": "TOOL_ERROR: tool not found: mobile_smali_reg_display"
+  },
+  {
+    "tool": "mobile_smali_reg_display",
+    "args": {
+      "num": 64
+    },
+    "reason": "TOOL_ERROR: tool not found: mobile_smali_reg_display"
+  },
+  {
+    "tool": "mobile_smali_reg_display",
+    "args": {
+      "num": 65
+    },
+    "reason": "TOOL_ERROR: tool not found: mobile_smali_reg_display"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor",
+    "args": {
+      "desc": "I"
+    },
+    "reason": "TOOL_ERROR: execution failed: execution failed: invalid params: missing 'descriptor'"
+  },
+  {
+    "tool": "mobile_smali_parse_type_descriptor",
+    "args": {
+      "desc": "Ljava/lang/Object;"
+    },
+    "reason": "TOOL_ERROR: execution failed: execution failed: invalid params: missing 'descriptor'"
+  },
+  {
+    "tool": "mobile_smali_parse_method_descriptor",
+    "args": {
+      "desc": "(IZ)V"
+    },
+    "reason": "TOOL_ERROR: execution failed: execution failed: invalid params: missing 'descriptor'"
+  },
+  {
+    "tool": "mobile_apktool_find",
+    "args": {},
+    "reason": "Requires apktool in PATH \u2014 not available in this environment"
+  },
+  {
+    "tool": "mobile_jadx_find",
+    "args": {},
+    "reason": "Requires jadx in PATH \u2014 not available in this environment"
+  },
+  {
+    "tool": "mobile_apktool_apk_decode_smali_count",
+    "args": {
+      "apk": "test.apk",
+      "out": "out"
+    },
+    "reason": "Requires real APK file on disk"
+  },
+  {
+    "tool": "mobile_apktool_impl_build",
+    "args": {
+      "dir": "out",
+      "out": "test.apk"
+    },
+    "reason": "Requires real decoded APK directory on disk"
+  },
+  {
+    "tool": "mobile_apktool_install_framework",
+    "args": {
+      "apk_path": "framework.apk"
+    },
+    "reason": "Requires real framework APK file on disk"
+  }
+]

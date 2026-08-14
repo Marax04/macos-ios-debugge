@@ -1,0 +1,36 @@
+{
+  "skipped": [
+    {
+      "tool": "threatintel_ioc_type_all_display",
+      "reason": "unexpected shape: {\"variants\": [\"MD5\", \"SHA-1\", \"SHA-256\", \"SHA-512\", \"IP\", \"Domain\", \"URL\", \"Email\", \"Registry\", \"Filename\", \"Mutex\", \"YA"
+    },
+    {
+      "tool": "threatintel_confidence_decay_pct_at_age[1.0,3600.0,36000.0]",
+      "reason": "can't extract pct from {'score_pct': 0, 'source': 'rustre_threatintel::ConfidenceDecay::score_pct_at_age'}"
+    },
+    {
+      "tool": "threatintel_campaign_duration_secs[0,0]",
+      "reason": "can't extract duration from {'duration_secs': 0, 'is_active': False, 'source': 'rustre_threatintel::Campaign::duration_secs'}"
+    },
+    {
+      "tool": "threatintel_group_search",
+      "reason": "nondeterministic or requires pre-seeded database; not independently verifiable"
+    },
+    {
+      "tool": "threatintel_group_aliases",
+      "reason": "nondeterministic or requires pre-seeded database; not independently verifiable"
+    },
+    {
+      "tool": "threatintel_group_list_known",
+      "reason": "nondeterministic or requires pre-seeded database; not independently verifiable"
+    },
+    {
+      "tool": "threatintel_indicator_lookup",
+      "reason": "nondeterministic or requires pre-seeded database; not independently verifiable"
+    },
+    {
+      "tool": "threatintel_indicator_export_stix",
+      "reason": "nondeterministic or requires pre-seeded database; not independently verifiable"
+    }
+  ]
+}

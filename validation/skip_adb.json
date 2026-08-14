@@ -1,0 +1,8 @@
+{
+  "skipped": [
+    {
+      "tool": "adb_current_mtime",
+      "reason": "nondeterministic (wall clock)"
+    }
+  ]
+}

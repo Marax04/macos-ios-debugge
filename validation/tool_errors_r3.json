@@ -1,0 +1,1660 @@
+﻿{
+    "final_total":  3971,
+    "by_prefix":  {
+                      "ttd":  [
+                                  "ttd_trace_position_from_u128",
+                                  "ttd_replay_memory_state_apply_write",
+                                  "ttd_replay_delta_compressor_roundtrip",
+                                  "ttd_replayer_query_execute_tick"
+                              ],
+                      "plugin":  [
+                                     "plugin_lua_load_inline"
+                                 ],
+                      "symbols":  [
+                                      "symbols_stabs_record_parse_all_be",
+                                      "symbols_stabs_provider_from_bytes",
+                                      "symbols_discover_pdb_for_binary",
+                                      "symbols_symbol_source_priority",
+                                      "symbols_stabs_parse_all"
+                                  ],
+                      "sandbox":  [
+                                      "sandbox_report_severity_parse",
+                                      "sandbox_report_severity_score",
+                                      "sandbox_report_format_extension"
+                                  ],
+                      "kgdb":  [
+                                   "kgdb_hex_to_bytes",
+                                   "kgdb_hex_to_bytes_v2",
+                                   "kgdb_hex_le_to_u64",
+                                   "kgdb_rle_encode",
+                                   "kgdb_rle_decode",
+                                   "kgdb_rsp_checksum",
+                                   "kgdb_gdb_packet_to_wire",
+                                   "kgdb_gdb_packet_parse",
+                                   "kgdb_decode_hex_buf"
+                               ],
+                      "lua":  [
+                                  "lua_loader_lua_header_is_official_format_wx1"
+                              ],
+                      "flirt":  [
+                                    "flirt_parse_sig_header",
+                                    "flirt_gen_elf_parse"
+                                ],
+                      "mobile":  [
+                                     "mobile_apktool_apk_decode_smali_count",
+                                     "mobile_apktool_impl_build",
+                                     "mobile_dyld_header_parse",
+                                     "mobile_dyld_parse_dyld_magic",
+                                     "mobile_dyld_format_uuid",
+                                     "mobile_dyld_header_uuid_string"
+                                 ],
+                      "hex":  [
+                                  "hex_pattern_import_ida_pat",
+                                  "hex_pattern_masked_new",
+                                  "hex_pattern_masked_matches_at",
+                                  "hex_pattern_regex_search_v4",
+                                  "hex_pattern_group_compile_v4",
+                                  "hex_pattern_group_any_matches_v4",
+                                  "hex_pattern_signature_matches_v4",
+                                  "hex_pattern_to_hex_string_v3",
+                                  "hex_pattern_nfa_find_all_v3",
+                                  "hex_pattern_nfa_find_first_v3",
+                                  "hex_pattern_dfa_search_v3",
+                                  "hex_pattern_multi_matcher_search_v3",
+                                  "hex_pattern_to_masked_v3",
+                                  "hex_pattern_sequence_search_v3"
+                              ],
+                      "stabs":  [
+                                    "stabs_type_code_from_char"
+                                ],
+                      "m68k":  [
+                                   "m68k_variant_info"
+                               ],
+                      "script":  [
+                                     "script_bytes_concat",
+                                     "script_bytes_slice",
+                                     "script_bytes_find",
+                                     "script_error_is_recoverable",
+                                     "script_value_len_builtin",
+                                     "script_lua_template_patch_pattern",
+                                     "script_python_pure_value_classify",
+                                     "script_python_pyvalue_is_truthy",
+                                     "script_python_pyvalue_len",
+                                     "script_python_pyvalue_as_int",
+                                     "script_python_pyscriptvalue_display"
+                                 ],
+                      "arch":  [
+                                   "arch_jvm_decode",
+                                   "arch_jvm_decode_at",
+                                   "arch_wasm_function_stats_from_bytes"
+                               ],
+                      "arch68k":  [
+                                      "arch68k_size_bytes",
+                                      "arch68k_size_suffix"
+                                  ],
+                      "agent":  [
+                                    "agent_llm_estimate_cost",
+                                    "agent_llm_llm_model_display",
+                                    "agent_prompts_registry_render"
+                                ],
+                      "rlib":  [
+                                   "rlib_dec_symbol_map_from_flirt_pairs",
+                                   "rlib_dec_typeprop_set_get",
+                                   "rlib_dec_cfs_detect_loop",
+                                   "rlib_dec2_symbol_map_extend_pairs",
+                                   "rlib_dec2_name_recovery_pass",
+                                   "rlib_dec2_diagnostic_from_pass"
+                               ],
+                      "patch":  [
+                                    "patch_pe_va_to_file_offset"
+                                ],
+                      "trace":  [
+                                    "trace_open_trace_file",
+                                    "trace_event_type_name_wt1",
+                                    "trace_coverage_to_lcov_string_v2",
+                                    "trace_coverage_afl_new_edges_v2",
+                                    "trace_coverage_lighthouse_from_run_v2",
+                                    "trace_coverage_heatmap_build_v2",
+                                    "trace_coverage_block_colors_v2",
+                                    "trace_coverage_diff_compute_v2",
+                                    "trace_coverage_merge_all_runs_v2",
+                                    "trace_coverage_html_report_v2",
+                                    "trace_coverage_compute_function_stats_v2",
+                                    "trace_coverage_to_custom_binary",
+                                    "trace_coverage_merge_runs",
+                                    "trace_coverage_afl_bitmap_count",
+                                    "trace_coverage_afl_new_coverage",
+                                    "trace_coverage_parse_custom_binary",
+                                    "trace_coverage_afl_jaccard",
+                                    "trace_coverage_covbitmap_ops",
+                                    "trace_coverage_diff_overlap_pct",
+                                    "trace_coverage_run_hot_bbs",
+                                    "trace_coverage_run_summary",
+                                    "trace_coverage_run_visit_at",
+                                    "trace_coverage_data_stats",
+                                    "trace_coverage_covbitmap_clear_bits",
+                                    "trace_coverage_heatmap_hottest",
+                                    "trace_coverage_lighthouse_roundtrip",
+                                    "trace_navigate_access_kind_display",
+                                    "trace_navigate_insn_entry_v2",
+                                    "trace_navigate_call_entry",
+                                    "trace_navigate_ret_entry",
+                                    "trace_navigate_stackframe_display_name",
+                                    "trace_navigate_bookmark_with_note",
+                                    "trace_navigate_step_window",
+                                    "trace_navigate_idx_for_tsc",
+                                    "trace_navigate_mem_access_index",
+                                    "trace_navigate_access_kind_from_str_x",
+                                    "trace_pt_decoder_remaining_bytes"
+                                ],
+                      "analysis":  [
+                                       "analysis_xref_kind_is_code",
+                                       "analysis_xref_kind_is_data",
+                                       "analysis_xref_kind_is_import",
+                                       "analysis_xref_kind_classify",
+                                       "analysis_type_fact_byte_size",
+                                       "analysis_type_fact_is_known",
+                                       "analysis_type_fact_join",
+                                       "analysis_type_fact_display_name",
+                                       "analysis_type_fact_display",
+                                       "analysis_type_environment_merge",
+                                       "analysis_type_infer_signature"
+                                   ],
+                      "net":  [
+                                  "net_is_private_addr",
+                                  "net_parse_ipv6_full",
+                                  "net_is_multicast_addr_v2",
+                                  "net_pcap_file_parse_info",
+                                  "net_pcap_split_by_count",
+                                  "net_pcap_split_by_time",
+                                  "net_proxy_http_request_line_parse",
+                                  "net_proxy_http_request_line_is_http11",
+                                  "net_proxy_http_request_line_is_http2",
+                                  "net_proxy_http_status_line_parse",
+                                  "net_proxy_http_status_line_is_success",
+                                  "net_proxy_http_status_line_is_redirect",
+                                  "net_proxy_http_status_line_is_client_error",
+                                  "net_proxy_http_status_line_is_server_error",
+                                  "net_proxy_rate_limiter_check",
+                                  "net_rules_import_rules_json",
+                                  "net_rules_ip_spec_matches",
+                                  "net_rules_port_spec_matches"
+                              ],
+                      "rustre":  [
+                                     "rustre_symbols_ext_cross_ref_index_ops"
+                                 ],
+                      "fuzz":  [
+                                   "fuzz_mutate_input",
+                                   "fuzz_cov_drcov_parse",
+                                   "fuzz_cov_drcov_header_parse",
+                                   "fuzz_cov_drcov_blocks_per_module",
+                                   "fuzz_cov_diff_jaccard",
+                                   "fuzz_cov_coverage_run_merge",
+                                   "fuzz_cov_drcov_header_parse_v2",
+                                   "fuzz_san_stack_edit_distance"
+                               ],
+                      "vmlift":  [
+                                     "vmlift_lift_to_pseudo_il"
+                                 ],
+                      "triage":  [
+                                     "triage_die_match_rule_condition",
+                                     "triage_die_match_rule_condition_single"
+                                 ],
+                      "loader":  [
+                                     "loader_lua_read_string",
+                                     "loader_ole_list_streams",
+                                     "loader_wasm_parse",
+                                     "loader_wasm_stats",
+                                     "loader_elf_info_summary",
+                                     "loader_macho_parse_summary",
+                                     "loader_elf_parse_info",
+                                     "loader_elf_plt_entries",
+                                     "loader_macho_parse",
+                                     "loader_pe_parse_info",
+                                     "loader_pe_imports_from_dll"
+                                 ],
+                      "ghidra":  [
+                                     "ghidra_pcode_parser_parse_json"
+                                 ],
+                      "adb":  [
+                                  "adb_decode_message",
+                                  "adb_filter_by_level",
+                                  "adb_msg_write",
+                                  "adb_msg_auth",
+                                  "adb_log_level_display"
+                              ],
+                      "threatintel":  [
+                                          "threatintel_x_ioc_new_network_flag",
+                                          "threatintel_x_ioc_new_hash_flag",
+                                          "threatintel_group_link_ioc",
+                                          "threatintel_ioc_type_display_w3",
+                                          "threatintel_ioc_type_display",
+                                          "threatintel_ext_ioc_type_stix_pattern"
+                                      ],
+                      "codeview":  [
+                                       "codeview_parse_symbols",
+                                       "codeview_parse_type_records",
+                                       "codeview_symbol_filter_count"
+                                   ],
+                      "malpedia":  [
+                                       "malpedia_check_ruleset_quality"
+                                   ],
+                      "mem":  [
+                                  "mem_read_typed_at_hex",
+                                  "mem_write_typed_at_hex",
+                                  "mem_perms_from_rwx",
+                                  "mem_search_bytes_range_hex",
+                                  "mem_shannon_entropy_max_block_wire",
+                                  "mem_shannon_entropy_min_block_wire",
+                                  "mem_shannon_entropy_mean_block_wire",
+                                  "mem_search_bytes_hex_v2",
+                                  "mem_perms_from_rwx_v5",
+                                  "mem_find_bytes_provider_v5",
+                                  "mem_search_bytes_with_mask_v5",
+                                  "mem_composite_first_wins_v5",
+                                  "mem_patched_read_v5"
+                              ],
+                      "emu":  [
+                                  "emu_qiling_syscall_ctx_args"
+                              ],
+                      "adf":  [
+                                  "adf_compute_dominators_chain",
+                                  "adf_postorder_chain"
+                              ],
+                      "events":  [
+                                     "events_kind_subscription"
+                                 ],
+                      "windbg":  [
+                                     "windbg_kdnet_packet_type_id"
+                                 ],
+                      "diff":  [
+                                   "diff_bindiff_match_kind_is_reliable",
+                                   "diff_bindiff_match_kind_priority",
+                                   "diff_bindiff_match_kind_display",
+                                   "diff_bindiff_hungarian_dims",
+                                   "diff_bindiff_binary_snapshot_call_graph",
+                                   "diff_simple_hash",
+                                   "diff_lcs_similarity",
+                                   "diff_byte_histogram_similarity",
+                                   "diff_semantic_matcher_similarity",
+                                   "diff_semantic_matcher_are_equivalent",
+                                   "diff_semantic_differ_diff_function_pair",
+                                   "diff_ngram_jaccard_similarity",
+                                   "diff_combined_byte_similarity"
+                               ],
+                      "dotnet":  [
+                                     "dotnet_edit_nop_fill_range",
+                                     "dotnet_metadata_parse_field_sig_blob",
+                                     "dotnet_metadata_parse_local_var_sig",
+                                     "dotnet_metadata_parse_method_sig_blob",
+                                     "dotnet_metadata_pretty_print_type_sig",
+                                     "dotnet_metadata_parse_array_shape",
+                                     "dotnet_metadata_parse_custom_attribute_blob",
+                                     "dotnet_metadata_parse_method_body",
+                                     "dotnet_metadata_all_type_names_basic",
+                                     "dotnet_metadata_all_field_names",
+                                     "dotnet_metadata_assembly_ref_names",
+                                     "dotnet_metadata_find_type_def_row",
+                                     "dotnet_metadata_get_type_view",
+                                     "dotnet_metadata_get_method_view",
+                                     "dotnet_metadata_resolve_token",
+                                     "dotnet_metadata_parse_ca_typed",
+                                     "dotnet_metadata_type_def_by_index",
+                                     "dotnet_metadata_method_def_by_index"
+                                 ],
+                      "deobf":  [
+                                    "deobf_string_hex_decode",
+                                    "deobf_string_rc4_inverse_ksa_v3",
+                                    "deobf_string_decode_base64_custom_v3"
+                                ],
+                      "yara":  [
+                                   "yara_engine_parse_rule"
+                               ],
+                      "forensics":  [
+                                        "forensics_fs_prefetch_parse",
+                                        "forensics_fs_prefetch_summary",
+                                        "forensics_fs_lnk_parse",
+                                        "forensics_fs_lnk_analyzer_summary",
+                                        "forensics_fs_lnk_file_target_path",
+                                        "forensics_fs_prefetch_analyzer_report",
+                                        "forensics_fs_prefetch_pattern_matcher_risk",
+                                        "forensics_fs_prefetch_file_loaded_modules"
+                                    ],
+                      "debug":  [
+                                    "debug_macos_vm_region_contains",
+                                    "debug_macos_macho_section_contains",
+                                    "debug_macos_stop_reason_address",
+                                    "debug_macos_stop_reason_is_exit",
+                                    "debug_unicorn_watchpoint_probe",
+                                    "debug_unicorn_hook_record_describe",
+                                    "debug_unicorn_emulate_steps",
+                                    "debug_unicorn_coverage_granularity_align",
+                                    "debug_unicorn_fault_rule_should_fire",
+                                    "debug_unicorn_v2_config_presets",
+                                    "debug_unicorn_coverage_granularity_align_v2",
+                                    "debug_unicorn_region_perms_flags_v2",
+                                    "debug_unicorn_fault_injector_fire_v2",
+                                    "debug_unicorn_fault_rule_should_fire_v2",
+                                    "debug_unicorn_watch_kind_matches_v2"
+                                ],
+                      "pe":  [
+                                 "pe_editor_parse_dos_header",
+                                 "pe_editor_parse_file_header",
+                                 "pe_editor_parse_optional_header64",
+                                 "pe_editor_header_field_debug"
+                             ],
+                      "il":  [
+                                 "il_lift_level_at_least_pair_r7"
+                             ]
+                  },
+    "final_error":  259,
+    "final_stub":  0,
+    "final_ok":  3712,
+    "categories":  {
+                       "UNKNOWN_KIND":  [
+                                            {
+                                                "prefix":  "agent",
+                                                "error":  "invalid params: unknown model_id \u0027\u0027 ",
+                                                "tool":  "agent_llm_estimate_cost"
+                                            },
+                                            {
+                                                "prefix":  "agent",
+                                                "error":  "invalid params: unknown variant: M68000 ",
+                                                "tool":  "agent_llm_llm_model_display"
+                                            },
+                                            {
+                                                "prefix":  "analysis",
+                                                "error":  "invalid params: unknown kind ",
+                                                "tool":  "analysis_xref_kind_is_code"
+                                            },
+                                            {
+                                                "prefix":  "analysis",
+                                                "error":  "invalid params: unknown kind ",
+                                                "tool":  "analysis_xref_kind_is_data"
+                                            },
+                                            {
+                                                "prefix":  "analysis",
+                                                "error":  "invalid params: unknown kind ",
+                                                "tool":  "analysis_xref_kind_is_import"
+                                            },
+                                            {
+                                                "prefix":  "analysis",
+                                                "error":  "invalid params: unknown kind: Call ",
+                                                "tool":  "analysis_xref_kind_classify"
+                                            },
+                                            {
+                                                "prefix":  "debug",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "debug_macos_stop_reason_address"
+                                            },
+                                            {
+                                                "prefix":  "debug",
+                                                "error":  "invalid params: unknown kind: Call ",
+                                                "tool":  "debug_macos_stop_reason_is_exit"
+                                            },
+                                            {
+                                                "prefix":  "debug",
+                                                "error":  "invalid params: unknown fault_kind ",
+                                                "tool":  "debug_unicorn_fault_injector_fire_v2"
+                                            },
+                                            {
+                                                "prefix":  "debug",
+                                                "error":  "invalid params: unknown fault_kind ",
+                                                "tool":  "debug_unicorn_fault_rule_should_fire_v2"
+                                            },
+                                            {
+                                                "prefix":  "diff",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "diff_bindiff_match_kind_is_reliable"
+                                            },
+                                            {
+                                                "prefix":  "diff",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "diff_bindiff_match_kind_priority"
+                                            },
+                                            {
+                                                "prefix":  "diff",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "diff_bindiff_match_kind_display"
+                                            },
+                                            {
+                                                "prefix":  "fuzz",
+                                                "error":  "invalid params: unknown strategy:  ",
+                                                "tool":  "fuzz_mutate_input"
+                                            },
+                                            {
+                                                "prefix":  "il",
+                                                "error":  "invalid params: unknown level i32 ",
+                                                "tool":  "il_lift_level_at_least_pair_r7"
+                                            },
+                                            {
+                                                "prefix":  "m68k",
+                                                "error":  "invalid params: unknown variant \u0027M68000\u0027 ",
+                                                "tool":  "m68k_variant_info"
+                                            },
+                                            {
+                                                "prefix":  "mem",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "mem_read_typed_at_hex"
+                                            },
+                                            {
+                                                "prefix":  "mem",
+                                                "error":  "invalid params: unknown kind \u0027Call\u0027 ",
+                                                "tool":  "mem_write_typed_at_hex"
+                                            },
+                                            {
+                                                "prefix":  "pe",
+                                                "error":  "invalid params: unknown field:  ",
+                                                "tool":  "pe_editor_header_field_debug"
+                                            },
+                                            {
+                                                "prefix":  "script",
+                                                "error":  "invalid params: unknown variant \u0027M68000\u0027 ",
+                                                "tool":  "script_error_is_recoverable"
+                                            },
+                                            {
+                                                "prefix":  "symbols",
+                                                "error":  "invalid params: unknown source \u0027\u0027 ",
+                                                "tool":  "symbols_symbol_source_priority"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown kind call ",
+                                                "tool":  "threatintel_x_ioc_new_network_flag"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown kind call ",
+                                                "tool":  "threatintel_x_ioc_new_hash_flag"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown group \u0027\u0027 ",
+                                                "tool":  "threatintel_group_link_ioc"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown ioc_type \u0027\u0027 ",
+                                                "tool":  "threatintel_ioc_type_display_w3"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown variant \u0027m68000\u0027 ",
+                                                "tool":  "threatintel_ioc_type_display"
+                                            },
+                                            {
+                                                "prefix":  "threatintel",
+                                                "error":  "invalid params: unknown ioc_type ",
+                                                "tool":  "threatintel_ext_ioc_type_stix_pattern"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: unknown kind ",
+                                                "tool":  "trace_event_type_name_wt1"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: unknown kind: Call ",
+                                                "tool":  "trace_navigate_access_kind_from_str_x"
+                                            },
+                                            {
+                                                "prefix":  "triage",
+                                                "error":  "invalid params: invalid rule: unknown variant `rule te ",
+                                                "tool":  "triage_die_match_rule_condition"
+                                            },
+                                            {
+                                                "prefix":  "triage",
+                                                "error":  "invalid params: invalid RuleCondition: unknown variant ",
+                                                "tool":  "triage_die_match_rule_condition_single"
+                                            },
+                                            {
+                                                "prefix":  "windbg",
+                                                "error":  "invalid params: unknown kind: call ",
+                                                "tool":  "windbg_kdnet_packet_type_id"
+                                            }
+                                        ],
+                       "INVALID_JSON":  [
+                                            {
+                                                "prefix":  "ghidra",
+                                                "error":  "internal error: parsing P-code JSON: expected a top-le ",
+                                                "tool":  "ghidra_pcode_parser_parse_json"
+                                            },
+                                            {
+                                                "prefix":  "net",
+                                                "error":  "internal error: serialization error: EOF while parsing ",
+                                                "tool":  "net_rules_import_rules_json"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_to_lcov_string_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_lighthouse_from_run_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_heatmap_build_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_block_colors_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: a json: expected value at line 1 colum ",
+                                                "tool":  "trace_coverage_diff_compute_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: expected value at line 1 column  ",
+                                                "tool":  "trace_coverage_merge_all_runs_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: run json: EOF while parsing a value at ",
+                                                "tool":  "trace_coverage_html_report_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: run_json: EOF while parsing a value at ",
+                                                "tool":  "trace_coverage_compute_function_stats_v2"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: run_json: EOF while parsing a value at ",
+                                                "tool":  "trace_coverage_to_custom_binary"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: a_json: EOF while parsing a value at l ",
+                                                "tool":  "trace_coverage_merge_runs"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_run_hot_bbs"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_run_summary"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_run_visit_at"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: expected value at line 1 column  ",
+                                                "tool":  "trace_coverage_data_stats"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_heatmap_hottest"
+                                            },
+                                            {
+                                                "prefix":  "trace",
+                                                "error":  "invalid params: json: EOF while parsing a value at lin ",
+                                                "tool":  "trace_coverage_lighthouse_roundtrip"
+                                            }
+                                        ],
+                       "MISSING_PARAM":  [
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: missing \u0027fact\u0027 ",
+                                                 "tool":  "analysis_type_fact_byte_size"
+                                             },
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: missing \u0027fact\u0027 ",
+                                                 "tool":  "analysis_type_fact_is_known"
+                                             },
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: missing \u0027fact\u0027 ",
+                                                 "tool":  "analysis_type_fact_display_name"
+                                             },
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: missing \u0027fact\u0027 ",
+                                                 "tool":  "analysis_type_fact_display"
+                                             },
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: bad a: missing field `types` ",
+                                                 "tool":  "analysis_type_environment_merge"
+                                             },
+                                             {
+                                                 "prefix":  "analysis",
+                                                 "error":  "invalid params: missing \u0027env\u0027 ",
+                                                 "tool":  "analysis_type_infer_signature"
+                                             },
+                                             {
+                                                 "prefix":  "arch68k",
+                                                 "error":  "invalid params: missing \u0027size\u0027 ",
+                                                 "tool":  "arch68k_size_bytes"
+                                             },
+                                             {
+                                                 "prefix":  "arch68k",
+                                                 "error":  "invalid params: missing \u0027size\u0027 ",
+                                                 "tool":  "arch68k_size_suffix"
+                                             },
+                                             {
+                                                 "prefix":  "debug",
+                                                 "error":  "invalid params: missing \u0027query\u0027 ",
+                                                 "tool":  "debug_macos_vm_region_contains"
+                                             },
+                                             {
+                                                 "prefix":  "debug",
+                                                 "error":  "invalid params: missing \u0027query\u0027 ",
+                                                 "tool":  "debug_macos_macho_section_contains"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing query ",
+                                                 "tool":  "diff_bindiff_binary_snapshot_call_graph"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027data\u0027 byte array ",
+                                                 "tool":  "diff_simple_hash"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027a\u0027 byte array ",
+                                                 "tool":  "diff_lcs_similarity"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027a\u0027 byte array ",
+                                                 "tool":  "diff_byte_histogram_similarity"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027hex_a\u0027 or \u0027bytes_a\u0027 ",
+                                                 "tool":  "diff_semantic_matcher_similarity"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027hex_a\u0027 or \u0027bytes_a\u0027 ",
+                                                 "tool":  "diff_semantic_matcher_are_equivalent"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027hex_a\u0027 or \u0027bytes_a\u0027 ",
+                                                 "tool":  "diff_semantic_differ_diff_function_pair"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027a\u0027 byte array ",
+                                                 "tool":  "diff_ngram_jaccard_similarity"
+                                             },
+                                             {
+                                                 "prefix":  "diff",
+                                                 "error":  "invalid params: missing \u0027a\u0027 byte array ",
+                                                 "tool":  "diff_combined_byte_similarity"
+                                             },
+                                             {
+                                                 "prefix":  "fuzz",
+                                                 "error":  "invalid params: parse: parse error: missing DRCOV VERS ",
+                                                 "tool":  "fuzz_cov_drcov_header_parse_v2"
+                                             },
+                                             {
+                                                 "prefix":  "fuzz",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "fuzz_san_stack_edit_distance"
+                                             },
+                                             {
+                                                 "prefix":  "hex",
+                                                 "error":  "invalid params: missing \u0027data_hex\u0027 ",
+                                                 "tool":  "hex_pattern_nfa_find_all_v3"
+                                             },
+                                             {
+                                                 "prefix":  "hex",
+                                                 "error":  "invalid params: missing \u0027data_hex\u0027 ",
+                                                 "tool":  "hex_pattern_nfa_find_first_v3"
+                                             },
+                                             {
+                                                 "prefix":  "hex",
+                                                 "error":  "invalid params: missing \u0027data_hex\u0027 ",
+                                                 "tool":  "hex_pattern_dfa_search_v3"
+                                             },
+                                             {
+                                                 "prefix":  "hex",
+                                                 "error":  "invalid params: missing \u0027data_hex\u0027 ",
+                                                 "tool":  "hex_pattern_multi_matcher_search_v3"
+                                             },
+                                             {
+                                                 "prefix":  "hex",
+                                                 "error":  "invalid params: missing \u0027data_hex\u0027 ",
+                                                 "tool":  "hex_pattern_sequence_search_v3"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027hex\u0027 ",
+                                                 "tool":  "kgdb_hex_to_bytes"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027hex\u0027 ",
+                                                 "tool":  "kgdb_hex_to_bytes_v2"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027hex\u0027 ",
+                                                 "tool":  "kgdb_hex_le_to_u64"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027data\u0027 ",
+                                                 "tool":  "kgdb_rle_encode"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027data\u0027 ",
+                                                 "tool":  "kgdb_rle_decode"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027data\u0027 ",
+                                                 "tool":  "kgdb_rsp_checksum"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027data\u0027 ",
+                                                 "tool":  "kgdb_gdb_packet_to_wire"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: packet error: missing \u0027$\u0027 prefix: \"\" ",
+                                                 "tool":  "kgdb_gdb_packet_parse"
+                                             },
+                                             {
+                                                 "prefix":  "kgdb",
+                                                 "error":  "invalid params: missing \u0027hex\u0027 ",
+                                                 "tool":  "kgdb_decode_hex_buf"
+                                             },
+                                             {
+                                                 "prefix":  "malpedia",
+                                                 "error":  "invalid params: bad ruleset: missing field `name` ",
+                                                 "tool":  "malpedia_check_ruleset_quality"
+                                             },
+                                             {
+                                                 "prefix":  "net",
+                                                 "error":  "invalid params: missing \u0027addr\u0027 ",
+                                                 "tool":  "net_is_private_addr"
+                                             },
+                                             {
+                                                 "prefix":  "net",
+                                                 "error":  "invalid params: missing \u0027bytes\u0027 ",
+                                                 "tool":  "net_proxy_rate_limiter_check"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "invalid params: missing \u0027pairs\u0027 ",
+                                                 "tool":  "rlib_dec_symbol_map_from_flirt_pairs"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "invalid params: missing \u0027ty\u0027 ",
+                                                 "tool":  "rlib_dec_typeprop_set_get"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "invalid params: missing \u0027lines\u0027 ",
+                                                 "tool":  "rlib_dec_cfs_detect_loop"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "invalid params: missing \u0027pairs\u0027 ",
+                                                 "tool":  "rlib_dec2_symbol_map_extend_pairs"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "invalid params: missing \u0027addr\u0027 ",
+                                                 "tool":  "rlib_dec2_name_recovery_pass"
+                                             },
+                                             {
+                                                 "prefix":  "rlib",
+                                                 "error":  "internal error: missing \u0027msg\u0027 ",
+                                                 "tool":  "rlib_dec2_diagnostic_from_pass"
+                                             },
+                                             {
+                                                 "prefix":  "rustre",
+                                                 "error":  "invalid params: missing query ",
+                                                 "tool":  "rustre_symbols_ext_cross_ref_index_ops"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027a\u0027 or \u0027a_hex\u0027 ",
+                                                 "tool":  "script_bytes_concat"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027haystack\u0027 or \u0027haystack_hex\u0027 ",
+                                                 "tool":  "script_bytes_find"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027from\u0027 or \u0027from_hex\u0027 ",
+                                                 "tool":  "script_lua_template_patch_pattern"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027value\u0027 ",
+                                                 "tool":  "script_python_pure_value_classify"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027value\u0027 ",
+                                                 "tool":  "script_python_pyvalue_is_truthy"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027value\u0027 ",
+                                                 "tool":  "script_python_pyvalue_len"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027value\u0027 ",
+                                                 "tool":  "script_python_pyvalue_as_int"
+                                             },
+                                             {
+                                                 "prefix":  "script",
+                                                 "error":  "invalid params: missing \u0027value\u0027 ",
+                                                 "tool":  "script_python_pyscriptvalue_display"
+                                             },
+                                             {
+                                                 "prefix":  "symbols",
+                                                 "error":  "invalid params: missing \u0027stab\u0027 or \u0027stab_hex\u0027 ",
+                                                 "tool":  "symbols_stabs_record_parse_all_be"
+                                             },
+                                             {
+                                                 "prefix":  "symbols",
+                                                 "error":  "invalid params: missing \u0027stab\u0027 or \u0027stab_hex\u0027 ",
+                                                 "tool":  "symbols_stabs_provider_from_bytes"
+                                             },
+                                             {
+                                                 "prefix":  "symbols",
+                                                 "error":  "invalid params: missing \u0027binary_path\u0027 ",
+                                                 "tool":  "symbols_discover_pdb_for_binary"
+                                             },
+                                             {
+                                                 "prefix":  "symbols",
+                                                 "error":  "invalid params: missing \u0027stab\u0027 or \u0027stab_hex\u0027 ",
+                                                 "tool":  "symbols_stabs_parse_all"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "trace_coverage_afl_new_edges_v2"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027bytes\u0027 ",
+                                                 "tool":  "trace_coverage_afl_bitmap_count"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "trace_coverage_afl_new_coverage"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027bytes\u0027 ",
+                                                 "tool":  "trace_coverage_parse_custom_binary"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "trace_coverage_afl_jaccard"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "trace_coverage_covbitmap_ops"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027a\u0027 ",
+                                                 "tool":  "trace_coverage_diff_overlap_pct"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027bytes\u0027 ",
+                                                 "tool":  "trace_coverage_covbitmap_clear_bits"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027idx\u0027 ",
+                                                 "tool":  "trace_navigate_insn_entry_v2"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027idx\u0027 ",
+                                                 "tool":  "trace_navigate_call_entry"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027idx\u0027 ",
+                                                 "tool":  "trace_navigate_ret_entry"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027fn_addr\u0027 ",
+                                                 "tool":  "trace_navigate_stackframe_display_name"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027name\u0027 ",
+                                                 "tool":  "trace_navigate_bookmark_with_note"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027cap\u0027 ",
+                                                 "tool":  "trace_navigate_step_window"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027entries\u0027 ",
+                                                 "tool":  "trace_navigate_idx_for_tsc"
+                                             },
+                                             {
+                                                 "prefix":  "trace",
+                                                 "error":  "invalid params: missing \u0027writes\u0027 ",
+                                                 "tool":  "trace_navigate_mem_access_index"
+                                             }
+                                         ],
+                       "INTERNAL_ERROR":  [
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "internal error: emulation error: emulator not started; ",
+                                                  "tool":  "debug_unicorn_emulate_steps"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: start offset 0x0000 not found ",
+                                                  "tool":  "dotnet_edit_nop_fill_range"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_field_sig_blob: data too short:  ",
+                                                  "tool":  "dotnet_metadata_parse_field_sig_blob"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_local_var_sig: data too short: n ",
+                                                  "tool":  "dotnet_metadata_parse_local_var_sig"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_method_sig_blob: data too short: ",
+                                                  "tool":  "dotnet_metadata_parse_method_sig_blob"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: pretty_print_type_sig: data too short: ",
+                                                  "tool":  "dotnet_metadata_pretty_print_type_sig"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_array_shape: data too short: nee ",
+                                                  "tool":  "dotnet_metadata_parse_array_shape"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_custom_attribute_blob: data too  ",
+                                                  "tool":  "dotnet_metadata_parse_custom_attribute_blob"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_method_body: data too short: nee ",
+                                                  "tool":  "dotnet_metadata_parse_method_body"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_all_type_names_basic"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_all_field_names"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_assembly_ref_names"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_find_type_def_row"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_get_type_view"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_get_method_view"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_resolve_token"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_custom_attribute_blob_typed: dat ",
+                                                  "tool":  "dotnet_metadata_parse_ca_typed"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_type_def_by_index"
+                                              },
+                                              {
+                                                  "prefix":  "dotnet",
+                                                  "error":  "internal error: parse_metadata_direct: data too short: ",
+                                                  "tool":  "dotnet_metadata_method_def_by_index"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "internal error: lnk parse: too short: need 76, got 16 ",
+                                                  "tool":  "forensics_fs_lnk_analyzer_summary"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "internal error: lnk parse: too short: need 76, got 16 ",
+                                                  "tool":  "forensics_fs_lnk_file_target_path"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "internal error: prefetch parse: file too short: need 8 ",
+                                                  "tool":  "forensics_fs_prefetch_analyzer_report"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "internal error: prefetch parse: file too short: need 8 ",
+                                                  "tool":  "forensics_fs_prefetch_pattern_matcher_risk"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "internal error: prefetch parse: file too short: need 8 ",
+                                                  "tool":  "forensics_fs_prefetch_file_loaded_modules"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "internal error: pcap parse failed: buffer too short: n ",
+                                                  "tool":  "net_pcap_file_parse_info"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "internal error: split failed: buffer too short: need 2 ",
+                                                  "tool":  "net_pcap_split_by_count"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "internal error: split failed: buffer too short: need 2 ",
+                                                  "tool":  "net_pcap_split_by_time"
+                                              },
+                                              {
+                                                  "prefix":  "patch",
+                                                  "error":  "internal error: pe_va_to_file_offset: not a PE binary  ",
+                                                  "tool":  "patch_pe_va_to_file_offset"
+                                              },
+                                              {
+                                                  "prefix":  "script",
+                                                  "error":  "internal error: type mismatch: expected collection, go ",
+                                                  "tool":  "script_value_len_builtin"
+                                              },
+                                              {
+                                                  "prefix":  "trace",
+                                                  "error":  "internal error: open_trace_file: store error: file is  ",
+                                                  "tool":  "trace_open_trace_file"
+                                              }
+                                          ],
+                       "INVALID_FORMAT":  [
+                                              {
+                                                  "prefix":  "adb",
+                                                  "error":  "invalid params: decode failed: protocol error: message ",
+                                                  "tool":  "adb_decode_message"
+                                              },
+                                              {
+                                                  "prefix":  "adb",
+                                                  "error":  "invalid params: bad level:  ",
+                                                  "tool":  "adb_filter_by_level"
+                                              },
+                                              {
+                                                  "prefix":  "adb",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "adb_msg_write"
+                                              },
+                                              {
+                                                  "prefix":  "adb",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "adb_msg_auth"
+                                              },
+                                              {
+                                                  "prefix":  "adb",
+                                                  "error":  "invalid params: could not parse brief logcat line ",
+                                                  "tool":  "adb_log_level_display"
+                                              },
+                                              {
+                                                  "prefix":  "adf",
+                                                  "error":  "invalid params: n must be \u003e 0 ",
+                                                  "tool":  "adf_compute_dominators_chain"
+                                              },
+                                              {
+                                                  "prefix":  "adf",
+                                                  "error":  "invalid params: n must be \u003e 0 ",
+                                                  "tool":  "adf_postorder_chain"
+                                              },
+                                              {
+                                                  "prefix":  "agent",
+                                                  "error":  "invalid params: template not found: main ",
+                                                  "tool":  "agent_prompts_registry_render"
+                                              },
+                                              {
+                                                  "prefix":  "analysis",
+                                                  "error":  "invalid params: bad a: invalid value: map, expected ma ",
+                                                  "tool":  "analysis_type_fact_join"
+                                              },
+                                              {
+                                                  "prefix":  "arch",
+                                                  "error":  "invalid params: reserved or implementation-defined opc ",
+                                                  "tool":  "arch_jvm_decode"
+                                              },
+                                              {
+                                                  "prefix":  "arch",
+                                                  "error":  "invalid params: reserved or implementation-defined opc ",
+                                                  "tool":  "arch_jvm_decode_at"
+                                              },
+                                              {
+                                                  "prefix":  "arch",
+                                                  "error":  "invalid params: invalid file format: unknown Wasm opco ",
+                                                  "tool":  "arch_wasm_function_stats_from_bytes"
+                                              },
+                                              {
+                                                  "prefix":  "codeview",
+                                                  "error":  "invalid params: parse_cv_symbols: record too short ",
+                                                  "tool":  "codeview_parse_symbols"
+                                              },
+                                              {
+                                                  "prefix":  "codeview",
+                                                  "error":  "invalid params: parse_cv_type_records: record too shor ",
+                                                  "tool":  "codeview_parse_type_records"
+                                              },
+                                              {
+                                                  "prefix":  "codeview",
+                                                  "error":  "invalid params: parse_cv_symbols: record too short ",
+                                                  "tool":  "codeview_symbol_filter_count"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: kind: unknown \u0027Call\u0027 ",
+                                                  "tool":  "debug_unicorn_watchpoint_probe"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: hook_type: \u0027\u0027 ",
+                                                  "tool":  "debug_unicorn_hook_record_describe"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: granularity: unknown \u0027\u0027 ",
+                                                  "tool":  "debug_unicorn_coverage_granularity_align"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: kind: unknown \u0027Call\u0027 ",
+                                                  "tool":  "debug_unicorn_fault_rule_should_fire"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: preset: unknown \u0027\u0027 ",
+                                                  "tool":  "debug_unicorn_v2_config_presets"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: granularity must be instruction|cache_ ",
+                                                  "tool":  "debug_unicorn_coverage_granularity_align_v2"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: preset must be r|rw|rx|rwx ",
+                                                  "tool":  "debug_unicorn_region_perms_flags_v2"
+                                              },
+                                              {
+                                                  "prefix":  "debug",
+                                                  "error":  "invalid params: watch_kind must be read|write|read_wri ",
+                                                  "tool":  "debug_unicorn_watch_kind_matches_v2"
+                                              },
+                                              {
+                                                  "prefix":  "deobf",
+                                                  "error":  "internal error: internal error: invalid hex char: 0x74 ",
+                                                  "tool":  "deobf_string_hex_decode"
+                                              },
+                                              {
+                                                  "prefix":  "deobf",
+                                                  "error":  "invalid params: s_final must be 256 bytes ",
+                                                  "tool":  "deobf_string_rc4_inverse_ksa_v3"
+                                              },
+                                              {
+                                                  "prefix":  "deobf",
+                                                  "error":  "invalid params: alphabet must be 64 bytes ",
+                                                  "tool":  "deobf_string_decode_base64_custom_v3"
+                                              },
+                                              {
+                                                  "prefix":  "diff",
+                                                  "error":  "invalid params: cost_matrix empty ",
+                                                  "tool":  "diff_bindiff_hungarian_dims"
+                                              },
+                                              {
+                                                  "prefix":  "emu",
+                                                  "error":  "invalid params: args must have exactly 6 entries ",
+                                                  "tool":  "emu_qiling_syscall_ctx_args"
+                                              },
+                                              {
+                                                  "prefix":  "events",
+                                                  "error":  "invalid params: invalid kind: Call ",
+                                                  "tool":  "events_kind_subscription"
+                                              },
+                                              {
+                                                  "prefix":  "flirt",
+                                                  "error":  "invalid params: parse error: sig file too short ",
+                                                  "tool":  "flirt_parse_sig_header"
+                                              },
+                                              {
+                                                  "prefix":  "flirt",
+                                                  "error":  "invalid params: parse error: not an ELF file ",
+                                                  "tool":  "flirt_gen_elf_parse"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "invalid params: prefetch parse: invalid magic 03000000 ",
+                                                  "tool":  "forensics_fs_prefetch_parse"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "invalid params: prefetch parse: invalid magic 03000000 ",
+                                                  "tool":  "forensics_fs_prefetch_summary"
+                                              },
+                                              {
+                                                  "prefix":  "forensics",
+                                                  "error":  "invalid params: lnk parse: bad magic: 0x00905a4d ",
+                                                  "tool":  "forensics_fs_lnk_parse"
+                                              },
+                                              {
+                                                  "prefix":  "fuzz",
+                                                  "error":  "invalid params: parse: parse error: utf8 error: invali ",
+                                                  "tool":  "fuzz_cov_drcov_parse"
+                                              },
+                                              {
+                                                  "prefix":  "fuzz",
+                                                  "error":  "invalid params: parse: parse error: utf8 error: invali ",
+                                                  "tool":  "fuzz_cov_drcov_header_parse"
+                                              },
+                                              {
+                                                  "prefix":  "fuzz",
+                                                  "error":  "invalid params: parse: parse error: utf8 error: invali ",
+                                                  "tool":  "fuzz_cov_drcov_blocks_per_module"
+                                              },
+                                              {
+                                                  "prefix":  "fuzz",
+                                                  "error":  "invalid params: a ",
+                                                  "tool":  "fuzz_cov_diff_jaccard"
+                                              },
+                                              {
+                                                  "prefix":  "fuzz",
+                                                  "error":  "invalid params: a ",
+                                                  "tool":  "fuzz_cov_coverage_run_merge"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: import: parse error at token \u0027test\u0027: u ",
+                                                  "tool":  "hex_pattern_import_ida_pat"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: bytes: not array ",
+                                                  "tool":  "hex_pattern_masked_new"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: bytes: not array ",
+                                                  "tool":  "hex_pattern_masked_matches_at"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "hex_pattern_regex_search_v4"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "hex_pattern_group_compile_v4"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "hex_pattern_group_any_matches_v4"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "hex_pattern_signature_matches_v4"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: empty pattern ",
+                                                  "tool":  "hex_pattern_to_hex_string_v3"
+                                              },
+                                              {
+                                                  "prefix":  "hex",
+                                                  "error":  "invalid params: empty pattern ",
+                                                  "tool":  "hex_pattern_to_masked_v3"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: parse error: unsupported size_t_size 0 ",
+                                                  "tool":  "loader_lua_read_string"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: truncated header ",
+                                                  "tool":  "loader_ole_list_streams"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: invalid magic bytes ",
+                                                  "tool":  "loader_wasm_parse"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: invalid magic bytes ",
+                                                  "tool":  "loader_wasm_stats"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: ELF parse: Invalid magic number: 0x332 ",
+                                                  "tool":  "loader_elf_info_summary"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: Mach-O parse: invalid file format: Unk ",
+                                                  "tool":  "loader_macho_parse_summary"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: ElfInfo::parse: Invalid magic number:  ",
+                                                  "tool":  "loader_elf_parse_info"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: ElfInfo::parse: Invalid magic number:  ",
+                                                  "tool":  "loader_elf_plt_entries"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "internal error: macho parse: invalid file format: Unkn ",
+                                                  "tool":  "loader_macho_parse"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: PeInfo::parse: Malformed entity: DOS h ",
+                                                  "tool":  "loader_pe_parse_info"
+                                              },
+                                              {
+                                                  "prefix":  "loader",
+                                                  "error":  "invalid params: PeInfo::parse: Malformed entity: DOS h ",
+                                                  "tool":  "loader_pe_imports_from_dll"
+                                              },
+                                              {
+                                                  "prefix":  "lua",
+                                                  "error":  "invalid params: invalid magic ",
+                                                  "tool":  "lua_loader_lua_header_is_official_format_wx1"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: invalid rwx string:  ",
+                                                  "tool":  "mem_perms_from_rwx"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: pattern must not be empty ",
+                                                  "tool":  "mem_search_bytes_range_hex"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: \u0027block_size\u0027 must be \u003e 0 ",
+                                                  "tool":  "mem_shannon_entropy_max_block_wire"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: \u0027block_size\u0027 must be \u003e 0 ",
+                                                  "tool":  "mem_shannon_entropy_min_block_wire"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: \u0027block_size\u0027 must be \u003e 0 ",
+                                                  "tool":  "mem_shannon_entropy_mean_block_wire"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: empty pattern ",
+                                                  "tool":  "mem_search_bytes_hex_v2"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: bad rwx ",
+                                                  "tool":  "mem_perms_from_rwx_v5"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: empty pattern ",
+                                                  "tool":  "mem_find_bytes_provider_v5"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: bad pattern/mask ",
+                                                  "tool":  "mem_search_bytes_with_mask_v5"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: empty inputs ",
+                                                  "tool":  "mem_composite_first_wins_v5"
+                                              },
+                                              {
+                                                  "prefix":  "mem",
+                                                  "error":  "invalid params: bad inputs ",
+                                                  "tool":  "mem_patched_read_v5"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: decode error:  does not have an .apk e ",
+                                                  "tool":  "mobile_apktool_apk_decode_smali_count"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: build error: directory path is empty ",
+                                                  "tool":  "mobile_apktool_impl_build"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "mobile_dyld_header_parse"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: parse: Truncated data at offset 0 ",
+                                                  "tool":  "mobile_dyld_parse_dyld_magic"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: uuid must have 16 bytes ",
+                                                  "tool":  "mobile_dyld_format_uuid"
+                                              },
+                                              {
+                                                  "prefix":  "mobile",
+                                                  "error":  "invalid params: uuid must have 16 bytes ",
+                                                  "tool":  "mobile_dyld_header_uuid_string"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: parse_ipv6_full failed: buffer too sho ",
+                                                  "tool":  "net_parse_ipv6_full"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid IP address syntax ",
+                                                  "tool":  "net_is_multicast_addr_v2"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed reque ",
+                                                  "tool":  "net_proxy_http_request_line_parse"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed reque ",
+                                                  "tool":  "net_proxy_http_request_line_is_http11"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed reque ",
+                                                  "tool":  "net_proxy_http_request_line_is_http2"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed statu ",
+                                                  "tool":  "net_proxy_http_status_line_parse"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed statu ",
+                                                  "tool":  "net_proxy_http_status_line_is_success"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed statu ",
+                                                  "tool":  "net_proxy_http_status_line_is_redirect"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed statu ",
+                                                  "tool":  "net_proxy_http_status_line_is_client_error"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: invalid proxy request: malformed statu ",
+                                                  "tool":  "net_proxy_http_status_line_is_server_error"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: addr ",
+                                                  "tool":  "net_rules_ip_spec_matches"
+                                              },
+                                              {
+                                                  "prefix":  "net",
+                                                  "error":  "invalid params: parse error at token \u0027alert tcp any  - ",
+                                                  "tool":  "net_rules_port_spec_matches"
+                                              },
+                                              {
+                                                  "prefix":  "pe",
+                                                  "error":  "invalid params: buffer too short: need 64 bytes, have  ",
+                                                  "tool":  "pe_editor_parse_dos_header"
+                                              },
+                                              {
+                                                  "prefix":  "pe",
+                                                  "error":  "invalid params: buffer too short: need 20 bytes, have  ",
+                                                  "tool":  "pe_editor_parse_file_header"
+                                              },
+                                              {
+                                                  "prefix":  "pe",
+                                                  "error":  "invalid params: buffer too short: need 112 bytes, have ",
+                                                  "tool":  "pe_editor_parse_optional_header64"
+                                              },
+                                              {
+                                                  "prefix":  "plugin",
+                                                  "error":  "invalid params: plugin script inline did not return a  ",
+                                                  "tool":  "plugin_lua_load_inline"
+                                              },
+                                              {
+                                                  "prefix":  "sandbox",
+                                                  "error":  "invalid params: parse severity: invalid data: unknown  ",
+                                                  "tool":  "sandbox_report_severity_parse"
+                                              },
+                                              {
+                                                  "prefix":  "sandbox",
+                                                  "error":  "invalid params: invalid data: unknown severity:  ",
+                                                  "tool":  "sandbox_report_severity_score"
+                                              },
+                                              {
+                                                  "prefix":  "sandbox",
+                                                  "error":  "invalid params: invalid data: unknown format:  ",
+                                                  "tool":  "sandbox_report_format_extension"
+                                              },
+                                              {
+                                                  "prefix":  "script",
+                                                  "error":  "invalid params: index out of bounds: index 4, length 3 ",
+                                                  "tool":  "script_bytes_slice"
+                                              },
+                                              {
+                                                  "prefix":  "stabs",
+                                                  "error":  "invalid params: ch: empty ",
+                                                  "tool":  "stabs_type_code_from_char"
+                                              },
+                                              {
+                                                  "prefix":  "trace",
+                                                  "error":  "invalid params: \u0027kind\u0027 must be \u0027read\u0027 or \u0027write\u0027 ",
+                                                  "tool":  "trace_navigate_access_kind_display"
+                                              },
+                                              {
+                                                  "prefix":  "trace",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "trace_pt_decoder_remaining_bytes"
+                                              },
+                                              {
+                                                  "prefix":  "ttd",
+                                                  "error":  "invalid params: invalid digit found in string ",
+                                                  "tool":  "ttd_trace_position_from_u128"
+                                              },
+                                              {
+                                                  "prefix":  "ttd",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "ttd_replay_memory_state_apply_write"
+                                              },
+                                              {
+                                                  "prefix":  "ttd",
+                                                  "error":  "invalid params: args must contain \u0027bytes\u0027, \u0027hex\u0027, or \u0027 ",
+                                                  "tool":  "ttd_replay_delta_compressor_roundtrip"
+                                              },
+                                              {
+                                                  "prefix":  "ttd",
+                                                  "error":  "invalid params: query parse error: unknown command: SE ",
+                                                  "tool":  "ttd_replayer_query_execute_tick"
+                                              },
+                                              {
+                                                  "prefix":  "vmlift",
+                                                  "error":  "invalid params: lift error: Unknown opcode in bytecode ",
+                                                  "tool":  "vmlift_lift_to_pseudo_il"
+                                              },
+                                              {
+                                                  "prefix":  "yara",
+                                                  "error":  "invalid params: yara parse: parse error at line 1: exp ",
+                                                  "tool":  "yara_engine_parse_rule"
+                                              }
+                                          ]
+                   }
+}

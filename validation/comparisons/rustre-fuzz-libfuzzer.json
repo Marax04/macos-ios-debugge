@@ -1,0 +1,27 @@
+{
+  "crate": "rustre-fuzz-libfuzzer",
+  "mcp_surface": "none",
+  "note": "rustre-fuzz-libfuzzer is a workspace library crate (in-process libFuzzer-style fuzzer: mutators, RNG, coverage feedback, corpus manager, crash dedup/triage, harness scaffolding). It is NOT exposed via the MCP server: no references in crates/rustre-mcp-tools (grep for 'fuzz_libfuzzer'/'rustre-fuzz-libfuzzer' returns no MCP wiring). JSON-RPC stdio comparison against C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\rustre-mcp.exe is therefore N/A. Validation is restricted to pure-Python ground-truth checks of the public surface (cast helpers, RNG determinism, mutator semantics, coverage feedback, crash triage/dedup, libFuzzer corpus naming, corpus manager).",
+  "validator": "validation/validators/rustre-fuzz-libfuzzer.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 12,
+    "all_passed": true,
+    "checked_against_source": {
+      "cast::u64_to_u8/u16/u32 saturation": "matches u8::try_from(x).unwrap_or(u8::MAX) etc. in crates/rustre-fuzz-libfuzzer/src/lib.rs",
+      "cast::u128_to_u64 saturation": "matches u64::try_from(x).unwrap_or(u64::MAX)",
+      "cast::usize_to_i32 saturation": "matches i32::try_from(x).unwrap_or(i32::MAX)",
+      "Rng (xorshift64* style)": "deterministic across seeds",
+      "mutator empty-input invariants": "ByteFlip/Delete return empty unchanged",
+      "CoverageFeedback.record": "first-time edges set virgin=false and return new=true",
+      "triage_crash SIGSEGV+memcpy": "classified as critical/memory-corruption",
+      "dedup_crashes": "sha256(top-N frames) collapses duplicates",
+      "libfuzzer_corpus_name": "sha1(content) hex matches libFuzzer canonical naming",
+      "CorpusManager.add": "only inputs with new edges accepted"
+    }
+  },
+  "tests": 12,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

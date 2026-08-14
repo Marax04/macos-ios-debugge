@@ -1,0 +1,101 @@
+{
+  "module": "codeview_v2",
+  "tools_hardened": 7,
+  "tools_list": [
+    "codeview_build_test_pub32",
+    "codeview_parse_type_records",
+    "codeview_parse_cv8_lines",
+    "codeview_symbol_filter_count",
+    "codeview_parse_type_record_single",
+    "codeview_pdb_path_from_pe",
+    "codeview_pdb_superblock_parse"
+  ],
+  "checks_run": 16,
+  "checks_passed": 16,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "codeview_build_test_pub32",
+      "label": "known name+offset",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_build_test_pub32",
+      "label": "empty name offset=0",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_type_records",
+      "label": "empty bytes => 0 records",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_type_records",
+      "label": "one LF_PROCEDURE record",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_cv8_lines",
+      "label": "empty bytes => 0 blocks",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_cv8_lines",
+      "label": "one block with 2 lines",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_symbol_filter_count",
+      "label": "one PUB32 symbol",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_symbol_filter_count",
+      "label": "empty stream => count=0",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_type_record_single",
+      "label": "too short => parsed=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_type_record_single",
+      "label": "LF_POINTER record => parsed=true",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_parse_type_record_single",
+      "label": "unknown leaf => parsed=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_pdb_path_from_pe",
+      "label": "random bytes => found=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_pdb_path_from_pe",
+      "label": "MZ only => found=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_pdb_superblock_parse",
+      "label": "< 52 bytes => parsed=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_pdb_superblock_parse",
+      "label": "52 zero bytes => parsed=true, magic_ok=false",
+      "status": "PASS"
+    },
+    {
+      "tool": "codeview_pdb_superblock_parse",
+      "label": "valid MSF magic+fields => magic_ok=true, valid=true",
+      "status": "PASS"
+    }
+  ]
+}

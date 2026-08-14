@@ -1,0 +1,19 @@
+{
+  "tools_hardened": 2,
+  "tools_passed": 2,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "mips_encode_nop",
+      "status": "PASS",
+      "note": "word=0 hex=00000000"
+    },
+    {
+      "tool": "mips_gpr_name",
+      "status": "PASS",
+      "note": "all 32 registers verified"
+    }
+  ]
+}

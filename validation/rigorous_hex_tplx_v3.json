@@ -1,0 +1,94 @@
+{
+  "category": "hex_tplx",
+  "generated": "2026-07-11",
+  "notes": "All 11 tools hardened. hex_tplx_template_json_roundtrip validator check fixed (no 'ok' field in response; success is name==MZ and fields_count>0 and json_len>0).",
+  "tools": [
+    {
+      "tool": "hex_tplx_builtin_count",
+      "status": "PASS",
+      "reference": "builtin_templates() inserts 10 entries: MZ, PE_COFF, ELF32, ELF64, ZIP, PNG, BMP, JPEG, GIF, PDF",
+      "expected": {"count": 10},
+      "actual": {"count": 10}
+    },
+    {
+      "tool": "hex_tplx_registry_with_builtins",
+      "status": "PASS",
+      "reference": "TemplateRegistry::with_builtins() delegates to builtin_templates(), same 10 entries",
+      "expected": {"len": 10, "names": ["BMP","ELF32","ELF64","GIF","JPEG","MZ","PDF","PE_COFF","PNG","ZIP"]},
+      "actual": {"len": 10, "names": ["BMP","ELF32","ELF64","GIF","JPEG","MZ","PDF","PE_COFF","PNG","ZIP"]}
+    },
+    {
+      "tool": "hex_tplx_template_json_roundtrip",
+      "status": "PASS",
+      "reference": "Template::to_json then from_json; success = name==MZ and fields_count>0 and json_len>0 (no 'ok' field in response)",
+      "expected": {"name": "MZ", "fields_count_gt": 0, "json_len_gt": 0},
+      "actual": {"name": "MZ", "fields_count": 19, "json_len": 3657}
+    },
+    {
+      "tool": "hex_tplx_expr_eval",
+      "status": "PASS",
+      "reference": "Expr::Eq(field, value).eval({field: actual}) == (actual == value)",
+      "test_cases": [
+        {"args": {"field":"x","value":42,"actual":42}, "expected": true, "actual": true},
+        {"args": {"field":"x","value":42,"actual":99}, "expected": false, "actual": false},
+        {"args": {"field":"f","value":0,"actual":0}, "expected": true, "actual": true}
+      ]
+    },
+    {
+      "tool": "hex_tplx_bitfield_def_extract",
+      "status": "PASS",
+      "reference": "BitfieldDef::extract(raw) = (raw >> start_bit) & ((1 << bit_count) - 1)",
+      "test_cases": [
+        {"args": {"raw":255,"start_bit":0,"bit_count":4}, "expected": 15, "actual": 15},
+        {"args": {"raw":255,"start_bit":4,"bit_count":4}, "expected": 15, "actual": 15},
+        {"args": {"raw":43981,"start_bit":4,"bit_count":8}, "expected": 188, "actual": 188},
+        {"args": {"raw":0,"start_bit":0,"bit_count":8}, "expected": 0, "actual": 0}
+      ]
+    },
+    {
+      "tool": "hex_tplx_bitfield_struct_extract",
+      "status": "PASS",
+      "reference": "defs=[BitfieldDef('lo',0,4), BitfieldDef('hi',4,4)]; lo=(raw>>0)&0xF, hi=(raw>>4)&0xF",
+      "test_cases": [
+        {"args": {"raw":171}, "expected": {"lo":11,"hi":10,"raw":171,"field_count":2}, "actual": {"lo":11,"hi":10,"raw":171,"field_count":2}},
+        {"args": {"raw":255}, "expected": {"lo":15,"hi":15,"raw":255,"field_count":2}, "actual": {"lo":15,"hi":15,"raw":255,"field_count":2}},
+        {"args": {"raw":0}, "expected": {"lo":0,"hi":0,"raw":0,"field_count":2}, "actual": {"lo":0,"hi":0,"raw":0,"field_count":2}}
+      ]
+    },
+    {
+      "tool": "hex_tplx_printer_render",
+      "status": "PASS",
+      "reference": "render_struct(ParsedStruct{name='Empty',fields=[]}) at depth=0 -> 'struct Empty {\\n}\\n'",
+      "expected": "struct Empty {\n}\n",
+      "actual": "struct Empty {\n}\n"
+    },
+    {
+      "tool": "hex_tplx_pe_opt_header",
+      "status": "PASS",
+      "reference": "template_pe_optional_header() adds 30 fields: Magic through NumberOfRvaAndSizes",
+      "expected": {"name": "PE_OPT_HEADER", "field_count": 30},
+      "actual": {"name": "PE_OPT_HEADER", "field_count": 30}
+    },
+    {
+      "tool": "hex_tplx_elf32_shdr",
+      "status": "PASS",
+      "reference": "template_elf32_shdr() adds 10 fields: sh_name through sh_entsize",
+      "expected": {"name": "ELF32_SHDR", "field_count": 10},
+      "actual": {"name": "ELF32_SHDR", "field_count": 10}
+    },
+    {
+      "tool": "hex_tplx_apply_builtin_to_bytes",
+      "status": "PASS",
+      "reference": "Apply MZ builtin template to 128-byte buffer starting with 4D5A; result name=='MZ' and field_count>0",
+      "expected": {"name": "MZ", "field_count_gt": 0},
+      "actual": {"name": "MZ", "field_count": 19}
+    },
+    {
+      "tool": "hex_tplx_registry_apply",
+      "status": "PASS",
+      "reference": "TemplateRegistry::apply('MZ', buf) same as apply_builtin_to_bytes; result name=='MZ' and field_count>0",
+      "expected": {"name": "MZ", "field_count_gt": 0},
+      "actual": {"name": "MZ", "field_count": 19}
+    }
+  ]
+}

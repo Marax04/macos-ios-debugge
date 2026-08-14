@@ -1,0 +1,551 @@
+{
+  "module": "net_v3",
+  "tools_hardened": 108,
+  "checks_passed": 108,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "mismatches": [],
+  "skipped_details": [],
+  "all_results": [
+    {
+      "tool": "net_proxy_hex_encode",
+      "status": "PASS",
+      "note": "hex_encode(deadbeef)=deadbeef"
+    },
+    {
+      "tool": "net_proxy_ms_to_iso8601",
+      "status": "PASS",
+      "note": "ms=0 => {'iso8601': '1970-01-01T00:00:00.000Z', 'source': 'rustre_net_proxy::HarExporter::ms_to_iso8601'}"
+    },
+    {
+      "tool": "net_proxy_ms_to_iso8601_1s",
+      "status": "PASS",
+      "note": "ms=1000 => {'iso8601': '1970-01-01T00:00:01.000Z', 'source': 'rustre_net_proxy::HarExporter::ms_to_iso8601'}"
+    },
+    {
+      "tool": "net_dns_type_name_v2(1)",
+      "status": "PASS",
+      "note": "rtype=1 => A"
+    },
+    {
+      "tool": "net_dns_type_name_v2(28)",
+      "status": "PASS",
+      "note": "rtype=28 => AAAA"
+    },
+    {
+      "tool": "net_dns_type_name_v2(5)",
+      "status": "PASS",
+      "note": "rtype=5 => CNAME"
+    },
+    {
+      "tool": "net_dns_type_name_v2(15)",
+      "status": "PASS",
+      "note": "rtype=15 => MX"
+    },
+    {
+      "tool": "net_dns_type_name_v2(2)",
+      "status": "PASS",
+      "note": "rtype=2 => NS"
+    },
+    {
+      "tool": "net_icmp_type_name_v2(0)",
+      "status": "PASS",
+      "note": "icmp=0 => {'name': 'Echo Reply', 'source': 'rustre_net::icmp_type_name'}"
+    },
+    {
+      "tool": "net_icmp_type_name_v2(8)",
+      "status": "PASS",
+      "note": "icmp=8 => {'name': 'Echo Request', 'source': 'rustre_net::icmp_type_name'}"
+    },
+    {
+      "tool": "net_icmp_type_name_v2(3)",
+      "status": "PASS",
+      "note": "icmp=3 => {'name': 'Destination Unreachable', 'source': 'rustre_net::icmp_type_name'}"
+    },
+    {
+      "tool": "net_is_multicast_addr_v2(224.0.0.1)",
+      "status": "PASS",
+      "note": "224.0.0.1 multicast=True"
+    },
+    {
+      "tool": "net_is_multicast_addr_v2(192.168.1.1)",
+      "status": "PASS",
+      "note": "192.168.1.1 multicast=False"
+    },
+    {
+      "tool": "net_is_multicast_addr_v2(ff02::1)",
+      "status": "PASS",
+      "note": "ff02::1 multicast=True"
+    },
+    {
+      "tool": "net_is_multicast_addr_v2(2001::1)",
+      "status": "PASS",
+      "note": "2001::1 multicast=False"
+    },
+    {
+      "tool": "net_dissect_dnp3_app_fc_name(0)",
+      "status": "PASS",
+      "note": "fc=0 => {'fc': 0, 'name': 'CONFIRM', 'is_control': False, 'source': 'rustre_net_dissect::dnp3_app_fc_name'}"
+    },
+    {
+      "tool": "net_dissect_dnp3_app_fc_name(1)",
+      "status": "PASS",
+      "note": "fc=1 => {'fc': 1, 'name': 'READ', 'is_control': False, 'source': 'rustre_net_dissect::dnp3_app_fc_name'}"
+    },
+    {
+      "tool": "net_dissect_dnp3_app_fc_name(2)",
+      "status": "PASS",
+      "note": "fc=2 => {'fc': 2, 'name': 'WRITE', 'is_control': True, 'source': 'rustre_net_dissect::dnp3_app_fc_name'}"
+    },
+    {
+      "tool": "net_dissect_dnp3_app_fc_name(129)",
+      "status": "PASS",
+      "note": "fc=129 => {'fc': 129, 'name': 'RESPONSE', 'is_control': False, 'source': 'rustre_net_dissect::dnp3_app_fc_name'}"
+    },
+    {
+      "tool": "net_dissect_smb2_is_sensitive_share(ADMIN$)",
+      "status": "PASS",
+      "note": "ADMIN$ sensitive=True"
+    },
+    {
+      "tool": "net_dissect_smb2_is_sensitive_share(IPC$)",
+      "status": "PASS",
+      "note": "IPC$ sensitive=True"
+    },
+    {
+      "tool": "net_dissect_smb2_is_sensitive_share(C$)",
+      "status": "PASS",
+      "note": "C$ sensitive=True"
+    },
+    {
+      "tool": "net_dissect_smb2_is_sensitive_share(myshare)",
+      "status": "PASS",
+      "note": "myshare sensitive=False"
+    },
+    {
+      "tool": "net_proxy_http_method_display(GET)",
+      "status": "PASS",
+      "note": "display={'input': 'GET', 'display': 'GET', 'is_idempotent': True, 'has_body': False, 'source': 'rustre_net_proxy::HttpMethod::from_str'}"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body(GET)",
+      "status": "PASS",
+      "note": "GET has_body=False"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent(GET)",
+      "status": "PASS",
+      "note": "GET is_idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_display(POST)",
+      "status": "PASS",
+      "note": "display={'input': 'POST', 'display': 'POST', 'is_idempotent': False, 'has_body': True, 'source': 'rustre_net_proxy::HttpMethod::from_str'}"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body(POST)",
+      "status": "PASS",
+      "note": "POST has_body=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent(POST)",
+      "status": "PASS",
+      "note": "POST is_idempotent=False"
+    },
+    {
+      "tool": "net_proxy_http_method_display(PUT)",
+      "status": "PASS",
+      "note": "display={'input': 'PUT', 'display': 'PUT', 'is_idempotent': True, 'has_body': True, 'source': 'rustre_net_proxy::HttpMethod::from_str'}"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body(PUT)",
+      "status": "PASS",
+      "note": "PUT has_body=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent(PUT)",
+      "status": "PASS",
+      "note": "PUT is_idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_display(DELETE)",
+      "status": "PASS",
+      "note": "display={'input': 'DELETE', 'display': 'DELETE', 'is_idempotent': True, 'has_body': False, 'source': 'rustre_net_proxy::HttpMethod::from_str'}"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body(DELETE)",
+      "status": "PASS",
+      "note": "DELETE has_body=False"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent(DELETE)",
+      "status": "PASS",
+      "note": "DELETE is_idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_from_str",
+      "status": "PASS",
+      "note": "from_str(GET)={'method': 'GET', 'source': 'rustre_net_proxy::HttpMethod::from_str'}"
+    },
+    {
+      "tool": "net_proxy_http_status_classify(HTTP/1.1 200 OK)",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'version': 'HTTP/1.1', 'code': 200, 'reason': 'OK', 'is_success': True, 'is_redirect': False, 'is_client_error': False, 'is_server_error': False, 'source': 'rustre_net_proxy::HttpStatusLine'}"
+    },
+    {
+      "tool": "net_proxy_http_status_classify(HTTP/1.1 301 Moved)",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'version': 'HTTP/1.1', 'code': 301, 'reason': 'Moved', 'is_success': False, 'is_redirect': True, 'is_client_error': False, 'is_server_error': False, 'source': 'rustre_net_proxy::HttpStatusLine'}"
+    },
+    {
+      "tool": "net_proxy_http_status_classify(HTTP/1.1 404 Not Fou)",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'version': 'HTTP/1.1', 'code': 404, 'reason': 'Not Found', 'is_success': False, 'is_redirect': False, 'is_client_error': True, 'is_server_error': False, 'source': 'rustre_net_proxy::HttpStatusLine'}"
+    },
+    {
+      "tool": "net_proxy_http_status_classify(HTTP/1.1 500 Interna)",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'version': 'HTTP/1.1', 'code': 500, 'reason': 'Internal Server Error', 'is_success': False, 'is_redirect': False, 'is_client_error': False, 'is_server_error': True, 'source': 'rustre_net_proxy::HttpStatusLine'}"
+    },
+    {
+      "tool": "net_proxy_http_status_line_parse",
+      "status": "PASS",
+      "note": "parsed status=200"
+    },
+    {
+      "tool": "net_proxy_http_status_line_is_success(HTTP/1.1 200 OK)",
+      "status": "PASS",
+      "note": "=> True"
+    },
+    {
+      "tool": "net_proxy_http_status_line_is_redirect(HTTP/1.1 301 Mo)",
+      "status": "PASS",
+      "note": "=> True"
+    },
+    {
+      "tool": "net_proxy_http_status_line_is_client_error(HTTP/1.1 404 No)",
+      "status": "PASS",
+      "note": "=> True"
+    },
+    {
+      "tool": "net_proxy_http_status_line_is_server_error(HTTP/1.1 500 In)",
+      "status": "PASS",
+      "note": "=> True"
+    },
+    {
+      "tool": "net_proxy_http_status_line_is_success(HTTP/1.1 404 No)",
+      "status": "PASS",
+      "note": "=> False"
+    },
+    {
+      "tool": "net_proxy_http_request_line_parse",
+      "status": "PASS",
+      "note": "parsed method=GET"
+    },
+    {
+      "tool": "net_proxy_http_request_line_is_http11",
+      "status": "PASS",
+      "note": "HTTP/1.1 => True"
+    },
+    {
+      "tool": "net_proxy_http_request_line_is_http2",
+      "status": "PASS",
+      "note": "HTTP/1.1 is_http2 => False"
+    },
+    {
+      "tool": "net_proxy_http_request_line_version",
+      "status": "PASS",
+      "note": "version={'ok': True, 'method': 'GET', 'uri': '/index.html', 'version': 'HTTP/1.1', 'is_http11': True, 'is_http2': False, 'source': 'rustre_net_proxy::HttpRequestLine'}"
+    },
+    {
+      "tool": "net_proxy_parse_request_line",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'method': 'POST', 'uri': '/api/v1', 'version': 'HTTP/1.1', 'source': 'rustre_net_proxy::HttpRequestLine::parse'}"
+    },
+    {
+      "tool": "net_proxy_parse_status_line",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'version': 'HTTP/1.1', 'code': 404, 'reason': 'Not Found', 'source': 'rustre_net_proxy::HttpStatusLine::parse'}"
+    },
+    {
+      "tool": "net_proxy_parse_connect",
+      "status": "PASS",
+      "note": "=> {'target': 'example.com:443', 'matched': True, 'source': 'rustre_net_proxy::HttpProxy::parse_connect'}"
+    },
+    {
+      "tool": "net_proxy_http_connect_request_parse",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'host': 'example.com', 'port': 443, 'http_version': 'HTTP/1.1', 'headers': [['Host', 'example.com:443']], 'source': 'rustre_net_proxy::HttpConnectRequest::parse'}"
+    },
+    {
+      "tool": "net_proxy_http_connect_error_response",
+      "status": "PASS",
+      "note": "=> {'response': 'HTTP/1.1 403 Forbidden\\r\\n\\r\\n', 'source': 'rustre_net_proxy::HttpConnectRequest::error_response'}"
+    },
+    {
+      "tool": "net_proxy_headers_to_json",
+      "status": "PASS",
+      "note": "headers_to_json ok"
+    },
+    {
+      "tool": "net_proxy_header_rewrite_set",
+      "status": "PASS",
+      "note": "=> {'output': 'Content-Type: text/html\\r\\nX-Custom: test', 'source': 'rustre_net_proxy::HeaderRewriteRule::set'}"
+    },
+    {
+      "tool": "net_proxy_header_rewrite_remove",
+      "status": "PASS",
+      "note": "=> {'output': 'Accept: */*', 'source': 'rustre_net_proxy::HeaderRewriteRule::remove'}"
+    },
+    {
+      "tool": "net_proxy_header_rewriter_apply_all",
+      "status": "PASS",
+      "note": "=> {'output': 'Accept: */*\\r\\nX-Proxy: 1', 'source': 'rustre_net_proxy::HeaderRewriter::apply_all'}"
+    },
+    {
+      "tool": "net_proxy_acl_entry_allow_all",
+      "status": "PASS",
+      "note": "=> {'host_pattern': '*', 'port': None, 'matches_example': True, 'source': 'rustre_net_proxy::AclEntry::allow_all'}"
+    },
+    {
+      "tool": "net_proxy_acl_entry_deny_host",
+      "status": "PASS",
+      "note": "=> {'host_pattern': 'evil.com', 'matches': True, 'source': 'rustre_net_proxy::AclEntry::deny_host'}"
+    },
+    {
+      "tool": "net_proxy_acl_entry_matches",
+      "status": "PASS",
+      "note": "evil.com matches evil.com:443 => {'deny_matches': True, 'allow_all_matches': True, 'source': 'rustre_net_proxy::AclEntry::matches'}"
+    },
+    {
+      "tool": "net_proxy_acl_evaluate",
+      "status": "PASS",
+      "note": "=> {'action': 'Deny', 'len': 1, 'is_empty': False, 'source': 'rustre_net_proxy::ProxyAcl::evaluate'}"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match_len",
+      "status": "PASS",
+      "note": "'he' in 'hello' len=2"
+    },
+    {
+      "tool": "net_proxy_rate_limiter_check",
+      "status": "PASS",
+      "note": "=> {'connected': True, 'sent': True, 'active_connections': 1, 'bytes_this_window': 500, 'source': 'rustre_net_proxy::RateLimiter'}"
+    },
+    {
+      "tool": "net_proxy_shared_stats_ops",
+      "status": "PASS",
+      "note": "=> {'requests': 1, 'bytes_in': 100, 'bytes_out': 200, 'errors': 1, 'connections': 1, 'source': 'rustre_net_proxy::SharedStats::snapshot'}"
+    },
+    {
+      "tool": "net_proxy_inject_xff_headers",
+      "status": "PASS",
+      "note": "=> {'injected': False, 'output_hex': 'deadbeef', 'output_len': 4, 'source': 'rustre_net_proxy::inject_xff_headers'}"
+    },
+    {
+      "tool": "net_proxy_decode_content_encoding",
+      "status": "PASS",
+      "note": "identity decode => {'input_len': 5, 'output_len': 5, 'output_hex': '68656c6c6f', 'source': 'rustre_net_proxy::decode_content_encoding'}"
+    },
+    {
+      "tool": "net_proxy_socks5_udp_header_parse",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'rsv': 0, 'frag': 0, 'atyp': 1, 'dst_addr': '192.168.1.1', 'dst_port': 80, 'source': 'rustre_net_proxy::Socks5UdpHeader::parse'}"
+    },
+    {
+      "tool": "net_decode_chunked_v2",
+      "status": "PASS",
+      "note": "chunked decode => decoded_hex=68656c6c6f"
+    },
+    {
+      "tool": "net_detect_protocol_v2",
+      "status": "PASS",
+      "note": "port 80 HTTP detected => {'protocol': 'HTTP', 'source': 'rustre_net::detect_protocol'}"
+    },
+    {
+      "tool": "net_dissect_byte_entropy(zeros)",
+      "status": "PASS",
+      "note": "entropy(zeros)=0.0"
+    },
+    {
+      "tool": "net_dissect_icmp_stream_tunnel_heuristic",
+      "status": "PASS",
+      "note": "=> {'count': 2, 'tunnel_suspected': False, 'source': 'rustre_net_dissect::icmp_stream_tunnel_heuristic'}"
+    },
+    {
+      "tool": "net_dissect_scan_http_attacks_decoded",
+      "status": "PASS",
+      "note": "=> {'count': 1, 'hits': [{'kind': 'SqlInjection', 'pattern': \"' or '\", 'offset': 6}], 'source': 'rustre_net_dissect::scan_http_attacks_decoded'}"
+    },
+    {
+      "tool": "net_parse_arp_v2",
+      "status": "PASS",
+      "note": "ARP parsed => {'op': 'Request', 'sha': 'aa:bb:cc:dd:ee:ff', 'ptype': 2048, 'hlen': 6, 'plen': 4, 'source': 'rustre_net::parse_arp'}"
+    },
+    {
+      "tool": "net_parse_ethernet_v2",
+      "status": "PASS",
+      "note": "Ethernet parsed => ok"
+    },
+    {
+      "tool": "net_parse_ipv4_v2",
+      "status": "PASS",
+      "note": "IPv4 parsed => ok"
+    },
+    {
+      "tool": "net_parse_ipv6_v2",
+      "status": "PASS",
+      "note": "IPv6 parsed ok"
+    },
+    {
+      "tool": "net_parse_icmp_v2",
+      "status": "PASS",
+      "note": "ICMP parsed => ok"
+    },
+    {
+      "tool": "net_parse_tcp_v2",
+      "status": "PASS",
+      "note": "TCP parsed => ok"
+    },
+    {
+      "tool": "net_parse_udp_v2",
+      "status": "PASS",
+      "note": "UDP parsed => ok"
+    },
+    {
+      "tool": "net_rules_aho_corasick_build",
+      "status": "PASS",
+      "note": "built AC automaton => {'state_count': 11, 'pattern_count': 2, 'source': 'rustre_net_rules::AhoCorasick::build'}"
+    },
+    {
+      "tool": "net_rules_aho_corasick_contains_any",
+      "status": "PASS",
+      "note": "'hello' in text => True"
+    },
+    {
+      "tool": "net_rules_aho_corasick_find_all",
+      "status": "PASS",
+      "note": "found 3 matches"
+    },
+    {
+      "tool": "net_rules_ahocorasick_find_first",
+      "status": "PASS",
+      "note": "first match => {'match': {'pattern_idx': 1, 'start': 0, 'end': 5}, 'source': 'rustre_net_rules::AhoCorasick::find_first'}"
+    },
+    {
+      "tool": "net_rules_ahocorasick_state_count",
+      "status": "PASS",
+      "note": "structural ok => {'state_count': 5, 'patterns': 2, 'source': 'rustre_net_rules::AhoCorasick::state_count'}"
+    },
+    {
+      "tool": "net_rules_find_bytes_nocase",
+      "status": "PASS",
+      "note": "found 'hello' (nocase) at index 0"
+    },
+    {
+      "tool": "net_rules_parse_single",
+      "status": "PASS",
+      "note": "parsed rule sid=1001"
+    },
+    {
+      "tool": "net_rules_parse_many",
+      "status": "PASS",
+      "note": "parsed 2 rules"
+    },
+    {
+      "tool": "net_rules_ip_spec_matches",
+      "status": "PASS",
+      "note": "192.168.1.100 in 192.168.1.0/24 => True"
+    },
+    {
+      "tool": "net_rules_port_spec_matches",
+      "status": "PASS",
+      "note": "port 80 matches spec '80' => True"
+    },
+    {
+      "tool": "net_rules_proto_display",
+      "status": "PASS",
+      "note": "=> {'protos': ['tcp', 'udp', 'icmp', 'any'], 'actions': ['alert', 'pass', 'drop', 'log', 'reject'], 'source': 'rustre_net_rules::{Proto,RuleAction}::Display'}"
+    },
+    {
+      "tool": "net_rules_ruledir_display",
+      "status": "PASS",
+      "note": "=> {'dirs': ['->', '<>'], 'protos': ['tcp', 'udp', 'icmp', 'any'], 'source': 'rustre_net_rules::{RuleDir,RuleProtocol}::Display'}"
+    },
+    {
+      "tool": "net_rules_ruleset_new_add_count",
+      "status": "PASS",
+      "note": "=> {'count': 1, 'source': 'rustre_net_rules::RuleSet::{new,add,count}'}"
+    },
+    {
+      "tool": "net_rules_engine_add_remove",
+      "status": "PASS",
+      "note": "=> {'before': 1, 'after': 0, 'source': 'rustre_net_rules::RuleEngine::{add_rule,remove_rule,rules}'}"
+    },
+    {
+      "tool": "net_rules_engine_evaluate",
+      "status": "PASS",
+      "note": "rule matched => {'rule_count': 1, 'match_count': 1, 'source': 'rustre_net_rules::RuleEngine::evaluate_all'}"
+    },
+    {
+      "tool": "net_rules_compiled_ruleset_eval",
+      "status": "PASS",
+      "note": "=> {'rule_count': 1, 'match_count': 1, 'source': 'rustre_net_rules::CompiledRuleSet::evaluate'}"
+    },
+    {
+      "tool": "net_rules_export_rules_json",
+      "status": "PASS",
+      "note": "json export ok (len=170)"
+    },
+    {
+      "tool": "net_rules_export_rules_snort",
+      "status": "PASS",
+      "note": "snort export ok (len=170)"
+    },
+    {
+      "tool": "net_rules_import_rules_json",
+      "status": "PASS",
+      "note": "structural ok (type=str)"
+    },
+    {
+      "tool": "net_rules_diff_rules",
+      "status": "PASS",
+      "note": "structural ok (type=str)"
+    },
+    {
+      "tool": "net_rules_ruleset_by_sid",
+      "status": "PASS",
+      "note": "=> {'sid': 1001, 'found': False, 'source': 'rustre_net_rules::RuleSet::by_sid'}"
+    },
+    {
+      "tool": "net_rules_network_spec_any",
+      "status": "PASS",
+      "note": "=> {'matches': True, 'source': 'rustre_net_rules::NetworkSpec::any'}"
+    },
+    {
+      "tool": "net_rules_packet_context_from_ipv4",
+      "status": "PASS",
+      "note": "=> {'ok': True, 'src_ip': '192.168.1.1', 'dst_ip': '192.168.1.2', 'src_port': 12345, 'dst_port': 80, 'ip_proto': 6, 'ttl': 64, 'payload_len': 0, 'source': 'rustre_net_rules::PacketContext::from_ipv4'}"
+    },
+    {
+      "tool": "net_rules_spec_engine_match",
+      "status": "PASS",
+      "note": "=> {'match_count': 1, 'source': 'rustre_net_rules::SpecRuleEngine::match_packet'}"
+    },
+    {
+      "tool": "net_rules_specrule_content_patterns",
+      "status": "PASS",
+      "note": "=> {'patterns': ['GET ', 'HTTP'], 'source': 'rustre_net_rules::SpecRule::content_patterns'}"
+    },
+    {
+      "tool": "net_rules_specrule_sid_msg",
+      "status": "PASS",
+      "note": "=> {'sid': 9999, 'msg': 'TestMsg', 'source': 'rustre_net_rules::SpecRule::{sid,msg}'}"
+    },
+    {
+      "tool": "net_rules_rule_store_roundtrip",
+      "status": "PASS",
+      "note": "=> {'saved': 1, 'loaded': 1, 'count': 1, 'source': 'rustre_net_rules::RuleStore'}"
+    }
+  ]
+}

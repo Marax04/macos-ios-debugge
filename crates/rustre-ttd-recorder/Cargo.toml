@@ -1,0 +1,33 @@
+[package]
+license.workspace = true
+name = "rustre-ttd-recorder"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-ttd = { path = "../rustre-ttd" }
+rustre-trace = { path = "../rustre-trace" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+rusqlite = { workspace = true }
+async-trait = { workspace = true }
+chacha20poly1305 = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", features = ["ptrace", "signal", "process", "user", "event"] }
+libc = "0.2"
+
+[lints]
+workspace = true

@@ -1,0 +1,129 @@
+{
+  "tier_a": [
+    {
+      "fn": "scan_ascii",
+      "result": [
+        {
+          "address": 4096,
+          "length": 5,
+          "encoding": "Ascii",
+          "value": "hello"
+        },
+        {
+          "address": 4102,
+          "length": 13,
+          "encoding": "Ascii",
+          "value": "world is here"
+        },
+        {
+          "address": 4116,
+          "length": 10,
+          "encoding": "Ascii",
+          "value": "foobar1234"
+        }
+      ]
+    },
+    {
+      "fn": "entropy",
+      "result": -0.0
+    },
+    {
+      "fn": "entropy",
+      "result": 1.0
+    },
+    {
+      "fn": "detect_xor_key",
+      "result": 27
+    },
+    {
+      "fn": "base64_decode",
+      "result": "aGVsbG8="
+    },
+    {
+      "fn": "hex_decode",
+      "result": "3q2+7w=="
+    },
+    {
+      "fn": "rot13_decode",
+      "result": "uryyb"
+    },
+    {
+      "fn": "levenshtein",
+      "result": 3
+    },
+    {
+      "fn": "lcs_length",
+      "result": 4
+    },
+    {
+      "fn": "extract_urls",
+      "result": [
+        "https://x.example.com/a",
+        "http://y.io"
+      ]
+    },
+    {
+      "fn": "extract_ips",
+      "result": [
+        "10.0.0.1",
+        "8.8.8.8"
+      ]
+    },
+    {
+      "fn": "is_private_ipv4",
+      "result": true
+    },
+    {
+      "fn": "parse_ipv4",
+      "result": [
+        8,
+        8,
+        8,
+        8
+      ]
+    }
+  ],
+  "tier_b": {
+    "mcp_count": 500,
+    "mcp_error": null,
+    "mcp_sample": [
+      {
+        "va": 5368713296,
+        "length": 14,
+        "encoding": "Utf16Le",
+        "value": "赊「荈￹萏Ř"
+      },
+      {
+        "va": 5368713330,
+        "length": 20,
+        "encoding": "Utf16Le",
+        "value": "蕍瓶䠲ڋ⥈䧸옹蜏 "
+      },
+      {
+        "va": 5368713350,
+        "length": 168,
+        "encoding": "Utf16Le",
+        "value": "譈ࡎň䧹힉襍麝Ģ襌䳺襈ၾ赌켽ﬡ䰁ｈ䧂훷Ō䃳ﶀ畵䑅䄏䌄똏㵬䘀똏㠴譈䠆荈׸癶譈ࡆӇ尸ふ䀰沈и衄㡴䠅잃䠆纉ｂ￿遦譈䠆荈Ǹ筶譈ࡆӆ尸血㡬䠁잃䠂纉：￿읈⑄Ġ"
+      },
+      {
+        "va": 5368713524,
+        "length": 38,
+        "encoding": "Utf16Le",
+        "value": "䠀襉䣗憎襍㽪ģ襌䣺纋Ｔ￿읈⑄Ġ"
+      },
+      {
+        "va": 5368713754,
+        "length": 34,
+        "encoding": "Utf16Le",
+        "value": "襈䧱횉襈㺈ģ襌䣲纋﷯￿읈⑄Ġ"
+      }
+    ],
+    "raw_text_len": 57723,
+    "mcp_values": 500,
+    "mcp_ascii_only": 12,
+    "raw_ascii_distinct": 108249,
+    "overlap": 12,
+    "overlap_pct": 1.0
+  },
+  "mismatches": []
+}

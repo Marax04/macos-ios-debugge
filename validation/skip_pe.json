@@ -1,0 +1,46 @@
+[
+  {
+    "tool": "pe_tools_rich_header_parse",
+    "reason": "requires real PE binary with a Rich header on disk; output depends on binary_id project state and binary content"
+  },
+  {
+    "tool": "pe_rebuild_find_pe_candidates",
+    "reason": "scans a memory dump for PE candidates; output is nondeterministic without a fixed memory dump input"
+  },
+  {
+    "tool": "pe_rebuild_calculate_pe_checksum",
+    "reason": "requires full PE byte array; same checksum algorithm already verified in rigorous_pe_v2.json as pe_tools_compute_pe_checksum"
+  },
+  {
+    "tool": "pe_rebuild_infer_characteristics",
+    "reason": "requires real PE section data to infer characteristics; output is binary-specific and nondeterministic"
+  },
+  {
+    "tool": "pe_editor_build_tree",
+    "reason": "CFF-Explorer-style tree requires a well-formed PE with valid optional header (240 bytes for PE32+); complex binary layout dependency"
+  },
+  {
+    "tool": "pe_editor_parse_file_header",
+    "reason": "requires a valid COFF FileHeader at a given offset; complex binary layout dependency"
+  },
+  {
+    "tool": "pe_editor_parse_optional_header64",
+    "reason": "requires a full 240-byte PE32+ optional header at a given offset; complex binary layout dependency"
+  },
+  {
+    "tool": "pe_editor_signing_scaffold_blob",
+    "reason": "builds WIN_CERTIFICATE blob whose layout depends on internal scaffold state; not independently computable without matching the exact struct layout"
+  },
+  {
+    "tool": "pe_editor_patchset_total_bytes",
+    "reason": "superseded by pe_editor_patchset_add_multi and pe_editor_x_patchset_total_bytes_after_add (both in rigorous_pe_v3.json)"
+  },
+  {
+    "tool": "pe_editor_export_add",
+    "reason": "modifies PE on disk; side-effecting and binary-dependent"
+  },
+  {
+    "tool": "pe_editor_export_remove",
+    "reason": "modifies PE on disk; side-effecting and binary-dependent"
+  }
+]

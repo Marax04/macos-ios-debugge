@@ -1,0 +1,8 @@
+{
+  "category": "syscalls",
+  "tools_in_category": 69,
+  "checks_total": 65,
+  "checks_passed": 65,
+  "checks_skipped": 6,
+  "mismatches": []
+}

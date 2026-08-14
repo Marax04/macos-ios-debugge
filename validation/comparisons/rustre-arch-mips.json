@@ -1,0 +1,24 @@
+{
+  "crate": "rustre-arch-mips",
+  "notes": "MCP exposes only `analysis_disasm_at_path_mips` for this crate (path-aware disassembly requiring a loaded binary with mapped sections). All other validator functions (encoders, branch-target math, GPR/ABI tables, segment math, COP0 helpers, prologue detect, delay-slot detect) are pure-math/internal — not exposed via MCP. End-to-end MCP disasm not run: no MIPS ELF sample available under repository (no *.elf or samples/*mips*).",
+  "mcp_tools_relevant": [
+    "analysis_disasm_at_path_mips"
+  ],
+  "validator_outputs": {
+    "swap32(0xAABBCCDD)": 3721182122,
+    "branch_target_i(0x1000,-4)": 4084,
+    "branch_target_j(0x1000,0x100)": 1024,
+    "gpr(29)": "$sp",
+    "gpr_role_o32(4)": "Arg",
+    "segment_name(0x80001234)": "kseg0",
+    "virt_to_phys(0x80001234)": 4660,
+    "exc_name(8)": "Sys",
+    "encode_nop()": 0,
+    "encode_addu(8,9,10)": 19546145,
+    "encode_addiu($sp,$sp,-32)": 666763232,
+    "detect_mips_prologue([0x27BDFFE0])": 32,
+    "has_delay_slot(j 0x08000000)": true
+  },
+  "mcp_outputs": {},
+  "mismatches": []
+}

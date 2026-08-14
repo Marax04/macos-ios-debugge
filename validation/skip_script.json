@@ -1,0 +1,13 @@
+{
+  "script_lua_execute_script": "Lua script execution nondeterministic",
+  "script_lua_template_dump_functions": "requires binary analysis context",
+  "script_lua_template_extract_strings": "requires binary analysis context",
+  "script_lua_template_find_xrefs": "requires binary analysis context",
+  "script_lua_template_patch_pattern": "requires binary analysis context",
+  "script_lua_template_rename_functions": "requires binary analysis context",
+  "script_rhai_binary_info": "requires binary loaded into rhai context",
+  "script_rhai_get_info": "requires loaded binary in store",
+  "script_rhai_load_binary": "requires binary data in store context",
+  "script_rhai_load_binary_into": "requires binary data in store context",
+  "script_variable_frame_probe": "requires debug frame context"
+}

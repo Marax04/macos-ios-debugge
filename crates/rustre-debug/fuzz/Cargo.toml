@@ -1,0 +1,49 @@
+[workspace]
+
+[package]
+name = "rustre-debug-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustre-debug = { path = ".." }
+tempfile = "3"
+
+# Prevent this from accidentally being published
+[profile.release]
+debug = true
+
+[[bin]]
+name = "fuzz_windbg_ttd_idx"
+path = "fuzz_targets/fuzz_windbg_ttd_idx.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_rr_trace_dir"
+path = "fuzz_targets/fuzz_rr_trace_dir.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_minidump"
+path = "fuzz_targets/fuzz_minidump.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_pdb_codeview"
+path = "fuzz_targets/fuzz_pdb_codeview.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_dwarf_cfi"
+path = "fuzz_targets/fuzz_dwarf_cfi.rs"
+test = false
+doc = false

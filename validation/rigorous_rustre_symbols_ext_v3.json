@@ -1,0 +1,70 @@
+{
+  "category": "rustre_symbols_ext",
+  "tools_total": 12,
+  "tools_passed": 12,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "checks": [
+    {
+      "tool": "rustre_symbols_ext_try_demangle",
+      "passed": true,
+      "note": "demangled='<rust>_RNvNtCs6CKzx_3foo3bar4baz'"
+    },
+    {
+      "tool": "rustre_symbols_ext_demangler_pipeline",
+      "passed": true,
+      "note": "demangled='<rust>_RNvNtCs6CKzx_3foo3bar4baz'"
+    },
+    {
+      "tool": "rustre_symbols_ext_pdb_server_msdl_url",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_pdb_server_pdb_url",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_source_priority_all",
+      "passed": true,
+      "note": "count=12"
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_function",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_data",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_label",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_dword",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_qword",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_cross_ref_index_ops",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "rustre_symbols_ext_unified_table_add_lookup",
+      "passed": true,
+      "note": ""
+    }
+  ]
+}

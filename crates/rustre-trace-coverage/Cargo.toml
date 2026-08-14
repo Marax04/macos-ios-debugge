@@ -1,0 +1,22 @@
+[package]
+license.workspace = true
+name = "rustre-trace-coverage"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# NOTE: cannot depend on `rustre-trace` — that crate already lists this one as
+# an optional sub-coverage dependency, forming a workspace cycle. Coverage-only
+# types live here; consumers that need both pull each separately.
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

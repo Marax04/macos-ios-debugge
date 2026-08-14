@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-fuzz-afl",
+  "tests": 11,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-fuzz-afl (verificato in crates/rustre-mcp-tools/src/: nessun tool fuzz_* / afl_* esposto; il riferimento 'fuzzy_hash' in lib.rs e' fuzzy hashing per signature matching, non AFL fuzzing). Validator Python self-tests eseguiti con successo (11 funzioni: constants, cov_classify_count, has_new_coverage, similarity, fnv1a, stage_bit_flip_1, stage_byte_flip_1, stage_arith_8, stage_interesting_8, stage_splice, minimal_covering_set). Confronto MCP-vs-validator non eseguibile finche' non viene esposto un set di tool fuzz_afl_* (coverage map, virgin bits, deterministic stages, minimal covering set). Gap puramente di superficie MCP: la logica nel crate workspace e' coperta dai test interni.",
+  "validator_output_file": "comparisons/_fuzz_afl_validator_out.json",
+  "gap": "missing_mcp_tools:fuzz_afl_cov_classify,fuzz_afl_has_new_coverage,fuzz_afl_stage_*,fuzz_afl_minimal_covering_set"
+}

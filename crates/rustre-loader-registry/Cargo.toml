@@ -1,0 +1,31 @@
+[package]
+license.workspace = true
+name = "rustre-loader-registry"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-loader = { path = "../rustre-loader" }
+rustre-loader-android = { path = "../rustre-loader-android" }
+rustre-loader-console = { path = "../rustre-loader-console" }
+rustre-loader-dotnet = { path = "../rustre-loader-dotnet" }
+rustre-loader-elf = { path = "../rustre-loader-elf" }
+rustre-loader-firmware = { path = "../rustre-loader-firmware" }
+rustre-loader-java = { path = "../rustre-loader-java" }
+rustre-loader-lua = { path = "../rustre-loader-lua" }
+rustre-loader-luajit = { path = "../rustre-loader-luajit" }
+rustre-loader-macho = { path = "../rustre-loader-macho" }
+rustre-loader-ole = { path = "../rustre-loader-ole" }
+rustre-loader-pdf = { path = "../rustre-loader-pdf" }
+rustre-loader-pe = { path = "../rustre-loader-pe" }
+rustre-loader-wasm = { path = "../rustre-loader-wasm" }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,70 @@
+{
+  "category": "symbols_pdb",
+  "tools_in_category": 19,
+  "checks_total": 6,
+  "checks_passed": 6,
+  "checks_skipped": 15,
+  "mismatches": [],
+  "skipped_log": [
+    {
+      "tool": "symbols_pdb_guid_format",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_reader_types",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_reader_modules",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_reader_guid",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_public_scan",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_stream_names",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_reader_symbols_count",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_types_by_kind",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_module_proc_count",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_symbols_filter_functions",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_stream_info_signature",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_module_proc_symbols",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_symbols_with_segment",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_symbols_list",
+      "why": "no independent truth; call succeeded"
+    },
+    {
+      "tool": "symbols_pdb_symbols_count_by_kind",
+      "why": "no independent truth; call succeeded"
+    }
+  ]
+}

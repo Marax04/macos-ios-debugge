@@ -1,0 +1,281 @@
+{
+  "category": "debug_macos",
+  "total": 68,
+  "passed": 68,
+  "failed": 0,
+  "results": [
+    {
+      "tool": "debug_macos_mach_vm_protection_as_raw",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_region_end",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_dyld_image_name",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_section_is_code [TEXT,text]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_section_is_code [DATA,data]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_task_info_resident_ratio",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_stop_reason_is_exit [exited]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_stop_reason_is_exit [breakpoint]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_hw_bp_encode",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_dsym_locator_name_for",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_dsym_locator_candidates",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mac_mem_perm_from_unix_str",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_uuid_record_canonical",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_thread_list_stopped_tids",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_region_map_totals",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_breakpoint_manager_build",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_process_describe",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_x86_register_index [rax]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_x86_register_index [rbx]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_x86_register_index [rip]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_x86_register_index [rsp]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_x86_register_index [rbp]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [x0]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [x28]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [fp]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [lr]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [sp]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [pc]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_arm64_register_index [cpsr]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_header_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_cpu_type_from_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_cpu_type_from_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_file_type_from_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_format_macho_version",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_format_uuid",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_exception_from_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_prot_decode",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_decode",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_simulate_x86_64_registers",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_simulate_x86_64_registers [rax]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_simulate_arm64_registers",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_dyld_image_rebased",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_section_qualified_name",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_fat_header_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_parse_load_commands",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_extract_dylibs",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_extract_uuid",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_exception_to_signal",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_region_describe",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_region_contains [inside]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_region_contains [outside]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_breakpoint_manager_round_trip",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_as_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_to_unix_str",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_to_unix_str [rw]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_protection_to_unix_str [none]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_region_is_writable [rw]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_vm_region_is_writable [rx]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_vm_region_map_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_dyld_image_list_find",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_section_contains [inside]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_macho_section_contains [outside]",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_stop_reason_address",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_process_table_enumerate",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_fat_header_slice_for",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_thread_list_ops",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_from_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "debug_macos_mach_exception_type_is_fatal",
+      "status": "PASS"
+    }
+  ],
+  "mismatches": []
+}

@@ -1,0 +1,45 @@
+{
+  "crate": "rustre-emu-qiling",
+  "validator": "validation/validators/rustre-emu-qiling.py",
+  "mcp_server": "C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe",
+  "note": "Validator is source-static (counts pub fn in impl blocks against report-baseline numbers). The rustre-mcp server exposes binary RE tools (project/binary/analysis/decompile), NOT crate source-introspection tools, so there is no MCP equivalent to compare per-test. Comparison performed: validator output vs. report-baseline expectations declared inside the validator.",
+  "tests": 16,
+  "test_breakdown": {
+    "per_module_method_counts": 14,
+    "free_fn_total": 1,
+    "expected_modules_declared": 1
+  },
+  "validator_exit_code": 2,
+  "mismatches_count": 15,
+  "mismatches": [
+    {"kind": "method_count", "module": "lib.rs",             "expected": 145, "actual": 146, "delta": 1,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_windows",     "expected": 39,  "actual": 40,  "delta": 1,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_memory",      "expected": 46,  "actual": 61,  "delta": 15, "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_hook_manager","expected": 17,  "actual": 24,  "delta": 7,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_coverage",    "expected": 24,  "actual": 27,  "delta": 3,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_backend",     "expected": 26,  "actual": 33,  "delta": 7,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_analysis",    "expected": 51,  "actual": 62,  "delta": 11, "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_posix",       "expected": 9,   "actual": 11,  "delta": 2,  "direction": "grew"},
+    {"kind": "method_count", "module": "qiling_script_gen",  "expected": 15,  "actual": 18,  "delta": 3,  "direction": "grew"},
+    {"kind": "method_count", "module": "rootfs_manager",     "expected": 26,  "actual": 32,  "delta": 6,  "direction": "grew"},
+    {"kind": "method_count", "module": "fs_manager",         "expected": 39,  "actual": 42,  "delta": 3,  "direction": "grew"},
+    {"kind": "method_count", "module": "os_syscall_emu",     "expected": 11,  "actual": 17,  "delta": 6,  "direction": "grew"},
+    {"kind": "method_count", "module": "os_posix_emulation", "expected": 29,  "actual": 32,  "delta": 3,  "direction": "grew"},
+    {"kind": "method_count", "module": "anti_evasion",       "expected": 22,  "actual": 27,  "delta": 5,  "direction": "grew"},
+    {"kind": "free_fn_count", "expected": 5, "actual": 6, "delta": 1, "direction": "grew"}
+  ],
+  "real_mismatches": 0,
+  "stale_report_mismatches": 15,
+  "rationale": "Every single mismatch is actual > expected: the crate has more pub fn than the validator's baseline expectations (which are pinned to a snapshot from validation/reports/rustre-emu-qiling.md). Per workspace policy (never remove code, never #[allow], dead-code = uncabled functionality to wire in) these are NOT bugs to fix by trimming code. The report baseline is stale relative to the current source. Modules grew organically; all 14 expected modules are still declared in lib.rs and all 5 expected free functions exist.",
+  "fixed": 0,
+  "fix_action": "none",
+  "match_final": false,
+  "match_after_policy": true,
+  "actual_methods": {
+    "lib.rs": 146, "qiling_windows": 40, "qiling_memory": 61, "qiling_hook_manager": 24,
+    "qiling_coverage": 27, "qiling_backend": 33, "qiling_analysis": 62, "qiling_posix": 11,
+    "qiling_result_parser": 7, "qiling_script_gen": 18, "rootfs_manager": 32, "fs_manager": 42,
+    "os_syscall_emu": 17, "os_posix_emulation": 32, "anti_evasion": 27
+  },
+  "free_fn_total": 6
+}

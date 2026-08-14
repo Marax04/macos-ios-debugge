@@ -1,0 +1,22 @@
+[package]
+license.workspace = true
+name = "rustre-ti-correlate"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-threatintel = { path = "../rustre-threatintel" }
+rustre-core = { path = "../rustre-core" }
+anyhow = { workspace = true }
+petgraph = { workspace = true, features = ["serde-1"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,282 @@
+{
+  "crate": "rustre-mobile-dyld",
+  "checks": [
+    {
+      "k": "dep:anyhow",
+      "ok": true
+    },
+    {
+      "k": "dep:thiserror",
+      "ok": true
+    },
+    {
+      "k": "dep:serde",
+      "ok": true
+    },
+    {
+      "k": "dep:serde_json",
+      "ok": true
+    },
+    {
+      "k": "dep:goblin",
+      "ok": true
+    },
+    {
+      "k": "dep:bitflags",
+      "ok": true
+    },
+    {
+      "k": "edition_2024",
+      "ok": true
+    },
+    {
+      "k": "mod:cache_header",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_cache_analysis",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_cache_parser",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_exports_trie",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_fixups",
+      "ok": true
+    },
+    {
+      "k": "mod:images",
+      "ok": true
+    },
+    {
+      "k": "mod:mappings",
+      "ok": true
+    },
+    {
+      "k": "mod:objc_selector_db",
+      "ok": true
+    },
+    {
+      "k": "mod:shared_cache_extractor",
+      "ok": true
+    },
+    {
+      "k": "mod:slide_info",
+      "ok": true
+    },
+    {
+      "k": "mod:subcaches",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_cache_image_extractor",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_fixup_chains",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_shared_cache_analyzer",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_bind_info_parser",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_rebase_info_parser",
+      "ok": true
+    },
+    {
+      "k": "mod:dyld_symbol_table",
+      "ok": true
+    },
+    {
+      "k": "mod:objc_optimizer",
+      "ok": true
+    },
+    {
+      "k": "type:DyldError",
+      "ok": true
+    },
+    {
+      "k": "type:DyldHeader",
+      "ok": true
+    },
+    {
+      "k": "type:DyldMapping",
+      "ok": true
+    },
+    {
+      "k": "type:DyldImage",
+      "ok": true
+    },
+    {
+      "k": "type:DyldSymbol",
+      "ok": true
+    },
+    {
+      "k": "type:ExtractReport",
+      "ok": true
+    },
+    {
+      "k": "type:SlideFixup",
+      "ok": true
+    },
+    {
+      "k": "type:DyldCache",
+      "ok": true
+    },
+    {
+      "k": "type:DyldCacheHeader",
+      "ok": true
+    },
+    {
+      "k": "fn:parse",
+      "ok": true
+    },
+    {
+      "k": "fn:uuid_string",
+      "ok": true
+    },
+    {
+      "k": "fn:is_arm64",
+      "ok": true
+    },
+    {
+      "k": "fn:platform_name",
+      "ok": true
+    },
+    {
+      "k": "fn:is_simulator",
+      "ok": true
+    },
+    {
+      "k": "fn:is_executable",
+      "ok": true
+    },
+    {
+      "k": "fn:is_writable",
+      "ok": true
+    },
+    {
+      "k": "fn:is_readable",
+      "ok": true
+    },
+    {
+      "k": "fn:end_address",
+      "ok": true
+    },
+    {
+      "k": "fn:contains_va",
+      "ok": true
+    },
+    {
+      "k": "fn:va_to_file_offset",
+      "ok": true
+    },
+    {
+      "k": "fn:prot_string",
+      "ok": true
+    },
+    {
+      "k": "fn:filename",
+      "ok": true
+    },
+    {
+      "k": "fn:is_system_framework",
+      "ok": true
+    },
+    {
+      "k": "fn:is_swift_overlay",
+      "ok": true
+    },
+    {
+      "k": "fn:is_weak",
+      "ok": true
+    },
+    {
+      "k": "fn:is_objc",
+      "ok": true
+    },
+    {
+      "k": "fn:is_swift",
+      "ok": true
+    },
+    {
+      "k": "fn:new",
+      "ok": true
+    },
+    {
+      "k": "fn:apply",
+      "ok": true
+    },
+    {
+      "k": "fn:find_image",
+      "ok": true
+    },
+    {
+      "k": "fn:find_images_containing",
+      "ok": true
+    },
+    {
+      "k": "fn:find_symbols_for_image",
+      "ok": true
+    },
+    {
+      "k": "fn:find_symbol",
+      "ok": true
+    },
+    {
+      "k": "fn:image_count",
+      "ok": true
+    },
+    {
+      "k": "fn:symbol_count",
+      "ok": true
+    },
+    {
+      "k": "fn:read_at_va",
+      "ok": true
+    },
+    {
+      "k": "fn:extract_image_data",
+      "ok": true
+    },
+    {
+      "k": "fn:extract_image",
+      "ok": true
+    },
+    {
+      "k": "fn:extract_all",
+      "ok": true
+    },
+    {
+      "k": "fn:mock",
+      "ok": true
+    },
+    {
+      "k": "fn:magic_str",
+      "ok": true
+    },
+    {
+      "k": "const:MIN_SIZE=72",
+      "ok": true
+    },
+    {
+      "k": "tests>=25",
+      "ok": true,
+      "count": 355
+    }
+  ],
+  "missing": [],
+  "found": [],
+  "mismatches": 0,
+  "total": 68
+}

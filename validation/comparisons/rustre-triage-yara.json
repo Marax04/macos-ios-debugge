@@ -1,0 +1,26 @@
+{
+  "crate": "rustre-triage-yara",
+  "date": "2026-06-30",
+  "summary": {
+    "tests": 28,
+    "mismatches": 0,
+    "match": false
+  },
+  "mcp": {
+    "tool_registered": false,
+    "note": "No rustre-triage-yara tool found in wire_tools.rs. MCP exposes triage_entropy and triage_analyze only."
+  },
+  "python": {
+    "validators_loaded": 250,
+    "self_tests": 28,
+    "passed": 28,
+    "failed": 0
+  },
+  "comparison": {
+    "mcp_tests_run": 0,
+    "python_tests_run": 28,
+    "mismatches": 0,
+    "match": false,
+    "reason": "No MCP tool for rustre-triage-yara exists; Python covers 250 functions, all 28 self-tests pass."
+  }
+}

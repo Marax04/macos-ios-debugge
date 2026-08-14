@@ -1,0 +1,8 @@
+{
+ "category": "arch_wasm",
+ "tools_in_category": 70,
+ "checks_total": 37,
+ "checks_passed": 36,
+ "checks_skipped": 55,
+ "mismatches": []
+}

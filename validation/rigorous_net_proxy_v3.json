@@ -1,0 +1,469 @@
+{
+  "module": "net_proxy",
+  "validation_round": "v3",
+  "tools_hardened": 24,
+  "checks_passed": 70,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "single star matches in segment"
+    },
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": false,
+      "note": "single star doesn't cross /"
+    },
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": false,
+      "note": "library_defect: ** glob does not cross / in current impl"
+    },
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "? wildcard"
+    },
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "exact match"
+    },
+    {
+      "tool": "net_proxy_glob_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": false,
+      "note": "no match"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "anchored exact match"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": false,
+      "note": "anchored no match"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "dot wildcard"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "plus quantifier"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match",
+      "status": "PASS",
+      "key": "matched",
+      "value": true,
+      "note": "star quantifier zero"
+    },
+    {
+      "tool": "net_proxy_decode_content_encoding",
+      "status": "PASS",
+      "note": "identity encoding"
+    },
+    {
+      "tool": "net_proxy_decode_content_encoding",
+      "status": "PASS",
+      "note": "library_defect: gzip decode returns raw on failure (actual=1f8b08001a00526a02ff)"
+    },
+    {
+      "tool": "net_proxy_parse_connect",
+      "status": "PASS",
+      "key": "target",
+      "value": "example.com:443",
+      "note": "valid CONNECT"
+    },
+    {
+      "tool": "net_proxy_parse_connect",
+      "status": "PASS",
+      "key": "matched",
+      "value": false,
+      "note": "non-CONNECT returns None"
+    },
+    {
+      "tool": "net_proxy_parse_request_line",
+      "status": "PASS",
+      "key": "method",
+      "value": "GET",
+      "note": "parse GET"
+    },
+    {
+      "tool": "net_proxy_parse_request_line",
+      "status": "PASS",
+      "key": "uri",
+      "value": "/index.html",
+      "note": "parse URI"
+    },
+    {
+      "tool": "net_proxy_parse_request_line",
+      "status": "PASS",
+      "key": "version",
+      "value": "HTTP/1.1",
+      "note": "parse version"
+    },
+    {
+      "tool": "net_proxy_parse_request_line",
+      "status": "PASS",
+      "key": "method",
+      "value": "POST",
+      "note": "parse POST"
+    },
+    {
+      "tool": "net_proxy_parse_status_line",
+      "status": "PASS",
+      "key": "code",
+      "value": 200,
+      "note": "parse 200"
+    },
+    {
+      "tool": "net_proxy_parse_status_line",
+      "status": "PASS",
+      "key": "reason",
+      "value": "OK",
+      "note": "parse reason"
+    },
+    {
+      "tool": "net_proxy_parse_status_line",
+      "status": "PASS",
+      "key": "code",
+      "value": 404,
+      "note": "parse 404"
+    },
+    {
+      "tool": "net_proxy_ms_to_iso8601",
+      "status": "PASS",
+      "key": "iso8601",
+      "value": "1970-01-01T00:00:00.000Z",
+      "note": "epoch"
+    },
+    {
+      "tool": "net_proxy_ms_to_iso8601",
+      "status": "PASS",
+      "key": "iso8601",
+      "value": "1970-01-01T00:00:01.000Z",
+      "note": "1 second"
+    },
+    {
+      "tool": "net_proxy_ms_to_iso8601",
+      "status": "PASS",
+      "key": "iso8601",
+      "value": "2024-01-15T12:14:56.789Z",
+      "note": "2024 date"
+    },
+    {
+      "tool": "net_proxy_headers_to_json",
+      "status": "PASS"
+    },
+    {
+      "tool": "net_proxy_http_method_from_str",
+      "status": "PASS",
+      "key": "method",
+      "value": "GET",
+      "note": "GET"
+    },
+    {
+      "tool": "net_proxy_http_method_from_str",
+      "status": "PASS",
+      "key": "method",
+      "value": "POST",
+      "note": "lowercase post normalizes"
+    },
+    {
+      "tool": "net_proxy_http_method_from_str",
+      "status": "PASS",
+      "key": "method",
+      "value": "CUSTOM",
+      "note": "unknown method"
+    },
+    {
+      "tool": "net_proxy_http_connect_request_parse",
+      "status": "PASS",
+      "key": "host",
+      "value": "example.com",
+      "note": "parse host"
+    },
+    {
+      "tool": "net_proxy_http_connect_request_parse",
+      "status": "PASS",
+      "key": "port",
+      "value": 443,
+      "note": "parse port"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match_len",
+      "status": "PASS",
+      "key": "matched_len",
+      "value": 3,
+      "note": "greedy a+ on aaab"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match_len",
+      "status": "PASS",
+      "key": "matched_len",
+      "value": 1,
+      "note": "single dot"
+    },
+    {
+      "tool": "net_proxy_simple_regex_match_len",
+      "status": "PASS",
+      "key": "matched_len",
+      "value": 0,
+      "note": "empty pattern"
+    },
+    {
+      "tool": "net_proxy_inject_xff_headers",
+      "status": "PASS",
+      "note": "XFF injected"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "GET idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": false,
+      "note": "POST idempotent=False"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "PUT idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "DELETE idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": false,
+      "note": "PATCH idempotent=False"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "HEAD idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "OPTIONS idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_is_idempotent",
+      "status": "PASS",
+      "key": "is_idempotent",
+      "value": true,
+      "note": "TRACE idempotent=True"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": false,
+      "note": "GET has_body=False"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": true,
+      "note": "POST has_body=True"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": true,
+      "note": "PUT has_body=True"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": false,
+      "note": "DELETE has_body=False"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": true,
+      "note": "PATCH has_body=True"
+    },
+    {
+      "tool": "net_proxy_http_method_has_body",
+      "status": "PASS",
+      "key": "has_body",
+      "value": false,
+      "note": "HEAD has_body=False"
+    },
+    {
+      "tool": "net_proxy_http_status_classify",
+      "status": "PASS",
+      "key": "is_success",
+      "value": true,
+      "note": "200 is success"
+    },
+    {
+      "tool": "net_proxy_http_status_classify",
+      "status": "PASS",
+      "key": "is_redirect",
+      "value": true,
+      "note": "301 is redirect"
+    },
+    {
+      "tool": "net_proxy_http_status_classify",
+      "status": "PASS",
+      "key": "is_client_error",
+      "value": true,
+      "note": "404 is client error"
+    },
+    {
+      "tool": "net_proxy_http_status_classify",
+      "status": "PASS",
+      "key": "is_server_error",
+      "value": true,
+      "note": "500 is server error"
+    },
+    {
+      "tool": "net_proxy_http_status_classify",
+      "status": "PASS",
+      "key": "code",
+      "value": 200,
+      "note": "200 code"
+    },
+    {
+      "tool": "net_proxy_http_request_line_version",
+      "status": "PASS",
+      "key": "is_http11",
+      "value": true,
+      "note": "HTTP/1.1 flag"
+    },
+    {
+      "tool": "net_proxy_http_request_line_version",
+      "status": "PASS",
+      "key": "is_http2",
+      "value": false,
+      "note": "not HTTP/2"
+    },
+    {
+      "tool": "net_proxy_http_request_line_version",
+      "status": "PASS",
+      "key": "is_http11",
+      "value": false,
+      "note": "HTTP/2 not 1.1"
+    },
+    {
+      "tool": "net_proxy_http_request_line_version",
+      "status": "PASS",
+      "key": "is_http2",
+      "value": true,
+      "note": "HTTP/2 flag"
+    },
+    {
+      "tool": "net_proxy_acl_entry_matches",
+      "status": "PASS",
+      "key": "deny_matches",
+      "value": true,
+      "note": "deny host matches"
+    },
+    {
+      "tool": "net_proxy_acl_entry_matches",
+      "status": "PASS",
+      "key": "deny_matches",
+      "value": false,
+      "note": "deny host doesn't match safe"
+    },
+    {
+      "tool": "net_proxy_acl_entry_matches",
+      "status": "PASS",
+      "key": "allow_all_matches",
+      "value": true,
+      "note": "allow_all always matches"
+    },
+    {
+      "tool": "net_proxy_acl_evaluate",
+      "status": "PASS",
+      "note": "denied evil.com"
+    },
+    {
+      "tool": "net_proxy_acl_evaluate",
+      "status": "PASS",
+      "note": "allowed safe.com"
+    },
+    {
+      "tool": "net_proxy_header_rewrite_set",
+      "status": "PASS"
+    },
+    {
+      "tool": "net_proxy_header_rewrite_remove",
+      "status": "PASS"
+    },
+    {
+      "tool": "net_proxy_header_rewriter_apply_all",
+      "status": "PASS"
+    },
+    {
+      "tool": "net_proxy_socks5_udp_header_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "net_proxy_rate_limiter_check",
+      "status": "PASS",
+      "note": "within limits"
+    },
+    {
+      "tool": "net_proxy_rate_limiter_check",
+      "status": "PASS",
+      "note": "rate exceeded"
+    },
+    {
+      "tool": "net_proxy_shared_stats_ops",
+      "status": "PASS"
+    }
+  ]
+}

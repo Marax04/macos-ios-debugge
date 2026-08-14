@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-console",
+  "tests_run": 29,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Validator rustre-loader-console.py e' un self-test stdlib indipendente (run_tests): 29 check su xor_checksum, parsing iNES (NES), Game Boy header checksum + logo, SNES LoROM scoring, GBA branch sniff, e detect_format (PE/ELF/ZIP/GZIP/NES/GB/SNES/GBA). Esito: passed=29 failed=0.",
+    "Nessun tool MCP dedicato loader_console_* esiste in crates/rustre-mcp-tools (grep su loader_console / loader-console = 0 match). Le primitive del crate (xor_checksum, NesHeader::parse, gb_verify_header_checksum, snes_score, detect_format per console formats) sono funzioni interne non esposte come endpoint JSON-RPC.",
+    "I tool MCP generici (binary_info, triage_analyze, analyze_strings, ...) non accettano gli input sintetici del dispatch del validator (hex bytes, header offset, score threshold) ne' restituiscono i campi console-specifici (prg_banks, mapper, gb_logo_ok, snes_score) in forma confrontabile 1:1.",
+    "Conclusione coerente con rustre-loader-pe / rustre-loader-elf / rustre-loader-macho: confronto MCP vs validator NON applicabile. Nessun mismatch reale, nessun fix da applicare al workspace.",
+    "Verifica collaterale: cargo build -p rustre-loader-console --release completa pulito (no warnings, no errors)."
+  ]
+}

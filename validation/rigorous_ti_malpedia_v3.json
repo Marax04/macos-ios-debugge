@@ -1,0 +1,180 @@
+{
+  "category": "ti_malpedia",
+  "tools": [
+    {
+      "tool": "ti_malpedia_normalize_family_name[WannaCry]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name[Fancy Bear]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_normalize_family_name[Poison-Ivy]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type[ransomware]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type[trojan]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type[banker]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type[infostealer]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_to_malware_type[something_weird]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_family_response",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_alias_resolve[heodo]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_alias_resolve[unknown]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_classify_family[emotet]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_classify_family[no_match]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_signature_score[3/5]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_signature_score[0/0]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_text",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_db_search[emotet]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_mock_db_find_by_hash[empty]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_attribution_method_display",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_platform_prefix",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_api_key_is_valid",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_search_query_build",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_classifier_score_all",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_get_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_get_yara_rules",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_search_by_hash[evil]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_search_by_hash[safe]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_list_actors",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_has_sample[known]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_family_has_sample[unknown]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_local_db_populate_stats",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_api_key_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_stats_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_actor_attribution_add_evidence",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_actor_spec_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_sample_spec_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_new",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_signature_score_result[7/10]",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_alias_resolver_count",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_local_db_list_families",
+      "pass": true
+    },
+    {
+      "tool": "ti_malpedia_client_search_query_exec",
+      "pass": true
+    }
+  ],
+  "mismatches": [],
+  "summary": {
+    "hardened": 42,
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0
+  }
+}

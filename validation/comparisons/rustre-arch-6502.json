@@ -1,0 +1,23 @@
+{
+  "crate": "rustre-arch-6502",
+  "validator": "validation/validators/rustre-arch-6502.py",
+  "validator_kind": "self-contained (no MCP calls; pure-Python 6502 reference)",
+  "mcp_tools_matched": [],
+  "mcp_note": "rustre-arch-6502 is registered as an architecture backend via rustre-arch-registry; no dedicated MCP tool exposes 6502 disasm directly. Generic disasm tools (analysis_disasm_at_path) target x86/x64/ARM; a 6502 fixture binary is not available in this workspace.",
+  "tests": 31,
+  "checks_total": 31,
+  "checks_failed": [],
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "crate_invariants_verified": [
+    "REG_A=0 REG_X=1 REG_Y=2 REG_SP=3 REG_PC=4 REG_P=5",
+    "status N=0x80 V=0x40 C=0x01",
+    "RESET_VECTOR=0xFFFC NMI=0xFFFA IRQ=0xFFFE",
+    "opcode table entries (NOP/LDA/JSR/RTS/BRK) match base cycles",
+    "AddrMode extra_bytes (Implied=0, Immediate=1, Absolute=2, Relative=1)",
+    "page-cross +1 cycle penalty for AbsoluteX/AbsoluteY/IndirectY",
+    "branch_target relative arithmetic (+/- signed 8-bit)",
+    "disassemble_one JSR $1234 / disassemble_range LDA #$42 NOP RTS"
+  ]
+}

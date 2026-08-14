@@ -1,0 +1,136 @@
+{
+  "crate": "rustre-demangle",
+  "tests_run": 17,
+  "mismatches": 3,
+  "results": [
+    {
+      "symbol": "_ZN3std2io5stdio6_print17hb6e4a2c0bcfaa0adE",
+      "validator": "std::io::stdio::_print",
+      "mcp": "std::io::stdio::_print::hb6e4a2c0bcfaa0ad",
+      "match": false,
+      "tolerated": false,
+      "ok": false
+    },
+    {
+      "symbol": "_ZN4core3ptr13drop_in_place17h0123456789abcdefE",
+      "validator": "core::ptr::drop_in_place",
+      "mcp": "core::ptr::drop_in_place::h0123456789abcdef",
+      "match": false,
+      "tolerated": false,
+      "ok": false
+    },
+    {
+      "symbol": "_RNvCs1234_5crate3foo",
+      "validator": "crate[3c1c0]::foo",
+      "mcp": "crate[3c1c0]::foo",
+      "match": true,
+      "tolerated": false,
+      "ok": true
+    },
+    {
+      "symbol": "_ZN3foo3barEv",
+      "validator": "foo::bar()",
+      "mcp": "foo::bar()",
+      "match": true,
+      "tolerated": false,
+      "ok": true
+    },
+    {
+      "symbol": "_ZN3FooC1Ev",
+      "validator": "Foo::Foo()",
+      "mcp": "Foo::Foo()",
+      "match": true,
+      "tolerated": false,
+      "ok": true
+    },
+    {
+      "symbol": "_ZN3FooD0Ev",
+      "validator": "Foo::~Foo()",
+      "mcp": "Foo::~Foo()",
+      "match": true,
+      "tolerated": false,
+      "ok": true
+    },
+    {
+      "symbol": "_ZTV3Foo",
+      "validator": "vtable for Foo",
+      "mcp": "{vtable(Foo)}",
+      "match": false,
+      "tolerated": false,
+      "ok": false
+    },
+    {
+      "symbol": "_ZTI3Foo",
+      "validator": "typeinfo for Foo",
+      "mcp": "typeinfo for Foo",
+      "match": true,
+      "tolerated": false,
+      "ok": true
+    },
+    {
+      "symbol": "?foo@@YAHXZ",
+      "validator": null,
+      "mcp": "int __cdecl foo(void)",
+      "match": false,
+      "tolerated": true,
+      "ok": true
+    },
+    {
+      "symbol": "$s4main5HelloVMa",
+      "validator": null,
+      "mcp": "main.Hello",
+      "match": false,
+      "tolerated": true,
+      "ok": true
+    },
+    {
+      "helper": "is_constructor",
+      "symbol": "_ZN3FooC1Ev",
+      "expected": true,
+      "validator": true,
+      "match": true
+    },
+    {
+      "helper": "is_constructor",
+      "symbol": "_ZN3FooD0Ev",
+      "expected": false,
+      "validator": false,
+      "match": true
+    },
+    {
+      "helper": "is_destructor",
+      "symbol": "_ZN3FooD0Ev",
+      "expected": true,
+      "validator": true,
+      "match": true
+    },
+    {
+      "helper": "is_vtable",
+      "symbol": "_ZTV3Foo",
+      "expected": true,
+      "validator": true,
+      "match": true
+    },
+    {
+      "helper": "is_vtable",
+      "symbol": "_Z3foo",
+      "expected": false,
+      "validator": false,
+      "match": true
+    },
+    {
+      "helper": "is_typeinfo",
+      "symbol": "_ZTI3Foo",
+      "expected": true,
+      "validator": true,
+      "match": true
+    },
+    {
+      "helper": "is_typeinfo",
+      "symbol": "_ZTS3Foo",
+      "expected": true,
+      "validator": true,
+      "match": true
+    }
+  ]
+}

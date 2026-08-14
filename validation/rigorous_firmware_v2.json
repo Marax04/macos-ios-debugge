@@ -1,0 +1,89 @@
+{
+  "category": "firmware",
+  "tools_hardened": 2,
+  "tools_passed": 15,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": {
+    "firmware_detect_kind_v2": [
+      {
+        "desc": "gzip magic",
+        "status": "PASS",
+        "kind": "tar.gz"
+      },
+      {
+        "desc": "bzip2 magic",
+        "status": "PASS",
+        "kind": "bzip2"
+      },
+      {
+        "desc": "xz magic",
+        "status": "PASS",
+        "kind": "xz"
+      },
+      {
+        "desc": "lzma magic",
+        "status": "PASS",
+        "kind": "lzma"
+      },
+      {
+        "desc": "intel-hex colon",
+        "status": "PASS",
+        "kind": "intel-hex"
+      },
+      {
+        "desc": "srec S0",
+        "status": "PASS",
+        "kind": "srec"
+      },
+      {
+        "desc": "uf2 magic",
+        "status": "PASS",
+        "kind": "uf2"
+      },
+      {
+        "desc": "uboot magic",
+        "status": "PASS",
+        "kind": "uboot-legacy"
+      },
+      {
+        "desc": "fit magic",
+        "status": "PASS",
+        "kind": "uboot-fit"
+      },
+      {
+        "desc": "squashfs-le",
+        "status": "PASS",
+        "kind": "squashfs"
+      },
+      {
+        "desc": "jffs2 magic",
+        "status": "PASS",
+        "kind": "jffs2"
+      },
+      {
+        "desc": "cramfs magic",
+        "status": "PASS",
+        "kind": "cramfs"
+      },
+      {
+        "desc": "raw short",
+        "status": "PASS",
+        "kind": "raw"
+      },
+      {
+        "desc": "unknown",
+        "status": "PASS",
+        "kind": "unknown"
+      }
+    ],
+    "firmware_scan_embedded_signatures": [
+      {
+        "status": "PASS",
+        "count": 3,
+        "ref_count": 3
+      }
+    ]
+  }
+}

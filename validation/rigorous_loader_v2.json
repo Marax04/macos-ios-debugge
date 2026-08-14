@@ -1,0 +1,639 @@
+{
+  "module": "loader",
+  "tools_hardened": 23,
+  "checks_run": 83,
+  "checks_passed": 83,
+  "checks_failed": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "loader_core_md5",
+      "label": "loader_core_md5",
+      "status": "PASS",
+      "expected": "b4209e09634b503cd65320b99a247980",
+      "actual": "b4209e09634b503cd65320b99a247980"
+    },
+    {
+      "tool": "loader_core_md5",
+      "label": "md5(0x00)",
+      "status": "PASS",
+      "expected": "93b885adfe0da089cdf634904fd59f71",
+      "actual": "93b885adfe0da089cdf634904fd59f71"
+    },
+    {
+      "tool": "loader_core_md5",
+      "label": "md5(empty)",
+      "status": "PASS",
+      "expected": "d41d8cd98f00b204e9800998ecf8427e",
+      "actual": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "tool": "loader_core_sha256",
+      "label": "loader_core_sha256",
+      "status": "PASS",
+      "expected": "a988e1e25ad1f6b00f91fb68e8eec8b68b8bfd6ff1f8eaca2f121d075a35bf78",
+      "actual": "a988e1e25ad1f6b00f91fb68e8eec8b68b8bfd6ff1f8eaca2f121d075a35bf78"
+    },
+    {
+      "tool": "loader_core_sha256",
+      "label": "sha256(0x00)",
+      "status": "PASS",
+      "expected": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+      "actual": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+    },
+    {
+      "tool": "loader_elf_gnu_hash_str",
+      "label": "gnu_hash_str('main')",
+      "status": "PASS",
+      "expected": 2090499946,
+      "actual": 2090499946
+    },
+    {
+      "tool": "loader_elf_gnu_hash_str",
+      "label": "gnu_hash_str('_start')",
+      "status": "PASS",
+      "expected": 3990577714,
+      "actual": 3990577714
+    },
+    {
+      "tool": "loader_elf_gnu_hash_str",
+      "label": "gnu_hash_str('printf')",
+      "status": "PASS",
+      "expected": 359345080,
+      "actual": 359345080
+    },
+    {
+      "tool": "loader_elf_gnu_hash_str",
+      "label": "gnu_hash_str('malloc')",
+      "status": "PASS",
+      "expected": 221883709,
+      "actual": 221883709
+    },
+    {
+      "tool": "loader_elf_gnu_hash_str",
+      "label": "gnu_hash_str('')",
+      "status": "PASS",
+      "expected": 5381,
+      "actual": 5381
+    },
+    {
+      "tool": "loader_elf_gnu_hash_bytes",
+      "label": "loader_elf_gnu_hash_bytes",
+      "status": "PASS",
+      "expected": 771639395,
+      "actual": 771639395
+    },
+    {
+      "tool": "loader_elf_gnu_hash_bytes",
+      "label": "gnu_hash_bytes(0x00)",
+      "status": "PASS",
+      "expected": 177573,
+      "actual": 177573
+    },
+    {
+      "tool": "loader_android_adler32",
+      "label": "loader_android_adler32",
+      "status": "PASS",
+      "expected": 360448927,
+      "actual": 360448927
+    },
+    {
+      "tool": "loader_android_adler32",
+      "label": "adler32(01..05)",
+      "status": "PASS",
+      "expected": 2621456,
+      "actual": 2621456
+    },
+    {
+      "tool": "loader_luajit_read_uleb128",
+      "label": "uleb128: 5",
+      "status": "PASS",
+      "expected": {
+        "value": 5,
+        "next_pos": 1
+      },
+      "actual": {
+        "value": 5,
+        "next_pos": 1
+      }
+    },
+    {
+      "tool": "loader_luajit_read_uleb128",
+      "label": "uleb128: 128",
+      "status": "PASS",
+      "expected": {
+        "value": 128,
+        "next_pos": 2
+      },
+      "actual": {
+        "value": 128,
+        "next_pos": 2
+      }
+    },
+    {
+      "tool": "loader_luajit_read_uleb128",
+      "label": "uleb128: 624485",
+      "status": "PASS",
+      "expected": {
+        "value": 624485,
+        "next_pos": 3
+      },
+      "actual": {
+        "value": 624485,
+        "next_pos": 3
+      }
+    },
+    {
+      "tool": "loader_luajit_read_uleb128",
+      "label": "uleb128: 16383",
+      "status": "PASS",
+      "expected": {
+        "value": 16383,
+        "next_pos": 2
+      },
+      "actual": {
+        "value": 16383,
+        "next_pos": 2
+      }
+    },
+    {
+      "tool": "loader_luajit_read_sleb128",
+      "label": "sleb128: +63",
+      "status": "PASS",
+      "expected": {
+        "value": 63,
+        "next_pos": 1
+      },
+      "actual": {
+        "value": 63,
+        "next_pos": 1
+      }
+    },
+    {
+      "tool": "loader_luajit_read_sleb128",
+      "label": "sleb128: -64",
+      "status": "PASS",
+      "expected": {
+        "value": -64,
+        "next_pos": 1
+      },
+      "actual": {
+        "value": -64,
+        "next_pos": 1
+      }
+    },
+    {
+      "tool": "loader_luajit_read_sleb128",
+      "label": "sleb128: -1",
+      "status": "PASS",
+      "expected": {
+        "value": -1,
+        "next_pos": 1
+      },
+      "actual": {
+        "value": -1,
+        "next_pos": 1
+      }
+    },
+    {
+      "tool": "loader_luajit_read_sleb128",
+      "label": "sleb128: +128",
+      "status": "PASS",
+      "expected": {
+        "value": 128,
+        "next_pos": 2
+      },
+      "actual": {
+        "value": 128,
+        "next_pos": 2
+      }
+    },
+    {
+      "tool": "loader_dotnet_read_compressed_uint",
+      "label": "dotnet_compressed_uint(1-byte:3)",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "loader_dotnet_read_compressed_uint",
+      "label": "dotnet_compressed_uint(2-byte:381)",
+      "status": "PASS",
+      "expected": 383,
+      "actual": 383
+    },
+    {
+      "tool": "loader_dotnet_read_compressed_uint",
+      "label": "dotnet_compressed_uint(4-byte:8192)",
+      "status": "PASS",
+      "expected": 8192,
+      "actual": 8192
+    },
+    {
+      "tool": "loader_lua_is_bytecode",
+      "label": "lua magic (5 bytes)->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_lua_is_bytecode",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_java_is_class",
+      "label": "CAFEBABE->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_java_is_class",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_is_java_class",
+      "label": "CAFEBABE+major55->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_is_java_class",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_is_elf",
+      "label": "ELF magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_is_elf",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_is_pe",
+      "label": "MZ+PE sig->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_is_pe",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_is_macho",
+      "label": "Mach-O 64LE->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_is_macho",
+      "label": "Mach-O fat->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_is_macho",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_ole_is_ole",
+      "label": "OLE2 magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_ole_is_ole",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_pdf_version",
+      "label": "PDF 1.7",
+      "status": "PASS",
+      "expected": "1.7",
+      "actual": "1.7"
+    },
+    {
+      "tool": "loader_pdf_version",
+      "label": "PDF 2.0",
+      "status": "PASS",
+      "expected": "2.0",
+      "actual": "2.0"
+    },
+    {
+      "tool": "loader_pdf_version",
+      "label": "PDF 1.4",
+      "status": "PASS",
+      "expected": "1.4",
+      "actual": "1.4"
+    },
+    {
+      "tool": "loader_pdf_has_javascript",
+      "label": "PDF with /JavaScript->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_pdf_has_javascript",
+      "label": "PDF without /JavaScript->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_pdf_has_embedded_files",
+      "label": "PDF with /EmbeddedFile->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_pdf_has_embedded_files",
+      "label": "PDF without /EmbeddedFile->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_android_is_apk",
+      "label": "PK+classes.dex->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_android_is_apk",
+      "label": "PK only, no classes.dex->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_android_is_apk",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_android_is_vdex",
+      "label": "VDEX magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_android_is_vdex",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_android_is_dex",
+      "label": "DEX magic->true",
+      "status": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "loader_android_is_dex",
+      "label": "deadbeef->false",
+      "status": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x00=unreachable",
+      "status": "PASS",
+      "expected": "unreachable",
+      "actual": "unreachable"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x01=nop",
+      "status": "PASS",
+      "expected": "nop",
+      "actual": "nop"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x02=block",
+      "status": "PASS",
+      "expected": "block",
+      "actual": "block"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x03=loop",
+      "status": "PASS",
+      "expected": "loop",
+      "actual": "loop"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x04=if",
+      "status": "PASS",
+      "expected": "if",
+      "actual": "if"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x05=else",
+      "status": "PASS",
+      "expected": "else",
+      "actual": "else"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x0b=end",
+      "status": "PASS",
+      "expected": "end",
+      "actual": "end"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x0c=br",
+      "status": "PASS",
+      "expected": "br",
+      "actual": "br"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x0d=br_if",
+      "status": "PASS",
+      "expected": "br_if",
+      "actual": "br_if"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x0f=return",
+      "status": "PASS",
+      "expected": "return",
+      "actual": "return"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x10=call",
+      "status": "PASS",
+      "expected": "call",
+      "actual": "call"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x1a=drop",
+      "status": "PASS",
+      "expected": "drop",
+      "actual": "drop"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x1b=select",
+      "status": "PASS",
+      "expected": "select",
+      "actual": "select"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x20=local.get",
+      "status": "PASS",
+      "expected": "local.get",
+      "actual": "local.get"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x21=local.set",
+      "status": "PASS",
+      "expected": "local.set",
+      "actual": "local.set"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x22=local.tee",
+      "status": "PASS",
+      "expected": "local.tee",
+      "actual": "local.tee"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x23=global.get",
+      "status": "PASS",
+      "expected": "global.get",
+      "actual": "global.get"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x24=global.set",
+      "status": "PASS",
+      "expected": "global.set",
+      "actual": "global.set"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x28=i32.load",
+      "status": "PASS",
+      "expected": "i32.load",
+      "actual": "i32.load"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x36=i32.store",
+      "status": "PASS",
+      "expected": "i32.store",
+      "actual": "i32.store"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x41=i32.const",
+      "status": "PASS",
+      "expected": "i32.const",
+      "actual": "i32.const"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x42=i64.const",
+      "status": "PASS",
+      "expected": "i64.const",
+      "actual": "i64.const"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x45=i32.eqz",
+      "status": "PASS",
+      "expected": "i32.eqz",
+      "actual": "i32.eqz"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x46=i32.eq",
+      "status": "PASS",
+      "expected": "i32.eq",
+      "actual": "i32.eq"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x6a=i32.add",
+      "status": "PASS",
+      "expected": "i32.add",
+      "actual": "i32.add"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x6b=i32.sub",
+      "status": "PASS",
+      "expected": "i32.sub",
+      "actual": "i32.sub"
+    },
+    {
+      "tool": "loader_wasm_opcode_mnemonic",
+      "label": "wasm 0x6c=i32.mul",
+      "status": "PASS",
+      "expected": "i32.mul",
+      "actual": "i32.mul"
+    },
+    {
+      "tool": "loader_console_xor_checksum",
+      "label": "xor_checksum(deadbeef00112233)",
+      "status": "PASS",
+      "expected": 34,
+      "actual": 34
+    },
+    {
+      "tool": "loader_console_xor_checksum",
+      "label": "xor_checksum(00 FF AA 55)",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    }
+  ]
+}

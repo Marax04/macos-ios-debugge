@@ -1,0 +1,66 @@
+{
+  "module": "callconv",
+  "version": "v3",
+  "tools_hardened": 4,
+  "tools_passed": 6,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "rustre_decompiler_callconv_arch_from_str",
+      "args": {
+        "arch": "x86_64"
+      },
+      "status": "PASS",
+      "arch": "X86_64"
+    },
+    {
+      "tool": "rustre_decompiler_callconv_arch_from_str",
+      "args": {
+        "arch": "aarch64"
+      },
+      "status": "PASS",
+      "arch": "Arm64"
+    },
+    {
+      "tool": "rustre_decompiler_callconv_arch_from_str",
+      "args": {
+        "arch": "x86"
+      },
+      "status": "PASS",
+      "arch": "X86"
+    },
+    {
+      "tool": "rustre_decompiler_callconv_lift_mnemonic",
+      "args": {
+        "mnemonic": "push",
+        "operands": "rbp"
+      },
+      "status": "PASS",
+      "count": 1
+    },
+    {
+      "tool": "decomp_x_callconv_lift_mnemonic_count",
+      "args": {
+        "mnemonic": "push",
+        "operands": "rbp"
+      },
+      "status": "PASS",
+      "count": 1
+    },
+    {
+      "tool": "decomp_x_callconv_arch_from_str_roundtrip",
+      "args": {
+        "arches": [
+          "x86_64",
+          "aarch64",
+          "x86"
+        ]
+      },
+      "status": "PASS",
+      "count": 3
+    }
+  ],
+  "notes": "All 4 new tools are decompiler-bridge callconv tools. 3 initial mismatches were validator_defect (wrong field names). Fixed validator matches actual Rust behavior."
+}

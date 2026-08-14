@@ -1,0 +1,116 @@
+[
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": 4
+    },
+    "status": "PASS",
+    "expected_hex": "48000005",
+    "actual_hex": "48000005"
+  },
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": 8
+    },
+    "status": "PASS",
+    "expected_hex": "48000009",
+    "actual_hex": "48000009"
+  },
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": -4
+    },
+    "status": "PASS",
+    "expected_hex": "4BFFFFFD",
+    "actual_hex": "4BFFFFFD"
+  },
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": 1024
+    },
+    "status": "PASS",
+    "expected_hex": "48000401",
+    "actual_hex": "48000401"
+  },
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": -128
+    },
+    "status": "PASS",
+    "expected_hex": "4BFFFF81",
+    "actual_hex": "4BFFFF81"
+  },
+  {
+    "tool": "ppc_encode_bl",
+    "input": {
+      "disp": 4194300
+    },
+    "status": "PASS",
+    "expected_hex": "483FFFFD",
+    "actual_hex": "483FFFFD"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 3,
+      "imm": 1
+    },
+    "status": "PASS",
+    "expected_hex": "3C600001",
+    "actual_hex": "3C600001"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 0,
+      "imm": 0
+    },
+    "status": "PASS",
+    "expected_hex": "3C000000",
+    "actual_hex": "3C000000"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 31,
+      "imm": -1
+    },
+    "status": "PASS",
+    "expected_hex": "3FE0FFFF",
+    "actual_hex": "3FE0FFFF"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 3,
+      "imm": 32767
+    },
+    "status": "PASS",
+    "expected_hex": "3C607FFF",
+    "actual_hex": "3C607FFF"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 3,
+      "imm": -32768
+    },
+    "status": "PASS",
+    "expected_hex": "3C608000",
+    "actual_hex": "3C608000"
+  },
+  {
+    "tool": "ppc_encode_lis",
+    "input": {
+      "rd": 10,
+      "imm": 4660
+    },
+    "status": "PASS",
+    "expected_hex": "3D401234",
+    "actual_hex": "3D401234"
+  }
+]

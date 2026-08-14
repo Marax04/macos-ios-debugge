@@ -1,0 +1,8 @@
+{
+  "passed": [
+    "script_rhai_trunc_u128_to_u64"
+  ],
+  "failed": [],
+  "mismatches": [],
+  "notes": "v3: script_rhai_trunc_u128_to_u64 \u2014 truncates u128 to low 64 bits (n & 0xFFFFFFFFFFFFFFFF)"
+}

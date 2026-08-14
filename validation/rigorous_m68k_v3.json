@@ -1,0 +1,50 @@
+{
+  "category": "m68k",
+  "based_on": "rigorous_m68k_v2.json",
+  "note": "Re-verified 2026-07-11 against current target/release/rustre-mcp.exe. The ColdFire mismatch recorded in v2 is now resolved — the binary correctly returns is_32bit=true and has_bitfield=true for ColdFire. Validator_defect in v2: the reference expected values were correct but the binary at that time was stale; the current build passes all checks. No new m68k tools discovered (only m68k_decode_instr and m68k_variant_info exist in wire_tools.rs).",
+  "tools_hardened": 2,
+  "tools_passed": 30,
+  "tools_failed": 0,
+  "tools_skipped": 1,
+  "mismatches": [],
+  "detail": [
+    {"tool": "m68k_variant_info", "variant": "68000",    "status": "PASS", "is_32bit": false, "has_fpu": false, "has_mmu": false, "has_bitfield": false, "address_space_bytes": 16777216},
+    {"tool": "m68k_variant_info", "variant": "68010",    "status": "PASS", "is_32bit": false, "has_fpu": false, "has_mmu": false, "has_bitfield": false, "address_space_bytes": 16777216},
+    {"tool": "m68k_variant_info", "variant": "68020",    "status": "PASS", "is_32bit": true,  "has_fpu": false, "has_mmu": false, "has_bitfield": true,  "address_space_bytes": 4294967296},
+    {"tool": "m68k_variant_info", "variant": "68030",    "status": "PASS", "is_32bit": true,  "has_fpu": false, "has_mmu": true,  "has_bitfield": true,  "address_space_bytes": 4294967296},
+    {"tool": "m68k_variant_info", "variant": "68040",    "status": "PASS", "is_32bit": true,  "has_fpu": true,  "has_mmu": true,  "has_bitfield": true,  "address_space_bytes": 4294967296},
+    {"tool": "m68k_variant_info", "variant": "68060",    "status": "PASS", "is_32bit": true,  "has_fpu": true,  "has_mmu": true,  "has_bitfield": true,  "address_space_bytes": 4294967296},
+    {"tool": "m68k_variant_info", "variant": "ColdFire", "status": "PASS", "is_32bit": true,  "has_fpu": false, "has_mmu": false, "has_bitfield": true,  "address_space_bytes": 4294967296,
+     "v2_status": "FAIL", "resolution": "binary_fixed — current build returns is_32bit=true, has_bitfield=true as the Rust source (lib.rs:96, has_bitfield=is_32bit) dictates"},
+    {"tool": "m68k_decode_instr", "test": "NOP",           "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "RTS",           "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "RTE",           "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "MOVEQ #0,D0",   "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "MOVEQ #$FF,D3", "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "BRA.W +2",      "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "BNE.B -2",      "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "MOVE.W D0,D1",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "MOVE.B D0,D1",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "ADD.W D0,D1",   "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "SUB.W D0,D1",   "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "OR.W D0,D1",    "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "DIVU.W D0,D1",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "LSR.W #1,D0",   "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "ASL.W #2,D3",   "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "TRAP #0",       "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "CLR.W D0",      "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "ADDQ.W #4,D0",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "SUBQ.W #1,D0",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "ADDA.W D0,A1",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "SUBA.W D0,A1",  "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "JMP (A0)",      "status": "PASS"},
+    {"tool": "m68k_decode_instr", "test": "JSR (A0)",      "status": "PASS"}
+  ],
+  "skipped_detail": [
+    {
+      "tool": "m68k_decode_instr",
+      "test": "BSR.W word-disp 0",
+      "reason": "reference_unimplemented: truncated Bcc encoding ambiguous at displacement=0; skip retained from v2"
+    }
+  ]
+}

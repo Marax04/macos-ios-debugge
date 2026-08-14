@@ -1,0 +1,84 @@
+__int64 sub_1400A4590();
+__int64 sub_1400A423D();
+
+__int64 __fastcall sub_1400A3FB0(size_t a1, size_t a2, __int64 a3, __int64 a4) {
+    __int64 __rdx_rax;
+    int v_20;
+    int v_28;
+    int v_30;
+    int v_350;
+    int v_38;
+    int v_40;
+    int v_48;
+    int v_50;
+    int v_60;
+    int v_68;
+    int v_78;
+    __int64 v3;
+    __int64 v1;
+    int v8;
+    __int64 v6;
+    int v7;
+    __int64 v5;
+    __int64 v2;
+
+    v3 = a2;
+    v_38 = a1;
+    v1 = 0x4000000000000000;
+    a2 = 0;
+    v1 = __rdx_rax / v3; a2 = __rdx_rax % v3; /* unsigned */;
+    v1 += 1;
+    v_78 = v1;
+    v1 = v3;
+    if (v3 >= 0x1001) {
+        v1 |= 1;
+        a1 = 63 - __builtin_clzll(v1);
+        v1 = a1;
+        v1 >>= 1;
+        a1 &= 1;
+        a1 += v1;
+        v1 = 1;
+        v1 <<= a1;
+        a2 = v3;
+        a2 >>= a1;
+        a2 += v1;
+        a2 >>= 1;
+        v_48 = a2;
+    } else {
+        v1 >>= 1;
+        a1 = v3;
+        a1 -= v1;
+        v1 = 64;
+        if (a1 < 64) v1 = a1;
+        v_48 = v1;
+    }
+    v1 = v_38;
+    a1 = v1 + 32;
+    v_60 = a1;
+    v1 -= 16;
+    v_68 = v1;
+    v8 = 1;
+    v6 = 0;
+    v7 = 0;
+    v_40 = a4;
+    v_30 = a3;
+    v_50 = v3;
+    v5 = v3;
+    v5 -= v6;
+    if ((v5 <= 0)) JUMPOUT(0x1400a40f0);
+    v1 = v6;
+    v1 <<= 4;
+    a1 = v_38;
+    a1 += v1;
+    if (v5 >= v_48) JUMPOUT(0x1400a4110);
+    if (v_350 == 0) JUMPOUT(0x1400a4170);
+    v1 = 32;
+    if (v5 >= 32) v5 = v1;
+    v_28 = 0;
+    v_20 = 0;
+    sub_1400A4590(a1, v5);
+    v2 = v_30;
+    v1 = v_40;
+    a1 =  + v1*2 + 1;
+    return sub_1400A423D();
+}

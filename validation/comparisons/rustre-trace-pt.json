@@ -1,0 +1,30 @@
+{
+  "crate": "rustre-trace-pt",
+  "tests": [
+    {
+      "name": "intel_pt_metrics",
+      "py": {
+        "crate": "rustre-trace",
+        "mode": "intel_pt",
+        "pt_packets": 0,
+        "packet_breakdown": {"tnt": 0, "tip": 0, "fup": 0, "psb": 0, "mtc": 0, "cyc": 0},
+        "decoded_instructions": 0,
+        "branches": {"taken": 0, "not_taken": 0, "indirect": 0, "total": 0, "taken_rate_pct": 0.0},
+        "decode_errors": 0,
+        "decode_error_rate_pct": 0.0,
+        "psb_blocks": 0,
+        "duration_ns": 0,
+        "insn_per_ns": 0.0,
+        "trace_count": 0,
+        "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace-pt.json"
+      },
+      "mcp": {
+        "note": "rustre-mcp exposes no Intel PT decoder tool; analysis_trace_data_flow_path / trace_data_flow are static xref/dataflow slicers, not hardware-trace packet decoders (TNT/TIP/FUP/PSB/MTC/CYC)"
+      },
+      "mismatch": false,
+      "reason": "no MCP equivalent — validator-only crate (hardware Intel PT decoding not surfaced by rustre-mcp)"
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

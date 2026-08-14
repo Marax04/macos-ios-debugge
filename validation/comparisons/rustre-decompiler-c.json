@@ -1,0 +1,33 @@
+{
+  "crate": "rustre-decompiler-c",
+  "mcp_tools_exposed": ["decompiler_core_batch_decompile"],
+  "validator_ops": [
+    "format_for_header", "c_precedence_for_op", "signature_as_c_declaration",
+    "vardecl_as_c_declaration", "emit_const", "emit_struct_def", "emit_struct",
+    "emit_typedef", "emit_enum", "emit_if", "emit_if_else", "emit_while",
+    "emit_do_while", "emit_for", "emit_switch", "macro_expand",
+    "header_for_function", "include_emit", "render_cstatement", "brace_balance"
+  ],
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "comparable": false,
+  "reason": "The validator covers 20 pure golden-string formatter ops (format_for_header, c_precedence_for_op, emit_const, CFlowEmitter::emit_*, CMacroExpander::expand, CIncludeManager, CStatement::render, CTypeDeclaration::emit_*, etc.). The MCP server exposes only one tool for this crate — `decompiler_core_batch_decompile` — which is a binary-address-driven batch orchestrator over the full decompile pipeline. None of the granular emitters validated by the Python golden tests are reachable via JSON-RPC. There is no input space on which the two surfaces can be compared.",
+  "gap_type": "MCP surface gap — 19 granular formatter tools missing",
+  "missing_mcp_tools": [
+    "decompile_format_for_header",
+    "decompile_c_precedence_for_op",
+    "decompile_emit_const",
+    "decompile_emit_struct_def",
+    "decompile_emit_struct", "decompile_emit_typedef", "decompile_emit_enum",
+    "decompile_emit_if", "decompile_emit_if_else", "decompile_emit_while",
+    "decompile_emit_do_while", "decompile_emit_for", "decompile_emit_switch",
+    "decompile_macro_expand",
+    "decompile_include_emit", "decompile_header_for_function",
+    "decompile_render_cstatement",
+    "decompile_signature_as_c_declaration", "decompile_vardecl_as_c_declaration"
+  ],
+  "fixes_applied": [],
+  "build_ok_after_fix": null,
+  "final_match": false,
+  "recommendation": "Wire the granular formatters from rustre-decompiler-c into rustre-mcp-tools (wire_tools.rs) as standalone MCP tools before this validator can run a behavioral comparison. This is a feature-add task, not a bug fix — out of scope for a single comparison turn."
+}

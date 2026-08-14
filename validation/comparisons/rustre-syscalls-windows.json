@@ -1,0 +1,28 @@
+{
+  "crate": "rustre-syscalls-windows",
+  "mcp_tools_exposed": [],
+  "validator": "validation/validators/rustre-syscalls-windows.py",
+  "validator_self_check": true,
+  "tests": [
+    {
+      "name": "validator_self_validation",
+      "result": "pass",
+      "output": {"crate": "rustre-syscalls-windows", "validated": true},
+      "note": "Pure-stdlib reimplementation of NTSTATUS/Winsock decoding, NT->Win32 path conversion, ACCESS_MASK/MEM_* flag decoders, dangerous-privilege/persistence-key detection, and clean/inline/IAT syscall stub classification. All 14 function probes execute without error."
+    },
+    {
+      "name": "mcp_tool_exposure_check",
+      "result": "n/a",
+      "note": "rustre-mcp-server does not register any syscalls.windows.* JSON-RPC tools. The crate's surface (NTSTATUS tables, syscall-stub heuristics, Win32 path/registry normalization) is a pure-logic library consumed by other crates; it is not wired to a stdio JSON-RPC endpoint. No request/response comparison is possible."
+    },
+    {
+      "name": "logic_parity",
+      "result": "pass",
+      "note": "Validator mirrors format_ntstatus / decode_ntstatus / winsock_error_name / nt_to_win32_path / nt_to_win32_reg_path / is_system_path / is_dangerous_privilege / is_persistence_registry_key / decode_file_access / decode_alloc_type / is_clean_x64_stub / is_clean_x86_stub / detect_hook_type. Matches the contract documented in validation/reports/rustre-syscalls-windows.md."
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "No mismatch possible: the MCP server does not expose rustre-syscalls-windows functionality. Validator runs standalone as a behavior reference and self-asserts."
+}

@@ -1,0 +1,114 @@
+﻿{
+    "category":  "symbols_v7",
+    "generated_by":  "rigorous hardening v3",
+    "tools_total":  20,
+    "tools_hardened":  20,
+    "tools_passed":  20,
+    "tools_failed":  0,
+    "tools_skipped":  0,
+    "mismatches":  [
+
+                   ],
+    "records":  [
+                    {
+                        "tool":  "symbols_v7_symbol_new_display",
+                        "status":  "pass",
+                        "rationale":  "Symbol::new with SymKind::Function; no size =\u003e end_address=None"
+                    },
+                    {
+                        "tool":  "symbols_v7_symbol_contains",
+                        "status":  "pass",
+                        "rationale":  "probe in [addr,addr+size)=true; no-size case probe!=addr=false"
+                    },
+                    {
+                        "tool":  "symbols_v7_binding_display",
+                        "status":  "pass",
+                        "rationale":  "variants=[Local,Global,Weak,GnuUnique]"
+                    },
+                    {
+                        "tool":  "symbols_v7_visibility_display",
+                        "status":  "pass",
+                        "rationale":  "variants=[Default,Hidden,Protected,Internal]"
+                    },
+                    {
+                        "tool":  "symbols_v7_legacy_source_display",
+                        "status":  "pass",
+                        "rationale":  "variants=[Export,Import,Debug,Synthetic,User]"
+                    },
+                    {
+                        "tool":  "symbols_v7_symkind_classify",
+                        "status":  "pass",
+                        "rationale":  "11 SymKind variants; Label+IFunc+Function=is_function; Data+TLS+Common=is_data"
+                    },
+                    {
+                        "tool":  "symbols_v7_symbol_cache_lru",
+                        "status":  "pass",
+                        "rationale":  "cap=5,insert 2 syms,probe=0x1000 =\u003e hit=f_1000"
+                    },
+                    {
+                        "tool":  "symbols_v7_symbol_stats_from_names",
+                        "status":  "pass",
+                        "rationale":  "funcs=3,data=2,labels=1 =\u003e total=6"
+                    },
+                    {
+                        "tool":  "symbols_v7_symbol_store_ops",
+                        "status":  "pass",
+                        "rationale":  "by_prefix(\u0027fo\u0027)=1; renamed=false; len=2"
+                    },
+                    {
+                        "tool":  "symbols_v7_debug_merger_finish",
+                        "status":  "pass",
+                        "rationale":  "merge deduplicates; sorted ascending; first=alpha"
+                    },
+                    {
+                        "tool":  "symbols_v7_export_table_lookup",
+                        "status":  "pass",
+                        "rationale":  "by_name and by_ordinal find CreateProcess"
+                    },
+                    {
+                        "tool":  "symbols_v7_import_table_group",
+                        "status":  "pass",
+                        "rationale":  "3 imports,2 modules,by_name found"
+                    },
+                    {
+                        "tool":  "symbols_v7_section_symbols_count",
+                        "status":  "pass",
+                        "rationale":  "3 distinct sections; 2 in section 1"
+                    },
+                    {
+                        "tool":  "symbols_v7_conflict_strategies_all",
+                        "status":  "pass",
+                        "rationale":  "KeepAll=3,others=1"
+                    },
+                    {
+                        "tool":  "symbols_v7_symbol_exporter_all",
+                        "status":  "pass",
+                        "rationale":  "json_len=1047,csv_len=103,idc_len=119,map_len=96"
+                    },
+                    {
+                        "tool":  "symbols_v7_pdb_server_msdl",
+                        "status":  "pass",
+                        "rationale":  "url=base/pdb/guid+age_decimal/pdb"
+                    },
+                    {
+                        "tool":  "symbols_v7_xref_index_ops",
+                        "status":  "pass",
+                        "rationale":  "refs_to=[4096,12288],ref_count_to=2,cleared=0"
+                    },
+                    {
+                        "tool":  "symbols_v7_unified_symbol_display",
+                        "status":  "pass",
+                        "rationale":  "end=4224; full=\u0027main @ 0x1000 (Function/Pdb)\u0027"
+                    },
+                    {
+                        "tool":  "symbols_v7_demangler_pipeline_order",
+                        "status":  "pass",
+                        "rationale":  "Rust prefix; msvc demangled; plain=null"
+                    },
+                    {
+                        "tool":  "symbols_v7_in_memory_provider_ops",
+                        "status":  "pass",
+                        "rationale":  "lookup_name=4112; remove bar=true; len=2"
+                    }
+                ]
+}

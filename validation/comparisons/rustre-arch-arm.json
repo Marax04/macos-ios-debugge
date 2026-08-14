@@ -1,0 +1,44 @@
+{
+  "crate": "rustre-arch-arm",
+  "mcp_tools_relevant": [
+    "analysis_disasm_at_path (generic dispatcher, arch=arm)"
+  ],
+  "validator_self_tests": "passed",
+  "tests_run": [
+    {
+      "name": "validator_static_report_parse",
+      "input": "validation/reports/rustre-arch-arm.md",
+      "result": "passed",
+      "functions_extracted": 27,
+      "covers": [
+        "ArmArch::new_arm/new_thumb/new_arm_be",
+        "ArmMode::is_thumb",
+        "ArmLinearDisassembler::disassemble",
+        "Thumb16Instr::decode/mnemonic",
+        "Thumb2Instr::decode/decode_word",
+        "ConditionCode/CpsrFlags/ProcessorMode/BarrelShiftType",
+        "Alu ops (add,adc,sub,...,smull)",
+        "MemBarrier dmb/dsb/isb",
+        "ExclusiveMonitor ldrex/strex",
+        "ArmCpu condition_passes/barrel_shift/exception_entry",
+        "ThumbExpanded::decode, ArmV7InstrClass::classify_a32",
+        "aapcs_role, decode_bl_target",
+        "NEON helpers (dreg/qreg/sreg, suffixes, decoders)"
+      ]
+    },
+    {
+      "name": "mcp_analysis_disasm_at_path_arm_on_x64_pe",
+      "input_path": "target/release/rustre-mcp.exe",
+      "address": "0x140001000",
+      "arch": "arm",
+      "count": 4,
+      "result": "ok (Capstone arm backend reachable via generic dispatcher)",
+      "note": "Disassembled bytes are nonsensical as ARM because the binary is an x86_64 PE; this only confirms backend wiring, not semantic correctness. No A32/T32 binary present in baseline corpus."
+    }
+  ],
+  "overlap_analysis": "The validator for rustre-arch-arm is a static parser of the crate's documentation report (functions/signatures), not a behavioral comparator. The crate exposes A32/T32/NEON/VFP decoders and CPU semantics, reachable from MCP only through the generic `analysis_disasm_at_path` dispatcher (arch=arm) - there is no dedicated `analysis_disasm_at_path_arm` tool (unlike arm64/cil/jvm/mips/riscv/wasm). The baseline corpus contains only cargo-zyphora.exe (x86_64 PE), so MCP cannot exercise the ARM backend on a real ARM target. Functional disasm comparison between MCP and validator is therefore not feasible with the current corpus; the validator's static contract (27 exported functions across 5 modules) is satisfied.",
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true
+}

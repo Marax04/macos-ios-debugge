@@ -1,0 +1,38 @@
+{
+  "crate": "rustre-net-proxy",
+  "tests": 21,
+  "mismatches": 1,
+  "match": false,
+  "notes": {
+    "mcp_tools": "No MCP tools expose rustre-net-proxy functions (grep found zero references in rustre-mcp-tools/src/wire_tools.rs or any other MCP tool source). The crate is uncabled.",
+    "rust_tests": {
+      "passed": 456,
+      "failed": 2,
+      "failures": [
+        "new_capabilities_tests::glob_match_double_star_crosses_slashes — glob_match(\"src/**/*.rs\", \"src/foo/bar/lib.rs\") returns false in Rust but should be true",
+        "enterprise_mitm_tests::ja3_grease_values_excluded — JA3 GREASE value not excluded from JA3 string (no Python validator covers this function)"
+      ]
+    },
+    "python_validators": {
+      "functions_covered": 21,
+      "self_test_assertions": 26,
+      "result": "All self-tests passed"
+    },
+    "behavioral_mismatches": [
+      {
+        "function": "glob_match",
+        "rust_behavior": "glob_match(\"src/**/*.rs\", \"src/foo/bar/lib.rs\") -> false (BUG: ** not crossing slashes properly)",
+        "python_behavior": "validator_glob_match converts ** to .* which would match cross-directory patterns correctly",
+        "verdict": "MISMATCH — Rust is broken, Python is correct"
+      }
+    ],
+    "functions_in_python_not_in_mcp": [
+      "detect_websocket_upgrade", "parse_websocket_stream", "reassemble_ws_messages",
+      "generate_cert_for_host", "extract_sni_from_tcp_payload", "inject_xff_headers",
+      "apply_rules_to_request", "apply_rules_to_response", "hex_decode", "hex_encode",
+      "glob_match", "simple_regex_match", "simple_regex_match_len", "base64_decode",
+      "decode_content_encoding", "decode_http_response_body", "extract_jwt_tokens",
+      "handle_connect_tunnel", "detect_ssl_strip", "harvest_credentials", "rewrite_body"
+    ]
+  }
+}

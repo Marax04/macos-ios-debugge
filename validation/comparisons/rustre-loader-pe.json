@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-pe",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Per validation/reports/rustre-loader-pe.md (sezione 'Existing MCP tools'): nessun tool MCP loader_pe_* dedicato esiste in crates/rustre-mcp-tools/src/wire_tools.rs. Le funzioni testabili del validator (md5_hex, sha256_hex, normalise_dll_name, normalise_function_name, make_entry, imphash, byte_histogram, shannon_entropy, most_common_byte, chi_squared, looks_packed, scan_ascii, scan_utf16le, classify_string, rva_to_file_offset, find_overlay_offset, detect_sfx_kind, parse_pe) sono primitive interne del crate, non endpoint MCP.",
+    "Le funzionalita' loader-pe sono raggiungibili solo INDIRETTAMENTE tramite tool generici (binary_info, triage_analyze, analyze_imports, analyze_exports, analyze_strings, patch_pe_security_summary, patch_pe_set_security, flirt_apply_auto), che restituiscono JSON aggregato non confrontabile 1:1 con i dispatch del validator (che richiedono input come {data_hex, min_len} o {dll, func} oppure {sections, rva}).",
+    "Il dispatch del validator (_DISPATCH in rustre-loader-pe.py) opera a livello di pura funzione su input sintetici (hex bytes, stringhe, struct sezioni JSON), input che nessun MCP tool accetta direttamente. Un confronto MCP vs validator richiederebbe wrapper RPC dedicati per ogni primitiva (loader_pe_md5_hex, loader_pe_shannon_entropy, loader_pe_scan_ascii, ...) che attualmente non esistono.",
+    "Conclusione: confronto MCP vs validator NON applicabile a questo crate, analogamente a rustre-loader-elf e rustre-loader-macho. Nessun mismatch da registrare, nessun fix sul crate da applicare.",
+    "Verifica collaterale: cargo build -p rustre-loader-pe --release completa pulito (no warnings, no errors) confermando lo stato sano del crate."
+  ]
+}

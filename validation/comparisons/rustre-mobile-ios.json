@@ -1,0 +1,53 @@
+{
+  "crate": "rustre-mobile-ios",
+  "generated": "2026-06-30",
+  "summary": {
+    "tests": 250,
+    "mcp_tools_wired": 0,
+    "mcp_tools_loosely_related": 2,
+    "mismatches": 250,
+    "match": false
+  },
+  "python_validator": {
+    "file": "validation/validators/rustre-mobile-ios.py",
+    "function_count": 250,
+    "smoke_test_result": "PASS",
+    "modules_covered": [
+      "bundle.rs",
+      "info_plist.rs",
+      "plist.rs",
+      "pac.rs",
+      "swift_metadata.rs",
+      "objc_runtime.rs",
+      "objc_runtime_analysis.rs",
+      "macho_objc_runtime.rs",
+      "ios_malware.rs",
+      "ios_jailbreak_detector.rs",
+      "jailbreak_detection.rs",
+      "fairplay.rs",
+      "ios_swift_metadata_parser.rs",
+      "ios_codesign_verifier.rs",
+      "ios_entitlements_parser.rs",
+      "ios_dylib_injector_detector.rs",
+      "entitlements.rs",
+      "codesign.rs",
+      "lib.rs"
+    ]
+  },
+  "mcp_server": {
+    "binary": "target/release/rustre-mcp.exe",
+    "total_tools": 119,
+    "ios_specific_tools": [],
+    "loosely_related_tools": [
+      "triage_entropy_packing_indicators",
+      "symbols_demangle_swift"
+    ],
+    "notes": "No rustre-mobile-ios APIs are wired as MCP tools. The crate exists at crates/rustre-mobile-ios but none of its public API (IosBundle, InfoPlist, PAC scanning, ObjC runtime, Swift metadata, FairPlay, jailbreak detection, entitlements, codesign, dylib injection) is exposed via the MCP server."
+  },
+  "comparison": {
+    "tests": 250,
+    "mismatches": 250,
+    "match": false,
+    "detail": "All 250 validator functions correspond to rustre-mobile-ios public API surface that has zero MCP coverage. Every function is a mismatch (Python-only, no MCP counterpart)."
+  }
+}

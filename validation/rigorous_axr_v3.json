@@ -1,0 +1,26 @@
+{
+  "note": "v3 audit: all 12 axr_* tools were already covered by rigorous_axr_v2.json (15 test cases, 0 failures). No new tools found. No mismatches. Coverage is complete.",
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "tool_errors": 0,
+    "skipped": 0,
+    "new_this_round": 0
+  },
+  "tools_audited": [
+    "axr_db_callers_of",
+    "axr_db_callees_of",
+    "axr_db_hot_functions",
+    "axr_db_is_leaf_function",
+    "axr_db_all_import_names",
+    "axr_db_all_strings",
+    "axr_db_to_json",
+    "axr_graph_call_graph_stats",
+    "axr_graph_reachable_from",
+    "axr_graph_bfs_distances",
+    "axr_graph_scc",
+    "axr_graph_topological_sort"
+  ],
+  "mismatches": []
+}

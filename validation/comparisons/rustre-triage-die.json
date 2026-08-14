@@ -1,0 +1,43 @@
+{
+  "crate": "rustre-triage-die",
+  "tests": [
+    {
+      "id": "T1_entropy_zeros",
+      "validator": 0.0,
+      "expected": 0.0,
+      "pass": true
+    },
+    {
+      "id": "T2_entropy_uniform",
+      "validator": 8.0,
+      "expected": 8.0,
+      "pass": true
+    },
+    {
+      "id": "T3_pe_overall_entropy",
+      "validator": 6.357579783098515,
+      "mcp": null,
+      "mcp_keys_seen": [],
+      "pass": false
+    },
+    {
+      "id": "T4_pe_section_count_validator",
+      "validator_sections": 5,
+      "section_names": [
+        ".text",
+        ".rdata",
+        ".data",
+        ".pdata",
+        ".reloc"
+      ],
+      "pass": true
+    }
+  ],
+  "mismatches": 1,
+  "fixed": 0,
+  "mcp_raw_summary": {
+    "triage_entropy_packing_indicators": "{'content': [{'type': 'text', 'text': '{\\n  \"path\": \"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\",\\n  \"is_likely_packed\": false,\\n  \"indicator_count\": 0,\\n  \"indicators\": [],\\n  \"imports_count\": 106\\n}'}], 'isError': False}",
+    "triage_analyze": "{'content': [{'type': 'text', 'text': 'tool not found: triage_analyze'}], 'isError': True}",
+    "binary_entropy": "{'content': [{'type': 'text', 'text': 'tool not found: binary_entropy'}], 'isError': True}"
+  }
+}

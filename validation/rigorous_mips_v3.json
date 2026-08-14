@@ -1,0 +1,45 @@
+{
+  "tools_hardened": 2,
+  "tools_passed": 2,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "callconv_mips_o32_name_v2",
+      "status": "PASS",
+      "expected": {
+        "name": "MIPS O32",
+        "max_reg_args": 4,
+        "stack_alignment": 8,
+        "caller_cleanup": true,
+        "shadow_space_bytes": 16,
+        "source": "rustre_analysis_callconv::mips_o32"
+      },
+      "actual": {
+        "name": "MIPS O32",
+        "max_reg_args": 4,
+        "stack_alignment": 8,
+        "caller_cleanup": true,
+        "shadow_space_bytes": 16,
+        "source": "rustre_analysis_callconv::mips_o32"
+      },
+      "note": "MIPS O32 ABI: 4 arg regs ($a0-$a3), 8-byte stack align, 16-byte shadow space. All fields match ABI spec."
+    },
+    {
+      "tool": "emu_unicorn_new_mips32",
+      "status": "PASS",
+      "expected": {
+        "arch": "mips32",
+        "regions": 1,
+        "source": "rustre_emu_unicorn::new_mips32_emu"
+      },
+      "actual": {
+        "arch": "mips32",
+        "regions": 1,
+        "source": "rustre_emu_unicorn::new_mips32_emu"
+      },
+      "note": "Emulator init: arch=mips32, 1 memory region mapped on creation. Deterministic."
+    }
+  ]
+}

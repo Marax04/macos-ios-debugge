@@ -1,0 +1,341 @@
+{
+  "category": "dotnet",
+  "tools_hardened": 30,
+  "checks_total": 55,
+  "checks_passed": 55,
+  "checks_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "dotnet_encode_token",
+      "status": "PASS",
+      "desc": "encode_token(TypeDef=0x02, row=1) -> 0x02000001",
+      "actual_excerpt": "{'table': 2, 'row': 1, 'token': 33554433}"
+    },
+    {
+      "tool": "dotnet_encode_token",
+      "status": "PASS",
+      "desc": "encode_token(MethodDef=0x06, row=42) -> 0x0600002a",
+      "actual_excerpt": "{'table': 6, 'row': 42, 'token': 100663338}"
+    },
+    {
+      "tool": "dotnet_encode_token",
+      "status": "PASS",
+      "desc": "encode_token(UserString=0x70, row=0x1234) -> 0x70001234",
+      "actual_excerpt": "{'table': 112, 'row': 4660, 'token': 1879052852}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0x02) -> 'TypeDef'",
+      "actual_excerpt": "{'table': 2, 'name': 'TypeDef'}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0x06) -> 'MethodDef'",
+      "actual_excerpt": "{'table': 6, 'name': 'MethodDef'}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0x04) -> 'Field'",
+      "actual_excerpt": "{'table': 4, 'name': 'Field'}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0x23) -> 'AssemblyRef'",
+      "actual_excerpt": "{'table': 35, 'name': 'AssemblyRef'}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0x70) -> 'UserString'",
+      "actual_excerpt": "{'table': 112, 'name': 'UserString'}"
+    },
+    {
+      "tool": "dotnet_token_table_name",
+      "status": "PASS",
+      "desc": "token_table_name(0xFF) -> '<unknown>'",
+      "actual_excerpt": "{'table': 255, 'name': '<unknown>'}"
+    },
+    {
+      "tool": "dotnet_method_flags_decode",
+      "status": "PASS",
+      "desc": "method_flags(0x0016) public static",
+      "actual_excerpt": "{'raw': 22, 'access': 'public', 'is_public': True, 'is_static': True, 'is_virtual': False, 'is_abstract': False, 'is_sealed': False, 'is_special_name': False, 'is_rt_special_name': False, 'is_pinvoke'"
+    },
+    {
+      "tool": "dotnet_method_flags_decode",
+      "status": "PASS",
+      "desc": "method_flags(0x0046) public virtual",
+      "actual_excerpt": "{'raw': 70, 'access': 'public', 'is_public': True, 'is_static': False, 'is_virtual': True, 'is_abstract': False, 'is_sealed': False, 'is_special_name': False, 'is_rt_special_name': False, 'is_pinvoke'"
+    },
+    {
+      "tool": "dotnet_method_flags_decode",
+      "status": "PASS",
+      "desc": "method_flags(0x0001) private",
+      "actual_excerpt": "{'raw': 1, 'access': 'private', 'is_public': False, 'is_static': False, 'is_virtual': False, 'is_abstract': False, 'is_sealed': False, 'is_special_name': False, 'is_rt_special_name': False, 'is_pinvok"
+    },
+    {
+      "tool": "dotnet_edit_new_type_public_class",
+      "status": "PASS",
+      "desc": "new_type_public_class flags=0x00000101",
+      "actual_excerpt": "{'name': 'MyClass', 'namespace': 'App.Core', 'flags': 257, 'source': 'rustre_dotnet_edit::NewTypeDescriptor::public_class'}"
+    },
+    {
+      "tool": "dotnet_edit_new_type_public_interface",
+      "status": "PASS",
+      "desc": "new_type_public_interface flags=0x000000A1",
+      "actual_excerpt": "{'name': 'IFoo', 'namespace': '', 'flags': 161, 'source': 'rustre_dotnet_edit::NewTypeDescriptor::public_interface'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_encode_sig_wire",
+      "status": "PASS",
+      "desc": "static_void encode_sig -> 000001",
+      "actual_excerpt": "{'name': 'DoIt', 'sig_hex': '000001', 'sig_len': 3, 'source': 'rustre_dotnet_edit::NewMethodDescriptor::static_void.encode_sig'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_instance_void_sig",
+      "status": "PASS",
+      "desc": "instance_void sig -> 200001",
+      "actual_excerpt": "{'name': 'Run', 'sig_hex': '200001', 'sig_len': 3, 'source': 'rustre_dotnet_edit::NewMethodDescriptor::instance_void'}"
+    },
+    {
+      "tool": "dotnet_edit_new_field_public_sig",
+      "status": "PASS",
+      "desc": "public_field sig element_type=0x08 -> 0608",
+      "actual_excerpt": "{'name': 'Count', 'flags': 6, 'sig_hex': '0608', 'source': 'rustre_dotnet_edit::NewFieldDescriptor::public_field'}"
+    },
+    {
+      "tool": "dotnet_edit_new_field_static_sig",
+      "status": "PASS",
+      "desc": "public_static sig element_type=0x05 -> 0605",
+      "actual_excerpt": "{'name': 'Tag', 'flags': 22, 'sig_hex': '0605', 'source': 'rustre_dotnet_edit::NewFieldDescriptor::public_static'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_new",
+      "status": "PASS",
+      "desc": "ManagedResource::new flags=1, is_public=True",
+      "actual_excerpt": "{'name': 'res.bin', 'flags': 1, 'data_len': 4, 'is_public': True, 'source': 'rustre_dotnet_edit::ManagedResource::new'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_is_public_wire",
+      "status": "PASS",
+      "desc": "ManagedResource is_public(flags=1) = True",
+      "actual_excerpt": "{'flags': 1, 'is_public': True, 'source': 'rustre_dotnet_edit::ManagedResource::is_public'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_is_public_wire",
+      "status": "PASS",
+      "desc": "ManagedResource is_public(flags=0) = False",
+      "actual_excerpt": "{'flags': 0, 'is_public': False, 'source': 'rustre_dotnet_edit::ManagedResource::is_public'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_is_public_wire",
+      "status": "PASS",
+      "desc": "ManagedResource is_public(flags=2) = False",
+      "actual_excerpt": "{'flags': 2, 'is_public': False, 'source': 'rustre_dotnet_edit::ManagedResource::is_public'}"
+    },
+    {
+      "tool": "dotnet_edit_edit_transaction_len",
+      "status": "PASS",
+      "desc": "EditTransaction len=0",
+      "actual_excerpt": "{'empty_before': True, 'len': 0, 'is_empty': True, 'source': 'rustre_dotnet_edit::EditTransaction::len'}"
+    },
+    {
+      "tool": "dotnet_edit_edit_transaction_len",
+      "status": "PASS",
+      "desc": "EditTransaction len=3",
+      "actual_excerpt": "{'empty_before': True, 'len': 3, 'is_empty': False, 'source': 'rustre_dotnet_edit::EditTransaction::len'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('nop') = pops=0, pushes=0",
+      "actual_excerpt": "{'opcode': 'nop', 'pops': 0, 'pushes': 0, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('ret') = pops=0, pushes=0",
+      "actual_excerpt": "{'opcode': 'ret', 'pops': 0, 'pushes': 0, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('ldarg.0') = pops=0, pushes=1",
+      "actual_excerpt": "{'opcode': 'ldarg.0', 'pops': 0, 'pushes': 1, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('ldc.i4.1') = pops=0, pushes=1",
+      "actual_excerpt": "{'opcode': 'ldc.i4.1', 'pops': 0, 'pushes': 1, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('add') = pops=2, pushes=1",
+      "actual_excerpt": "{'opcode': 'add', 'pops': 2, 'pushes': 1, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('pop') = pops=1, pushes=0",
+      "actual_excerpt": "{'opcode': 'pop', 'pops': 1, 'pushes': 0, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('dup') = pops=1, pushes=2",
+      "actual_excerpt": "{'opcode': 'dup', 'pops': 1, 'pushes': 2, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('stloc.0') = pops=1, pushes=0",
+      "actual_excerpt": "{'opcode': 'stloc.0', 'pops': 1, 'pushes': 0, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_decompile_stack_effect",
+      "status": "PASS",
+      "desc": "stack_effect('ceq') = pops=2, pushes=1",
+      "actual_excerpt": "{'opcode': 'ceq', 'pops': 2, 'pushes': 1, 'source': 'rustre_dotnet_decompile::stack_effect'}"
+    },
+    {
+      "tool": "dotnet_cil_simple_instr",
+      "status": "PASS",
+      "desc": "cil_simple_instr nop",
+      "actual_excerpt": "{'display': 'IL_0000: nop', 'offset': 0, 'opcode': 'nop', 'byte_size': 1, 'is_branch': False, 'is_unconditional_branch': False, 'is_terminator': False, 'branch_targets': [], 'source': 'rustre_dotnet::"
+    },
+    {
+      "tool": "dotnet_cil_simple_instr",
+      "status": "PASS",
+      "desc": "cil_simple_instr ret offset=10",
+      "actual_excerpt": "{'display': 'IL_000A: ret', 'offset': 10, 'opcode': 'ret', 'byte_size': 1, 'is_branch': False, 'is_unconditional_branch': False, 'is_terminator': True, 'branch_targets': [], 'source': 'rustre_dotnet::"
+    },
+    {
+      "tool": "dotnet_edit_new_type_public_class_probe",
+      "status": "PASS",
+      "desc": "new_type_public_class_probe",
+      "actual_excerpt": "{'name': 'FooClass', 'namespace': 'NS', 'flags': 257, 'iface_count': 0, 'has_base': False, 'source': 'rustre_dotnet_edit::NewTypeDescriptor::public_class'}"
+    },
+    {
+      "tool": "dotnet_edit_new_type_public_interface_probe",
+      "status": "PASS",
+      "desc": "new_type_public_interface_probe",
+      "actual_excerpt": "{'name': 'IBar', 'namespace': 'NS', 'flags': 161, 'iface_count': 0, 'source': 'rustre_dotnet_edit::NewTypeDescriptor::public_interface'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_static_void_body",
+      "status": "PASS",
+      "desc": "static_void body contains ret",
+      "actual_excerpt": "{'name': 'Init', 'flags': 22, 'impl_flags': 0, 'body': ['ret'], 'source': 'rustre_dotnet_edit::NewMethodDescriptor::static_void'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_instance_void_body",
+      "status": "PASS",
+      "desc": "instance_void body contains ret",
+      "actual_excerpt": "{'name': 'Execute', 'flags': 6, 'impl_flags': 0, 'body': ['ret'], 'source': 'rustre_dotnet_edit::NewMethodDescriptor::instance_void'}"
+    },
+    {
+      "tool": "dotnet_edit_new_field_public_static_probe",
+      "status": "PASS",
+      "desc": "public_static_probe flags=0x0016, type_sig_len=2",
+      "actual_excerpt": "{'name': 'Val', 'flags': 22, 'type_sig_len': 2, 'source': 'rustre_dotnet_edit::NewFieldDescriptor::public_static'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_data_len",
+      "status": "PASS",
+      "desc": "managed_resource_data_len(4 bytes) = 4",
+      "actual_excerpt": "{'name': 'r', 'flags': 1, 'data_len': 4, 'is_public': True, 'source': 'rustre_dotnet_edit::ManagedResource::new'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_data_len",
+      "status": "PASS",
+      "desc": "managed_resource_data_len(empty) = 0",
+      "actual_excerpt": "{'name': 'r2', 'flags': 1, 'data_len': 0, 'is_public': True, 'source': 'rustre_dotnet_edit::ManagedResource::new'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_encode_sig_static",
+      "status": "PASS",
+      "desc": "encode_sig_static: first_byte=0 (default/static calling conv)",
+      "actual_excerpt": "{'name': 'Go', 'sig_len': 3, 'first_byte': 0, 'calling_conv_is_default': True, 'source': 'rustre_dotnet_edit::NewMethodDescriptor::encode_sig'}"
+    },
+    {
+      "tool": "dotnet_edit_new_method_static_void_flags_v2",
+      "status": "PASS",
+      "desc": "static_void_flags_v2",
+      "actual_excerpt": "{'name': 'Foo', 'flags': 22, 'impl_flags': 0, 'body_len': 1, 'source': 'rustre_dotnet_edit::NewMethodDescriptor::static_void'}"
+    },
+    {
+      "tool": "dotnet_edit_managed_resource_new_flags_v2",
+      "status": "PASS",
+      "desc": "managed_resource_new_flags_v2(size=8)",
+      "actual_excerpt": "{'name': 'data.bin', 'flags': 1, 'is_public': True, 'data_len': 8, 'source': 'rustre_dotnet_edit::ManagedResource::new'}"
+    },
+    {
+      "tool": "dotnet_edit_il_validator_is_valid_v2",
+      "status": "PASS",
+      "desc": "il_validator_is_valid_v2([]) = True",
+      "actual_excerpt": "{'is_valid': True, 'input_len': 0, 'source': 'rustre_dotnet_edit::IlValidator::is_valid'}"
+    },
+    {
+      "tool": "dotnet_edit_il_validator_is_valid_v2",
+      "status": "PASS",
+      "desc": "il_validator_is_valid_v2(['ret']) = True",
+      "actual_excerpt": "{'is_valid': True, 'input_len': 1, 'source': 'rustre_dotnet_edit::IlValidator::is_valid'}"
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_remove_nops",
+      "status": "PASS",
+      "desc": "remove_nops([nop,ldarg.0,nop,ret]) -> output_len=2, no nop",
+      "actual_excerpt": "{'input_len': 4, 'output_len': 2, 'opcodes': ['ldarg.0', 'ret'], 'source': 'rustre_dotnet_edit::IlOptimizer::remove_nops'}"
+    },
+    {
+      "tool": "dotnet_edit_il_optimizer_remove_nops",
+      "status": "PASS",
+      "desc": "remove_nops([ret]) unchanged",
+      "actual_excerpt": "{'input_len': 1, 'output_len': 1, 'opcodes': ['ret'], 'source': 'rustre_dotnet_edit::IlOptimizer::remove_nops'}"
+    },
+    {
+      "tool": "dotnet_edit_il_builder_ret",
+      "status": "PASS",
+      "desc": "il_builder_ret emits bytes_hex=062a",
+      "actual_excerpt": "{'len': 1, 'bytes_hex': '062A', 'source': 'rustre_dotnet_edit::IlBuilder'}"
+    },
+    {
+      "tool": "dotnet_edit_il_builder_ldc_i4_v2",
+      "status": "PASS",
+      "desc": "il_builder_ldc_i4_v2(0) emits 1 opcode",
+      "actual_excerpt": "{'value': 0, 'opcodes': ['ldc.i4.0'], 'current_offset': 1, 'source': 'rustre_dotnet_edit::IlBuilder::ldc_i4'}"
+    },
+    {
+      "tool": "dotnet_edit_il_builder_ldc_i4_v2",
+      "status": "PASS",
+      "desc": "il_builder_ldc_i4_v2(5)",
+      "actual_excerpt": "{'value': 5, 'opcodes': ['ldc.i4.5'], 'current_offset': 1, 'source': 'rustre_dotnet_edit::IlBuilder::ldc_i4'}"
+    },
+    {
+      "tool": "dotnet_edit_il_builder_ldarg_v2",
+      "status": "PASS",
+      "desc": "il_builder_ldarg_v2(0)",
+      "actual_excerpt": "{'index': 0, 'opcodes': ['ldarg.0'], 'current_offset': 1, 'source': 'rustre_dotnet_edit::IlBuilder::ldarg'}"
+    },
+    {
+      "tool": "dotnet_edit_new_field_public_field_wire",
+      "status": "PASS",
+      "desc": "new_field_public_field_wire(I4)",
+      "actual_excerpt": "{'name': 'x', 'flags': 6, 'type_sig_hex': '0608', 'source': 'rustre_dotnet_edit::NewFieldDescriptor::public_field'}"
+    },
+    {
+      "tool": "dotnet_edit_new_field_public_static_wire",
+      "status": "PASS",
+      "desc": "new_field_public_static_wire(I1)",
+      "actual_excerpt": "{'name': 's', 'flags': 22, 'type_sig_hex': '0604', 'source': 'rustre_dotnet_edit::NewFieldDescriptor::public_static'}"
+    }
+  ]
+}

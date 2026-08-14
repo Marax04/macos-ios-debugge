@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-forensics-fs",
+  "tests": 1,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "Validator is self-contained (sanitize_filename/sanitize_export_name, MemFsNode V1/V2, CSV escaping, MemFs::build mock-image tree, MemoryFs::build_process_tree, DFS walkers, to_export_dir traversal sanitization, FUSE non-Unix stub). All assertions in _run_tests() pass. MCP server (rustre-mcp wire_tools.rs) does not expose rustre-forensics-fs tools; the crate exists in workspace (crates/rustre-forensics-fs) but its functionality is not wired into MCP tools. Comparison is validator self-baseline; no MCP surface to mismatch against, so no workspace fix is required.",
+  "validator_path": "C:/Users/Fra/Desktop/RustRE/validation/validators/rustre-forensics-fs.py",
+  "mcp_tools_found": []
+}

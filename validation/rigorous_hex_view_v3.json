@@ -1,0 +1,51 @@
+{
+  "category": "hex_view",
+  "version": 3,
+  "date": "2026-07-11",
+  "tools": [
+    {
+      "tool": "hex_view_format_hex_dump",
+      "mcp_name": "mcp__rustre-mcp__hex_view_format_hex_dump",
+      "description": "Format bytes as classic xxd-style plain-text hex dump starting at base_offset.",
+      "rust_impl": "crates/rustre-hex-view/src/lib.rs :: format_hex_dump",
+      "test_input": {
+        "hex": "deadbeef001122334455667788990011",
+        "base_offset": 0
+      },
+      "python_reference": "PlainHexRenderer with default HexViewConfig (bytes_per_row=16, group_size=1, uppercase_hex=true, show_offset=true hex base, show_ascii=true). Line format: '{offset:08X}  {hex_str}  |{ascii_str}|'. hex_str: bytes separated by single space, padded to 16 bytes with '  ' per missing byte.",
+      "expected_output": {
+        "dump": "00000000  DE AD BE EF 00 11 22 33 44 55 66 77 88 99 00 11  |......\"3DUfw....|",
+        "len": 16,
+        "source": "rustre_hex_view::format_hex_dump"
+      },
+      "status": "PASS",
+      "verification_method": "exact_match"
+    },
+    {
+      "tool": "hex_view_format_hex_dump_ansi",
+      "mcp_name": "mcp__rustre-mcp__hex_view_format_hex_dump_ansi",
+      "description": "Format bytes as ANSI-coloured hex dump starting at base_offset.",
+      "rust_impl": "crates/rustre-hex-view/src/lib.rs :: format_hex_dump_ansi",
+      "test_input": {
+        "hex": "deadbeef001122334455667788990011",
+        "base_offset": 0
+      },
+      "python_reference": "AnsiHexRenderer with default HexViewConfig and dark color scheme. Output contains ANSI 24-bit color escape sequences (ESC[38;2;R;G;Bm / ESC[48;2;R;G;Bm). Verified structurally: correct len field, dump contains ANSI escapes, dump contains uppercase hex bytes DE AD BE EF.",
+      "expected_output": {
+        "len": 16,
+        "has_ansi_escapes": true,
+        "has_hex_bytes": true,
+        "source": "rustre_hex_view::format_hex_dump_ansi"
+      },
+      "status": "PASS",
+      "verification_method": "structural",
+      "note": "Exact ANSI escape sequence comparison is impractical from Python without replicating Rust color map; structural checks (len, escape presence, hex bytes) are sufficient for hardening."
+    }
+  ],
+  "summary": {
+    "tools_hardened": 2,
+    "tools_passed": 2,
+    "tools_failed": 0,
+    "tools_skipped": 0
+  }
+}

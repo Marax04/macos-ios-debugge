@@ -1,0 +1,23 @@
+[package]
+name = "rustre-fuzz-sanitizers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-fuzz dependency intentionally omitted: rustre-fuzz is the umbrella crate
+# that aggregates the fuzz backends, so it depends on us, not the other way.
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,6 @@
+{
+ "category": "survey_fuzz_libfuzzer",
+ "checks_total": 10,
+ "checks_passed": 10,
+ "mismatches": []
+}

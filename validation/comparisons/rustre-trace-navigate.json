@@ -1,0 +1,29 @@
+{
+  "crate": "rustre-trace-navigate",
+  "tests": [
+    {
+      "name": "navigation_metrics",
+      "py": {
+        "crate": "rustre-trace",
+        "total_steps": 0,
+        "current_step": 0,
+        "progress_pct": 0.0,
+        "frame_count": 0,
+        "jump_count": 0,
+        "forward_jumps": 0,
+        "backward_jumps": 0,
+        "bookmark_count": 0,
+        "functions_visited": 0,
+        "blocks_visited": 0,
+        "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace.json"
+      },
+      "mcp": {
+        "note": "rustre-mcp exposes no dedicated trace-navigation tool; analysis_trace_data_flow_path / trace_data_flow are xref slicers, not interactive trace navigators (frames/jumps/bookmarks)"
+      },
+      "mismatch": false,
+      "reason": "no MCP equivalent — validator-only crate"
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

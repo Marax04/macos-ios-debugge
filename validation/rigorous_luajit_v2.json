@@ -1,0 +1,27 @@
+[
+  {
+    "tool": "luajit_instr_op",
+    "status": "PASS",
+    "mismatches": []
+  },
+  {
+    "tool": "luajit_instr_a",
+    "status": "PASS",
+    "mismatches": []
+  },
+  {
+    "tool": "loader_luajit_is_luajit",
+    "status": "PASS",
+    "mismatches": []
+  },
+  {
+    "tool": "loader_luajit_read_uleb128",
+    "status": "PASS",
+    "mismatches": []
+  },
+  {
+    "tool": "loader_luajit_read_sleb128",
+    "status": "PASS",
+    "mismatches": []
+  }
+]

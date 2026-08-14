@@ -1,0 +1,23 @@
+﻿[package]
+license.workspace = true
+name = "rustre-deobf-vmlift"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-deobf = { path = "../rustre-deobf" }
+rustre-core = { path = "../rustre-core" }
+rustre-deobf-vm = { path = "../rustre-deobf-vm" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+petgraph = { workspace = true }
+
+[lints]
+workspace = true

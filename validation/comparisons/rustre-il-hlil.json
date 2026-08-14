@@ -1,0 +1,7 @@
+{
+  "crate": "rustre-il-hlil",
+  "status": "no_mcp_surface",
+  "note": "Report explicitly states 'Existing MCP tools: None'. Validator is standalone Python reference; no MCP tools exposed in rustre-mcp-tools/rustre-mcp to call. Comparison not applicable.",
+  "tests_run": 0,
+  "mismatches_found": 0
+}

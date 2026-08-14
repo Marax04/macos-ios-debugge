@@ -1,0 +1,114 @@
+{
+  "category": "plugin",
+  "tools_hardened": 9,
+  "tools_passed": 9,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "plugin_lua_loader_default_count",
+      "status": "PASS",
+      "expected": {
+        "count": 0,
+        "ids": []
+      },
+      "actual": {
+        "count": 0,
+        "ids": []
+      }
+    },
+    {
+      "tool": "plugin_lua_load_inline",
+      "status": "PASS",
+      "expected": {
+        "id": "test_plugin@1.0.0",
+        "name": "test_plugin",
+        "version": "1.0.0",
+        "has_on_load": false,
+        "has_on_unload": false
+      },
+      "actual": {
+        "id": "test_plugin@1.0.0",
+        "name": "test_plugin",
+        "version": "1.0.0",
+        "has_on_load": false,
+        "has_on_unload": false
+      }
+    },
+    {
+      "tool": "plugin_python_stub_signature",
+      "status": "PASS",
+      "expected": "def my_func() -> int:",
+      "actual": "def my_func() -> int:"
+    },
+    {
+      "tool": "plugin_python_module_counts",
+      "status": "PASS",
+      "expected": {
+        "function_count": 1,
+        "class_count": 1
+      },
+      "actual": {
+        "function_count": 1,
+        "class_count": 1
+      }
+    },
+    {
+      "tool": "plugin_native_loader_count",
+      "status": "PASS",
+      "expected": {
+        "count": 0
+      },
+      "actual": {
+        "count": 0
+      }
+    },
+    {
+      "tool": "plugin_native_loader_ids",
+      "status": "PASS",
+      "expected": {
+        "ids": []
+      },
+      "actual": {
+        "ids": []
+      }
+    },
+    {
+      "tool": "plugin_python_generate_stub",
+      "status": "PASS",
+      "expected": "stub contains header, doc, constant, class, function",
+      "actual": "# Stub for module 'mymod'\n\"\"\"My module.\"\"\"\n\nVERSION: ... = \"1.0\"\n\nclass MyClass(object):\n    \"\"\"\"\"\"\n\ndef do_thing():\n    \"\"\"\"\"\"\n"
+    },
+    {
+      "tool": "plugin_python_class_methods_tagged",
+      "status": "PASS",
+      "expected": {
+        "matches": [
+          "analyse"
+        ]
+      },
+      "actual": {
+        "matches": [
+          "analyse"
+        ]
+      }
+    },
+    {
+      "tool": "plugin_python_format_error",
+      "status": "PASS",
+      "expected": {
+        "kind": "ValueError",
+        "message": "bad input",
+        "error_display": "ValueError: bad input",
+        "context_display": "[plugin=myplugin script=run.py fn=process]"
+      },
+      "actual": {
+        "kind": "ValueError",
+        "message": "bad input",
+        "error_display": "ValueError: bad input",
+        "context_display": "[plugin=myplugin script=run.py fn=process]"
+      }
+    }
+  ]
+}

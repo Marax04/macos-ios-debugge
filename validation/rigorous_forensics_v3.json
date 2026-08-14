@@ -1,0 +1,11 @@
+{
+  "note": "Round 3 sweep: all 81 forensics tools already covered by rigorous_forensics_v2.json (16) and skip_forensics.json (65). No remaining tools to harden.",
+  "summary": {
+    "tools_hardened": 0,
+    "tools_passed": 0,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "mismatches": []
+  },
+  "results": []
+}

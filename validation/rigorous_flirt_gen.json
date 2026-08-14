@@ -1,0 +1,7 @@
+{
+  "module": "flirt_gen",
+  "tools_hardened": 11,
+  "checks_passed": 31,
+  "checks_failed": 0,
+  "mismatches": []
+}

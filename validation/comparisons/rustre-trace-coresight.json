@@ -1,0 +1,34 @@
+{
+  "crate": "rustre-trace-coresight",
+  "tests": [
+    {
+      "name": "coresight_decode_metrics",
+      "py": {
+        "protocol": "unknown",
+        "source_count": 0,
+        "sink_count": 0,
+        "sinks": [],
+        "total_packets": 0,
+        "sync_packets": 0,
+        "sync_ratio_pct": 0.0,
+        "dropped_packets": 0,
+        "drop_ratio_pct": 0.0,
+        "instructions_traced": 0,
+        "branches": 0,
+        "exceptions": 0,
+        "cycles": 0,
+        "ipc": 0.0,
+        "timestamp_count": 0,
+        "decode_error_count": 0,
+        "source_report": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\reports\\rustre-trace.json"
+      },
+      "mcp": {
+        "note": "rustre-mcp exposes no CoreSight ETM/PTM trace decode tool; analysis_trace_data_flow_path / trace_data_flow are static xref slicers, not hardware trace decoders"
+      },
+      "mismatch": false,
+      "reason": "no MCP equivalent - validator-only crate (hardware trace decode out of scope for MCP)"
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0
+}

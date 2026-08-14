@@ -1,0 +1,25 @@
+{
+  "crate": "rustre-il",
+  "validator": {
+    "mismatches": 3,
+    "details": [
+      "IlError: missing variant Invalid",
+      "IlError: missing variant Unsupported",
+      "IlError: missing variant TierMismatch"
+    ]
+  },
+  "mcp": {
+    "note": "rustre-il is a source-only foundational crate (IlTier enum, IlError enum); the MCP server analyzes binaries, not crate sources, so no MCP tool mirrors this validator. Source inspection of crates/rustre-il/src/lib.rs confirms all 3 IlError variants (Unsupported, TierMismatch, Invalid) are present with correct #[error(...)] messages and thiserror derive.",
+    "il_tier_variants_present": ["Lift", "Llil", "Mlil", "Hlil"],
+    "il_error_variants_present": ["Unsupported", "TierMismatch", "Invalid"],
+    "forbid_unsafe": true,
+    "deps_present": ["serde", "thiserror"]
+  },
+  "analysis": {
+    "real_mismatch": false,
+    "root_cause": "Validator regex 'pub\\s+enum\\s+IlError\\s*\\{([^}]*)\\}' is terminated prematurely by the '}' inside #[error(\"... {op} ... {tier:?} ...\")] attribute interpolation tokens, so the captured enum body is truncated before the variant names. The Rust source is correct; the validator has a parser bug.",
+    "evidence": "crates/rustre-il/src/lib.rs lines 57-65 define IlError with all three variants and proper #[error] attributes; cargo build succeeds; downstream crates compile against these variants."
+  },
+  "fixed": 0,
+  "match_final": true
+}

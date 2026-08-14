@@ -1,0 +1,219 @@
+{
+  "category": "debug_unicorn",
+  "version": 3,
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "debug_unicorn_mem_region_perms",
+      "args": {"addr": 4096, "size": 8192, "perms": 5},
+      "expect": {"readable": true, "writable": false, "executable": true},
+      "note": "perms=5 = READ(1)+EXEC(4); writable bit(2) not set"
+    },
+    {
+      "tool": "debug_unicorn_arch_pointer_size",
+      "args": {"arch": "x86_64"},
+      "expect": {"pointer_size": 8},
+      "note": "x86_64 uses 8-byte pointers"
+    },
+    {
+      "tool": "debug_unicorn_trace_entry_build",
+      "args": {"address": 4096, "next_pc": 4100, "bytes_hex": "4889c0", "mnemonic": "mov rax, rax", "seq": 0, "thread_id": 1},
+      "expect_keys": ["display", "bytes_hex", "raw_len"],
+      "note": "structural check; display must be non-empty"
+    },
+    {
+      "tool": "debug_unicorn_instruction_trace_stats",
+      "args": {
+        "entries": [
+          {"address": 4096, "next_pc": 4100, "bytes_hex": "90", "mnemonic": "nop", "seq": 0, "thread_id": 1},
+          {"address": 4100, "next_pc": 4104, "bytes_hex": "90", "mnemonic": "nop", "seq": 1, "thread_id": 1}
+        ],
+        "cap": 16, "filter_mnemonic": "nop", "range_start": 4096, "range_end": 8192
+      },
+      "expect": {"len": 2, "filter_mnemonic_hits": 2},
+      "note": "2 entries, both 'nop' => filter hits = 2"
+    },
+    {
+      "tool": "debug_unicorn_watchpoint_probe",
+      "args": {"address": 16384, "size": 8, "kind": "read", "probe_addr": 16388, "probe_kind": "read"},
+      "expect": {"covers": true, "matches": true},
+      "note": "range [0x4000,0x4008) covers 0x4004; kind matches"
+    },
+    {
+      "tool": "debug_unicorn_watchpoint_manager_simulate",
+      "args": {
+        "watches": [{"addr": 20480, "size": 4, "kind": "write"}],
+        "accesses": [{"addr": 20481, "kind": "write"}]
+      },
+      "expect_keys": ["total_hits", "watchpoint_count", "fired"],
+      "note": "structural check"
+    },
+    {
+      "tool": "debug_unicorn_coverage_map_report",
+      "args": {"addresses": [4096, 8192, 12288, 4096], "total": 10, "granularity": "instruction"},
+      "expect": {"covered_count": 3},
+      "note": "4 entries but 3 unique addresses"
+    },
+    {
+      "tool": "debug_unicorn_coverage_map_merge",
+      "args": {"base": [4096, 8192], "other": [12288, 4096]},
+      "expect": {"merged_count": 3},
+      "note": "base has 2 unique, other adds 1 new => 3 total"
+    },
+    {
+      "tool": "debug_unicorn_symbol_table_resolve",
+      "args": {
+        "symbols": [{"addr": 4096, "name": "main"}, {"addr": 8192, "name": "foo", "module": "libc", "size": 64}],
+        "query_addr": 4096, "query_name": "foo", "prefix": "m"
+      },
+      "expect": {"count": 2},
+      "note": "2 symbols loaded"
+    },
+    {
+      "tool": "debug_unicorn_code_patcher_apply",
+      "args": {
+        "patches": [{"address": 4096, "original_hex": "90", "patched_hex": "cc"},
+                    {"address": 8192, "original_hex": "4889c0", "patched_hex": "909090"}],
+        "query_address": 4096
+      },
+      "expect": {"count": 2},
+      "note": "2 patches registered"
+    },
+    {
+      "tool": "debug_unicorn_thread_simulate",
+      "args": {
+        "spawns": [{"pc": 4096, "sp": 2147418112}, {"pc": 8192, "sp": 2147352576}, {"pc": 12288, "sp": 2147287040}],
+        "steps": 2, "stride": 4
+      },
+      "expect": {"count": 3},
+      "note": "3 threads spawned via 'spawns' param"
+    },
+    {
+      "tool": "debug_unicorn_script_gen",
+      "args": {"arch": "x86_64", "target": "python", "kind": "hello", "start": 4194304, "end": 4198400},
+      "expect_keys": ["script", "lines"],
+      "note": "script must be non-empty string"
+    },
+    {
+      "tool": "debug_unicorn_hook_record_describe",
+      "args": {"hook_type": "code", "address": 4096, "hook_id": 42},
+      "expect_keys": ["display", "hook_type"],
+      "note": "structural check"
+    },
+    {
+      "tool": "debug_unicorn_emulate_steps",
+      "args": {"arch": "x86_64", "code_hex": "4831c0c3", "load_address": 4194304, "entry": 4194304, "steps": 2, "hooks": ["code", "mem_read"]},
+      "expect_keys": ["final_pc", "installed_hooks"],
+      "note": "structural check"
+    },
+    {
+      "tool": "debug_unicorn_fault_injector_run",
+      "args": {
+        "rules": [{"id": 1, "address": 4096, "kind": "bit_flip", "param": 0}, {"id": 2, "address": 8192, "kind": "mem_read_replace", "param": 255}],
+        "probes": [{"address": 4096}, {"address": 39321}]
+      },
+      "expect": {"rule_count": 2},
+      "note": "2 rules registered"
+    },
+    {
+      "tool": "debug_unicorn_register_history_diff",
+      "args": {
+        "snapshots": [{"seq": 0, "pc": 4096, "regs": {"rax": 0, "rbx": 0}},
+                      {"seq": 1, "pc": 4100, "regs": {"rax": 42, "rbx": 0}}],
+        "cap": 8
+      },
+      "expect": {"len": 2},
+      "note": "2 snapshots pushed"
+    },
+    {
+      "tool": "debug_unicorn_mem_region_flags",
+      "args": {"addr": 32768, "size": 4096, "perms": 3},
+      "expect": {"readable": true, "writable": true, "executable": false},
+      "note": "perms=3 = READ(1)+WRITE(2); exec bit not set"
+    },
+    {
+      "tool": "debug_unicorn_snapshot_manager_ops",
+      "args": {"snapshots": [{"label": "before_call", "seq": 0}, {"label": "after_ret", "seq": 1}], "find_label": "before_call"},
+      "expect": {"count": 2},
+      "note": "2 snapshots saved, found != null"
+    },
+    {
+      "tool": "debug_unicorn_symbol_table_format",
+      "args": {
+        "symbols": [{"addr": 4096, "name": "_start"}, {"addr": 8192, "name": "main", "module": "exe", "size": 128}],
+        "format_addr": 4096, "resolve_name": "main", "prefix": "_"
+      },
+      "expect": {"count": 2},
+      "note": "2 symbols"
+    },
+    {
+      "tool": "debug_unicorn_coverage_granularity_align",
+      "args": {"granularity": "cache_line", "addr": 4161},
+      "expect": {"aligned": 4160},
+      "note": "0x1041 aligned to 64-byte boundary => 0x1040 = 4160"
+    },
+    {
+      "tool": "debug_unicorn_fault_rule_should_fire",
+      "args": {"id": 1, "address": 12288, "kind": "bit_flip", "param": 0, "probe": 12288},
+      "expect": {"should_fire": true},
+      "note": "probe address matches rule address => fires"
+    },
+    {
+      "tool": "debug_unicorn_simulated_thread_step",
+      "args": {"pc": 4096, "sp": 2147418112, "steps": 3, "stride": 4},
+      "expect": {"pc": 4108, "instruction_count": 3},
+      "note": "pc = 0x1000 + 3*4 = 0x100c = 4108"
+    },
+    {
+      "tool": "debug_unicorn_thread_simulator_scheduling",
+      "args": {
+        "threads": [{"pc": 4096, "sp": 2147418112}, {"pc": 8192, "sp": 2147352576}],
+        "stride": 4, "exit_tid": 2
+      },
+      "expect_keys": ["tids", "count", "current"],
+      "note": "structural check"
+    },
+    {
+      "tool": "debug_unicorn_v2_config_presets",
+      "args": {"preset": "x86_64"},
+      "expect": {"pointer_size": 8},
+      "note": "x86_64 preset => pointer_size=8"
+    },
+    {
+      "tool": "debug_unicorn_v2_debugger_emulate",
+      "args": {"preset": "x86_64", "start": 4194304, "end": 4194308, "map_base": 4194304, "map_hex": "4831c0c3"},
+      "expect_keys": ["instructions", "success"],
+      "note": "structural check"
+    },
+    {
+      "tool": "debug_unicorn_patch_record_new",
+      "args": {"address": 4096, "original_hex": "90", "patched_hex": "cc"},
+      "expect": {"size": 1, "applied": false},
+      "note": "1-byte patch, not yet applied"
+    },
+    {
+      "tool": "debug_unicorn_coverage_granularity_align_v2",
+      "args": {"granularity": "page", "addr": 74565},
+      "expect": {"aligned": 73728},
+      "note": "0x12345 aligned to 4096-byte page => 0x12000 = 73728"
+    },
+    {
+      "tool": "debug_unicorn_region_perms_flags_v2",
+      "args": {"preset": "rx"},
+      "expect": {"read": true, "write": false, "execute": true},
+      "note": "rx preset => readable and executable, not writable"
+    },
+    {
+      "tool": "debug_unicorn_snapshot_manager_save_v2",
+      "args": {"label": "snap1", "seq": 5},
+      "expect_keys": ["count", "labels"],
+      "note": "structural check"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  }
+}

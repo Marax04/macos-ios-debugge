@@ -1,0 +1,1632 @@
+{
+  "category": "decomp",
+  "tools_hardened": 197,
+  "tools_passed": 197,
+  "tools_failed": 0,
+  "tools_skipped": 21,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "u16"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "args": {
+        "width": "u64"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "u16"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "args": {
+        "width": "u64"
+      }
+    },
+    {
+      "tool": "decompiler_cfs_block_id_display",
+      "status": "PASS",
+      "args": {
+        "id": 0
+      }
+    },
+    {
+      "tool": "decompiler_cfs_block_id_display",
+      "status": "PASS",
+      "args": {
+        "id": 5
+      }
+    },
+    {
+      "tool": "decompiler_cfs_block_id_display",
+      "status": "PASS",
+      "args": {
+        "id": 100
+      }
+    },
+    {
+      "tool": "decompiler_cfs_algorithm_display",
+      "status": "PASS",
+      "args": {
+        "algorithm": "dream"
+      }
+    },
+    {
+      "tool": "decompiler_cfs_algorithm_display",
+      "status": "PASS",
+      "args": {
+        "algorithm": "phoenix"
+      }
+    },
+    {
+      "tool": "decompiler_cfs_algorithm_display",
+      "status": "PASS",
+      "args": {
+        "algorithm": "sailr"
+      }
+    },
+    {
+      "tool": "decompiler_cfs_algorithm_display",
+      "status": "PASS",
+      "args": {
+        "algorithm": "structural"
+      }
+    },
+    {
+      "tool": "decompiler_c_brace_style_default",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_c_indent_make",
+      "status": "PASS",
+      "args": {
+        "level": 0
+      }
+    },
+    {
+      "tool": "decompiler_c_indent_make",
+      "status": "PASS",
+      "args": {
+        "level": 1
+      }
+    },
+    {
+      "tool": "decompiler_c_indent_make",
+      "status": "PASS",
+      "args": {
+        "level": 2,
+        "style": "tabs"
+      }
+    },
+    {
+      "tool": "decompiler_c_indent_make",
+      "status": "PASS",
+      "args": {
+        "level": 1,
+        "style": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_int_byte_size",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_byte_size",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_byte_size",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_byte_size",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "u16"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "args": {
+        "width": "u64"
+      }
+    },
+    {
+      "tool": "decompiler_arch_from_str",
+      "status": "PASS",
+      "args": {
+        "arch": "x86_64"
+      }
+    },
+    {
+      "tool": "decompiler_arch_from_str",
+      "status": "PASS",
+      "args": {
+        "arch": "x86"
+      }
+    },
+    {
+      "tool": "decompiler_arch_from_str",
+      "status": "PASS",
+      "args": {
+        "arch": "aarch64"
+      }
+    },
+    {
+      "tool": "decompiler_os_from_pe_flag",
+      "status": "PASS",
+      "args": {
+        "is_pe": true
+      }
+    },
+    {
+      "tool": "decompiler_os_from_pe_flag",
+      "status": "PASS",
+      "args": {
+        "is_pe": false
+      }
+    },
+    {
+      "tool": "decompiler_c_version",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_c_supported_languages",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_c_max_decompile_depth",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_cfs_identifier_tokens",
+      "status": "PASS",
+      "args": {
+        "text": "int x = foo_bar + baz;"
+      }
+    },
+    {
+      "tool": "decompiler_cfs_identifier_tokens",
+      "status": "PASS",
+      "args": {
+        "text": ""
+      }
+    },
+    {
+      "tool": "decompiler_cfs_branch_condition",
+      "status": "PASS",
+      "args": {
+        "id": 1,
+        "stmts": []
+      }
+    },
+    {
+      "tool": "decompiler_cfs_branch_condition",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_cfs_scc_groups",
+      "status": "PASS",
+      "args": {
+        "blocks": [
+          {
+            "id": 0,
+            "successors": []
+          }
+        ],
+        "entry": 0
+      }
+    },
+    {
+      "tool": "decompiler_cfs_scc_groups",
+      "status": "PASS",
+      "args": {
+        "blocks": [
+          {
+            "id": 0,
+            "successors": [
+              1
+            ]
+          },
+          {
+            "id": 1,
+            "successors": [
+              0
+            ]
+          }
+        ],
+        "entry": 0
+      }
+    },
+    {
+      "tool": "decompiler_stack_frame_report",
+      "status": "PASS",
+      "args": {
+        "function_addr": 4096,
+        "instructions": [],
+        "arch": "x86_64"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "unknown"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "int",
+          "width": "i32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "ptr",
+          "pointee": {
+            "kind": "int",
+            "width": "i32"
+          }
+        },
+        "ptr_width": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "float32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "unknown"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "int",
+          "width": "i32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_is_pointer",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "ptr",
+          "pointee": {
+            "kind": "int",
+            "width": "i32"
+          }
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_is_pointer",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "int",
+          "width": "i32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_name_prefix",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "int",
+          "width": "i32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_name_prefix",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "ptr",
+          "pointee": {
+            "kind": "int",
+            "width": "i64"
+          }
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_rename_for_type",
+      "status": "PASS",
+      "args": {
+        "type": {
+          "kind": "int",
+          "width": "i32"
+        }
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_string",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_qualifier_string",
+      "status": "PASS",
+      "args": {
+        "const": true,
+        "volatile": false,
+        "restrict": false
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_string",
+      "status": "PASS",
+      "args": {
+        "const": true,
+        "volatile": true,
+        "restrict": true
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_at",
+      "status": "PASS",
+      "args": {
+        "fields": [],
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_at",
+      "status": "PASS",
+      "args": {
+        "fields": [
+          {
+            "name": "x",
+            "type": {
+              "kind": "int",
+              "width": "i32"
+            },
+            "offset": 0
+          }
+        ],
+        "offset": 0,
+        "total_size": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_rename_variables",
+      "status": "PASS",
+      "args": {
+        "code": "int v0 = v1 + v2;"
+      }
+    },
+    {
+      "tool": "decompiler_type_rename_variables",
+      "status": "PASS",
+      "args": {
+        "code": ""
+      }
+    },
+    {
+      "tool": "decompiler_type_rename_all",
+      "status": "PASS",
+      "args": {
+        "vars": []
+      }
+    },
+    {
+      "tool": "decompiler_type_rename_all",
+      "status": "PASS",
+      "args": {
+        "vars": [
+          {
+            "name": "v0",
+            "type": {
+              "kind": "int",
+              "width": "i32"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "u16"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "u64"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i8"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i16"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_int_wp",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_ptr_wp",
+      "status": "PASS",
+      "args": {
+        "ptr_width": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_byte_size_ptr_wp",
+      "status": "PASS",
+      "args": {
+        "ptr_width": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ints_wp",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ints_wp",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_is_convertible_ints_wp",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_is_convertible_ints_wp",
+      "status": "PASS",
+      "args": {
+        "a": "u8",
+        "b": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_at_wp",
+      "status": "PASS",
+      "args": {
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_at_wp",
+      "status": "PASS",
+      "args": {
+        "offset": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_database_windows_counts_wp",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_database_linux_counts_wp",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_stdlib_db_counts_wp",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_function_prototype_wp",
+      "status": "PASS",
+      "args": {
+        "name": "foo",
+        "ret_width": "i32",
+        "params": []
+      }
+    },
+    {
+      "tool": "decompiler_type_function_prototype_wp",
+      "status": "PASS",
+      "args": {
+        "name": "bar",
+        "ret_width": "i64",
+        "params": [
+          "i32",
+          "i64"
+        ]
+      }
+    },
+    {
+      "tool": "decompiler_type_union_c_name_wp",
+      "status": "PASS",
+      "args": {
+        "name": "MyUnion"
+      }
+    },
+    {
+      "tool": "decompiler_type_recovery_record_get_wp",
+      "status": "PASS",
+      "args": {
+        "addr": 4096,
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_recovery_record_get_wp",
+      "status": "PASS",
+      "args": {
+        "addr": 8192,
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_recovery_from_access_size_wp",
+      "status": "PASS",
+      "args": {
+        "addr": 4096,
+        "bytes": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_recovery_from_access_size_wp",
+      "status": "PASS",
+      "args": {
+        "addr": 8192,
+        "bytes": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_pointer_analysis_alias_wp",
+      "status": "PASS",
+      "args": {
+        "a": "p",
+        "b": "q"
+      }
+    },
+    {
+      "tool": "decompiler_type_pointer_analysis_not_null_wp",
+      "status": "PASS",
+      "args": {
+        "ptr": "p",
+        "target": "x"
+      }
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_wp",
+      "status": "PASS",
+      "args": {
+        "var": "v0",
+        "bytes": 4,
+        "signed": true
+      }
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_wp",
+      "status": "PASS",
+      "args": {
+        "var": "v1",
+        "bytes": 1,
+        "signed": false
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_canonical_wp",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_canonical_wp",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_inference_assignment_wp",
+      "status": "PASS",
+      "args": {
+        "dst": "v0",
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_propagator_assign_wp",
+      "status": "PASS",
+      "args": {
+        "src": "v0",
+        "dst": "v1",
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_wp",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_wp",
+      "status": "PASS",
+      "args": {
+        "c": true,
+        "v": false,
+        "r": false
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_wp",
+      "status": "PASS",
+      "args": {
+        "c": true,
+        "v": true,
+        "r": true
+      }
+    },
+    {
+      "tool": "decompiler_type_layout_padded_size_wp",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_layout_padded_size_wp",
+      "status": "PASS",
+      "args": {
+        "total_size": 16
+      }
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_typedef_wp",
+      "status": "PASS",
+      "args": {
+        "alias": "DWORD",
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decomp2_type_propagation_roundtrip",
+      "status": "PASS",
+      "args": {
+        "var": "x",
+        "ty": "i32"
+      }
+    },
+    {
+      "tool": "decomp2_type_propagation_roundtrip",
+      "status": "PASS",
+      "args": {
+        "var": "ptr",
+        "ty": "ptr"
+      }
+    },
+    {
+      "tool": "decomp2_expression_recovery_count",
+      "status": "PASS",
+      "args": {
+        "name": "foo",
+        "ret": "i32"
+      }
+    },
+    {
+      "tool": "decomp2_expression_recovery_count",
+      "status": "PASS",
+      "args": {
+        "name": "bar",
+        "ret": "void"
+      }
+    },
+    {
+      "tool": "decomp2_variable_recovery_stack",
+      "status": "PASS",
+      "args": {
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decomp2_variable_recovery_stack",
+      "status": "PASS",
+      "args": {
+        "offset": -8
+      }
+    },
+    {
+      "tool": "decomp2_variable_recovery_stack",
+      "status": "PASS",
+      "args": {
+        "offset": 16
+      }
+    },
+    {
+      "tool": "decomp2_decompiler_cache_miss",
+      "status": "PASS",
+      "args": {
+        "capacity": 10,
+        "addr": 4096
+      }
+    },
+    {
+      "tool": "decomp2_decompiler_cache_miss",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decomp2_calling_convention_param_regs",
+      "status": "PASS",
+      "args": {
+        "arch": "x86_64"
+      }
+    },
+    {
+      "tool": "decomp2_calling_convention_param_regs",
+      "status": "PASS",
+      "args": {
+        "arch": "x86"
+      }
+    },
+    {
+      "tool": "decomp2_calling_convention_param_regs",
+      "status": "PASS",
+      "args": {
+        "arch": "aarch64"
+      }
+    },
+    {
+      "tool": "decomp2_pass_registry_empty",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decomp2_annotation_category_filter",
+      "status": "PASS",
+      "args": {
+        "start": 0,
+        "end": 100
+      }
+    },
+    {
+      "tool": "decomp2_annotation_category_filter",
+      "status": "PASS",
+      "args": {
+        "start": 50,
+        "end": 200
+      }
+    },
+    {
+      "tool": "decomp_x_width_hint_batch",
+      "status": "PASS",
+      "args": {
+        "instrs": [
+          {
+            "mnemonic": "mov",
+            "operands": "eax, ecx"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "decomp_x_width_hint_batch",
+      "status": "PASS",
+      "args": {
+        "instrs": []
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_same_class_z1",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_same_class_z1",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_same_class_z1",
+      "status": "PASS",
+      "args": {
+        "a": "ptr",
+        "b": "ptr"
+      }
+    },
+    {
+      "tool": "decompiler_type_inference_pointer_deref_z1",
+      "status": "PASS",
+      "args": {
+        "ptr": "p",
+        "result": "v",
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_propagator_binop_z1",
+      "status": "PASS",
+      "args": {
+        "lhs": "a",
+        "rhs": "b",
+        "result": "c",
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_is_pointer_void_n2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_n2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_n2",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_name_prefix_int_n2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_name_prefix_int_n2",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_n2",
+      "status": "PASS",
+      "args": {
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_n2",
+      "status": "PASS",
+      "args": {
+        "offset": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_function_arity_n2",
+      "status": "PASS",
+      "args": {
+        "n": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_function_arity_n2",
+      "status": "PASS",
+      "args": {
+        "n": 3
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_string_n2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_qualifier_string_n2",
+      "status": "PASS",
+      "args": {
+        "const_": true
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_string_n2",
+      "status": "PASS",
+      "args": {
+        "const_": true,
+        "volatile": true,
+        "restrict": true
+      }
+    },
+    {
+      "tool": "decompiler_type_qualified_c_name_n2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_layout_for_struct_n2",
+      "status": "PASS",
+      "args": {
+        "total_size": 16
+      }
+    },
+    {
+      "tool": "decompiler_type_layout_for_struct_n2",
+      "status": "PASS",
+      "args": {
+        "total_size": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_union_member_named_n2",
+      "status": "PASS",
+      "args": {
+        "member": "x"
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_zx2",
+      "status": "PASS",
+      "args": {
+        "const_q": true,
+        "volatile_q": false,
+        "restrict_q": false
+      }
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_zx2",
+      "status": "PASS",
+      "args": {
+        "const_q": true,
+        "volatile_q": true,
+        "restrict_q": true
+      }
+    },
+    {
+      "tool": "decompiler_type_qualified_c_name_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_qualified_c_name_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "u64",
+        "const_q": true
+      }
+    },
+    {
+      "tool": "decompiler_type_union_member_named_zx2",
+      "status": "PASS",
+      "args": {
+        "probe": "x"
+      }
+    },
+    {
+      "tool": "decompiler_type_function_arity_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_function_arity_zx2",
+      "status": "PASS",
+      "args": {
+        "n": 3,
+        "variadic": false
+      }
+    },
+    {
+      "tool": "decompiler_type_function_arity_zx2",
+      "status": "PASS",
+      "args": {
+        "n": 0,
+        "variadic": true
+      }
+    },
+    {
+      "tool": "decompiler_type_calling_convention_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_layout_padded_size_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_layout_padded_size_zx2",
+      "status": "PASS",
+      "args": {
+        "total_size": 16
+      }
+    },
+    {
+      "tool": "decompiler_type_pointer_analysis_zx2",
+      "status": "PASS",
+      "args": {
+        "ptr": "p",
+        "target": "x",
+        "alias": "q"
+      }
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_name_prefix_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_lattice_join_zx2",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_lattice_join_zx2",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_lattice_join_zx2",
+      "status": "PASS",
+      "args": {
+        "a": "u8",
+        "b": "u64"
+      }
+    },
+    {
+      "tool": "decompiler_type_lattice_from_decomp_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_lattice_from_decomp_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "u8"
+      }
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_zx2",
+      "status": "PASS",
+      "args": {
+        "var": "v0",
+        "widths": [
+          4
+        ],
+        "signed": true
+      }
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_zx2",
+      "status": "PASS",
+      "args": {
+        "var": "v1",
+        "widths": [
+          1,
+          2,
+          4
+        ],
+        "signed": false
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_clusterer_zx2",
+      "status": "PASS",
+      "args": {
+        "base": "p",
+        "observations": [
+          {
+            "offset": 0,
+            "width": 4
+          },
+          {
+            "offset": 4,
+            "width": 4
+          }
+        ]
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_clusterer_zx2",
+      "status": "PASS",
+      "args": {
+        "base": "q",
+        "observations": []
+      }
+    },
+    {
+      "tool": "decompiler_type_array_match_zx2",
+      "status": "PASS",
+      "args": {
+        "base": "arr",
+        "idx": "i",
+        "stride": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_array_match_zx2",
+      "status": "PASS",
+      "args": {
+        "base": "buf",
+        "idx": "n",
+        "stride": 1
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_classes_zx2",
+      "status": "PASS",
+      "args": {
+        "pairs": [],
+        "probe": "x"
+      }
+    },
+    {
+      "tool": "decompiler_type_unifier_classes_zx2",
+      "status": "PASS",
+      "args": {
+        "pairs": [
+          [
+            "a",
+            "b"
+          ],
+          [
+            "c",
+            "d"
+          ]
+        ],
+        "probe": "a"
+      }
+    },
+    {
+      "tool": "decompiler_type_env_struct_named_zx2",
+      "status": "PASS",
+      "args": {
+        "name": "MyStruct",
+        "probe": "x"
+      }
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ptr_zx2",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i32"
+      }
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ptr_zx2",
+      "status": "PASS",
+      "args": {
+        "a": "i32",
+        "b": "i64"
+      }
+    },
+    {
+      "tool": "decompiler_type_is_pointer_zx2",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_zx2",
+      "status": "PASS",
+      "args": {
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_zx2",
+      "status": "PASS",
+      "args": {
+        "offset": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_array_byte_size_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i32",
+        "n": 4
+      }
+    },
+    {
+      "tool": "decompiler_type_array_byte_size_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "i64",
+        "n": 0
+      }
+    },
+    {
+      "tool": "decompiler_type_array_byte_size_zx2",
+      "status": "PASS",
+      "args": {
+        "width": "u8",
+        "n": 16,
+        "ptr_width": 8
+      }
+    },
+    {
+      "tool": "decompiler_type_database_resolve_typedef_n2",
+      "status": "PASS",
+      "args": {
+        "alias": "DWORD",
+        "width": "u32"
+      }
+    },
+    {
+      "tool": "decompiler_type_database_resolve_typedef_n2",
+      "status": "PASS",
+      "args": {
+        "alias": "SIZE_T",
+        "width": "u64"
+      }
+    }
+  ],
+  "skips_added": [
+    {
+      "tool": "decompile.function",
+      "reason": "Requires binary analysis pipeline; output depends on actual binary disassembly + decompilation pass."
+    },
+    {
+      "tool": "decompile.rename_variable",
+      "reason": "Stateful rename in decompiler session; no deterministic Python ground truth."
+    },
+    {
+      "tool": "decompile.set_type",
+      "reason": "Stateful type annotation in decompiler session; no deterministic Python ground truth."
+    },
+    {
+      "tool": "decompiler_type_env_resolve_struct_z1",
+      "reason": "TypeEnvironment internal state; depends on prior struct registrations in Rust."
+    },
+    {
+      "tool": "decompiler_type_database_get_struct_z1",
+      "reason": "TypeDatabase lookup; result depends on built-in Rust struct definitions loaded at startup."
+    },
+    {
+      "tool": "decompiler_type_database_get_union_z1",
+      "reason": "TypeDatabase lookup for unions; same as get_struct_z1."
+    },
+    {
+      "tool": "decompiler_type_database_get_function_z1",
+      "reason": "TypeDatabase lookup for functions; same as get_struct_z1."
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_struct_z1",
+      "reason": "CType emission for struct; depends on TypeDatabase state."
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_union_z1",
+      "reason": "CType emission for union; depends on TypeDatabase state."
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_function_z1",
+      "reason": "CType emission for function; depends on TypeDatabase state."
+    },
+    {
+      "tool": "decomp2_symbol_map_insert_lookup",
+      "reason": "SymbolMap stateful insert+lookup; HashMap iteration order non-deterministic."
+    },
+    {
+      "tool": "decomp2_annotation_store_clear",
+      "reason": "AnnotationStore stateful; clear result depends on prior server-side state."
+    },
+    {
+      "tool": "decomp2_function_name_generator_hint",
+      "reason": "Counter-based name generator; result depends on server-side call count."
+    },
+    {
+      "tool": "decomp2_timing_hook_total",
+      "reason": "Timing hook measures wall time; inherently nondeterministic."
+    },
+    {
+      "tool": "decompiler_load_binary_info",
+      "reason": "Requires loading an actual binary file through Rust binary loader; file-dependent."
+    },
+    {
+      "tool": "decompiler_detect_functions",
+      "reason": "Function detection depends on binary content and Rust disassembler heuristics."
+    },
+    {
+      "tool": "decompiler_disassemble_function_x86",
+      "reason": "Requires valid binary_path + function VA; output depends on binary content."
+    },
+    {
+      "tool": "decompiler_core_batch_decompile",
+      "reason": "Batch decompilation; requires binary file and writable out_dir; output is file-based."
+    },
+    {
+      "tool": "decompiler_recover_structs",
+      "reason": "Struct recovery requires binary + address; output depends on binary content."
+    },
+    {
+      "tool": "decompiler_type_env_set_get",
+      "reason": "TypeEnvironment stateful; set+get result depends on Rust HashMap state."
+    },
+    {
+      "tool": "decompiler_type_env_set_get_wp",
+      "reason": "TypeEnvironment WP variant; stateful as above."
+    }
+  ]
+}

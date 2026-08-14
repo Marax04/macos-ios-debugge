@@ -1,0 +1,153 @@
+{
+  "crate": "rustre-analysis-callconv",
+  "saved": false,
+  "functions": [
+    {
+      "name": "sysv_x64_three_args",
+      "expected": "sysv_x64",
+      "detected": "sysv_x64",
+      "score": 70,
+      "ranking": [
+        [
+          "sysv_x64",
+          70
+        ],
+        [
+          "msvc_x64",
+          30
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "msvc_x64_three_args",
+      "expected": "msvc_x64",
+      "detected": "msvc_x64",
+      "score": 80,
+      "ranking": [
+        [
+          "msvc_x64",
+          80
+        ],
+        [
+          "sysv_x64",
+          55
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "stdcall_x86_two_stack_args",
+      "expected": "stdcall_x86",
+      "detected": "stdcall_x86",
+      "score": 40,
+      "ranking": [
+        [
+          "stdcall_x86",
+          40
+        ],
+        [
+          "fastcall_x86",
+          25
+        ],
+        [
+          "thiscall_x86",
+          25
+        ],
+        [
+          "cdecl_x86",
+          15
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "fastcall_x86_two_args",
+      "expected": "fastcall_x86",
+      "detected": "fastcall_x86",
+      "score": 40,
+      "ranking": [
+        [
+          "fastcall_x86",
+          40
+        ],
+        [
+          "thiscall_x86",
+          20
+        ],
+        [
+          "cdecl_x86",
+          0
+        ],
+        [
+          "stdcall_x86",
+          0
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "thiscall_x86_method",
+      "expected": "thiscall_x86",
+      "detected": "thiscall_x86",
+      "score": 50,
+      "ranking": [
+        [
+          "thiscall_x86",
+          50
+        ],
+        [
+          "fastcall_x86",
+          35
+        ],
+        [
+          "stdcall_x86",
+          15
+        ],
+        [
+          "cdecl_x86",
+          0
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "aapcs64_four_args",
+      "expected": "aapcs64",
+      "detected": "aapcs64",
+      "score": 80,
+      "ranking": [
+        [
+          "aapcs64",
+          80
+        ],
+        [
+          "aapcs32",
+          0
+        ]
+      ],
+      "pass": true
+    },
+    {
+      "name": "sysv_x64_factory_invariants",
+      "expected": true,
+      "detected": true,
+      "score": 100,
+      "ranking": [],
+      "pass": true
+    },
+    {
+      "name": "msvc_x64_factory_invariants",
+      "expected": true,
+      "detected": true,
+      "score": 100,
+      "ranking": [],
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0
+  }
+}

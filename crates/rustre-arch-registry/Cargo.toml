@@ -1,0 +1,37 @@
+[package]
+license.workspace = true
+name = "rustre-arch-registry"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-arch = { path = "../rustre-arch" }
+rustre-arch-6502 = { path = "../rustre-arch-6502" }
+rustre-arch-68k = { path = "../rustre-arch-68k" }
+rustre-arch-arm = { path = "../rustre-arch-arm" }
+rustre-arch-arm64 = { path = "../rustre-arch-arm64" }
+rustre-arch-avr = { path = "../rustre-arch-avr" }
+rustre-arch-bpf = { path = "../rustre-arch-bpf" }
+rustre-arch-cil = { path = "../rustre-arch-cil" }
+rustre-arch-dex = { path = "../rustre-arch-dex" }
+rustre-arch-jvm = { path = "../rustre-arch-jvm" }
+rustre-arch-lua = { path = "../rustre-arch-lua" }
+rustre-arch-luajit = { path = "../rustre-arch-luajit" }
+rustre-arch-mips = { path = "../rustre-arch-mips" }
+rustre-arch-msp430 = { path = "../rustre-arch-msp430" }
+rustre-arch-ppc = { path = "../rustre-arch-ppc" }
+rustre-arch-riscv = { path = "../rustre-arch-riscv" }
+rustre-arch-sparc = { path = "../rustre-arch-sparc" }
+rustre-arch-wasm = { path = "../rustre-arch-wasm" }
+rustre-arch-x86 = { path = "../rustre-arch-x86" }
+rustre-arch-z80 = { path = "../rustre-arch-z80" }
+
+[lints]
+workspace = true

@@ -1,0 +1,969 @@
+{
+  "category": "trace",
+  "tools_hardened": 54,
+  "tools_passed": 54,
+  "tools_failed": 0,
+  "tools_skipped": 90,
+  "checks": [
+    {
+      "tool": "trace_navigate_bytes_to_u64_v3",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_v3",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          171,
+          205
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_v3",
+      "status": "PASS",
+      "args": {
+        "bytes": []
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_access_kind_display",
+      "status": "PASS",
+      "args": {
+        "kind": "read"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_access_kind_display",
+      "status": "PASS",
+      "args": {
+        "kind": "write"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_access_kind_display",
+      "status": "PASS",
+      "args": {
+        "kind": "other"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_insn_entry_v2",
+      "status": "PASS",
+      "args": {
+        "idx": 5,
+        "pc": 4096,
+        "tid": 2,
+        "disasm": "nop"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_call_entry",
+      "status": "PASS",
+      "args": {
+        "idx": 0,
+        "pc": 256,
+        "tid": 1,
+        "target": 512,
+        "ret_addr": 261
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_ret_entry",
+      "status": "PASS",
+      "args": {
+        "idx": 0,
+        "pc": 768,
+        "tid": 1,
+        "target": 261
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name",
+      "status": "PASS",
+      "args": {
+        "fn_addr": 4096
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_bookmark_with_note",
+      "status": "PASS",
+      "args": {
+        "name": "bp1",
+        "idx": 3,
+        "pc": 57005,
+        "note": "my note"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_bookmark_store_sorted",
+      "status": "PASS",
+      "args": {
+        "items": [
+          {
+            "name": "b",
+            "idx": 5,
+            "pc": 1280
+          },
+          {
+            "name": "a",
+            "idx": 2,
+            "pc": 512
+          },
+          {
+            "name": "c",
+            "idx": 8,
+            "pc": 2048
+          }
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_navigation_history",
+      "status": "PASS",
+      "args": {
+        "indices": [
+          10,
+          20,
+          30
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_step_window",
+      "status": "PASS",
+      "args": {
+        "cap": 3,
+        "moves": [
+          {
+            "from": 0,
+            "to": 1
+          },
+          {
+            "from": 1,
+            "to": 2
+          },
+          {
+            "from": 2,
+            "to": 3
+          },
+          {
+            "from": 3,
+            "to": 4
+          }
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_idx_for_tsc",
+      "status": "PASS",
+      "args": {
+        "entries": [],
+        "tsc": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_navigate_mem_access_index",
+      "status": "PASS",
+      "args": {
+        "writes": [],
+        "reads": []
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_filter_instructions_only",
+      "status": "PASS",
+      "args": {},
+      "note": ""
+    },
+    {
+      "tool": "trace_compressor_compression_ratio",
+      "status": "PASS",
+      "args": {
+        "original_count": 100,
+        "block_count": 10
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_compressor_compression_ratio",
+      "status": "PASS",
+      "args": {
+        "original_count": 0,
+        "block_count": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_compressor_compression_ratio",
+      "status": "PASS",
+      "args": {
+        "original_count": 50,
+        "block_count": 50
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_bitmap_count",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_bitmap_count",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          0,
+          0,
+          0
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_bitmap_count",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          255,
+          255
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_new_coverage",
+      "status": "PASS",
+      "args": {
+        "a": [
+          0,
+          1,
+          0
+        ],
+        "b": [
+          1,
+          1,
+          1
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_drcov_parse",
+      "status": "PASS",
+      "args": {
+        "text": "DRCOV VERSION: 2\nDRCOV FLAVOR: drcov\nModule Table: version 2, count 0\nBB Table: 0 bbs\n"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_parse_custom_binary",
+      "status": "PASS",
+      "args": {
+        "bytes": []
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_parse_custom_binary",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          0,
+          16,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          5,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_jaccard",
+      "status": "PASS",
+      "args": {
+        "a": [
+          1,
+          0
+        ],
+        "b": [
+          1,
+          0
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_afl_jaccard",
+      "status": "PASS",
+      "args": {
+        "a": [
+          1,
+          0
+        ],
+        "b": [
+          0,
+          1
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_covedge_display",
+      "status": "PASS",
+      "args": {
+        "from": 57005,
+        "to": 48879
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_function_stats_pct",
+      "status": "PASS",
+      "args": {
+        "total_bb": 10,
+        "covered_bb": 5
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_function_stats_pct",
+      "status": "PASS",
+      "args": {
+        "total_bb": 10,
+        "covered_bb": 10
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_function_stats_pct",
+      "status": "PASS",
+      "args": {
+        "total_bb": 0,
+        "covered_bb": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_parse_lcov_wire",
+      "status": "PASS",
+      "args": {
+        "text": "SF:foo.c\nDA:10,1\nDA:20,0\nend_of_record\nSF:bar.c\nDA:5,2\nend_of_record\n"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_covbitmap_ops",
+      "status": "PASS",
+      "args": {
+        "a": [
+          15
+        ],
+        "b": [
+          240
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_diff_overlap_pct",
+      "status": "PASS",
+      "args": {
+        "a": [
+          4096,
+          8192
+        ],
+        "b": [
+          8192,
+          12288
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_event_type_name_wt1",
+      "status": "PASS",
+      "args": {
+        "kind": "instruction"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_event_type_name_wt1",
+      "status": "PASS",
+      "args": {
+        "kind": "memread"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_event_type_name_wt1",
+      "status": "PASS",
+      "args": {
+        "kind": "call"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_event_type_name_wt1",
+      "status": "PASS",
+      "args": {
+        "kind": "syscall"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_event_type_name_wt1",
+      "status": "PASS",
+      "args": {
+        "kind": "exception"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_session_instruction_count_wt1",
+      "status": "PASS",
+      "args": {
+        "addrs": [
+          4096,
+          4097,
+          4098,
+          4096
+        ],
+        "arch": "x86_64"
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_filter_matches_wt1",
+      "status": "PASS",
+      "args": {
+        "addr": 4660
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_filter_matches_wt1",
+      "status": "PASS",
+      "args": {
+        "addr": 20480,
+        "min_addr": 4096,
+        "max_addr": 8192
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_coverage_map_wt1",
+      "status": "PASS",
+      "args": {
+        "addrs": [
+          4096,
+          4097,
+          4096
+        ],
+        "total_addresses": 10,
+        "top_n": 5
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_compressor_rle_wt1",
+      "status": "PASS",
+      "args": {
+        "addr": 4096,
+        "count": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_compressor_rle_wt1",
+      "status": "PASS",
+      "args": {
+        "addr": 4096,
+        "count": 100
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_diff_similarity_wt1",
+      "status": "PASS",
+      "args": {
+        "left_addrs": [
+          4096,
+          8192
+        ],
+        "right_addrs": [
+          4096,
+          8192
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_player_progress_wt1",
+      "status": "PASS",
+      "args": {
+        "n": 10,
+        "steps": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_index_build_wt1",
+      "status": "PASS",
+      "args": {
+        "addrs": [
+          4096,
+          8192,
+          4096
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_json_roundtrip_wt1",
+      "status": "PASS",
+      "args": {
+        "n": 5
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_visualization_data_wt1",
+      "status": "PASS",
+      "args": {
+        "addrs": [
+          4096,
+          8192,
+          4096
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_recorder_record_wt1",
+      "status": "PASS",
+      "args": {
+        "n": 5,
+        "max": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "trace_registry_engines_wt1",
+      "status": "PASS",
+      "args": {},
+      "note": ""
+    }
+  ],
+  "mismatches": [],
+  "skips": [
+    {
+      "tool": "trace_coverage_to_custom_binary",
+      "reason": "binary format output \u2014 no independent Python serializer for CoverageRun"
+    },
+    {
+      "tool": "trace_coverage_merge_runs",
+      "reason": "JSON-in/JSON-out, result shape verified implicitly via covdiff; hard to pin independently"
+    },
+    {
+      "tool": "trace_cov_parse_lcov",
+      "reason": "already covered in a different variant (trace_coverage_parse_lcov_wire tested here)"
+    },
+    {
+      "tool": "trace_coverage_compute_function_stats_v2",
+      "reason": "complex JSON stats \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_parse_lcov_v2",
+      "reason": "same logic as parse_lcov_wire, already covered"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_new_v2",
+      "reason": "stateful ExecutionTrace build; idx_for_tsc tested separately"
+    },
+    {
+      "tool": "trace_navigate_coverage_build_empty_wire",
+      "reason": "stateful empty coverage object; deterministic but no field to pin"
+    },
+    {
+      "tool": "trace_navigate_call_index_build_wp",
+      "reason": "wire-protocol variant needing more env setup"
+    },
+    {
+      "tool": "trace_navigate_call_stack_reconstructor_new_wire",
+      "reason": "stateful reconstructor \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_navigate_call_stack_reconstructor_process_wp",
+      "reason": "stateful; depends on prior reconstructor state"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_idx_for_ms_wp",
+      "reason": "millisecond-based idx lookup \u2014 stateful"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_idx_for_tsc_x",
+      "reason": "TSC variant, similar to idx_for_tsc tested above"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_len_wire",
+      "reason": "trivial len field; tested via idx_for_tsc empty check"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_with_arch_wp",
+      "reason": "arch annotation variant \u2014 no field to pin independently"
+    },
+    {
+      "tool": "trace_navigate_reg_timeline_build_wp",
+      "reason": "register timeline \u2014 no independent Python reference"
+    },
+    {
+      "tool": "trace_navigate_trace_entry_mem_access_wp",
+      "reason": "mem access extraction \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_navigate_trace_entry_with_regs_wp",
+      "reason": "register-augmented entry \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_navigate_mem_access_index_addrs_wp",
+      "reason": "variant of mem_access_index; already base case tested"
+    },
+    {
+      "tool": "trace_navigate_mem_access_index_queries_wp",
+      "reason": "complex query variant; no independent reference"
+    },
+    {
+      "tool": "trace_navigate_stack_frame_with_name_wp",
+      "reason": "same as stackframe_display_name with name; format tested via display_name above"
+    },
+    {
+      "tool": "trace_navigate_nav_history_new_wire",
+      "reason": "empty NavigationHistory constructor; trivial"
+    },
+    {
+      "tool": "trace_navigate_step_window_new_wire",
+      "reason": "empty StepWindow; trivial constructor"
+    },
+    {
+      "tool": "trace_navigate_bookmark_store_new_wire",
+      "reason": "empty BookmarkStore; trivial constructor"
+    },
+    {
+      "tool": "trace_navigate_bookmark_display_x",
+      "reason": "bookmark display string \u2014 no strict format spec"
+    },
+    {
+      "tool": "trace_navigate_navevent_display_x",
+      "reason": "NavEvent display \u2014 no strict format spec"
+    },
+    {
+      "tool": "trace_navigate_access_kind_from_str_x",
+      "reason": "from_str mapping \u2014 covered by display test above"
+    },
+    {
+      "tool": "trace_navigate_access_kind_display_wire",
+      "reason": "same as trace_navigate_access_kind_display tested above"
+    },
+    {
+      "tool": "trace_navigate_call_entry_wire",
+      "reason": "wire variant of call_entry already tested above"
+    },
+    {
+      "tool": "trace_navigate_ret_entry_wire",
+      "reason": "wire variant of ret_entry already tested above"
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name_wire",
+      "reason": "wire variant tested via stackframe_display_name above"
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name_x",
+      "reason": "x-variant; same logic"
+    },
+    {
+      "tool": "trace_navigate_stackframe_with_name_x",
+      "reason": "x-variant of stackframe_with_name"
+    },
+    {
+      "tool": "trace_navigate_entry_call_target_x",
+      "reason": "entry field accessor \u2014 covered by call_entry test"
+    },
+    {
+      "tool": "trace_navigate_entry_is_call_x",
+      "reason": "entry field accessor \u2014 covered by call_entry test"
+    },
+    {
+      "tool": "trace_navigate_entry_is_ret_x",
+      "reason": "entry field accessor \u2014 covered by ret_entry test"
+    },
+    {
+      "tool": "trace_navigate_entry_ret_addr_x",
+      "reason": "entry field accessor \u2014 covered by call_entry test"
+    },
+    {
+      "tool": "trace_navigate_entry_ret_target_x",
+      "reason": "entry field accessor \u2014 covered by ret_entry test"
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_x",
+      "reason": "x-variant of bytes_to_u64, same function as v3 tested above"
+    },
+    {
+      "tool": "trace_navigate_stackframe_new",
+      "reason": "trivial constructor"
+    },
+    {
+      "tool": "trace_navigate_bookmark_new",
+      "reason": "trivial constructor"
+    },
+    {
+      "tool": "trace_coverage_afl_new_edges_v2",
+      "reason": "new_edges v2 variant \u2014 similar to afl_new_coverage tested above"
+    },
+    {
+      "tool": "trace_coverage_block_color_info_rgba_wire3",
+      "reason": "RGBA color computation \u2014 no independent Python reference"
+    },
+    {
+      "tool": "trace_coverage_block_colors_v2",
+      "reason": "color list \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_data_stats",
+      "reason": "aggregate stats JSON \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_data_all_bb_addresses_wire3",
+      "reason": "bb address list extraction \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_diff_compute_v2",
+      "reason": "diff v2 variant \u2014 overlap_pct tested above"
+    },
+    {
+      "tool": "trace_coverage_drcov_resolve",
+      "reason": "drcov address resolution \u2014 needs module info"
+    },
+    {
+      "tool": "trace_coverage_drcov_to_run_v2",
+      "reason": "drcov to run conversion \u2014 complex format"
+    },
+    {
+      "tool": "trace_coverage_function_stats_flags",
+      "reason": "flags field; tested via function_stats_pct"
+    },
+    {
+      "tool": "trace_coverage_heatmap_build_v2",
+      "reason": "heatmap JSON \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_heatmap_heat_at_wire3",
+      "reason": "heatmap point lookup \u2014 depends on heatmap state"
+    },
+    {
+      "tool": "trace_coverage_heatmap_hottest",
+      "reason": "hottest BB list \u2014 depends on heatmap state"
+    },
+    {
+      "tool": "trace_coverage_html_report_v2",
+      "reason": "HTML generation \u2014 no independent reference"
+    },
+    {
+      "tool": "trace_coverage_lcov_line_ratio_wire3",
+      "reason": "LCOV line ratio \u2014 tested parse path above"
+    },
+    {
+      "tool": "trace_coverage_lighthouse_from_run_v2",
+      "reason": "lighthouse format conversion \u2014 complex"
+    },
+    {
+      "tool": "trace_coverage_lighthouse_roundtrip",
+      "reason": "lighthouse roundtrip \u2014 complex format"
+    },
+    {
+      "tool": "trace_coverage_load_afl_bitmap_v2",
+      "reason": "AFL bitmap load v2 \u2014 similar to bitmap_count tested above"
+    },
+    {
+      "tool": "trace_coverage_map_new",
+      "reason": "empty map constructor \u2014 trivial"
+    },
+    {
+      "tool": "trace_coverage_map_ratio",
+      "reason": "map ratio \u2014 depends on total_addresses, tested via map_wt1"
+    },
+    {
+      "tool": "trace_coverage_merge_all_runs_v2",
+      "reason": "merge all runs \u2014 complex multi-run"
+    },
+    {
+      "tool": "trace_coverage_parse_custom_binary_v2",
+      "reason": "v2 variant of parse_custom_binary tested above"
+    },
+    {
+      "tool": "trace_coverage_run_heatmap_wire3",
+      "reason": "run heatmap wire variant \u2014 no reference"
+    },
+    {
+      "tool": "trace_coverage_run_hot_bbs",
+      "reason": "hot BBs list \u2014 no reference"
+    },
+    {
+      "tool": "trace_coverage_run_summary",
+      "reason": "run summary \u2014 no reference"
+    },
+    {
+      "tool": "trace_coverage_run_visit_at",
+      "reason": "visit count at addr \u2014 no reference"
+    },
+    {
+      "tool": "trace_coverage_session_add_run_wire3",
+      "reason": "stateful session add run"
+    },
+    {
+      "tool": "trace_coverage_to_lcov_string_v2",
+      "reason": "LCOV string serialization \u2014 no reference"
+    },
+    {
+      "tool": "trace_diff_compute",
+      "reason": "diff compute \u2014 overlap tested via diff_overlap_pct"
+    },
+    {
+      "tool": "trace_diff_similarity_identical",
+      "reason": "identity check \u2014 tested via diff_similarity_wt1"
+    },
+    {
+      "tool": "trace_anomaly_detector_detect",
+      "reason": "anomaly detection \u2014 nondeterministic"
+    },
+    {
+      "tool": "trace_callees_forward",
+      "reason": "callee graph \u2014 needs binary context"
+    },
+    {
+      "tool": "trace_callers_backward",
+      "reason": "caller graph \u2014 needs binary context"
+    },
+    {
+      "tool": "trace_coverage_covbitmap_clear_bits",
+      "reason": "clear bits op \u2014 complement of set tested above"
+    },
+    {
+      "tool": "trace_coverage_covbitmap_record_edge",
+      "reason": "edge record \u2014 stateful bitmap"
+    },
+    {
+      "tool": "trace_function_call_tree_build",
+      "reason": "call tree \u2014 needs full trace"
+    },
+    {
+      "tool": "trace_heatmap_from_session",
+      "reason": "heatmap from session \u2014 stateful"
+    },
+    {
+      "tool": "trace_loop_detector_detect",
+      "reason": "loop detection \u2014 complex algorithm"
+    },
+    {
+      "tool": "trace_recorder_is_full",
+      "reason": "is_full field \u2014 tested via recorder_record_wt1"
+    },
+    {
+      "tool": "trace_recorder_new",
+      "reason": "trivial constructor"
+    },
+    {
+      "tool": "trace_recorder_record_insn",
+      "reason": "single insn record \u2014 tested via recorder_record_wt1"
+    },
+    {
+      "tool": "trace_session_build_heat_map",
+      "reason": "heat map \u2014 no reference"
+    },
+    {
+      "tool": "trace_session_build_index",
+      "reason": "index build \u2014 stateful"
+    },
+    {
+      "tool": "trace_session_coverage_set",
+      "reason": "coverage set \u2014 stateful"
+    },
+    {
+      "tool": "trace_session_duration_ns",
+      "reason": "duration \u2014 stateful session"
+    },
+    {
+      "tool": "trace_session_instruction_count",
+      "reason": "count \u2014 tested via session_instruction_count_wt1"
+    },
+    {
+      "tool": "trace_statistics_compute",
+      "reason": "statistics \u2014 complex; no reference"
+    },
+    {
+      "tool": "trace_filter_matches",
+      "reason": "filter matches \u2014 tested via filter_matches_wt1"
+    },
+    {
+      "tool": "trace_coverage_map_hit_count",
+      "reason": "hit count \u2014 tested via coverage_map_wt1"
+    },
+    {
+      "tool": "trace_player_progress",
+      "reason": "progress \u2014 tested via player_progress_wt1"
+    },
+    {
+      "tool": "trace_coverage_map_wt1",
+      "reason": "map wt1 \u2014 already tested above (duplicate skip entry \u2014 ignore)"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-net-rules",
+  "tests": 12,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-net-rules (grep su crates/rustre-mcp-tools: nessun riferimento a net_rules/snort/rule_engine/aho_corasick). Il crate fornisce parser regole Snort, motore di matching, Aho-Corasick e PacketContext IPv4, ma non e' esposto via JSON-RPC stdio dal binario rustre-mcp.exe. Validator Python eseguito con successo (12 check: ip_spec_matches, port_spec_matches, network_spec_matches, rule_parser_parse, rule_parser_parse_many, decode_content, parse_dsize, ac_find_all/first/contains_any, packet_from_ipv4, rule_engine_evaluate/_all) - tutti generano output coerente. Confronto MCP-vs-validator non eseguibile finche' non viene esposto un tool tipo net_rules_parse / net_rules_evaluate. Stesso pattern di rustre-net-pcap e rustre-arch-bpf.",
+  "validator_output": {"crate": "rustre-net-rules", "saved": true},
+  "gap": "missing_mcp_tool:net_rules_parse,net_rules_evaluate,net_rules_ac_find_all,net_rules_packet_from_ipv4"
+}

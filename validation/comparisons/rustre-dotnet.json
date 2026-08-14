@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-dotnet",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Il validator rustre-dotnet.py e' un harness self-contained che valida algoritmi ECMA-335 in pure-Python: parse_method_body (tiny/fat header), decode_branch_target (short/long CIL branches), is_terminator, MethodFlags/FieldFlags/TypeFlags bit-decoding, AssemblyVersion formatting, CustomAttribute.is_type matching. Input sintetici (bytes hard-coded).",
+    "Nessun tool MCP dedicato espone queste primitive: in crates/rustre-mcp-tools/src/wire_tools.rs l'unico tool dotnet-related e' AnalysisDisasmAtPathCilTool (analysis_disasm_at_path_cil), che opera su file path PE/.NET completo e ritorna una disassembly aggregata, non accetta byte synthetic come {header_bytes_hex} ne' espone flag-decoders o is_type matcher.",
+    "Il dispatch del validator opera a livello di funzione pura su input artificiali; nessun endpoint JSON-RPC stdio del binario rustre-mcp.exe accetta tali input. Un confronto 1:1 richiederebbe wrapper RPC dedicati (dotnet_parse_method_body, dotnet_decode_branch, dotnet_method_flags, ...) che attualmente non esistono.",
+    "Conclusione: confronto MCP vs validator NON applicabile, analogamente a rustre-loader-pe/elf/macho. Validator eseguito direttamente: 'OK: all rustre-dotnet validator checks passed' (tutti i check ECMA-335 superati).",
+    "Verifica collaterale: cargo build -p rustre-dotnet --release completa pulito (no warnings, no errors), confermando lo stato sano del crate."
+  ]
+}

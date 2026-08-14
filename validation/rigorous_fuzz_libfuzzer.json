@@ -1,0 +1,7 @@
+{
+  "module": "fuzz_libfuzzer",
+  "tools_hardened": 9,
+  "checks_passed": 13,
+  "checks_failed": 0,
+  "mismatches": []
+}

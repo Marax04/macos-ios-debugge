@@ -1,0 +1,48 @@
+{
+  "crate": "rustre-arch-riscv",
+  "summary": "Validator covers pure-table/decoder helpers (CSR, SBI, syscall, ABI, prologue, brev8, mcause, qemu MMIO, fp_rm, fclass, c_classify). The only MCP-exposed surface is `analysis_disasm_at_path_riscv` which requires a loader-supported binary (ELF/PE). There is no MCP wrapper for any of the validator's pure functions, and no validator coverage of full-binary disasm. Overlap of testable inputs between the two surfaces is therefore empty.",
+  "mcp_tools_inspected": [
+    {
+      "name": "analysis_disasm_at_path_riscv",
+      "schema_required": ["path"],
+      "behavior": "Loads binary via registered loaders; raw .bin returns 'no registered loader can handle format: Unknown'. Requires ELF/PE."
+    }
+  ],
+  "mcp_outputs": [
+    {
+      "test": "disasm raw .bin (3 RV64I words: addi sp,sp,-32; sd ra,24(sp); sd s0,16(sp))",
+      "request": {"name":"analysis_disasm_at_path_riscv","arguments":{"path":"<scratch>/rv_prologue.bin","address":0,"count":3,"bits":64}},
+      "result": {"isError": true, "text": "execution failed: internal error: load failed: loader: no registered loader can handle format: Unknown"}
+    }
+  ],
+  "validator_outputs": {
+    "rv_brev8_32(0x12345678)": "0x482c6a1e",
+    "rv_c_classify(0x0001)": "quadrant1",
+    "rv_c_classify(0x0013)": "not-compressed",
+    "rv_fp_rm_str(0)": "rne",
+    "rv_fp_rm_str(7)": "dyn",
+    "rv_fclass_bit_name(8)": "snan",
+    "mcause_decode(2,64)": {"is_interrupt": false, "code": 2, "name": "illegal instruction"},
+    "mcause_decode((1<<63)|7,64)": {"is_interrupt": true, "code": 7, "name": "machine timer interrupt"},
+    "csr_0x300": {"name": "mstatus", "access": "MRW", "privilege": "machine"},
+    "csr_0xC00": {"name": "cycle", "access": "URO", "privilege": "user"},
+    "sbi(0x10,0)": {"name": "sbi_get_spec_version"},
+    "syscall(64)": {"name": "write"},
+    "qemu@0x10000000": {"name": "uart0"},
+    "qemu@0x02000000": {"name": "clint"},
+    "abi sp": {"x": 2, "callee_saved": true},
+    "abi a0": {"x": 10, "callee_saved": false},
+    "arg_regs_count": 8,
+    "callee_saved_count": 13,
+    "prologue": {"frame_size": 32, "spills": [{"reg":1,"offset":24,"width":8},{"reg":8,"offset":16,"width":8}]}
+  },
+  "mismatches": [],
+  "gap_findings": [
+    "MCP exposes no tool for CSR/SBI/syscall/ABI/QEMU-MMIO/prologue/brev8 lookups despite these being deterministic, well-specified RISC-V helpers worth surfacing.",
+    "analysis_disasm_at_path_riscv cannot be exercised against raw byte buffers; there is no `analysis_disasm_bytes_riscv` or analogous in-memory disasm tool. Validator's decode_compressed/decode_rvv/decode_stream cannot be tested through MCP without crafting a fake ELF."
+  ],
+  "tests_attempted": 1,
+  "tests_compared": 0,
+  "fixed": 0,
+  "match_final": true
+}

@@ -1,0 +1,90 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 237
+expression: "render_corpus(\"string operations (64-bit)\", 64, corpus)"
+---
+# string operations (64-bit)
+
+== movsb (bits=64) ==
+-- movsb [a4]
+   0x1000: [rdi.8].1 = [rsi.8].1
+   0x1000: rsi.8 = (rsi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== movsq (bits=64) ==
+-- movsq [48 a5]
+   0x1000: [rdi.8].8 = [rsi.8].8
+   0x1000: rsi.8 = (rsi.8 + ((flag(df) == 0x1.1) ? 0xfffffffffffffff8.8 : 0x8.8).8).8
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xfffffffffffffff8.8 : 0x8.8).8).8
+
+== rep movsb (bits=64) ==
+-- rep movsb [f3 a4]
+   0x1000: memcpy(((flag(df) == 0x1.1) ? ((rdi.8 - rcx.8).8 + 0x1.8).8 : rdi.8).8, ((flag(df) == 0x1.1) ? ((rsi.8 - rcx.8).8 + 0x1.8).8 : rsi.8).8, rcx.8)
+   0x1000: rdi.8 = ((flag(df) == 0x1.1) ? (rdi.8 - rcx.8).8 : (rdi.8 + rcx.8).8).8
+   0x1000: rsi.8 = ((flag(df) == 0x1.1) ? (rsi.8 - rcx.8).8 : (rsi.8 + rcx.8).8).8
+   0x1000: rcx.8 = 0x0.8
+
+== rep movsq (bits=64) ==
+-- rep movsq [f3 48 a5]
+   0x1000: memcpy(((flag(df) == 0x1.1) ? ((rdi.8 - (rcx.8 * 0x8.8).8).8 + 0x8.8).8 : rdi.8).8, ((flag(df) == 0x1.1) ? ((rsi.8 - (rcx.8 * 0x8.8).8).8 + 0x8.8).8 : rsi.8).8, (rcx.8 * 0x8.8).8)
+   0x1000: rdi.8 = ((flag(df) == 0x1.1) ? (rdi.8 - (rcx.8 * 0x8.8).8).8 : (rdi.8 + (rcx.8 * 0x8.8).8).8).8
+   0x1000: rsi.8 = ((flag(df) == 0x1.1) ? (rsi.8 - (rcx.8 * 0x8.8).8).8 : (rsi.8 + (rcx.8 * 0x8.8).8).8).8
+   0x1000: rcx.8 = 0x0.8
+
+== stosb (bits=64) ==
+-- stosb [aa]
+   0x1000: [rdi.8].1 = al.1
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== rep stosd (bits=64) ==
+-- rep stosd [f3 ab]
+   0x1000: memset(((flag(df) == 0x1.1) ? ((rdi.8 - (rcx.8 * 0x4.8).8).8 + 0x4.8).8 : rdi.8).8, eax.4, (rcx.8 * 0x4.8).8)
+   0x1000: rdi.8 = ((flag(df) == 0x1.1) ? (rdi.8 - (rcx.8 * 0x4.8).8).8 : (rdi.8 + (rcx.8 * 0x4.8).8).8).8
+   0x1000: rcx.8 = 0x0.8
+
+== lodsb (bits=64) ==
+-- lodsb [ac]
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffffff00.8).8 | (zx([rsi.8].1, 1->8) & 0xff.8).8).8
+   0x1000: rsi.8 = (rsi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== scasb (bits=64) ==
+-- scasb [ae]
+   0x1000: tmp0.1 = (al.1 - [rdi.8].1).1
+   0x1000: flag(cf) = (al.1 <u [rdi.8].1)
+   0x1000: flag(of) = (((al.1 <s 0x0.1) != ([rdi.8].1 <s 0x0.1)) & ((tmp0.1 <s 0x0.1) != (al.1 <s 0x0.1))).1
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== repne scasb (bits=64) ==
+-- repne scasb [f2 ae]
+   0x1000: tmp0.1 = (al.1 - [rdi.8].1).1
+   0x1000: flag(cf) = (al.1 <u [rdi.8].1)
+   0x1000: flag(of) = (((al.1 <s 0x0.1) != ([rdi.8].1 <s 0x0.1)) & ((tmp0.1 <s 0x0.1) != (al.1 <s 0x0.1))).1
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== cmpsb (bits=64) ==
+-- cmpsb [a6]
+   0x1000: tmp0.1 = ([rsi.8].1 - [rdi.8].1).1
+   0x1000: flag(cf) = ([rsi.8].1 <u [rdi.8].1)
+   0x1000: flag(of) = ((([rsi.8].1 <s 0x0.1) != ([rdi.8].1 <s 0x0.1)) & ((tmp0.1 <s 0x0.1) != ([rsi.8].1 <s 0x0.1))).1
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+   0x1000: rsi.8 = (rsi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+
+== repe cmpsb (bits=64) ==
+-- repe cmpsb [f3 a6]
+   0x1000: tmp0.1 = ([rsi.8].1 - [rdi.8].1).1
+   0x1000: flag(cf) = ([rsi.8].1 <u [rdi.8].1)
+   0x1000: flag(of) = ((([rsi.8].1 <s 0x0.1) != ([rdi.8].1 <s 0x0.1)) & ((tmp0.1 <s 0x0.1) != ([rsi.8].1 <s 0x0.1))).1
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+   0x1000: rsi.8 = (rsi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8
+   0x1000: rdi.8 = (rdi.8 + ((flag(df) == 0x1.1) ? 0xffffffffffffffff.8 : 0x1.8).8).8

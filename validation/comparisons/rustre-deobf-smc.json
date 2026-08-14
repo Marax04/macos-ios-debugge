@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-deobf-smc",
+  "error": "validator script not found at validation/validators/rustre-deobf-smc.py",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches": [],
+  "match": false,
+  "tests": 0
+}

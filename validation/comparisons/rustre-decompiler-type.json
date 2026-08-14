@@ -1,0 +1,100 @@
+{
+  "byte_size": [
+    {
+      "in": "{'kind': 'Int', 'width': 'I32'}",
+      "expected": 4,
+      "got": 4
+    },
+    {
+      "in": "{'kind': 'Ptr', 'inner': {'kind': 'Void'}}",
+      "expected": 8,
+      "got": 8
+    },
+    {
+      "in": "{'kind': 'Array', 'elem': {'kind': 'Int', 'width': 'I32'}, 'n': 10}",
+      "expected": 40,
+      "got": 40
+    },
+    {
+      "in": "{'kind': 'Float64'}",
+      "expected": 8,
+      "got": 8
+    },
+    {
+      "in": "{'kind': 'Enum', 'name': 'E', 'variants': [], 'backing': 'U16'}",
+      "expected": 2,
+      "got": 2
+    },
+    {
+      "in": "{'kind': 'Bool'}",
+      "expected": 1,
+      "got": 1
+    },
+    {
+      "in": "{'kind': 'CStr'}",
+      "expected": 8,
+      "got": 8
+    },
+    {
+      "in": "{'kind': 'Unknown'}",
+      "expected": null,
+      "got": null
+    }
+  ],
+  "byte_size_ptr4": 4,
+  "c_name": [
+    {
+      "expected": "int32_t",
+      "got": "int32_t"
+    },
+    {
+      "expected": "int32_t *",
+      "got": "int32_t *"
+    },
+    {
+      "expected": "int32_t[10]",
+      "got": "int32_t[10]"
+    },
+    {
+      "expected": "char *",
+      "got": "char *"
+    },
+    {
+      "expected": "void *",
+      "got": "void *"
+    }
+  ],
+  "field_at": {
+    "at_0": "value",
+    "at_4": null,
+    "at_8": "next",
+    "exact_0": "value",
+    "exact_4": null
+  },
+  "qualifier": {
+    "const_volatile": "const volatile",
+    "all": "const volatile restrict",
+    "preds_const": {
+      "is_const": true,
+      "is_volatile": false,
+      "is_restrict": false
+    }
+  },
+  "renamer": {
+    "seq": [
+      "i0",
+      "i1",
+      "p_0"
+    ],
+    "hint_arg": "arg0",
+    "hint_other": "i2"
+  },
+  "rename_variables": "ptr_0 = malloc(8); for(i=0; i<10; ++i) { f(ptr_0); }",
+  "emitter": {
+    "node_plus_8": "node->next",
+    "arr_plus_i_mul_4": "arr[i]",
+    "deref_p": "*p",
+    "call": "foo(1,x)",
+    "deref_nonptr": "DerefNonPointer"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "category": "forensics_fs",
+  "skipped": [
+    {
+      "tool": "forensics_fs_prefetch_parse",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_prefetch_summary",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_lnk_parse",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_lnk_analyzer_summary",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_lnk_file_target_path",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_prefetch_analyzer_report",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_prefetch_pattern_matcher_risk",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    },
+    {
+      "tool": "forensics_fs_prefetch_file_loaded_modules",
+      "reason": "Requires a real Prefetch/LNK binary file on disk; not available in test environment"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+__int64 sub_1400F2C50();
+__int64 sub_1400F3326();
+__int64 sub_140020E30();
+__int64 sub_140020C70();
+__int64 sub_140020C60();
+extern __int64 off_14012D270;
+extern __int64 off_14008C740;
+
+__int64 __fastcall sub_1400FAB20(int *a1) {
+    __int64 rsp;
+    int arg_8;
+    int v_20;
+    int v_30;
+    int v_38;
+    int v_40;
+    int v_50;
+    int v_60;
+    int v_70;
+    int v_80;
+    int v_90;
+    int v_a0;
+    int v_a8;
+    int v_b0;
+    int v_c0;
+    int v_d0;
+    char *str;
+    __int64 *dst;
+    __int64 *v2;
+    __int64 v6;
+    __int64 v4;
+    __int64 *src;
+    __int64 v7;
+    __m128i xmm0;
+    __m128i xmm1;
+    __m128i xmm2;
+    __m128i xmm3;
+    __int64 v8;
+    __int64 result;
+
+    dst = (__int64 *)a1;
+    v2 = *a1;
+    v6 = (__int64)v2 + (__int64)v2;
+    v4 = 4;
+    if (v6 >= 5) v4 = v6;
+    src = (__int64 *)arg_8;
+    str = 8;
+    v_20 = 4;
+    a1 = rsp + 48;
+    sub_1400F2C50(a1, v2, src);
+    if (v_30 == 1) {
+        a1 = (int *)v_38;
+        v2 = (__int64 *)v_40;
+        sub_1400F3326(a1, v2);
+        v7 = (__int64)v2;
+        dst = (__int64 *)a1;
+        a1 = off_14012D270;
+        v2 = __readgsqword(88);
+        a1 = v2[(__int64)a1];
+        a1 += 32;
+        str = (char *)a1;
+        xmm0 = _mm_loadu_si128((__m128i *)src);
+        xmm1 = _mm_loadu_si128((__m128i *)(src + 16));
+        xmm2 = _mm_loadu_si128((__m128i *)(src + 32));
+        xmm3 = _mm_loadu_si128((__m128i *)(src + 48));
+        _mm_storeu_si128((__m128i *)&v_30, xmm0);
+        _mm_storeu_si128((__m128i *)&v_40, xmm1);
+        _mm_storeu_si128((__m128i *)&v_50, xmm2);
+        _mm_storeu_si128((__m128i *)&v_60, xmm3);
+        xmm0 = _mm_loadu_si128((__m128i *)(src + 64));
+        _mm_storeu_si128((__m128i *)&v_70, xmm0);
+        xmm0 = _mm_loadu_si128((__m128i *)(src + 80));
+        _mm_storeu_si128((__m128i *)&v_80, xmm0);
+        xmm0 = _mm_loadu_si128((__m128i *)(src + 96));
+        _mm_storeu_si128((__m128i *)&v_90, xmm0);
+        a1 = *(src + 112);
+        v_a0 = (int)a1;
+        v_a8 = 0;
+        v2 = &off_14008C740;
+        sub_140020E30(v7, v2, str);
+        a1 = (int *)str;
+        sub_140020C70(a1);
+        v8 = v_a8;
+        xmm0 = _mm_loadu_si128((__m128i *)&v_b0);
+        if (v8 != 1) {
+            if (v8 != 2) JUMPOUT(0x1400fac94);
+            a1 = _mm_cvtsi128_si64(xmm0);
+            xmm0 = _mm_shuffle_epi32(xmm0, 238);
+            v2 = _mm_cvtsi128_si64(xmm0);
+            sub_140020C60(a1, v2);
+        }
+        xmm1 = _mm_loadu_si128((__m128i *)&v_c0);
+        xmm2 = _mm_loadu_si128((__m128i *)&v_d0);
+        _mm_storeu_si128((__m128i *)(dst + 32), xmm2);
+        _mm_storeu_si128((__m128i *)(dst + 16), xmm1);
+        _mm_storeu_si128((__m128i *)dst, xmm0);
+        return 0;
+    } else {
+        result = v_38;
+        *(dst + 8) = result;
+        *dst = v4;
+        return result;
+    }
+}

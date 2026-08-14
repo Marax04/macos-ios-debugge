@@ -1,0 +1,21 @@
+﻿[package]
+license.workspace = true
+name = "rustre-events"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }
+thiserror = { workspace = true }
+once_cell = { workspace = true }
+tracing = { workspace = true }

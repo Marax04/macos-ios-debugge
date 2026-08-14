@@ -1,0 +1,34 @@
+[package]
+license.workspace = true
+name = "rustre-loader"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+md-5 = { workspace = true }
+parking_lot = { workspace = true }
+bitflags = { workspace = true }
+
+# Sub-crate adapters (rustre-loader-android, -console, -dotnet, …) live in
+# the separate `rustre-loader-registry` crate. That crate depends on this hub
+# AND on every sub-crate; the sub-crates depend on this hub. Keeping the hub
+# free of sub-crate path-deps avoids a Cargo dependency cycle.
+
+[dev-dependencies]
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

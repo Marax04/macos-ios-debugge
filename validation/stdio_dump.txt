@@ -1,0 +1,7 @@
+﻿rustre-mcp.exe : Error: expect initialize request
+In riga:1 car:275
++ ... $j2+"`n") | & "target\release\rustre-mcp.exe" --transport=stdio 2>&1  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error: expect initialize request:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

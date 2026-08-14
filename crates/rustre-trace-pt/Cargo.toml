@@ -1,0 +1,31 @@
+[package]
+license.workspace = true
+name = "rustre-trace-pt"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# NOTE: must NOT depend on rustre-trace — workspace cycle (rustre-trace lists
+# this crate as an optional sub-trace dep). This crate is self-contained.
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+libc = "0.2"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+# This crate wraps Intel PT (Processor Trace) and necessarily calls raw CPUID
+# intrinsics (`__cpuid_count`) for capability detection. Those intrinsics are
+# `unsafe` by definition; there is no safe alternative. Mirror the pattern used
+# by `rustre-debug-windows` and `rustre-script-python` and opt this crate out
+# of the workspace `unsafe_code = "warn"` lint at the package level rather than
+# annotating every CPUID call site.
+[lints.rust]
+unsafe_code = "allow"

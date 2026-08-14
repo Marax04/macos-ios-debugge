@@ -1,0 +1,54 @@
+[
+  {
+    "tool": "trace_pt_decode_buffer",
+    "reason": "Intel PT binary format \u2014 no Python decoder; nondeterministic packet sync"
+  },
+  {
+    "tool": "trace_pt_coverage",
+    "reason": "Intel PT binary format \u2014 no Python decoder"
+  },
+  {
+    "tool": "trace_pt_drcov",
+    "reason": "Intel PT binary format \u2014 no Python decoder"
+  },
+  {
+    "tool": "trace_coresight_etm_decode_stream",
+    "reason": "ARM ETM binary format \u2014 no Python decoder"
+  },
+  {
+    "tool": "trace_coresight_tpiu_demux",
+    "reason": "ARM TPIU binary format \u2014 no Python decoder"
+  },
+  {
+    "tool": "trace_coresight_stm_decode_stream",
+    "reason": "ARM STM binary format \u2014 no Python decoder"
+  },
+  {
+    "tool": "trace_coresight_is_valid_stream",
+    "reason": "binary format \u2014 requires protocol knowledge"
+  },
+  {
+    "tool": "trace_coresight_find_sync_offsets",
+    "reason": "binary format \u2014 requires protocol knowledge"
+  },
+  {
+    "tool": "trace_merge_empty_sessions",
+    "reason": "stateful session merge \u2014 result depends on internal session object"
+  },
+  {
+    "tool": "trace_merge_sessions_empty",
+    "reason": "same as above"
+  },
+  {
+    "tool": "trace_open_trace_file",
+    "reason": "requires a trace file on disk"
+  },
+  {
+    "tool": "trace_pt_decoder_remaining_bytes",
+    "reason": "stateful decoder \u2014 nondeterministic after reset"
+  },
+  {
+    "tool": "trace_pt_flow_event_count",
+    "reason": "stateful flow \u2014 result is 0 but not independently verifiable"
+  }
+]

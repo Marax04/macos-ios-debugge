@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader",
+  "mcp_tools_tested": ["loader_core_md5"],
+  "validator_functions_compared": ["md5"],
+  "tests": [
+    {"name": "hello", "input_hex": "68656c6c6f", "mcp": "5d41402abc4b2a76b9719d911017c592", "validator": "5d41402abc4b2a76b9719d911017c592", "match": true},
+    {"name": "empty", "input_hex": "", "mcp": "d41d8cd98f00b204e9800998ecf8427e", "validator": "d41d8cd98f00b204e9800998ecf8427e", "match": true},
+    {"name": "ten_bytes_seq", "input_hex": "00010203040506070809", "mcp": "c56bd5480f6e5413cb62a0ad9666613a", "validator": "c56bd5480f6e5413cb62a0ad9666613a", "match": true},
+    {"name": "elf_header_fragment", "input_hex": "7f454c46020101000000000000000000", "mcp": "98d841f9ede6095f626bb4a7ec626f37", "validator": "98d841f9ede6095f626bb4a7ec626f37", "match": true},
+    {"name": "pe_mz_padded", "input_hex": "4d5a000000000000000000000000000000000000000000000000000000000000", "mcp": "db8d17136fa7b66024c21887dfd3b530", "validator": "db8d17136fa7b66024c21887dfd3b530", "match": true}
+  ],
+  "mismatches": [],
+  "notes": "Only one rustre-loader MCP tool exists (loader_core_md5). Other validator functions (sha256, format detectors, RichLoadResult invariants, probe ordering) have no dedicated MCP tool surface to compare against per the report. All 5 hash inputs produced identical digests.",
+  "final_match": true
+}

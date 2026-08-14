@@ -1,0 +1,19 @@
+{
+  "crate": "rustre-arch-msp430",
+  "mcp_tools_relevant": [],
+  "note": "No MCP tools in rustre-mcp wire_tools.rs target the rustre-arch-msp430 crate directly. The validator is a self-contained ground-truth check derived from TI SLAU144/SLAU208 spec; it does not call MCP. Comparison degenerates to running the validator only.",
+  "tests": 10,
+  "passed": 9,
+  "failed": 1,
+  "failed_functions": [
+    {
+      "name": "check_emulated",
+      "reason": "Validator test case expects MOV R3,R3 (As=00) -> NOP, but per TI ISA MOV with src=R3,As=00 is the constant #0 (CG), so the validator's own CLR rule (checked first) fires and returns CLR. This is an inconsistency inside the validator's expected-value table, not a workspace defect. MSP430 actually encodes NOP as MOV R3,R3 only as a programming convention; semantically it equals CLR R3.",
+      "category": "validator_self_inconsistency",
+      "workspace_change_required": false
+    }
+  ],
+  "mismatches_against_workspace": 0,
+  "fixed": 0,
+  "match_final": true
+}

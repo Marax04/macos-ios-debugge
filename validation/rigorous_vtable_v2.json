@@ -1,0 +1,288 @@
+[
+  {
+    "tool": "vtable_section_range",
+    "passed": true,
+    "expected": {
+      "end_address": 4112,
+      "contains": true
+    },
+    "actual": {
+      "end_address": 4112,
+      "contains": true
+    }
+  },
+  {
+    "tool": "vtable_section_read_ptr (ptr_size=8)",
+    "passed": true,
+    "expected": 16045690984503098046,
+    "actual": 16045690984503098046
+  },
+  {
+    "tool": "vtable_section_read_ptr (ptr_size=4)",
+    "passed": true,
+    "expected": 3735928559,
+    "actual": 3735928559
+  },
+  {
+    "tool": "vtable_section_read_ptr (out-of-range)",
+    "passed": true,
+    "expected": null,
+    "actual": null
+  },
+  {
+    "tool": "vtable_section_read_cstr",
+    "passed": true,
+    "expected": "Hello",
+    "actual": "Hello"
+  },
+  {
+    "tool": "vtable_section_read_i32",
+    "passed": true,
+    "expected": -42,
+    "actual": -42
+  },
+  {
+    "tool": "vtable_section_read_u32",
+    "passed": true,
+    "expected": 3405691582,
+    "actual": 3405691582
+  },
+  {
+    "tool": "vtable_vmi_flags_decode (diamond)",
+    "passed": true,
+    "expected": {
+      "is_diamond_shaped": true,
+      "has_non_diamond_repeat": false
+    },
+    "actual": {
+      "is_diamond_shaped": true,
+      "has_non_diamond_repeat": false
+    }
+  },
+  {
+    "tool": "vtable_vmi_flags_decode (non-diamond-repeat)",
+    "passed": true,
+    "expected": {
+      "is_diamond_shaped": false,
+      "has_non_diamond_repeat": true
+    },
+    "actual": {
+      "is_diamond_shaped": false,
+      "has_non_diamond_repeat": true
+    }
+  },
+  {
+    "tool": "vtable_vmi_flags_decode (zero)",
+    "passed": true,
+    "expected": {
+      "is_diamond_shaped": false,
+      "has_non_diamond_repeat": false
+    },
+    "actual": {
+      "is_diamond_shaped": false,
+      "has_non_diamond_repeat": false
+    }
+  },
+  {
+    "tool": "vtable_entry_display (no name)",
+    "passed": true,
+    "expected": "+0x0000: 0x1234  (<unknown>)",
+    "actual": "+0x0000: 0x1234  (<unknown>)"
+  },
+  {
+    "tool": "vtable_entry_display (with name)",
+    "passed": true,
+    "expected": "+0x0008: 0xabcd  (MyClass::method)",
+    "actual": "+0x0008: 0xabcd  (MyClass::method)"
+  },
+  {
+    "tool": "vtable_make_ptr_section",
+    "passed": true,
+    "expected": {
+      "size": 24,
+      "base_address": 40960,
+      "end_address": 40984
+    },
+    "actual": {
+      "size": 24,
+      "base_address": 40960,
+      "end_address": 40984
+    }
+  },
+  {
+    "tool": "vtable_make_str_section",
+    "passed": true,
+    "expected": {
+      "size": 6,
+      "base_address": 45056,
+      "end_address": 45062
+    },
+    "actual": {
+      "size": 6,
+      "base_address": 45056,
+      "end_address": 45062
+    }
+  },
+  {
+    "tool": "vtable_extends_check (derived extends base)",
+    "passed": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "vtable_extends_check (base does not extend derived)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_extends_check (no prefix match)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_is_itanium_mangled (positive)",
+    "passed": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "vtable_is_itanium_mangled (negative)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_is_msvc_mangled (positive .?AV)",
+    "passed": true,
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "vtable_is_msvc_mangled (negative)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_analysis_pass_name",
+    "passed": true,
+    "expected": "vtable_analysis",
+    "actual": "vtable_analysis"
+  },
+  {
+    "tool": "vtable_demangle_msvc_name (.?AVFoo@@)",
+    "passed": true,
+    "expected": "Foo",
+    "actual": "Foo"
+  },
+  {
+    "tool": "vtable_demangle_msvc_name (.?AVBar@Ns@@)",
+    "passed": true,
+    "expected": "Bar::Ns",
+    "actual": "Bar::Ns"
+  },
+  {
+    "tool": "vtable_scanner_configured_scan (empty \u2192 0)",
+    "passed": true,
+    "expected": 0,
+    "actual": 0
+  },
+  {
+    "tool": "vtable_scanner_configured_scan (no code ranges \u2192 0)",
+    "passed": true,
+    "expected": 0,
+    "actual": 0
+  },
+  {
+    "tool": "vtable_parse_msvc_rtti (empty \u2192 not found)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_parse_itanium_rtti (empty \u2192 not found)",
+    "passed": true,
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "vtable_scan_binary (empty \u2192 0)",
+    "passed": true,
+    "expected": 0,
+    "actual": 0
+  },
+  {
+    "tool": "vtable_entry_new_wire (fields)",
+    "passed": true,
+    "expected": {
+      "offset": 0,
+      "target_address": 4660
+    },
+    "actual": {
+      "offset": 0,
+      "target_address": 4660
+    }
+  },
+  {
+    "tool": "vtable_new_add_entry_wire (entry_count)",
+    "passed": true,
+    "expected": 3,
+    "actual": 3
+  },
+  {
+    "tool": "vtable_pure_virtual_detector_wire (returns bool)",
+    "passed": true,
+    "expected": "<bool>",
+    "actual": true
+  },
+  {
+    "tool": "vtable_comparer_diff_wire (1 change)",
+    "passed": true,
+    "expected": 1,
+    "actual": 1
+  },
+  {
+    "tool": "vtable_stats_from_database_wire (vtable_count=2)",
+    "passed": true,
+    "expected": 2,
+    "actual": 2
+  },
+  {
+    "tool": "vtable_extends_heuristic_wire (a extends b, not vice versa)",
+    "passed": true,
+    "expected": {
+      "a_extends_b": true,
+      "b_extends_a": false
+    },
+    "actual": {
+      "a_extends_b": true,
+      "b_extends_a": false
+    }
+  },
+  {
+    "tool": "vtable_builder_edges_wire (1 edge)",
+    "passed": true,
+    "expected": 1,
+    "actual": 1
+  },
+  {
+    "tool": "vtable_set_to_json_wire (len=2)",
+    "passed": true,
+    "expected": 2,
+    "actual": 2
+  },
+  {
+    "tool": "vtable_mi_layout_build_wire (fields)",
+    "passed": true,
+    "expected": {
+      "derived_class": "Derived",
+      "object_size": 32
+    },
+    "actual": {
+      "derived_class": "Derived",
+      "object_size": 32
+    }
+  }
+]

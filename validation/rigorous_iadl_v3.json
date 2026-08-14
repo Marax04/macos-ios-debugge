@@ -1,0 +1,10 @@
+{
+  "category": "iadl",
+  "tools_hardened": 0,
+  "tools_passed": 0,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "All 5 iadl tools (iadl_convergence_moving_average, iadl_convergence_ema, iadl_convergence_trend_slope, iadl_compute_hash, iadl_analyze_binary_for_protections) were already fully hardened in rigorous_iadl_v2.json with 10 passing test cases and 0 failures. No remaining tools to cover in v3.",
+  "detail": []
+}

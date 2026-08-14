@@ -1,0 +1,92 @@
+[
+  {
+    "tool": "debug_frida_new_session_state",
+    "args": {},
+    "status": "PASS",
+    "detail": "state='detached', name='frida', hooks=0, arch_count=6"
+  },
+  {
+    "tool": "debug_frida_session_state_display",
+    "args": {},
+    "status": "PASS",
+    "detail": "all 5 state display strings correct"
+  },
+  {
+    "tool": "debug_frida_hook_display",
+    "args": {
+      "address": 4660,
+      "script": "log()",
+      "hook_id": 7
+    },
+    "status": "PASS",
+    "detail": "display='FridaHook(id=7, addr=0x1234, script_len=5)'"
+  },
+  {
+    "tool": "debug_frida_interceptor_record_display",
+    "args": {
+      "hook_id": 1,
+      "address": 20480,
+      "thread_id": 2,
+      "args": [
+        10,
+        20
+      ],
+      "return_value": null,
+      "timestamp": 1000
+    },
+    "status": "PASS",
+    "detail": "display='InterceptorRecord(hook=1, addr=0x5000, tid=2, ts=1000)'"
+  },
+  {
+    "tool": "debug_frida_install_hook_detached_errors",
+    "args": {
+      "address": 4096,
+      "script": "console.log('hi');"
+    },
+    "status": "PASS",
+    "detail": "is_err=True, error='agent not injected'"
+  },
+  {
+    "tool": "debug_frida_execute_script_detached_errors",
+    "args": {
+      "script": "var x = 1;"
+    },
+    "status": "PASS",
+    "detail": "is_err=True, error='agent not injected'"
+  },
+  {
+    "tool": "debug_frida_scan_memory_detached",
+    "args": {
+      "pattern_hex": "90"
+    },
+    "status": "PASS",
+    "detail": "is_err=True, pattern_len=1, error='agent not injected'"
+  },
+  {
+    "tool": "debug_frida_simulate_hook_hit_detached",
+    "args": {
+      "hook_id": 1
+    },
+    "status": "PASS",
+    "detail": "records_after=0 as expected (detached no-op)"
+  },
+  {
+    "tool": "debug_frida_v2_device_display",
+    "args": {
+      "remote": "192.168.1.1",
+      "usb": "abc123"
+    },
+    "status": "PASS",
+    "detail": "local='local', remote='remote:192.168.1.1', usb='usb:abc123'"
+  },
+  {
+    "tool": "debug_frida_v2_manager_lifecycle",
+    "args": {
+      "pid_a": 1,
+      "pid_b": 2,
+      "events": 6
+    },
+    "status": "PASS",
+    "detail": "s_a_id=1, s_b_id=2, interceptors=1, events=6, first='call 0x0 -> 0x1000'"
+  }
+]

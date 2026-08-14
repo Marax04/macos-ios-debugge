@@ -1,0 +1,34 @@
+[package]
+license.workspace = true
+name = "rustre-arch"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+# Verified 2026-06-20: every `rustre-arch-*` sub-crate now imports its
+# trait/types from `rustre_core::arch` directly (not from this hub), so
+# no sub-crate has a path-dep back here. That breaks the previous cycle
+# and lets us wire the sub-crates in behind the `subcrates` feature so
+# `crate::sub_arch_registry` is reachable from the hub. The sibling
+# `rustre-arch-registry` crate provides the same aggregation for
+# consumers that prefer to opt-in explicitly.
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+dashmap = { workspace = true }
+bitflags = { workspace = true }
+anyhow = { workspace = true }
+
+# NOTE: sub-arch deps live in the sibling `rustre-arch-registry` aggregation
+# crate to avoid the workspace dep cycle (each sub-arch needs to re-export
+# hub-side types like `DecodeError`, so they path-dep on this crate).
+
+[lints]
+workspace = true

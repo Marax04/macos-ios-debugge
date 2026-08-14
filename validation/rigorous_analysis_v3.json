@@ -1,0 +1,1396 @@
+[
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "Fallthrough"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "Jump"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "BranchTaken"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "BranchNotTaken"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "Indirect"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "Call"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_intraprocedural",
+    "status": "PASS",
+    "args": {
+      "kind": "Return"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "BranchTaken"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "BranchNotTaken"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "Fallthrough"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "Jump"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "Call"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "Return"
+    }
+  },
+  {
+    "tool": "analysis_cfg_flow_edge_kind_is_conditional",
+    "status": "PASS",
+    "args": {
+      "kind": "Indirect"
+    }
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeCall"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeJump"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeReturn"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "DataRead"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "DataWrite"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "DataAddress"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "DataPointer"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "ImportByName"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "ImportByOrdinal"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "StringRef"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "TypeRef"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_code",
+    "status": "PASS",
+    "args": {
+      "kind": "ThunkCall"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeCall"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "DataRead"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "DataWrite"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "DataAddress"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "DataPointer"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "ImportByName"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_data",
+    "status": "PASS",
+    "args": {
+      "kind": "ThunkCall"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_import",
+    "status": "PASS",
+    "args": {
+      "kind": "ImportByName"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_import",
+    "status": "PASS",
+    "args": {
+      "kind": "ImportByOrdinal"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_kind_is_import",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeCall"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_xref_kind_is_import",
+    "status": "PASS",
+    "args": {
+      "kind": "DataRead"
+    },
+    "expected": false,
+    "actual": false
+  },
+  {
+    "tool": "analysis_result_zero_total_items",
+    "status": "PASS",
+    "args": {},
+    "expected": 0,
+    "actual": 0
+  },
+  {
+    "tool": "analysis_type_winapi_lookup",
+    "status": "PASS",
+    "args": {
+      "name": "HANDLE"
+    }
+  },
+  {
+    "tool": "analysis_type_winapi_lookup",
+    "status": "PASS",
+    "args": {
+      "name": "NOTYPE_XYZ"
+    }
+  },
+  {
+    "tool": "analysis_string_detect_xor_key_wire2",
+    "status": "PASS",
+    "args": {
+      "data_hex": "0a272e2e2d6e62152d302e2663"
+    },
+    "note": "found key=64"
+  },
+  {
+    "tool": "analysis_string_detect_xor_key_wire2",
+    "status": "PASS",
+    "args": {
+      "data_hex": "0000000000000000"
+    },
+    "note": "nulls-check"
+  },
+  {
+    "tool": "analysis_cfg_build_stats",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_dominator_tree",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_post_dominator_tree",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_find_natural_loops",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_to_dot",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_to_full_json",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_reverse_post_order",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_post_order",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_metrics_compute",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_scc_components",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_scc_loops_count",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_reducibility_test",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_stats_is_complex",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_natural_loop_count",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_natural_loops_innermost",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_stats_entry_exit_blocks",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_reachable_count",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_join_branch_counts",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_dot_printer_render",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_to_dot_annotated",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_reachable_from",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_dominates",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "a": 0,
+      "b": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_post_dominates",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "a": 0,
+      "b": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_strictly_dominates",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "a": 0,
+      "b": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_is_back_edge",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "from": 2,
+      "to": 0
+    }
+  },
+  {
+    "tool": "analysis_cfg_immediate_dominator",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_dom_depth",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_dominance_frontier",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_dominated_by",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_dominance_frontier_of",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_iterated_dominance_frontier",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "seeds": [
+        0
+      ]
+    }
+  },
+  {
+    "tool": "analysis_cfg_predecessors",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_cfg_successors",
+    "status": "PASS",
+    "args": {
+      "entry": 0,
+      "edges": [
+        {
+          "from": 0,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 2,
+          "to": 0
+        }
+      ],
+      "node": 1
+    }
+  },
+  {
+    "tool": "analysis_ctx_function_info_new",
+    "status": "PASS",
+    "args": {
+      "start": 4096,
+      "length": 64,
+      "name": "main"
+    }
+  },
+  {
+    "tool": "analysis_ctx_function_info_add_tag",
+    "status": "PASS",
+    "args": {
+      "start": 4096,
+      "tags": [
+        "leaf"
+      ]
+    }
+  },
+  {
+    "tool": "analysis_ctx_string_info_classify",
+    "status": "PASS",
+    "args": {
+      "address": 8192,
+      "value": "Hello"
+    }
+  },
+  {
+    "tool": "analysis_ctx_xref_info_build",
+    "status": "PASS",
+    "args": {
+      "from": 4096,
+      "to": 8192,
+      "kind": "Call"
+    }
+  },
+  {
+    "tool": "analysis_progress_track",
+    "status": "PASS",
+    "args": {
+      "done": [
+        "pass1"
+      ],
+      "failed": [],
+      "query": "pass1"
+    }
+  },
+  {
+    "tool": "analysis_ctx_builder",
+    "status": "PASS",
+    "args": {
+      "id": "ctx-1",
+      "name": "test",
+      "arch": "x86_64"
+    }
+  },
+  {
+    "tool": "analysis_cache_key_from_data",
+    "status": "PASS",
+    "args": {
+      "pass_name": "linear_sweep",
+      "uri": "file:///test.exe",
+      "hex": "deadbeef"
+    }
+  },
+  {
+    "tool": "analysis_xref_index_total",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_xref_index_count_kind",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "kind": "Call"
+    }
+  },
+  {
+    "tool": "analysis_xref_index_hot_call_targets",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "top_n": 3
+    }
+  },
+  {
+    "tool": "analysis_xref_index_callers_of",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "addr": 4101
+    }
+  },
+  {
+    "tool": "analysis_xref_index_callees_of",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "addr": 4101
+    }
+  },
+  {
+    "tool": "analysis_xref_index_data_refs_to",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "addr": 4101
+    }
+  },
+  {
+    "tool": "analysis_xref_index_is_leaf",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "addr": 4101
+    }
+  },
+  {
+    "tool": "analysis_xref_index_sources_targets",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_xref_kind_classify",
+    "status": "PASS",
+    "args": {
+      "kind": "CodeCall"
+    }
+  },
+  {
+    "tool": "analysis_xref_kind_classify",
+    "status": "PASS",
+    "args": {
+      "kind": "DataRead"
+    },
+    "expected": true,
+    "actual": true
+  },
+  {
+    "tool": "analysis_xref_database_stats",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096,
+      "code_end": 4101,
+      "pointer_size": 8
+    }
+  },
+  {
+    "tool": "analysis_xref_global_xrefs_to",
+    "status": "PASS",
+    "args": {
+      "addr": 4096
+    }
+  },
+  {
+    "tool": "analysis_xref_global_xrefs_from",
+    "status": "PASS",
+    "args": {
+      "addr": 4096
+    }
+  },
+  {
+    "tool": "analysis_xref_global_db_total",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_count_strings",
+    "status": "PASS",
+    "args": {
+      "hex": "48656c6c6f00576f726c6400"
+    }
+  },
+  {
+    "tool": "analysis_count_basic_blocks",
+    "status": "PASS",
+    "args": {
+      "hex": "48656c6c6f00576f726c6400"
+    }
+  },
+  {
+    "tool": "analysis_count_xrefs",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_scan_call_targets",
+    "status": "PASS",
+    "args": {
+      "hex": "e8deadbeef4889c0",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_scan_prologues",
+    "status": "PASS",
+    "args": {
+      "hex": "e8deadbeef4889c0",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_xref_index_from_path_v2",
+    "status": "PASS",
+    "args": {
+      "path": "TARGET"
+    }
+  },
+  {
+    "tool": "analysis_xref_index_from_bytes_v2",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000"
+    }
+  },
+  {
+    "tool": "analysis_linear_sweep",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_recursive_descent",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000",
+      "base": 4096
+    }
+  },
+  {
+    "tool": "analysis_boundary_info",
+    "status": "PASS",
+    "args": {
+      "hex": "e800000000"
+    }
+  },
+  {
+    "tool": "analysis_xref_db_roundtrip",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_scheduler_order",
+    "status": "PASS",
+    "args": {
+      "passes": [
+        "pass_a",
+        "pass_b"
+      ]
+    }
+  },
+  {
+    "tool": "analysis_scheduler_groups",
+    "status": "PASS",
+    "args": {
+      "passes": [
+        "pass_a",
+        "pass_b"
+      ]
+    }
+  },
+  {
+    "tool": "analysis_incremental_affected",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_event_bus_publish",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_stats_aggregate",
+    "status": "PASS",
+    "args": {
+      "binary_id": "bin-0001"
+    },
+    "note": "binary-dep"
+  },
+  {
+    "tool": "analysis_report_summary",
+    "status": "PASS",
+    "args": {
+      "binary_id": "bin-0001"
+    },
+    "note": "binary-dep"
+  },
+  {
+    "tool": "analysis_vsa_resolve_jump_table",
+    "status": "PASS",
+    "args": {
+      "table_base": 4096,
+      "entry_size": 8,
+      "code_base": 0,
+      "code_limit": 65536,
+      "entries": [
+        8192,
+        12288
+      ]
+    }
+  },
+  {
+    "tool": "analysis_vsa_resolve_indirect_calls",
+    "status": "PASS",
+    "args": {
+      "code_base": 0,
+      "code_limit": 65536
+    }
+  },
+  {
+    "tool": "analysis_vsa_detect_buffer_overflows",
+    "status": "PASS",
+    "args": {}
+  },
+  {
+    "tool": "analysis_xref_call_graph",
+    "status": "PASS",
+    "args": {
+      "binary_id": "bin-0001"
+    },
+    "note": "binary-dependent-no-error"
+  }
+]

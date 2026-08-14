@@ -1,0 +1,270 @@
+{
+  "passed": [
+    {
+      "tool": "agent_shannon_entropy",
+      "key": "entropy",
+      "value": 3.0
+    },
+    {
+      "tool": "agent_shannon_entropy",
+      "key": "entropy",
+      "value": 8.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 1.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 1000.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 9007199254740992.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 9007199254740992.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f64",
+      "key": "output",
+      "value": 9007199254740992.0
+    },
+    {
+      "tool": "agent_cast_usize_to_f64",
+      "key": "output",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_cast_usize_to_f64",
+      "key": "output",
+      "value": 42.0
+    },
+    {
+      "tool": "agent_cast_usize_to_f64",
+      "key": "output",
+      "value": 4503599627370496.0
+    },
+    {
+      "tool": "agent_cast_i64_to_f64",
+      "key": "output",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_cast_i64_to_f64",
+      "key": "output",
+      "value": 1000.0
+    },
+    {
+      "tool": "agent_cast_i64_to_f64",
+      "key": "output",
+      "value": -1000.0
+    },
+    {
+      "tool": "agent_cast_i64_to_f64",
+      "key": "output",
+      "value": -9007199254740992.0
+    },
+    {
+      "tool": "agent_cast_u64_to_u32",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_u64_to_u32",
+      "key": "output",
+      "value": 100
+    },
+    {
+      "tool": "agent_cast_u64_to_u32",
+      "key": "output",
+      "value": 4294967295
+    },
+    {
+      "tool": "agent_cast_u64_to_u32",
+      "key": "output",
+      "value": 4294967295
+    },
+    {
+      "tool": "agent_cast_u64_to_u32",
+      "key": "output",
+      "value": 4294967295
+    },
+    {
+      "tool": "agent_cast_f64_to_u64",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_f64_to_u64",
+      "key": "output",
+      "value": 1
+    },
+    {
+      "tool": "agent_cast_f64_to_u64",
+      "key": "output",
+      "value": 4503599627370496
+    },
+    {
+      "tool": "agent_cast_f64_to_u64",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_f64_to_u32",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_f64_to_u32",
+      "key": "output",
+      "value": 255
+    },
+    {
+      "tool": "agent_cast_f64_to_u32",
+      "key": "output",
+      "value": 4294967295
+    },
+    {
+      "tool": "agent_cast_f64_to_u32",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_u64_to_usize",
+      "key": "output",
+      "value": 0
+    },
+    {
+      "tool": "agent_cast_u64_to_usize",
+      "key": "output",
+      "value": 42
+    },
+    {
+      "tool": "agent_cast_u64_to_usize",
+      "key": "output",
+      "value": 65535
+    },
+    {
+      "tool": "agent_llm_count_tokens",
+      "key": "tokens",
+      "value": 0
+    },
+    {
+      "tool": "agent_llm_count_tokens",
+      "key": "tokens",
+      "value": 2
+    },
+    {
+      "tool": "agent_llm_count_tokens",
+      "key": "tokens",
+      "value": 3
+    },
+    {
+      "tool": "agent_llm_count_tokens",
+      "key": "tokens",
+      "value": 25
+    },
+    {
+      "tool": "agent_llm_token_counter_count_text",
+      "key": "tokens",
+      "value": 0
+    },
+    {
+      "tool": "agent_llm_token_counter_count_text",
+      "key": "tokens",
+      "value": 3
+    },
+    {
+      "tool": "agent_llm_token_counter_count_text",
+      "key": "tokens",
+      "value": 10
+    },
+    {
+      "tool": "agent_llm_token_counter_count_messages",
+      "key": "tokens",
+      "value": 12
+    },
+    {
+      "tool": "agent_llm_token_counter_fits_in_context",
+      "key": "fits",
+      "value": true
+    },
+    {
+      "tool": "agent_llm_message_system",
+      "key": "role",
+      "value": "system"
+    },
+    {
+      "tool": "agent_llm_message_user",
+      "key": "role",
+      "value": "user"
+    },
+    {
+      "tool": "agent_llm_message_assistant",
+      "key": "role",
+      "value": "assistant"
+    },
+    {
+      "tool": "agent_llm_llm_role_display",
+      "key": "display",
+      "value": "System"
+    },
+    {
+      "tool": "agent_llm_llm_role_display",
+      "key": "display",
+      "value": "User"
+    },
+    {
+      "tool": "agent_llm_llm_role_display",
+      "key": "display",
+      "value": "Assistant"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "key": "display",
+      "value": "Gpt4"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "key": "display",
+      "value": "Claude3Opus"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "key": "display",
+      "value": "Claude3Sonnet"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "key": "display",
+      "value": "Claude3Haiku"
+    },
+    {
+      "tool": "agent_llm_llm_model_display",
+      "key": "display",
+      "value": "Llama3"
+    },
+    {
+      "tool": "agent_prompts_error_display",
+      "key": "display",
+      "value": "missing template variable: myvar"
+    },
+    {
+      "tool": "agent_llm_trim_to_budget",
+      "key": "trimmed",
+      "value": "hello world"
+    }
+  ],
+  "failed": []
+}

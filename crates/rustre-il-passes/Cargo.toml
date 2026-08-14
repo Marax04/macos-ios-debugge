@@ -1,0 +1,26 @@
+[package]
+license.workspace = true
+name = "rustre-il-passes"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# NON e' un nodo fantasma: VERIFICATO con una build il 2026-08-04 — togliendola
+# il crate NON compila (`PassContext::tier: rustre_il::IlTier`, src/lib.rs:122 e
+# :139). Non rimuovere senza prima ritipizzare quel campo.
+rustre-il = { path = "../rustre-il" }
+rustre-core = { path = "../rustre-core" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+serde = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true

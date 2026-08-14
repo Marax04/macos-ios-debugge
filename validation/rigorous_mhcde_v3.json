@@ -1,0 +1,81 @@
+[
+  {
+    "tool": "mhcde_entropy_shannon",
+    "status": "PASS",
+    "expected": 3.75,
+    "actual": 3.75
+  },
+  {
+    "tool": "mhcde_entropy_mean",
+    "status": "PASS",
+    "expected": 3.75,
+    "actual": 3.75
+  },
+  {
+    "tool": "mhcde_entropy_analyze",
+    "status": "PASS",
+    "note": "structure present, count=1"
+  },
+  {
+    "tool": "mhcde_opaque_predicate_detect",
+    "status": "PASS",
+    "expected_count": 1,
+    "actual_count": 1
+  },
+  {
+    "tool": "mhcde_opaque_count_by_type",
+    "status": "PASS",
+    "counts": {
+      "AlwaysTrue": 1
+    }
+  },
+  {
+    "tool": "mhcde_opaque_total_patch_bytes",
+    "status": "PASS",
+    "expected": 5,
+    "actual": 5
+  },
+  {
+    "tool": "mhcde_junk_code_detect",
+    "status": "PASS",
+    "expected_count": 1,
+    "actual_count": 1
+  },
+  {
+    "tool": "mhcde_junk_total_bytes",
+    "status": "PASS",
+    "expected": 6,
+    "actual": 6
+  },
+  {
+    "tool": "mhcde_junk_density",
+    "status": "PASS",
+    "expected": 1.0,
+    "actual": 1.0
+  },
+  {
+    "tool": "mhcde_cff_detect",
+    "status": "PASS",
+    "detected": true
+  },
+  {
+    "tool": "mhcde_orchestrator_analyze",
+    "status": "PASS",
+    "note": "structure valid"
+  },
+  {
+    "tool": "mhcde_analyze_and_patch",
+    "status": "PASS",
+    "note": "structure valid"
+  },
+  {
+    "tool": "mhcde_score_model_naturalness",
+    "status": "PASS",
+    "naturalness": 0.8125
+  },
+  {
+    "tool": "mhcde_pass_analyze",
+    "status": "PASS",
+    "note": "structure valid"
+  }
+]

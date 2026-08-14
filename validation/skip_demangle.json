@@ -1,0 +1,136 @@
+{
+  "skipped": [
+    {
+      "tool": "demangle_auto",
+      "reason": "complex multi-ABI dispatcher, no portable Python equivalent for arbitrary mangled names"
+    },
+    {
+      "tool": "demangle_normalize_type",
+      "reason": "complex type string parser, no stdlib equivalent"
+    },
+    {
+      "tool": "demangle_batch",
+      "reason": "delegates to demangle_auto, same complexity"
+    },
+    {
+      "tool": "demangle_msvc_rtti",
+      "reason": "MSVC RTTI decoding, requires Windows-specific knowledge"
+    },
+    {
+      "tool": "demangle_batch_parallel",
+      "reason": "parallel batch, same as demangle_batch"
+    },
+    {
+      "tool": "demangle_result_display",
+      "reason": "display formatter only, depends on demangling first"
+    },
+    {
+      "tool": "demangle_dispatch",
+      "reason": "routing meta-tool, delegates to others"
+    },
+    {
+      "tool": "demangle_classify",
+      "reason": "multi-step classifier, no Python equivalent"
+    },
+    {
+      "tool": "demangle_itanium_native",
+      "reason": "calls full itanium_full demangler, complex parser"
+    },
+    {
+      "tool": "demangle_auto_wire",
+      "reason": "delegates to AutoDemangler, complex"
+    },
+    {
+      "tool": "demangle_auto_demangler_wire",
+      "reason": "same as auto_wire"
+    },
+    {
+      "tool": "demangle_swift_heuristic_wire",
+      "reason": "Swift mangling: no Python stdlib equivalent"
+    },
+    {
+      "tool": "demangle_msvc_full_wire",
+      "reason": "MSVC full demangler: complex recursive parser"
+    },
+    {
+      "tool": "demangle_d_lang_wire",
+      "reason": "D language demangler: complex parser"
+    },
+    {
+      "tool": "demangle_rust_v0_wire",
+      "reason": "calls rustc-demangle Rust lib, cannot replicate in pure Python"
+    },
+    {
+      "tool": "demangle_rust_legacy_wire",
+      "reason": "Rust legacy: depends on Itanium + hash logic, complex"
+    },
+    {
+      "tool": "demangle_rust_auto_wire",
+      "reason": "delegates to Rust auto-detect + demangle"
+    },
+    {
+      "tool": "demangle_cpp_itanium_wire",
+      "reason": "calls itanium_full full parser, complex"
+    },
+    {
+      "tool": "demangle_cpp_msvc_wire",
+      "reason": "calls msvc_full full parser, complex"
+    },
+    {
+      "tool": "demangle_cpp_auto_wire",
+      "reason": "delegates to cpp_demangler::demangle_cpp"
+    },
+    {
+      "tool": "demangle_itanium_extract_namespace_wire",
+      "reason": "result depends on itanium demangler output"
+    },
+    {
+      "tool": "demangle_itanium_is_std_symbol_wire",
+      "reason": "result depends on itanium demangler output"
+    },
+    {
+      "tool": "demangle_itanium_is_lambda_wire",
+      "reason": "result depends on itanium demangler output"
+    },
+    {
+      "tool": "demangle_itanium_native_detect_kind_wire",
+      "reason": "calls itanium_full parser internally"
+    },
+    {
+      "tool": "demangle_d_struct_demangle_wire",
+      "reason": "D demangler complex parser"
+    },
+    {
+      "tool": "demangle_rust_v0_struct_demangle_wire",
+      "reason": "calls RustV0Demangler::demangle, rustc-demangle dep"
+    },
+    {
+      "tool": "demangle_demangler2_auto_wire",
+      "reason": "meta-dispatcher, complex"
+    },
+    {
+      "tool": "demangle_objc_demangle_wire",
+      "reason": "ObjC demangling has edge cases, no stdlib equivalent"
+    },
+    {
+      "tool": "demangle_swift_extended_parse_wire",
+      "reason": "Swift parser, no stdlib equivalent"
+    },
+    {
+      "tool": "demangle_symbol_classifier_classify_wire",
+      "reason": "multi-ABI classifier, complex"
+    },
+    {
+      "tool": "demangle_itanium_native_demangle_wire",
+      "reason": "itanium_full full parse, complex"
+    },
+    {
+      "tool": "rustre_symbols_core_try_demangle",
+      "reason": "not a demangle_ prefixed tool"
+    },
+    {
+      "tool": "rustre_symbols_core_demangler_pipeline",
+      "reason": "not a demangle_ prefixed tool"
+    }
+  ]
+}

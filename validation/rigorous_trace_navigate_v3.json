@@ -1,0 +1,157 @@
+{
+  "category": "trace_navigate",
+  "generated_by": "validate_trace_navigate_v2.py",
+  "results": [
+    {
+      "tool": "trace_navigate_bytes_to_u64",
+      "status": "PASS",
+      "description": "LE u64 from [1,0,...,0] = 1"
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64",
+      "status": "PASS",
+      "description": "LE u64 from deadbeef bytes"
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_v2",
+      "status": "PASS",
+      "description": "v2: LE u64 = 2"
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_v3",
+      "status": "PASS",
+      "description": "v3: LE u64 = 0xff"
+    },
+    {
+      "tool": "trace_navigate_access_kind_display",
+      "status": "PASS",
+      "description": "AccessKind::Read -> 'read'"
+    },
+    {
+      "tool": "trace_navigate_access_kind_display",
+      "status": "PASS",
+      "description": "AccessKind::Write -> 'write'"
+    },
+    {
+      "tool": "trace_navigate_access_kind_display_wire",
+      "status": "PASS",
+      "description": "wire: both kinds display"
+    },
+    {
+      "tool": "trace_navigate_insn_entry",
+      "status": "PASS",
+      "description": "insn_entry fields and display"
+    },
+    {
+      "tool": "trace_navigate_insn_entry_v2",
+      "status": "PASS",
+      "description": "insn_entry_v2 display"
+    },
+    {
+      "tool": "trace_navigate_call_entry",
+      "status": "PASS",
+      "description": "call_entry fields"
+    },
+    {
+      "tool": "trace_navigate_call_entry_wire",
+      "status": "PASS",
+      "description": "call_entry_wire display"
+    },
+    {
+      "tool": "trace_navigate_ret_entry",
+      "status": "PASS",
+      "description": "ret_entry fields"
+    },
+    {
+      "tool": "trace_navigate_ret_entry_wire",
+      "status": "PASS",
+      "description": "ret_entry_wire display"
+    },
+    {
+      "tool": "trace_navigate_stackframe_new",
+      "status": "PASS",
+      "description": "stackframe_new fields (no name -> hex display)"
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name",
+      "status": "PASS",
+      "description": "stackframe_display_name with name 'my_func'"
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name",
+      "status": "PASS",
+      "description": "stackframe_display_name with empty name -> ''"
+    },
+    {
+      "tool": "trace_navigate_stackframe_display_name_wire",
+      "status": "PASS",
+      "description": "stackframe_display_name_wire with name"
+    },
+    {
+      "tool": "trace_navigate_bookmark_new",
+      "status": "PASS",
+      "description": "bookmark_new fields"
+    },
+    {
+      "tool": "trace_navigate_bookmark_with_note",
+      "status": "PASS",
+      "description": "bookmark_with_note has display field"
+    },
+    {
+      "tool": "trace_navigate_bookmark_store_sorted",
+      "status": "PASS",
+      "description": "sorted by idx"
+    },
+    {
+      "tool": "trace_navigate_bookmark_store_new_wire",
+      "status": "PASS",
+      "description": "bookmark_store_new_wire: one bookmark"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_new_v2",
+      "status": "PASS",
+      "description": "execution_trace_new_v2: empty trace"
+    },
+    {
+      "tool": "trace_navigate_execution_trace_len_wire",
+      "status": "PASS",
+      "description": "execution_trace_len_wire: empty"
+    },
+    {
+      "tool": "trace_navigate_navigation_history",
+      "status": "PASS",
+      "description": "navigation_history: push 3 positions, current=30, undo=2"
+    },
+    {
+      "tool": "trace_navigate_nav_history_new_wire",
+      "status": "PASS",
+      "description": "nav_history_new_wire: push 3, undo -> 200"
+    },
+    {
+      "tool": "trace_navigate_step_window",
+      "status": "PASS",
+      "description": "step_window: cap=5, push 3 moves, latest=Moved(2->3)"
+    },
+    {
+      "tool": "trace_navigate_step_window_new_wire",
+      "status": "PASS",
+      "description": "step_window_new_wire: cap=3, push 5 -> len=3 (capped)"
+    },
+    {
+      "tool": "trace_navigate_idx_for_tsc",
+      "status": "PASS",
+      "description": "idx_for_tsc: 3 entries tsc=0,100,200, tsc=150 -> idx=2"
+    },
+    {
+      "tool": "trace_navigate_mem_access_index",
+      "status": "PASS",
+      "description": "mem_access_index: 2 distinct addresses (0x1000 written, 0x2000 read)"
+    }
+  ],
+  "summary": {
+    "passed": 29,
+    "failed": 0,
+    "total": 29
+  },
+  "mismatches": []
+}

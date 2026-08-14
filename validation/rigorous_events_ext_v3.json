@@ -1,0 +1,328 @@
+{
+  "category": "events_ext",
+  "checks_total": 45,
+  "checks_passed": 45,
+  "checks_failed": 0,
+  "checks_errors": 0,
+  "tools_hardened": 22,
+  "tools_passed": 22,
+  "tools_failed": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "events_ext_bus_new_default",
+      "status": "pass",
+      "key": "total_published",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_new_default",
+      "status": "pass",
+      "key": "history_len",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_new_default",
+      "status": "pass",
+      "key": "dropped",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_new_default",
+      "status": "pass",
+      "key": "receiver_count",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_send_diff_completed",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_diff_completed",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_flirt_match",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_flirt_match",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_coverage_updated",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_coverage_updated",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_watchdog_ping",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_watchdog_ping",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_peer_connected",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_peer_connected",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_agent_thinking",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_agent_thinking",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_result",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_result",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_subscribe_with_history",
+      "status": "pass",
+      "key": "history_len",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "events_ext_bus_variant_count",
+      "status": "pass",
+      "key": "variant_count",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "events_ext_bus_variant_count",
+      "status": "pass",
+      "key": "other",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_dropped_count",
+      "status": "pass",
+      "key": "dropped",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_dropped_count",
+      "status": "pass",
+      "key": "total",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "events_ext_bus_total_published",
+      "status": "pass",
+      "key": "total",
+      "expected": 5,
+      "actual": 5
+    },
+    {
+      "tool": "events_ext_bus_recent_events",
+      "status": "pass",
+      "key": "recent_len",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "events_ext_bus_recent_events",
+      "status": "pass",
+      "key": "history_len",
+      "expected": 5,
+      "actual": 5
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_tick",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_tick",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_backward",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_ttd_backward",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_step",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_step",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_stop",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_emulation_stop",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_crash",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_crash",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_new_coverage",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_fuzz_new_coverage",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_call",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_mcp_tool_call",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_diff_started",
+      "status": "pass",
+      "key": "count",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_send_diff_started",
+      "status": "pass",
+      "key": "total",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "events_ext_bus_metrics_snapshot",
+      "status": "pass",
+      "key": "total_published",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "tool": "events_ext_bus_metrics_snapshot",
+      "status": "pass",
+      "key": "history_len",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "tool": "events_ext_bus_metrics_snapshot",
+      "status": "pass",
+      "key": "variants",
+      "expected": 2,
+      "actual": 2
+    }
+  ]
+}

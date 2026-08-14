@@ -1,0 +1,1309 @@
+{
+  "category": "ti_misp",
+  "tools_hardened": 53,
+  "tools_passed": 105,
+  "tools_failed": 0,
+  "tools_skipped": 2,
+  "total_checks": 105,
+  "mismatches": [],
+  "all_results": [
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 0,
+        "level": "Organisation only"
+      },
+      "actual": {
+        "value": 0,
+        "level": "Organisation only"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 1,
+        "level": "Community"
+      },
+      "actual": {
+        "value": 1,
+        "level": "Community"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 2,
+        "level": "Connected communities"
+      },
+      "actual": {
+        "value": 2,
+        "level": "Connected communities"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 3,
+        "level": "All communities"
+      },
+      "actual": {
+        "value": 3,
+        "level": "All communities"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 4,
+        "level": "Sharing group"
+      },
+      "actual": {
+        "value": 4,
+        "level": "Sharing group"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 5,
+        "level": "No distribution"
+      },
+      "actual": {
+        "value": 5,
+        "level": "No distribution"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 99,
+        "recognised": false
+      },
+      "actual": {
+        "recognised": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 1,
+        "threat_level": "High"
+      },
+      "actual": {
+        "value": 1,
+        "threat_level": "High"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 2,
+        "threat_level": "Medium"
+      },
+      "actual": {
+        "value": 2,
+        "threat_level": "Medium"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 3,
+        "threat_level": "Low"
+      },
+      "actual": {
+        "value": 3,
+        "threat_level": "Low"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 4,
+        "threat_level": "Undefined"
+      },
+      "actual": {
+        "value": 4,
+        "threat_level": "Undefined"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_from_value",
+      "status": "PASS",
+      "expected": {
+        "value": 0,
+        "recognised": false
+      },
+      "actual": {
+        "recognised": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 0,
+        "value": 0
+      },
+      "actual": {
+        "value": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 1,
+        "value": 1
+      },
+      "actual": {
+        "value": 1
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 2,
+        "value": 2
+      },
+      "actual": {
+        "value": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 3,
+        "value": 3
+      },
+      "actual": {
+        "value": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 4,
+        "value": 4
+      },
+      "actual": {
+        "value": 4
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 5,
+        "value": 5
+      },
+      "actual": {
+        "value": 5
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 1,
+        "value": 1
+      },
+      "actual": {
+        "value": 1
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 2,
+        "value": 2
+      },
+      "actual": {
+        "value": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 3,
+        "value": 3
+      },
+      "actual": {
+        "value": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_value",
+      "status": "PASS",
+      "expected": {
+        "v": 4,
+        "value": 4
+      },
+      "actual": {
+        "value": 4
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_tag_spec_new",
+      "status": "PASS",
+      "expected": {
+        "name": "tlp:white",
+        "colour": "#FFFFFF",
+        "exportable": true
+      },
+      "actual": {
+        "name": "tlp:white",
+        "colour": "#FFFFFF",
+        "exportable": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_matches",
+      "status": "PASS",
+      "expected": {
+        "matched": true
+      },
+      "actual": {
+        "matched": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_matches",
+      "status": "PASS",
+      "expected": {
+        "matched": false
+      },
+      "actual": {
+        "matched": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sighting_is_false_positive",
+      "status": "PASS",
+      "expected": {
+        "is_false_positive": true
+      },
+      "actual": {
+        "is_false_positive": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sighting_is_false_positive",
+      "status": "PASS",
+      "expected": {
+        "is_false_positive": false
+      },
+      "actual": {
+        "is_false_positive": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_spec_has_ids_attributes",
+      "status": "PASS",
+      "expected": {
+        "has_ids_attributes": true
+      },
+      "actual": {
+        "has_ids_attributes": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_spec_has_ids_attributes",
+      "status": "PASS",
+      "expected": {
+        "has_ids_attributes": false
+      },
+      "actual": {
+        "has_ids_attributes": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "expected": {
+        "variant": "md5",
+        "misp_str": "md5"
+      },
+      "actual": {
+        "misp_str": "md5"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "expected": {
+        "variant": "sha256",
+        "misp_str": "sha256"
+      },
+      "actual": {
+        "misp_str": "sha256"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "expected": {
+        "variant": "ip-src",
+        "misp_str": "ip-src"
+      },
+      "actual": {
+        "misp_str": "ip-src"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_to_str",
+      "status": "PASS",
+      "expected": {
+        "variant": "domain",
+        "misp_str": "domain"
+      },
+      "actual": {
+        "misp_str": "domain"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "md5",
+        "ioc_type": "md5"
+      },
+      "actual": {
+        "ioc_type": "md5"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "sha1",
+        "ioc_type": "sha1"
+      },
+      "actual": {
+        "ioc_type": "sha1"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "sha256",
+        "ioc_type": "sha256"
+      },
+      "actual": {
+        "ioc_type": "sha256"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "ip-src",
+        "ioc_type": "ip"
+      },
+      "actual": {
+        "ioc_type": "ip"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "ip-dst",
+        "ioc_type": "ip"
+      },
+      "actual": {
+        "ioc_type": "ip"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "domain",
+        "ioc_type": "domain"
+      },
+      "actual": {
+        "ioc_type": "domain"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "url",
+        "ioc_type": "url"
+      },
+      "actual": {
+        "ioc_type": "url"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "email-src",
+        "ioc_type": "email"
+      },
+      "actual": {
+        "ioc_type": "email"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "mutex",
+        "ioc_type": "mutex"
+      },
+      "actual": {
+        "ioc_type": "mutex"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "yara",
+        "ioc_type": "yara"
+      },
+      "actual": {
+        "ioc_type": "yara"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "filename",
+        "ioc_type": "filename"
+      },
+      "actual": {
+        "ioc_type": "filename"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "regkey",
+        "ioc_type": "registry"
+      },
+      "actual": {
+        "ioc_type": "registry"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_parse_attribute_type",
+      "status": "PASS",
+      "expected": {
+        "recognised": false
+      },
+      "actual": {
+        "recognised": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "md5",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "md5"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "sha1",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "sha1"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "sha256",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "sha256"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "ip-src",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "ip-src"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "domain",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "domain"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "url",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "url"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "email",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "email"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "yara",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "yara"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "attr_type": "filename",
+        "recognised": true
+      },
+      "actual": {
+        "recognised": true,
+        "canonical": "filename"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_type_roundtrip",
+      "status": "PASS",
+      "expected": {
+        "recognised": false
+      },
+      "actual": {
+        "recognised": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_ioc_count",
+      "status": "PASS",
+      "expected": {
+        "ioc_count": 2
+      },
+      "actual": {
+        "ioc_count": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sharing_group_new",
+      "status": "PASS",
+      "expected": {
+        "id": 5,
+        "name": "TestGroup",
+        "active": true
+      },
+      "actual": {
+        "id": 5,
+        "name": "TestGroup",
+        "active": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_feed_new",
+      "status": "PASS",
+      "expected": {
+        "source_format": "misp",
+        "enabled": false
+      },
+      "actual": {
+        "source_format": "misp",
+        "enabled": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_search_build",
+      "status": "PASS",
+      "expected": {
+        "search.value": "emotet",
+        "search.limit": 50
+      },
+      "actual": {
+        "search.value": "emotet",
+        "search.limit": 50
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_check",
+      "status": "PASS",
+      "expected": {
+        "matches": true
+      },
+      "actual": {
+        "matches": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_check",
+      "status": "PASS",
+      "expected": {
+        "matches": false
+      },
+      "actual": {
+        "matches": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_supported_ioc_types",
+      "status": "PASS",
+      "expected": {
+        "supported_ioc_types_count": 8,
+        "includes_Md5": true
+      },
+      "actual": {
+        "count": 8,
+        "includes_Md5": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_org_new",
+      "status": "PASS",
+      "expected": {
+        "name": "ACME",
+        "local": true
+      },
+      "actual": {
+        "name": "ACME",
+        "local": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_full_new",
+      "status": "PASS",
+      "expected": {
+        "info": "My Event",
+        "published": false
+      },
+      "actual": {
+        "info": "My Event",
+        "published": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sighting_new",
+      "status": "PASS",
+      "expected": {
+        "sighting_type": 2,
+        "attribute_uuid": "attr-001"
+      },
+      "actual": {
+        "sighting_type": 2,
+        "attribute_uuid": "attr-001"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sighting_new",
+      "status": "PASS",
+      "expected": {
+        "is_false_positive": true
+      },
+      "actual": {
+        "is_false_positive": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_galaxy_cluster_new",
+      "status": "PASS",
+      "expected": {
+        "value": "T1234",
+        "cluster_type": "technique"
+      },
+      "actual": {
+        "value": "T1234",
+        "cluster_type": "technique"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_workflow_new",
+      "status": "PASS",
+      "expected": {
+        "name": "wf-test",
+        "trigger_id": "event-publish",
+        "enabled": false
+      },
+      "actual": {
+        "name": "wf-test",
+        "trigger_id": "event-publish",
+        "enabled": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_rest_search_json",
+      "status": "PASS",
+      "expected": {
+        "format": "json",
+        "return_format": "json",
+        "request.value": "emotet"
+      },
+      "actual": {
+        "format": "json",
+        "return_format": "json",
+        "request.value": "emotet"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_search_date_range",
+      "status": "PASS",
+      "expected": {
+        "date_from": "2024-01-01",
+        "date_to": "2024-12-31"
+      },
+      "actual": {
+        "date_from": "2024-01-01",
+        "date_to": "2024-12-31"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_full_has_ids",
+      "status": "PASS",
+      "expected": {
+        "has_ids_attributes": true
+      },
+      "actual": {
+        "has_ids_attributes": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_full_has_ids",
+      "status": "PASS",
+      "expected": {
+        "has_ids_attributes": false
+      },
+      "actual": {
+        "has_ids_attributes": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_api_client_new",
+      "status": "PASS",
+      "expected": {
+        "api_url": "https://misp.example.com",
+        "verify_ssl": true
+      },
+      "actual": {
+        "api_url": "https://misp.example.com",
+        "verify_ssl": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_object_full_new",
+      "status": "PASS",
+      "expected": {
+        "name": "file",
+        "attribute_count": 0
+      },
+      "actual": {
+        "name": "file",
+        "attribute_count": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_describe",
+      "status": "PASS",
+      "expected": {
+        "value": 3,
+        "level": "All communities"
+      },
+      "actual": {
+        "level": "All communities",
+        "value": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sharing_group_build",
+      "status": "PASS",
+      "expected": {
+        "name": "SG1",
+        "org_count": 3
+      },
+      "actual": {
+        "name": "SG1",
+        "org_count": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_tag_spec_new_v3",
+      "status": "PASS",
+      "expected": {
+        "name": "tlp:green",
+        "exportable": true
+      },
+      "actual": {
+        "name": "tlp:green",
+        "exportable": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_org_new_v3",
+      "status": "PASS",
+      "expected": {
+        "name": "SecOrg",
+        "local": true
+      },
+      "actual": {
+        "name": "SecOrg",
+        "local": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_matches_v3",
+      "status": "PASS",
+      "expected": {
+        "matches": true
+      },
+      "actual": {
+        "matches": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_matches_v3",
+      "status": "PASS",
+      "expected": {
+        "matches": false
+      },
+      "actual": {
+        "matches": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_value_v3",
+      "status": "PASS",
+      "expected": {
+        "value": 2,
+        "display": "Connected communities"
+      },
+      "actual": {
+        "value": 2,
+        "display": "Connected communities"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_value_v3",
+      "status": "PASS",
+      "expected": {
+        "value": 3,
+        "display": "Low"
+      },
+      "actual": {
+        "value": 3,
+        "display": "Low"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_rest_search_json_v3",
+      "status": "PASS",
+      "expected": {
+        "format": "json",
+        "request_value": "ransomware"
+      },
+      "actual": {
+        "format": "json",
+        "request_value": "ransomware"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_display_v3",
+      "status": "PASS",
+      "expected": {
+        "display": "Community",
+        "recognised": true
+      },
+      "actual": {
+        "display": "Community",
+        "recognised": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_full_as_ioc_type_v3",
+      "status": "PASS",
+      "expected": {
+        "ioc_type": "sha256"
+      },
+      "actual": {
+        "ioc_type": "sha256"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_full_as_ioc_type_v3",
+      "status": "PASS",
+      "expected": {
+        "ioc_type": null
+      },
+      "actual": {
+        "ioc_type": null
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_galaxy_cluster_new_v3",
+      "status": "PASS",
+      "expected": {
+        "value": "T9999",
+        "cluster_type": "tool"
+      },
+      "actual": {
+        "value": "T9999",
+        "cluster_type": "tool"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_event_full_ioc_count_v3",
+      "status": "PASS",
+      "expected": {
+        "ioc_count": 2
+      },
+      "actual": {
+        "ioc_count": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_sharing_group_add_org_v3",
+      "status": "PASS",
+      "expected": {
+        "org_count": 3
+      },
+      "actual": {
+        "org_count": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_feed_new_v4",
+      "status": "PASS",
+      "expected": {
+        "source_format": "misp",
+        "name": "FeedV4"
+      },
+      "actual": {
+        "source_format": "misp",
+        "name": "FeedV4"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_workflow_new_v4",
+      "status": "PASS",
+      "expected": {
+        "name": "wf-v4",
+        "enabled": false
+      },
+      "actual": {
+        "name": "wf-v4",
+        "enabled": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_object_template_new_v4",
+      "status": "PASS",
+      "expected": {
+        "name": "file-template",
+        "version": "1"
+      },
+      "actual": {
+        "name": "file-template",
+        "version": "1"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_galaxy_cluster_new_v4",
+      "status": "PASS",
+      "expected": {
+        "value": "T0042",
+        "cluster_type": "malware"
+      },
+      "actual": {
+        "value": "T0042",
+        "cluster_type": "malware"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_search_with_limit_v4",
+      "status": "PASS",
+      "expected": {
+        "value": "emotet",
+        "limit": 100
+      },
+      "actual": {
+        "value": "emotet",
+        "limit": 100
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_search_with_threat_level_v4",
+      "status": "PASS",
+      "expected": {
+        "threat_level_id": 2
+      },
+      "actual": {
+        "threat_level_id": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_search_tags_v4",
+      "status": "PASS",
+      "expected": {
+        "tags_len": 2,
+        "not_tags_len": 1
+      },
+      "actual": {
+        "tags_len": 2,
+        "not_tags_len": 1
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_distribution_level_all_values_v4",
+      "status": "PASS",
+      "expected": {
+        "count": 6
+      },
+      "actual": {
+        "count": 6
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_threat_level_all_values_v4",
+      "status": "PASS",
+      "expected": {
+        "count": 4
+      },
+      "actual": {
+        "count": 4
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_analysis_level_display_v4",
+      "status": "PASS",
+      "expected": {
+        "displays": [
+          "Initial",
+          "Ongoing",
+          "Completed"
+        ]
+      },
+      "actual": {
+        "displays": [
+          "Initial",
+          "Ongoing",
+          "Completed"
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_add_entries_v4",
+      "status": "PASS",
+      "expected": {
+        "matches": true
+      },
+      "actual": {
+        "matches": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_warning_list_add_entries_v4",
+      "status": "PASS",
+      "expected": {
+        "matches": false
+      },
+      "actual": {
+        "matches": false
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_object_full_add_attr_v4",
+      "status": "PASS",
+      "expected": {
+        "attribute_count": 3
+      },
+      "actual": {
+        "attribute_count": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_full_ioc_type_v4",
+      "status": "PASS",
+      "expected": {
+        "has_ioc": true,
+        "ioc_type": "Ip"
+      },
+      "actual": {
+        "has_ioc": true,
+        "ioc_type": "Ip"
+      },
+      "note": ""
+    },
+    {
+      "tool": "ti_misp_attribute_full_ioc_type_v4",
+      "status": "PASS",
+      "expected": {
+        "has_ioc": false
+      },
+      "actual": {
+        "has_ioc": false
+      },
+      "note": ""
+    }
+  ],
+  "notes": "105 checks across 53 tool types; 105 PASS, 0 FAIL"
+}

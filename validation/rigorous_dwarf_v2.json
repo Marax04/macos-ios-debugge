@@ -1,0 +1,62 @@
+{
+  "category": "dwarf",
+  "tools_hardened": 13,
+  "tools_passed": 13,
+  "tools_failed": 0,
+  "tools_skipped": 11,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "dwarf_casts_i64_to_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_i64_to_u64",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_i64_to_usize",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u64_to_i64",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u64_to_u16",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u64_to_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u64_to_u8",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u64_to_usize",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_u8_to_i8",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_usize_to_i64",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_casts_usize_to_u32",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_abbrev_read_uleb128",
+      "status": "PASS"
+    },
+    {
+      "tool": "dwarf_abbrev_read_sleb128",
+      "status": "PASS"
+    }
+  ]
+}

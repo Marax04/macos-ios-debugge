@@ -1,0 +1,34 @@
+[package]
+license.workspace = true
+name = "rustre-demangle"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+cpp_demangle = "0.4"
+rustc-demangle = "0.1"
+parking_lot = { workspace = true }
+rayon = { workspace = true }
+serde_json = { workspace = true }
+ahash = { workspace = true }
+
+[dev-dependencies]
+proptest = "1"
+msvc-demangler = "0.10"
+criterion = { workspace = true }
+
+[[bench]]
+name = "demangle_bench"
+harness = false
+
+[lints]
+workspace = true

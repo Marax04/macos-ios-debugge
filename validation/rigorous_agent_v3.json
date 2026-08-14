@@ -1,0 +1,549 @@
+{
+  "passed": [
+    {
+      "tool": "agent_cast_u64_to_f32",
+      "key": "output",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f32",
+      "key": "output",
+      "value": 100.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f32",
+      "key": "output",
+      "value": 16777216.0
+    },
+    {
+      "tool": "agent_cast_u64_to_f32",
+      "key": "output",
+      "value": 4294967296.0
+    },
+    {
+      "tool": "agent_cast_f64_to_f32",
+      "key": "output",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_cast_f64_to_f32",
+      "key": "output",
+      "value": 1.5
+    },
+    {
+      "tool": "agent_cast_f64_to_f32",
+      "key": "output",
+      "value": -1.5
+    },
+    {
+      "tool": "agent_rate_limiter_available",
+      "key": "available",
+      "value": 10
+    },
+    {
+      "tool": "agent_rate_limiter_available",
+      "key": "available",
+      "value": 0
+    },
+    {
+      "tool": "agent_rate_limiter_try_acquire",
+      "key": "acquired",
+      "value": true
+    },
+    {
+      "tool": "agent_rate_limiter_try_acquire",
+      "key": "available_after",
+      "value": 7
+    },
+    {
+      "tool": "agent_rate_limiter_try_acquire",
+      "key": "acquired_over",
+      "value": false
+    },
+    {
+      "tool": "agent_rate_limiter_acquire",
+      "key": "acquired",
+      "value": "[True, True]"
+    },
+    {
+      "tool": "agent_rate_limiter_acquire",
+      "key": "acquired_list",
+      "value": [
+        true,
+        true
+      ]
+    },
+    {
+      "tool": "agent_metrics_success_rate",
+      "key": "success_rate",
+      "value": 0.75
+    },
+    {
+      "tool": "agent_metrics_success_rate",
+      "key": "success_rate",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_metrics_success_rate",
+      "key": "success_rate",
+      "value": 1.0
+    },
+    {
+      "tool": "agent_metrics_avg_duration_ms",
+      "key": "avg_duration_ms",
+      "value": 200.0
+    },
+    {
+      "tool": "agent_metrics_avg_duration_ms",
+      "key": "avg_duration_ms",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_metrics_tool_success_rate",
+      "key": "tool_success_rate",
+      "value": 0.8
+    },
+    {
+      "tool": "agent_metrics_tool_success_rate",
+      "key": "tool_success_rate",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_memory_store_len",
+      "key": "len",
+      "value": 3
+    },
+    {
+      "tool": "agent_memory_store_len",
+      "key": "len",
+      "value": 0
+    },
+    {
+      "tool": "agent_memory_store_len",
+      "key": "is_empty",
+      "value": true
+    },
+    {
+      "tool": "agent_memory_store_get",
+      "key": "stored",
+      "value": "True"
+    },
+    {
+      "tool": "agent_task_queue_len_drain",
+      "key": "len_before",
+      "value": 5
+    },
+    {
+      "tool": "agent_task_queue_len_drain",
+      "key": "drained",
+      "value": 5
+    },
+    {
+      "tool": "agent_task_queue_len_drain",
+      "key": "len_before",
+      "value": 0
+    },
+    {
+      "tool": "agent_task_queue_peek_pop",
+      "key": "popped",
+      "value": "3"
+    },
+    {
+      "tool": "agent_message_kind_flags",
+      "key": "is_query",
+      "value": true
+    },
+    {
+      "tool": "agent_message_kind_flags",
+      "key": "is_response",
+      "value": false
+    },
+    {
+      "tool": "agent_message_kind_flags",
+      "key": "is_query",
+      "value": false
+    },
+    {
+      "tool": "agent_message_kind_flags",
+      "key": "is_response",
+      "value": true
+    },
+    {
+      "tool": "agent_message_kind_flags",
+      "key": "is_query",
+      "value": false
+    },
+    {
+      "tool": "agent_standard_re_pipeline",
+      "key": "task_count",
+      "value": 8
+    },
+    {
+      "tool": "agent_bump_priority",
+      "key": "resulting_priority",
+      "value": "High"
+    },
+    {
+      "tool": "agent_bump_priority",
+      "key": "resulting_priority_saturate",
+      "value": "High"
+    },
+    {
+      "tool": "agent_prompts_builtin_templates_count",
+      "key": "count",
+      "value": "10"
+    },
+    {
+      "tool": "agent_prompts_registry_count",
+      "key": "count",
+      "value": "6"
+    },
+    {
+      "tool": "agent_prompts_template_new",
+      "key": "name",
+      "value": "test_tpl"
+    },
+    {
+      "tool": "agent_prompts_builtin_template_names",
+      "key": "names_count",
+      "value": 10
+    },
+    {
+      "tool": "agent_prompts_registry_list_names",
+      "key": "names_count",
+      "value": 6
+    },
+    {
+      "tool": "agent_prompts_registry_render",
+      "key": "rendered",
+      "value": "Review decompiled code from {{binary}}:\n{{code}}\nIdentify: algorithm, data struc"
+    },
+    {
+      "tool": "agent_prompts_render_template",
+      "key": "rendered",
+      "value": "Hello world"
+    },
+    {
+      "tool": "agent_prompts_context_build",
+      "key": "context",
+      "value": ""
+    },
+    {
+      "tool": "agent_prompts_few_shot_roundtrip",
+      "key": "count",
+      "value": null
+    },
+    {
+      "tool": "agent_prompts_template_var_spec",
+      "key": "required",
+      "value": "True"
+    },
+    {
+      "tool": "agent_prompts_spec_template_render",
+      "key": "rendered",
+      "value": "Hello {name}"
+    },
+    {
+      "tool": "agent_id_new_wire",
+      "key": "inner",
+      "value": 42
+    },
+    {
+      "tool": "agent_id_new_wire",
+      "key": "inner",
+      "value": 0
+    },
+    {
+      "tool": "agent_message_role_as_str_wire",
+      "key": "as_str",
+      "value": "user"
+    },
+    {
+      "tool": "agent_message_role_as_str_wire",
+      "key": "as_str_assistant",
+      "value": "assistant"
+    },
+    {
+      "tool": "agent_llm_message_user_wire",
+      "key": "role",
+      "value": "User"
+    },
+    {
+      "tool": "agent_llm_message_assistant_wire",
+      "key": "role",
+      "value": "Assistant"
+    },
+    {
+      "tool": "agent_workflow_builtin_list",
+      "key": "count",
+      "value": 6
+    },
+    {
+      "tool": "agent_workflow_templates_list",
+      "key": "templates",
+      "value": "[{'id': 'malware_analysis', 'name': 'Malware Analysis', 'version': '1.0.0', 'des"
+    },
+    {
+      "tool": "agent_builtin_workflows",
+      "key": "count",
+      "value": 2
+    },
+    {
+      "tool": "agent_llm_extract_code_blocks",
+      "key": "blocks_count",
+      "value": 1
+    },
+    {
+      "tool": "agent_llm_extract_code_blocks",
+      "key": "blocks_empty",
+      "value": true
+    },
+    {
+      "tool": "agent_llm_builtin_models",
+      "key": "models",
+      "value": "[{'id': 'claude-sonnet-4-6', 'display_name': 'Claude Sonnet 4.6', 'provider': 'A"
+    },
+    {
+      "tool": "agent_llm_estimate_cost",
+      "key": "cost_usd",
+      "value": 0.0105
+    },
+    {
+      "tool": "agent_llm_estimate_cost",
+      "key": "cost_zero",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_parse_confidence",
+      "key": "confidence",
+      "value": 0.8500000238418579
+    },
+    {
+      "tool": "agent_parse_vulnerabilities",
+      "key": "count",
+      "value": "0"
+    },
+    {
+      "tool": "agent_llm_context_manager_build",
+      "key": "count",
+      "value": 1
+    },
+    {
+      "tool": "agent_llm_lib_message_from_message",
+      "key": "role",
+      "value": "User"
+    },
+    {
+      "tool": "agent_llm_lib_config_build",
+      "key": "model",
+      "value": "Gpt4"
+    },
+    {
+      "tool": "agent_llm_lib_response_first_text",
+      "key": "first_text",
+      "value": "hello"
+    },
+    {
+      "tool": "agent_llm_lib_role_parse",
+      "key": "message_role",
+      "value": "user"
+    },
+    {
+      "tool": "agent_llm_lib_completion_options_default",
+      "key": "max_tokens",
+      "value": "4096"
+    },
+    {
+      "tool": "agent_llm_lib_token_usage_total",
+      "key": "total",
+      "value": 15
+    },
+    {
+      "tool": "agent_llm_lib_context_manager_len",
+      "key": "len",
+      "value": 2
+    },
+    {
+      "tool": "agent_llm_lib_tool_definition_new",
+      "key": "name",
+      "value": "my_tool"
+    },
+    {
+      "tool": "agent_llm_lib_list_model_variants",
+      "key": "variants_count",
+      "value": 6
+    },
+    {
+      "tool": "agent_llm_lib_completion_response_build",
+      "key": "content",
+      "value": ""
+    },
+    {
+      "tool": "agent_prompts_v2_render_pairs",
+      "key": "rendered",
+      "value": "Hello {name}"
+    },
+    {
+      "tool": "agent_prompts_v2_context_builder_full",
+      "key": "context",
+      "value": "=== Disassembly ===\n\n\n=== Decompiled Code ===\n\n\n=== Strings ===\n\n\n=== Imports =="
+    },
+    {
+      "tool": "agent_prompts_v2_template_registry_builtins",
+      "key": "count",
+      "value": "10"
+    },
+    {
+      "tool": "agent_prompts_v2_few_shot_similarity",
+      "key": "count",
+      "value": "2"
+    },
+    {
+      "tool": "agent_prompts_v2_few_shot_count_filter",
+      "key": "matched",
+      "value": "3"
+    },
+    {
+      "tool": "agent_prompts_v2_prompt_chain_execute",
+      "key": "outputs",
+      "value": "['STEP1: HELLO', 'STEP2: STEP1: HELLO']"
+    },
+    {
+      "tool": "agent_prompts_v2_spec_registry_builtins",
+      "key": "count",
+      "value": "6"
+    },
+    {
+      "tool": "agent_prompts_v2_spec_template_var_kinds",
+      "key": "required",
+      "value": "{'name': 'x', 'required': True, 'has_default': False}"
+    },
+    {
+      "tool": "agent_prompts_v2_engine_builtins",
+      "key": "count",
+      "value": "14"
+    },
+    {
+      "tool": "agent_prompts_v2_engine_prompt_variable",
+      "key": "required",
+      "value": "{'name': 'test_var', 'description': 'desc', 'required': True}"
+    },
+    {
+      "tool": "agent_reasoning_new_v2",
+      "key": "task_id",
+      "value": "1"
+    },
+    {
+      "tool": "agent_reasoning_add_step_v2",
+      "key": "step_count",
+      "value": "1"
+    },
+    {
+      "tool": "agent_plan_new_v2",
+      "key": "goal",
+      "value": "analyze binary"
+    },
+    {
+      "tool": "agent_session_new_v2",
+      "key": "session_id",
+      "value": "s1"
+    },
+    {
+      "tool": "agent_conversation_add_message_v2",
+      "key": "message_count",
+      "value": "2"
+    },
+    {
+      "tool": "agent_memory_store_len_v2",
+      "key": "len",
+      "value": "1"
+    },
+    {
+      "tool": "agent_memory_entry_with_tags_v2",
+      "key": "tags",
+      "value": "['a', 'b']"
+    },
+    {
+      "tool": "agent_metrics_new_v2",
+      "key": "success_rate",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_plugin_registry_empty_v2",
+      "key": "plugin_count",
+      "value": 0
+    },
+    {
+      "tool": "agent_prompt_generator_rename_v2",
+      "key": "prompt_len",
+      "value": "88"
+    },
+    {
+      "tool": "agent_prompt_generator_rename_v2",
+      "key": "prompt_len_positive",
+      "value": true
+    },
+    {
+      "tool": "agent_rate_limiter_reset_v2",
+      "key": "reset_restores_tokens",
+      "value": true
+    },
+    {
+      "tool": "agent_self_improvement_avg_rating_v2",
+      "key": "average_rating",
+      "value": 0.0
+    },
+    {
+      "tool": "agent_prompt_gen_rename",
+      "key": "prompt",
+      "value": "You are a RE assistant.\n\nSuggest meaningful names for functions and variables:\n`"
+    },
+    {
+      "tool": "agent_prompt_gen_disasm",
+      "key": "prompt_contains_arch_and_disasm",
+      "value": true
+    },
+    {
+      "tool": "agent_prompt_gen_vuln",
+      "key": "prompt",
+      "value": "You are RE.\n\nAnalyze this code for security vulnerabilities:\n```\nunsafe { *ptr }"
+    },
+    {
+      "tool": "agent_prompt_gen_yara",
+      "key": "prompt",
+      "value": "You are RE.\n\nGenerate YARA rules based on:\nStrings: \nImports: "
+    },
+    {
+      "tool": "agent_response_extract_json",
+      "key": "json_key_value",
+      "value": "value"
+    },
+    {
+      "tool": "agent_response_parse_renames",
+      "key": "renames_count",
+      "value": 2
+    },
+    {
+      "tool": "agent_self_improvement_summary",
+      "key": "avg_rating",
+      "value": 0
+    },
+    {
+      "tool": "agent_reasoning_build",
+      "key": "step_count",
+      "value": 2
+    },
+    {
+      "tool": "agent_observation_build",
+      "key": "confidence",
+      "value": 0.5
+    }
+  ],
+  "failed": [],
+  "skipped": [
+    {
+      "tool": "agent_llm_mock_provider_complete",
+      "reason": "nondeterministic mock LLM response content"
+    }
+  ]
+}

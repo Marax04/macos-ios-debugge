@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-luajit",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Nessun tool MCP dedicato a LuaJIT esiste in crates/rustre-mcp-tools (grep -i 'luajit' su tutto il crate mcp-tools: 0 match). Il binario rustre-mcp.exe non espone endpoint loader_luajit_* / arch_luajit_* paragonabili 1:1 alle API testate dal validator.",
+    "Il validator rustre-loader-luajit.py costruisce un blob LuaJIT bytecode in-memory e chiama, tramite un harness Rust generato a runtime, le API pubbliche del crate: is_luajit, LJ_MAGIC, LJ_OPCODES, read_uleb128/read_sleb128, LjHeader::parse, LjBytecode::parse, LuaJitLoader::can_load/load, LjProto::mock, ProtoStats::compute, LjDisassembler::disassemble_proto, LjVersion::from_byte. Tutti input/output sono primitive Rust (slice di byte, struct interne), non superficie JSON-RPC.",
+    "Le funzionalita' LuaJIT sono raggiungibili dal server MCP solo in modo molto indiretto via tool generici (binary_info, triage_analyze, analyze_strings) che non riconoscono il magic 0x1B 'LJ' come formato di prima classe e restituiscono JSON aggregato non confrontabile con i singoli dispatch del validator.",
+    "Conclusione: confronto MCP vs validator NON applicabile a questo crate, analogamente a rustre-loader-pe, rustre-loader-elf, rustre-loader-macho. Nessun mismatch da registrare, nessun fix da applicare al workspace.",
+    "Verifica collaterale: cargo build -p rustre-loader-luajit --release completa pulito (Finished release in 5.88s, nessun warning ne errore), confermando lo stato sano del crate sotto i feature di default."
+  ]
+}

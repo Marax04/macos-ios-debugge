@@ -1,0 +1,853 @@
+{
+  "module": "fuzz_v2_rigorous",
+  "tools_hardened": [
+    "fuzz_net_xor_checksum",
+    "fuzz_net_add_checksum",
+    "fuzz_net_frame_u32_le",
+    "fuzz_net_frame_u32_be",
+    "fuzz_net_decode_frame_u32_le",
+    "fuzz_san_parse_hex_u64",
+    "fuzz_san_classify_severity",
+    "fuzz_cov_coverage_fraction",
+    "fuzz_cov_rle_encode",
+    "fuzz_cov_rle_is_beneficial",
+    "fuzz_afl_stage_bit_flip_1",
+    "fuzz_afl_stage_bit_flip_2",
+    "fuzz_afl_stage_bit_flip_4",
+    "fuzz_afl_stage_byte_flip_1",
+    "fuzz_afl_stage_interesting_8",
+    "fuzz_afl_stage_interesting_16",
+    "fuzz_afl_stage_interesting_32",
+    "fuzz_afl_stage_arith_8",
+    "fuzz_afl_stage_arith_16",
+    "fuzz_afl_stage_arith_32",
+    "fuzz_afl_stage_splice",
+    "fuzz_afl_bitmap_summary",
+    "fuzz_afl_dict_load",
+    "fuzz_afl_stats_serialize",
+    "fuzz_afl_stats_parse",
+    "fuzz_san_parse_ubsan_output",
+    "fuzz_san_crash_dedup_group",
+    "fuzz_san_log_parser_parse_first",
+    "fuzz_san_log_parser_parse_all",
+    "fuzz_net_interesting_int_mutation",
+    "fuzz_cov_drcov_header_parse",
+    "fuzz_cov_drcov_parse",
+    "fuzz_cov_drcov_blocks_per_module",
+    "fuzz_cov_db_intersection_union_x",
+    "fuzz_net_protocol_drive_path",
+    "fuzz_libfuzzer_havoc_mutate",
+    "fuzz_fnv1a",
+    "fuzz_rank_seeds_by_priority",
+    "fuzz_cov_pcguard_density",
+    "fuzz_cov_pcguard_hash",
+    "fuzz_cov_lcov_parse",
+    "fuzz_cov_coverage_diff",
+    "fuzz_cov_drcov_module_contains",
+    "fuzz_cov_drcov_entry_end_addr",
+    "fuzz_cov_coverage_run_merge",
+    "fuzz_cov_lcov_aggregate_by_file",
+    "fuzz_cov_lcov_line_pct",
+    "fuzz_cov_drcov_bb_abs_addr",
+    "fuzz_cov_drcov_module_v2_size",
+    "fuzz_cov_diff_jaccard",
+    "fuzz_net_interesting_constants",
+    "fuzz_net_response_matcher_find",
+    "fuzz_net_response_matcher_matches",
+    "fuzz_net_crash_classify",
+    "fuzz_net_crash_classify_reason",
+    "fuzz_net_protocol_load_yaml",
+    "fuzz_san_parse_asan_output",
+    "fuzz_san_stack_edit_distance",
+    "fuzz_libfuzzer_bucket_bitmap",
+    "fuzz_libfuzzer_count_new_bits_bucketed",
+    "fuzz_libfuzzer_parse_sanitizer_output",
+    "fuzz_san_ubsan_check_signed_overflow",
+    "fuzz_san_ubsan_check_null_deref",
+    "fuzz_san_ubsan_check_misaligned",
+    "fuzz_san_ubsan_check_division",
+    "fuzz_san_ubsan_checked_add",
+    "fuzz_san_ubsan_checked_mul",
+    "fuzz_san_ubsan_check_access",
+    "fuzz_san_asan_scenario",
+    "fuzz_san_msan_scenario",
+    "fuzz_san_coverage_summary",
+    "fuzz_afl_dict_info",
+    "fuzz_afl_cmplog_colorize",
+    "fuzz_afl_queue_score",
+    "fuzz_afl_havoc_mutate",
+    "fuzz_afl_bit_flip_mutate",
+    "fuzz_afl_arith_mutate",
+    "fuzz_afl_bucket_hits",
+    "fuzz_libfuzzer_structured_serialize",
+    "fuzz_libfuzzer_structured_deserialize",
+    "fuzz_libfuzzer_input_splice",
+    "fuzz_libfuzzer_simple_rng",
+    "fuzz_libfuzzer_crash_handler_inject",
+    "fuzz_libfuzzer_persistent_harness_run",
+    "fuzz_cov_drcov_module_to_offset_x",
+    "fuzz_cov_coverage_run_was_hit_x",
+    "fuzz_cov_edge_map_has_edge_x",
+    "fuzz_cov_lcov_fully_covered_x",
+    "fuzz_cov_drcov_basic_block_abs_addr_x",
+    "fuzz_cov_drcov_module_v2_contains_x",
+    "fuzz_net_decode_frame_u32_be_ext"
+  ],
+  "checks_passed": 150,
+  "checks_failed": 0,
+  "checks_skipped": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "fuzz_net_xor_checksum",
+      "status": "PASS",
+      "check": "xor_checksum(deadbeef)==34"
+    },
+    {
+      "tool": "fuzz_net_xor_checksum",
+      "status": "PASS",
+      "check": "xor_checksum('')==0"
+    },
+    {
+      "tool": "fuzz_net_add_checksum",
+      "status": "PASS",
+      "check": "add_checksum(deadbeef)==56"
+    },
+    {
+      "tool": "fuzz_net_frame_u32_le",
+      "status": "PASS",
+      "check": "hex=='04000000deadbeef' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_net_frame_u32_le",
+      "status": "PASS",
+      "check": "length==8"
+    },
+    {
+      "tool": "fuzz_net_frame_u32_le",
+      "status": "PASS",
+      "check": "empty frame hex=='00000000' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_net_frame_u32_be",
+      "status": "PASS",
+      "check": "hex=='00000004deadbeef' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_net_decode_frame_u32_le",
+      "status": "PASS",
+      "check": "found==True"
+    },
+    {
+      "tool": "fuzz_net_decode_frame_u32_le",
+      "status": "PASS",
+      "check": "payload_hex=='deadbeef' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_net_decode_frame_u32_le",
+      "status": "PASS",
+      "check": "total_len==8"
+    },
+    {
+      "tool": "fuzz_net_decode_frame_u32_le",
+      "status": "PASS",
+      "check": "truncated\u2192found==False"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "ok('0xff')==True"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "value('0xff')==255"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "ok('0x1234ABCD')==True"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "value('0x1234ABCD')==305441741"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "ok('0xFFFFFFFFFFFFFFFF')==True"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "value('0xFFFFFFFFFFFFFFFF')==18446744073709551615"
+    },
+    {
+      "tool": "fuzz_san_parse_hex_u64",
+      "status": "PASS",
+      "check": "ok('xyz')==False"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('heap-buffer-overflow')=='HIGH'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('use-after-free')=='CRITICAL'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('heap-use-after-free')=='CRITICAL'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('memory-leak')=='INFO'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('integer-overflow')=='LOW'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('unknown-thing')=='MEDIUM'"
+    },
+    {
+      "tool": "fuzz_san_classify_severity",
+      "status": "PASS",
+      "check": "classify_severity('null-deref')=='MEDIUM'"
+    },
+    {
+      "tool": "fuzz_cov_coverage_fraction",
+      "status": "PASS",
+      "check": "coverage_fraction('00000000')\u22480.0"
+    },
+    {
+      "tool": "fuzz_cov_coverage_fraction",
+      "status": "PASS",
+      "check": "coverage_fraction('ffffffff')\u22481.0"
+    },
+    {
+      "tool": "fuzz_cov_coverage_fraction",
+      "status": "PASS",
+      "check": "coverage_fraction('01010100')\u22480.75"
+    },
+    {
+      "tool": "fuzz_cov_coverage_fraction",
+      "status": "PASS",
+      "check": "coverage_fraction('01000000')\u22480.25"
+    },
+    {
+      "tool": "fuzz_cov_coverage_fraction",
+      "status": "PASS",
+      "check": "coverage_fraction('')\u22480.0"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('').out_len==0"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('').out_hex=='' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aa').out_len==3"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aa').out_hex=='0100aa' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aabb').out_len==6"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aabb').out_hex=='0100aa0100bb' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aaaaaa').out_len==3"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aaaaaa').out_hex=='0300aa' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aaaa').out_len==3"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('aaaa').out_hex=='0200aa' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('deadbeef').out_len==12"
+    },
+    {
+      "tool": "fuzz_cov_rle_encode",
+      "status": "PASS",
+      "check": "rle_encode('deadbeef').out_hex=='0100de0100ad0100be0100ef' (case-insensitive)"
+    },
+    {
+      "tool": "fuzz_cov_rle_is_beneficial",
+      "status": "PASS",
+      "check": "rle_is_beneficial('aaaaaaaa')==True"
+    },
+    {
+      "tool": "fuzz_cov_rle_is_beneficial",
+      "status": "PASS",
+      "check": "rle_is_beneficial('aabb')==False"
+    },
+    {
+      "tool": "fuzz_cov_rle_is_beneficial",
+      "status": "PASS",
+      "check": "rle_is_beneficial('aaaaaa')==False"
+    },
+    {
+      "tool": "fuzz_cov_rle_is_beneficial",
+      "status": "PASS",
+      "check": "rle_is_beneficial('deadbeef')==False"
+    },
+    {
+      "tool": "fuzz_afl_stage_bit_flip_1",
+      "status": "PASS",
+      "check": "count==32"
+    },
+    {
+      "tool": "fuzz_afl_stage_bit_flip_2",
+      "status": "PASS",
+      "check": "count==31"
+    },
+    {
+      "tool": "fuzz_afl_stage_bit_flip_4",
+      "status": "PASS",
+      "check": "count==29"
+    },
+    {
+      "tool": "fuzz_afl_stage_byte_flip_1",
+      "status": "PASS",
+      "check": "count==4"
+    },
+    {
+      "tool": "fuzz_afl_stage_interesting_8",
+      "status": "PASS",
+      "check": "count==36"
+    },
+    {
+      "tool": "fuzz_afl_stage_interesting_16",
+      "status": "PASS",
+      "check": "count==60"
+    },
+    {
+      "tool": "fuzz_afl_stage_interesting_32",
+      "status": "PASS",
+      "check": "count==14"
+    },
+    {
+      "tool": "fuzz_afl_stage_arith_8",
+      "status": "PASS",
+      "check": "count==280"
+    },
+    {
+      "tool": "fuzz_afl_stage_arith_16",
+      "status": "PASS",
+      "check": "count==210"
+    },
+    {
+      "tool": "fuzz_afl_stage_arith_32",
+      "status": "PASS",
+      "check": "count==70"
+    },
+    {
+      "tool": "fuzz_afl_stage_splice",
+      "status": "PASS",
+      "check": "splice output len=3"
+    },
+    {
+      "tool": "fuzz_afl_bitmap_summary",
+      "status": "PASS",
+      "check": "count_non_zero==2"
+    },
+    {
+      "tool": "fuzz_afl_bitmap_summary",
+      "status": "PASS",
+      "check": "size==4"
+    },
+    {
+      "tool": "fuzz_afl_dict_load",
+      "status": "PASS",
+      "check": "count==2"
+    },
+    {
+      "tool": "fuzz_afl_stats_serialize",
+      "status": "PASS",
+      "check": "returns 'serialized' key"
+    },
+    {
+      "tool": "fuzz_afl_stats_parse",
+      "status": "PASS",
+      "check": "returns 'stats' key"
+    },
+    {
+      "tool": "fuzz_san_parse_ubsan_output",
+      "status": "PASS",
+      "check": "returns non-empty dict"
+    },
+    {
+      "tool": "fuzz_san_crash_dedup_group",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_san_log_parser_parse_first",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_san_log_parser_parse_all",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_net_interesting_int_mutation",
+      "status": "PASS",
+      "check": "returns dict: ['current', 'size_bytes', 'mutated', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_drcov_header_parse",
+      "status": "PASS",
+      "check": "version==2"
+    },
+    {
+      "tool": "fuzz_cov_drcov_parse",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_drcov_blocks_per_module",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_db_intersection_union_x",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_net_protocol_drive_path",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_libfuzzer_havoc_mutate",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_fnv1a",
+      "status": "PASS",
+      "check": "fnv1a('deadbeef')==2841847738195052947"
+    },
+    {
+      "tool": "fuzz_fnv1a",
+      "status": "PASS",
+      "check": "fnv1a('0001020304')==3708964778940489647"
+    },
+    {
+      "tool": "fuzz_fnv1a",
+      "status": "PASS",
+      "check": "fnv1a('')==14695981039346656037"
+    },
+    {
+      "tool": "fuzz_rank_seeds_by_priority",
+      "status": "PASS",
+      "check": "ranked_ids no-tie==[1, 0, 2]"
+    },
+    {
+      "tool": "fuzz_rank_seeds_by_priority",
+      "status": "PASS",
+      "check": "rank_seeds tie-break -> [30, 20, 10]"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_density",
+      "status": "PASS",
+      "check": "density=0.75, hit_count=3"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_density",
+      "status": "PASS",
+      "check": "density(01020300)\u22480.75"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_hash",
+      "status": "PASS",
+      "check": "hash='be7a5a7751657191'"
+    },
+    {
+      "tool": "fuzz_cov_pcguard_hash",
+      "status": "PASS",
+      "check": "different bitmaps give different hashes"
+    },
+    {
+      "tool": "fuzz_cov_lcov_parse",
+      "status": "PASS",
+      "check": "records==1"
+    },
+    {
+      "tool": "fuzz_cov_lcov_parse",
+      "status": "PASS",
+      "check": "total_lines_hit==1"
+    },
+    {
+      "tool": "fuzz_cov_coverage_diff",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_contains",
+      "status": "PASS",
+      "check": "contains(in range)==True"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_contains",
+      "status": "PASS",
+      "check": "contains(out of range)==False"
+    },
+    {
+      "tool": "fuzz_cov_drcov_entry_end_addr",
+      "status": "PASS",
+      "check": "returns dict: ['abs', 'end', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_coverage_run_merge",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_lcov_aggregate_by_file",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_lcov_line_pct",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_drcov_bb_abs_addr",
+      "status": "PASS",
+      "check": "abs==4198400"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_v2_size",
+      "status": "PASS",
+      "check": "size==1048576"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_v2_size",
+      "status": "PASS",
+      "check": "contains==True"
+    },
+    {
+      "tool": "fuzz_cov_diff_jaccard",
+      "status": "PASS",
+      "check": "jaccard([1,2,3],[2,3,4])\u22480.5"
+    },
+    {
+      "tool": "fuzz_net_interesting_constants",
+      "status": "PASS",
+      "check": "returns u8/u16/u32"
+    },
+    {
+      "tool": "fuzz_net_response_matcher_find",
+      "status": "PASS",
+      "check": "found==True"
+    },
+    {
+      "tool": "fuzz_net_response_matcher_find",
+      "status": "PASS",
+      "check": "index==2"
+    },
+    {
+      "tool": "fuzz_net_response_matcher_matches",
+      "status": "PASS",
+      "check": "matches==True"
+    },
+    {
+      "tool": "fuzz_net_response_matcher_matches",
+      "status": "PASS",
+      "check": "no match==False"
+    },
+    {
+      "tool": "fuzz_net_crash_classify",
+      "status": "PASS",
+      "check": "kind='UNEXPECTED_RESPONSE'"
+    },
+    {
+      "tool": "fuzz_net_crash_classify_reason",
+      "status": "PASS",
+      "check": "kind='UNEXPECTED_RESPONSE'"
+    },
+    {
+      "tool": "fuzz_net_protocol_load_yaml",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_san_parse_asan_output",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_san_stack_edit_distance",
+      "status": "PASS",
+      "check": "distance([foo,bar,baz],[foo,baz])==1"
+    },
+    {
+      "tool": "fuzz_libfuzzer_bucket_bitmap",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_libfuzzer_count_new_bits_bucketed",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_libfuzzer_parse_sanitizer_output",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_signed_overflow",
+      "status": "PASS",
+      "check": "i64_max+1 overflow==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_signed_overflow",
+      "status": "PASS",
+      "check": "1+1 no overflow==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_null_deref",
+      "status": "PASS",
+      "check": "null_deref(ptr=0)==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_null_deref",
+      "status": "PASS",
+      "check": "null_deref(ptr=0xdeadbeef)==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_misaligned",
+      "status": "PASS",
+      "check": "misaligned(addr=3,align=4)==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_misaligned",
+      "status": "PASS",
+      "check": "aligned(addr=4,align=4)==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_division",
+      "status": "PASS",
+      "check": "div_by_zero(divisor=0)==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_division",
+      "status": "PASS",
+      "check": "div_by_zero(divisor=5)==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_add",
+      "status": "PASS",
+      "check": "i64_max+1 ok==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_add",
+      "status": "PASS",
+      "check": "100+200 ok==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_add",
+      "status": "PASS",
+      "check": "100+200 result==300"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_mul",
+      "status": "PASS",
+      "check": "i64_max*2 ok==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_mul",
+      "status": "PASS",
+      "check": "6*7 ok==True"
+    },
+    {
+      "tool": "fuzz_san_ubsan_checked_mul",
+      "status": "PASS",
+      "check": "6*7 result==42"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_access",
+      "status": "PASS",
+      "check": "check_access(ptr=0)==False"
+    },
+    {
+      "tool": "fuzz_san_ubsan_check_access",
+      "status": "PASS",
+      "check": "check_access(ptr=0x1000,align=4)==True"
+    },
+    {
+      "tool": "fuzz_san_asan_scenario",
+      "status": "PASS",
+      "check": "ok=True"
+    },
+    {
+      "tool": "fuzz_san_msan_scenario",
+      "status": "PASS",
+      "check": "ok=False"
+    },
+    {
+      "tool": "fuzz_san_coverage_summary",
+      "status": "PASS",
+      "check": "coverage_ratio=0.2"
+    },
+    {
+      "tool": "fuzz_afl_dict_info",
+      "status": "PASS",
+      "check": "count=2"
+    },
+    {
+      "tool": "fuzz_afl_cmplog_colorize",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_afl_queue_score",
+      "status": "PASS",
+      "check": "score=1.7976931348623157e+308"
+    },
+    {
+      "tool": "fuzz_afl_havoc_mutate",
+      "status": "PASS",
+      "check": "len=4"
+    },
+    {
+      "tool": "fuzz_afl_bit_flip_mutate",
+      "status": "PASS",
+      "check": "output hex='C0ADBEEF'"
+    },
+    {
+      "tool": "fuzz_afl_arith_mutate",
+      "status": "PASS",
+      "check": "hex='DEA6BEEF'"
+    },
+    {
+      "tool": "fuzz_afl_bucket_hits",
+      "status": "PASS",
+      "check": "bucketed 8 entries: [1, 2, 4, 8, 8, 16, 32, 64]"
+    },
+    {
+      "tool": "fuzz_libfuzzer_structured_serialize",
+      "status": "PASS",
+      "check": "returns hex output"
+    },
+    {
+      "tool": "fuzz_libfuzzer_structured_deserialize",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_libfuzzer_input_splice",
+      "status": "PASS",
+      "check": "len=4"
+    },
+    {
+      "tool": "fuzz_libfuzzer_simple_rng",
+      "status": "PASS",
+      "check": "libfuzzer_simple_rng(seed=42, count=4)==[45454805674, 11532217803599905471, 10021416941527320954, 2899061411254629736]"
+    },
+    {
+      "tool": "fuzz_libfuzzer_crash_handler_inject",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_libfuzzer_persistent_harness_run",
+      "status": "PASS",
+      "check": "returns dict"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_to_offset_x",
+      "status": "PASS",
+      "check": "returns dict: ['offset', 'size', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_coverage_run_was_hit_x",
+      "status": "PASS",
+      "check": "returns dict: ['was_hit', 'distinct', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_edge_map_has_edge_x",
+      "status": "PASS",
+      "check": "returns dict: ['has_edge', 'edge_hits', 'successors', 'edge_count', 'total', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_lcov_fully_covered_x",
+      "status": "PASS",
+      "check": "returns dict: ['records', 'count', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_drcov_basic_block_abs_addr_x",
+      "status": "PASS",
+      "check": "returns dict: ['abs_addr', 'start', 'size', 'module_id', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_v2_contains_x",
+      "status": "PASS",
+      "check": "returns dict: ['contains', 'size', 'source']"
+    },
+    {
+      "tool": "fuzz_net_decode_frame_u32_be_ext",
+      "status": "PASS",
+      "check": "returns dict: ['consumed', 'payload_len', 'source']"
+    },
+    {
+      "tool": "fuzz_cov_drcov_module_to_offset_x",
+      "status": "PASS",
+      "check": "offset==327680"
+    },
+    {
+      "tool": "fuzz_cov_coverage_run_was_hit_x",
+      "status": "PASS",
+      "check": "was_hit==True"
+    },
+    {
+      "tool": "fuzz_cov_drcov_basic_block_abs_addr_x",
+      "status": "PASS",
+      "check": "abs_addr==4198400"
+    }
+  ]
+}

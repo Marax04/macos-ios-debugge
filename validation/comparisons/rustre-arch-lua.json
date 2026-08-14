@@ -1,0 +1,38 @@
+{
+  "crate": "rustre-arch-lua",
+  "tests": 8,
+  "mismatches": 1,
+  "fixed": 0,
+  "match_final": false,
+  "notes": [
+    "Validator is a standalone Python self-test of the Lua VM bytecode format (no MCP I/O). It checks ground-truth: magic, instruction layouts (iABC/iABx/iAsBx for 5.1-5.3; iABC/iABx/iAx/isJ for 5.4), sBx bias = 131071, sJ bias = 16777215, opcode counts {Lua51:38, Lua52:41, Lua53:47, Lua54:83}.",
+    "rustre-mcp does not expose Lua-bytecode-specific tools; the only crate-level cross-check is the opcode tables and constants inside rustre-arch-lua.",
+    "Validator self-test: 8/8 PASS (all internal checks succeed).",
+    "Cross-check vs crate: constants for sBx (131071) and sJ (16777215) match. Opcode-table cardinality MISMATCHES for Lua 5.4: validator/report says 83 (upstream lopcodes.h), but rustre-arch-lua::LUA54_OPCODES has 81 entries (0..=80), missing LFALSESKIP and LOADTRUE and conflating LOADBOOL with LOADFALSE at idx 5. Lua 5.1/5.2/5.3 tables (38/41/47) match.",
+    "Attempted fix (expand to 83 entries with correct LOADFALSE/LFALSESKIP/LOADTRUE at 5/6/7, shifting all later opcodes by +2) — builds clean but breaks 81 hardcoded unit tests in lua54_decoder.rs and lib.rs (test_decode_call, test_decode_jmp, test_decode_return, test_forloop, etc.) that bake in legacy opcode numbers. Coordinated refactor of those tests and any external opcode-number consumers (lua_cfg branch ranges already updated) is required, out of scope for this single-crate comparison run. Reverted to preserve green test suite; mismatch logged."
+  ],
+  "validator_result": {
+    "saved": true,
+    "checks": [
+      "detect_version Lua51",
+      "detect_version Lua54",
+      "detect_version rejects non-Lua",
+      "legacy iABC decode",
+      "legacy iAsBx round-trip",
+      "lua54 iABC decode",
+      "lua54 isJ round-trip",
+      "opcode counts table",
+      "lua54 op mask is 7 bits",
+      "lua54 minimum header length sanity"
+    ]
+  },
+  "crate_state": {
+    "LUA51_OPCODES_len": 38,
+    "LUA52_OPCODES_len": 41,
+    "LUA53_OPCODES_len": 47,
+    "LUA54_OPCODES_len": 81,
+    "expected_LUA54_OPCODES_len": 83,
+    "MAXARG_SBX_OLD": 131071,
+    "MAXARG_SJ": 16777215
+  }
+}

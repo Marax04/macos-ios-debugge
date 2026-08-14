@@ -1,0 +1,26 @@
+[package]
+license.workspace = true
+name = "rustre-script"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+rustre-script-lua = { path = "../rustre-script-lua" }
+rustre-script-python = { path = "../rustre-script-python" }
+rustre-script-rhai = { path = "../rustre-script-rhai" }
+
+[lints]
+workspace = true

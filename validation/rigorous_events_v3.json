@@ -1,0 +1,9 @@
+{
+  "category": "events",
+  "note": "All 97 events_* MCP tools were already covered by rigorous_events.json (12 tools) and rigorous_events_v2.json (101 entries, 97 unique tools). No remaining tools to harden.",
+  "tools_hardened": 0,
+  "tools_passed": 0,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": []
+}

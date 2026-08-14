@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-core",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": "Per validation/reports/rustre-core.md (section 'Existing MCP Tools'): no MCP tool in rustre-mcp-tools exposes rustre-core pure functions (LEB128, endian swap, RVA resolve, segment translation, permissions, topo-sort) directly. Grep over crates/rustre-mcp-tools confirms zero references to leb128/swap_endian/rva_resolve/permissions_as_rwx/topological_order. The validator (validation/validators/rustre-core.py) is therefore an oracle for in-crate Rust unit tests, not for an MCP-vs-validator comparison. No comparison cases exist to drive; no fixes applied."
+}

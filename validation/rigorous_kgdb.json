@@ -1,0 +1,30 @@
+{
+  "module": "kgdb",
+  "tools_hardened": [
+    "kgdb_bytes_to_hex",
+    "kgdb_decode_hex_buf",
+    "kgdb_encode_hex_buf",
+    "kgdb_gdb_packet_parse",
+    "kgdb_gdb_packet_to_wire",
+    "kgdb_hex_le_to_u64",
+    "kgdb_hex_to_bytes",
+    "kgdb_is_kernel_address",
+    "kgdb_page_align",
+    "kgdb_parse_qsupported",
+    "kgdb_read_u64_le_hex",
+    "kgdb_rsp_checksum",
+    "kgdb_rsp_checksum_bytes",
+    "kgdb_rsp_encode_packet_bytes",
+    "kgdb_rsp_escape",
+    "kgdb_rsp_unescape",
+    "kgdb_rsp_verify_checksum_bytes",
+    "kgdb_u32_to_hex_le",
+    "kgdb_u64_to_hex_le",
+    "kgdb_verify_rsp_checksum"
+  ],
+  "tools_hardened_count": 20,
+  "checks_passed": 93,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

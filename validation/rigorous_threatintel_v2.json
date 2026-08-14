@@ -1,0 +1,335 @@
+{
+  "category": "threatintel",
+  "tools_hardened": 44,
+  "tools_passed": 36,
+  "tools_failed": 0,
+  "tools_skipped": 8,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "threatintel_ioc_type_display_w3[md5]",
+      "status": "PASS",
+      "expected": {
+        "display": "MD5"
+      },
+      "actual": {
+        "input": "md5",
+        "display": "MD5",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[sha1]",
+      "status": "PASS",
+      "expected": {
+        "display": "SHA-1"
+      },
+      "actual": {
+        "input": "sha1",
+        "display": "SHA-1",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[sha256]",
+      "status": "PASS",
+      "expected": {
+        "display": "SHA-256"
+      },
+      "actual": {
+        "input": "sha256",
+        "display": "SHA-256",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[sha512]",
+      "status": "PASS",
+      "expected": {
+        "display": "SHA-512"
+      },
+      "actual": {
+        "input": "sha512",
+        "display": "SHA-512",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[ip]",
+      "status": "PASS",
+      "expected": {
+        "display": "IP"
+      },
+      "actual": {
+        "input": "ip",
+        "display": "IP",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[domain]",
+      "status": "PASS",
+      "expected": {
+        "display": "Domain"
+      },
+      "actual": {
+        "input": "domain",
+        "display": "Domain",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[url]",
+      "status": "PASS",
+      "expected": {
+        "display": "URL"
+      },
+      "actual": {
+        "input": "url",
+        "display": "URL",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[email]",
+      "status": "PASS",
+      "expected": {
+        "display": "Email"
+      },
+      "actual": {
+        "input": "email",
+        "display": "Email",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[registry]",
+      "status": "PASS",
+      "expected": {
+        "display": "Registry"
+      },
+      "actual": {
+        "input": "registry",
+        "display": "Registry",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[filename]",
+      "status": "PASS",
+      "expected": {
+        "display": "Filename"
+      },
+      "actual": {
+        "input": "filename",
+        "display": "Filename",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[mutex]",
+      "status": "PASS",
+      "expected": {
+        "display": "Mutex"
+      },
+      "actual": {
+        "input": "mutex",
+        "display": "Mutex",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_ioc_type_display_w3[yara]",
+      "status": "PASS",
+      "expected": {
+        "display": "YARA"
+      },
+      "actual": {
+        "input": "yara",
+        "display": "YARA",
+        "source": "rustre_threatintel::IocType::Display"
+      }
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[0]",
+      "status": "PASS",
+      "expected": "very_low",
+      "actual": "Very Low"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[10]",
+      "status": "PASS",
+      "expected": "very_low",
+      "actual": "Very Low"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[19]",
+      "status": "PASS",
+      "expected": "very_low",
+      "actual": "Very Low"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[20]",
+      "status": "PASS",
+      "expected": "low",
+      "actual": "Low"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[39]",
+      "status": "PASS",
+      "expected": "low",
+      "actual": "Low"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[40]",
+      "status": "PASS",
+      "expected": "moderate",
+      "actual": "Moderate"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[59]",
+      "status": "PASS",
+      "expected": "moderate",
+      "actual": "Moderate"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[60]",
+      "status": "PASS",
+      "expected": "high",
+      "actual": "High"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[79]",
+      "status": "PASS",
+      "expected": "high",
+      "actual": "High"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[80]",
+      "status": "PASS",
+      "expected": "very_high",
+      "actual": "Very High"
+    },
+    {
+      "tool": "threatintel_confidence_tier_from_score[100]",
+      "status": "PASS",
+      "expected": "very_high",
+      "actual": "Very High"
+    },
+    {
+      "tool": "threatintel_confidence_tier_lower_bound",
+      "status": "PASS",
+      "expected": {
+        "VeryLow": 0,
+        "Low": 20,
+        "Moderate": 40,
+        "High": 60,
+        "VeryHigh": 80
+      },
+      "actual": {
+        "tiers": [
+          {
+            "tier": "Very Low",
+            "lower_bound": 0
+          },
+          {
+            "tier": "Low",
+            "lower_bound": 20
+          },
+          {
+            "tier": "Moderate",
+            "lower_bound": 40
+          },
+          {
+            "tier": "High",
+            "lower_bound": 60
+          },
+          {
+            "tier": "Very High",
+            "lower_bound": 80
+          }
+        ],
+        "source": "rustre_threatintel::ConfidenceTier::lower_bound"
+      }
+    },
+    {
+      "tool": "threatintel_confidence_decay_score_at_age[1.0,86400.0,86400.0]",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5
+    },
+    {
+      "tool": "threatintel_confidence_decay_score_at_age[0.8,3600.0,0.0]",
+      "status": "PASS",
+      "expected": 0.8,
+      "actual": 0.8
+    },
+    {
+      "tool": "threatintel_confidence_decay_score_at_age[1.0,3600.0,36000.0]",
+      "status": "PASS",
+      "expected": 0.000977,
+      "actual": 0.0009765625
+    },
+    {
+      "tool": "threatintel_confidence_decay_pct_at_age[1.0,86400.0,86400.0]",
+      "status": "PASS",
+      "expected": 50,
+      "actual": 50
+    },
+    {
+      "tool": "threatintel_confidence_decay_pct_at_age[0.8,3600.0,0.0]",
+      "status": "PASS",
+      "expected": 80,
+      "actual": 80
+    },
+    {
+      "tool": "threatintel_campaign_duration_secs[1000000,1100000]",
+      "status": "PASS",
+      "expected": 100000,
+      "actual": 100000
+    },
+    {
+      "tool": "threatintel_campaign_duration_secs[500,1000]",
+      "status": "PASS",
+      "expected": 500,
+      "actual": 500
+    },
+    {
+      "tool": "threatintel_db_is_empty_w3",
+      "status": "PASS",
+      "expected": {
+        "len": 0,
+        "is_empty": true
+      },
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "source": "rustre_threatintel::ThreatIndicatorDatabase"
+      }
+    },
+    {
+      "tool": "threatintel_confidence_clamp_w3[2.5]",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "threatintel_confidence_clamp_w3[-0.5]",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "threatintel_confidence_clamp_w3[0.7]",
+      "status": "PASS",
+      "expected": 0.7,
+      "actual": 0.699999988079071
+    },
+    {
+      "tool": "threatintel_campaign_unique_tactics",
+      "status": "PASS",
+      "expected": 3,
+      "actual": 3
+    }
+  ]
+}

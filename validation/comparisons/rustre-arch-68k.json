@@ -1,0 +1,12 @@
+{
+  "crate": "rustre-arch-68k",
+  "mcp_tool": null,
+  "note": "No m68k-specific MCP tool; validator extracts fn names from report. Compared against pub fn in crate source.",
+  "validator_functions": 46,
+  "source_pub_fns": 293,
+  "missing_in_source": [],
+  "tests": 46,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-il-llil",
+  "status": "no_mcp_surface",
+  "note": "rustre-il-llil is a library-only crate. No tools in rustre-mcp-tools/src/wire_tools.rs reference 'il_llil' or 'llil_'. Report explicitly states: 'None. Grep over crates/rustre-mcp-tools/src/ for llil / il_llil returns no matches.' No MCP-vs-validator comparison possible without first exposing wire tools.",
+  "mcp_outputs": [],
+  "validator_outputs": [
+    {"function": "self_test", "registered_validators": 22, "internal_checks_passed": 10, "internal_checks_failed": 0}
+  ],
+  "mismatches": [],
+  "suggested_followup": "Expose function_to_json, function_to_dot, build_ssa, liveness_analysis, LlilConcreteInterpreter::run as MCP tools, then re-run comparison."
+}

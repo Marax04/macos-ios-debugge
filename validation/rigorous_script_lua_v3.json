@@ -1,0 +1,356 @@
+{
+  "category": "script_lua",
+  "validator_version": "v3",
+  "tools_hardened": 39,
+  "tools_passed": 39,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "results": [
+    {
+      "tool": "script_lua_casts_u64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 18446744073709551615
+      },
+      "expected": -1,
+      "actual": -1
+    },
+    {
+      "tool": "script_lua_casts_u64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "script_lua_casts_u64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 100
+      },
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "tool": "script_lua_casts_usize_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 42
+      },
+      "expected": 42,
+      "actual": 42
+    },
+    {
+      "tool": "script_lua_casts_usize_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "script_lua_casts_i64_to_u64",
+      "status": "PASS",
+      "args": {
+        "value": -1
+      },
+      "expected": 18446744073709551615,
+      "actual": 18446744073709551615
+    },
+    {
+      "tool": "script_lua_casts_i64_to_u64",
+      "status": "PASS",
+      "args": {
+        "value": 42
+      },
+      "expected": 42,
+      "actual": 42
+    },
+    {
+      "tool": "script_lua_casts_u64_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "script_lua_casts_u64_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 1
+      },
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "script_lua_casts_u64_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 4
+      },
+      "expected": 4.0,
+      "actual": 4.0
+    },
+    {
+      "tool": "script_lua_casts_i64_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "script_lua_casts_i64_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 8
+      },
+      "expected": 8.0,
+      "actual": 8.0
+    },
+    {
+      "tool": "script_lua_casts_f64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 3.7
+      },
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "script_lua_casts_f64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": 0.0
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "script_lua_casts_f64_to_i64",
+      "status": "PASS",
+      "args": {
+        "value": -5.9
+      },
+      "expected": -5,
+      "actual": -5
+    },
+    {
+      "tool": "script_lua_casts_usize_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 0
+      },
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "script_lua_casts_usize_to_f64",
+      "status": "PASS",
+      "args": {
+        "value": 16
+      },
+      "expected": 16.0,
+      "actual": 16.0
+    },
+    {
+      "tool": "script_lua_casts_i64_to_u32",
+      "status": "PASS",
+      "args": {
+        "value": -1
+      },
+      "expected": 4294967295,
+      "actual": 4294967295
+    },
+    {
+      "tool": "script_lua_casts_i64_to_u32",
+      "status": "PASS",
+      "args": {
+        "value": 256
+      },
+      "expected": 256,
+      "actual": 256
+    },
+    {
+      "tool": "script_lua_casts_i64_to_i32",
+      "status": "PASS",
+      "args": {
+        "value": -1
+      },
+      "expected": -1,
+      "actual": -1
+    },
+    {
+      "tool": "script_lua_casts_i64_to_i32",
+      "status": "PASS",
+      "args": {
+        "value": 4294967297
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "script_lua_casts_i64_to_usize",
+      "status": "PASS",
+      "args": {
+        "value": -1
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "script_lua_casts_i64_to_usize",
+      "status": "PASS",
+      "args": {
+        "value": 42
+      },
+      "expected": 42,
+      "actual": 42
+    },
+    {
+      "tool": "script_lua_casts_u64_to_usize",
+      "status": "PASS",
+      "args": {
+        "value": 100
+      },
+      "expected": 100,
+      "actual": 100
+    },
+    {
+      "tool": "script_lua_calculate_entropy",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "script_lua_calculate_entropy_uniform",
+      "status": "PASS",
+      "expected": 8.0,
+      "actual": 8.0
+    },
+    {
+      "tool": "script_lua_nop_sled",
+      "status": "PASS",
+      "expected": {
+        "hex": "9090909090909090",
+        "length": 8
+      },
+      "actual": {
+        "length": 8,
+        "hex": "9090909090909090",
+        "source": "rustre_script_lua::lua_nop_sled"
+      }
+    },
+    {
+      "tool": "script_lua_detect_format",
+      "status": "PASS",
+      "args": {
+        "data_hex": "4d5a9000"
+      },
+      "expected": "PE",
+      "actual": "PE"
+    },
+    {
+      "tool": "script_lua_detect_format",
+      "status": "PASS",
+      "args": {
+        "data_hex": "7f454c46"
+      },
+      "expected": "ELF",
+      "actual": "ELF"
+    },
+    {
+      "tool": "script_lua_detect_format",
+      "status": "PASS",
+      "args": {
+        "data_hex": ""
+      },
+      "expected": "Unknown",
+      "actual": "Unknown"
+    },
+    {
+      "tool": "script_lua_jmp_patch",
+      "status": "PASS",
+      "expected": "e9fb0f0000",
+      "actual": "e9fb0f0000"
+    },
+    {
+      "tool": "script_lua_ret_patch",
+      "status": "PASS",
+      "expected": {
+        "bytes_hex": "c3",
+        "len": 1
+      },
+      "actual": {
+        "bytes_hex": "c3",
+        "len": 1,
+        "source": "rustre_script_lua::lua_ret_patch"
+      }
+    },
+    {
+      "tool": "script_lua_match_hex_pattern",
+      "status": "PASS",
+      "expected": {
+        "hits": [
+          0
+        ],
+        "count": 1
+      },
+      "actual": {
+        "hits": [
+          0
+        ],
+        "count": 1,
+        "source": "rustre_script_lua::lua_match_hex_pattern"
+      }
+    },
+    {
+      "tool": "script_lua_template_find_xrefs",
+      "status": "PASS",
+      "expected": "-- Find xrefs to 0x1000\nlocal results = get_xrefs_to(0x1000)\nprint('Total: ' .. #results)\n",
+      "actual": "-- Find xrefs to 0x1000\nlocal results = get_xrefs_to(0x1000)\nprint('Total: ' .. #results)\n"
+    },
+    {
+      "tool": "script_lua_template_extract_strings",
+      "status": "PASS",
+      "expected": "-- Extract strings\nlocal strings = find_strings(4)\nprint('Total strings: ' .. #strings)\n",
+      "actual": "-- Extract strings\nlocal strings = find_strings(4)\nprint('Total strings: ' .. #strings)\n"
+    },
+    {
+      "tool": "script_lua_template_dump_functions",
+      "status": "PASS",
+      "expected": "-- Dump functions\nfor _, f in ipairs(list_functions()) do\n  print(f.name)\nend\n",
+      "actual": "-- Dump functions\nfor _, f in ipairs(list_functions()) do\n  print(f.name)\nend\n"
+    },
+    {
+      "tool": "script_lua_template_patch_pattern",
+      "status": "PASS",
+      "actual": "-- Patch pattern\nlocal from = { 0xde, 0xad, 0xbe, 0xef }\nlocal to = { 0x90, 0x90"
+    },
+    {
+      "tool": "script_lua_context_output_text",
+      "status": "PASS",
+      "expected": "hello",
+      "actual": "hello"
+    },
+    {
+      "tool": "script_lua_execute_script",
+      "status": "PASS",
+      "actual": {
+        "ok": true,
+        "result": "nil",
+        "type": "nil",
+        "output": "5",
+        "steps": 6,
+        "source": "rustre_script_lua::LuaEngine::execute"
+      }
+    }
+  ],
+  "mismatches": []
+}

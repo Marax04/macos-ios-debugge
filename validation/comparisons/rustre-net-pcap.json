@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-net-pcap",
+  "tests": 6,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-net-pcap (verificato grep su crates/rustre-mcp-tools: nessun riferimento a pcap/net_pcap/net-pcap). Il crate fornisce parser PCAP/PCAPNG ma non e' esposto via JSON-RPC stdio dal binario rustre-mcp.exe. Validator Python eseguito con successo (6 check strutturali: pcap_roundtrip, pcapng_roundtrip, linktype_enum, invalid_magic, buffer_too_short, bpf_ops_constants) - tutti passati. Confronto MCP-vs-validator non eseguibile finche' non viene esposto un tool tipo net_pcap_parse_path / net_pcap_read_records. Stesso pattern di rustre-arch-bpf.",
+  "validator_output": {"crate": "rustre-net-pcap", "saved": true},
+  "gap": "missing_mcp_tool:net_pcap_parse_path"
+}

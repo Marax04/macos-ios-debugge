@@ -1,0 +1,391 @@
+{
+  "results": [
+    {
+      "tool": "triage_entropy_shannon_f32_bytes",
+      "input": "dead",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_f32_bytes",
+      "input": "uniform",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_shannon_f32_bytes",
+      "input": "zeros",
+      "expected": -0.0,
+      "actual": -0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify_bytes",
+      "input": "dead",
+      "expected": "Text",
+      "actual": "Text",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify_bytes",
+      "input": "zeros",
+      "expected": "Empty",
+      "actual": "Empty",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_classify_bytes",
+      "input": "uniform",
+      "expected": "Random",
+      "actual": "Random",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_bytes",
+      "input": "dead",
+      "expected": "Medium",
+      "actual": "Medium",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_bytes",
+      "input": "zeros",
+      "expected": "VeryLow",
+      "actual": "VeryLow",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_from_bytes",
+      "input": "uniform",
+      "expected": "VeryHigh",
+      "actual": "VeryHigh",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=0.0",
+      "expected": "Empty",
+      "actual": "Empty",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=2.0",
+      "expected": "Text",
+      "actual": "Text",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=4.5",
+      "expected": "Code",
+      "actual": "Code",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=5.5",
+      "expected": "Data",
+      "actual": "Data",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=6.5",
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=7.2",
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "input": "entropy=7.8",
+      "expected": "Random",
+      "actual": "Random",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_display_from_entropy",
+      "input": "entropy=0.5",
+      "expected": "VeryLow",
+      "actual": "VeryLow",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_display_from_entropy",
+      "input": "entropy=2.0",
+      "expected": "Low",
+      "actual": "Low",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_display_from_entropy",
+      "input": "entropy=4.0",
+      "expected": "Medium",
+      "actual": "Medium",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_display_from_entropy",
+      "input": "entropy=6.0",
+      "expected": "High",
+      "actual": "High",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_rating_display_from_entropy",
+      "input": "entropy=7.5",
+      "expected": "VeryHigh",
+      "actual": "VeryHigh",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_packed_bytes",
+      "input": "zeros_H=0",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_packed_bytes",
+      "input": "dead_H=3",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_packed_bytes",
+      "input": "uniform_H=8",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_encrypted_bytes",
+      "input": "zeros",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_encrypted_bytes",
+      "input": "dead",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_section_is_encrypted_bytes",
+      "input": "uniform",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_chi_square_bytes",
+      "input": "zeros",
+      "expected": 2040.0,
+      "actual": 2040.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_chi_square_bytes",
+      "input": "dead",
+      "expected": 248.0,
+      "actual": 248.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_chi_square_bytes",
+      "input": "uniform",
+      "expected": 0.0,
+      "actual": 0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_count_of_bytes",
+      "input": "count(0x00) in [0,1,0,2,0,3]",
+      "expected": 3,
+      "actual": 3,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_analyzer_new",
+      "input": "chunk_size=512",
+      "expected": 512,
+      "actual": 512,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_heuristic_has_overlay",
+      "input": "MZ_64bytes",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_heuristic_has_overlay",
+      "input": "zeros_8bytes",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_packer_compute_entropy",
+      "input": "dead",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_packer_compute_entropy",
+      "input": "zeros",
+      "expected": -0.0,
+      "actual": -0.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_packer_compute_entropy",
+      "input": "uniform",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_match_condition_single",
+      "input": "StringPresent(MZ) in 4d5a",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_match_condition_single",
+      "input": "StringPresent(MZ) in deadbeef",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_match_rule_condition_single",
+      "input": "All([MZ]) in MZ",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_match_rule_condition_single",
+      "input": "Any([MZ,PE]) in MZ-only",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_match_rule_condition_single",
+      "input": "All([MZ,PE]) in MZ-only",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_die_builtin_rules_yaml_len",
+      "input": "no_input",
+      "expected": "bytes>100,lines>10",
+      "actual": {
+        "bytes": 4166,
+        "lines": 224
+      },
+      "pass": true
+    },
+    {
+      "tool": "triage_die_signature_database_entry_count",
+      "input": "no_input",
+      "expected": ">=0",
+      "actual": 23,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_result_overall_bytes",
+      "input": "dead",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_result_overall_bytes",
+      "input": "uniform",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_report_generate_bytes",
+      "input": "dead_entropy",
+      "expected": 3.0,
+      "actual": 3.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_report_generate_bytes",
+      "input": "dead_category",
+      "expected": "Text",
+      "actual": "Text",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_report_generate_bytes",
+      "input": "uniform_entropy",
+      "expected": 8.0,
+      "actual": 8.0,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_report_generate_bytes",
+      "input": "uniform_category",
+      "expected": "Random",
+      "actual": "Random",
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_most_common_bytes",
+      "input": "AA*4+BB*2+CC*1,count=1",
+      "expected": {
+        "byte": 170,
+        "count": 4
+      },
+      "actual": {
+        "byte": 170,
+        "count": 4
+      },
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_is_random_bytes",
+      "input": "uniform_chi=0",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "tool": "triage_entropy_histogram_is_random_bytes",
+      "input": "zeros",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    }
+  ],
+  "mismatches": [],
+  "summary": {
+    "total": 53,
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0
+  }
+}

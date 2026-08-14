@@ -1,0 +1,38 @@
+[
+  {
+    "tool": "yara_engine_parse_rule",
+    "reason": "TOOL_ERROR: requires valid YARA rule text with specific parse constraints; fails on generic input"
+  },
+  {
+    "tool": "yara_error_display",
+    "reason": "TOOL_ERROR: invalid params; requires specific error struct fields not available via JSON schema"
+  },
+  {
+    "tool": "yara_parser_parse_condition_section_wire",
+    "reason": "TOOL_ERROR: parse error on generic body; requires full condition: section preamble"
+  },
+  {
+    "tool": "yara_engine_scan_bytes",
+    "reason": "NONDETERMINISTIC: scans with a dummy stub rule; match list depends on internal stub state"
+  },
+  {
+    "tool": "yara_engine_builtin_rules_count_wire2",
+    "reason": "NONDETERMINISTIC: builtin rule count is internal and may change between builds"
+  },
+  {
+    "tool": "yara_engine_pe_module_from_bytes_wire3",
+    "reason": "COMPLEX: requires live PE binary bytes from TARGET; cannot independently reconstruct ext_count"
+  },
+  {
+    "tool": "yara_engine_elf_module_from_bytes_wire3",
+    "reason": "COMPLEX: requires live ELF binary bytes; cannot independently reconstruct ext_count"
+  },
+  {
+    "tool": "yara.scan_file",
+    "reason": "NONDETERMINISTIC: match results depend on internal loaded ruleset state; cannot predict which builtin rules fire on a given binary"
+  },
+  {
+    "tool": "yara.scan_memory",
+    "reason": "REQUIRES_IMAGE_ID: needs a live memory image_id from a running process; not obtainable in offline validation"
+  }
+]

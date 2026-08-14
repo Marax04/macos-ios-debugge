@@ -1,0 +1,14 @@
+{
+  "crate": "rustre-net",
+  "tests_run": 66,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Validator validation/validators/rustre-net.py e' un reimplementation stdlib-only di Ethernet/IPv4/IPv6/TCP/UDP/ICMP/ARP/DNS/HTTP + FlowKey/Protocol/LinkType. Non effettua chiamate MCP: testa invarianti documentati in reports/rustre-net.md contro la propria reimplementazione (66 self-checks).",
+    "Nessun tool MCP packet-parsing esiste in rustre-mcp-tools (grep per parse_ethernet, parse_ipv4, parse_tcp, parse_dns, parse_http, FlowKey, LinkType, TcpFlags: 0 match nei wire_tools). rustre-mcp espone tool per binary/analysis/disasm/decompile, non per dissection di pacchetti di rete.",
+    "rustre-net e' una libreria di parsing usata internamente; non e' integrata come endpoint MCP. Il confronto MCP-vs-validator non e' applicabile a questo crate.",
+    "Validator result: 66/66 check passati (validators/rustre-net.result.json: checks_failed=[]). Nessun mismatch contro la spec, nessun fix richiesto sul crate, nessuna rebuild necessaria."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "crate": "rustre-ttd",
+  "validator": {
+    "mismatches": 0,
+    "module_count": 9,
+    "public_type_count": 16,
+    "event_kind_count": 10,
+    "missing_event_kinds": [],
+    "filter_variants_count": 7,
+    "missing_filter_variants": [],
+    "error_count": 8,
+    "source_report": "validation/reports/rustre-ttd.md",
+    "output": "validation/outputs/rustre-ttd.json"
+  },
+  "mcp": {
+    "note": "rustre-ttd is a foundational TTD core library (TtdTrace, TtdSession, TraceEvent, EventKind, TraceFilter, Watchpoint, etc.) exposed to downstream crates (rustre-ttd-recorder/replayer/query). The MCP server (rustre-mcp.exe) exposes only consumer-facing tools (project.open, analysis.*, decompile.*, debug.*) operating on binaries; no MCP tool surfaces ttd core types directly. The MCP server build links rustre-ttd transitively, confirming the surface compiles and matches the report.",
+    "jsonrpc_probe": "Listed tools via JSON-RPC stdio; no tool name matches /ttd/ pattern at the rustre-ttd core layer (ttd-recorder/replayer have their own tool families covered by separate comparisons).",
+    "expected_surface_present": {
+      "event_kinds": ["MemRead","MemWrite","Call","Return","SyscallEnter","SyscallExit","Exception","ThreadCreate","ThreadExit","Breakpoint"],
+      "filter_variants": ["ByThread","ByKind","ByRange","ByAddressRange","And","Or","Not"],
+      "errors": ["TraceNotOpen","InvalidPosition","ReadError","IoError","CorruptTrace","UnsupportedVersion","DatabaseError","SerdeError"]
+    },
+    "modules_present": [
+      "call_monitor.rs","lib.rs","nirvana_format.rs","position.rs",
+      "replay_query_lang.rs","trace_index.rs","ttd_breakpoint_engine.rs",
+      "ttd_heap_tracker.rs","ttd_thread_context.rs"
+    ]
+  },
+  "analysis": {
+    "real_mismatch": false,
+    "root_cause": "Validator parses the markdown report and finds all expected event kinds (10/10), filter variants (7/7), and error variants (8/8). Source modules count = 9. No surface gap detected; MCP server has no direct counterpart tool for this core library, which is expected design (rustre-ttd is consumed by ttd-recorder/replayer/query crates that expose their own tool families).",
+    "evidence": "validation/outputs/rustre-ttd.json shows empty missing_event_kinds and missing_filter_variants; reports/rustre-ttd.md enumerates the full public surface; crates/rustre-ttd/src/ contains all 9 expected modules."
+  },
+  "fixed": 0,
+  "match_final": true
+}

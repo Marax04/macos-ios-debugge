@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-debug-kgdb",
+  "tests": 14,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "notes": "Validator is self-contained (RSP/KD/DR7/kallsyms/iomem helpers). All 14 self-tests pass. MCP server (rustre-mcp wire_tools.rs) does not expose rustre-debug-kgdb tools, so there is no MCP surface to compare against. The crate exists in workspace (crates/rustre-debug-kgdb) but its functionality is not wired into MCP tools; comparison is between validator and itself baseline.",
+  "validator_path": "C:/Users/Fra/Desktop/RustRE/validation/validators/rustre-debug-kgdb.py",
+  "mcp_tools_found": []
+}

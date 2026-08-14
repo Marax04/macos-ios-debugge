@@ -1,0 +1,118 @@
+[
+  {
+    "tool": "rustre_decompiler_mem_operand_parse",
+    "reason": "Parses Rust IL syntax \u2014 output depends on internal parser; no simple Python reference"
+  },
+  {
+    "tool": "rustre_decompiler_callconv_arch_from_str",
+    "reason": "SKIP: enum mapping verified indirectly; nondeterministic output format"
+  },
+  {
+    "tool": "rustre_decompiler_load_binary_info",
+    "reason": "SKIP: requires binary file on disk; result varies by environment"
+  },
+  {
+    "tool": "rustre_decompiler_detect_functions_path",
+    "reason": "SKIP: requires binary file on disk"
+  },
+  {
+    "tool": "rustre_symbols_v3_pdb_server_url",
+    "reason": "SKIP: URL construction depends on hash/guid input format details"
+  },
+  {
+    "tool": "rustre_symb_bv_const",
+    "reason": "SKIP: BitVec symbolic expression display format not independently computable"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_add",
+    "reason": "SKIP: symbolic expression tree display format not independently computable"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_and",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_or",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_xor",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_sub",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symbolic_not",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_fresh_sym_id",
+    "reason": "SKIP: nondeterministic counter"
+  },
+  {
+    "tool": "rustre_symb_v2_symexpr_eq",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symexpr_ugt",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symexpr_uge",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symexpr_extract",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_v2_symexpr_ite",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_simplify_add",
+    "reason": "SKIP: simplifier output format"
+  },
+  {
+    "tool": "rustre_symb_simplify_xor",
+    "reason": "SKIP: simplifier output format"
+  },
+  {
+    "tool": "rustre_symb_simplify_not",
+    "reason": "SKIP: simplifier output format"
+  },
+  {
+    "tool": "rustre_symb_type_width",
+    "reason": "SKIP: symbolic type widths vary"
+  },
+  {
+    "tool": "rustre_symb_expr_width",
+    "reason": "SKIP: symbolic expr"
+  },
+  {
+    "tool": "rustre_symb_eval_concrete",
+    "reason": "SKIP: symbolic eval"
+  },
+  {
+    "tool": "rustre_symb_state_fork",
+    "reason": "SKIP: symbolic state"
+  },
+  {
+    "tool": "rustre_symb_path_conjunction",
+    "reason": "SKIP: symbolic path"
+  },
+  {
+    "tool": "rustre_symb_symwidth_info",
+    "reason": "SKIP: symbolic info"
+  },
+  {
+    "tool": "rustre_symb_spec_eval",
+    "reason": "SKIP: spec eval"
+  },
+  {
+    "tool": "rustre_symb_spec_substitute",
+    "reason": "SKIP: spec substitute"
+  }
+]

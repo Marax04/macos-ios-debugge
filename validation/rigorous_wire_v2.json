@@ -1,0 +1,26 @@
+[
+  {
+    "tool": "wire_bytes_len",
+    "status": "PASS",
+    "expected": 8,
+    "actual": 8
+  },
+  {
+    "tool": "wire_bytes_hex_encode",
+    "status": "PASS",
+    "expected": "deadbeef00112233",
+    "actual": "deadbeef00112233"
+  },
+  {
+    "tool": "wire_echo_string",
+    "status": "PASS",
+    "expected": "hello, 世界",
+    "actual": "hello, 世界"
+  },
+  {
+    "tool": "wire_string_len",
+    "status": "PASS",
+    "expected": 13,
+    "actual": 13
+  }
+]

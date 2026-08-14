@@ -1,0 +1,9 @@
+{
+  "category": "flirt",
+  "tools_hardened": 6,
+  "tools_passed": 23,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "notes": "v3 hardens 6 remaining flirt-category tools: flirt_gen_sig_trie_branch_encode_wire, flirt_gen_sig_trie_node_encode_leaf_wire, decomp_symbol_map_from_flirt, decomp_symbol_map_from_flirt_pairs_dcx1, events_ext_bus_send_flirt_match, rlib_dec_symbol_map_from_flirt_pairs. All 6 tools have independently computed expected values."
+}

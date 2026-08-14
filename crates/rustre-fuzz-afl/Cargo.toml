@@ -1,0 +1,27 @@
+[package]
+name = "rustre-fuzz-afl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-fuzz provides the shared primitives (Corpus, CoverageMap, FuzzInput,
+# TargetExecutor, fnv1a, ...) that this backend builds on. The hub crate
+# (rustre-fuzz) re-exports our AflFuzzer through its registry, so the
+# dependency edge is: rustre-fuzz-afl -> rustre-fuzz for primitives, and
+# rustre-fuzz -> rustre-fuzz-afl only via the hub's optional `backends`
+# feature so that this leaf compiles standalone.
+rustre-fuzz = { path = "../rustre-fuzz", default-features = false }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+rayon.workspace = true
+
+[lints]
+workspace = true

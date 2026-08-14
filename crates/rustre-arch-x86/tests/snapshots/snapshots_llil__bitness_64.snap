@@ -1,0 +1,58 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 309
+expression: "render_corpus(\"bitness corpus lifted in 64-bit mode\", 64, corpus)"
+---
+# bitness corpus lifted in 64-bit mode
+
+== push 0x55 (bits=64) ==
+-- push 55h [6a 55]
+   0x1000: push.8 0x55.8
+
+== push rax (bits=64) ==
+-- push rax [50]
+   0x1000: push.8 rax.8
+
+== pop rbx (bits=64) ==
+-- pop rbx [5b]
+   0x1000: rbx.8 = pop
+
+== mov eax, ecx (bits=64) ==
+-- mov eax,ecx [89 c8]
+   0x1000: rax.8 = zx(low(rcx.8, 4), 4->8)
+
+== add eax, ebx (bits=64) ==
+-- add eax,ebx [01 d8]
+   0x1000: tmp0.4 = (low(rax.8, 4) + low(rbx.8, 4)).4
+   0x1000: flag(cf) = (tmp0.4 <u low(rax.8, 4))
+   0x1000: flag(of) = (((low(rax.8, 4) <s 0x0.4) == (low(rbx.8, 4) <s 0x0.4)) & ((tmp0.4 <s 0x0.4) != (low(rax.8, 4) <s 0x0.4))).1
+   0x1000: flag(af) = (((low(rax.8, 4) & 0xf.4).4 + (low(rbx.8, 4) & 0xf.4).4).4 >u 0xf.4)
+   0x1000: flag(sf) = (tmp0.4 <s 0x0.4)
+   0x1000: flag(zf) = (tmp0.4 == 0x0.4)
+   0x1000: flag(pf) = parity(tmp0.4).1
+   0x1000: rax.8 = zx(tmp0.4, 4->8)
+
+== call +0x100 (bits=64) ==
+-- call 0000000000001105h [e8 00 01 00 00]
+   0x1000: call 0x1105.8
+
+== ret (bits=64) ==
+-- ret [c3]
+   0x1000: ret
+
+== mov eax, [rbx] (bits=64) ==
+-- mov eax,[rbx] [8b 03]
+   0x1000: rax.8 = zx([rbx.8].4, 4->8)
+
+== lea eax, [rbx+rcx*4+8] (bits=64) ==
+-- lea eax,[rbx+rcx*4+8] [8d 44 8b 08]
+   0x1000: rax.8 = zx(low(((rbx.8 + (rcx.8 * 0x4.8).8).8 + 0x8.8).8, 4), 4->8)
+
+== xor eax, eax (bits=64) ==
+-- xor eax,eax [31 c0]
+   0x1000: rax.8 = zx(0x0.4, 4->8)
+   0x1000: flag(cf) = 0x0.1
+   0x1000: flag(of) = 0x0.1
+   0x1000: flag(sf) = 0x0.1
+   0x1000: flag(zf) = 0x1.1
+   0x1000: flag(pf) = 0x1.1

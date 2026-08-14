@@ -1,0 +1,13 @@
+{
+ "category": "ti_opencti",
+ "checks_total": 2,
+ "checks_passed": 1,
+ "mismatches": [
+  {
+   "tool": "confidence_clamp(150)",
+   "mcp": 100,
+   "truth": 150,
+   "note": "in range 0-255"
+  }
+ ]
+}

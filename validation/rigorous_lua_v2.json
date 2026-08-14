@@ -1,0 +1,1061 @@
+{
+  "category": "lua",
+  "tools_hardened": 91,
+  "tools_passed": 91,
+  "tools_failed": 0,
+  "tools_skipped": 8,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "lua_loader_is_bytecode[valid_51]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_is_bytecode[not_lua]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_is_bytecode[too_short]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_opcode_name[51_0]",
+      "passed": true,
+      "expected": "MOVE",
+      "actual": "MOVE"
+    },
+    {
+      "tool": "lua_loader_opcode_name[51_1]",
+      "passed": true,
+      "expected": "LOADK",
+      "actual": "LOADK"
+    },
+    {
+      "tool": "lua_loader_opcode_name[51_22]",
+      "passed": true,
+      "expected": "JMP",
+      "actual": "JMP"
+    },
+    {
+      "tool": "lua_loader_opcode_name[52_0]",
+      "passed": true,
+      "expected": "MOVE",
+      "actual": "MOVE"
+    },
+    {
+      "tool": "lua_loader_opcode_name[52_2]",
+      "passed": true,
+      "expected": "LOADKX",
+      "actual": "LOADKX"
+    },
+    {
+      "tool": "lua_loader_opcode_name[53_0]",
+      "passed": true,
+      "expected": "MOVE",
+      "actual": "MOVE"
+    },
+    {
+      "tool": "lua_loader_opcode_name[53_17]",
+      "passed": true,
+      "expected": "POW",
+      "actual": "POW"
+    },
+    {
+      "tool": "lua_loader_opcode_name[54_0]",
+      "passed": true,
+      "expected": "MOVE",
+      "actual": "MOVE"
+    },
+    {
+      "tool": "lua_loader_opcode_name[51_255]",
+      "passed": true,
+      "expected": "UNK",
+      "actual": "UNK"
+    },
+    {
+      "tool": "lua_bc_version_from_byte[0x51]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81
+      },
+      "actual": {
+        "display": "Lua 5.1",
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81,
+        "source": "rustre_loader_lua::LuaVersion::from_byte"
+      }
+    },
+    {
+      "tool": "lua_bc_version_from_byte[0x52]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 2,
+        "is_known": true,
+        "as_byte": 82
+      },
+      "actual": {
+        "display": "Lua 5.2",
+        "major": 5,
+        "minor": 2,
+        "is_known": true,
+        "as_byte": 82,
+        "source": "rustre_loader_lua::LuaVersion::from_byte"
+      }
+    },
+    {
+      "tool": "lua_bc_version_from_byte[0x53]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 3,
+        "is_known": true,
+        "as_byte": 83
+      },
+      "actual": {
+        "display": "Lua 5.3",
+        "major": 5,
+        "minor": 3,
+        "is_known": true,
+        "as_byte": 83,
+        "source": "rustre_loader_lua::LuaVersion::from_byte"
+      }
+    },
+    {
+      "tool": "lua_bc_version_from_byte[0x54]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84
+      },
+      "actual": {
+        "display": "Lua 5.4",
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84,
+        "source": "rustre_loader_lua::LuaVersion::from_byte"
+      }
+    },
+    {
+      "tool": "lua_bc_version_from_byte[0x0]",
+      "passed": true,
+      "expected": {
+        "major": 0,
+        "minor": 0,
+        "is_known": false,
+        "as_byte": 0
+      },
+      "actual": {
+        "display": "Lua unknown(0x00)",
+        "major": 0,
+        "minor": 0,
+        "is_known": false,
+        "as_byte": 0,
+        "source": "rustre_loader_lua::LuaVersion::from_byte"
+      }
+    },
+    {
+      "tool": "lua_bc_endian_from_byte[1]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_bc_endian_from_byte[0]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_bc_endian_from_byte[2]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_bc_endian_from_byte[255]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_bc_instr_decode[zero]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 0,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 0,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      }
+    },
+    {
+      "tool": "lua_bc_instr_decode[allones]",
+      "passed": true,
+      "expected": {
+        "opcode": 63,
+        "a": 255,
+        "b": 511,
+        "c": 511,
+        "bx": 262143,
+        "sbx": 131072
+      },
+      "actual": {
+        "opcode": 63,
+        "a": 255,
+        "b": 511,
+        "c": 511,
+        "bx": 262143,
+        "sbx": 131072
+      }
+    },
+    {
+      "tool": "lua_bc_instr_decode[MOVE_A1_B2]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 1,
+        "b": 2,
+        "c": 0,
+        "bx": 1024,
+        "sbx": -130047
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 1,
+        "b": 2,
+        "c": 0,
+        "bx": 1024,
+        "sbx": -130047
+      }
+    },
+    {
+      "tool": "lua_bc_loader_can_load[valid]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_bc_loader_can_load[not_lua]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_bc_opcode_layout[0x51_op0]",
+      "passed": true,
+      "expected": {
+        "opcode_name": "MOVE",
+        "has_layout": true
+      },
+      "actual": {
+        "layout": "Abc",
+        "opcode_name": "MOVE",
+        "source": "rustre_loader_lua::opcode_layout"
+      }
+    },
+    {
+      "tool": "lua_bc_opcode_layout[0x54_op0]",
+      "passed": true,
+      "expected": {
+        "opcode_name": "MOVE",
+        "has_layout": true
+      },
+      "actual": {
+        "layout": "Abc",
+        "opcode_name": "MOVE",
+        "source": "rustre_loader_lua::opcode_layout"
+      }
+    },
+    {
+      "tool": "lua_bc_proto_stats_mock[Lua51]",
+      "passed": true,
+      "expected": "non-stub response",
+      "actual": {
+        "proto_count": 1,
+        "instruction_count": 1,
+        "constant_count": 5,
+        "string_count": 1,
+        "number_count": 1,
+        "integer_count": 1,
+        "upvalue_count": 1,
+        "local_count": 1,
+        "display": "protos=1 instrs=1 consts=5 strings=1 nums=1 ints=1 upvals=1 locals=1",
+        "source": "rustre_loader_lua::ProtoStats::from_proto"
+      }
+    },
+    {
+      "tool": "lua_bc_disassemble_mock[Lua51]",
+      "passed": true,
+      "expected": "dict with lines",
+      "actual": {
+        "lines": [
+          "0000: RETURN      R0, 0, 0              ; line 1"
+        ],
+        "count": 1,
+        "source": "rustre_loader_lua::disassemble_proto"
+      }
+    },
+    {
+      "tool": "lua_bc_chunk_from_mock[Lua51]",
+      "passed": true,
+      "expected": "dict with chunk fields",
+      "actual": {
+        "name": "@test.lua",
+        "first_line": 0,
+        "last_line": 100,
+        "num_params": 0,
+        "is_vararg": true,
+        "max_stack": 8,
+        "constants_count": 5,
+        "functions_count": 0,
+        "instructions_count": 1,
+        "display": "LuaChunk '@test.lua' lines=0-100 params=0 instrs=1",
+        "source": "rustre_loader_lua::LuaChunk::from_proto"
+      }
+    },
+    {
+      "tool": "lua_bc_module_disasm_mock[Lua51]",
+      "passed": true,
+      "expected": "non-stub response",
+      "actual": {
+        "version": "Lua 5.1",
+        "proto_count": 1,
+        "flat_listing": [
+          "; === proto '@test.lua' [0-100] ===",
+          "  0000: RETURN      R0, 0, 0              ; line 1"
+        ],
+        "source": "rustre_loader_lua::ModuleDisasm::from_module"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_from_byte[Lua51]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81
+      },
+      "actual": {
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_from_byte[Lua54]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84
+      },
+      "actual": {
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_from_byte[Unknown_0x99]",
+      "passed": true,
+      "expected": {
+        "major": 9,
+        "minor": 9,
+        "is_known": false,
+        "as_byte": 153
+      },
+      "actual": {
+        "major": 9,
+        "minor": 9,
+        "is_known": false,
+        "as_byte": 153
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x51]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x52]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x53]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x54]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x0]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0xff]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_version_is_known[0x55]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_version_major_minor[0x51]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 1
+      },
+      "actual": {
+        "major": 5,
+        "minor": 1
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_major_minor[0x52]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 2
+      },
+      "actual": {
+        "major": 5,
+        "minor": 2
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_major_minor[0x53]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 3
+      },
+      "actual": {
+        "major": 5,
+        "minor": 3
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_major_minor[0x54]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 4
+      },
+      "actual": {
+        "major": 5,
+        "minor": 4
+      }
+    },
+    {
+      "tool": "lua_loader_lua_endian_from_byte[1]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_endian_from_byte[0]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_endian_from_byte[2]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_endian_from_byte[255]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_instr_decode[A=1]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 1,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 1,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      }
+    },
+    {
+      "tool": "lua_loader_lua_instr_decode[allones]",
+      "passed": true,
+      "expected": {
+        "opcode": 63,
+        "a": 255,
+        "b": 511,
+        "c": 511,
+        "bx": 262143,
+        "sbx": 131072
+      },
+      "actual": {
+        "opcode": 63,
+        "a": 255,
+        "b": 511,
+        "c": 511,
+        "bx": 262143,
+        "sbx": 131072
+      }
+    },
+    {
+      "tool": "lua_loader_lua_instr_decode[B=3]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 0,
+        "b": 3,
+        "c": 0,
+        "bx": 1536,
+        "sbx": -129535
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 0,
+        "b": 3,
+        "c": 0,
+        "bx": 1536,
+        "sbx": -129535
+      }
+    },
+    {
+      "tool": "lua_loader_is_lua_bytecode[valid_51]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_is_lua_bytecode[not_lua]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_is_lua_bytecode[too_short]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_endian_to_core[1]",
+      "passed": true,
+      "expected": "little",
+      "actual": "Little"
+    },
+    {
+      "tool": "lua_loader_lua_endian_to_core[0]",
+      "passed": true,
+      "expected": "big",
+      "actual": "Big"
+    },
+    {
+      "tool": "lua_loader_lua_const_is_string[Lua51]",
+      "passed": true,
+      "expected": "count > 0 and constants list present",
+      "actual": {
+        "count": 5
+      }
+    },
+    {
+      "tool": "lua_loader_lua_arch_info[Lua51]",
+      "passed": true,
+      "expected": "dict with name+pointer_size",
+      "actual": {
+        "name": "lua51",
+        "pointer_size": 8,
+        "endian": "Little",
+        "num_registers": 16,
+        "calling_conventions": 1,
+        "source": "rustre_loader_lua::LuaArch"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_source_line[Lua51_pc0]",
+      "passed": true,
+      "expected": "dict with line and pc",
+      "actual": {
+        "pc": 0,
+        "line": 1,
+        "line_info_len": 1,
+        "source": "rustre_loader_lua::LuaProto::source_line"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_mock",
+      "passed": null,
+      "skip": true,
+      "reason": "No dedicated tool; proto returned via lua_loader_lua_const_is_string etc."
+    },
+    {
+      "tool": "lua_loader_lua_all_strings_mock",
+      "passed": null,
+      "skip": true,
+      "reason": "No dedicated tool returning mock string list directly"
+    },
+    {
+      "tool": "lua_loader_lua_proto_stats_mock",
+      "passed": null,
+      "skip": true,
+      "reason": "No dedicated tool; covered by lua_bc_proto_stats_mock"
+    },
+    {
+      "tool": "lua_loader_lua_opcode_layout[Lua51_MOVE]",
+      "passed": true,
+      "expected": "dict with format/opmode/layout",
+      "actual": {
+        "layout": "Abc",
+        "mnemonic": "MOVE",
+        "source": "rustre_loader_lua::opcode_layout"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_disassemble_mock[Lua51]",
+      "passed": true,
+      "expected": "dict with lines",
+      "actual": {
+        "line_count": 1,
+        "lines": [
+          "0000: RETURN      R0, 0, 0              ; line 1"
+        ],
+        "source": "rustre_loader_lua::disassemble_proto"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_chunk_mock[test]",
+      "passed": true,
+      "expected": {
+        "name": "test",
+        "has_num_params": true
+      },
+      "actual": {
+        "name": "test"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_loader_name[default]",
+      "passed": true,
+      "expected": "name containing 'lua'",
+      "actual": "lua"
+    },
+    {
+      "tool": "lua_loader_lua_version_as_byte_wx1[0x51]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81
+      },
+      "actual": {
+        "major": 5,
+        "minor": 1,
+        "is_known": true,
+        "as_byte": 81
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_as_byte_wx1[0x52]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 2,
+        "is_known": true,
+        "as_byte": 82
+      },
+      "actual": {
+        "major": 5,
+        "minor": 2,
+        "is_known": true,
+        "as_byte": 82
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_as_byte_wx1[0x53]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 3,
+        "is_known": true,
+        "as_byte": 83
+      },
+      "actual": {
+        "major": 5,
+        "minor": 3,
+        "is_known": true,
+        "as_byte": 83
+      }
+    },
+    {
+      "tool": "lua_loader_lua_version_as_byte_wx1[0x54]",
+      "passed": true,
+      "expected": {
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84
+      },
+      "actual": {
+        "major": 5,
+        "minor": 4,
+        "is_known": true,
+        "as_byte": 84
+      }
+    },
+    {
+      "tool": "lua_loader_lua_endian_is_le_wx1[1]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_endian_is_le_wx1[0]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_endian_is_le_wx1[2]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_instr_fields_wx1[A=1]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 1,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 1,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      }
+    },
+    {
+      "tool": "lua_loader_lua_instr_fields_wx1[zero]",
+      "passed": true,
+      "expected": {
+        "opcode": 0,
+        "a": 0,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      },
+      "actual": {
+        "opcode": 0,
+        "a": 0,
+        "b": 0,
+        "c": 0,
+        "bx": 0,
+        "sbx": -131071
+      }
+    },
+    {
+      "tool": "lua_loader_lua_header_is_official_format_wx1[official]",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "lua_loader_lua_header_is_official_format_wx1[unofficial]",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "lua_loader_lua_const_is_string_wx1[Lua51]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "str_is_string": true,
+        "str_as_str": "hello",
+        "nil_is_string": false,
+        "str_display": "\"hello\"",
+        "nil_display": "nil",
+        "source": "rustre_loader_lua::LuaConst::is_string"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_total_instructions_wx1[default]",
+      "passed": true,
+      "expected": "total_instructions >= 1",
+      "actual": {
+        "total_instructions": 1
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_const_type_counts_wx1[default]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "counts": {
+          "bool": 1,
+          "integer": 1,
+          "nil": 1,
+          "number": 1,
+          "string": 1
+        },
+        "num_constants": 5,
+        "source": "rustre_loader_lua::LuaProto::constant_type_counts"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_chunk_from_proto_fields_wx1[default]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "name": "@test.lua",
+        "first_line": 0,
+        "last_line": 100,
+        "num_params": 0,
+        "is_vararg": true,
+        "max_stack": 8,
+        "constants_count": 5,
+        "instructions_count": 1,
+        "functions_count": 0,
+        "display": "LuaChunk '@test.lua' lines=0-100 params=0 instrs=1",
+        "source": "rustre_loader_lua::LuaChunk::from_proto"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_stats_from_proto_wx1[default]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "proto_count": 1,
+        "instruction_count": 1,
+        "constant_count": 5,
+        "string_count": 1,
+        "number_count": 1,
+        "integer_count": 1,
+        "upvalue_count": 1,
+        "local_count": 1,
+        "display": "protos=1 instrs=1 consts=5 strings=1 nums=1 ints=1 upvals=1 locals=1",
+        "source": "rustre_loader_lua::ProtoStats::from_proto"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_walker_count_wx1[default]",
+      "passed": true,
+      "expected": "dict with count",
+      "actual": {
+        "count": 3,
+        "nested": 2,
+        "source": "rustre_loader_lua::ProtoWalker::new"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_constant_index_get_wx1[0]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "index": 0,
+        "display": "K0",
+        "found": true,
+        "value": "\"hello\"",
+        "source": "rustre_loader_lua::ConstantIndex::get"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_opcode_layout_wx1[Lua51_0]",
+      "passed": true,
+      "expected": "non-stub",
+      "actual": {
+        "layout": "Abc",
+        "mnemonic": "MOVE",
+        "version": "Lua 5.1",
+        "opcode": 0,
+        "source": "rustre_loader_lua::opcode_layout"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_header_parse[valid51]",
+      "passed": true,
+      "expected": {
+        "ok": true,
+        "version contains '5.1'": true
+      },
+      "actual": {
+        "ok": true,
+        "version": "Lua 5.1",
+        "endian": "LE"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_header_parse[invalid]",
+      "passed": true,
+      "expected": {
+        "ok": false,
+        "or error field present": true
+      },
+      "actual": {
+        "ok": false,
+        "error": "truncated data",
+        "source": "rustre_loader_lua::LuaHeader::parse"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_header_to_endian[LE_header]",
+      "passed": true,
+      "expected": {
+        "ok": true,
+        "endian contains 'little'/'le'": true
+      },
+      "actual": {
+        "ok": true,
+        "endian": "Little"
+      }
+    },
+    {
+      "tool": "lua_loader_read_string_lua[ab]",
+      "passed": true,
+      "expected": {
+        "ok": true,
+        "string": "ab"
+      },
+      "actual": {
+        "ok": true,
+        "string": "ab"
+      }
+    },
+    {
+      "tool": "lua_loader_upvalue_desc_from_upvalue[Lua51]",
+      "passed": true,
+      "expected": "dict with count + upvalues",
+      "actual": {
+        "count": 1,
+        "upvalues": [
+          {
+            "name": "_ENV",
+            "in_stack": 0,
+            "idx": 0,
+            "display": "upval _ENV in_stack=0 idx=0"
+          }
+        ],
+        "source": "rustre_loader_lua::UpvalueDesc::from_upvalue"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_proto_all_strings_direct[Lua51]",
+      "passed": true,
+      "expected": "dict with count + strings",
+      "actual": {
+        "count": 1,
+        "strings": [
+          "hello"
+        ],
+        "source": "rustre_loader_lua::LuaProto::all_strings"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_disassemble_proto_wx1",
+      "passed": null,
+      "skip": true,
+      "reason": "requires pre-built proto object; complex state"
+    },
+    {
+      "tool": "lua_loader_lua_chunk_from_proto[Lua51]",
+      "passed": true,
+      "expected": "dict with chunk fields",
+      "actual": {
+        "display": "LuaChunk '@test.lua' lines=0-100 params=0 instrs=1",
+        "name": "@test.lua",
+        "num_params": 0,
+        "is_vararg": true,
+        "max_stack": 8,
+        "constants_count": 5,
+        "functions_count": 0,
+        "instructions_count": 1,
+        "source": "rustre_loader_lua::LuaChunk::from_proto"
+      }
+    },
+    {
+      "tool": "lua_loader_lua_bytecode_parse",
+      "passed": null,
+      "skip": true,
+      "reason": "requires complete Lua bytecode binary"
+    },
+    {
+      "tool": "lua_loader_lua_bytecode_loader_load",
+      "passed": null,
+      "skip": true,
+      "reason": "requires binary_id; project-state dependent"
+    },
+    {
+      "tool": "lua_bc_read_string",
+      "passed": null,
+      "skip": true,
+      "reason": "API shape for bc variant requires investigation; covered by lua_loader_read_string_lua"
+    },
+    {
+      "tool": "lua_bc_module_parse",
+      "passed": null,
+      "skip": true,
+      "reason": "requires complete Lua bytecode binary"
+    }
+  ]
+}

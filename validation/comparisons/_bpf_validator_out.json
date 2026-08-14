@@ -1,0 +1,472 @@
+[
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        149,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 149,
+      "class": 5,
+      "class_name": "JMP",
+      "dst_reg": 0,
+      "src_reg": 0,
+      "off": 0,
+      "imm": 0,
+      "size": 8,
+      "mnemonic": "exit",
+      "jmp_op": 144,
+      "jmp_op_name": "exit"
+    }
+  },
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        183,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 183,
+      "class": 7,
+      "class_name": "ALU64",
+      "dst_reg": 0,
+      "src_reg": 0,
+      "off": 0,
+      "imm": 0,
+      "size": 8,
+      "mnemonic": "mov_k",
+      "alu_op": 176,
+      "alu_op_name": "mov",
+      "src_kind": "k"
+    }
+  },
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        15,
+        33,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 15,
+      "class": 7,
+      "class_name": "ALU64",
+      "dst_reg": 1,
+      "src_reg": 2,
+      "off": 0,
+      "imm": 0,
+      "size": 8,
+      "mnemonic": "add_x",
+      "alu_op": 0,
+      "alu_op_name": "add",
+      "src_kind": "x"
+    }
+  },
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        133,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 133,
+      "class": 5,
+      "class_name": "JMP",
+      "dst_reg": 0,
+      "src_reg": 0,
+      "off": 0,
+      "imm": 1,
+      "size": 8,
+      "mnemonic": "call",
+      "jmp_op": 128,
+      "jmp_op_name": "call"
+    }
+  },
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        24,
+        1,
+        0,
+        0,
+        136,
+        119,
+        102,
+        85,
+        0,
+        0,
+        0,
+        0,
+        68,
+        51,
+        34,
+        17
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 24,
+      "class": 0,
+      "class_name": "LD",
+      "dst_reg": 1,
+      "src_reg": 0,
+      "off": 0,
+      "imm": 1432778632,
+      "size": 16,
+      "imm64": 1234605616436508552,
+      "mnemonic": "lddw"
+    }
+  },
+  {
+    "function": "decode_insn",
+    "input": {
+      "bytes": [
+        97,
+        16,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "code": 97,
+      "class": 1,
+      "class_name": "LDX",
+      "dst_reg": 0,
+      "src_reg": 1,
+      "off": 4,
+      "imm": 0,
+      "size": 8,
+      "mem_size": "W",
+      "mem_size_bytes": 4,
+      "mem_mode": "MEM",
+      "mnemonic": "ldxw"
+    }
+  },
+  {
+    "function": "disassemble",
+    "input": {
+      "bytes": [
+        183,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        15,
+        33,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        133,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        24,
+        1,
+        0,
+        0,
+        136,
+        119,
+        102,
+        85,
+        0,
+        0,
+        0,
+        0,
+        68,
+        51,
+        34,
+        17,
+        97,
+        16,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        149,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "count": 6,
+      "insns": [
+        {
+          "ok": true,
+          "code": 183,
+          "class": 7,
+          "class_name": "ALU64",
+          "dst_reg": 0,
+          "src_reg": 0,
+          "off": 0,
+          "imm": 0,
+          "size": 8,
+          "mnemonic": "mov_k",
+          "alu_op": 176,
+          "alu_op_name": "mov",
+          "src_kind": "k",
+          "offset": 0
+        },
+        {
+          "ok": true,
+          "code": 15,
+          "class": 7,
+          "class_name": "ALU64",
+          "dst_reg": 1,
+          "src_reg": 2,
+          "off": 0,
+          "imm": 0,
+          "size": 8,
+          "mnemonic": "add_x",
+          "alu_op": 0,
+          "alu_op_name": "add",
+          "src_kind": "x",
+          "offset": 8
+        },
+        {
+          "ok": true,
+          "code": 133,
+          "class": 5,
+          "class_name": "JMP",
+          "dst_reg": 0,
+          "src_reg": 0,
+          "off": 0,
+          "imm": 1,
+          "size": 8,
+          "mnemonic": "call",
+          "jmp_op": 128,
+          "jmp_op_name": "call",
+          "offset": 16
+        },
+        {
+          "ok": true,
+          "code": 24,
+          "class": 0,
+          "class_name": "LD",
+          "dst_reg": 1,
+          "src_reg": 0,
+          "off": 0,
+          "imm": 1432778632,
+          "size": 16,
+          "imm64": 1234605616436508552,
+          "mnemonic": "lddw",
+          "offset": 24
+        },
+        {
+          "ok": true,
+          "code": 97,
+          "class": 1,
+          "class_name": "LDX",
+          "dst_reg": 0,
+          "src_reg": 1,
+          "off": 4,
+          "imm": 0,
+          "size": 8,
+          "mem_size": "W",
+          "mem_size_bytes": 4,
+          "mem_mode": "MEM",
+          "mnemonic": "ldxw",
+          "offset": 40
+        },
+        {
+          "ok": true,
+          "code": 149,
+          "class": 5,
+          "class_name": "JMP",
+          "dst_reg": 0,
+          "src_reg": 0,
+          "off": 0,
+          "imm": 0,
+          "size": 8,
+          "mnemonic": "exit",
+          "jmp_op": 144,
+          "jmp_op_name": "exit",
+          "offset": 48
+        }
+      ],
+      "consumed": 56
+    }
+  },
+  {
+    "function": "helper_name",
+    "input": {
+      "id": 1
+    },
+    "output": {
+      "ok": true,
+      "id": 1,
+      "name": "map_lookup_elem"
+    }
+  },
+  {
+    "function": "helper_name",
+    "input": {
+      "id": 6
+    },
+    "output": {
+      "ok": true,
+      "id": 6,
+      "name": "trace_printk"
+    }
+  },
+  {
+    "function": "helper_name",
+    "input": {
+      "id": 9999
+    },
+    "output": {
+      "ok": false,
+      "id": 9999
+    }
+  },
+  {
+    "function": "map_type_name",
+    "input": {
+      "type": 1
+    },
+    "output": {
+      "ok": true,
+      "type": 1,
+      "name": "HASH"
+    }
+  },
+  {
+    "function": "map_type_name",
+    "input": {
+      "type": 27
+    },
+    "output": {
+      "ok": true,
+      "type": 27,
+      "name": "RINGBUF"
+    }
+  },
+  {
+    "function": "cfg_summary",
+    "input": {
+      "bytes": [
+        183,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        15,
+        33,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        133,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        24,
+        1,
+        0,
+        0,
+        136,
+        119,
+        102,
+        85,
+        0,
+        0,
+        0,
+        0,
+        68,
+        51,
+        34,
+        17,
+        97,
+        16,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0,
+        149,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "output": {
+      "ok": true,
+      "insn_count": 6,
+      "exits": 1,
+      "branches": 0,
+      "calls": 1
+    }
+  }
+]

@@ -1,0 +1,234 @@
+[
+  {
+    "tool": "ti_vt_token_bucket_available",
+    "reason": "Token bucket uses Instant::now() \u2014 available_tokens is time-dependent"
+  },
+  {
+    "tool": "ti_vt_token_bucket_consume",
+    "reason": "Token bucket is time-dependent; result changes between calls"
+  },
+  {
+    "tool": "ti_vt_rate_limiter_free_tier",
+    "reason": "VtRateLimiter::default_free_tier() is time-dependent"
+  },
+  {
+    "tool": "ti_vt_mock_file_report",
+    "reason": "mock_file_report has complex internal heuristics; no exact ground truth"
+  },
+  {
+    "tool": "ti_vt_mock_ip_report",
+    "reason": "mock_ip_report \u2014 complex mock"
+  },
+  {
+    "tool": "ti_vt_parse_search_response",
+    "reason": "Parses arbitrary text; output depends on parsing heuristics"
+  },
+  {
+    "tool": "ti_vt_av_result_classify",
+    "reason": "AV result classification depends on internal category rule set"
+  },
+  {
+    "tool": "ti_vt_ip_report_spec_is_malicious",
+    "reason": "VtIpReportSpec builder internals not fully traced"
+  },
+  {
+    "tool": "ti_vt_file_report_spec_stats",
+    "reason": "Depends on mock_file_report internals"
+  },
+  {
+    "tool": "ti_vt_sandbox_verdict_score",
+    "reason": "SandboxVerdict::weighted_score: base * confidence. confidence default 0.8 but tool may accept custom; verdict choices are complex"
+  },
+  {
+    "tool": "ti_misp_warning_list_matches",
+    "reason": "MispWarningList::matches logic partially depends on internal matching impl"
+  },
+  {
+    "tool": "ti_misp_warning_list_check",
+    "reason": "Same as warning_list_matches"
+  },
+  {
+    "tool": "ti_misp_sighting_is_false_positive",
+    "reason": "MispSighting::is_false_positive needs full sighting_type trace"
+  },
+  {
+    "tool": "ti_misp_event_spec_has_ids_attributes",
+    "reason": "Complex event builder with MispAttributeSpec"
+  },
+  {
+    "tool": "ti_misp_event_ioc_count",
+    "reason": "Complex event builder with add_attribute; ioc_count logic not traced"
+  },
+  {
+    "tool": "ti_misp_sharing_group_new",
+    "reason": "MispSharingGroup complex builder"
+  },
+  {
+    "tool": "ti_misp_sharing_group_build",
+    "reason": "Same; org count may vary"
+  },
+  {
+    "tool": "ti_misp_galaxy_find_cluster",
+    "reason": "MispGalaxy uses uuid_v4_mock which may be nondeterministic"
+  },
+  {
+    "tool": "ti_misp_tag_spec_new",
+    "reason": "MispTagSpec struct fields not fully traced"
+  },
+  {
+    "tool": "ti_misp_parse_attribute_type",
+    "reason": "MispApiClient::parse_misp_attribute_type \u2014 client-level wrapper not fully traced"
+  },
+  {
+    "tool": "ti_misp_attribute_type_roundtrip",
+    "reason": "Partially covered by ti_misp_attribute_type_to_str above"
+  },
+  {
+    "tool": "ti_misp_supported_ioc_types",
+    "reason": "MispApiClient::supported_ioc_types \u2014 full list not traced independently"
+  },
+  {
+    "tool": "ti_misp_feed_new",
+    "reason": "Simple struct; not a logic-sensitive tool"
+  },
+  {
+    "tool": "ti_misp_search_build",
+    "reason": "MispSearch builder \u2014 output depends on default values"
+  },
+  {
+    "tool": "ti_misp_sighting_new",
+    "reason": "Simple struct new; sighting_type variants not traced"
+  },
+  {
+    "tool": "ti_misp_event_full_new",
+    "reason": "Simple struct; fields have internal defaults"
+  },
+  {
+    "tool": "ti_misp_distribution_level_describe",
+    "reason": "Overlaps with ti_misp_distribution_level_from_value already covered"
+  },
+  {
+    "tool": "ti_misp_distribution_level_value",
+    "reason": "Covered by distribution_level_from_value roundtrip"
+  },
+  {
+    "tool": "ti_misp_threat_level_value",
+    "reason": "Covered by threat_level_from_value roundtrip"
+  },
+  {
+    "tool": "ti_malpedia_mock_stats",
+    "reason": "MalpediaStats::mock() \u2014 exact field values not traced"
+  },
+  {
+    "tool": "ti_malpedia_mock_family_response",
+    "reason": "Mock data with internal defaults"
+  },
+  {
+    "tool": "ti_malpedia_alias_resolve",
+    "reason": "FamilyAliasResolver::with_defaults \u2014 built-in alias table unknown"
+  },
+  {
+    "tool": "ti_malpedia_classify_family",
+    "reason": "FamilyClassifier::with_defaults \u2014 scoring table unknown"
+  },
+  {
+    "tool": "ti_malpedia_signature_score",
+    "reason": "SignatureScoreResult simple struct; no computation to verify"
+  },
+  {
+    "tool": "ti_malpedia_yara_rule_text",
+    "reason": "MalpediaYaraRule::to_yara_text format not traced"
+  },
+  {
+    "tool": "ti_malpedia_mock_db_search",
+    "reason": "MalpediaLocalDb::search_families returns mock data"
+  },
+  {
+    "tool": "ti_malpedia_mock_db_find_by_hash",
+    "reason": "Mock data"
+  },
+  {
+    "tool": "ti_malpedia_attribution_method_display",
+    "reason": "ActorAttribution fields partially traced; complex state"
+  },
+  {
+    "tool": "ti_malpedia_family_platform_prefix",
+    "reason": "MalpediaFamilySpec::platform_prefix unknown"
+  },
+  {
+    "tool": "ti_malpedia_search_query_build",
+    "reason": "MalpediaSearchQuery builder output depends on default serialization"
+  },
+  {
+    "tool": "ti_malpedia_classifier_score_all",
+    "reason": "FamilyClassifier::score \u2014 scoring table internal"
+  },
+  {
+    "tool": "ti_malpedia_client_get_stats",
+    "reason": "Mock stats; exact fields unknown"
+  },
+  {
+    "tool": "ti_malpedia_client_get_yara_rules",
+    "reason": "Mock YARA rules"
+  },
+  {
+    "tool": "ti_malpedia_client_search_by_hash",
+    "reason": "Mock search results"
+  },
+  {
+    "tool": "ti_malpedia_client_list_actors",
+    "reason": "Mock actor list"
+  },
+  {
+    "tool": "ti_malpedia_family_has_sample",
+    "reason": "MalpediaFamilySpec::has_sample \u2014 internal sample list unknown"
+  },
+  {
+    "tool": "ti_malpedia_local_db_populate_stats",
+    "reason": "MalpediaLocalDb::populate_mock_data \u2014 unknown field values"
+  },
+  {
+    "tool": "ti_malpedia_api_key_new",
+    "reason": "MalpediaApiKey::new captures SystemTime::now() \u2014 created_at nondeterministic"
+  },
+  {
+    "tool": "ti_malpedia_stats_new",
+    "reason": "MalpediaStats::new \u2014 fields unknown"
+  },
+  {
+    "tool": "ti_malpedia_actor_attribution_add_evidence",
+    "reason": "ActorAttribution complex state mutation with evidence list"
+  },
+  {
+    "tool": "ti_malpedia_actor_spec_new",
+    "reason": "MalpediaActorSpec::new \u2014 fields not traced"
+  },
+  {
+    "tool": "ti_malpedia_sample_spec_new",
+    "reason": "MalpediaSampleSpec::new \u2014 fields not traced"
+  },
+  {
+    "tool": "ti_malpedia_yara_rule_new",
+    "reason": "MalpediaYaraRule::new \u2014 fields not traced"
+  },
+  {
+    "tool": "ti_malpedia_signature_score_result",
+    "reason": "SignatureScoreResult::new \u2014 fields not traced"
+  },
+  {
+    "tool": "ti_malpedia_alias_resolver_count",
+    "reason": "Count depends on with_defaults alias data"
+  },
+  {
+    "tool": "ti_malpedia_local_db_list_families",
+    "reason": "Mock data list"
+  },
+  {
+    "tool": "ti_malpedia_client_search_query_exec",
+    "reason": "Mock exec via MalpediaApiClient::search"
+  },
+  {
+    "tool": "ti_otx_sample_pulse",
+    "reason": "OtxPulse::sample() \u2014 exact mock pulse fields not traced from source"
+  }
+]

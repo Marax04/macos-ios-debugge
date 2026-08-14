@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-il",
+  "mismatches": 3,
+  "details": [
+    "IlError: missing variant Invalid",
+    "IlError: missing variant Unsupported",
+    "IlError: missing variant TierMismatch"
+  ]
+}

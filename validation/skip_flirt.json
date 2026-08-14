@@ -1,0 +1,44 @@
+{
+  "skipped": [
+    {
+      "tool": "flirt_apply_auto",
+      "reason": "requires an open project/binary; cannot verify output without loading PE"
+    },
+    {
+      "tool": "flirt_builtin_matcher",
+      "reason": "library and pattern counts are opaque/implementation-defined, no exact reference"
+    },
+    {
+      "tool": "flirt_gen_elf_parse",
+      "reason": "requires valid ELF binary data; no self-contained test vector available"
+    },
+    {
+      "tool": "flirt_gen_library_builder_demo",
+      "reason": "opaque demo data; exact counts are implementation-defined"
+    },
+    {
+      "tool": "flirt_gen_generate_from_ranges_wire",
+      "reason": "requires PE/ELF memory ranges; output depends on binary layout"
+    },
+    {
+      "tool": "flirt_parse_sig_header",
+      "reason": "requires a valid IDA .sig file on disk"
+    },
+    {
+      "tool": "flirt_gen_pattern_with_quality",
+      "reason": "requires hex_bytes param with exact quality threshold; thresholds are opaque"
+    },
+    {
+      "tool": "flirt_sig_file_parse_wire",
+      "reason": "requires valid .sig file bytes; invalid input returns error, no positive reference"
+    },
+    {
+      "tool": "flirt_sig_pattern_matches_wire",
+      "reason": "SigPattern constructed from default sig with unknown internal bytes"
+    },
+    {
+      "tool": "flirt_matcher_best_match_wire",
+      "reason": "best_match result depends on internal matcher state; no independent reference"
+    }
+  ]
+}

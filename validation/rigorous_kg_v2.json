@@ -1,0 +1,200 @@
+{
+  "module": "kg",
+  "tools_hardened": [
+    "kg.annotate",
+    "kg.set_function_name",
+    "kg.set_comment",
+    "kg.get_function",
+    "kg.list_functions",
+    "kg.query",
+    "kg.search"
+  ],
+  "tools_hardened_count": 7,
+  "checks_total": 45,
+  "checks_passed": 45,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "check_details": [
+    {
+      "name": "kg.annotate/entity_type",
+      "passed": true
+    },
+    {
+      "name": "kg.annotate/entity_id",
+      "passed": true
+    },
+    {
+      "name": "kg.annotate/key",
+      "passed": true
+    },
+    {
+      "name": "kg.annotate/value",
+      "passed": true
+    },
+    {
+      "name": "kg.annotate/annotated",
+      "passed": true
+    },
+    {
+      "name": "kg.annotate/default_binary_id",
+      "passed": true
+    },
+    {
+      "name": "kg.set_function_name/binary_id",
+      "passed": true
+    },
+    {
+      "name": "kg.set_function_name/name",
+      "passed": true
+    },
+    {
+      "name": "kg.set_function_name/status",
+      "passed": true
+    },
+    {
+      "name": "kg.set_function_name/addr",
+      "passed": true
+    },
+    {
+      "name": "kg.set_comment/binary_id",
+      "passed": true
+    },
+    {
+      "name": "kg.set_comment/addr",
+      "passed": true
+    },
+    {
+      "name": "kg.set_comment/text",
+      "passed": true
+    },
+    {
+      "name": "kg.set_comment/status",
+      "passed": true
+    },
+    {
+      "name": "kg.get_function/binary_id",
+      "passed": true
+    },
+    {
+      "name": "kg.get_function/addr",
+      "passed": true
+    },
+    {
+      "name": "kg.get_function/name_from_store",
+      "passed": true
+    },
+    {
+      "name": "kg.get_function/comment_present",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/binary_id",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/count_key",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/count_match",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/nonempty",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/schema",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/renamed_name",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/filter/all_match",
+      "passed": true
+    },
+    {
+      "name": "kg.list_functions/filter/count_match",
+      "passed": true
+    },
+    {
+      "name": "kg.query/select1/rows_key",
+      "passed": true
+    },
+    {
+      "name": "kg.query/select1/count_key",
+      "passed": true
+    },
+    {
+      "name": "kg.query/select1/count_match",
+      "passed": true
+    },
+    {
+      "name": "kg.query/select1/nonempty",
+      "passed": true
+    },
+    {
+      "name": "kg.query/limit5/count",
+      "passed": true
+    },
+    {
+      "name": "kg.query/limit5/count_field",
+      "passed": true
+    },
+    {
+      "name": "kg.query/reject_non_select",
+      "passed": true
+    },
+    {
+      "name": "kg.query/missing_sql",
+      "passed": true
+    },
+    {
+      "name": "kg.search/text_only/results_list",
+      "passed": true
+    },
+    {
+      "name": "kg.search/text_only/total_zero",
+      "passed": true
+    },
+    {
+      "name": "kg.search/text_only/note_present",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/query_echoed",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/count_field",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/results_list",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/count_match",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/finds_name",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/result_schema",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/entity_type",
+      "passed": true
+    },
+    {
+      "name": "kg.search/query/score_float",
+      "passed": true
+    }
+  ]
+}

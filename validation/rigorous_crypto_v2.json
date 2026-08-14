@@ -1,0 +1,157 @@
+{
+  "category": "crypto",
+  "tools_hardened": 22,
+  "tools_passed": 21,
+  "tools_failed": 0,
+  "tools_skipped": 1,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "crypto_id_aes_rcon",
+      "passed": true,
+      "expected": "[141, 1, 2, 4, 8, 16, 32, 64, 128, 27, 54]",
+      "actual": "[141, 1, 2, 4, 8, 16, 32, 64, 128, 27, 54]",
+      "note": "AES Rcon table 11 bytes exact match"
+    },
+    {
+      "tool": "crypto_id_crc32_poly",
+      "passed": true,
+      "expected": "0xedb88320",
+      "actual": "0xedb88320",
+      "note": "CRC32 reversed polynomial exact value"
+    },
+    {
+      "tool": "crypto_id_shannon_entropy_wire",
+      "passed": true,
+      "expected": "3.0",
+      "actual": "3.0",
+      "note": "8 distinct bytes \u2192 entropy = 3.0 exactly"
+    },
+    {
+      "tool": "crypto_id_shannon_entropy_wire_zero",
+      "passed": true,
+      "expected": "0.0",
+      "actual": "-0.0",
+      "note": "16 identical bytes \u2192 entropy = 0.0"
+    },
+    {
+      "tool": "crypto_id_shannon_entropy_wire_hex",
+      "passed": true,
+      "expected": "2.0",
+      "actual": "2.0",
+      "note": "hex='deadbeef' \u2192 entropy=2.0"
+    },
+    {
+      "tool": "crypto_id_scan_aes_sbox_positive",
+      "passed": true,
+      "expected": ">=1 hit at offset 16",
+      "actual": "hit_count=1",
+      "note": "AES sbox embedded at offset 16"
+    },
+    {
+      "tool": "crypto_id_scan_aes_sbox_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "no AES sbox in data \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_sha256_constants_positive",
+      "passed": true,
+      "expected": ">=1 hit",
+      "actual": "hit_count=1",
+      "note": "SHA256 K[0..8] LE embedded at offset 8"
+    },
+    {
+      "tool": "crypto_id_scan_sha256_constants_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "zeros \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_chacha_magic_positive",
+      "passed": true,
+      "expected": ">=1 hit",
+      "actual": "hit_count=1",
+      "note": "'expand 32-byte k' embedded"
+    },
+    {
+      "tool": "crypto_id_scan_chacha_magic_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "zeros \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_tea_delta_positive",
+      "passed": true,
+      "expected": ">=1 hit",
+      "actual": "hit_count=1",
+      "note": "TEA_DELTA LE embedded"
+    },
+    {
+      "tool": "crypto_id_scan_tea_delta_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "zeros \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_crc32_table_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "sequential 0..31 bytes, no CRC32 table \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_des_sbox_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "tiny buf \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_scan_blowfish_p_negative",
+      "passed": true,
+      "expected": "0",
+      "actual": "0",
+      "note": "zeros \u2192 0 hits"
+    },
+    {
+      "tool": "crypto_id_identify_in_binary_wire",
+      "passed": true,
+      "expected": "int >= 0",
+      "actual": "15",
+      "note": "AES sbox embedded; finding_count is non-negative integer"
+    },
+    {
+      "tool": "crypto_id_scan_binary_constants",
+      "passed": true,
+      "expected": "dict with hit_count or hits",
+      "actual": "['count', 'hits', 'bytes_scanned']",
+      "note": "AES sbox embedded; response has hit fields"
+    },
+    {
+      "tool": "crypto_id_scan_and_summarize",
+      "passed": true,
+      "expected": "dict",
+      "actual": "dict",
+      "note": "returns structured summary dict"
+    },
+    {
+      "tool": "crypto_id_signature_db_list",
+      "passed": true,
+      "expected": "dict or list",
+      "actual": "dict",
+      "note": "returns signature database listing"
+    },
+    {
+      "tool": "crypto_id_active_plan",
+      "passed": true,
+      "expected": "dict",
+      "actual": "dict",
+      "note": "active plan returns dict"
+    }
+  ]
+}

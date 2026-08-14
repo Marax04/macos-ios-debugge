@@ -1,0 +1,242 @@
+{
+  "category": "trace",
+  "tools_hardened": 11,
+  "tools_passed": 21,
+  "tools_failed": 0,
+  "tools_skipped": 13,
+  "checks": [
+    {
+      "tool": "trace_navigate_bytes_to_u64",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          222
+        ]
+      }
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64",
+      "status": "PASS",
+      "args": {
+        "bytes": [
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255,
+          255
+        ]
+      }
+    },
+    {
+      "tool": "trace_navigate_insn_entry",
+      "status": "PASS",
+      "args": {
+        "idx": 7,
+        "pc": 4660,
+        "tid": 1,
+        "disasm": "mov rax, rbx"
+      }
+    },
+    {
+      "tool": "trace_coverage_percent",
+      "status": "PASS",
+      "args": {
+        "hit": 50,
+        "total": 200
+      }
+    },
+    {
+      "tool": "trace_coverage_percent",
+      "status": "PASS",
+      "args": {
+        "hit": 0,
+        "total": 0
+      }
+    },
+    {
+      "tool": "trace_cov_bitmap_new",
+      "status": "PASS",
+      "args": {
+        "size": 16
+      }
+    },
+    {
+      "tool": "trace_cov_bitmap_new",
+      "status": "PASS",
+      "args": {
+        "size": 0
+      }
+    },
+    {
+      "tool": "trace_cov_bitmap_new",
+      "status": "PASS",
+      "args": {
+        "size": 7
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_is_full_wire3",
+      "status": "PASS",
+      "args": {
+        "hex": "ff"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_is_full_wire3",
+      "status": "PASS",
+      "args": {
+        "hex": "00"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_is_full_wire3",
+      "status": "PASS",
+      "args": {
+        "hex": "f0"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_set_bits_wire3",
+      "status": "PASS",
+      "args": {
+        "hex": "81"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_union_wire3",
+      "status": "PASS",
+      "args": {
+        "a_hex": "0f",
+        "b_hex": "f0"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_union_wire3",
+      "status": "PASS",
+      "args": {
+        "a_hex": "aa",
+        "b_hex": "55"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_intersection_wire3",
+      "status": "PASS",
+      "args": {
+        "a_hex": "ff",
+        "b_hex": "0f"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_intersection_wire3",
+      "status": "PASS",
+      "args": {
+        "a_hex": "aa",
+        "b_hex": "55"
+      }
+    },
+    {
+      "tool": "trace_coverage_covbitmap_difference_wire3",
+      "status": "PASS",
+      "args": {
+        "a_hex": "ff",
+        "b_hex": "0f"
+      }
+    },
+    {
+      "tool": "trace_coverage_covedge_new_wire3",
+      "status": "PASS",
+      "args": {
+        "from": 57005,
+        "to": 48879
+      }
+    },
+    {
+      "tool": "trace_navigate_bytes_to_u64_v2",
+      "status": "PASS"
+    },
+    {
+      "tool": "trace_coverage_percent",
+      "status": "PASS",
+      "args": {
+        "hit": 10,
+        "total": 5
+      }
+    }
+  ],
+  "mismatches": [],
+  "skips": [
+    {
+      "tool": "trace_pt_decode_buffer",
+      "reason": "Intel PT binary format \u2014 no Python decoder; nondeterministic packet sync"
+    },
+    {
+      "tool": "trace_pt_coverage",
+      "reason": "Intel PT binary format \u2014 no Python decoder"
+    },
+    {
+      "tool": "trace_pt_drcov",
+      "reason": "Intel PT binary format \u2014 no Python decoder"
+    },
+    {
+      "tool": "trace_coresight_etm_decode_stream",
+      "reason": "ARM ETM binary format \u2014 no Python decoder"
+    },
+    {
+      "tool": "trace_coresight_tpiu_demux",
+      "reason": "ARM TPIU binary format \u2014 no Python decoder"
+    },
+    {
+      "tool": "trace_coresight_stm_decode_stream",
+      "reason": "ARM STM binary format \u2014 no Python decoder"
+    },
+    {
+      "tool": "trace_coresight_is_valid_stream",
+      "reason": "binary format \u2014 requires protocol knowledge"
+    },
+    {
+      "tool": "trace_coresight_find_sync_offsets",
+      "reason": "binary format \u2014 requires protocol knowledge"
+    },
+    {
+      "tool": "trace_merge_empty_sessions",
+      "reason": "stateful session merge \u2014 result depends on internal session object"
+    },
+    {
+      "tool": "trace_merge_sessions_empty",
+      "reason": "same as above"
+    },
+    {
+      "tool": "trace_open_trace_file",
+      "reason": "requires a trace file on disk"
+    },
+    {
+      "tool": "trace_pt_decoder_remaining_bytes",
+      "reason": "stateful decoder \u2014 nondeterministic after reset"
+    },
+    {
+      "tool": "trace_pt_flow_event_count",
+      "reason": "stateful flow \u2014 result is 0 but not independently verifiable"
+    }
+  ]
+}

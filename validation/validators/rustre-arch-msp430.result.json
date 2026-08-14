@@ -1,0 +1,56 @@
+{
+  "crate": "rustre-arch-msp430",
+  "saved": false,
+  "functions": [
+    {
+      "name": "constant_generator",
+      "ok": true,
+      "cases": 7
+    },
+    {
+      "name": "reg_name",
+      "ok": true,
+      "cases": 6
+    },
+    {
+      "name": "bw_suffix",
+      "ok": true,
+      "cases": 2
+    },
+    {
+      "name": "src_addr_mode",
+      "ok": true,
+      "cases": 7
+    },
+    {
+      "name": "AddrMode_ext_words",
+      "ok": true,
+      "cases": 6
+    },
+    {
+      "name": "AddrMode_reads_memory",
+      "ok": true,
+      "cases": 4
+    },
+    {
+      "name": "InterruptVector_address",
+      "ok": true,
+      "cases": 2
+    },
+    {
+      "name": "alu_arith",
+      "ok": true,
+      "cases": 4
+    },
+    {
+      "name": "check_emulated",
+      "ok": false,
+      "cases": 6
+    },
+    {
+      "name": "msp430x_is_extension_word",
+      "ok": true,
+      "cases": 4
+    }
+  ]
+}

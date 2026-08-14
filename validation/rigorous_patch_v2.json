@@ -1,0 +1,220 @@
+[
+  {
+    "tool": "patch_parse_hex_bytes",
+    "status": "PASS",
+    "expected": "all test cases match py_parse_hex_bytes",
+    "actual": [
+      {
+        "hex_in": "deadbeef",
+        "status": "ok"
+      },
+      {
+        "hex_in": "DE AD BE EF",
+        "status": "ok"
+      },
+      {
+        "hex_in": "0xDE,0xAD,0xBE,0xEF",
+        "status": "ok"
+      },
+      {
+        "hex_in": "00112233",
+        "status": "ok"
+      },
+      {
+        "hex_in": "deadbeef00112233",
+        "status": "ok"
+      },
+      {
+        "hex_in": "90 90 CC",
+        "status": "ok"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "tool": "patch_assemble_simple",
+    "status": "PASS",
+    "expected": "all known mnemonics produce correct encodings",
+    "actual": [
+      {
+        "mnemonic": "nop",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "ret",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "retn",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "ret far",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "retf",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "int3",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "ud2",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "hlt",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "cli",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "sti",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "leave",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "cdq",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "syscall",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "sysret",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "pushfd",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "pushfq",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "popfd",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "popfq",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "xor eax, eax",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "xor rax, rax",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "mov eax, 0",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "mov eax, 1",
+        "status": "ok"
+      },
+      {
+        "mnemonic": "nop 4",
+        "status": "ok"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "tool": "patch_compute_pe_checksum",
+    "status": "PASS",
+    "expected": {
+      "checksum": 1263036,
+      "checksum_offset": 320
+    },
+    "actual": {
+      "checksum": 1263036
+    },
+    "note": "image_size=1244160, checksum_offset=0x140"
+  },
+  {
+    "tool": "patch_pe_security_summary",
+    "status": "PASS",
+    "expected": {
+      "is_64bit": true,
+      "dll_characteristics": 32800,
+      "aslr": false,
+      "dep": false,
+      "cfg": false,
+      "force_integrity": false,
+      "no_seh": false,
+      "no_isolation": false,
+      "no_bind": false,
+      "terminal_server_aware": true
+    },
+    "actual": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "aslr": false,
+      "dep": false,
+      "cfg": false,
+      "force_integrity": false,
+      "no_seh": false,
+      "no_isolation": false,
+      "no_bind": false,
+      "terminal_server_aware": true,
+      "is_64bit": true,
+      "dll_characteristics": 32800
+    },
+    "note": "all flags match"
+  },
+  {
+    "tool": "patch_binary_diff+patch_binary_patch (roundtrip)",
+    "status": "PASS",
+    "expected": "patch(old, diff(old,new)) == new for all cases",
+    "actual": [
+      {
+        "old_hex": "deadbeef",
+        "new_hex": "deadcafe",
+        "status": "ok"
+      },
+      {
+        "old_hex": "00010203",
+        "new_hex": "00010203",
+        "status": "ok"
+      },
+      {
+        "old_hex": "aabbcc",
+        "new_hex": "aabb00cc",
+        "status": "ok"
+      },
+      {
+        "old_hex": "0102030405060708",
+        "new_hex": "0102ff0405060708",
+        "status": "ok"
+      }
+    ],
+    "note": ""
+  },
+  {
+    "tool": "patch_build_delta",
+    "status": "PASS",
+    "expected": "delta.old_size/new_size match input lengths",
+    "actual": [
+      {
+        "case": "deadbeef->deadcafe",
+        "status": "ok"
+      },
+      {
+        "case": "aabb->aabb00cc",
+        "status": "ok"
+      }
+    ],
+    "note": ""
+  }
+]

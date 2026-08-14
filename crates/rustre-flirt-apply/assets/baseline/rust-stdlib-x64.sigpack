@@ -1,0 +1,7 @@
+SIGPACK 1
+pack rust-stdlib-x64
+---
+4883EC28E8..............85C0750E | 0 0 0000 16 | rust-stdlib | std::rt::lang_start_internal
+4883EC2848894C2430488B0DE8 | 0 0 0000 12 | rust-stdlib | core::panicking::panic
+4889742410574883EC30488BFA488BF1488B9F | 0 0 0000 19 | rust-stdlib | alloc::raw_vec::RawVec::grow_amortized
+4885C9740C488B01FF50104883C40859C3 | 0 0 0000 16 | rust-stdlib | alloc::alloc::dealloc

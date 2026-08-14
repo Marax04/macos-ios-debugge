@@ -1,0 +1,732 @@
+{
+  "category": "forensics_fs",
+  "generated": "2026-07-11",
+  "defect_policy": "all failures in v1 were validator_defect (wrong field names); corrected here",
+  "tools": [
+    {
+      "tool": "forensics_fs_memfs_node_dir_read_bytes_none",
+      "passed": true,
+      "expected": {
+        "read_bytes_is_none": true,
+        "is_dir": true
+      },
+      "actual": {
+        "read_bytes_is_none": true,
+        "is_dir": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_is_file",
+      "passed": true,
+      "expected": {
+        "is_file": true,
+        "is_dir": false
+      },
+      "actual": {
+        "is_file": true,
+        "is_dir": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_is_dir_check",
+      "passed": true,
+      "expected": {
+        "is_dir": true,
+        "is_file": false
+      },
+      "actual": {
+        "is_dir": true,
+        "is_file": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_size_file",
+      "passed": true,
+      "expected": {
+        "size": 4,
+        "input_len": 4
+      },
+      "actual": {
+        "size": 4,
+        "input_len": 4
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_file_read_bytes",
+      "passed": true,
+      "expected": {
+        "is_file": true,
+        "is_dir": false,
+        "out_hex": "deadbeef0011",
+        "len": 6
+      },
+      "actual": {
+        "is_file": true,
+        "out_hex": "deadbeef0011",
+        "len": 6
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_dir_children",
+      "passed": true,
+      "expected": {
+        "children_count": 3,
+        "children": [
+          "alpha",
+          "beta",
+          "gamma"
+        ]
+      },
+      "actual": {
+        "children_count": 3,
+        "children": [
+          "alpha",
+          "beta",
+          "gamma"
+        ]
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_dir_child_by_name",
+      "passed": true,
+      "expected": {
+        "found": true
+      },
+      "actual": {
+        "found": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_lazy_file_read",
+      "passed": true,
+      "expected": {
+        "out_hex": "63",
+        "len": 1
+      },
+      "actual": {
+        "out_hex": "63",
+        "len": 1
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memory_fs_root_inode",
+      "passed": true,
+      "expected": {
+        "is_dir": true,
+        "root_inode_is_int": true
+      },
+      "actual": {
+        "is_dir": true,
+        "root_inode": 1
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memory_fs_into_root",
+      "passed": true,
+      "expected": {
+        "is_dir": true,
+        "inode_is_int": true
+      },
+      "actual": {
+        "is_dir": true,
+        "inode": 1
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_v2_walker_root",
+      "passed": true,
+      "expected": {
+        "first_is_dir": true,
+        "first_path_is_str": true
+      },
+      "actual": {
+        "first_is_dir": true,
+        "first_path": "/"
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_table_new_len_empty",
+      "passed": true,
+      "expected": {
+        "len": 0,
+        "is_empty": true
+      },
+      "actual": {
+        "len": 0,
+        "is_empty": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_table_insert_get",
+      "passed": true,
+      "expected": {
+        "got": "myfile.txt",
+        "len": 1,
+        "total_alloc": 1024
+      },
+      "actual": {
+        "got": "myfile.txt",
+        "len": 1,
+        "total_alloc": 1024
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_table_find_by_name",
+      "passed": true,
+      "expected": {
+        "count": 0,
+        "names": []
+      },
+      "actual": {
+        "count": 0,
+        "names": []
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_table_find_deleted",
+      "passed": true,
+      "expected": {
+        "count": 2,
+        "deleted": [
+          "flagged",
+          "orphan"
+        ]
+      },
+      "actual": {
+        "count": 2,
+        "deleted": [
+          "orphan",
+          "flagged"
+        ]
+      },
+      "note": "Tool creates table with two pre-seeded deleted inodes",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_is_directory",
+      "passed": true,
+      "expected": {
+        "is_directory_is_bool": true,
+        "is_encrypted_is_bool": true
+      },
+      "actual": {
+        "is_directory": true,
+        "is_encrypted": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_data_run_new_byte_size",
+      "passed": true,
+      "expected": {
+        "run_bytes": 40960,
+        "sparse_bytes": 40960
+      },
+      "actual": {
+        "run_bytes": 40960,
+        "sparse_bytes": 40960
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_inode_total_run_bytes",
+      "passed": true,
+      "expected": {
+        "total_bytes_is_int": true,
+        "cluster_size": 4096
+      },
+      "actual": {
+        "total_bytes": 36864,
+        "cluster_size": 4096
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_event_new",
+      "passed": true,
+      "expected": {
+        "type_name": "Create",
+        "pid_is_int": true
+      },
+      "actual": {
+        "type_name": "Create",
+        "pid": 42
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_event_type_kind_name",
+      "passed": true,
+      "expected": {
+        "count": 12,
+        "kind_names_count": 12
+      },
+      "actual": {
+        "count": 12,
+        "kind_names": [
+          "Create",
+          "Modify",
+          "Access",
+          "Delete",
+          "Move",
+          "HardLink",
+          "SymLink",
+          "PermChange",
+          "OwnerChange",
+          "Mount",
+          "Unmount",
+          "Execute"
+        ]
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_push_sort",
+      "passed": true,
+      "expected": {
+        "order_sorted": true,
+        "order_len_ge_2": true
+      },
+      "actual": {
+        "order": [
+          100,
+          200,
+          300
+        ],
+        "is_sorted": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_filter_by_type",
+      "passed": true,
+      "expected": {
+        "kind": "Create",
+        "matches_is_int": true
+      },
+      "actual": {
+        "kind": "Create",
+        "matches": 2
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_filter_by_time",
+      "passed": true,
+      "expected": {
+        "in_window_is_int": true,
+        "start": 0
+      },
+      "actual": {
+        "in_window": 5,
+        "start": 0
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_hot_paths",
+      "passed": true,
+      "expected": {
+        "hot_is_list": true,
+        "len_le_top_n": true
+      },
+      "actual": {
+        "hot_len": 3,
+        "hot": [
+          [
+            "/hot",
+            5
+          ],
+          [
+            "/warm",
+            2
+          ],
+          [
+            "/cold",
+            1
+          ]
+        ]
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_csv_roundtrip",
+      "passed": true,
+      "expected": {
+        "csv_bytes_is_int": true,
+        "roundtrip_events_is_int": true
+      },
+      "actual": {
+        "csv_bytes": 64,
+        "roundtrip_events": 2
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_timeline_report",
+      "passed": true,
+      "expected": {
+        "report_debug_contains_total": true
+      },
+      "actual": {
+        "report_debug": "TimelineReport { total: 3, first_ts: 1, last_ts: 3, duration_secs: 2, events_by_"
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_to_export_dir_single_file",
+      "passed": true,
+      "expected": {
+        "exported": true
+      },
+      "actual": {
+        "exported": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memory_fs_new_root",
+      "passed": true,
+      "expected": {
+        "is_dir": true
+      },
+      "actual": {
+        "is_dir": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_file_size",
+      "passed": true,
+      "expected": {
+        "size_is_int": true
+      },
+      "actual": {
+        "size": 0
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_prefetch",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_lnk",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_registry_hive",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_evtx",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_browser_db",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_memory_dump",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_dropped_payload",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_pagefile",
+      "passed": true,
+      "expected": {
+        "detected": true
+      },
+      "actual": {
+        "detected": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_detect_certificate_store",
+      "passed": true,
+      "expected": {
+        "detected_is_bool": true
+      },
+      "actual": {
+        "detected": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_artifact_scanner_scan_path",
+      "passed": true,
+      "expected": {
+        "total_is_int": true
+      },
+      "actual": {
+        "total": 1
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_new_file",
+      "passed": true,
+      "expected": {
+        "is_file": true,
+        "name": "readme.txt"
+      },
+      "actual": {
+        "is_file": true,
+        "name": "readme.txt"
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_new_dir",
+      "passed": true,
+      "expected": {
+        "is_dir": true,
+        "name": "subdir"
+      },
+      "actual": {
+        "is_dir": true,
+        "name": "subdir"
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_add_child",
+      "passed": true,
+      "expected": {
+        "children_ge_1": true
+      },
+      "actual": {
+        "children": 3
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_find_child",
+      "passed": true,
+      "expected": {
+        "found_is_bool": true
+      },
+      "actual": {
+        "found": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_find_by_inode",
+      "passed": true,
+      "expected": {
+        "found_is_bool": true
+      },
+      "actual": {
+        "found": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_readdir_entries",
+      "passed": true,
+      "expected": {
+        "names_is_list": true
+      },
+      "actual": {
+        "names": [
+          "a.txt",
+          "sub"
+        ]
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memory_fs_new",
+      "passed": true,
+      "expected": {
+        "root_inode_is_int": true
+      },
+      "actual": {
+        "root_inode": 1
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memory_fs_build_process_tree_empty",
+      "passed": true,
+      "expected": {
+        "has_processes_dir": true
+      },
+      "actual": {
+        "has_processes_dir": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_file_probe",
+      "passed": true,
+      "expected": {
+        "is_file": true,
+        "is_dir": false
+      },
+      "actual": {
+        "is_file": true,
+        "is_dir": false
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_dir_probe",
+      "passed": true,
+      "expected": {
+        "is_dir": true,
+        "children_is_list": true
+      },
+      "actual": {
+        "is_dir": true,
+        "children": [
+          "a",
+          "b"
+        ]
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_memfs_node_child_lookup",
+      "passed": true,
+      "expected": {
+        "found": true
+      },
+      "actual": {
+        "found": true
+      },
+      "note": "",
+      "defect_side": ""
+    },
+    {
+      "tool": "forensics_fs_node_v2_sizes",
+      "passed": true,
+      "expected": {
+        "file_size": 7,
+        "dir_size": 0
+      },
+      "actual": {
+        "file_size": 7,
+        "dir_size": 0
+      },
+      "note": "",
+      "defect_side": ""
+    }
+  ]
+}

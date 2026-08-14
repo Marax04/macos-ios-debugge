@@ -1,0 +1,47 @@
+{
+  "module": "yara",
+  "round": 3,
+  "tools_hardened": 7,
+  "tools_passed": 7,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "results": [
+    {
+      "tool": "yara.compile",
+      "status": "PASS",
+      "reference": "rule_count==1 for single-rule source; status==\"compiled\""
+    },
+    {
+      "tool": "yara.compile#ruleset_id_format",
+      "status": "PASS",
+      "reference": "ruleset_id starts with \"yara-\""
+    },
+    {
+      "tool": "yara.compile#determinism",
+      "status": "PASS",
+      "reference": "same source produces same ruleset_id across calls"
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_new",
+      "status": "PASS",
+      "reference": "name and family echoed from input; condition==\"any of them\""
+    },
+    {
+      "tool": "ti_malpedia_yara_rule_text",
+      "status": "PASS",
+      "reference": "returned yara text contains rule name and family string"
+    },
+    {
+      "tool": "ti_malpedia_client_get_yara_rules",
+      "status": "PASS",
+      "reference": "returns list of rules; first entry has family matching input"
+    },
+    {
+      "tool": "agent_prompt_gen_yara",
+      "status": "PASS",
+      "reference": "prompt contains all supplied strings and imports; template: sys\\n\\nGenerate YARA rules based on:\\nStrings: ...\\nImports: ..."
+    }
+  ],
+  "mismatches": [],
+  "notes": "yara.scan_file and yara.scan_memory added to skip_yara.json (nondeterministic/need image_id)"
+}

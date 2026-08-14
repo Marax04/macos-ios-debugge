@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-hex-template",
+  "tests_run": 7,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "No MCP tools expose the rustre-hex-template library API. tools/list on the rustre-mcp.exe stdio server (119 tools total) yields only 'binary.hexdump' for any hex/template/magic match; no tool wraps Template/TemplateField/ParsedStruct/apply_template, auto_select_template, diff_parsed, flatten_parsed, template_stats, or any of the built-in templates (pe_section_header, elf64_ehdr, png_chunk, zip_eocd). Grep over crates/rustre-mcp-server and all crates/**/Cargo.toml for rustre_hex_template / HexTemplate / apply_template returned no matches: the crate is not even a dependency of the MCP server or tools layer. The public surface of rustre-hex-template is not reachable through any MCP tool, so MCP-vs-validator parity comparison cannot be executed. Validator (validation/validators/rustre-hex-template.py) self-test passes standalone: ELF64 ehdr parse + e_entry value, diff_parsed change detection, template_stats (14 fields), JSON export, PNG chunk repeat=\"length\" blob read, Expr And/Eq/Gt eval (true+false branches) — 7/7 assertions OK. No workspace fix applied because there is nothing to reconcile; the gap is a missing MCP wrapper, not a bug in rustre-hex-template."
+}

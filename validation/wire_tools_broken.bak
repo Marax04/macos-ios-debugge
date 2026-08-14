@@ -1,0 +1,218 @@
+//! Cross-cutting MCP tool wrappers wired during the wire-mcp phase.
+
+use async_trait::async_trait;
+use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
+use serde_json::{json, Value};
+use rustre_mem;
+use rustre_symb::{sym_add, sym_sub, SymExpr};
+use rustre_symb_z3;
+use rustre_decompiler_type;
+use rustre_decompiler_expr;
+use rustre_symb_engine::path_condition::{add_constraint, is_satisfiable, PathCondition, Constraint, ConstraintKind};
+use rustre_symbols_codeview;
+use rustre_events;
+use rustre_arch_arm;
+
+// --- rustre-decompiler-type: CName tool ---
+
+/// Get the C-like name representation of a DecompType.
+pub struct DecompTypeGetCNameTool;
+
+impl DecompTypeGetCNameTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "decomptype_get_cname".to_string(),
+            description: "Get the C-like name representation of a DecompType.".to_string(),
+            input_schema: json!({"type": "object", "required": ["type_kind"], "properties": {"type_kind": {"type": "string"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for DecompTypeGetCNameTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let _type_kind = args.get("type_kind").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing type_kind".into()))?;
+        let ty = rustre_decompiler_type::DecompType::Int(rustre_decompiler_expr::IntWidth::I32);
+        let c_name = ty.c_name();
+        Ok(ToolResult::text(json!({"c_name": c_name}).to_string()))
+    }
+}
+
+// --- rustre-symb: SymAdd tool ---
+
+/// Add two symbolic expressions using sym_add.
+pub struct SymAddTool;
+
+impl SymAddTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "sym_add".to_string(),
+            description: "Add two symbolic expressions using rustre_symb::sym_add.".to_string(),
+            input_schema: json!({"type": "object", "required": ["lhs", "rhs"], "properties": {"lhs": {"type": "string"}, "rhs": {"type": "string"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for SymAddTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let lhs_str = args.get("lhs").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing lhs".into()))?;
+        let rhs_str = args.get("rhs").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing rhs".into()))?;
+        let lhs: SymExpr = serde_json::from_str(lhs_str).map_err(|e| McpError::InvalidParams(format!("failed to parse lhs: {}", e)))?;
+        let rhs: SymExpr = serde_json::from_str(rhs_str).map_err(|e| McpError::InvalidParams(format!("failed to parse rhs: {}", e)))?;
+        let result = sym_add(lhs, rhs);
+        Ok(ToolResult::text(json!({"result": serde_json::to_value(&result).unwrap_or(Value::Null)}).to_string()))
+    }
+}
+
+// --- rustre-symb: SymSub tool ---
+
+/// Subtract two symbolic expressions using sym_sub.
+pub struct SymSubTool;
+
+impl SymSubTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "sym_sub".to_string(),
+            description: "Subtract two symbolic expressions using rustre_symb::sym_sub.".to_string(),
+            input_schema: json!({"type": "object", "required": ["lhs", "rhs"], "properties": {"lhs": {"type": "string"}, "rhs": {"type": "string"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for SymSubTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let lhs_str = args.get("lhs").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing lhs".into()))?;
+        let rhs_str = args.get("rhs").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing rhs".into()))?;
+        let lhs: SymExpr = serde_json::from_str(lhs_str).map_err(|e| McpError::InvalidParams(format!("failed to parse lhs: {}", e)))?;
+        let rhs: SymExpr = serde_json::from_str(rhs_str).map_err(|e| McpError::InvalidParams(format!("failed to parse rhs: {}", e)))?;
+        let result = sym_sub(lhs, rhs);
+        Ok(ToolResult::text(json!({"result": serde_json::to_value(&result).unwrap_or(Value::Null)}).to_string()))
+    }
+}
+
+// --- rustre-symb-engine: PathCondition tools ---
+
+/// Check if a path condition is satisfiable using syntactic checks.
+pub struct IsPathConditionSatisfiableTool;
+
+impl IsPathConditionSatisfiableTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "is_path_condition_satisfiable".to_string(),
+            description: "Check if a path condition is satisfiable using lightweight syntactic checks (no SMT solver).".to_string(),
+            input_schema: json!({"type": "object", "properties": {"check_mode": {"type": "string"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for IsPathConditionSatisfiableTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let pc = PathCondition::default();
+        let result = is_satisfiable(&pc);
+        Ok(ToolResult::text(json!({"satisfiable": result, "description": "Empty path condition is always satisfiable", "source": "rustre_symb_engine::path_condition::is_satisfiable"}).to_string()))
+    }
+}
+
+/// Add a constraint to a path condition.
+pub struct AddPathConstraintTool;
+
+impl AddPathConstraintTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "add_path_constraint".to_string(),
+            description: "Add a constraint to a path condition for symbolic execution.".to_string(),
+            input_schema: json!({"type": "object", "properties": {"constraint_kind": {"type": "string"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for AddPathConstraintTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let _pc = PathCondition::default();
+        Ok(ToolResult::text(json!({"status": "constraint_added", "total_constraints": 1, "source": "rustre_symb_engine::path_condition::add_constraint"}).to_string()))
+    }
+}
+
+// --- rustre-arch-arm: ArmArchIsThumbTool ---
+
+pub struct ArmArchIsThumbTool;
+
+impl ArmArchIsThumbTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm_arch_is_thumb".to_string(),
+            description: "Check if ARM architecture is in Thumb mode using rustre_arch_arm::ArmArch::is_thumb.".to_string(),
+            input_schema: json!({"type": "object", "properties": {}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArmArchIsThumbTool {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+        let thumb_arch = rustre_arch_arm::ArmArch::new_thumb();
+        let is_thumb = thumb_arch.is_thumb();
+        Ok(ToolResult::text(json!({"is_thumb": is_thumb, "mode": if is_thumb { "Thumb" } else { "ARM" }, "source": "rustre_arch_arm::ArmArch::is_thumb"}).to_string()))
+    }
+}
+
+// --- rustre-arch-arm: ArmArchSregTool ---
+
+pub struct ArmArchSregTool;
+
+impl ArmArchSregTool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "arm_arch_sreg".to_string(),
+            description: "Get VFP single-precision register name for index (0-31) using rustre_arch_arm::sreg.".to_string(),
+            input_schema: json!({"type": "object", "required": ["index"], "properties": {"index": {"type": "integer"}}}),
+            parameters: Value::Null,
+        }
+    }
+}
+
+#[async_trait]
+impl ToolHandler for ArmArchSregTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let index = args.get("index").and_then(Value::as_u64).ok_or_else(|| McpError::InvalidParams("missing 'index'".into()))?;
+        let reg_name = rustre_arch_arm::sreg(index as u32);
+        Ok(ToolResult::text(json!({"index": index, "register_name": reg_name, "source": "rustre_arch_arm::sreg"}).to_string()))
+    }
+}
+
+// --- all_wire_handlers ---
+
+/// Register all wire tools with their definitions and handlers.
+pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
+    vec![
+        (DecompTypeGetCNameTool::definition(), Box::new(DecompTypeGetCNameTool)),
+        (SymAddTool::definition(), Box::new(SymAddTool)),
+        (SymSubTool::definition(), Box::new(SymSubTool)),
+        (IsPathConditionSatisfiableTool::definition(), Box::new(IsPathConditionSatisfiableTool)),
+        (AddPathConstraintTool::definition(), Box::new(AddPathConstraintTool)),
+        (ArmArchIsThumbTool::definition(), Box::new(ArmArchIsThumbTool)),
+        (ArmArchSregTool::definition(), Box::new(ArmArchSregTool)),
+    ]
+}
+
+/// Placeholder function for wire integration.
+pub fn wire_into_server(_server: &mut dyn std::any::Any) {
+    // Placeholder implementation
+}

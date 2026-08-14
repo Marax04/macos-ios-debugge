@@ -1,0 +1,910 @@
+{
+  "module": "arch_wasm_remaining",
+  "tools_hardened": 70,
+  "checks_passed": 70,
+  "checks_failed": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "arch_wasm_valtype_from_byte",
+      "pass": true,
+      "expected": {
+        "name": "i32"
+      },
+      "actual": {
+        "name": "i32"
+      }
+    },
+    {
+      "tool": "arch_wasm_section_id_from_byte",
+      "pass": true,
+      "expected": {
+        "name": "type"
+      },
+      "actual": {
+        "name": "type"
+      }
+    },
+    {
+      "tool": "arch_wasm_external_kind_from_byte",
+      "pass": true,
+      "expected": {
+        "name": "func"
+      },
+      "actual": {
+        "name": "func"
+      }
+    },
+    {
+      "tool": "arch_wasm_mutability_from_byte",
+      "pass": true,
+      "expected": {
+        "name": "mutable"
+      },
+      "actual": {
+        "name": "mutable"
+      }
+    },
+    {
+      "tool": "arch_wasm_valtype_name",
+      "pass": true,
+      "expected": {
+        "name": "i32"
+      },
+      "actual": {
+        "name": "i32"
+      }
+    },
+    {
+      "tool": "arch_wasm_valtype_is_numeric",
+      "pass": true,
+      "expected": {
+        "is_numeric": true
+      },
+      "actual": {
+        "is_numeric": true
+      }
+    },
+    {
+      "tool": "arch_wasm_valtype_is_reference",
+      "pass": true,
+      "expected": {
+        "is_reference": true
+      },
+      "actual": {
+        "is_reference": true
+      }
+    },
+    {
+      "tool": "arch_wasm_section_name",
+      "pass": true,
+      "expected": {
+        "name": "type"
+      },
+      "actual": {
+        "name": "type"
+      }
+    },
+    {
+      "tool": "arch_wasm_external_kind_name",
+      "pass": true,
+      "expected": {
+        "name": "func"
+      },
+      "actual": {
+        "name": "func"
+      }
+    },
+    {
+      "tool": "arch_wasm_limits_decode",
+      "pass": true,
+      "expected": {
+        "min": 1
+      },
+      "actual": {
+        "min": 1
+      }
+    },
+    {
+      "tool": "arch_wasm_functype_decode",
+      "pass": true,
+      "actual": {
+        "params": [
+          "i32"
+        ],
+        "results": [
+          "i64"
+        ],
+        "param_count": 1,
+        "result_count": 1
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_module_header_parse",
+      "pass": true,
+      "expected": {
+        "valid": true
+      },
+      "actual": {
+        "valid": true
+      }
+    },
+    {
+      "tool": "arch_wasm_constants",
+      "pass": true,
+      "actual": {
+        "magic_hex": "0061736d",
+        "version_hex": "01000000"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_simd_mnemonic",
+      "pass": true,
+      "actual": {
+        "sub": 0,
+        "mnemonic": "v128.load"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_disassemble",
+      "pass": true,
+      "actual": {
+        "mnemonic": "nop",
+        "operands": "",
+        "size": 1,
+        "flags_bits": 0
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_arch_info",
+      "pass": true,
+      "actual": {
+        "name": "wasm",
+        "pointer_size": 4,
+        "endian": "Little"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_memory_type_decode",
+      "pass": true,
+      "expected": {
+        "min": 1
+      },
+      "actual": {
+        "min": 1
+      }
+    },
+    {
+      "tool": "arch_wasm_table_type_decode",
+      "pass": true,
+      "actual": {
+        "element_type": "funcref",
+        "min": 10,
+        "max": null,
+        "consumed": 3
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_global_type_decode",
+      "pass": true,
+      "actual": {
+        "content_type": "i32",
+        "mutability": "const",
+        "consumed": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_valtype_byte",
+      "pass": true,
+      "actual": {
+        "name": "i32",
+        "byte": 127
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_function_stats",
+      "pass": true,
+      "actual": {
+        "instruction_count": 2,
+        "call_count": 0,
+        "branch_count": 0,
+        "load_count": 0,
+        "store_count": 0,
+        "return_count": 0,
+        "unreachable_count": 2
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_name_subsection_from_byte",
+      "pass": true,
+      "expected": {
+        "name": "function"
+      },
+      "actual": {
+        "name": "function"
+      }
+    },
+    {
+      "tool": "arch_wasm_decode_fc_prefix",
+      "pass": true,
+      "actual": {
+        "error": "invalid file format: truncated 0xFC instruction"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_decode_fd_prefix",
+      "pass": true,
+      "actual": {
+        "error": "invalid file format: truncated LEB128"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_decode_fe_prefix",
+      "pass": true,
+      "actual": {
+        "error": "invalid file format: truncated LEB128"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_linear_disassemble",
+      "pass": true,
+      "actual": {
+        "count": 2,
+        "errors": 0,
+        "instructions": [
+          {
+            "mnemonic": "nop",
+            "operands": "",
+            "size": 1
+          },
+          {
+            "mnemonic": "nop",
+            "operands": "",
+            "size": 1
+          }
+        ]
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_as_i32",
+      "pass": true,
+      "actual": {
+        "as_i32": 42,
+        "as_i64": null,
+        "source": "rustre_arch_wasm::WasmValue::as_i32"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_as_i64",
+      "pass": true,
+      "actual": {
+        "as_i64": 99,
+        "as_i32": null,
+        "source": "rustre_arch_wasm::WasmValue::as_i64"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_as_f32",
+      "pass": true,
+      "actual": {
+        "as_f32": 1.5,
+        "as_f64": null,
+        "source": "rustre_arch_wasm::WasmValue::as_f32"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_as_f64",
+      "pass": true,
+      "actual": {
+        "as_f64": 3.14,
+        "as_i32": null,
+        "source": "rustre_arch_wasm::WasmValue::as_f64"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_type_tag",
+      "pass": true,
+      "actual": {
+        "tag": "i64",
+        "source": "rustre_arch_wasm::WasmValue::value_type"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_stack_ops",
+      "pass": true,
+      "actual": {
+        "empty_start": true,
+        "depth_after_push": 2,
+        "peek": 2,
+        "popped": 2,
+        "final_depth": 1,
+        "source": "rustre_arch_wasm::WasmStack"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_stack_drain",
+      "pass": true,
+      "actual": {
+        "drained_count": 2,
+        "final_depth": 0,
+        "source": "rustre_arch_wasm::WasmStack::drain"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_decode_type",
+      "pass": true,
+      "expected": {
+        "recognized": true
+      },
+      "actual": {
+        "recognized": true
+      }
+    },
+    {
+      "tool": "arch_wasm_decode_func_type",
+      "pass": true,
+      "actual": {
+        "params": 1,
+        "results": 1,
+        "source": "rustre_arch_wasm::decode_func_type"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_functype_arity",
+      "pass": true,
+      "actual": {
+        "params": 1,
+        "results": 1,
+        "source": "rustre_arch_wasm::WasmFuncType::arity"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_name_subsection_name",
+      "pass": true,
+      "actual": {
+        "name": "module",
+        "source": "rustre_arch_wasm::NameSubsectionType::name"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_mutability_probe",
+      "pass": true,
+      "actual": {
+        "const": "Some(Const)",
+        "mutable": "Some(Mutable)",
+        "bad": "None",
+        "source": "rustre_arch_wasm::WasmMutability::from_byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_valuetype_byte_roundtrip",
+      "pass": true,
+      "expected": {
+        "reencoded": 127,
+        "roundtrip_ok": true
+      },
+      "actual": {
+        "reencoded": 127,
+        "roundtrip_ok": true
+      }
+    },
+    {
+      "tool": "arch_wasm_cf_basic_blocks",
+      "pass": true,
+      "actual": {
+        "instr_count": 8,
+        "block_count": 3,
+        "source": "rustre_arch_wasm::WasmControlFlow::extract_basic_blocks"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_cf_find_block_end",
+      "pass": true,
+      "actual": {
+        "start": 0,
+        "end_index": 3,
+        "instr_count": 6,
+        "source": "rustre_arch_wasm::WasmControlFlow::find_block_end"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_executor_new",
+      "pass": true,
+      "actual": {
+        "memory_bytes": 64,
+        "locals": 2,
+        "stack_depth": 0,
+        "source": "rustre_arch_wasm::WasmExecutor::new"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_executor_reset",
+      "pass": true,
+      "actual": {
+        "depth_before": 2,
+        "depth_after": 0,
+        "memory_len": 32,
+        "source": "rustre_arch_wasm::WasmExecutor::reset"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_simd_probe",
+      "pass": true,
+      "actual": {
+        "probed": 5,
+        "hits": 4,
+        "source": "rustre_arch_wasm::simd_opcode_mnemonic"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_valtype_ref_probe",
+      "pass": true,
+      "actual": {
+        "probed": 8,
+        "reference": 2,
+        "numeric": 4,
+        "source": "rustre_arch_wasm::WasmValueType"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_section_id_probe",
+      "pass": true,
+      "actual": {
+        "probed": 14,
+        "hits": 13,
+        "source": "rustre_arch_wasm::WasmSectionId::from_byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_external_kind_probe",
+      "pass": true,
+      "actual": {
+        "probed": 5,
+        "hits": 4,
+        "source": "rustre_arch_wasm::WasmExternalKind::from_byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_value_as_v128",
+      "pass": true,
+      "actual": {
+        "hex": "abababababababababababababababab",
+        "len": 16,
+        "is_some": true,
+        "source": "rustre_arch_wasm::WasmValue::as_v128"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_stack_new_empty",
+      "pass": true,
+      "expected": {
+        "is_empty": true,
+        "depth": 0
+      },
+      "actual": {
+        "is_empty": true,
+        "depth": 0
+      }
+    },
+    {
+      "tool": "arch_wasm_linear_disassembler_new",
+      "pass": true,
+      "actual": {
+        "initial_offset": 0,
+        "input_len": 2,
+        "source": "rustre_arch_wasm::WasmLinearDisassembler::new"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_function_stats_from_bytes",
+      "pass": true,
+      "actual": {
+        "instruction_count": 2,
+        "call_count": 0,
+        "branch_count": 0,
+        "load_count": 0,
+        "store_count": 0,
+        "return_count": 0,
+        "unreachable_count": 0,
+        "source": "rustre_arch_wasm::WasmFunctionStats::from_bytes"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_name_subsection_type_probe",
+      "pass": true,
+      "actual": {
+        "probes": [
+          {
+            "byte": 0,
+            "name": "module"
+          },
+          {
+            "byte": 1,
+            "name": "function"
+          },
+          {
+            "byte": 2,
+            "name": "local"
+          },
+          {
+            "byte": 3,
+            "name": "label"
+          },
+          {
+            "byte": 4,
+            "name": "type"
+          },
+          {
+            "byte": 5,
+            "name": "table"
+          },
+          {
+            "byte": 6,
+            "name": "memory"
+          },
+          {
+            "byte": 7,
+            "name": "global"
+          },
+          {
+            "byte": 8,
+            "name": "element"
+          },
+          {
+            "byte": 9,
+            "name": "data"
+          },
+          {
+            "byte": 10,
+            "name": null
+          }
+        ],
+        "source": "rustre_arch_wasm::NameSubsectionType::from_byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_executor_execute_instruction",
+      "pass": true,
+      "expected": {
+        "result": 8
+      },
+      "actual": {
+        "result": 8
+      }
+    },
+    {
+      "tool": "arch_wasm_control_flow_extract_blocks",
+      "pass": true,
+      "actual": {
+        "count": 2,
+        "blocks": [
+          {
+            "start": 0,
+            "end": 2
+          },
+          {
+            "start": 2,
+            "end": 4
+          }
+        ],
+        "source": "rustre_arch_wasm::WasmControlFlow::extract_basic_blocks"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_module_header_valid_check",
+      "pass": true,
+      "expected": {
+        "valid_parses": true
+      },
+      "actual": {
+        "valid_parses": true
+      }
+    },
+    {
+      "tool": "arch_wasm_valtype_all_bytes",
+      "pass": true,
+      "actual": {
+        "types": [
+          {
+            "name": "i32",
+            "byte": 127,
+            "is_numeric": true,
+            "is_reference": false
+          },
+          {
+            "name": "i64",
+            "byte": 126,
+            "is_numeric": true,
+            "is_reference": false
+          },
+          {
+            "name": "f32",
+            "byte": 125,
+            "is_numeric": true,
+            "is_reference": false
+          },
+          {
+            "name": "f64",
+            "byte": 124,
+            "is_numeric": true,
+            "is_reference": false
+          },
+          {
+            "name": "v128",
+            "byte": 123,
+            "is_numeric": false,
+            "is_reference": false
+          },
+          {
+            "name": "funcref",
+            "byte": 112,
+            "is_numeric": false,
+            "is_reference": true
+          },
+          {
+            "name": "externref",
+            "byte": 111,
+            "is_numeric": false,
+            "is_reference": true
+          }
+        ],
+        "count": 7,
+        "source": "rustre_arch_wasm::WasmValueType::byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_section_id_all",
+      "pass": true,
+      "actual": {
+        "sections": [
+          {
+            "byte": 0,
+            "name": "custom"
+          },
+          {
+            "byte": 1,
+            "name": "type"
+          },
+          {
+            "byte": 2,
+            "name": "import"
+          },
+          {
+            "byte": 3,
+            "name": "function"
+          },
+          {
+            "byte": 4,
+            "name": "table"
+          },
+          {
+            "byte": 5,
+            "name": "memory"
+          },
+          {
+            "byte": 6,
+            "name": "global"
+          },
+          {
+            "byte": 7,
+            "name": "export"
+          },
+          {
+            "byte": 8,
+            "name": "start"
+          },
+          {
+            "byte": 9,
+            "name": "element"
+          },
+          {
+            "byte": 10,
+            "name": "code"
+          },
+          {
+            "byte": 11,
+            "name": "data"
+          },
+          {
+            "byte": 12,
+            "name": "datacount"
+          }
+        ],
+        "count": 13,
+        "source": "rustre_arch_wasm::WasmSectionId::from_byte"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_limits_no_max_check",
+      "pass": true,
+      "actual": {
+        "min": 5,
+        "has_max": false,
+        "consumed": 2,
+        "source": "rustre_arch_wasm::WasmLimits::decode"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_call_graph_edge_count",
+      "pass": true,
+      "actual": {
+        "edge_count": 3,
+        "function_count": 3,
+        "source": "rustre_arch_wasm::wasm_analysis::FunctionCallGraph::edge_count"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_call_graph_callees_of",
+      "pass": true,
+      "actual": {
+        "caller": 0,
+        "callees": [
+          1,
+          2
+        ],
+        "source": "rustre_arch_wasm::wasm_analysis::FunctionCallGraph::callees_of"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_call_graph_reachable_from",
+      "pass": true,
+      "actual": {
+        "root": 0,
+        "reachable_count": 4,
+        "source": "rustre_arch_wasm::wasm_analysis::FunctionCallGraph::reachable_from"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_call_graph_roots_leaves",
+      "pass": true,
+      "actual": {
+        "roots": [
+          0,
+          3
+        ],
+        "leaves": [
+          1,
+          2,
+          3
+        ],
+        "source": "rustre_arch_wasm::wasm_analysis::FunctionCallGraph::roots"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_call_graph_recursive",
+      "pass": true,
+      "actual": {
+        "recursive": [
+          0
+        ],
+        "source": "rustre_arch_wasm::wasm_analysis::FunctionCallGraph::recursive_functions"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_indirect_call_table_resolve",
+      "pass": true,
+      "actual": {
+        "slot": 0,
+        "resolved": 10,
+        "source": "rustre_arch_wasm::wasm_analysis::IndirectCallTable::resolve"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_indirect_call_table_entry_count",
+      "pass": true,
+      "actual": {
+        "entry_count": 3,
+        "unique_functions": 3,
+        "table_size": 16,
+        "source": "rustre_arch_wasm::wasm_analysis::IndirectCallTable::entry_count"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_function_ref_func_import",
+      "pass": true,
+      "actual": {
+        "func_idx": 0,
+        "func_is_import": false,
+        "import_idx": 0,
+        "import_is_import": true,
+        "source": "rustre_arch_wasm::wasm_analysis::WasmFunctionRef"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_data_flow_state_probe",
+      "pass": true,
+      "actual": {
+        "popped": "i64",
+        "local0": "f64",
+        "missing_default": "i32",
+        "stack_depth": 1,
+        "source": "rustre_arch_wasm::wasm_analysis::DataFlowState"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_data_flow_analysis_record",
+      "pass": true,
+      "actual": {
+        "offset": 0,
+        "hit": true,
+        "miss": false,
+        "state_count": 1,
+        "source": "rustre_arch_wasm::wasm_analysis::DataFlowAnalysis::record"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_module_header_magic_ok",
+      "pass": true,
+      "actual": {
+        "canonical_ok": true,
+        "bad_rejected": true,
+        "source": "rustre_arch_wasm::WasmModuleHeader::parse"
+      },
+      "note": ""
+    },
+    {
+      "tool": "arch_wasm_limits_has_max",
+      "pass": true,
+      "actual": {
+        "min_only_min": 4,
+        "min_only_max": null,
+        "min_only_bytes": 2,
+        "min_max_min": 2,
+        "min_max_max": 16,
+        "min_max_bytes": 3,
+        "source": "rustre_arch_wasm::WasmLimits::decode"
+      },
+      "note": ""
+    }
+  ]
+}

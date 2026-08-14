@@ -1,0 +1,8 @@
+{
+  "category": "triage_entropy",
+  "tools_in_category": 55,
+  "checks_total": 25,
+  "checks_passed": 7,
+  "checks_skipped": 14,
+  "mismatches": []
+}

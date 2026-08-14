@@ -1,0 +1,60 @@
+{
+  "category": "bpf",
+  "tools_hardened": 2,
+  "tools_passed": 10,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 1,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 2,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 206,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 0,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 207,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper",
+      "id": 9999,
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper_by_name",
+      "name": "bpf_map_lookup_elem",
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper_by_name",
+      "name": "bpf_map_update_elem",
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper_by_name",
+      "name": "bpf_tcp_raw_check_syncookie_ipv4",
+      "status": "PASS"
+    },
+    {
+      "tool": "bpf_lookup_helper_by_name",
+      "name": "bpf_does_not_exist",
+      "status": "PASS"
+    }
+  ]
+}

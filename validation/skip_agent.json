@@ -1,0 +1,66 @@
+[
+  {
+    "tool": "agent_llm_mock_provider_complete",
+    "reason": "nondeterministic mock (uses internal queued responses)"
+  },
+  {
+    "tool": "agent_id_new_wire",
+    "reason": "nondeterministic (UUID generation)"
+  },
+  {
+    "tool": "agent_session_new_v2",
+    "reason": "nondeterministic (UUID/timestamp)"
+  },
+  {
+    "tool": "agent_rate_limiter_acquire",
+    "reason": "time-dependent"
+  },
+  {
+    "tool": "agent_standard_re_pipeline",
+    "reason": "requires active binary analysis session"
+  },
+  {
+    "tool": "agent_workflow_builtin_list",
+    "reason": "returns internal implementation list; no fixed ground truth"
+  },
+  {
+    "tool": "agent_workflow_templates_list",
+    "reason": "returns internal implementation list; no fixed ground truth"
+  },
+  {
+    "tool": "agent_builtin_workflows",
+    "reason": "returns internal implementation list; no fixed ground truth"
+  },
+  {
+    "tool": "agent_prompts_builtin_templates_count",
+    "reason": "count depends on compiled-in templates; not independently computable without running binary"
+  },
+  {
+    "tool": "agent_prompts_registry_count",
+    "reason": "count depends on compiled-in templates"
+  },
+  {
+    "tool": "agent_prompts_builtin_template_names",
+    "reason": "depends on compiled-in templates"
+  },
+  {
+    "tool": "agent_llm_builtin_models",
+    "reason": "depends on compiled-in model list"
+  },
+  {
+    "tool": "agent_llm_estimate_cost",
+    "reason": "depends on model pricing table in binary"
+  },
+  {
+    "tool": "agent_llm_extract_code_blocks",
+    "reason": "depends on LLM response parser heuristics"
+  },
+  {
+    "tool": "agent_cast_u64_to_f32",
+    "reason": "f32 precision comparison unreliable over JSON (JSON has no f32 type)"
+  },
+  {
+    "tool": "agent_cast_f64_to_f32",
+    "reason": "f32 precision comparison unreliable over JSON"
+  }
+]

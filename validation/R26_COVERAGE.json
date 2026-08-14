@@ -1,0 +1,2191 @@
+{
+  "total_tools": 119,
+  "total_crates": 203,
+  "per_crate": [
+    {
+      "crate": "rustre-adb",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "adb_*"
+      ]
+    },
+    {
+      "crate": "rustre-agent",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-agent-llm",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-agent-prompts",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-agent-workflow",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis",
+      "tool_count": 9,
+      "tool_names": [
+        "analyze.full",
+        "analyze.function",
+        "analyze.basic_block",
+        "analyze.cross_refs",
+        "analyze.call_graph",
+        "analyze.strings",
+        "analyze.imports",
+        "analyze.exports",
+        "survey_binary"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-callconv",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "analysis_callconv_*"
+      ]
+    },
+    {
+      "crate": "rustre-analysis-cfg",
+      "tool_count": 3,
+      "tool_names": [
+        "analysis_basic_blocks_path",
+        "analysis_dominators_path",
+        "analysis_loops_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-dataflow",
+      "tool_count": 2,
+      "tool_names": [
+        "trace_data_flow",
+        "analysis_trace_data_flow_path"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-fn",
+      "tool_count": 5,
+      "tool_names": [
+        "analysis_fn_detect_extra",
+        "function_list_by_kind",
+        "noreturn_infer",
+        "analysis_fn_detect_functions_path",
+        "analysis_fn_cfg_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-string",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_string_scan_path"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-type",
+      "tool_count": 9,
+      "tool_names": [
+        "infer_types_path",
+        "type_propagate_path",
+        "struct_field_at_path",
+        "type_infer",
+        "type_query",
+        "type_inspect",
+        "type_apply_batch",
+        "declare_type",
+        "analysis_infer_types_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-typerecov",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_recover_structs_path"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-analysis-vsa",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "analysis_vsa_*"
+      ]
+    },
+    {
+      "crate": "rustre-analysis-vtable",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "analysis_vtable_*"
+      ]
+    },
+    {
+      "crate": "rustre-analysis-xref",
+      "tool_count": 10,
+      "tool_names": [
+        "analysis_xref_call_graph",
+        "analysis_xref_callees",
+        "analysis_xref_get_xrefs_to",
+        "analysis_xref_get_xrefs_from",
+        "analysis_xref_to_path",
+        "analysis_xref_from_path",
+        "analysis_xref_call_graph_root_functions",
+        "analysis_xref_string_ref_counts",
+        "analysis_callgraph_path",
+        "analysis_callees_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-6502",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_6502_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-68k",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_68k_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-arm",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_arm_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-arm64",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_arm64"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-avr",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_avr_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-bpf",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_bpf_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-cil",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_cil"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-dex",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_dex_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-jvm",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_jvm"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-lua",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_lua_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-luajit",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_luajit_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-mips",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_mips"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-msp430",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_msp430_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-ppc",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_ppc_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-registry",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-riscv",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_riscv"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-sparc",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_sparc_*"
+      ]
+    },
+    {
+      "crate": "rustre-arch-wasm",
+      "tool_count": 1,
+      "tool_names": [
+        "analysis_disasm_at_path_wasm"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-x86",
+      "tool_count": 3,
+      "tool_names": [
+        "disasm.at",
+        "disasm.function",
+        "analysis_disasm_at_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-arch-z80",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "arch_z80_*"
+      ]
+    },
+    {
+      "crate": "rustre-bin",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-cli",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-core",
+      "tool_count": 13,
+      "tool_names": [
+        "binary.info",
+        "binary.hexdump",
+        "binary.read",
+        "binary.search_bytes",
+        "binary.search_strings",
+        "binary.entropy",
+        "kg.query",
+        "kg.annotate",
+        "kg.search",
+        "kg.set_function_name",
+        "kg.set_comment",
+        "kg.get_function",
+        "kg.list_functions"
+      ],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-crypto-id",
+      "tool_count": 3,
+      "tool_names": [
+        "crypto.identify",
+        "analysis_crypto_scan_path",
+        "crypto_xor_decode"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-crypto-oracle",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "crypto_oracle_*"
+      ]
+    },
+    {
+      "crate": "rustre-crypto-whitebox",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "crypto_whitebox_*"
+      ]
+    },
+    {
+      "crate": "rustre-daemon",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-db",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-debug",
+      "tool_count": 12,
+      "tool_names": [
+        "debug.launch",
+        "debug.attach",
+        "debug.continue",
+        "debug.step_into",
+        "debug.step_over",
+        "debug.set_breakpoint",
+        "debug.remove_breakpoint",
+        "debug.read_registers",
+        "debug.read_memory",
+        "debug.write_memory",
+        "debug.backtrace",
+        "debug.evaluate"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-debug-frida",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_frida_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-gdb",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_gdb_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-kgdb",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_kgdb_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-linux",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_linux_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-macos",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_macos_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-registry",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-debug-unicorn",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_unicorn_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-windbg",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_windbg_*"
+      ]
+    },
+    {
+      "crate": "rustre-debug-windows",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "debug_windows_*"
+      ]
+    },
+    {
+      "crate": "rustre-decompiler",
+      "tool_count": 7,
+      "tool_names": [
+        "decompile.function",
+        "decompile.rename_variable",
+        "decompile.set_type",
+        "decompiler_core_batch_decompile",
+        "decompiler_recover_structs",
+        "decompiler_stack_frame_report",
+        "decompile_function_path"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-decompiler-c",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "decompiler_c_*"
+      ]
+    },
+    {
+      "crate": "rustre-decompiler-cfs",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "decompiler_cfs_*"
+      ]
+    },
+    {
+      "crate": "rustre-decompiler-expr",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "decompiler_expr_*"
+      ]
+    },
+    {
+      "crate": "rustre-decompiler-ghidra",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "decompiler_ghidra_*"
+      ]
+    },
+    {
+      "crate": "rustre-decompiler-type",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "decompiler_type_*"
+      ]
+    },
+    {
+      "crate": "rustre-demangle",
+      "tool_count": 5,
+      "tool_names": [
+        "symbols_demangle_auto",
+        "symbols_demangle_rust",
+        "symbols_demangle_msvc",
+        "symbols_demangle_itanium",
+        "symbols_demangle_swift"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-deobf",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-antianti",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_antianti_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-cff",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_cff_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-iadl",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_iadl_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-mba",
+      "tool_count": 1,
+      "tool_names": [
+        "deobf_mba_normalize"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-deobf-mhcde",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_mhcde_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-opaque",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_opaque_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-smc",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_smc_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-string",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_string_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-vm",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_vm_*"
+      ]
+    },
+    {
+      "crate": "rustre-deobf-vmlift",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "deobf_vmlift_*"
+      ]
+    },
+    {
+      "crate": "rustre-diff",
+      "tool_count": 5,
+      "tool_names": [
+        "diff.compare",
+        "diff_compare",
+        "diff_bindiff",
+        "diff_minhash",
+        "diff_semantic"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-diff-bindiff",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "diff_bindiff_*"
+      ]
+    },
+    {
+      "crate": "rustre-diff-semantic",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "diff_semantic_*"
+      ]
+    },
+    {
+      "crate": "rustre-dotnet",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "dotnet_*"
+      ]
+    },
+    {
+      "crate": "rustre-dotnet-decompile",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "dotnet_decompile_*"
+      ]
+    },
+    {
+      "crate": "rustre-dotnet-edit",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "dotnet_edit_*"
+      ]
+    },
+    {
+      "crate": "rustre-dotnet-metadata",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "dotnet_metadata_*"
+      ]
+    },
+    {
+      "crate": "rustre-emu",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "emu_*"
+      ]
+    },
+    {
+      "crate": "rustre-emu-qiling",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "emu_qiling_*"
+      ]
+    },
+    {
+      "crate": "rustre-emu-shellcode",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "emu_shellcode_*"
+      ]
+    },
+    {
+      "crate": "rustre-emu-unicorn",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "emu_unicorn_*"
+      ]
+    },
+    {
+      "crate": "rustre-events",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-flirt",
+      "tool_count": 3,
+      "tool_names": [
+        "flirt_apply_auto",
+        "fingerprint_compute",
+        "fingerprint_match"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-flirt-apply",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "flirt_apply_*"
+      ]
+    },
+    {
+      "crate": "rustre-flirt-gen",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "flirt_gen_*"
+      ]
+    },
+    {
+      "crate": "rustre-forensics",
+      "tool_count": 3,
+      "tool_names": [
+        "forensics.open_dump",
+        "forensics.run_plugin",
+        "forensics.list_plugins"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-forensics-fs",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "forensics_fs_*"
+      ]
+    },
+    {
+      "crate": "rustre-forensics-mem",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "forensics_mem_*"
+      ]
+    },
+    {
+      "crate": "rustre-forensics-plugins",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "forensics_plugins_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz-afl",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_afl_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz-cov",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_cov_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz-libfuzzer",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_libfuzzer_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz-net",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_net_*"
+      ]
+    },
+    {
+      "crate": "rustre-fuzz-sanitizers",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "fuzz_sanitizers_*"
+      ]
+    },
+    {
+      "crate": "rustre-graph",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-gui",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-hex",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-hex-pattern",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-hex-template",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-hex-view",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il-hlil",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il-lift",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il-llil",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il-mlil",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-il-passes",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-knowledge",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-loader",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-android",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_android_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-console",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_console_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-dotnet",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_dotnet_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-elf",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_elf_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-firmware",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_firmware_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-java",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_java_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-lua",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_lua_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-luajit",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_luajit_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-macho",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_macho_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-ole",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_ole_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-pdf",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_pdf_*"
+      ]
+    },
+    {
+      "crate": "rustre-loader-pe",
+      "tool_count": 1,
+      "tool_names": [
+        "loader_core_md5"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-loader-registry",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-loader-wasm",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "loader_wasm_*"
+      ]
+    },
+    {
+      "crate": "rustre-mcp",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-mcp-federation",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-mcp-server",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-mcp-tools",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-mem",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-mobile",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-android",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_android_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-apktool",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_apktool_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-dyld",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_dyld_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-ios",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_ios_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-ipa",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_ipa_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-jadx",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_jadx_*"
+      ]
+    },
+    {
+      "crate": "rustre-mobile-smali",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "mobile_smali_*"
+      ]
+    },
+    {
+      "crate": "rustre-net",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "net_*"
+      ]
+    },
+    {
+      "crate": "rustre-net-dissect",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "net_dissect_*"
+      ]
+    },
+    {
+      "crate": "rustre-net-pcap",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "net_pcap_*"
+      ]
+    },
+    {
+      "crate": "rustre-net-proxy",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "net_proxy_*"
+      ]
+    },
+    {
+      "crate": "rustre-net-rules",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "net_rules_*"
+      ]
+    },
+    {
+      "crate": "rustre-patch",
+      "tool_count": 5,
+      "tool_names": [
+        "patch_patch_find_code_caves",
+        "patch_bytes",
+        "patch_nop_range",
+        "patch_xor_region",
+        "patch_asm"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-pe-editor",
+      "tool_count": 2,
+      "tool_names": [
+        "patch_pe_security_summary",
+        "patch_pe_set_security"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-pe-rebuild",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "pe_rebuild_*"
+      ]
+    },
+    {
+      "crate": "rustre-pe-tools",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "pe_tools_*"
+      ]
+    },
+    {
+      "crate": "rustre-plugin-api",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-plugin-host",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-plugin-loader",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-plugin-lua",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-plugin-native",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-plugin-python",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-project",
+      "tool_count": 4,
+      "tool_names": [
+        "project.open",
+        "project.close",
+        "project.list_binaries",
+        "project.info"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-sandbox",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "sandbox_*"
+      ]
+    },
+    {
+      "crate": "rustre-sandbox-extract",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "sandbox_extract_*"
+      ]
+    },
+    {
+      "crate": "rustre-sandbox-monitor",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "sandbox_monitor_*"
+      ]
+    },
+    {
+      "crate": "rustre-sandbox-report",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "sandbox_report_*"
+      ]
+    },
+    {
+      "crate": "rustre-sandbox-vm",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "sandbox_vm_*"
+      ]
+    },
+    {
+      "crate": "rustre-script",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "script_*"
+      ]
+    },
+    {
+      "crate": "rustre-script-lua",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "script_lua_*"
+      ]
+    },
+    {
+      "crate": "rustre-script-python",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "script_python_*"
+      ]
+    },
+    {
+      "crate": "rustre-script-rhai",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "script_rhai_*"
+      ]
+    },
+    {
+      "crate": "rustre-symb",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symb_*"
+      ]
+    },
+    {
+      "crate": "rustre-symb-engine",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symb_engine_*"
+      ]
+    },
+    {
+      "crate": "rustre-symb-taint",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symb_taint_*"
+      ]
+    },
+    {
+      "crate": "rustre-symb-z3",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symb_z3_*"
+      ]
+    },
+    {
+      "crate": "rustre-symbols",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symbols_*"
+      ]
+    },
+    {
+      "crate": "rustre-symbols-codeview",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symbols_codeview_*"
+      ]
+    },
+    {
+      "crate": "rustre-symbols-dwarf",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symbols_dwarf_*"
+      ]
+    },
+    {
+      "crate": "rustre-symbols-pdb",
+      "tool_count": 1,
+      "tool_names": [
+        "symbols_pdb_load"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-symbols-stabs",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "symbols_stabs_*"
+      ]
+    },
+    {
+      "crate": "rustre-syscalls",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "syscalls_*"
+      ]
+    },
+    {
+      "crate": "rustre-syscalls-linux",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "syscalls_linux_*"
+      ]
+    },
+    {
+      "crate": "rustre-syscalls-windows",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "syscalls_windows_*"
+      ]
+    },
+    {
+      "crate": "rustre-sysinternals",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "INTERNAL",
+      "needs_mcp": false,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-threatintel",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "threatintel_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-correlate",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_correlate_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-malpedia",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_malpedia_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-misp",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_misp_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-opencti",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_opencti_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-otx",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_otx_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-shodan",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_shodan_*"
+      ]
+    },
+    {
+      "crate": "rustre-ti-vt",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ti_vt_*"
+      ]
+    },
+    {
+      "crate": "rustre-trace",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "trace_*"
+      ]
+    },
+    {
+      "crate": "rustre-trace-coresight",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "trace_coresight_*"
+      ]
+    },
+    {
+      "crate": "rustre-trace-coverage",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "trace_coverage_*"
+      ]
+    },
+    {
+      "crate": "rustre-trace-navigate",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "trace_navigate_*"
+      ]
+    },
+    {
+      "crate": "rustre-trace-pt",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "trace_pt_*"
+      ]
+    },
+    {
+      "crate": "rustre-triage",
+      "tool_count": 2,
+      "tool_names": [
+        "triage.analyze",
+        "triage_entropy_packing_indicators"
+      ],
+      "category": "COVERED_PARTIAL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-triage-die",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "triage_die_*"
+      ]
+    },
+    {
+      "crate": "rustre-triage-entropy",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "triage_entropy_*"
+      ]
+    },
+    {
+      "crate": "rustre-triage-peid",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "triage_peid_*"
+      ]
+    },
+    {
+      "crate": "rustre-triage-yara",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "triage_yara_*"
+      ]
+    },
+    {
+      "crate": "rustre-ttd",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ttd_*"
+      ]
+    },
+    {
+      "crate": "rustre-ttd-query",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ttd_query_*"
+      ]
+    },
+    {
+      "crate": "rustre-ttd-recorder",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ttd_recorder_*"
+      ]
+    },
+    {
+      "crate": "rustre-ttd-replay",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ttd_replay_*"
+      ]
+    },
+    {
+      "crate": "rustre-ttd-replayer",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "ttd_replayer_*"
+      ]
+    },
+    {
+      "crate": "rustre-yara",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "yara_*"
+      ]
+    },
+    {
+      "crate": "rustre-yara-engine",
+      "tool_count": 3,
+      "tool_names": [
+        "yara.scan_file",
+        "yara.compile",
+        "yara.scan_memory"
+      ],
+      "category": "COVERED_FULL",
+      "needs_mcp": true,
+      "suggested_tools": []
+    },
+    {
+      "crate": "rustre-yara-rules",
+      "tool_count": 0,
+      "tool_names": [],
+      "category": "UNCOVERED",
+      "needs_mcp": true,
+      "suggested_tools": [
+        "yara_rules_*"
+      ]
+    }
+  ],
+  "unassigned_tools": [],
+  "summary": {
+    "full": 16,
+    "partial": 14,
+    "uncovered_should_have": 134,
+    "internal_ok": 39
+  },
+  "gap_crates": [
+    "rustre-adb",
+    "rustre-analysis-callconv",
+    "rustre-analysis-vsa",
+    "rustre-analysis-vtable",
+    "rustre-arch-6502",
+    "rustre-arch-68k",
+    "rustre-arch-arm",
+    "rustre-arch-avr",
+    "rustre-arch-bpf",
+    "rustre-arch-dex",
+    "rustre-arch-lua",
+    "rustre-arch-luajit",
+    "rustre-arch-msp430",
+    "rustre-arch-ppc",
+    "rustre-arch-sparc",
+    "rustre-arch-z80",
+    "rustre-crypto-oracle",
+    "rustre-crypto-whitebox",
+    "rustre-debug-frida",
+    "rustre-debug-gdb",
+    "rustre-debug-kgdb",
+    "rustre-debug-linux",
+    "rustre-debug-macos",
+    "rustre-debug-unicorn",
+    "rustre-debug-windbg",
+    "rustre-debug-windows",
+    "rustre-decompiler-c",
+    "rustre-decompiler-cfs",
+    "rustre-decompiler-expr",
+    "rustre-decompiler-ghidra",
+    "rustre-decompiler-type",
+    "rustre-deobf",
+    "rustre-deobf-antianti",
+    "rustre-deobf-cff",
+    "rustre-deobf-iadl",
+    "rustre-deobf-mhcde",
+    "rustre-deobf-opaque",
+    "rustre-deobf-smc",
+    "rustre-deobf-string",
+    "rustre-deobf-vm",
+    "rustre-deobf-vmlift",
+    "rustre-diff-bindiff",
+    "rustre-diff-semantic",
+    "rustre-dotnet",
+    "rustre-dotnet-decompile",
+    "rustre-dotnet-edit",
+    "rustre-dotnet-metadata",
+    "rustre-emu",
+    "rustre-emu-qiling",
+    "rustre-emu-shellcode",
+    "rustre-emu-unicorn",
+    "rustre-flirt-apply",
+    "rustre-flirt-gen",
+    "rustre-forensics-fs",
+    "rustre-forensics-mem",
+    "rustre-forensics-plugins",
+    "rustre-fuzz",
+    "rustre-fuzz-afl",
+    "rustre-fuzz-cov",
+    "rustre-fuzz-libfuzzer",
+    "rustre-fuzz-net",
+    "rustre-fuzz-sanitizers",
+    "rustre-loader",
+    "rustre-loader-android",
+    "rustre-loader-console",
+    "rustre-loader-dotnet",
+    "rustre-loader-elf",
+    "rustre-loader-firmware",
+    "rustre-loader-java",
+    "rustre-loader-lua",
+    "rustre-loader-luajit",
+    "rustre-loader-macho",
+    "rustre-loader-ole",
+    "rustre-loader-pdf",
+    "rustre-loader-wasm",
+    "rustre-mobile",
+    "rustre-mobile-android",
+    "rustre-mobile-apktool",
+    "rustre-mobile-dyld",
+    "rustre-mobile-ios",
+    "rustre-mobile-ipa",
+    "rustre-mobile-jadx",
+    "rustre-mobile-smali",
+    "rustre-net",
+    "rustre-net-dissect",
+    "rustre-net-pcap",
+    "rustre-net-proxy",
+    "rustre-net-rules",
+    "rustre-pe-rebuild",
+    "rustre-pe-tools",
+    "rustre-sandbox",
+    "rustre-sandbox-extract",
+    "rustre-sandbox-monitor",
+    "rustre-sandbox-report",
+    "rustre-sandbox-vm",
+    "rustre-script",
+    "rustre-script-lua",
+    "rustre-script-python",
+    "rustre-script-rhai",
+    "rustre-symb",
+    "rustre-symb-engine",
+    "rustre-symb-taint",
+    "rustre-symb-z3",
+    "rustre-symbols",
+    "rustre-symbols-codeview",
+    "rustre-symbols-dwarf",
+    "rustre-symbols-stabs",
+    "rustre-syscalls",
+    "rustre-syscalls-linux",
+    "rustre-syscalls-windows",
+    "rustre-threatintel",
+    "rustre-ti-correlate",
+    "rustre-ti-malpedia",
+    "rustre-ti-misp",
+    "rustre-ti-opencti",
+    "rustre-ti-otx",
+    "rustre-ti-shodan",
+    "rustre-ti-vt",
+    "rustre-trace",
+    "rustre-trace-coresight",
+    "rustre-trace-coverage",
+    "rustre-trace-navigate",
+    "rustre-trace-pt",
+    "rustre-triage-die",
+    "rustre-triage-entropy",
+    "rustre-triage-peid",
+    "rustre-triage-yara",
+    "rustre-ttd",
+    "rustre-ttd-query",
+    "rustre-ttd-recorder",
+    "rustre-ttd-replay",
+    "rustre-ttd-replayer",
+    "rustre-yara",
+    "rustre-yara-rules"
+  ]
+}

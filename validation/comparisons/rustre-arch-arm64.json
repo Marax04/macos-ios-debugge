@@ -1,0 +1,24 @@
+{
+  "crate": "rustre-arch-arm64",
+  "mcp_tools_relevant": ["analysis_disasm_at_path_arm64"],
+  "validator_self_tests": "passed",
+  "tests_run": [
+    {
+      "name": "validator_self_tests",
+      "result": "passed",
+      "covers": ["a64_b_offset","a64_b_target","is_b/is_bl/is_ret","a64_movz_value","a64_add_imm_value","add64_nzcv","sub64_nzcv","get/set/strip_ptr_tag","page_base/offset_4k","align_up/down","aapcs64_role","decode_logical_imm","encode_retaa","encode_xpaci","classify_mnemonic","linear_disasm_count/addresses","capstone disasm NOP"]
+    },
+    {
+      "name": "mcp_analysis_disasm_at_path_arm64_raw_bin",
+      "input_path": "scratchpad/a64.bin (raw A64 words: NOP, RET, BL+4, B+4, MOVZ X0 #0x1234, ADD X0,X0,#0x10)",
+      "address": 0,
+      "result": "ERROR: loader: no registered loader can handle format: Unknown",
+      "note": "MCP path tool requires a recognized container (PE/ELF/MachO). Raw bytes not supported."
+    }
+  ],
+  "overlap_analysis": "The validator targets pure-math A64 helpers and Capstone-based single-word disassembly. The only MCP surface for this crate (analysis_disasm_at_path_arm64) operates on loadable binaries, not raw A64 words. No ARM64 binary present in baseline corpus (cargo-zyphora.exe is x64 PE). Direct functional comparison between MCP tool and validator is therefore not feasible with current corpus.",
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true
+}

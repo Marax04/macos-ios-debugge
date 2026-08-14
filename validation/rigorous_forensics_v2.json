@@ -1,0 +1,139 @@
+{
+  "summary": {
+    "tools_hardened": 16,
+    "tools_passed": 16,
+    "tools_failed": 0,
+    "tools_skipped": 65,
+    "mismatches": []
+  },
+  "results": [
+    {
+      "tool": "forensics_compute_md5",
+      "status": "PASS",
+      "field": "md5",
+      "expected": "b4209e09634b503cd65320b99a247980",
+      "actual": "b4209e09634b503cd65320b99a247980",
+      "elapsed_s": 0.001
+    },
+    {
+      "tool": "forensics_compute_sha1",
+      "status": "PASS",
+      "field": "sha1",
+      "expected": "9d30ab6367e1bf611f7a5a13e4dafa00bc8ce027",
+      "actual": "9d30ab6367e1bf611f7a5a13e4dafa00bc8ce027",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_compute_sha256",
+      "status": "PASS",
+      "field": "digest",
+      "expected": "a988e1e25ad1f6b00f91fb68e8eec8b68b8bfd6ff1f8eaca2f121d075a35bf78",
+      "actual": "a988e1e25ad1f6b00f91fb68e8eec8b68b8bfd6ff1f8eaca2f121d075a35bf78",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_compute_sha512",
+      "status": "PASS",
+      "field": "digest",
+      "expected": "e3c1bcc6a33f4d605e6dc5940d8b70889ae9d7efb2106d5c64330491d422046bf77a55cc008ed35acde74a3a5f18da87b7ac21552e1ab2bc8c0ee5876a55a747",
+      "actual": "e3c1bcc6a33f4d605e6dc5940d8b70889ae9d7efb2106d5c64330491d422046bf77a55cc008ed35acde74a3a5f18da87b7ac21552e1ab2bc8c0ee5876a55a747",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_mem_windows_version_display",
+      "status": "PASS",
+      "field": "display",
+      "expected": "10.0.19041",
+      "actual": "10.0.19041",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_mem_net_protocol_as_str",
+      "status": "PASS",
+      "field": "protocol/as_str",
+      "expected": "TCPv4",
+      "actual": "TCPv4",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_mem_process_name_matches",
+      "status": "PASS",
+      "field": "matches",
+      "expected": "True",
+      "actual": "True",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_mem_thread_state_from_u8",
+      "status": "PASS",
+      "field": "state",
+      "expected": "Initialized",
+      "actual": "Initialized",
+      "elapsed_s": 0.001
+    },
+    {
+      "tool": "forensics_mem_connection_state_from_u8",
+      "status": "PASS",
+      "field": "state",
+      "expected": "Unknown",
+      "actual": "Unknown",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_file_size",
+      "status": "PASS",
+      "field": "size",
+      "expected": "5",
+      "actual": "5",
+      "elapsed_s": 0.001
+    },
+    {
+      "tool": "forensics_fs_memfs_node_v2_size_file",
+      "status": "PASS",
+      "field": "size",
+      "expected": "5",
+      "actual": "5",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_fs_memfs_node_file_read_bytes",
+      "status": "PASS",
+      "field": "out_hex",
+      "expected": "68656c6c6f",
+      "actual": "68656C6C6F",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_fs_memfs_node_dir_read_bytes_none",
+      "status": "PASS",
+      "field": "read_bytes_is_none",
+      "expected": "True",
+      "actual": "True",
+      "elapsed_s": 0.001
+    },
+    {
+      "tool": "forensics_fs_inode_table_new_len_empty",
+      "status": "PASS",
+      "field": "len+is_empty",
+      "expected": "len=0 is_empty=True",
+      "actual": "len=0 is_empty=True",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_fs_memory_fs_root_inode",
+      "status": "PASS",
+      "field": "is_dir",
+      "expected": "True (root must be a directory)",
+      "actual": "True",
+      "elapsed_s": 0.0
+    },
+    {
+      "tool": "forensics_fs_memory_fs_into_root",
+      "status": "PASS",
+      "field": "is_dir",
+      "expected": "True (into_root must be a directory)",
+      "actual": "True",
+      "elapsed_s": 0.0
+    }
+  ]
+}

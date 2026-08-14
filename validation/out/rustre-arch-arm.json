@@ -1,0 +1,141 @@
+{
+  "crate": "rustre-arch-arm",
+  "saved": true,
+  "functions": [
+    {
+      "module": "lib.rs",
+      "name": "ArmArch::new_arm",
+      "signature": "ArmArch::new_arm() -> Self"
+    },
+    {
+      "module": "lib.rs",
+      "name": "ArmArch::new_thumb",
+      "signature": "ArmArch::new_thumb() -> Self"
+    },
+    {
+      "module": "lib.rs",
+      "name": "ArmArch::new_arm_be",
+      "signature": "ArmArch::new_arm_be() -> Self"
+    },
+    {
+      "module": "lib.rs",
+      "name": "ArmMode::is_thumb",
+      "signature": "ArmMode::is_thumb(&self) -> bool"
+    },
+    {
+      "module": "lib.rs",
+      "name": "ArmLinearDisassembler::disassemble",
+      "signature": "ArmLinearDisassembler::disassemble(&self, address: Address, bytes: &[u8]) -> Result<Instruction, CoreError>"
+    },
+    {
+      "module": "lib.rs",
+      "name": "sreg",
+      "signature": "sreg(n: u32) -> &'static str"
+    },
+    {
+      "module": "arm_thumb2",
+      "name": "Thumb16Instr::decode",
+      "signature": "Thumb16Instr::decode(hw: u16) -> Option<Self>"
+    },
+    {
+      "module": "arm_thumb2",
+      "name": "Thumb16Instr::mnemonic",
+      "signature": "Thumb16Instr::mnemonic(&self) -> String"
+    },
+    {
+      "module": "arm_thumb2",
+      "name": "Thumb2Instr::decode",
+      "signature": "Thumb2Instr::decode(hw1: u16, hw2: u16) -> Result<Thumb2Instr, Thumb2DecodeError>"
+    },
+    {
+      "module": "arm_thumb2",
+      "name": "Thumb2Instr::decode_word",
+      "signature": "Thumb2Instr::decode_word(word: u32) -> Result<Thumb2Instr, Thumb2DecodeError>"
+    },
+    {
+      "module": "arm_thumb2",
+      "name": "decode_bytes",
+      "signature": "decode_bytes(...)"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "ConditionCode::",
+      "signature": "ConditionCode::{from_bits, encoding, mnemonic, evaluate, invert}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "CpsrFlags::",
+      "signature": "CpsrFlags::{from_raw, from_flags, raw, n, z, c, v, q, t, mode, ge, with_nzcv, with_thumb, with_mode, with_irq_disabled}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "ProcessorMode::",
+      "signature": "ProcessorMode::{from_bits, encoding, is_privileged, name, has_spsr}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "BarrelShiftType::",
+      "signature": "BarrelShiftType::{from_bits, name}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "Alu::",
+      "signature": "Alu::{add, adc, sub, sbc, rsb, and, orr, eor, bic, mov, mvn, cmp, cmn, tst, teq, mul, umull, smull}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "MemBarrier::",
+      "signature": "MemBarrier::{new, dmb_sy, dsb_sy, isb_sy}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "ExclusiveMonitor::",
+      "signature": "ExclusiveMonitor::{new, mark_exclusive, attempt_store, clear, is_tagged, tagged_address}"
+    },
+    {
+      "module": "arm_instruction_semantics",
+      "name": "ArmCpu::",
+      "signature": "ArmCpu::{new, cpsr, spsr, write_cpsr, write_spsr, condition_passes, barrel_shift, apply_alu_flags, exception_entry, exception_return, ldrex, strex, clrex, decode_barrier}"
+    },
+    {
+      "module": "armv7_full",
+      "name": "ThumbExpandedKind::classify",
+      "signature": "ThumbExpandedKind::classify(hw1, hw2) -> Self"
+    },
+    {
+      "module": "armv7_full",
+      "name": "ThumbExpanded::decode",
+      "signature": "ThumbExpanded::decode(hw1, hw2) -> Self"
+    },
+    {
+      "module": "armv7_full",
+      "name": "ArmCoprocessor::format",
+      "signature": "ArmCoprocessor::format(&self) -> String"
+    },
+    {
+      "module": "armv7_full",
+      "name": "NeonFull::format",
+      "signature": "NeonFull::format(&self) -> String"
+    },
+    {
+      "module": "armv7_full",
+      "name": "VfpFull::format",
+      "signature": "VfpFull::format(&self) -> String"
+    },
+    {
+      "module": "armv7_full",
+      "name": "ArmV7InstrClass::classify_a32",
+      "signature": "ArmV7InstrClass::classify_a32(word: u32) -> Self"
+    },
+    {
+      "module": "armv7_full",
+      "name": "aapcs_role",
+      "signature": "aapcs_role(n: u8) -> AapcsRole"
+    },
+    {
+      "module": "armv7_full",
+      "name": "decode_bl_target",
+      "signature": "decode_bl_target(hw1: u16, hw2: u16, pc: u32) -> u32"
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "category": "hex_tply",
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "hex_tply_bmp_header",
+      "args": {},
+      "check": "field_count == 16",
+      "reference": "template_bmp_header() has 16 FieldDef entries (5 BITMAPFILEHEADER + 11 BITMAPINFOHEADER)",
+      "expected": { "field_count": 16 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_jpeg_jfif",
+      "args": {},
+      "check": "field_count == 11",
+      "reference": "template_jpeg_jfif() has 11 fields: SOI, APP0Marker, APP0Length, Identifier, MajorVersion, MinorVersion, Units, Xdensity, Ydensity, Xthumbnail, Ythumbnail",
+      "expected": { "field_count": 11 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_zip_local_file_header",
+      "args": {},
+      "check": "field_count == 11",
+      "reference": "template_zip_local_file_header() has 11 fields matching APPNOTE ZIP local entry header",
+      "expected": { "field_count": 11 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_zip_eocd",
+      "args": {},
+      "check": "field_count == 8",
+      "reference": "template_zip_eocd() has 8 fields: Signature, DiskNumber, StartDisk, EntriesOnDisk, TotalEntries, CentralDirSize, CentralDirOffset, CommentLength",
+      "expected": { "field_count": 8 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_coff_file_header",
+      "args": {},
+      "check": "field_count == 7",
+      "reference": "template_coff_file_header() has 7 fields matching IMAGE_FILE_HEADER",
+      "expected": { "field_count": 7 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_pe32plus_optional_header",
+      "args": {},
+      "check": "field_count == 29",
+      "reference": "template_pe32plus_optional_header() has 29 fields for the PE32+ IMAGE_OPTIONAL_HEADER64",
+      "expected": { "field_count": 29 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_elf64_shdr",
+      "args": {},
+      "check": "field_count == 10",
+      "reference": "template_elf64_shdr() has 10 fields: sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize",
+      "expected": { "field_count": 10 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_pe_import_descriptor",
+      "args": {},
+      "check": "field_count == 5",
+      "reference": "template_pe_import_descriptor() has 5 fields matching IMAGE_IMPORT_DESCRIPTOR",
+      "expected": { "field_count": 5 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_pe_export_directory",
+      "args": {},
+      "check": "field_count == 11",
+      "reference": "template_pe_export_directory() has 11 fields matching IMAGE_EXPORT_DIRECTORY",
+      "expected": { "field_count": 11 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_auto_select_template",
+      "args": { "hex": "4d5a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" },
+      "check": "matched==true AND name=='MZ' AND field_count==19",
+      "reference": "MZ magic (4d5a) triggers auto_select_template to return template_mz() which has 19 fields",
+      "expected": { "matched": true, "name": "MZ", "field_count": 19 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_flatten_parsed",
+      "args": { "name": "MZ", "hex": "4d5a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" },
+      "check": "flat_count == 19",
+      "reference": "MZ template has 19 primitive/bytes fields (no nested structs), flatten_parsed yields one TemplateField per ParsedField",
+      "expected": { "flat_count": 19 },
+      "status": "PASS"
+    },
+    {
+      "tool": "hex_tply_template_report",
+      "args": { "name": "MZ", "hex": "4d5a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" },
+      "check": "field_count==19 AND total_size==64",
+      "reference": "MZ template field_count=top-level fields=19; total_size=sum of flat field sizes: 14*2+8+2+2+20+4=64",
+      "expected": { "field_count": 19, "total_size": 64 },
+      "status": "PASS"
+    }
+  ],
+  "summary": {
+    "tools_hardened": 12,
+    "tools_passed": 12,
+    "tools_failed": 0,
+    "tools_skipped": 0,
+    "mismatches": []
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-lua",
+  "tests_run": 23,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Validator rustre-loader-lua.py e' un self-test stdlib indipendente (run_checks): 23 check su LUA_MAGIC b'\\x1bLua', detect_version (Lua51..Lua54), LuaHeader MIN_SIZE=12, blocco LUAC_DATA 5.4, mapping endian byte (0=Be,1=Le), tag LuaConst (NIL=0,BOOL=1,NUMBER=3,SHORT_STR=4,LONG_STR=20,INT=0x13,FLOAT=0x03), layout istruzione Lua 5.1 32-bit (iABC/iABx/iAsBx con bias 131071) + round-trip, read_string_lua length-prefixed (size_t 4 e 8, empty, NUL trailing). Esito: passed=23 failed=0.",
+    "Nessun tool MCP dedicato loader_lua_* esiste in crates/rustre-mcp-tools (grep loader_lua / loader-lua / rustre_loader_lua = 0 match). Le primitive del crate rustre-loader-lua (LUA_MAGIC, LuaHeader::parse, decode iABC/iABx/iAsBx, LuaConst tags, read_string_lua) sono funzioni interne non esposte come endpoint JSON-RPC.",
+    "I tool MCP generici (binary_info, triage_analyze, analyze_strings, ...) non accettano gli input sintetici del validator (header preamble bytes, parola istruzione 32-bit, payload length-prefixed) ne' restituiscono campi lua-specifici (version, endian, size_t_size, sBx, tag) in forma confrontabile 1:1 con i check Python.",
+    "Conclusione coerente con rustre-loader-console / rustre-loader-pe / rustre-loader-elf / rustre-loader-macho / rustre-loader-dotnet: confronto MCP vs validator NON applicabile per assenza di endpoint dedicati. Nessun mismatch reale, nessun fix da applicare al workspace.",
+    "Verifica collaterale: cargo build -p rustre-loader-lua --release completa pulito (Finished release profile, no warnings, no errors)."
+  ]
+}

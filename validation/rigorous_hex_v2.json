@@ -1,0 +1,7 @@
+{
+  "module": "hex_all",
+  "tools_hardened": 68,
+  "checks_passed": 68,
+  "checks_failed": 0,
+  "mismatches": []
+}

@@ -1,0 +1,32 @@
+{
+  "skipped": [
+    {
+      "tool": "mem_shannon_entropy_min_block_wire",
+      "reason": "key name for min unverified - check separately"
+    },
+    {
+      "tool": "mem_shannon_entropy_mean_block_wire",
+      "reason": "key name for mean unverified - check separately"
+    },
+    {
+      "tool": "mem_kx7_entropy_windows_max",
+      "reason": "window partitioning logic requires Rust source review"
+    },
+    {
+      "tool": "mem_kx7_entropy_windows_avg",
+      "reason": "window partitioning logic requires Rust source review"
+    },
+    {
+      "tool": "mem_kx7_entropy_windows_above",
+      "reason": "threshold semantics require Rust source review"
+    },
+    {
+      "tool": "mem_kx7_diff_memory_regions",
+      "reason": "base address overlap semantics unclear"
+    },
+    {
+      "tool": "mem_ma_entropy_region_suspicious_threshold_v4",
+      "reason": "threshold constant unknown"
+    }
+  ]
+}

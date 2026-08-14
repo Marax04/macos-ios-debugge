@@ -1,0 +1,8 @@
+{
+  "module": "fuzz_san",
+  "tools_hardened": 14,
+  "checks_passed": 86,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

@@ -1,0 +1,8 @@
+{
+  "category": "fuzz_san (sanitizer utilities)",
+  "tools_in_category": 18,
+  "checks_total": 37,
+  "checks_passed": 37,
+  "checks_skipped": 0,
+  "mismatches": []
+}

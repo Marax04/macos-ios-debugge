@@ -1,0 +1,18 @@
+[
+  {
+    "tool": "ios_scan_objc_selectors_path",
+    "reason": "Requires a Mach-O binary file path; test target is PE/COFF, not Mach-O \u2014 result would always be empty regardless of correctness"
+  },
+  {
+    "tool": "ios_scan_objc_classes_path",
+    "reason": "Requires a Mach-O binary file path; test target is PE/COFF, not Mach-O \u2014 result would always be empty regardless of correctness"
+  },
+  {
+    "tool": "mobile_ios_swift_is_mangled",
+    "reason": "Alias of ios_swift_is_mangled_wire; covered above via that tool"
+  },
+  {
+    "tool": "mobile_ios_decode_type_encoding",
+    "reason": "Alias of ios_decode_type_encoding_wire; covered above via that tool"
+  }
+]

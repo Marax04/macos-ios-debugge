@@ -1,0 +1,184 @@
+{
+  "category": "gdb",
+  "tools_hardened": 38,
+  "tools_passed": 38,
+  "tools_failed": 0,
+  "tools_skipped": 4,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "gdb_packet_checksum",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_packet_encode",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_packet_decode",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_packet_escape_data",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_packet_unescape_data",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_memory_read_cmd",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_memory_write_cmd",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_breakpoint_sw_cmd",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_breakpoint_hw_cmd",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_watchpoint_cmd_write",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_watchpoint_cmd_read",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits8",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits32",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits64",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits80",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits128",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits1",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_def_byte_size_bits33",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_ok_packet",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_error_packet_code0",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_error_packet_code1",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_error_packet_code5",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_error_packet_code127",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_error_packet_code255",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stub_empty_packet",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_step_range_packet_no_tid",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_step_range_packet_tid1",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_memory_read_response_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_memory_write_binary_cmd",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_target_xml_parse",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_target_xml_total_bytes",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_target_xml_register_by_name_rax",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_target_xml_register_by_name_missing",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_target_xml_register_by_num_1",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_codec_encode_p_rax",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_register_codec_decode_p_rax",
+      "status": "PASS"
+    },
+    {
+      "tool": "gdb_stop_reply_parse",
+      "status": "SKIP",
+      "reason": "stop reason is emitted as Rust Debug repr; no stable string reference"
+    },
+    {
+      "tool": "gdb_memory_map_parse",
+      "status": "SKIP",
+      "reason": "XML parsing with complex region structure; covered by Rust unit tests"
+    },
+    {
+      "tool": "gdb_register_codec_decode_g",
+      "status": "SKIP",
+      "reason": "requires full g-packet sized to target total_bytes; covered by Rust tests"
+    },
+    {
+      "tool": "gdb_register_codec_encode_g",
+      "status": "SKIP",
+      "reason": "requires RegisterSet map round-trip; covered by Rust tests"
+    },
+    {
+      "tool": "gdb_target_desc_x86_64_linux",
+      "status": "PASS",
+      "detail": "valid_xml=True has_arch=True"
+    },
+    {
+      "tool": "gdb_target_desc_aarch64_linux",
+      "status": "PASS",
+      "detail": "valid_xml=True has_arch=True"
+    }
+  ]
+}

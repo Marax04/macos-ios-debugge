@@ -1,0 +1,262 @@
+[
+  {
+    "tool": "forensics_mem_scan_pe_headers",
+    "reason": "scans binary data; output depends on runtime memory layout"
+  },
+  {
+    "tool": "forensics_mem_scan_stack_canaries",
+    "reason": "scans binary data; output depends on runtime memory layout"
+  },
+  {
+    "tool": "forensics_mem_find_unicode_strings",
+    "reason": "scans binary data; result set depends on binary content"
+  },
+  {
+    "tool": "forensics_mem_scan_heap_allocations",
+    "reason": "scans binary data; heap layout is nondeterministic"
+  },
+  {
+    "tool": "forensics_mem_win_find_processes_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_win_find_modules_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_win_find_network_connections_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_win_extract_registry_hives_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_win_find_kernel_info_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_linux_find_processes_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_linux_find_modules_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_linux_find_sockets_mock",
+    "reason": "mock image contents are implementation-defined"
+  },
+  {
+    "tool": "forensics_mem_registry_hive_parse_key",
+    "reason": "synthetic hive; key lookup is implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_prefetch_parse",
+    "reason": "requires real .pf file; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_prefetch_summary",
+    "reason": "requires real .pf file; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_lnk_parse",
+    "reason": "requires real .lnk file; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_prefetch",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_lnk",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_registry_hive",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_evtx",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_browser_db",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_memory_dump",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_dropped_payload",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_pagefile",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_detect_certificate_store",
+    "reason": "path-based heuristic; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_artifact_scanner_scan_path",
+    "reason": "aggregates multiple heuristics; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_lnk_analyzer_summary",
+    "reason": "requires real .lnk data; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_lnk_file_target_path",
+    "reason": "requires real .lnk data; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_prefetch_analyzer_report",
+    "reason": "requires real .pf data; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_prefetch_pattern_matcher_risk",
+    "reason": "requires real .pf data; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_prefetch_file_loaded_modules",
+    "reason": "requires real .pf data; no stdlib reference"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_v2_is_file",
+    "reason": "internal invariant; redundant with memfs_file_size"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_v2_is_dir_check",
+    "reason": "internal invariant; checked via memory_fs_root_inode"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_dir_children",
+    "reason": "structural check; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_dir_child_by_name",
+    "reason": "structural check; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_lazy_file_read",
+    "reason": "implementation-defined lazy callback"
+  },
+  {
+    "tool": "forensics_fs_memfs_v2_walker_root",
+    "reason": "structural walk; verified transitively"
+  },
+  {
+    "tool": "forensics_fs_to_export_dir_single_file",
+    "reason": "writes to temp dir; filesystem side-effect"
+  },
+  {
+    "tool": "forensics_fs_inode_table_insert_get",
+    "reason": "structural; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_inode_table_find_by_name",
+    "reason": "structural; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_inode_table_find_deleted",
+    "reason": "structural; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_inode_is_directory",
+    "reason": "bit-flag interpretation; implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_data_run_new_byte_size",
+    "reason": "cluster arithmetic; implementation-defined cluster_size mapping"
+  },
+  {
+    "tool": "forensics_fs_inode_total_run_bytes",
+    "reason": "cluster arithmetic; implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_timeline_event_new",
+    "reason": "struct construction; no external reference"
+  },
+  {
+    "tool": "forensics_fs_timeline_event_type_kind_name",
+    "reason": "enum name mapping; implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_timeline_push_sort",
+    "reason": "sort order; structural only"
+  },
+  {
+    "tool": "forensics_fs_timeline_filter_by_type",
+    "reason": "filter; structural only"
+  },
+  {
+    "tool": "forensics_fs_timeline_filter_by_time",
+    "reason": "filter; structural only"
+  },
+  {
+    "tool": "forensics_fs_timeline_hot_paths",
+    "reason": "top-N; structural only"
+  },
+  {
+    "tool": "forensics_fs_timeline_csv_roundtrip",
+    "reason": "csv format; implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_timeline_report",
+    "reason": "summary string; implementation-defined"
+  },
+  {
+    "tool": "forensics_fs_node_v2_new_file",
+    "reason": "struct creation; redundant with size checks"
+  },
+  {
+    "tool": "forensics_fs_node_v2_new_dir",
+    "reason": "struct creation; verified via root_inode"
+  },
+  {
+    "tool": "forensics_fs_node_v2_add_child",
+    "reason": "structural; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_node_v2_find_child",
+    "reason": "structural lookup; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_node_v2_find_by_inode",
+    "reason": "structural lookup; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_node_v2_readdir_entries",
+    "reason": "structural listing; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_memory_fs_new",
+    "reason": "constructor; verified via root_inode"
+  },
+  {
+    "tool": "forensics_fs_memory_fs_build_process_tree_empty",
+    "reason": "empty tree; structural only"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_file_probe",
+    "reason": "structural probe; redundant"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_dir_probe",
+    "reason": "structural probe; redundant"
+  },
+  {
+    "tool": "forensics_fs_memfs_node_child_lookup",
+    "reason": "structural lookup; no arithmetic reference"
+  },
+  {
+    "tool": "forensics_fs_node_v2_sizes",
+    "reason": "size property; redundant with file_size tests"
+  },
+  {
+    "tool": "forensics_fs_memory_fs_new_root",
+    "reason": "constructor variant; redundant"
+  }
+]

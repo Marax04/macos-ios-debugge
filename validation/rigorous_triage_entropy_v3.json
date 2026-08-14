@@ -1,0 +1,432 @@
+{
+  "category": "triage_entropy",
+  "tools_hardened": 9,
+  "tools_passed": 46,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Empty",
+      "actual": "Empty",
+      "passed": true,
+      "note": "e=0.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Empty",
+      "actual": "Empty",
+      "passed": true,
+      "note": "e=0.5"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Text",
+      "actual": "Text",
+      "passed": true,
+      "note": "e=1.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Text",
+      "actual": "Text",
+      "passed": true,
+      "note": "e=3.9"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Code",
+      "actual": "Code",
+      "passed": true,
+      "note": "e=4.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Code",
+      "actual": "Code",
+      "passed": true,
+      "note": "e=4.9"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Data",
+      "actual": "Data",
+      "passed": true,
+      "note": "e=5.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Data",
+      "actual": "Data",
+      "passed": true,
+      "note": "e=5.9"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "passed": true,
+      "note": "e=6.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "passed": true,
+      "note": "e=6.9"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "passed": true,
+      "note": "e=7.0"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "passed": true,
+      "note": "e=7.4"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Random",
+      "actual": "Random",
+      "passed": true,
+      "note": "e=7.5"
+    },
+    {
+      "tool": "triage_entropy_category_classify",
+      "expected": "Random",
+      "actual": "Random",
+      "passed": true,
+      "note": "e=8.0"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Empty",
+      "actual": "Empty",
+      "passed": true,
+      "note": "e=0.0"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Text",
+      "actual": "Text",
+      "passed": true,
+      "note": "e=2.0"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Code",
+      "actual": "Code",
+      "passed": true,
+      "note": "e=4.5"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Data",
+      "actual": "Data",
+      "passed": true,
+      "note": "e=5.5"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Compressed",
+      "actual": "Compressed",
+      "passed": true,
+      "note": "e=6.5"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Encrypted",
+      "actual": "Encrypted",
+      "passed": true,
+      "note": "e=7.2"
+    },
+    {
+      "tool": "triage_entropy_category_label",
+      "expected": "Random",
+      "actual": "Random",
+      "passed": true,
+      "note": "e=7.8"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "VeryLow",
+      "actual": "VeryLow",
+      "passed": true,
+      "note": "e=0.0"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "VeryLow",
+      "actual": "VeryLow",
+      "passed": true,
+      "note": "e=0.9"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "Low",
+      "actual": "Low",
+      "passed": true,
+      "note": "e=1.0"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "Low",
+      "actual": "Low",
+      "passed": true,
+      "note": "e=2.9"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "Medium",
+      "actual": "Medium",
+      "passed": true,
+      "note": "e=3.0"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "Medium",
+      "actual": "Medium",
+      "passed": true,
+      "note": "e=4.9"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "High",
+      "actual": "High",
+      "passed": true,
+      "note": "e=5.0"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "High",
+      "actual": "High",
+      "passed": true,
+      "note": "e=6.9"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "VeryHigh",
+      "actual": "VeryHigh",
+      "passed": true,
+      "note": "e=7.0"
+    },
+    {
+      "tool": "triage_entropy_rating_from_entropy",
+      "expected": "VeryHigh",
+      "actual": "VeryHigh",
+      "passed": true,
+      "note": "e=8.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        0,
+        128
+      ],
+      "actual": [
+        0,
+        0,
+        128
+      ],
+      "passed": true,
+      "note": "e=0.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        0,
+        128
+      ],
+      "actual": [
+        0,
+        0,
+        128
+      ],
+      "passed": true,
+      "note": "e=1.9"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        128,
+        255
+      ],
+      "actual": [
+        0,
+        128,
+        255
+      ],
+      "passed": true,
+      "note": "e=2.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        128,
+        255
+      ],
+      "actual": [
+        0,
+        128,
+        255
+      ],
+      "passed": true,
+      "note": "e=3.9"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        200,
+        0
+      ],
+      "actual": [
+        0,
+        200,
+        0
+      ],
+      "passed": true,
+      "note": "e=4.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        0,
+        200,
+        0
+      ],
+      "actual": [
+        0,
+        200,
+        0
+      ],
+      "passed": true,
+      "note": "e=5.9"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        255,
+        200,
+        0
+      ],
+      "actual": [
+        255,
+        200,
+        0
+      ],
+      "passed": true,
+      "note": "e=6.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        255,
+        200,
+        0
+      ],
+      "actual": [
+        255,
+        200,
+        0
+      ],
+      "passed": true,
+      "note": "e=6.9"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        200,
+        0,
+        0
+      ],
+      "actual": [
+        200,
+        0,
+        0
+      ],
+      "passed": true,
+      "note": "e=7.0"
+    },
+    {
+      "tool": "triage_entropy_heatmap_color_rgb",
+      "expected": [
+        200,
+        0,
+        0
+      ],
+      "actual": [
+        200,
+        0,
+        0
+      ],
+      "passed": true,
+      "note": "e=8.0"
+    },
+    {
+      "tool": "triage_entropy_shannon_path",
+      "expected": 6.35766213,
+      "actual": 6.35766213429351,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "triage_entropy_shannon_f32_path",
+      "expected": 6.35766,
+      "actual": 6.357658386230469,
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "triage_entropy_block_from_slice_path",
+      "expected": {
+        "entropy": 5.83344,
+        "category": "Data"
+      },
+      "actual": {
+        "entropy": 5.833434104919434,
+        "category": "Data"
+      },
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "triage_entropy_section_new_path",
+      "expected": {
+        "entropy": 5.833437,
+        "rating": "High"
+      },
+      "actual": {
+        "entropy": 5.833437469573405,
+        "rating": "High"
+      },
+      "passed": true,
+      "note": ""
+    },
+    {
+      "tool": "triage_entropy_analyzer_analyze_path",
+      "expected": {
+        "overall": 6.357662,
+        "rating": "High",
+        "chunks": 304
+      },
+      "actual": {
+        "overall": 6.35766213429351,
+        "rating": "High",
+        "chunks": 304
+      },
+      "passed": true,
+      "note": ""
+    }
+  ]
+}

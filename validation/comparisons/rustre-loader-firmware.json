@@ -1,0 +1,49 @@
+{
+  "crate": "rustre-loader-firmware",
+  "tests": 51,
+  "mismatches": 6,
+  "match": false,
+  "mismatch_details": [
+    {
+      "name": "detect_kind_tgz",
+      "python": "raw",
+      "rust": "tar.gz"
+    },
+    {
+      "name": "detect_kind_bzip2",
+      "python": "raw",
+      "rust": "bzip2"
+    },
+    {
+      "name": "detect_kind_xz",
+      "python": "raw",
+      "rust": "xz"
+    },
+    {
+      "name": "detect_kind_lzma",
+      "python": "raw",
+      "rust": "lzma"
+    },
+    {
+      "name": "detect_kind_jffs2",
+      "python": "raw",
+      "rust": "jffs2"
+    },
+    {
+      "name": "detect_kind_cramfs",
+      "python": "raw",
+      "rust": "cramfs"
+    }
+  ],
+  "rust_tests_passing": 106,
+  "mcp_tools_tested": [
+    "loader_core_md5"
+  ],
+  "notes": [
+    "Python validator missing 6 FirmwareKind magic variants vs Rust: TarGz, Bzip2, Xz, Lzma, Jffs2, CramFs",
+    "Python detect_firmware_kind returns 'raw' where Rust returns the specific compressed/filesystem variant",
+    "All hash functions (CRC32, FNV1a32, MurmurHash3, Adler32), entropy classification, SREC/IHEX parsing, UBoot header parsing, security scanners: match",
+    "MCP loader_core_md5 output matches Python hashlib.md5",
+    "rustre-loader-firmware has no direct MCP wire tool; closest MCP tool is loader_core_md5 (rustre_loader::md5)"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "crate": "rustre-arch-registry",
+  "note": "Composition crate; not exposed as MCP tool. Comparison made by reading Rust source (crates/rustre-arch-registry/src/lib.rs) and matching against validator EXPECTED_ARCHES.",
+  "tests": [
+    {
+      "name": "all_len_eq_19",
+      "validator": 19,
+      "mcp_equivalent": 19,
+      "source": "all() vec! has 19 Arc::new entries",
+      "match": true
+    },
+    {
+      "name": "all_names_match_expected_set",
+      "validator": ["6502","68k","arm","arm64","avr","bpf","cil","dex","jvm","lua","luajit","mips","msp430","ppc","riscv","sparc","wasm","x86","z80"],
+      "mcp_equivalent": ["6502","68k","arm","arm64","avr","bpf","cil","dex","jvm","lua","luajit","mips","msp430","ppc","riscv","sparc","wasm","x86","z80"],
+      "match": true
+    },
+    {
+      "name": "all_returns_fresh_vector",
+      "validator": true,
+      "mcp_equivalent": "Vec returned by value each call; Arc::new allocates fresh per call",
+      "match": true
+    },
+    {
+      "name": "register_all_overwrites_placeholders",
+      "validator": true,
+      "mcp_equivalent": "reg.insert(name, arch) overwrites prior PlaceholderArch entries",
+      "match": true
+    },
+    {
+      "name": "register_all_idempotent",
+      "validator": true,
+      "mcp_equivalent": "Two calls yield same final map of 19 entries",
+      "match": true
+    },
+    {
+      "name": "registry_get_each_expected_name",
+      "validator": true,
+      "mcp_equivalent": "global_registry().get(name) returns Some for all 19 names",
+      "match": true
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "mismatches": 0,
+    "fixed": 0,
+    "match_final": true
+  }
+}

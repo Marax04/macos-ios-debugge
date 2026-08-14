@@ -1,0 +1,21 @@
+﻿[package]
+license.workspace = true
+name = "rustre-arch-arm64"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+yaxpeax-arm = "0.4"
+yaxpeax-arch = "0.3"
+ahash = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

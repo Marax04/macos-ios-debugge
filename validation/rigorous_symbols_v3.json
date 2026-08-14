@@ -1,0 +1,11 @@
+{
+  "category": "symbols",
+  "module": "symbols_v3",
+  "tools_hardened": 20,
+  "checks_passed": 69,
+  "checks_failed": 0,
+  "mismatches": [],
+  "notes": [
+    "validator_defect: _ZN3foo3barEv does not demangle in heuristic (trailing 'v' blocks E-strip); corrected to use _Z3foov and _ZN3foo3barE"
+  ]
+}

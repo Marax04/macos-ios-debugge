@@ -1,0 +1,19 @@
+{
+  "crate": "rustre-il-lift",
+  "mcp_outputs": {},
+  "validator_outputs": {
+    "note": "Validator self-test executed; see scratchpad val_self.json. Covers hit_rate, success_rate, arch_names, diff_address_maps, node_count, x86_shape, verify."
+  },
+  "mismatches": [],
+  "notes": [
+    "Per report (reports/rustre-il-lift.md, section 'Existing MCP tools'): None.",
+    "Grep over crates/rustre-mcp-tools/src for 'rustre_il_lift|il-lift|X86Lifter|LifterRegistry' returned zero matches.",
+    "No MCP wire surface exists for this crate, so no MCP-vs-validator comparison is possible.",
+    "Validator is self-consistent and is intended as an oracle for a future Rust integration-test harness (per report 'Validator strategy' section A).",
+    "No code change required; no false mismatch to fix."
+  ],
+  "tests": 0,
+  "mismatches_count": 0,
+  "fixed": 0,
+  "match_final": true
+}

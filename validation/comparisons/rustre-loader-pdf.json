@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-loader-pdf",
+  "mcp_outputs": [],
+  "validator_outputs": [],
+  "mismatches": [],
+  "match": false,
+  "tests": 39,
+  "mismatches_count": 0,
+  "note": "rustre-loader-pdf has 39 Python validator functions and 456 Rust unit tests (350+95+11). No MCP tool in wire_tools.rs references rustre-loader-pdf; the crate is not wired into the MCP server. Comparison is not possible: match=false due to missing MCP coverage, not logic errors. Rust tests: 456 passed, 0 failed."
+}

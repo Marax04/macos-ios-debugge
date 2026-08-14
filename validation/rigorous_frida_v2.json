@@ -1,0 +1,127 @@
+[
+  {
+    "tool": "frida_session_initial_state",
+    "args": {},
+    "status": "PASS",
+    "detail": "state='detached' matches expected='detached'"
+  },
+  {
+    "tool": "frida_mock_stalker_events",
+    "args": {
+      "count": 0
+    },
+    "status": "PASS",
+    "detail": "count=0 events match expected=[]"
+  },
+  {
+    "tool": "frida_mock_stalker_events",
+    "args": {
+      "count": 3
+    },
+    "status": "PASS",
+    "detail": "count=3 events match expected=['call 0x0 -> 0x1000', 'block 0x100..0x120', 'compile 0x200']"
+  },
+  {
+    "tool": "frida_mock_stalker_events",
+    "args": {
+      "count": 5
+    },
+    "status": "PASS",
+    "detail": "count=5 events match expected=['call 0x0 -> 0x1000', 'block 0x100..0x120', 'compile 0x200', 'call 0x300 -> 0x1300', 'block 0x400..0x420']"
+  },
+  {
+    "tool": "frida_device_display",
+    "args": {
+      "kind": "local"
+    },
+    "status": "PASS",
+    "detail": "display='local' matches expected='local'"
+  },
+  {
+    "tool": "frida_device_display",
+    "args": {
+      "kind": "remote",
+      "value": "192.168.1.1"
+    },
+    "status": "PASS",
+    "detail": "display='remote:192.168.1.1' matches expected='remote:192.168.1.1'"
+  },
+  {
+    "tool": "frida_device_display",
+    "args": {
+      "kind": "usb",
+      "value": "abc123"
+    },
+    "status": "PASS",
+    "detail": "display='usb:abc123' matches expected='usb:abc123'"
+  },
+  {
+    "tool": "frida_target_local_pid",
+    "args": {
+      "pid": 1234
+    },
+    "status": "PASS",
+    "detail": "pid=1234, process_name=None, device=local"
+  },
+  {
+    "tool": "frida_target_local_name",
+    "args": {
+      "name": "chrome"
+    },
+    "status": "PASS",
+    "detail": "pid=None, process_name='chrome', device=local"
+  },
+  {
+    "tool": "frida_manager_attach_detach",
+    "args": {
+      "pid": 42
+    },
+    "status": "PASS",
+    "detail": "attach\u2192detach cycle counters correct"
+  },
+  {
+    "tool": "frida_manager_add_interceptor",
+    "args": {
+      "address": 3735928559,
+      "id": 7
+    },
+    "status": "PASS",
+    "detail": "interceptor_count=1 as expected=1"
+  },
+  {
+    "tool": "frida_stalker_event_display",
+    "args": {
+      "kind": "call",
+      "a": 4096,
+      "b": 8192
+    },
+    "status": "PASS",
+    "detail": "display='call 0x1000 -> 0x2000' matches expected='call 0x1000 -> 0x2000'"
+  },
+  {
+    "tool": "frida_stalker_event_display",
+    "args": {
+      "kind": "block",
+      "a": 12288,
+      "b": 12320
+    },
+    "status": "PASS",
+    "detail": "display='block 0x3000..0x3020' matches expected='block 0x3000..0x3020'"
+  },
+  {
+    "tool": "frida_stalker_event_display",
+    "args": {
+      "kind": "compile",
+      "a": 16384,
+      "b": 0
+    },
+    "status": "PASS",
+    "detail": "display='compile 0x4000' matches expected='compile 0x4000'"
+  },
+  {
+    "tool": "frida_session_script_count",
+    "args": {},
+    "status": "PASS",
+    "detail": "FridaSession defaults: id=1, attached=false, script_count=0"
+  }
+]

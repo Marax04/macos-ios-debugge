@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-debug-unicorn",
+  "mcp_tools_exposed": [],
+  "note": "Crate rustre-debug-unicorn exists in workspace but is NOT wired into rustre-mcp server (no references to debug_unicorn/UnicornDebugger in crates/rustre-mcp). No MCP tool calls are possible to compare against the Python validator surface. Validator runs standalone as pure-stdlib simulation per reports/rustre-debug-unicorn.md.",
+  "validator": {
+    "path": "validation/validators/rustre-debug-unicorn.py",
+    "passed": 22,
+    "total": 22
+  },
+  "comparisons": [],
+  "tests": 22,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

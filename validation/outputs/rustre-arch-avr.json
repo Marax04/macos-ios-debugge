@@ -1,0 +1,356 @@
+{
+  "crate": "rustre-arch-avr",
+  "saved": false,
+  "total": 29,
+  "mismatches": 0,
+  "functions": [
+    {
+      "input": "0000",
+      "expected": {
+        "mnemonic": "nop",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "nop",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0895",
+      "expected": {
+        "mnemonic": "ret",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "ret",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "1895",
+      "expected": {
+        "mnemonic": "reti",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "reti",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "8895",
+      "expected": {
+        "mnemonic": "sleep",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "sleep",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "a895",
+      "expected": {
+        "mnemonic": "wdr",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "wdr",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "9895",
+      "expected": {
+        "mnemonic": "break",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "break",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0994",
+      "expected": {
+        "mnemonic": "ijmp",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "ijmp",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0995",
+      "expected": {
+        "mnemonic": "icall",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "icall",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0c940000",
+      "expected": {
+        "mnemonic": "jmp",
+        "size": 4
+      },
+      "got": {
+        "mnemonic": "jmp",
+        "size": 4
+      },
+      "ok": true
+    },
+    {
+      "input": "0e940000",
+      "expected": {
+        "mnemonic": "call",
+        "size": 4
+      },
+      "got": {
+        "mnemonic": "call",
+        "size": 4
+      },
+      "ok": true
+    },
+    {
+      "input": "00900001",
+      "expected": {
+        "mnemonic": "lds",
+        "size": 4
+      },
+      "got": {
+        "mnemonic": "lds",
+        "size": 4
+      },
+      "ok": true
+    },
+    {
+      "input": "00920001",
+      "expected": {
+        "mnemonic": "sts",
+        "size": 4
+      },
+      "got": {
+        "mnemonic": "sts",
+        "size": 4
+      },
+      "ok": true
+    },
+    {
+      "input": "00c0",
+      "expected": {
+        "mnemonic": "rjmp",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "rjmp",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "00d0",
+      "expected": {
+        "mnemonic": "rcall",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "rcall",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "00e0",
+      "expected": {
+        "mnemonic": "ldi",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "ldi",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "110c",
+      "expected": {
+        "mnemonic": "add",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "add",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0118",
+      "expected": {
+        "mnemonic": "sub",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "sub",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "1124",
+      "expected": {
+        "mnemonic": "eor",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "eor",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0020",
+      "expected": {
+        "mnemonic": "and",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "and",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0028",
+      "expected": {
+        "mnemonic": "or",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "or",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "002c",
+      "expected": {
+        "mnemonic": "mov",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "mov",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0014",
+      "expected": {
+        "mnemonic": "cp",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "cp",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0030",
+      "expected": {
+        "mnemonic": "cpi",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "cpi",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "00b0",
+      "expected": {
+        "mnemonic": "in",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "in",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "00b8",
+      "expected": {
+        "mnemonic": "out",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "out",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0f92",
+      "expected": {
+        "mnemonic": "push",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "push",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "0f90",
+      "expected": {
+        "mnemonic": "pop",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "pop",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "01f0",
+      "expected": {
+        "mnemonic": "breq",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "breq",
+        "size": 2
+      },
+      "ok": true
+    },
+    {
+      "input": "01f4",
+      "expected": {
+        "mnemonic": "brne",
+        "size": 2
+      },
+      "got": {
+        "mnemonic": "brne",
+        "size": 2
+      },
+      "ok": true
+    }
+  ]
+}

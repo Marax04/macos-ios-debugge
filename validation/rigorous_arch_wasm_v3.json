@@ -1,0 +1,501 @@
+{
+  "module": "arch_wasm",
+  "version": "v3",
+  "tools_hardened": 70,
+  "tools_tested": 70,
+  "checks_passed": 118,
+  "checks_failed": 0,
+  "mismatches": [],
+  "tool_detail": [
+    {
+      "tool": "arch_wasm_valtype_from_byte",
+      "checks": 8,
+      "pass": 8,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_section_id_from_byte",
+      "checks": 14,
+      "pass": 14,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_external_kind_from_byte",
+      "checks": 5,
+      "pass": 5,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_mutability_from_byte",
+      "checks": 3,
+      "pass": 3,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_name",
+      "checks": 3,
+      "pass": 3,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_is_numeric",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_is_reference",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_section_name",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_external_kind_name",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_limits_decode",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_functype_decode",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_module_header_parse",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_constants",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_simd_mnemonic",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_disassemble",
+      "checks": 3,
+      "pass": 3,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_arch_info",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_memory_type_decode",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_table_type_decode",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_global_type_decode",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_byte",
+      "checks": 3,
+      "pass": 3,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_function_stats",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_name_subsection_from_byte",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_decode_fc_prefix",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_decode_fd_prefix",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_decode_fe_prefix",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_linear_disassemble",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_as_i32",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_as_f64",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_type_tag",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_stack_ops",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_stack_drain",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_decode_type",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_decode_func_type",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_functype_arity",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_name_subsection_name",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_mutability_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valuetype_byte_roundtrip",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_as_i64",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_as_f32",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_cf_basic_blocks",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_cf_find_block_end",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_executor_new",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_executor_reset",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_simd_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_ref_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_section_id_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_external_kind_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_value_as_v128",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_stack_new_empty",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_linear_disassembler_new",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_function_stats_from_bytes",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_name_subsection_type_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_executor_execute_instruction",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_control_flow_extract_blocks",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_module_header_valid_check",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_valtype_all_bytes",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_section_id_all",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_limits_no_max_check",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_call_graph_edge_count",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_call_graph_callees_of",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_call_graph_reachable_from",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_call_graph_roots_leaves",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_call_graph_recursive",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_indirect_call_table_resolve",
+      "checks": 2,
+      "pass": 2,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_indirect_call_table_entry_count",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_function_ref_func_import",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_data_flow_state_probe",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_data_flow_analysis_record",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_module_header_magic_ok",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    },
+    {
+      "tool": "arch_wasm_limits_has_max",
+      "checks": 1,
+      "pass": 1,
+      "fail": 0,
+      "notes": []
+    }
+  ]
+}

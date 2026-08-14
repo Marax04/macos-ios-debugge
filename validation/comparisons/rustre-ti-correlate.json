@@ -1,0 +1,799 @@
+{
+  "crate": "rustre-ti-correlate",
+  "tests": 109,
+  "mismatches": 0,
+  "match": true,
+  "note": "No MCP wire tools found in wire_tools.rs for this crate. Comparison performed via pure Python validator unit tests covering all 87 registered validators.",
+  "validator_count": 87,
+  "results": [
+    {
+      "name": "deduplicate_iocs basic",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "deduplicate_iocs no self",
+      "pass": true,
+      "got": "1.2.3.4",
+      "expected": "1.2.3.4",
+      "detail": ""
+    },
+    {
+      "name": "correlate_across_sources max_source_count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "correlate_across_sources ioc_counts has ip:1.2.3.4",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "cluster_by_campaign total",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "timeline 2 buckets",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "timeline first bucket count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "score_ioc campaigns match",
+      "pass": true,
+      "got": 0.4,
+      "expected": 0.4,
+      "detail": ""
+    },
+    {
+      "name": "tlsh_distance equal",
+      "pass": true,
+      "got": 0,
+      "expected": 0,
+      "detail": ""
+    },
+    {
+      "name": "tlsh_distance None on empty",
+      "pass": true,
+      "got": null,
+      "expected": null,
+      "detail": ""
+    },
+    {
+      "name": "tlsh_distance len mismatch",
+      "pass": true,
+      "got": null,
+      "expected": null,
+      "detail": ""
+    },
+    {
+      "name": "import_jaccard identical",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "import_jaccard disjoint",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "import_jaccard half",
+      "pass": true,
+      "got": 0.3333333333333333,
+      "expected": 0.3333333333333333,
+      "detail": ""
+    },
+    {
+      "name": "entropy_sim identical",
+      "pass": true,
+      "got": 0.9999999999999998,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "entropy_sim zero",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "entropy_sim diff lengths",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "string_overlap identical",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "string_overlap disjoint",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "correlate_pair identical",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "correlate_pair imphash_match",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "correlate_pair tlsh_dist 0",
+      "pass": true,
+      "got": 0,
+      "expected": 0,
+      "detail": ""
+    },
+    {
+      "name": "cluster_by_imphash aaa count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "cluster_by_imphash bbb count",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "cluster_samples 2 clusters",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "cluster_samples first cluster size",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "features_from_ioc ioc_type",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "features_from_ioc tag",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "features_from_ioc ttp",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "features_from_ioc actor",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator correlate_all 1 result",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator shared tag",
+      "pass": true,
+      "got": [
+        "t1"
+      ],
+      "expected": [
+        "t1"
+      ],
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator confidence",
+      "pass": true,
+      "got": 20,
+      "expected": 20,
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator high_confidence 50 empty",
+      "pass": true,
+      "got": 0,
+      "expected": 0,
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator high_confidence 20 one",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "ThreatCorrelator cluster_by_family unknown",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationGraph node_count",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationGraph edge_count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationGraph find_related a",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationGraph dot starts",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "MitreTechniqueMapper CreateRemoteThread has result",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "MitreTechniqueMapper T1055 in result",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "MitreTechniqueMapper batch >=1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "MitreTechniqueMapper classify not empty",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationResult filter_by_min_sources",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationResult max_source_count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "ThreatEvent with_label label",
+      "pass": true,
+      "got": "seen",
+      "expected": "seen",
+      "detail": ""
+    },
+    {
+      "name": "ThreatEvent with_label ts",
+      "pass": true,
+      "got": 12345,
+      "expected": 12345,
+      "detail": ""
+    },
+    {
+      "name": "ThreatEvent ioc_types",
+      "pass": true,
+      "got": [
+        "ip"
+      ],
+      "expected": [
+        "ip"
+      ],
+      "detail": ""
+    },
+    {
+      "name": "IocNode new kind",
+      "pass": true,
+      "got": "ip",
+      "expected": "ip",
+      "detail": ""
+    },
+    {
+      "name": "IocNode with_confidence",
+      "pass": true,
+      "got": 0.9,
+      "expected": 0.9,
+      "detail": ""
+    },
+    {
+      "name": "IocNode display_name labeled",
+      "pass": true,
+      "got": "MyLabel",
+      "expected": "MyLabel",
+      "detail": ""
+    },
+    {
+      "name": "IocNode display_name no label",
+      "pass": true,
+      "got": "1.2.3.4",
+      "expected": "1.2.3.4",
+      "detail": ""
+    },
+    {
+      "name": "IocEdge new kind",
+      "pass": true,
+      "got": "related",
+      "expected": "related",
+      "detail": ""
+    },
+    {
+      "name": "IocEdge weight default",
+      "pass": true,
+      "got": 0.01,
+      "expected": 0.01,
+      "detail": ""
+    },
+    {
+      "name": "IocGraph get_or_create_node id",
+      "pass": true,
+      "got": "ip::1.1.1.1",
+      "expected": "ip::1.1.1.1",
+      "detail": ""
+    },
+    {
+      "name": "IocGraph neighbors_out",
+      "pass": true,
+      "got": [
+        "domain::evil.com"
+      ],
+      "expected": [
+        "domain::evil.com"
+      ],
+      "detail": ""
+    },
+    {
+      "name": "IocGraph neighbors_in",
+      "pass": true,
+      "got": [
+        "ip::1.1.1.1"
+      ],
+      "expected": [
+        "ip::1.1.1.1"
+      ],
+      "detail": ""
+    },
+    {
+      "name": "IocGraph bfs_distance direct",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "IocGraph reachable",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "IocGraph nodes_of_kind ip count",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "TemporalCorrelator cluster_count >= 1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "TemporalCorrelator total_events 3",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "TemporalCorrelator hottest not None",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "TimeSeries total",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "TimeSeries mean",
+      "pass": true,
+      "got": 1.5,
+      "expected": 1.5,
+      "detail": ""
+    },
+    {
+      "name": "BurstDetector detect 1 burst",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "BurstDetector burst count 10",
+      "pass": true,
+      "got": 10,
+      "expected": 10,
+      "detail": ""
+    },
+    {
+      "name": "pearson_correlation identical",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "pearson_correlation anti",
+      "pass": true,
+      "got": -1.0,
+      "expected": -1.0,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationMatrix diag 1",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationMatrix off_diag 1",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "CorrelationMatrix high pairs",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "cluster_by_ttps has campaigns",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "cluster_by_ttps >=2 campaigns",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "label_propagation all nodes",
+      "pass": true,
+      "got": [
+        "b",
+        "a",
+        "d",
+        "c"
+      ],
+      "expected": [
+        "d",
+        "b",
+        "a",
+        "c"
+      ],
+      "detail": ""
+    },
+    {
+      "name": "build_communities >= 1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "graph_stats node_count",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "graph_stats edge_count",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "graph_stats density",
+      "pass": true,
+      "got": 0.3333333333333333,
+      "expected": 0.3333333333333333,
+      "detail": ""
+    },
+    {
+      "name": "to_dot contains digraph",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "to_dot contains uses",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "score_attribution APT1 first",
+      "pass": true,
+      "got": "APT1",
+      "expected": "APT1",
+      "detail": ""
+    },
+    {
+      "name": "score_attribution APT1 score",
+      "pass": true,
+      "got": 0.75,
+      "expected": 0.75,
+      "detail": ""
+    },
+    {
+      "name": "AttributionEngine score APT28",
+      "pass": true,
+      "got": "APT28",
+      "expected": "APT28",
+      "detail": ""
+    },
+    {
+      "name": "AttributionEngine top_n 1",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "AttributionEngine get_actor not None",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "IocCorrelator correlate max_source_count 2",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "IocCorrelator lookup count 2",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "CampaignCorrelator links >= 1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "CampaignCorrelator significant >=1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "CampaignCorrelator ioc_jaccard C1 C2",
+      "pass": true,
+      "got": 0.3333333333333333,
+      "expected": 0.3333333333333333,
+      "detail": ""
+    },
+    {
+      "name": "SimilarityMatrix diagonal",
+      "pass": true,
+      "got": 1.0,
+      "expected": 1.0,
+      "detail": ""
+    },
+    {
+      "name": "SimilarityMatrix [0][1]",
+      "pass": true,
+      "got": 0.5,
+      "expected": 0.5,
+      "detail": ""
+    },
+    {
+      "name": "SimilarityMatrix [0][2]",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "SimilarityMatrix pairs_above",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "BehavioralClusterer 3 clusters",
+      "pass": true,
+      "got": 3,
+      "expected": 3,
+      "detail": ""
+    },
+    {
+      "name": "TtpAnalyzer from_apis >=1",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "TtpAnalyzer cluster_by_tactic not empty",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "ActorTracker attribute_ioc not None",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "ActorTracker attribute_ioc actor_id",
+      "pass": true,
+      "got": "APT1",
+      "expected": "APT1",
+      "detail": ""
+    },
+    {
+      "name": "ActorTracker find_by_techniques",
+      "pass": true,
+      "got": true,
+      "expected": true,
+      "detail": ""
+    },
+    {
+      "name": "ActorTracker find_by_techniques overlap",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    },
+    {
+      "name": "build_campaign_timeline campaign_id",
+      "pass": true,
+      "got": "C1",
+      "expected": "C1",
+      "detail": ""
+    },
+    {
+      "name": "build_campaign_timeline 2 events",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "monthly_pulse 2 months",
+      "pass": true,
+      "got": 2,
+      "expected": 2,
+      "detail": ""
+    },
+    {
+      "name": "correlate_samples dm diagonal",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "correlate_samples dm off-diag",
+      "pass": true,
+      "got": 0.0,
+      "expected": 0.0,
+      "detail": ""
+    },
+    {
+      "name": "correlate_samples 1 cluster",
+      "pass": true,
+      "got": 1,
+      "expected": 1,
+      "detail": ""
+    }
+  ]
+}

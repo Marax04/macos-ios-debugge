@@ -1,0 +1,62 @@
+﻿[package]
+license.workspace = true
+name = "rustre-mcp-server"
+version = "0.1.0"
+edition = "2024"
+# Binary target lives in the umbrella `rustre-mcp` crate so it can depend on
+# both `rustre-mcp-server` and `rustre-mcp-tools` (the latter would otherwise
+# create a dependency cycle with this crate).
+autobins = false
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-mcp dependency intentionally omitted: rustre-mcp is the umbrella crate
+# that aggregates federation/server/tools, so it depends on us, not the other way.
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+rustre-core = { path = "../rustre-core" }
+rustre-loader-pe = { path = "../rustre-loader-pe" }
+rustre-triage-entropy = { path = "../rustre-triage-entropy" }
+rustre-analysis-string = { path = "../rustre-analysis-string" }
+rustre-analysis-fn = { path = "../rustre-analysis-fn" }
+rustre-triage = { path = "../rustre-triage" }
+rustre-crypto-id = { path = "../rustre-crypto-id" }
+rustre-arch-x86 = { path = "../rustre-arch-x86" }
+rustre-analysis-xref = { path = "../rustre-analysis-xref" }
+rustre-analysis-cfg = { path = "../rustre-analysis-cfg" }
+rustre-analysis-dataflow = { path = "../rustre-analysis-dataflow" }
+rustre-analysis-typerecov = { path = "../rustre-analysis-typerecov" }
+rustre-analysis-vsa = { path = "../rustre-analysis-vsa" }
+iced-x86 = { workspace = true }
+rustre-yara-engine = { path = "../rustre-yara-engine" }
+rustre-symbols-pdb = { path = "../rustre-symbols-pdb" }
+rustre-symbols-dwarf = { path = "../rustre-symbols-dwarf" }
+rustre-symbols = { path = "../rustre-symbols" }
+rustre-flirt-apply = { path = "../rustre-flirt-apply" }
+rustre-forensics = { path = "../rustre-forensics" }
+rustre-forensics-plugins = { path = "../rustre-forensics-plugins" }
+rustre-decompiler = { path = "../rustre-decompiler" }
+rustre-deobf-mba = { path = "../rustre-deobf-mba" }
+rustre-patch = { path = "../rustre-patch" }
+goblin = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+rmcp = { workspace = true }
+rustre-graph = { path = "../rustre-graph" }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[lints]
+workspace = true
+

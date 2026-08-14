@@ -1,0 +1,130 @@
+{
+  "category": "pe_tools",
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "pe_tools_compute_entropy",
+      "status": "PASS",
+      "inputs": {
+        "hex": "deadbeef001122334455667788990011"
+      },
+      "expected": {
+        "entropy": 3.75,
+        "bytes": 16
+      },
+      "actual": {
+        "entropy": 3.75,
+        "bytes": 16
+      },
+      "python_reference": "Shannon entropy: sum(-p*log2(p) for p in freq/n if p>0); freq=[0]*256 histogram over bytes",
+      "tolerance": 1e-9,
+      "notes": "16-byte buffer with 4 distinct values each appearing 4 times -> H=2bits/byte * (4/16)*4 = 2.0? Actually de ad be ef 00 11 22 33 44 55 66 77 88 99 00 11 -> each byte appears once or twice. H=3.75 confirmed by both Python and Rust."
+    },
+    {
+      "tool": "pe_tools_compute_entropy",
+      "status": "PASS",
+      "inputs": {
+        "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+      },
+      "expected": {
+        "entropy": 8.0,
+        "bytes": 256
+      },
+      "actual": {
+        "entropy": 8.0,
+        "bytes": 256
+      },
+      "python_reference": "Uniform distribution (all 256 byte values once) -> maximum entropy = 8.0 bits",
+      "tolerance": 1e-9
+    },
+    {
+      "tool": "pe_tools_compute_pe_checksum",
+      "status": "PASS",
+      "inputs": {
+        "hex": "deadbeef001122334455667788990011",
+        "note": "non-PE input (no MZ magic) -> find_checksum_offset returns None -> result is 0"
+      },
+      "expected": {
+        "checksum": 0,
+        "bytes": 16
+      },
+      "actual": {
+        "checksum": 0,
+        "bytes": 16
+      },
+      "python_reference": "find_checksum_offset: if data<64 or no valid PE header -> return None; compute_pe_checksum returns 0"
+    },
+    {
+      "tool": "pe_tools_compute_pe_checksum",
+      "status": "PASS",
+      "inputs": {
+        "note": "minimal PE64 stub (256 bytes, MZ+PE sig, PE32+ optional header, checksum field at 0x98)",
+        "hex_description": "4d5a0000...PE64 stub with zeroed checksum field"
+      },
+      "expected": {
+        "checksum": 41944,
+        "bytes": 256,
+        "note": "0xa3d8 = Python reference matches Rust output"
+      },
+      "actual": {
+        "checksum": 41944,
+        "bytes": 256
+      },
+      "python_reference": "PE checksum algorithm: skip 4-byte checksum field at pe_off+24+64; accumulate 16-bit words with carry fold; add file_size"
+    },
+    {
+      "tool": "pe_tools_rich_header_parse",
+      "status": "PASS",
+      "inputs": {
+        "hex": "deadbeef001122334455667788990011",
+        "note": "16-byte non-PE input -> present=false"
+      },
+      "expected": {
+        "present": false
+      },
+      "actual": {
+        "present": false
+      },
+      "python_reference": "Input < 64 bytes or no Rich marker found in DOS stub -> present=false"
+    },
+    {
+      "tool": "pe_tools_rich_header_parse",
+      "status": "MISMATCH",
+      "defect_type": "library_defect",
+      "inputs": {
+        "note": "DOS stub with synthetic Rich header (key=0xDEADC0DE, 1 entry: prodid=0x0001 build=0x1234 count=3)",
+        "hex_description": "96-byte stub: MZ header + DanS(masked) + 3*padding + entry + Rich + key"
+      },
+      "expected": {
+        "present": true,
+        "xor_key": 3735929054,
+        "entry_count": 1,
+        "entry_0_product_id": 1,
+        "entry_0_build_number": 4660,
+        "entry_0_count": 3
+      },
+      "actual": {
+        "present": false
+      },
+      "python_reference": "DanS marker as LE u32 = 0x536E6144 (b'DanS' interpreted LE). After XOR masking with key, scan for v^key==0x536E6144.",
+      "root_cause": "rustre_pe_tools::RichHeader::parse in crates/rustre-pe-tools/src/lib.rs line 676 uses dans_marker=0x4461_6E53 (big-endian interpretation of 'DanS') instead of the correct little-endian value 0x536E6144. This causes the backward DanS search to always fail on correctly-encoded Rich headers, returning None.",
+      "fix_location": "crates/rustre-pe-tools/src/lib.rs:676 — change 0x4461_6E53 to 0x536E_6144",
+      "fix_blocked": "task RULES prohibit modifying Rust crates"
+    }
+  ],
+  "summary": {
+    "tools_hardened": 3,
+    "tools_passed": 5,
+    "tools_failed": 1,
+    "tools_skipped": 0,
+    "mismatches": [
+      {
+        "tool": "pe_tools_rich_header_parse",
+        "defect_type": "library_defect",
+        "expected": "present=true with xor_key=0xDEADC0DE and 1 entry",
+        "actual": "present=false",
+        "root_cause": "Wrong DanS marker constant in lib.rs (0x4461_6E53 BE instead of 0x536E6144 LE)"
+      }
+    ]
+  }
+}

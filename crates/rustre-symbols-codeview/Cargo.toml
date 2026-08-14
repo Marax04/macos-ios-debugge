@@ -1,0 +1,20 @@
+[package]
+license.workspace = true
+name = "rustre-symbols-codeview"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-symbols = { path = "../rustre-symbols" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

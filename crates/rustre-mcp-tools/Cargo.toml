@@ -1,0 +1,214 @@
+﻿[package]
+license.workspace = true
+name = "rustre-mcp-tools"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-mcp dependency intentionally omitted: rustre-mcp is the umbrella crate
+# that aggregates federation/server/tools, so it depends on us, not the other way.
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+rustre-core = { path = "../rustre-core" }
+rustre-net = { path = "../rustre-net" }
+rustre-ti-malpedia = { path = "../rustre-ti-malpedia" }
+rustre-arch-x86 = { path = "../rustre-arch-x86" }
+rustre-arch-arm64 = { path = "../rustre-arch-arm64" }
+rustre-arch-mips = { path = "../rustre-arch-mips" }
+rustre-arch-riscv = { path = "../rustre-arch-riscv" }
+rustre-arch-wasm = { path = "../rustre-arch-wasm" }
+rustre-arch-cil = { path = "../rustre-arch-cil" }
+rustre-arch-jvm = { path = "../rustre-arch-jvm" }
+rustre-arch-lua = { path = "../rustre-arch-lua" }
+rustre-arch-6502 = { path = "../rustre-arch-6502" }
+rustre-yara-engine = { path = "../rustre-yara-engine" }
+rustre-yara = { path = "../rustre-yara" }
+rustre-decompiler = { path = "../rustre-decompiler" }
+rustre-decompiler-cfs = { path = "../rustre-decompiler-cfs" }
+rustre-decompiler-c = { path = "../rustre-decompiler-c" }
+# [DISABLED 2026-07-12] rustre-decompiler-ghidra — see workspace Cargo.toml.
+# rustre-decompiler-ghidra = { path = "../rustre-decompiler-ghidra" }
+rustre-analysis = { path = "../rustre-analysis" }
+rustre-analysis-type = { path = "../rustre-analysis-type" }
+rustre-analysis-typerecov = { path = "../rustre-analysis-typerecov" }
+rustre-decompiler-type = { path = "../rustre-decompiler-type" }
+rustre-analysis-fn = { path = "../rustre-analysis-fn" }
+rustre-analysis-string = { path = "../rustre-analysis-string" }
+rustre-loader = { path = "../rustre-loader" }
+rustre-loader-java = { path = "../rustre-loader-java" }
+rustre-loader-pe = { path = "../rustre-loader-pe" }
+rustre-loader-macho = { path = "../rustre-loader-macho" }
+rustre-mem = { path = "../rustre-mem" }
+rustre-flirt-apply = { path = "../rustre-flirt-apply" }
+rustre-flirt = { path = "../rustre-flirt" }
+rustre-flirt-gen = { path = "../rustre-flirt-gen" }
+rustre-hex = { path = "../rustre-hex" }
+rustre-hex-pattern = { path = "../rustre-hex-pattern" }
+rustre-hex-template = { path = "../rustre-hex-template" }
+rustre-analysis-xref = { path = "../rustre-analysis-xref" }
+rustre-analysis-dataflow = { path = "../rustre-analysis-dataflow" }
+rustre-analysis-cfg = { path = "../rustre-analysis-cfg" }
+rustre-analysis-vsa = { path = "../rustre-analysis-vsa" }
+rustre-triage = { path = "../rustre-triage" }
+rustre-patch = { path = "../rustre-patch" }
+rustre-triage-entropy = { path = "../rustre-triage-entropy" }
+rustre-triage-die = { path = "../rustre-triage-die" }
+rustre-pe-tools = { path = "../rustre-pe-tools" }
+rustre-pe-editor = { path = "../rustre-pe-editor" }
+rustre-pe-rebuild = { path = "../rustre-pe-rebuild" }
+rustre-crypto-id = { path = "../rustre-crypto-id" }
+rustre-symbols-pdb = { path = "../rustre-symbols-pdb" }
+rustre-symbols-dwarf = { path = "../rustre-symbols-dwarf" }
+rustre-symbols-stabs = { path = "../rustre-symbols-stabs" }
+rustre-arch-luajit = { path = "../rustre-arch-luajit" }
+rustre-deobf-mba = { path = "../rustre-deobf-mba" }
+rustre-deobf = { path = "../rustre-deobf" }
+rustre-deobf-opaque = { path = "../rustre-deobf-opaque" }
+rustre-deobf-vmlift = { path = "../rustre-deobf-vmlift" }
+rustre-deobf-vm = { path = "../rustre-deobf-vm" }
+rustre-demangle = { path = "../rustre-demangle" }
+rustre-diff = { path = "../rustre-diff" }
+rustre-diff-bindiff = { path = "../rustre-diff-bindiff" }
+rustre-diff-semantic = { path = "../rustre-diff-semantic" }
+rustre-decompiler-expr = { path = "../rustre-decompiler-expr" }
+iced-x86 = { workspace = true }
+capstone = "0.12"
+sha2 = { workspace = true }
+md-5 = { workspace = true }
+rustre-deobf-antianti = { path = "../rustre-deobf-antianti" }
+rustre-mcp-server = { path = "../rustre-mcp-server" }
+# [DISABLED 2026-07-12] rustre-debug-macos — see workspace Cargo.toml.
+# rustre-debug-macos = { path = "../rustre-debug-macos" }
+# [DISABLED 2026-07-12] rustre-debug-linux — see workspace Cargo.toml.
+# rustre-debug-linux = { path = "../rustre-debug-linux" }
+rustre-arch-avr = { path = "../rustre-arch-avr" }
+# [DISABLED 2026-07-12] rustre-emu-unicorn — see workspace Cargo.toml.
+# rustre-emu-unicorn = { path = "../rustre-emu-unicorn" }
+rustre-arch-bpf = { path = "../rustre-arch-bpf" }
+rustre-il-hlil = { path = "../rustre-il-hlil" }
+rustre-il-lift = { path = "../rustre-il-lift" }
+rustre-il-mlil = { path = "../rustre-il-mlil" }
+rustre-il-passes = { path = "../rustre-il-passes" }
+rustre-il-llil = { path = "../rustre-il-llil" }
+rustre-agent = { path = "../rustre-agent" }
+rustre-agent-workflow = { path = "../rustre-agent-workflow" }
+rustre-arch-sparc = { path = "../rustre-arch-sparc" }
+rustre-arch-68k = { path = "../rustre-arch-68k" }
+rustre-arch-arm = { path = "../rustre-arch-arm" }
+rustre-script = { path = "../rustre-script" }
+rustre-arch-msp430 = { path = "../rustre-arch-msp430" }
+rustre-arch-ppc = { path = "../rustre-arch-ppc" }
+rustre-arch-z80 = { path = "../rustre-arch-z80" }
+rustre-arch-dex = { path = "../rustre-arch-dex" }
+rustre-loader-console = { path = "../rustre-loader-console" }
+rustre-loader-luajit = { path = "../rustre-loader-luajit" }
+rustre-loader-lua = { path = "../rustre-loader-lua" }
+rustre-trace = { path = "../rustre-trace" }
+rustre-trace-navigate = { path = "../rustre-trace-navigate" }
+rustre-trace-coverage = { path = "../rustre-trace-coverage" }
+# [DISABLED 2026-07-12] rustre-debug-windbg — see workspace Cargo.toml.
+# rustre-debug-windbg = { path = "../rustre-debug-windbg" }
+# [DISABLED 2026-07-12] rustre-debug-frida — see workspace Cargo.toml.
+# rustre-debug-frida = { path = "../rustre-debug-frida" }
+rustre-debug = { path = "../rustre-debug" }
+# [DISABLED 2026-07-12] rustre-debug-windows — see workspace Cargo.toml.
+# rustre-debug-windows = { path = "../rustre-debug-windows" }
+# [DISABLED 2026-07-12] rustre-debug-gdb — see workspace Cargo.toml.
+# rustre-debug-gdb = { path = "../rustre-debug-gdb" }
+rustre-net-proxy = { path = "../rustre-net-proxy" }
+# [DISABLED 2026-07-12] rustre-debug-kgdb — see workspace Cargo.toml.
+# rustre-debug-kgdb = { path = "../rustre-debug-kgdb" }
+# [DISABLED 2026-07-12] rustre-debug-unicorn — see workspace Cargo.toml.
+# rustre-debug-unicorn = { path = "../rustre-debug-unicorn" }
+rustre-symbols = { path = "../rustre-symbols" }
+rustre-symb = { path = "../rustre-symb" }
+# [DISABLED 2026-07-12] rustre-symb-z3 — see workspace Cargo.toml.
+# rustre-symb-z3 = { path = "../rustre-symb-z3" }
+rustre-symb-engine = { path = "../rustre-symb-engine" }
+# rustre-symbols-codeview absorbed into rustre-debug::codeview (2026-07-12); use rustre-debug instead.
+rustre-events = { path = "../rustre-events" }
+rustre-adb = { path = "../rustre-adb" }
+rustre-db = { path = "../rustre-db" }
+rustre-hex-view = { path = "../rustre-hex-view" }
+rustre-fuzz-cov = { path = "../rustre-fuzz-cov" }
+rustre-fuzz = { path = "../rustre-fuzz" }
+rustre-fuzz-afl = { path = "../rustre-fuzz-afl" }
+rustre-script-rhai = { path = "../rustre-script-rhai" }
+rustre-script-python = { path = "../rustre-script-python" }
+rustre-script-lua = { path = "../rustre-script-lua" }
+# [DISABLED 2026-07-12] rustre-emu-qiling — see workspace Cargo.toml.
+# rustre-emu-qiling = { path = "../rustre-emu-qiling" }
+rustre-emu = { path = "../rustre-emu" }
+rustre-ti-misp = { path = "../rustre-ti-misp" }
+rustre-ti-opencti = { path = "../rustre-ti-opencti" }
+rustre-threatintel = { path = "../rustre-threatintel" }
+rustre-ttd-recorder = { path = "../rustre-ttd-recorder" }
+rustre-ttd-replayer = { path = "../rustre-ttd-replayer" }
+rustre-ttd-replay = { path = "../rustre-ttd-replay" }
+rustre-ttd = { path = "../rustre-ttd" }
+rustre-ttd-query = { path = "../rustre-ttd-query" }
+rustre-dotnet-edit = { path = "../rustre-dotnet-edit" }
+rustre-dotnet = { path = "../rustre-dotnet" }
+rustre-dotnet-decompile = { path = "../rustre-dotnet-decompile" }
+rustre-fuzz-sanitizers = { path = "../rustre-fuzz-sanitizers" }
+rustre-fuzz-libfuzzer = { path = "../rustre-fuzz-libfuzzer" }
+rustre-fuzz-net = { path = "../rustre-fuzz-net" }
+rustre-sandbox-vm = { path = "../rustre-sandbox-vm" }
+rustre-sandbox = { path = "../rustre-sandbox" }
+rustre-sysinternals = { path = "../rustre-sysinternals" }
+rustre-agent-llm = { path = "../rustre-agent-llm" }
+rustre-deobf-string = { path = "../rustre-deobf-string" }
+rustre-deobf-iadl = { path = "../rustre-deobf-iadl" }
+rustre-net-dissect = { path = "../rustre-net-dissect" }
+rustre-net-rules = { path = "../rustre-net-rules" }
+rustre-net-pcap = { path = "../rustre-net-pcap" }
+rustre-mobile = { path = "../rustre-mobile" }
+rustre-mobile-apktool = { path = "../rustre-mobile-apktool" }
+rustre-mobile-jadx = { path = "../rustre-mobile-jadx" }
+rustre-mobile-dyld = { path = "../rustre-mobile-dyld" }
+rustre-mobile-ios = { path = "../rustre-mobile-ios" }
+rustre-mobile-ipa = { path = "../rustre-mobile-ipa" }
+rustre-mobile-smali = { path = "../rustre-mobile-smali" }
+rustre-syscalls-linux = { path = "../rustre-syscalls-linux" }
+rustre-syscalls = { path = "../rustre-syscalls" }
+rustre-plugin-lua = { path = "../rustre-plugin-lua" }
+rustre-plugin-native = { path = "../rustre-plugin-native" }
+rustre-plugin-python = { path = "../rustre-plugin-python" }
+rustre-syscalls-windows = { path = "../rustre-syscalls-windows" }
+rustre-loader-firmware = { path = "../rustre-loader-firmware" }
+rustre-loader-ole = { path = "../rustre-loader-ole" }
+rustre-loader-pdf = { path = "../rustre-loader-pdf" }
+rustre-loader-wasm = { path = "../rustre-loader-wasm" }
+rustre-loader-android = { path = "../rustre-loader-android" }
+rustre-loader-elf = { path = "../rustre-loader-elf" }
+rustre-loader-dotnet = { path = "../rustre-loader-dotnet" }
+rustre-sandbox-report = { path = "../rustre-sandbox-report" }
+rustre-deobf-mhcde = { path = "../rustre-deobf-mhcde" }
+rustre-deobf-smc = { path = "../rustre-deobf-smc" }
+rustre-deobf-cff = { path = "../rustre-deobf-cff" }
+rustre-forensics-fs = { path = "../rustre-forensics-fs" }
+rustre-forensics-mem = { path = "../rustre-forensics-mem" }
+rustre-forensics = { path = "../rustre-forensics" }
+rustre-ti-vt = { path = "../rustre-ti-vt" }
+rustre-ti-otx = { path = "../rustre-ti-otx" }
+rustre-trace-pt = { path = "../rustre-trace-pt" }
+rustre-trace-coresight = { path = "../rustre-trace-coresight" }
+rustre-analysis-vtable = { path = "../rustre-analysis-vtable" }
+rustre-analysis-callconv = { path = "../rustre-analysis-callconv" }
+rustre-agent-prompts = { path = "../rustre-agent-prompts" }
+rustre-dotnet-metadata = { path = "../rustre-dotnet-metadata" }
+
+[lints]
+workspace = true
+

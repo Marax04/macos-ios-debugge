@@ -1,0 +1,87 @@
+__int64 sub_1400F6940();
+__int64 sub_1400F3326();
+__int64 sub_1400F761F();
+
+__int64 __fastcall sub_1400F74E0(int *a1) {
+    int arg_4;
+    int arg_8;
+    int v_10;
+    int v_18;
+    int v_20;
+    int v_28;
+    int v_8;
+    int v_c;
+    char *str;
+    __int64 *dst;
+    __int64 v3;
+    __int64 v10;
+    __int64 v5;
+    __int64 v6;
+    __int64 result;
+    __int64 v8;
+    __int64 v12;
+    int v13;
+    int v7;
+    __int64 v9;
+    __int64 v11;
+    __int64 v2;
+
+    dst = (__int64 *)a1;
+    v3 = *a1;
+    v10 = v3 + v3;
+    v5 = 4;
+    if (v10 >= 5) v5 = v10;
+    v6 = arg_8;
+    v_28 = 72;
+    v_20 = 8;
+    a1 = str - 24;
+    sub_1400F6940(a1, v3, v6);
+    if (v_18 == 1) {
+        a1 = (int *)v_10;
+        v3 = v_8;
+        sub_1400F3326(a1, v3);
+        result = 0;
+        a1 = 0;
+        v8 = v2;
+        /* cpuid  */;
+        { __int64 __xchg_tmp = v2; v2 = v2; v2 = __xchg_tmp; };
+        v8 = result;
+        v12 = 0x8000000000000000;
+        v13 = 0;
+        if (v8 == 0) JUMPOUT(0x1400f75f7);
+        v7 = (int)a1;
+        v9 = v6;
+        a1 = 0;
+        result = 1;
+        v9 = v2;
+        /* cpuid  */;
+        { __int64 __xchg_tmp = v2; v2 = v9; v9 = __xchg_tmp; };
+        arg_4 = v7;
+        v_c = v8;
+        if (v8 < 7) JUMPOUT(0x1400f75ff);
+        a1 = 0;
+        result = 7;
+        v5 = v2;
+        /* cpuid  */;
+        { __int64 __xchg_tmp = v2; v2 = v5; v5 = __xchg_tmp; };
+        v7 = v3;
+        v8 = (__int64)a1;
+        result = 7;
+        a1 = 1;
+        /* cpuid  */;
+        v13 = v5;
+        a1 = (int *)v8;
+        v_28 = (int)a1;
+        v_8 = v12;
+        result = v3;
+        v_18 = v12;
+        result = v3;
+        v_20 = v12;
+        return sub_1400F761F();
+    } else {
+        v11 = v_10;
+        *(dst + 8) = v11;
+        *dst = v5;
+        return result;
+    }
+}

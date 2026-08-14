@@ -1,0 +1,612 @@
+{
+  "tools_hardened": 47,
+  "tools_passed": 47,
+  "tools_failed": 0,
+  "tools_skipped": 29,
+  "passed": [
+    {
+      "tool": "rustre_analysis_string_shannon_entropy",
+      "label": "hello",
+      "input": {
+        "text": "hello"
+      },
+      "expected": 1.9219280948873623,
+      "actual": 1.9219280948873625
+    },
+    {
+      "tool": "rustre_analysis_string_shannon_entropy",
+      "label": "empty",
+      "input": {
+        "text": ""
+      },
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "rustre_analysis_string_shannon_entropy",
+      "label": "uniform",
+      "input": {
+        "text": "aaaa"
+      },
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "rustre_analysis_string_shannon_entropy",
+      "label": "8chars",
+      "input": {
+        "text": "abcdefgh"
+      },
+      "expected": 3.0,
+      "actual": 3.0
+    },
+    {
+      "tool": "rustre_analysis_string_levenshtein",
+      "label": "'kitten'-'sitting'",
+      "input": {
+        "a": "kitten",
+        "b": "sitting"
+      },
+      "expected": {
+        "distance": 3,
+        "similarity": 0.5714285714285714
+      },
+      "actual": {
+        "distance": 3,
+        "similarity": 0.5714285714285714
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_levenshtein",
+      "label": "''-'abc'",
+      "input": {
+        "a": "",
+        "b": "abc"
+      },
+      "expected": {
+        "distance": 3,
+        "similarity": 0.0
+      },
+      "actual": {
+        "distance": 3,
+        "similarity": 0.0
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_levenshtein",
+      "label": "'abc'-'abc'",
+      "input": {
+        "a": "abc",
+        "b": "abc"
+      },
+      "expected": {
+        "distance": 0,
+        "similarity": 1.0
+      },
+      "actual": {
+        "distance": 0,
+        "similarity": 1.0
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_levenshtein",
+      "label": "'abc'-''",
+      "input": {
+        "a": "abc",
+        "b": ""
+      },
+      "expected": {
+        "distance": 3,
+        "similarity": 0.0
+      },
+      "actual": {
+        "distance": 3,
+        "similarity": 0.0
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_jaro_winkler",
+      "label": "'martha'-'marhta'",
+      "input": {
+        "a": "martha",
+        "b": "marhta"
+      },
+      "expected": {
+        "jaro": 0.9444444444444445,
+        "jaro_winkler": 0.9611111111111111
+      },
+      "actual": {
+        "jaro": 0.9444444444444444,
+        "jaro_winkler": 0.9611111111111112
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_jaro_winkler",
+      "label": "'abc'-'abc'",
+      "input": {
+        "a": "abc",
+        "b": "abc"
+      },
+      "expected": {
+        "jaro": 1.0,
+        "jaro_winkler": 1.0
+      },
+      "actual": {
+        "jaro": 1.0,
+        "jaro_winkler": 1.0
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_jaro_winkler",
+      "label": "''-'abc'",
+      "input": {
+        "a": "",
+        "b": "abc"
+      },
+      "expected": {
+        "jaro": 0.0,
+        "jaro_winkler": 0.0
+      },
+      "actual": {
+        "jaro": 0.0,
+        "jaro_winkler": 0.0
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_jaro_winkler",
+      "label": "'CRATE'-'TRACE'",
+      "input": {
+        "a": "CRATE",
+        "b": "TRACE"
+      },
+      "expected": {
+        "jaro": 0.7333333333333334,
+        "jaro_winkler": 0.7333333333333334
+      },
+      "actual": {
+        "jaro": 0.7333333333333334,
+        "jaro_winkler": 0.7333333333333334
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Ascii",
+      "input": {
+        "encoding": "Ascii"
+      },
+      "expected": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      },
+      "actual": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Utf8",
+      "input": {
+        "encoding": "Utf8"
+      },
+      "expected": {
+        "is_unicode": true,
+        "min_char_bytes": 1
+      },
+      "actual": {
+        "is_unicode": true,
+        "min_char_bytes": 1
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Utf16Le",
+      "input": {
+        "encoding": "Utf16Le"
+      },
+      "expected": {
+        "is_unicode": true,
+        "min_char_bytes": 2
+      },
+      "actual": {
+        "is_unicode": true,
+        "min_char_bytes": 2
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Utf16Be",
+      "input": {
+        "encoding": "Utf16Be"
+      },
+      "expected": {
+        "is_unicode": true,
+        "min_char_bytes": 2
+      },
+      "actual": {
+        "is_unicode": true,
+        "min_char_bytes": 2
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Utf32Le",
+      "input": {
+        "encoding": "Utf32Le"
+      },
+      "expected": {
+        "is_unicode": true,
+        "min_char_bytes": 4
+      },
+      "actual": {
+        "is_unicode": true,
+        "min_char_bytes": 4
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Utf32Be",
+      "input": {
+        "encoding": "Utf32Be"
+      },
+      "expected": {
+        "is_unicode": true,
+        "min_char_bytes": 4
+      },
+      "actual": {
+        "is_unicode": true,
+        "min_char_bytes": 4
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "Latin1",
+      "input": {
+        "encoding": "Latin1"
+      },
+      "expected": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      },
+      "actual": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_encoding_info",
+      "label": "ShiftJis",
+      "input": {
+        "encoding": "ShiftJis"
+      },
+      "expected": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      },
+      "actual": {
+        "is_unicode": false,
+        "min_char_bytes": 1
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_extract_urls",
+      "label": "https://example.com/path",
+      "input": {
+        "text": "https://example.com/path"
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_extract_urls",
+      "label": "http://rust-lang.org",
+      "input": {
+        "text": "http://rust-lang.org"
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_extract_urls",
+      "label": "no_scheme_here",
+      "input": {
+        "text": "no_scheme_here"
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "rustre_analysis_string_extract_ips",
+      "label": "192.168.1.1",
+      "input": {
+        "text": "192.168.1.1"
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_extract_ips",
+      "label": "10.0.0.1",
+      "input": {
+        "text": "10.0.0.1"
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_extract_ips",
+      "label": "not.an.ip.addr",
+      "input": {
+        "text": "not.an.ip.addr"
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "rustre_analysis_string_extract_ips",
+      "label": "no ips",
+      "input": {
+        "text": "no ips"
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "rustre_vsa_valueset_interval",
+      "label": "[0,0]",
+      "input": {
+        "lo": 0,
+        "hi": 0
+      },
+      "expected": "is_bottom=false",
+      "actual": {
+        "is_top": false,
+        "is_bottom": false
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_interval",
+      "label": "[10,20]",
+      "input": {
+        "lo": 10,
+        "hi": 20
+      },
+      "expected": "is_bottom=false",
+      "actual": {
+        "is_top": false,
+        "is_bottom": false
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_interval",
+      "label": "[5,5]",
+      "input": {
+        "lo": 5,
+        "hi": 5
+      },
+      "expected": "is_bottom=false",
+      "actual": {
+        "is_top": false,
+        "is_bottom": false
+      }
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_singleton",
+      "label": "v=0",
+      "input": {
+        "v": 0
+      },
+      "expected": {
+        "lo": 0,
+        "hi": 0,
+        "is_singleton": true
+      },
+      "actual": {
+        "lo": 0,
+        "hi": 0,
+        "is_singleton": true
+      }
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_singleton",
+      "label": "v=42",
+      "input": {
+        "v": 42
+      },
+      "expected": {
+        "lo": 42,
+        "hi": 42,
+        "is_singleton": true
+      },
+      "actual": {
+        "lo": 42,
+        "hi": 42,
+        "is_singleton": true
+      }
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_singleton",
+      "label": "v=255",
+      "input": {
+        "v": 255
+      },
+      "expected": {
+        "lo": 255,
+        "hi": 255,
+        "is_singleton": true
+      },
+      "actual": {
+        "lo": 255,
+        "hi": 255,
+        "is_singleton": true
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_contains",
+      "label": "[5, 10, 15] contains 10",
+      "input": {
+        "vals": [
+          5,
+          10,
+          15
+        ],
+        "v": 10
+      },
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "rustre_vsa_valueset_contains",
+      "label": "[1, 2, 3] contains 4",
+      "input": {
+        "vals": [
+          1,
+          2,
+          3
+        ],
+        "v": 4
+      },
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "rustre_vsa_valueset_contains",
+      "label": "[] contains 0",
+      "input": {
+        "vals": [],
+        "v": 0
+      },
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "rustre_vsa_is_definitely_null",
+      "label": "si(0,0,0)",
+      "input": {
+        "lo": 0,
+        "hi": 0,
+        "stride": 0
+      },
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "rustre_vsa_is_definitely_null",
+      "label": "si(1,1,0)",
+      "input": {
+        "lo": 1,
+        "hi": 1,
+        "stride": 0
+      },
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "rustre_vsa_is_definitely_null",
+      "label": "si(0,10,1)",
+      "input": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 1
+      },
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "rustre_vsa_may_be_out_of_bounds",
+      "label": "si(5,5) in [0,10]",
+      "input": {
+        "lo": 5,
+        "hi": 5,
+        "stride": 0,
+        "base": 0,
+        "limit": 10
+      },
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "rustre_vsa_may_be_out_of_bounds",
+      "label": "si(15,15) in [0,10]",
+      "input": {
+        "lo": 15,
+        "hi": 15,
+        "stride": 0,
+        "base": 0,
+        "limit": 10
+      },
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "rustre_analysis_string_scan_ascii",
+      "label": "hello_world_nul",
+      "input": {
+        "hex": "68656c6c6f20776f726c6400"
+      },
+      "expected": "count>=1",
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_scan_ascii",
+      "label": "empty",
+      "input": {
+        "hex": ""
+      },
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "rustre_analysis_string_read_cstring",
+      "label": "hello_nul",
+      "input": {
+        "hex": "68656c6c6f00"
+      },
+      "expected": {
+        "found": true,
+        "value": "hello"
+      },
+      "actual": {
+        "found": true,
+        "value": "hello",
+        "source": "rustre_analysis_string::StringScanner::read_cstring"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_detect_xor_key",
+      "label": "uniform_0x41",
+      "input": {
+        "hex": "41414141414141414141414141414141"
+      },
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "rustre_analysis_string_detect_xor_key",
+      "label": "uniform_0xEF",
+      "input": {
+        "hex": "efefefefefefefef"
+      },
+      "expected": 128,
+      "actual": 128
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_join",
+      "label": "join_3_7",
+      "input": {
+        "a_lo": 3,
+        "a_hi": 3,
+        "a_stride": 0,
+        "b_lo": 7,
+        "b_hi": 7,
+        "b_stride": 0
+      },
+      "expected": "lo<=3 and hi>=7",
+      "actual": {
+        "lo": 3,
+        "hi": 7
+      }
+    }
+  ],
+  "failed": []
+}

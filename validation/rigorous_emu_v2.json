@@ -1,0 +1,1068 @@
+{
+  "summary": {
+    "tools_hardened": 128,
+    "tools_passed": 127,
+    "tools_failed": 1,
+    "tools_skipped": 42
+  },
+  "results": [
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_pointer_size_wire",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_pointer_size_wire",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_arch_pointer_size_wire",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_arch_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "x86-64",
+      "actual": "x86-64"
+    },
+    {
+      "tool": "emu_arch_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "arm",
+      "actual": "arm"
+    },
+    {
+      "tool": "emu_arch_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "arm64",
+      "actual": "arm64"
+    },
+    {
+      "tool": "emu_arch_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "mips32",
+      "actual": "mips32"
+    },
+    {
+      "tool": "emu_arch_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "riscv64",
+      "actual": "riscv64"
+    },
+    {
+      "tool": "emu_arch_name_wire",
+      "status": "PASS",
+      "field": "name",
+      "expected": "x86-64",
+      "actual": "x86-64"
+    },
+    {
+      "tool": "emu_arch_name_wire",
+      "status": "PASS",
+      "field": "name",
+      "expected": "arm64",
+      "actual": "arm64"
+    },
+    {
+      "tool": "emu_base_arch_is_64bit",
+      "status": "PASS",
+      "field": "is_64bit",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_base_arch_is_64bit",
+      "status": "PASS",
+      "field": "is_64bit",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_base_arch_is_64bit",
+      "status": "PASS",
+      "field": "is_64bit",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_base_arch_is_64bit",
+      "status": "PASS",
+      "field": "is_64bit",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_base_arch_is_x86",
+      "status": "PASS",
+      "field": "is_x86",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_base_arch_is_x86",
+      "status": "PASS",
+      "field": "is_x86",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_base_arch_is_x86",
+      "status": "PASS",
+      "field": "is_x86",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_base_arch_is_x86",
+      "status": "PASS",
+      "field": "is_x86",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_constants",
+      "status": "PASS",
+      "expected": {
+        "none": 0,
+        "read": 1,
+        "write": 2,
+        "exec": 4,
+        "rw": 3,
+        "rx": 5,
+        "rwx": 7
+      },
+      "actual": {
+        "none": 0,
+        "read": 1,
+        "write": 2,
+        "exec": 4,
+        "rw": 3,
+        "rx": 5,
+        "rwx": 7
+      }
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_can_read",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_can_exec",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_can_exec",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_can_exec",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_can_exec",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_read_bit",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_read_bit",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_read_bit",
+      "status": "PASS",
+      "field": "can_read",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_exec_bit",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_exec_bit",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_exec_bit",
+      "status": "PASS",
+      "field": "can_exec",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_write_bit",
+      "status": "PASS",
+      "field": "can_write",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_write_bit",
+      "status": "PASS",
+      "field": "can_write",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_write_bit",
+      "status": "PASS",
+      "field": "can_write",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_perm_write_bit",
+      "status": "PASS",
+      "field": "can_write",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_perm_bitmask_encode",
+      "status": "PASS",
+      "field": "bits",
+      "expected": 3,
+      "actual": 3
+    },
+    {
+      "tool": "emu_unicorn_perm_bitmask_encode",
+      "status": "PASS",
+      "field": "bits",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 2,
+      "actual": 2
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size_v2",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size_v2",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "tool": "emu_unicorn_mode_ptr_size_v2",
+      "status": "PASS",
+      "field": "ptr_size",
+      "expected": 8,
+      "actual": 8
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian_v2",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian_v2",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_mode_is_little_endian_v2",
+      "status": "PASS",
+      "field": "is_little_endian",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_qiling_elf_loader_stub_is_elf",
+      "status": "PASS",
+      "field": "is_elf",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_qiling_elf_loader_stub_is_elf",
+      "status": "PASS",
+      "field": "is_elf",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_qiling_fd_table_new",
+      "status": "PASS",
+      "expected": {
+        "is_empty": false,
+        "len": 3,
+        "open_fds": [
+          0,
+          1,
+          2
+        ]
+      },
+      "actual": {
+        "is_empty": false,
+        "len": 3,
+        "open_fds": [
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "tool": "emu_qiling_fd_table_is_empty",
+      "status": "FAIL",
+      "expected": {
+        "is_empty": false,
+        "len": 3
+      },
+      "actual": {
+        "is_empty": true,
+        "len": 0
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_default_empty",
+      "status": "PASS",
+      "expected": {
+        "coverage": 0,
+        "edges": 0,
+        "hot": null
+      },
+      "actual": {
+        "coverage": 0,
+        "edges": 0,
+        "hot": null
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_single_bb",
+      "status": "PASS",
+      "expected": {
+        "coverage": 1,
+        "edges": 0
+      },
+      "actual": {
+        "coverage": 1,
+        "edges": 0
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_malloc_sim",
+      "status": "PASS",
+      "field": "addr",
+      "expected": 65536,
+      "actual": 65536
+    },
+    {
+      "tool": "emu_unicorn_heap_calloc_sim",
+      "status": "PASS",
+      "field": "addr",
+      "expected": 65536,
+      "actual": 65536
+    },
+    {
+      "tool": "emu_unicorn_heap_realloc_sim",
+      "status": "PASS",
+      "field": "new_addr",
+      "expected": 65568,
+      "actual": 65568
+    },
+    {
+      "tool": "emu_unicorn_heap_free_sim",
+      "status": "PASS",
+      "field": "freed",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_zero_size_malloc",
+      "status": "PASS",
+      "field": "is_none",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_exhaustion_check",
+      "status": "PASS",
+      "field": "exhausted",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_free_invalid",
+      "status": "PASS",
+      "field": "freed",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_unicorn_heap_alloc_free_cycle",
+      "status": "PASS",
+      "field": "freed",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_calloc_overflow_check",
+      "status": "PASS",
+      "field": "overflow",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_brk_position",
+      "status": "PASS",
+      "field": "brk",
+      "expected": 4192,
+      "actual": 4192
+    },
+    {
+      "tool": "emu_unicorn_heap_realloc_free_addr",
+      "status": "PASS",
+      "field": "result",
+      "expected": null,
+      "actual": null
+    },
+    {
+      "tool": "emu_unicorn_heap_allocation_stats",
+      "status": "PASS",
+      "expected": {
+        "bytes_used": 112,
+        "allocation_count": 3
+      },
+      "actual": {
+        "bytes_used": 112,
+        "allocation_count": 3
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_record_seq",
+      "status": "PASS",
+      "expected": {
+        "coverage_count": 3,
+        "edge_count": 3
+      },
+      "actual": {
+        "coverage_count": 3,
+        "edge_count": 3
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_reset_check",
+      "status": "PASS",
+      "expected": {
+        "before": 2,
+        "after": 0
+      },
+      "actual": {
+        "before": 2,
+        "after": 0
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_hot_block",
+      "status": "PASS",
+      "expected": {
+        "hot_addr": 4096,
+        "hits": 3
+      },
+      "actual": {
+        "hot_addr": 4096,
+        "hits": 3
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_hit_count",
+      "status": "PASS",
+      "field": "requested_hits",
+      "expected": 5,
+      "actual": 5
+    },
+    {
+      "tool": "emu_unicorn_options_defaults_v2",
+      "status": "PASS",
+      "expected": {
+        "timeout_us": 5000000,
+        "max_instructions": 10000000,
+        "stop_on_unmapped": true,
+        "stop_on_invalid_insn": true
+      },
+      "actual": {
+        "timeout_us": 5000000,
+        "max_instructions": 10000000,
+        "stop_on_unmapped": true,
+        "stop_on_invalid_insn": true
+      }
+    },
+    {
+      "tool": "emu_unicorn_hookkind_labels",
+      "status": "PASS",
+      "field": "labels",
+      "expected": [
+        "code",
+        "mem",
+        "intr",
+        "insn",
+        "insn_invalid"
+      ],
+      "actual": [
+        "code",
+        "mem",
+        "intr",
+        "insn",
+        "insn_invalid"
+      ]
+    },
+    {
+      "tool": "emu_unicorn_syscall_args_pack",
+      "status": "PASS",
+      "expected": {
+        "number": 60,
+        "arg0": 1,
+        "arg1": 2
+      },
+      "actual": {
+        "number": 60,
+        "arg0": 1,
+        "arg1": 2
+      }
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "linux",
+      "actual": "linux"
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "windows",
+      "actual": "windows"
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "macos",
+      "actual": "macos"
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "freebsd",
+      "actual": "freebsd"
+    },
+    {
+      "tool": "emu_qiling_os_target_name",
+      "status": "PASS",
+      "field": "name",
+      "expected": "baremetal",
+      "actual": "baremetal"
+    },
+    {
+      "tool": "emu_qiling_syscall_result_retval",
+      "status": "PASS",
+      "field": "retval",
+      "expected": 42,
+      "actual": 42
+    },
+    {
+      "tool": "emu_qiling_syscall_result_retval",
+      "status": "PASS",
+      "description": "retval < 0 for not_implemented",
+      "actual": {
+        "retval": -38,
+        "source": "rustre_emu_qiling::SyscallResult::retval"
+      }
+    },
+    {
+      "tool": "emu_qiling_process_env_new_linux64",
+      "status": "PASS",
+      "field": "argv_len",
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "tool": "emu_qiling_process_env_getenv",
+      "status": "PASS",
+      "field": "found",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_qiling_process_env_getenv",
+      "status": "PASS",
+      "field": "found",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_qiling_rootfs_root",
+      "status": "PASS",
+      "description": "root contains 'rootfs'",
+      "actual": {
+        "root": "/tmp/rootfs",
+        "source": "rustre_emu_qiling::RootfsPath::root"
+      }
+    },
+    {
+      "tool": "emu_qiling_errno_constants",
+      "status": "PASS",
+      "expected": {
+        "EPERM": -1,
+        "ENOENT": -2,
+        "EBADF": -9,
+        "EACCES": -13,
+        "EINVAL": -22,
+        "ENOSYS": -38
+      },
+      "actual": {
+        "EPERM": -1,
+        "ENOENT": -2,
+        "EBADF": -9,
+        "EACCES": -13,
+        "EINVAL": -22,
+        "ENOSYS": -38
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_realloc_missing",
+      "status": "PASS",
+      "field": "is_none",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_coverage_reset_clears",
+      "status": "PASS",
+      "expected": {
+        "before": 2,
+        "after_coverage": 0,
+        "after_edges": 0
+      },
+      "actual": {
+        "before": 2,
+        "after_coverage": 0,
+        "after_edges": 0
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_calloc_zero",
+      "status": "PASS",
+      "field": "is_none",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_realloc_same",
+      "status": "PASS",
+      "field": "same",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_heap_bytes_used",
+      "status": "PASS",
+      "expected": {
+        "bytes_used": 32,
+        "allocs": 1
+      },
+      "actual": {
+        "bytes_used": 32,
+        "allocs": 1
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_allocator_new",
+      "status": "PASS",
+      "expected": {
+        "brk": 20480,
+        "allocs": 0,
+        "bytes_used": 0
+      },
+      "actual": {
+        "brk": 20480,
+        "allocs": 0,
+        "bytes_used": 0
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_free_then_alloc",
+      "status": "PASS",
+      "field": "reused",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "tool": "emu_unicorn_coverage_most_visited",
+      "status": "PASS",
+      "description": "most_visited.addr=0x1000, most_visited.hits=2",
+      "actual": {
+        "count": 3,
+        "most_visited": {
+          "addr": 4096,
+          "hits": 2
+        },
+        "source": "rustre_emu_unicorn::CoverageTracker::most_visited"
+      }
+    },
+    {
+      "tool": "emu_unicorn_coverage_edge_walk",
+      "status": "PASS",
+      "expected": {
+        "edges": 2,
+        "bbs": 3
+      },
+      "actual": {
+        "edges": 2,
+        "bbs": 3
+      }
+    },
+    {
+      "tool": "emu_unicorn_heap_realloc_grow",
+      "status": "PASS",
+      "expected": {
+        "first": 4096,
+        "realloc": 4128
+      },
+      "actual": {
+        "first": 4096,
+        "realloc": 4128
+      }
+    },
+    {
+      "tool": "emu_library_stub_is_stubbed[VirtualAlloc]",
+      "status": "PASS",
+      "description": "is_stubbed field present",
+      "actual": {
+        "is_stubbed": true
+      }
+    },
+    {
+      "tool": "emu_library_stub_is_stubbed",
+      "status": "PASS",
+      "field": "is_stubbed",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "tool": "emu_library_stub_module[VirtualAlloc]",
+      "status": "PASS",
+      "expected": "module is str",
+      "actual": {
+        "module": "kernel32"
+      }
+    }
+  ],
+  "mismatches": [
+    {
+      "tool": "emu_qiling_fd_table_is_empty",
+      "expected": {
+        "is_empty": false,
+        "len": 3
+      },
+      "actual": {
+        "is_empty": true,
+        "len": 0
+      }
+    }
+  ]
+}

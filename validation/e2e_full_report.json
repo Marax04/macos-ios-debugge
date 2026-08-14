@@ -1,0 +1,33 @@
+{
+  "target": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+  "elapsed_total_s": 2.85,
+  "functions": {
+    "detected_raw": 2336,
+    "unique_after_dedup": 2336,
+    "ida_baseline": 1456,
+    "over_detect_ratio": 1.6
+  },
+  "pdb": {
+    "symbols_with_address": 365,
+    "ida_baseline_named": 395
+  },
+  "decompile": {
+    "sample_size": 234,
+    "sampled_every": 10,
+    "successful": 234,
+    "failed": 0,
+    "success_rate_pct": 100.0,
+    "avg_pseudo_c_lines": 20.7,
+    "with_pdb_name": 0,
+    "elapsed_s": 2.4,
+    "throughput_per_sec": 97.3
+  },
+  "xrefs": {
+    "total": 18198
+  },
+  "findcrypt": {
+    "hits": 37,
+    "ida_baseline": 43
+  },
+  "pdb_addr_overlap_with_detected_functions": 5
+}

@@ -1,0 +1,3 @@
+# LuaFeatureSet carries one bool flag per Lua language feature (10 total).
+# Raising the threshold avoids a false-positive lint on that struct.
+struct-bool-fields-threshold = 11

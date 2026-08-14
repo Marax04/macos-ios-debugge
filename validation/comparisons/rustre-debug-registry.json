@@ -1,0 +1,44 @@
+{
+  "crate": "rustre-debug-registry",
+  "mcp_tools_exposed": false,
+  "note": "Internal composition crate; no MCP tools registered in rustre-mcp-server. Comparison performed against the crate's public `all()` factory via a release example binary.",
+  "tests": [
+    {
+      "name": "backend_count",
+      "method": "cargo run --release --example dump",
+      "expected": 8,
+      "actual": 8,
+      "match": true
+    },
+    {
+      "name": "backend_names",
+      "method": "Debugger::name() on each Box<dyn Debugger>",
+      "expected": ["frida", "gdb-rsp", "kgdb", "linux-ptrace", "macos-mach", "unicorn", "windbg", "windows-debug-api"],
+      "actual": ["frida", "gdb-rsp", "kgdb", "linux-ptrace", "macos-mach", "unicorn", "windbg", "windows-debug-api"],
+      "match": true
+    },
+    {
+      "name": "supported_architectures",
+      "method": "Debugger::supported_architectures() on each backend",
+      "actual": {
+        "frida": ["x86","x86_64","arm","arm64","aarch64","mips"],
+        "gdb-rsp": ["x86","x86_64","arm","arm64","aarch64","mips","mips64","powerpc","powerpc64","riscv","riscv64","s390","sparc","sparc64","m68k","avr","msp430"],
+        "kgdb": ["x86_64","arm64","arm","mips"],
+        "linux-ptrace": ["x86_64","x86"],
+        "macos-mach": ["x86_64","arm64"],
+        "unicorn": ["x86_64","x86_32","arm","arm64","mips","mips64","riscv32","riscv64"],
+        "windbg": ["x86_64","x86","arm64"],
+        "windows-debug-api": ["x86_64","x86"]
+      },
+      "match": true
+    }
+  ],
+  "initial_mismatches": [
+    "validator used short names (gdb, linux, macos, windows) vs actual transport-qualified names (gdb-rsp, linux-ptrace, macos-mach, windows-debug-api)",
+    "validator architecture lists were placeholders; actual lists differ for every backend (frida adds aarch64/mips; gdb-rsp covers 17 archs; kgdb adds arm/mips; linux-ptrace x86_64/x86 only; unicorn uses x86_32/riscv32/riscv64; windows-debug-api x86_64/x86 only)"
+  ],
+  "resolution": "Validator updated to match the workspace's authoritative implementation (names are asserted in 8+ in-crate unit tests and the rustre-debug hub doc comment cites 'linux-ptrace' as canonical). No workspace source changes — registry, sub-crates, and tests already pass cargo test --release.",
+  "mismatches": 2,
+  "fixed": 2,
+  "match_final": true
+}

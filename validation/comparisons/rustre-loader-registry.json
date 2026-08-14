@@ -1,0 +1,20 @@
+{
+  "crate": "rustre-loader-registry",
+  "method": "static source validator (Cargo.toml + lib.rs structural checks) compared against MCP-driven crate expectations",
+  "mcp_server": "C:\\Users\\Fra\\Desktop\\RustRE\\target\\release\\rustre-mcp.exe",
+  "validator": "C:\\Users\\Fra\\Desktop\\RustRE\\validation\\validators\\rustre-loader-registry.py",
+  "checks": {
+    "cargo_toml": "ok (name, edition 2024, anyhow + all 13 subcrate deps)",
+    "source_file": "src/lib.rs present",
+    "adapters_present": 13,
+    "tags_present": 13,
+    "functions": ["register_all_subcrate_loaders", "default_full_registry"],
+    "traits": ["MultiFormatLoader", "MultiFormatRegistry", "RichLoadResult"],
+    "probes": 13
+  },
+  "tests": 1,
+  "mismatches": 0,
+  "fixed": 0,
+  "ok": true,
+  "note": "Validator returned zero mismatches; no workspace fixes or rebuild required."
+}

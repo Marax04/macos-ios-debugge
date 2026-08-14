@@ -1,0 +1,6 @@
+{
+ "category": "survey_yara_parser",
+ "checks_total": 7,
+ "checks_passed": 7,
+ "mismatches": []
+}

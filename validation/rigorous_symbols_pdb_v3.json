@@ -1,0 +1,32 @@
+{
+  "module": "symbols_pdb_v3",
+  "tools_hardened": 1,
+  "checks_passed": 2,
+  "checks_failed": 0,
+  "mismatches": [],
+  "tools": [
+    {
+      "tool": "symbols_pdb_guid_format",
+      "status": "PASS",
+      "checks": [
+        {
+          "description": "16-byte sequence 00..ff GUID format — little-endian Data1/2/3, big-endian Data4",
+          "input_hex": "00112233445566778899aabbccddeeff",
+          "expected": "{33221100-5544-7766-8899-AABBCCDDEEFF}",
+          "actual": "{33221100-5544-7766-8899-AABBCCDDEEFF}",
+          "reference": "PdbGuid::to_string_fmt: d[3210]-d[54]-d[76]-d[89]-d[10..15] uppercase hex"
+        },
+        {
+          "description": "all-zeros GUID",
+          "input_hex": "00000000000000000000000000000000",
+          "expected": "{00000000-0000-0000-0000-000000000000}",
+          "actual": "{00000000-0000-0000-0000-000000000000}"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "symbols_pdb_guid_format is the only symbols_pdb_* tool independently verifiable without a real PDB file.",
+    "All other symbols_pdb_* tools require a valid PDB binary; they are covered in skip_symbols.json."
+  ]
+}

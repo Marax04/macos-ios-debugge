@@ -1,0 +1,46 @@
+{
+  "module": "kgdb_v3",
+  "note": "All 29 kgdb_* tools are fully covered by rigorous_kgdb.json (v1, 20 tools) and rigorous_kgdb_v2.json (v2, 27 checks across 27 unique tools including 9 new ones). No remaining tools to harden in v3.",
+  "tools_total": 29,
+  "tools_hardened": 0,
+  "tools_passed": 0,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "coverage_by_version": {
+    "v1": [
+      "kgdb_bytes_to_hex",
+      "kgdb_decode_hex_buf",
+      "kgdb_encode_hex_buf",
+      "kgdb_gdb_packet_parse",
+      "kgdb_gdb_packet_to_wire",
+      "kgdb_hex_le_to_u64",
+      "kgdb_hex_to_bytes",
+      "kgdb_is_kernel_address",
+      "kgdb_page_align",
+      "kgdb_parse_qsupported",
+      "kgdb_read_u64_le_hex",
+      "kgdb_rsp_checksum",
+      "kgdb_rsp_checksum_bytes",
+      "kgdb_rsp_encode_packet_bytes",
+      "kgdb_rsp_escape",
+      "kgdb_rsp_unescape",
+      "kgdb_rsp_verify_checksum_bytes",
+      "kgdb_u32_to_hex_le",
+      "kgdb_u64_to_hex_le",
+      "kgdb_verify_rsp_checksum"
+    ],
+    "v2_additions": [
+      "kgdb_bytes_to_hex_v2",
+      "kgdb_hex_to_bytes_v2",
+      "kgdb_kvirt_to_phys",
+      "kgdb_parse_kernel_callstack",
+      "kgdb_parse_thread_list",
+      "kgdb_rle_decode",
+      "kgdb_rle_encode",
+      "kgdb_target_xml_arm64",
+      "kgdb_target_xml_x86_64"
+    ]
+  },
+  "detail": []
+}

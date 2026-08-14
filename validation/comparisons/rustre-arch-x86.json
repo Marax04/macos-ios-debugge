@@ -1,0 +1,114 @@
+{
+  "mcp_outputs": {
+    "nop": {
+      "length": 1,
+      "mnemonic": "nop",
+      "bytes": "90",
+      "call_target": null
+    },
+    "mov": {
+      "length": 3,
+      "mnemonic": "mov",
+      "bytes": "4889c3",
+      "call_target": null
+    },
+    "ret": {
+      "length": 1,
+      "mnemonic": "ret",
+      "bytes": "c3",
+      "call_target": null
+    },
+    "call_rel": {
+      "length": 5,
+      "mnemonic": "call",
+      "bytes": "e810000000",
+      "call_target": 5368713242
+    },
+    "jmp_rel8": {
+      "length": 2,
+      "mnemonic": "jmp",
+      "bytes": "ebfe",
+      "call_target": 5368713226
+    },
+    "linear": {
+      "count": 5,
+      "sum_of_lengths": 12,
+      "mnemonics": [
+        "nop",
+        "mov",
+        "ret",
+        "call",
+        "jmp"
+      ]
+    }
+  },
+  "validator_outputs": {
+    "nop": {
+      "length": 1,
+      "mnemonic": "nop",
+      "bytes": "90",
+      "call_target": null
+    },
+    "mov": {
+      "length": 3,
+      "mnemonic": "movq",
+      "bytes": "4889c3",
+      "call_target": null
+    },
+    "ret": {
+      "length": 1,
+      "mnemonic": "retq",
+      "bytes": "c3",
+      "call_target": null
+    },
+    "call_rel": {
+      "length": null,
+      "mnemonic": null,
+      "bytes": "e810000000",
+      "call_target": null
+    },
+    "jmp_rel8": {
+      "length": 2,
+      "mnemonic": "jmp",
+      "bytes": "ebfe",
+      "call_target": 5368713226
+    },
+    "linear": {
+      "count": 5,
+      "sum_of_lengths": 12
+    }
+  },
+  "mismatches": [
+    {
+      "test": "mov",
+      "field": "mnemonic",
+      "mcp": "mov",
+      "validator": "movq"
+    },
+    {
+      "test": "ret",
+      "field": "mnemonic",
+      "mcp": "ret",
+      "validator": "retq"
+    },
+    {
+      "test": "call_rel",
+      "field": "length",
+      "mcp": 5,
+      "validator": null
+    },
+    {
+      "test": "call_rel",
+      "field": "mnemonic",
+      "mcp": "call",
+      "validator": null
+    },
+    {
+      "test": "call_rel",
+      "field": "target",
+      "mcp": 5368713242,
+      "validator": null
+    }
+  ],
+  "tests": 6
+}

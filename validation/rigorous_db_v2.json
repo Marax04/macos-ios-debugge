@@ -1,0 +1,320 @@
+{
+  "category": "db",
+  "tools_hardened": 16,
+  "tools_passed": 18,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "tool": "db_base_migrations_count",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3
+      }
+    },
+    {
+      "tool": "db_base_migrations_list",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "migrations": [
+          {
+            "version": 1,
+            "name": "create_graph_tables"
+          },
+          {
+            "version": 2,
+            "name": "create_events_table"
+          },
+          {
+            "version": 3,
+            "name": "create_kv_meta_table"
+          }
+        ],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "migrations": [
+          {
+            "version": 1,
+            "name": "create_graph_tables"
+          },
+          {
+            "version": 2,
+            "name": "create_events_table"
+          },
+          {
+            "version": 3,
+            "name": "create_kv_meta_table"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "db_base_migrations_max_version",
+      "status": "PASS",
+      "actual": {
+        "max_version": 3,
+        "count": 3,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "max_version": 3,
+        "count": 3
+      }
+    },
+    {
+      "tool": "db_base_migrations_names",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "names": [
+          "create_graph_tables",
+          "create_events_table",
+          "create_kv_meta_table"
+        ],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "names": [
+          "create_graph_tables",
+          "create_events_table",
+          "create_kv_meta_table"
+        ]
+      }
+    },
+    {
+      "tool": "db_base_migrations_versions",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "versions": [
+          1,
+          2,
+          3
+        ],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "versions": [
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "tool": "db_base_migrations_min_version",
+      "status": "PASS",
+      "actual": {
+        "min_version": 1,
+        "count": 3,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "min_version": 1,
+        "count": 3
+      }
+    },
+    {
+      "tool": "db_base_migrations_is_contiguous",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "contiguous": true,
+        "first_gap": null,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "contiguous": true,
+        "first_gap": null
+      }
+    },
+    {
+      "tool": "db_base_migrations_first_version",
+      "status": "PASS",
+      "actual": {
+        "ok": true,
+        "first_version": 1,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "first_version": 1
+      }
+    },
+    {
+      "tool": "db_base_migrations_summary",
+      "status": "PASS",
+      "actual": {
+        "ok": true,
+        "count": 3,
+        "names": [
+          "create_graph_tables",
+          "create_events_table",
+          "create_kv_meta_table"
+        ],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "names": [
+          "create_graph_tables",
+          "create_events_table",
+          "create_kv_meta_table"
+        ]
+      }
+    },
+    {
+      "tool": "db_base_migrations_with_down_sql",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "total": 3,
+        "items": [
+          {
+            "version": 1,
+            "name": "create_graph_tables"
+          },
+          {
+            "version": 2,
+            "name": "create_events_table"
+          },
+          {
+            "version": 3,
+            "name": "create_kv_meta_table"
+          }
+        ],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "total": 3,
+        "items": [
+          {
+            "version": 1,
+            "name": "create_graph_tables"
+          },
+          {
+            "version": 2,
+            "name": "create_events_table"
+          },
+          {
+            "version": 3,
+            "name": "create_kv_meta_table"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "db_base_migrations_unique_versions",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "unique": true,
+        "duplicates": [],
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "unique": true,
+        "duplicates": []
+      }
+    },
+    {
+      "tool": "db_base_migrations_total_sql_bytes",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "up_bytes": 1663,
+        "down_bytes": 118,
+        "total_bytes": 1781,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "up_bytes": 1663,
+        "down_bytes": 118,
+        "total_bytes": 1781
+      }
+    },
+    {
+      "tool": "db_base_migrations_avg_sql_bytes",
+      "status": "PASS",
+      "actual": {
+        "count": 3,
+        "total_bytes": 1663,
+        "avg_bytes": 554.3333333333334,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "count": 3,
+        "total_bytes": 1663,
+        "avg_bytes": 554.3333333333334
+      }
+    },
+    {
+      "tool": "db_base_migrations_largest_up_sql",
+      "status": "PASS",
+      "actual": {
+        "found": true,
+        "version": 1,
+        "name": "create_graph_tables",
+        "up_bytes": 1070,
+        "source": "rustre_db::base_migrations"
+      },
+      "expected_subset": {
+        "found": true,
+        "version": 1,
+        "name": "create_graph_tables",
+        "up_bytes": 1070
+      }
+    },
+    {
+      "tool": "db_base_migrations_find_by_version",
+      "status": "PASS",
+      "param": 1
+    },
+    {
+      "tool": "db_base_migrations_find_by_version",
+      "status": "PASS",
+      "param": 99
+    },
+    {
+      "tool": "db_base_migrations_has_version",
+      "status": "PASS",
+      "param": 1
+    },
+    {
+      "tool": "db_base_migrations_has_version",
+      "status": "PASS",
+      "param": 0
+    }
+  ],
+  "ground_truth": {
+    "count": 3,
+    "names": [
+      "create_graph_tables",
+      "create_events_table",
+      "create_kv_meta_table"
+    ],
+    "versions": [
+      1,
+      2,
+      3
+    ],
+    "up_bytes": 1663,
+    "down_bytes": 118,
+    "avg_bytes": 554.3333333333334,
+    "largest_ver": 1,
+    "largest_up_bytes": 1070
+  }
+}

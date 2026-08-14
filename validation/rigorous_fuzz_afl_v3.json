@@ -1,0 +1,58 @@
+{
+  "module": "fuzz_afl",
+  "version": 3,
+  "tools_hardened": 3,
+  "checks_passed": 6,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "tools_tested": [
+    "fuzz_afl_cmplog_colorize",
+    "fuzz_afl_havoc_mutate",
+    "fuzz_afl_arith_mutate"
+  ],
+  "checks": [
+    {
+      "tool": "fuzz_afl_cmplog_colorize",
+      "check": "empty entries yields all-zero counts",
+      "input": {"hex": "deadbeef", "entries": []},
+      "expected": {"candidate_count": 0, "entry_count": 0, "unequal_count": 0},
+      "status": "PASS"
+    },
+    {
+      "tool": "fuzz_afl_cmplog_colorize",
+      "check": "one unequal entry (v0=0xAA, v1=0xBB) yields entry_count=1 unequal_count=1",
+      "input": {"hex": "deadbeef001122334455667788990011", "entries": [{"addr": 4096, "v0": 170, "v1": 187, "size": 1}]},
+      "expected": {"entry_count": 1, "unequal_count": 1},
+      "status": "PASS"
+    },
+    {
+      "tool": "fuzz_afl_havoc_mutate",
+      "check": "output hex length == len*2",
+      "input": {"hex": "deadbeef001122334455667788990011", "seed": 3735928559},
+      "expected": "len(hex) == len_field * 2",
+      "status": "PASS",
+      "note": "len=16, hex has 32 chars"
+    },
+    {
+      "tool": "fuzz_afl_havoc_mutate",
+      "check": "deterministic: same seed produces same output",
+      "input": {"hex": "deadbeef001122334455667788990011", "seed": 3735928559},
+      "status": "PASS"
+    },
+    {
+      "tool": "fuzz_afl_arith_mutate",
+      "check": "output length equals input length (arithmetic preserves size)",
+      "input": {"hex": "deadbeef001122334455667788990011", "seed": 1},
+      "expected": "len(output_hex) == len(input_hex)",
+      "status": "PASS",
+      "note": "both 16 bytes"
+    },
+    {
+      "tool": "fuzz_afl_arith_mutate",
+      "check": "deterministic: same seed produces same output",
+      "input": {"hex": "deadbeef001122334455667788990011", "seed": 1},
+      "status": "PASS"
+    }
+  ]
+}

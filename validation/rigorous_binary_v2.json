@@ -1,0 +1,52 @@
+{
+  "category": "binary",
+  "tools_hardened": 6,
+  "tools_passed": 6,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "binary.info",
+      "verdict": "PASS",
+      "expected": "sha256=3e06974ab60293af... size=1244160",
+      "actual": "sha256=3e06974ab60293af... size=1244160",
+      "details": ""
+    },
+    {
+      "tool": "binary.hexdump",
+      "verdict": "PASS",
+      "expected": "hex first 8 bytes=4D 5A 90 00 03 00 00 00",
+      "actual": "hex first 8 bytes=4D 5A 90 00 03 00 00 00",
+      "details": ""
+    },
+    {
+      "tool": "binary.read",
+      "verdict": "PASS",
+      "expected": "data_hex=4d5a900003000000...",
+      "actual": "data_hex=4d5a900003000000...",
+      "details": ""
+    },
+    {
+      "tool": "binary.entropy",
+      "verdict": "PASS",
+      "expected": "overall_entropy\u22486.3577",
+      "actual": "overall_entropy=6.35766213429351",
+      "details": ""
+    },
+    {
+      "tool": "binary.search_bytes",
+      "verdict": "PASS",
+      "expected": "count>0, first_hit=0x140000000",
+      "actual": "count=10, first_hit=0x140000000",
+      "details": ""
+    },
+    {
+      "tool": "binary.search_strings",
+      "verdict": "PASS",
+      "expected": "count>=15951 (ascii lower bound), structure OK",
+      "actual": "count=19598, returned=200",
+      "details": ""
+    }
+  ]
+}

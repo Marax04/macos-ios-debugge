@@ -1,0 +1,208 @@
+{
+  "category": "m68k",
+  "tools_hardened": 2,
+  "tools_passed": 29,
+  "tools_failed": 1,
+  "tools_skipped": 1,
+  "mismatches": [
+    {
+      "tool": "m68k_variant_info",
+      "variant": "ColdFire",
+      "expected": {
+        "variant": "ColdFire",
+        "has_fpu": false,
+        "has_mmu": false,
+        "is_32bit": true,
+        "has_bitfield": true,
+        "address_space_bytes": 4294967296
+      },
+      "actual": {
+        "variant": "ColdFire",
+        "has_fpu": false,
+        "has_mmu": false,
+        "is_32bit": false,
+        "has_bitfield": false,
+        "address_space_bytes": 4294967296
+      },
+      "diff": {
+        "is_32bit": {
+          "expected": true,
+          "actual": false
+        },
+        "has_bitfield": {
+          "expected": true,
+          "actual": false
+        }
+      }
+    }
+  ],
+  "detail": [
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68000",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68010",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68020",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68030",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68040",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "68060",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_variant_info",
+      "variant": "ColdFire",
+      "status": "FAIL",
+      "diff": {
+        "is_32bit": {
+          "expected": true,
+          "actual": false
+        },
+        "has_bitfield": {
+          "expected": true,
+          "actual": false
+        }
+      }
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "NOP",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "RTS",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "RTE",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "MOVEQ #0,D0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "MOVEQ #$FF,D3",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "BRA.W +2",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "BNE.B -2",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "MOVE.W D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "MOVE.B D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "ADD.W D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "SUB.W D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "OR.W D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "DIVU.W D0,D1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "LSR.W #1,D0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "ASL.W #2,D3",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "TRAP #0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "CLR.W D0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "ADDQ.W #4,D0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "SUBQ.W #1,D0",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "ADDA.W D0,A1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "SUBA.W D0,A1",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "JMP (A0)",
+      "status": "PASS"
+    },
+    {
+      "tool": "m68k_decode_instr",
+      "test": "JSR (A0)",
+      "status": "PASS"
+    }
+  ],
+  "skipped_detail": [
+    {
+      "tool": "m68k_decode_instr",
+      "test": "BSR.W word-disp 0",
+      "reason": "reference_unimplemented: truncated Bcc"
+    }
+  ]
+}

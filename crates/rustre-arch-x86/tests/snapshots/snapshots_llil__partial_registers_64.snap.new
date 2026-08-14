@@ -1,0 +1,51 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 181
+expression: "render_corpus(\"partial registers (64-bit)\", 64, corpus)"
+---
+# partial registers (64-bit)
+
+== mov eax, ecx (zero-extends rax) (bits=64) ==
+-- mov eax,ecx [89 c8]
+   0x1000: rax.8 = zx(low(rcx.8, 4), 4->8)
+
+== mov al, bl (low-8 merge) (bits=64) ==
+-- mov al,bl [88 d8]
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffffff00.8).8 | (zx((rbx.8 & 0xff.8).1, 1->8) & 0xff.8).8).8
+
+== mov ah, bl (high-8 merge) (bits=64) ==
+-- mov ah,bl [88 dc]
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffff00ff.8).8 | ((zx((rbx.8 & 0xff.8).1, 1->8) & 0xff.8).8 << 0x8.8).8).8
+
+== mov ax, cx (16-bit merge) (bits=64) ==
+-- mov ax,cx [66 89 c8]
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffff0000.8).8 | (zx((rcx.8 & 0xffff.8).2, 2->8) & 0xffff.8).8).8
+
+== mov r8d, r9d (zero-extends r8) (bits=64) ==
+-- mov r8d,r9d [45 89 c8]
+   0x1000: r8.8 = zx(low(r9.8, 4), 4->8)
+
+== add al, 1 (bits=64) ==
+-- add al,1 [04 01]
+   0x1000: tmp0.1 = ((rax.8 & 0xff.8).1 + 0x1.1).1
+   0x1000: flag(cf) = (tmp0.1 <u (rax.8 & 0xff.8).1)
+   0x1000: flag(of) = ((((rax.8 & 0xff.8).1 <s 0x0.1) == (0x1.1 <s 0x0.1)) & ((tmp0.1 <s 0x0.1) != ((rax.8 & 0xff.8).1 <s 0x0.1))).1
+   0x1000: flag(af) = ((((rax.8 & 0xff.8).1 & 0xf.1).1 + (0x1.1 & 0xf.1).1).1 >u 0xf.1)
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffffff00.8).8 | (zx(tmp0.1, 1->8) & 0xff.8).8).8
+
+== inc ax (bits=64) ==
+-- inc ax [66 ff c0]
+   0x1000: tmp0.2 = ((rax.8 & 0xffff.8).2 + 0x1.2).2
+   0x1000: flag(of) = ((((rax.8 & 0xffff.8).2 <s 0x0.2) == (0x1.2 <s 0x0.2)) & ((tmp0.2 <s 0x0.2) != ((rax.8 & 0xffff.8).2 <s 0x0.2))).1
+   0x1000: flag(af) = ((((rax.8 & 0xffff.8).2 & 0xf.2).2 + (0x1.2 & 0xf.2).2).2 >u 0xf.2)
+   0x1000: flag(sf) = (tmp0.2 <s 0x0.2)
+   0x1000: flag(zf) = (tmp0.2 == 0x0.2)
+   0x1000: flag(pf) = parity(tmp0.2).1
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffff0000.8).8 | (zx(tmp0.2, 2->8) & 0xffff.8).8).8
+
+== movzx eax, al (bits=64) ==
+-- movzx eax,al [0f b6 c0]
+   0x1000: rax.8 = zx(zx((rax.8 & 0xff.8).1, 1->4), 4->8)

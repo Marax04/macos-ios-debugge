@@ -1,0 +1,6 @@
+{
+ "category": "survey_yara_rule",
+ "checks_total": 8,
+ "checks_passed": 8,
+ "mismatches": []
+}

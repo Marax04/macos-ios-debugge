@@ -1,0 +1,697 @@
+//! Pure Mach-O image-size arithmetic, extracted from `macos_debugger.rs`.
+//!
+//! # Why this is its own module
+//!
+//! `macos_debugger.rs` is `#![cfg(target_os = "macos")]`, so *everything* in
+//! it — including its `#[cfg(test)] mod tests` — is invisible on a non-macOS
+//! host. Those tests were never compiled, never run, and never could fail.
+//! This module has **no** `cfg` gate: it is compiled and its tests execute on
+//! Windows and Linux, which is the only way the segment-summing arithmetic
+//! gets real coverage in this environment.
+//!
+//! It is deliberately host-independent: it operates on an in-memory byte
+//! slice (a Mach-O header + its load commands), never on a live task. The
+//! live-process side (`mach_o_image_size_at`, which needs `task_t` and Mach
+//! VM reads) stays in `macos_debugger.rs`.
+//!
+//! # Why `Result`, not `Option`
+//!
+//! The original returned `Option<u64>` and the caller did `.unwrap_or(0)`,
+//! so a bad magic, a truncated buffer, and a genuinely empty image all
+//! collapsed into the same silent `0` — and `walk_dyld_images` then reported
+//! a module with `size: 0` with no trace of *why*. Distinct error variants
+//! let the caller log which failure actually happened.
+
+/// Why a Mach-O header + load-command buffer could not be summed.
+///
+/// Variants are distinct on purpose: a corrupt magic (we are not looking at
+/// a Mach-O at all) and a short read (we are, but did not get all of it) call
+/// for different diagnoses, and the previous `Option` return made them
+/// indistinguishable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MachoSizeError {
+    /// The buffer is smaller than a `mach_header_64` (32 bytes), so not even
+    /// the magic and `sizeofcmds` fields could be read.
+    TooShort {
+        /// Bytes actually available.
+        len: usize,
+    },
+    /// The first four bytes are not `MH_MAGIC_64`. Carries what was found so
+    /// a caller can tell a 32-bit / fat / byte-swapped image from garbage.
+    BadMagic {
+        /// The little-endian `u32` read at offset 0.
+        found: u32,
+    },
+    /// The header claims `sizeofcmds` bytes of load commands but the buffer
+    /// ends before them — a short/partial read, not a malformed image.
+    TruncatedLoadCommands {
+        /// Bytes the header says the load commands occupy.
+        expected: usize,
+        /// Bytes actually available after the 32-byte header.
+        available: usize,
+    },
+    /// The header parsed cleanly but contributed no mappable footprint: no
+    /// `LC_SEGMENT_64` at all, or only `__PAGEZERO` (which is excluded — it
+    /// is an unmapped reservation, not real image size). Reported instead of
+    /// `Ok(0)` because a zero total is otherwise indistinguishable from a
+    /// failed read at the call site.
+    NoSegments,
+}
+
+impl std::fmt::Display for MachoSizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooShort { len } => {
+                write!(f, "buffer of {len} bytes is shorter than mach_header_64 ({MACH_HEADER_64_SIZE})")
+            }
+            Self::BadMagic { found } => write!(f, "not MH_MAGIC_64: found {found:#010x}"),
+            Self::TruncatedLoadCommands {
+                expected,
+                available,
+            } => write!(
+                f,
+                "load commands truncated: header claims {expected} bytes, {available} available"
+            ),
+            Self::NoSegments => {
+                write!(f, "no mappable LC_SEGMENT_64 (empty, or __PAGEZERO only)")
+            }
+        }
+    }
+}
+
+impl std::error::Error for MachoSizeError {}
+
+/// `mach_header_64` size in bytes: magic/cputype/cpusubtype/filetype/ncmds/
+/// sizeofcmds/flags/reserved, all `u32` — 8 fields × 4 bytes.
+pub(crate) const MACH_HEADER_64_SIZE: usize = 32;
+/// 64-bit Mach-O magic, little-endian host order.
+pub(crate) const MH_MAGIC_64: u32 = 0xfeed_facf;
+/// `LC_SEGMENT_64` load-command tag.
+pub(crate) const LC_SEGMENT_64: u32 = 0x19;
+
+/// Sum the `vmsize` of every `LC_SEGMENT_64` load command in a Mach-O
+/// header + load-command byte buffer, skipping `__PAGEZERO` (a huge
+/// unmapped reservation, not real image footprint).
+///
+/// Never reads past `MACH_HEADER_64_SIZE + sizeofcmds`, even for a header
+/// whose `ncmds` is wildly larger than the load commands actually present:
+/// the loop bails the moment a command would cross that boundary.
+/// Size of a `segment_command_64` carrying zero sections — the smallest one
+/// that can exist. Each `section_64` adds a further 80 bytes.
+const SEGMENT_COMMAND_64_MIN_SIZE: usize = 72;
+
+pub(crate) fn parse_mach_o_segments_total_size(buf: &[u8]) -> Result<u64, MachoSizeError> {
+    if buf.len() < MACH_HEADER_64_SIZE {
+        return Err(MachoSizeError::TooShort { len: buf.len() });
+    }
+    // Every indexing below is bounds-checked by the two length guards, so the
+    // `try_into` conversions cannot fail; `unwrap_or_default` keeps the
+    // function total without an `unwrap`.
+    let magic = u32::from_le_bytes(buf[0..4].try_into().unwrap_or_default());
+    if magic != MH_MAGIC_64 {
+        return Err(MachoSizeError::BadMagic { found: magic });
+    }
+    let ncmds = u32::from_le_bytes(buf[16..20].try_into().unwrap_or_default()) as usize;
+    let sizeofcmds = u32::from_le_bytes(buf[20..24].try_into().unwrap_or_default()) as usize;
+
+    let cmds_end =
+        MACH_HEADER_64_SIZE
+            .checked_add(sizeofcmds)
+            .ok_or(MachoSizeError::TruncatedLoadCommands {
+                expected: sizeofcmds,
+                available: buf.len().saturating_sub(MACH_HEADER_64_SIZE),
+            })?;
+    if buf.len() < cmds_end {
+        return Err(MachoSizeError::TruncatedLoadCommands {
+            expected: sizeofcmds,
+            available: buf.len().saturating_sub(MACH_HEADER_64_SIZE),
+        });
+    }
+    let mut total = 0u64;
+    let mut counted_segments = 0usize;
+    let mut offset = MACH_HEADER_64_SIZE;
+    for _ in 0..ncmds {
+        if offset + 8 > cmds_end {
+            break;
+        }
+        let cmd = u32::from_le_bytes(buf[offset..offset + 4].try_into().unwrap_or_default());
+        let cmdsize =
+            u32::from_le_bytes(buf[offset + 4..offset + 8].try_into().unwrap_or_default()) as usize;
+        if cmdsize < 8 || offset + cmdsize > cmds_end {
+            break;
+        }
+        if cmd == LC_SEGMENT_64 {
+            // segment_command_64: cmd/cmdsize (8) + segname[16] (8..24) +
+            // vmaddr(8) (24..32) + vmsize(8) (32..40) + ... — vmsize is the
+            // SECOND u64 after segname, not the first (that's vmaddr).
+            // `cmdsize` is checked as well as `cmds_end`, for the same reason
+            // the LC_MAIN arm of `parse_mach_o_entry_offset` is (iteration
+            // 517): a command declaring less than it needs would have its
+            // fields read out of the NEXT command. Here that does not merely
+            // return a wrong number, it ADDS one to the image size, so the
+            // total stays plausible and no caller can tell. A
+            // `segment_command_64` is 72 bytes even with zero sections, so
+            // anything shorter is malformed by definition — not just short of
+            // the 40 bytes this code happens to read.
+            if SEGMENT_COMMAND_64_MIN_SIZE <= cmdsize
+                && offset + 40 <= cmds_end
+                && let Ok(segname_bytes) = buf[offset + 8..offset + 24].try_into()
+            {
+                let segname_bytes: [u8; 16] = segname_bytes;
+                // Compare all 16 bytes, NUL padding included. `segname` is a
+                // fixed-width, NUL-padded field, so a 10-byte prefix test
+                // also matched any LONGER segment name that merely starts
+                // with "__PAGEZERO" — e.g. a "__PAGEZERO_2" segment would be
+                // mistaken for the unmapped reservation and its vmsize
+                // silently dropped from the image total.
+                let is_pagezero = segname_bytes == *b"__PAGEZERO\0\0\0\0\0\0";
+                if !is_pagezero
+                    && let Ok(vmsize_bytes) = buf[offset + 32..offset + 40].try_into()
+                {
+                    total = total.saturating_add(u64::from_le_bytes(vmsize_bytes));
+                    counted_segments += 1;
+                }
+            }
+        }
+        offset += cmdsize;
+    }
+    if counted_segments == 0 {
+        return Err(MachoSizeError::NoSegments);
+    }
+    Ok(total)
+}
+
+/// `LC_MAIN` — carries `entryoff`, the entry point as a file offset from the
+/// image's base. The high bit (`LC_REQ_DYLD`) is part of the tag itself.
+pub(crate) const LC_MAIN: u32 = 0x8000_0028;
+/// `LC_UNIXTHREAD` — the pre-10.8 entry-point form, carrying a full initial
+/// thread state instead of an offset. Still emitted for `dyld` itself and for
+/// static executables, so both forms have to be handled.
+pub(crate) const LC_UNIXTHREAD: u32 = 0x5;
+/// `x86_THREAD_STATE64` flavour tag inside an `LC_UNIXTHREAD` command.
+const X86_THREAD_STATE64_FLAVOUR: u32 = 4;
+/// Index of `rip` within `x86_thread_state64_t`, counted in `u64` slots:
+/// rax, rbx, rcx, rdx, rdi, rsi, rbp, rsp, r8..r15 (16 slots), then rip.
+const X86_THREAD_STATE64_RIP_SLOT: usize = 16;
+/// `ARM_THREAD_STATE64` flavour tag inside an `LC_UNIXTHREAD` command.
+///
+/// Only the x86 flavour was handled, so on Apple Silicon every image carrying
+/// the pre-10.8 entry-point form — `dyld` itself and static executables —
+/// answered `None`, leaving `ModuleInfo::entry_point` empty on exactly the
+/// platform this function was written to fix. Same shape as the ARM64 crash
+/// address missing from `minidump_analysis` (iteration 465): a feature that
+/// works, and silently answers nothing, on one architecture.
+const ARM_THREAD_STATE64_FLAVOUR: u32 = 6;
+/// Index of `pc` within `arm_thread_state64_t`, counted in `u64` slots:
+/// `__x[29]` occupies slots 0..=28, then `fp` (29), `lr` (30), `sp` (31) and
+/// `pc` (32).
+const ARM_THREAD_STATE64_PC_SLOT: usize = 32;
+
+/// Extract an image's entry point (as an offset from its base) from a Mach-O
+/// header + load-command buffer.
+///
+/// macOS was the only backend leaving `ModuleInfo::entry_point` as `None` —
+/// Windows fills it from the PE optional header, Linux from the ELF header —
+/// so on macOS "where does this module start executing?" had no answer at all,
+/// even though the load commands carrying it were already being parsed one
+/// function away for the image size.
+///
+/// Returns `None`, never a guess, when neither `LC_MAIN` nor a usable
+/// `LC_UNIXTHREAD` is present, or when the buffer is truncated: a wrong entry
+/// point is worse than no entry point, since a caller cannot tell it is wrong.
+///
+/// The two forms differ in kind, not just encoding:
+/// * `LC_MAIN.entryoff` is an OFFSET from the image base — the caller adds the
+///   base.
+/// * `LC_UNIXTHREAD` carries an absolute `rip` in its thread state. It is
+///   returned relative to `image_base` so both forms hand back the same thing;
+///   an `rip` below the base (a malformed or foreign-slid image) yields `None`
+///   rather than a wrapped offset.
+pub(crate) fn parse_mach_o_entry_offset(buf: &[u8], image_base: u64) -> Option<u64> {
+    if buf.len() < MACH_HEADER_64_SIZE {
+        return None;
+    }
+    if u32::from_le_bytes(buf[0..4].try_into().ok()?) != MH_MAGIC_64 {
+        return None;
+    }
+    let ncmds = u32::from_le_bytes(buf[16..20].try_into().ok()?) as usize;
+    let sizeofcmds = u32::from_le_bytes(buf[20..24].try_into().ok()?) as usize;
+    let cmds_end = MACH_HEADER_64_SIZE.checked_add(sizeofcmds)?;
+    if buf.len() < cmds_end {
+        return None;
+    }
+
+    let mut offset = MACH_HEADER_64_SIZE;
+    for _ in 0..ncmds {
+        if offset + 8 > cmds_end {
+            break;
+        }
+        let cmd = u32::from_le_bytes(buf[offset..offset + 4].try_into().ok()?);
+        let cmdsize = u32::from_le_bytes(buf[offset + 4..offset + 8].try_into().ok()?) as usize;
+        if cmdsize < 8 || offset + cmdsize > cmds_end {
+            break;
+        }
+        match cmd {
+            // entry_point_command: cmd/cmdsize (8) + entryoff u64 (8..16) +
+            // stacksize u64 (16..24).
+            // `cmdsize` is checked as well as `cmds_end`: a malformed LC_MAIN
+            // declaring a cmdsize too small to hold its own `entryoff` would
+            // otherwise read the first 8 bytes of the NEXT load command and
+            // hand them back as an entry point. The LC_UNIXTHREAD arm below
+            // already bounded its read by `offset + cmdsize`; this one did not,
+            // so the same buffer was trusted to two different extents in two
+            // arms of one match.
+            LC_MAIN if offset + 16 <= cmds_end && 16 <= cmdsize => {
+                return Some(u64::from_le_bytes(buf[offset + 8..offset + 16].try_into().ok()?));
+            }
+            // thread_command: cmd/cmdsize (8) + flavour u32 + count u32,
+            // then `count` u32 words of state.
+            LC_UNIXTHREAD if offset + 16 <= cmds_end => {
+                let flavour = u32::from_le_bytes(buf[offset + 8..offset + 12].try_into().ok()?);
+                let pc_slot = match flavour {
+                    X86_THREAD_STATE64_FLAVOUR => Some(X86_THREAD_STATE64_RIP_SLOT),
+                    ARM_THREAD_STATE64_FLAVOUR => Some(ARM_THREAD_STATE64_PC_SLOT),
+                    // An unmodelled flavour is skipped, not guessed at: reading
+                    // a fixed slot out of a state whose layout is unknown would
+                    // return whatever register happens to sit there.
+                    _ => None,
+                };
+                if let Some(slot) = pc_slot {
+                    let pc_at = offset + 16 + slot * 8;
+                    if pc_at + 8 <= cmds_end && pc_at + 8 <= offset + cmdsize {
+                        let pc = u64::from_le_bytes(buf[pc_at..pc_at + 8].try_into().ok()?);
+                        return pc.checked_sub(image_base);
+                    }
+                }
+            }
+            _ => {}
+        }
+        offset += cmdsize;
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `segment_command_64` with zero sections, byte-for-byte per Apple's
+    /// published layout.
+    fn segment_cmd(name: &str, vmaddr: u64, vmsize: u64) -> Vec<u8> {
+        let mut segname = [0u8; 16];
+        let name_bytes = name.as_bytes();
+        segname[..name_bytes.len()].copy_from_slice(name_bytes);
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&LC_SEGMENT_64.to_le_bytes()); // cmd
+        buf.extend_from_slice(&72u32.to_le_bytes()); // cmdsize (0 sections)
+        buf.extend_from_slice(&segname);
+        buf.extend_from_slice(&vmaddr.to_le_bytes());
+        buf.extend_from_slice(&vmsize.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes()); // fileoff
+        buf.extend_from_slice(&vmsize.to_le_bytes()); // filesize
+        buf.extend_from_slice(&0u32.to_le_bytes()); // maxprot
+        buf.extend_from_slice(&0u32.to_le_bytes()); // initprot
+        buf.extend_from_slice(&0u32.to_le_bytes()); // nsects
+        buf.extend_from_slice(&0u32.to_le_bytes()); // flags
+        assert_eq!(buf.len(), 72, "segment_command_64 with 0 sections is 72 bytes");
+        buf
+    }
+
+    /// Assemble a `mach_header_64` followed by `cmds`, with an overridable
+    /// `ncmds` so hostile headers can be built.
+    fn header_with(ncmds: u32, cmds: &[u8]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&MH_MAGIC_64.to_le_bytes()); // magic
+        buf.extend_from_slice(&0u32.to_le_bytes()); // cputype
+        buf.extend_from_slice(&0u32.to_le_bytes()); // cpusubtype
+        buf.extend_from_slice(&0u32.to_le_bytes()); // filetype
+        buf.extend_from_slice(&ncmds.to_le_bytes()); // ncmds
+        buf.extend_from_slice(&(cmds.len() as u32).to_le_bytes()); // sizeofcmds
+        buf.extend_from_slice(&0u32.to_le_bytes()); // flags
+        buf.extend_from_slice(&0u32.to_le_bytes()); // reserved
+        assert_eq!(buf.len(), MACH_HEADER_64_SIZE);
+        buf.extend_from_slice(cmds);
+        buf
+    }
+
+    #[test]
+    fn parse_mach_o_segments_sums_real_segments_and_skips_pagezero() {
+        let mut cmds = segment_cmd("__PAGEZERO", 0, 0x1_0000_0000);
+        cmds.extend_from_slice(&segment_cmd("__TEXT", 0x1_0000_0000, 0x4000));
+        cmds.extend_from_slice(&segment_cmd("__DATA", 0x1_0000_4000, 0x1000));
+        let buf = header_with(3, &cmds);
+
+        let total =
+            parse_mach_o_segments_total_size(&buf).expect("should parse a well-formed header");
+        assert_eq!(
+            total,
+            0x4000 + 0x1000,
+            "should sum __TEXT+__DATA, excluding the __PAGEZERO reservation"
+        );
+    }
+
+    #[test]
+    fn parse_mach_o_segments_rejects_bad_magic() {
+        let mut buf = vec![0u8; MACH_HEADER_64_SIZE];
+        buf[0..4].copy_from_slice(&0xdead_beefu32.to_le_bytes());
+        assert!(parse_mach_o_segments_total_size(&buf).is_err());
+    }
+
+    #[test]
+    fn parse_mach_o_segments_rejects_truncated_buffer() {
+        assert!(parse_mach_o_segments_total_size(&[0u8; 10]).is_err());
+    }
+
+    /// The defect the `Option` signature made unfixable: a wrong-magic buffer
+    /// and a too-short buffer both returned `None`, so no caller could ever
+    /// tell "this is not a Mach-O" from "I did not read enough bytes".
+    #[test]
+    fn bad_magic_is_distinguishable_from_truncation() {
+        let mut bad_magic = vec![0u8; 40];
+        bad_magic[0..4].copy_from_slice(&0xdead_beefu32.to_le_bytes());
+        let short = vec![0u8; 10];
+
+        let e_magic = parse_mach_o_segments_total_size(&bad_magic).unwrap_err();
+        let e_short = parse_mach_o_segments_total_size(&short).unwrap_err();
+
+        assert_eq!(e_magic, MachoSizeError::BadMagic { found: 0xdead_beef });
+        assert_eq!(e_short, MachoSizeError::TooShort { len: 10 });
+        assert_ne!(
+            e_magic, e_short,
+            "the two failures must be distinguishable — that is the whole point of Result here"
+        );
+    }
+
+    /// A header carrying only `__PAGEZERO` sums to 0 because `__PAGEZERO` is
+    /// excluded by design. Returning `Ok(0)` would be indistinguishable from
+    /// a read failure once the caller applies `unwrap_or(0)`, so it must be
+    /// an explicit `NoSegments`.
+    #[test]
+    fn image_with_only_pagezero_is_an_error_not_zero() {
+        let cmds = segment_cmd("__PAGEZERO", 0, 0x1_0000_0000);
+        let buf = header_with(1, &cmds);
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap_err(),
+            MachoSizeError::NoSegments
+        );
+    }
+
+    /// A header with no load commands at all is also `NoSegments`, not 0.
+    #[test]
+    fn header_with_no_load_commands_is_no_segments() {
+        let buf = header_with(0, &[]);
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap_err(),
+            MachoSizeError::NoSegments
+        );
+    }
+
+    /// A header whose `sizeofcmds` promises more bytes than were read is a
+    /// truncation, reported as such rather than silently summing what is
+    /// there (which would under-report the image size as if it were real).
+    #[test]
+    fn sizeofcmds_beyond_the_buffer_is_truncation() {
+        let cmds = segment_cmd("__TEXT", 0x1000, 0x4000);
+        let mut buf = header_with(1, &cmds);
+        // Claim twice as many load-command bytes as are present.
+        let lying = (cmds.len() as u32) * 2;
+        buf[20..24].copy_from_slice(&lying.to_le_bytes());
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap_err(),
+            MachoSizeError::TruncatedLoadCommands {
+                expected: lying as usize,
+                available: cmds.len(),
+            }
+        );
+    }
+
+    /// Property (fuzz-lite): for ~200 deterministically generated hostile
+    /// headers — absurd `ncmds`, zero/huge/misaligned `cmdsize`, truncated
+    /// tails — the parser must neither panic nor read past `cmds_end`.
+    /// Any out-of-bounds index would panic in safe Rust, so "no panic over
+    /// the whole grid" IS the no-over-read proof.
+    #[test]
+    fn ncmds_larger_than_sizeofcmds_does_not_over_read() {
+        let mut checked = 0usize;
+        for ncmds in [0u32, 1, 2, 7, 255, 4096, u32::MAX] {
+            for cmdsize in [0u32, 1, 7, 8, 16, 72, 71, 73, 0xFFFF, u32::MAX] {
+                for tail_trim in [0usize, 1, 8, 40, 71] {
+                    let mut cmds = segment_cmd("__TEXT", 0x1000, 0x4000);
+                    // Overwrite the cmdsize field with the hostile value.
+                    cmds[4..8].copy_from_slice(&cmdsize.to_le_bytes());
+                    let mut buf = header_with(ncmds, &cmds);
+                    // Trim the tail WITHOUT touching sizeofcmds, so most of
+                    // these are also truncation cases.
+                    let keep = buf.len().saturating_sub(tail_trim);
+                    buf.truncate(keep);
+                    // Must return, never panic. Value is unconstrained; the
+                    // property under test is termination + memory safety.
+                    let _ = parse_mach_o_segments_total_size(&buf);
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked >= 200, "expected a meaningful grid, ran {checked}");
+    }
+
+    /// `__PAGEZERO` must be matched on the FULL 16-byte, NUL-padded `segname`
+    /// field, not on a 10-byte prefix.
+    ///
+    /// A prefix test treats any longer segment whose name merely *begins*
+    /// with "__PAGEZERO" as the unmapped reservation and drops its `vmsize`
+    /// from the image total. This test pairs the two cases that a prefix
+    /// comparison cannot tell apart:
+    ///   - real `__PAGEZERO` -> still excluded (no regression on the
+    ///     behaviour the exclusion exists for), and
+    ///   - `__PAGEZERO_2`    -> a distinct, genuinely mapped segment whose
+    ///     size must be counted.
+    ///
+    /// Fails before the fix: the second header sums to 0x4000 (the
+    /// `__PAGEZERO_2` segment silently swallowed) and, because it is then
+    /// the only counted segment that remains, the parser reports only
+    /// `__TEXT`.
+    #[test]
+    fn pagezero_is_matched_on_the_full_16_byte_segname() {
+        // Baseline: the genuine __PAGEZERO is excluded.
+        let mut cmds = segment_cmd("__PAGEZERO", 0, 0x1_0000_0000);
+        cmds.extend_from_slice(&segment_cmd("__TEXT", 0x1_0000_0000, 0x4000));
+        let buf = header_with(2, &cmds);
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap(),
+            0x4000,
+            "the real __PAGEZERO must stay excluded"
+        );
+
+        // A different segment that merely shares the first 10 bytes is NOT
+        // __PAGEZERO and must be counted.
+        let mut cmds = segment_cmd("__PAGEZERO_2", 0x2_0000_0000, 0x9000);
+        cmds.extend_from_slice(&segment_cmd("__TEXT", 0x1_0000_0000, 0x4000));
+        let buf = header_with(2, &cmds);
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap(),
+            0x4000 + 0x9000,
+            "__PAGEZERO_2 is a distinct mapped segment; only an exact 16-byte \
+             match may exclude a segment from the image size"
+        );
+    }
+    /// `entry_point_command` (`LC_MAIN`), 24 bytes.
+    fn lc_main(entryoff: u64) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(&LC_MAIN.to_le_bytes());
+        b.extend_from_slice(&24u32.to_le_bytes());
+        b.extend_from_slice(&entryoff.to_le_bytes());
+        b.extend_from_slice(&0u64.to_le_bytes()); // stacksize
+        b
+    }
+
+    /// `LC_UNIXTHREAD` carrying an `x86_THREAD_STATE64` with `rip` set.
+    fn lc_unixthread(rip: u64) -> Vec<u8> {
+        // 21 u64 registers = 42 u32 words, per x86_thread_state64_t.
+        let words = 42u32;
+        let cmdsize = 16 + (words as usize) * 4;
+        let mut b = Vec::new();
+        b.extend_from_slice(&LC_UNIXTHREAD.to_le_bytes());
+        b.extend_from_slice(&(cmdsize as u32).to_le_bytes());
+        b.extend_from_slice(&4u32.to_le_bytes()); // flavour x86_THREAD_STATE64
+        b.extend_from_slice(&words.to_le_bytes());
+        let mut state = vec![0u64; 21];
+        state[16] = rip; // rip is the 17th u64 slot
+        for w in state {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        assert_eq!(b.len(), cmdsize);
+        b
+    }
+
+    /// The same rule as the LC_MAIN test below, on the size path — where the
+    /// consequence is worse.
+    ///
+    /// A truncated `LC_SEGMENT_64` had its `segname` and `vmsize` read out of
+    /// the FOLLOWING command. That does not just return a wrong number: it
+    /// ADDS a phantom segment to the image total, which stays plausible and
+    /// which no caller can distinguish from a real one. The size constants
+    /// are fixed by the format: 72 bytes with zero sections, +80 per section.
+    #[test]
+    fn a_segment_command_shorter_than_the_format_allows_adds_no_phantom_size() {
+        // Truncated LC_SEGMENT_64 (cmdsize 8) followed by one real 0x9000
+        // segment. The bytes the short command would have read as `vmsize`
+        // are part of the real segment's header, so the bad total is not
+        // merely large — it looks like an ordinary image size.
+        let mut cmds = Vec::new();
+        cmds.extend_from_slice(&LC_SEGMENT_64.to_le_bytes());
+        cmds.extend_from_slice(&8u32.to_le_bytes());
+        cmds.extend_from_slice(&segment_cmd("__TEXT", 0x1000, 0x9000));
+
+        let buf = header_with(2, &cmds);
+        assert_eq!(
+            parse_mach_o_segments_total_size(&buf).unwrap(),
+            0x9000,
+            "only the well-formed segment may contribute to the image size"
+        );
+
+        // 40 bytes is what the code happens to READ; 72 is what the format
+        // requires. A command between the two is still malformed and must not
+        // be counted, or the guard would only be as strict as the current
+        // implementation rather than as strict as the format.
+        let mut cmds = Vec::new();
+        cmds.extend_from_slice(&LC_SEGMENT_64.to_le_bytes());
+        cmds.extend_from_slice(&48u32.to_le_bytes());
+        cmds.extend_from_slice(&[0u8; 40]);
+        cmds.extend_from_slice(&segment_cmd("__DATA", 0x1000, 0x4000));
+        let buf = header_with(2, &cmds);
+        assert_eq!(parse_mach_o_segments_total_size(&buf).unwrap(), 0x4000);
+    }
+
+    /// A load command may not be trusted past its own declared `cmdsize`.
+    ///
+    /// `LC_MAIN` is 24 bytes by definition. One declaring less than 16 cannot
+    /// contain its own `entryoff`, so the bytes at that position belong to the
+    /// NEXT command — reading them yields a confident, wrong entry point that
+    /// no caller can tell from a real one. `LC_UNIXTHREAD` already bounded its
+    /// read by `offset + cmdsize`; this asserts `LC_MAIN` does too.
+    #[test]
+    fn an_lc_main_shorter_than_its_own_payload_is_not_read_past_its_end() {
+        // A truncated LC_MAIN (cmdsize 8, no room for entryoff) followed by a
+        // real LC_MAIN. The bytes right after the short command are the next
+        // command's cmd+cmdsize word — 0x8000_0028 | (24 << 32) — which the
+        // unbounded read would have returned as the entry point.
+        let mut cmds = Vec::new();
+        cmds.extend_from_slice(&LC_MAIN.to_le_bytes());
+        cmds.extend_from_slice(&8u32.to_le_bytes()); // too small to hold entryoff
+        let poisoned = u64::from(LC_MAIN) | (24u64 << 32);
+        cmds.extend_from_slice(&lc_main(0x3f10));
+
+        let buf = header_with(2, &cmds);
+        let got = parse_mach_o_entry_offset(&buf, 0x1_0000_0000);
+        assert_ne!(
+            got,
+            Some(poisoned),
+            "the short LC_MAIN's `entryoff` was read out of the following command"
+        );
+        assert_eq!(
+            got,
+            Some(0x3f10),
+            "the truncated command is skipped and the well-formed one answers"
+        );
+    }
+
+    #[test]
+    fn lc_main_yields_the_entry_offset_and_lc_unixthread_yields_rip_minus_base() {
+        // macOS was the ONLY backend leaving ModuleInfo::entry_point as None.
+        // The two encodings mean different things and both must land on the
+        // same answer: an offset from the image base.
+        let buf = header_with(1, &lc_main(0x3f10));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x3f10));
+
+        // LC_UNIXTHREAD's rip is ABSOLUTE, so the base must be subtracted.
+        let buf = header_with(1, &lc_unixthread(0x1_0000_3f10));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x3f10));
+
+        // An entry point BELOW the image base cannot be an offset into it:
+        // None, not a wrapped u64 near the top of the address space.
+        let buf = header_with(1, &lc_unixthread(0x1000));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
+    }
+
+    #[test]
+    fn an_entry_point_command_is_found_after_other_load_commands() {
+        // Real images put __PAGEZERO/__TEXT first; the scan must walk past
+        // them via cmdsize rather than only inspecting the first command.
+        let mut cmds = segment_cmd("__PAGEZERO", 0, 0x1_0000_0000);
+        cmds.extend_from_slice(&segment_cmd("__TEXT", 0x1_0000_0000, 0x4000));
+        cmds.extend_from_slice(&lc_main(0x1234));
+        let buf = header_with(3, &cmds);
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x1234));
+    }
+
+    #[test]
+    fn an_image_with_no_entry_point_command_reports_none_rather_than_zero() {
+        // A dylib has no entry point at all. `Some(0)` would read as "entry
+        // at the image base", a plausible-looking lie; None says nothing.
+        let cmds = segment_cmd("__TEXT", 0x1_0000_0000, 0x4000);
+        let buf = header_with(1, &cmds);
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
+
+        // Truncated / non-Mach-O buffers are also None, never a guess.
+        assert_eq!(parse_mach_o_entry_offset(&[0u8; 8], 0), None);
+        assert_eq!(parse_mach_o_entry_offset(&[0u8; 64], 0), None);
+    }
+
+    /// `LC_UNIXTHREAD` carrying an `ARM_THREAD_STATE64` with `pc` set.
+    ///
+    /// Layout: `__x[29]` (slots 0..=28), `fp` (29), `lr` (30), `sp` (31),
+    /// `pc` (32), then `cpsr` + `pad` as two u32 words.
+    fn lc_unixthread_arm64(pc: u64) -> Vec<u8> {
+        let words = 68u32; // 33 u64 registers = 66 u32 words, + cpsr + pad
+        let cmdsize = 16 + (words as usize) * 4;
+        let mut b = Vec::new();
+        b.extend_from_slice(&LC_UNIXTHREAD.to_le_bytes());
+        b.extend_from_slice(&(cmdsize as u32).to_le_bytes());
+        b.extend_from_slice(&6u32.to_le_bytes()); // flavour ARM_THREAD_STATE64
+        b.extend_from_slice(&words.to_le_bytes());
+        let mut state = vec![0u64; 33];
+        state[32] = pc;
+        for w in state {
+            b.extend_from_slice(&w.to_le_bytes());
+        }
+        b.extend_from_slice(&0u32.to_le_bytes()); // cpsr
+        b.extend_from_slice(&0u32.to_le_bytes()); // pad
+        assert_eq!(b.len(), cmdsize);
+        b
+    }
+
+    /// On Apple Silicon the pre-10.8 entry-point form carries an ARM thread
+    /// state, and only the x86 flavour was handled.
+    ///
+    /// So `dyld` itself and every static executable answered `None`, leaving
+    /// `ModuleInfo::entry_point` empty on exactly the platform this function
+    /// exists to serve — the same shape as the ARM64 crash address missing
+    /// from the minidump reader in iteration 465.
+    #[test]
+    fn an_arm64_thread_state_yields_its_pc_relative_to_the_image_base() {
+        let buf = header_with(1, &lc_unixthread_arm64(0x1_0000_3f10));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x3f10));
+
+        // Below the base is not an offset into the image: None, never a
+        // wrapped value near the top of the address space.
+        let buf = header_with(1, &lc_unixthread_arm64(0x1000));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
+
+        // The x86 form still works: this is an addition, not a swap.
+        let buf = header_with(1, &lc_unixthread(0x1_0000_2222));
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), Some(0x2222));
+    }
+
+    /// A flavour this module does not model must be SKIPPED, not read at a
+    /// fixed slot: the layout is unknown, so whatever sits there is another
+    /// register, and returning it would be a confident wrong entry point.
+    #[test]
+    fn an_unmodelled_thread_flavour_yields_none() {
+        let mut cmd = lc_unixthread_arm64(0x1_0000_3f10);
+        // Flavour field sits at bytes 8..12 of the command.
+        cmd[8..12].copy_from_slice(&99u32.to_le_bytes());
+        let buf = header_with(1, &cmd);
+        assert_eq!(parse_mach_o_entry_offset(&buf, 0x1_0000_0000), None);
+    }
+
+}

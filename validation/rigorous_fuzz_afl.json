@@ -1,0 +1,29 @@
+{
+  "module": "fuzz_afl",
+  "tools_hardened": 19,
+  "checks_passed": 27,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "tools_tested": [
+    "fuzz_afl_bit_flip_mutate",
+    "fuzz_afl_bitmap_summary",
+    "fuzz_afl_bucket_hits",
+    "fuzz_afl_dict_info",
+    "fuzz_afl_dict_load",
+    "fuzz_afl_queue_score",
+    "fuzz_afl_stage_arith_16",
+    "fuzz_afl_stage_arith_32",
+    "fuzz_afl_stage_arith_8",
+    "fuzz_afl_stage_bit_flip_1",
+    "fuzz_afl_stage_bit_flip_2",
+    "fuzz_afl_stage_bit_flip_4",
+    "fuzz_afl_stage_byte_flip_1",
+    "fuzz_afl_stage_interesting_16",
+    "fuzz_afl_stage_interesting_32",
+    "fuzz_afl_stage_interesting_8",
+    "fuzz_afl_stage_splice",
+    "fuzz_afl_stats_parse",
+    "fuzz_afl_stats_serialize"
+  ]
+}

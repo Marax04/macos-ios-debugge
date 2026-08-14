@@ -1,0 +1,98 @@
+[
+  {
+    "tool": "rhai_entropy_bytes",
+    "reason": "error: execution failed: execution failed: invalid params: missing 'bytes' or 'hex'"
+  },
+  {
+    "tool": "rhai_hex_encode_bytes",
+    "reason": "error: execution failed: execution failed: invalid params: missing 'bytes' or 'hex'"
+  },
+  {
+    "tool": "script_rhai_detect_arch",
+    "reason": "depends on binary_id / open project state; arch detection is property of the loaded binary, no independent ground truth without parsing PE ourselves"
+  },
+  {
+    "tool": "script_rhai_entropy_impl",
+    "reason": "reads a region from the loaded binary by address range; would require independent PE parsing to compute expected value"
+  },
+  {
+    "tool": "script_rhai_binary_info",
+    "reason": "reads metadata from the open project (binary_id-dependent); no independent ground truth without re-parsing binary"
+  },
+  {
+    "tool": "script_rhai_load_binary",
+    "reason": "stateful: loads a binary into server-side store; result id is opaque and nondeterministic"
+  },
+  {
+    "tool": "script_rhai_get_info",
+    "reason": "depends on store populated by script_rhai_load_binary; not independently verifiable here"
+  },
+  {
+    "tool": "script_rhai_lossy_u64_to_f64",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_lossy_usize_to_f64",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_lossy_i64_to_f64",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_trunc_f64_to_i64",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_trunc_i64_to_u8",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_trunc_i64_to_u32",
+    "reason": "error: execution failed: execution failed: invalid params: missing n"
+  },
+  {
+    "tool": "script_rhai_sat_usize_to_i64",
+    "reason": "usize max is platform-dependent; safe to skip"
+  },
+  {
+    "tool": "script_rhai_sat_u64_to_usize_wire",
+    "reason": "usize max is platform-dependent; safe to skip"
+  },
+  {
+    "tool": "script_rhai_sat_i64_to_usize_wire",
+    "reason": "usize max is platform-dependent; safe to skip"
+  },
+  {
+    "tool": "script_rhai_rhai_value_is_unit",
+    "reason": "requires a Rhai Dynamic value as input; no JSON serialization path"
+  },
+  {
+    "tool": "script_rhai_event_bus_new",
+    "reason": "returns opaque handle id \u2014 nondeterministic"
+  },
+  {
+    "tool": "script_rhai_event_hook_system_new",
+    "reason": "returns opaque handle id \u2014 nondeterministic"
+  },
+  {
+    "tool": "script_rhai_new_binary_store",
+    "reason": "returns opaque store handle \u2014 nondeterministic"
+  },
+  {
+    "tool": "script_rhai_load_binary_into",
+    "reason": "stateful / opaque id"
+  },
+  {
+    "tool": "script_rhai_entropy_classify",
+    "reason": "reads binary section by binary_id; no independent ground truth"
+  },
+  {
+    "tool": "script_rhai_hex_encode",
+    "reason": "covered by script_rhai_hex_encode (same tool name collision \u2014 uses data_hex input not data)"
+  },
+  {
+    "tool": "script_rhai_detect_format",
+    "reason": "reads from loaded binary; covered by script_rhai_detect_format_static with raw hex"
+  }
+]

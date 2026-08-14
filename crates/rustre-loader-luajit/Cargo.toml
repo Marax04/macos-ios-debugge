@@ -1,0 +1,26 @@
+[package]
+license.workspace = true
+name = "rustre-loader-luajit"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+rustre-arch-luajit = { path = "../rustre-arch-luajit" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

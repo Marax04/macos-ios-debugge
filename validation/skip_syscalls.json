@@ -1,0 +1,121 @@
+{
+  "category": "syscalls",
+  "skipped": [
+    {
+      "tool": "syscalls_linux_aarch64_name",
+      "reason": "key not found in response: ['name', 'syscall', 'result']"
+    },
+    {
+      "tool": "syscalls_linux_aarch64_name",
+      "reason": "key not found in response: ['name', 'syscall', 'result']"
+    },
+    {
+      "tool": "syscalls_linux_aarch64_name",
+      "reason": "key not found in response: ['name', 'syscall', 'result']"
+    },
+    {
+      "tool": "syscalls_linux_aarch64_name",
+      "reason": "key not found in response: ['name', 'syscall', 'result']"
+    },
+    {
+      "tool": "syscalls_table_max_number_x86_64_v2",
+      "reason": "no max key in response"
+    },
+    {
+      "tool": "syscalls_database_stats",
+      "reason": "Statistics are runtime-dependent, not ground-truth verifiable"
+    },
+    {
+      "tool": "syscalls_database_empty_stats_v2",
+      "reason": "Empty stats always returns zeros \u2014 trivially true"
+    },
+    {
+      "tool": "syscalls_trace_empty_error_rate_v2",
+      "reason": "Trace stats depend on runtime tracing state"
+    },
+    {
+      "tool": "syscalls_linux_param_new",
+      "reason": "Constructs a new object; output is implementation-defined"
+    },
+    {
+      "tool": "syscalls_linux_error_not_found_display",
+      "reason": "Display formatting is implementation-defined"
+    },
+    {
+      "tool": "syscalls_linux_hex_dump_ext",
+      "reason": "Hex dump formatting is implementation-defined"
+    },
+    {
+      "tool": "syscalls_linux_format_mmap_args",
+      "reason": "Combined prot/flags format is impl-defined"
+    },
+    {
+      "tool": "syscalls_linux_format_open_flags",
+      "reason": "Formatted string output is impl-defined"
+    },
+    {
+      "tool": "syscalls_linux_format_exit_event",
+      "reason": "Exit event format is impl-defined"
+    },
+    {
+      "tool": "syscalls_linux_lookup_x86_64_entry",
+      "reason": "Returns a struct; field layout is impl-defined"
+    },
+    {
+      "tool": "syscalls_windows_build_version_ssn_table",
+      "reason": "Returns version-specific SSN table (not stable)"
+    },
+    {
+      "tool": "syscalls_windows_detect_hook_type",
+      "reason": "Hook detection depends on heuristics"
+    },
+    {
+      "tool": "syscalls_windows_is_clean_x86_stub",
+      "reason": "x86 stub layout varies by Windows version"
+    },
+    {
+      "tool": "syscalls_windows_is_clean_stub_dual",
+      "reason": "Dual-mode detection is impl-defined"
+    },
+    {
+      "tool": "syscalls_windows_lookup_win32_api",
+      "reason": "Win32 API DB content is impl-defined"
+    },
+    {
+      "tool": "syscalls_windows_apis_by_module",
+      "reason": "Module API list is impl-defined"
+    },
+    {
+      "tool": "syscalls_estimate_risk",
+      "reason": "Risk scoring heuristic, no canonical truth"
+    },
+    {
+      "tool": "syscalls_seccomp_policy_evaluate_v2",
+      "reason": "Policy evaluation depends on impl policy state"
+    },
+    {
+      "tool": "syscalls_call_prefix_flags_v2",
+      "reason": "Returns static implementation constants"
+    },
+    {
+      "tool": "syscalls_formatter_format_arg_fd_v2",
+      "reason": "fd formatting is impl-defined"
+    },
+    {
+      "tool": "syscalls_decode_arg_fd_v2",
+      "reason": "fd decoding is impl-defined"
+    },
+    {
+      "tool": "syscalls_decode_arg_ip_addr_v2",
+      "reason": "IP addr display is impl-defined"
+    },
+    {
+      "tool": "syscalls_builder_build_open_v2",
+      "reason": "Builds a struct; output is impl-defined"
+    },
+    {
+      "tool": "syscalls_format_cross_arch_table",
+      "reason": "Formatted table string is impl-defined"
+    }
+  ]
+}

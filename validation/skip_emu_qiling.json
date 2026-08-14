@@ -1,0 +1,4 @@
+{
+  "emu_qiling_linux_x86_64": "Requires an actual Linux rootfs directory and ELF binary on disk; nondeterministic execution",
+  "emu_qiling_shellcode_runner": "Requires a working emulation engine backend to execute shellcode; nondeterministic"
+}

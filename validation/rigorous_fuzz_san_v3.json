@@ -1,0 +1,47 @@
+{
+  "module": "fuzz_san_v3",
+  "tools_hardened": 4,
+  "checks_run": 9,
+  "checks_passed": 9,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": [],
+  "detail": [
+    {
+      "check": "fuzz_san_log_parser_parse_first_empty",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_log_parser_parse_first_asan",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_log_parser_parse_all_2reports",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_log_parser_parse_all_empty",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_crash_dedup_group_2same",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_crash_dedup_group_2diff",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_coverage_summary_empty",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_coverage_summary_2edges",
+      "passed": true
+    },
+    {
+      "check": "fuzz_san_coverage_summary_total0",
+      "passed": true
+    }
+  ]
+}

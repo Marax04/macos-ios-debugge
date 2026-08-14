@@ -1,0 +1,22 @@
+﻿[package]
+license.workspace = true
+name = "rustre-analysis-dataflow"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-analysis = { path = "../rustre-analysis" }
+rustre-core = { path = "../rustre-core" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+rustc-hash = { workspace = true }
+
+[lints]
+workspace = true

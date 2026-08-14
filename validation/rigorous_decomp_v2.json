@@ -1,0 +1,498 @@
+{
+  "category": "decomp",
+  "tools_hardened": 65,
+  "tools_passed": 65,
+  "tools_failed": 0,
+  "tools_skipped": 44,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "eax"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "al"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "r10d"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "r10b"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "rdi"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "sil"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "dil"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "r8w"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "r15b"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "bpl"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "spl"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "notareg"
+      }
+    },
+    {
+      "tool": "decomp_register_canonical",
+      "status": "PASS",
+      "args": {
+        "reg": "XMM0"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "rax"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "r15"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "R10"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "eax"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "r10d"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "ax"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "r10w"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "al"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "r10b"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "dil"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "sil"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "bpl"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "xmm0"
+      }
+    },
+    {
+      "tool": "decomp_register_width_bytes",
+      "status": "PASS",
+      "args": {
+        "reg": "notareg"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "int"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "for"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "while"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "goto"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "void"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "return"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "_Bool"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "_Atomic"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "main"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "myvar"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "rax"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": ""
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "inline"
+      }
+    },
+    {
+      "tool": "decomp_is_c_keyword",
+      "status": "PASS",
+      "args": {
+        "name": "restrict"
+      }
+    },
+    {
+      "tool": "decomp_quality_metrics_from_source",
+      "status": "PASS",
+      "args": {
+        "source": "void sub_1000() {\n    int x = 0;\n    if (x > 0) {\n        x = x + 1;\n    } else {\n        goto done;\n    }\n    while (x < 10) {\n        x++;\n    }\ndone:\n    return;\n}\n"
+      }
+    },
+    {
+      "tool": "decomp_quality_metrics_from_source",
+      "status": "PASS",
+      "args": {
+        "source": "x = 1;\ny = 2;\n"
+      }
+    },
+    {
+      "tool": "decomp_quality_readability_score",
+      "status": "PASS",
+      "args": {
+        "source": "void sub_1000() {\n    int x = 0;\n    if (x > 0) {\n        x = x + 1;\n    } else {\n        goto done;\n    }\n    while (x < 10) {\n        x++;\n    }\ndone:\n    return;\n}\n"
+      }
+    },
+    {
+      "tool": "decomp_pipeline_pass_count",
+      "status": "PASS",
+      "args": {}
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "x86_64"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "amd64"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "x86_64-windows"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "aarch64"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "arm64"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "x86"
+      }
+    },
+    {
+      "tool": "decomp_calling_convention_from_arch",
+      "status": "PASS",
+      "args": {
+        "arch": "mips"
+      }
+    },
+    {
+      "tool": "decomp_variable_recovery_stack_name",
+      "status": "PASS",
+      "args": {
+        "offset": 0
+      }
+    },
+    {
+      "tool": "decomp_variable_recovery_stack_name",
+      "status": "PASS",
+      "args": {
+        "offset": 8
+      }
+    },
+    {
+      "tool": "decomp_variable_recovery_stack_name",
+      "status": "PASS",
+      "args": {
+        "offset": -8
+      }
+    },
+    {
+      "tool": "decomp_variable_recovery_stack_name",
+      "status": "PASS",
+      "args": {
+        "offset": -16
+      }
+    },
+    {
+      "tool": "decomp_stats_summary",
+      "status": "PASS",
+      "args": {
+        "functions_decompiled": 10,
+        "functions_failed": 2,
+        "total_time_ms": 500
+      }
+    },
+    {
+      "tool": "decomp_stats_summary",
+      "status": "PASS",
+      "args": {
+        "functions_decompiled": 0,
+        "functions_failed": 5,
+        "total_time_ms": 0
+      }
+    },
+    {
+      "tool": "decomp_stats_summary",
+      "status": "PASS",
+      "args": {
+        "functions_decompiled": 100,
+        "functions_failed": 0,
+        "total_time_ms": 1000
+      }
+    },
+    {
+      "tool": "decomp_cache_hit_rate",
+      "status": "PASS",
+      "args": {
+        "capacity": 10,
+        "insert_addresses": [
+          100,
+          200,
+          300
+        ],
+        "query_addresses": [
+          100,
+          200,
+          400
+        ]
+      }
+    },
+    {
+      "tool": "decomp_cf_structuring_make_if_else",
+      "status": "PASS",
+      "args": {
+        "cond": "x > 0",
+        "then_body": [
+          "x = 1;"
+        ],
+        "else_body": [
+          "x = 2;"
+        ]
+      }
+    },
+    {
+      "tool": "decomp_cf_flatten_sequences",
+      "status": "PASS",
+      "args": {
+        "sequences": [
+          [
+            "line_a1;",
+            "line_a2;"
+          ],
+          [
+            "line_b1;",
+            "line_b2;"
+          ]
+        ]
+      }
+    },
+    {
+      "tool": "decomp_function_name_generator",
+      "status": "PASS",
+      "args": {
+        "address": 4096
+      }
+    },
+    {
+      "tool": "decomp_function_name_generator",
+      "status": "PASS",
+      "args": {
+        "address": 8192,
+        "hint": "my_func"
+      }
+    },
+    {
+      "tool": "decomp_decompiled_function_summary",
+      "status": "PASS",
+      "args": {
+        "address": 16384,
+        "name": "test_fn",
+        "pseudo_code": "int x = 0;\nreturn x;",
+        "confidence": 90
+      }
+    }
+  ]
+}

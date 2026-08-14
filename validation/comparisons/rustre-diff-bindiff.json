@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-diff-bindiff",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "No MCP wire tool exposes rustre-diff-bindiff. The diff_bindiff MCP tool dispatches to sibling crate rustre-diff (per report line 119-125). Validator covers pure-math primitives (hash_linear/hash_cfg/wl_hash/features_similarity/md_index/similarity_score/...) that have no MCP counterpart to compare against. Comparison not applicable."
+}

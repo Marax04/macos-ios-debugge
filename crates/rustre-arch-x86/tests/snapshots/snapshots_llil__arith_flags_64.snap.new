@@ -1,0 +1,151 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 99
+expression: "render_corpus(\"arithmetic + flags (64-bit)\", 64, corpus)"
+---
+# arithmetic + flags (64-bit)
+
+== add rax, rbx (bits=64) ==
+-- add rax,rbx [48 01 d8]
+   0x1000: tmp0.8 = (rax.8 + rbx.8).8
+   0x1000: flag(cf) = (tmp0.8 <u rax.8)
+   0x1000: flag(of) = (((rax.8 <s 0x0.8) == (rbx.8 <s 0x0.8)) & ((tmp0.8 <s 0x0.8) != (rax.8 <s 0x0.8))).1
+   0x1000: flag(af) = (((rax.8 & 0xf.8).8 + (rbx.8 & 0xf.8).8).8 >u 0xf.8)
+   0x1000: flag(sf) = (tmp0.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp0.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp0.8).1
+   0x1000: rax.8 = tmp0.8
+
+== add eax, 1 (bits=64) ==
+-- add eax,1 [83 c0 01]
+   0x1000: tmp0.4 = (low(rax.8, 4) + 0x1.4).4
+   0x1000: flag(cf) = (tmp0.4 <u low(rax.8, 4))
+   0x1000: flag(of) = (((low(rax.8, 4) <s 0x0.4) == (0x1.4 <s 0x0.4)) & ((tmp0.4 <s 0x0.4) != (low(rax.8, 4) <s 0x0.4))).1
+   0x1000: flag(af) = (((low(rax.8, 4) & 0xf.4).4 + (0x1.4 & 0xf.4).4).4 >u 0xf.4)
+   0x1000: flag(sf) = (tmp0.4 <s 0x0.4)
+   0x1000: flag(zf) = (tmp0.4 == 0x0.4)
+   0x1000: flag(pf) = parity(tmp0.4).1
+   0x1000: rax.8 = zx(tmp0.4, 4->8)
+
+== sub rcx, rdx (bits=64) ==
+-- sub rcx,rdx [48 29 d1]
+   0x1000: tmp0.8 = (rcx.8 - rdx.8).8
+   0x1000: flag(cf) = (rcx.8 <u rdx.8)
+   0x1000: flag(of) = (((rcx.8 <s 0x0.8) != (rdx.8 <s 0x0.8)) & ((tmp0.8 <s 0x0.8) != (rcx.8 <s 0x0.8))).1
+   0x1000: flag(af) = ((rcx.8 & 0xf.8).8 <u (rdx.8 & 0xf.8).8)
+   0x1000: flag(sf) = (tmp0.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp0.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp0.8).1
+   0x1000: rcx.8 = tmp0.8
+
+== adc rax, rbx (bits=64) ==
+-- adc rax,rbx [48 11 d8]
+   0x1000: tmp0.8 = zx(flag(cf), 1->8)
+   0x1000: tmp1.8 = (rax.8 + (rbx.8 + tmp0.8).8).8
+   0x1000: tmp2.8 = (rax.8 + rbx.8).8
+   0x1000: flag(cf) = ((tmp2.8 <u rax.8) | (tmp0.8 & (tmp2.8 == 0xffffffffffffffff.8)).1).1
+   0x1000: flag(of) = (((rax.8 <s 0x0.8) == (rbx.8 <s 0x0.8)) & ((tmp1.8 <s 0x0.8) != (rax.8 <s 0x0.8))).1
+   0x1000: flag(af) = ((((rax.8 & 0xf.8).8 + (rbx.8 & 0xf.8).8).8 >u 0xf.8) | (tmp0.8 & (((rax.8 & 0xf.8).8 + (rbx.8 & 0xf.8).8).8 == 0xf.8)).1).1
+   0x1000: flag(sf) = (tmp1.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp1.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp1.8).1
+   0x1000: rax.8 = tmp1.8
+
+== sbb rax, rbx (bits=64) ==
+-- sbb rax,rbx [48 19 d8]
+   0x1000: tmp0.8 = zx(flag(cf), 1->8)
+   0x1000: tmp1.8 = (rax.8 - (rbx.8 + tmp0.8).8).8
+   0x1000: flag(cf) = ((rax.8 <u rbx.8) | (tmp0.8 & (rax.8 == rbx.8)).1).1
+   0x1000: flag(of) = (((rax.8 <s 0x0.8) != (rbx.8 <s 0x0.8)) & ((tmp1.8 <s 0x0.8) != (rax.8 <s 0x0.8))).1
+   0x1000: flag(af) = (((rax.8 & 0xf.8).8 <u (rbx.8 & 0xf.8).8) | (tmp0.8 & ((rax.8 & 0xf.8).8 == (rbx.8 & 0xf.8).8)).1).1
+   0x1000: flag(sf) = (tmp1.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp1.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp1.8).1
+   0x1000: rax.8 = tmp1.8
+
+== inc rax (bits=64) ==
+-- inc rax [48 ff c0]
+   0x1000: tmp0.8 = (rax.8 + 0x1.8).8
+   0x1000: flag(of) = (((rax.8 <s 0x0.8) == (0x1.8 <s 0x0.8)) & ((tmp0.8 <s 0x0.8) != (rax.8 <s 0x0.8))).1
+   0x1000: flag(af) = (((rax.8 & 0xf.8).8 + (0x1.8 & 0xf.8).8).8 >u 0xf.8)
+   0x1000: flag(sf) = (tmp0.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp0.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp0.8).1
+   0x1000: rax.8 = tmp0.8
+
+== dec ecx (bits=64) ==
+-- dec ecx [ff c9]
+   0x1000: tmp0.4 = (low(rcx.8, 4) - 0x1.4).4
+   0x1000: flag(of) = (((low(rcx.8, 4) <s 0x0.4) != (0x1.4 <s 0x0.4)) & ((tmp0.4 <s 0x0.4) != (low(rcx.8, 4) <s 0x0.4))).1
+   0x1000: flag(af) = ((low(rcx.8, 4) & 0xf.4).4 <u (0x1.4 & 0xf.4).4)
+   0x1000: flag(sf) = (tmp0.4 <s 0x0.4)
+   0x1000: flag(zf) = (tmp0.4 == 0x0.4)
+   0x1000: flag(pf) = parity(tmp0.4).1
+   0x1000: rcx.8 = zx(tmp0.4, 4->8)
+
+== neg rax (bits=64) ==
+-- neg rax [48 f7 d8]
+   0x1000: tmp0.8 = (-rax.8).8
+   0x1000: flag(cf) = (rax.8 != 0x0.8)
+   0x1000: flag(of) = (((0x0.8 <s 0x0.8) != (rax.8 <s 0x0.8)) & ((tmp0.8 <s 0x0.8) != (0x0.8 <s 0x0.8))).1
+   0x1000: flag(af) = ((0x0.8 & 0xf.8).8 <u (rax.8 & 0xf.8).8)
+   0x1000: flag(sf) = (tmp0.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp0.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp0.8).1
+   0x1000: rax.8 = tmp0.8
+
+== cmp rax, rbx (bits=64) ==
+-- cmp rax,rbx [48 39 d8]
+   0x1000: tmp0.8 = (rax.8 - rbx.8).8
+   0x1000: flag(cf) = (rax.8 <u rbx.8)
+   0x1000: flag(of) = (((rax.8 <s 0x0.8) != (rbx.8 <s 0x0.8)) & ((tmp0.8 <s 0x0.8) != (rax.8 <s 0x0.8))).1
+   0x1000: flag(af) = ((rax.8 & 0xf.8).8 <u (rbx.8 & 0xf.8).8)
+   0x1000: flag(sf) = (tmp0.8 <s 0x0.8)
+   0x1000: flag(zf) = (tmp0.8 == 0x0.8)
+   0x1000: flag(pf) = parity(tmp0.8).1
+
+== cmp eax, 0x10 (bits=64) ==
+-- cmp eax,10h [83 f8 10]
+   0x1000: tmp0.4 = (low(rax.8, 4) - 0x10.4).4
+   0x1000: flag(cf) = (low(rax.8, 4) <u 0x10.4)
+   0x1000: flag(of) = (((low(rax.8, 4) <s 0x0.4) != (0x10.4 <s 0x0.4)) & ((tmp0.4 <s 0x0.4) != (low(rax.8, 4) <s 0x0.4))).1
+   0x1000: flag(af) = ((low(rax.8, 4) & 0xf.4).4 <u (0x10.4 & 0xf.4).4)
+   0x1000: flag(sf) = (tmp0.4 <s 0x0.4)
+   0x1000: flag(zf) = (tmp0.4 == 0x0.4)
+   0x1000: flag(pf) = parity(tmp0.4).1
+
+== test eax, eax (bits=64) ==
+-- test eax,eax [85 c0]
+   0x1000: tmp0.4 = (low(rax.8, 4) & low(rax.8, 4)).4
+   0x1000: flag(cf) = 0x0.1
+   0x1000: flag(of) = 0x0.1
+   0x1000: flag(sf) = (tmp0.4 <s 0x0.4)
+   0x1000: flag(zf) = (tmp0.4 == 0x0.4)
+   0x1000: flag(pf) = parity(tmp0.4).1
+
+== test al, 1 (bits=64) ==
+-- test al,1 [a8 01]
+   0x1000: tmp0.1 = ((rax.8 & 0xff.8).1 & 0x1.1).1
+   0x1000: flag(cf) = 0x0.1
+   0x1000: flag(of) = 0x0.1
+   0x1000: flag(sf) = (tmp0.1 <s 0x0.1)
+   0x1000: flag(zf) = (tmp0.1 == 0x0.1)
+   0x1000: flag(pf) = parity(tmp0.1).1
+
+== imul rax, rbx (bits=64) ==
+-- imul rax,rbx [48 0f af c3]
+   0x1000: rax.8 = (rax.8 * rbx.8).8
+   0x1000: flag(cf) = imul_overflow(rax.8, rbx.8).1
+   0x1000: flag(of) = imul_overflow(rax.8, rbx.8).1
+
+== mul rbx (bits=64) ==
+-- mul rbx [48 f7 e3]
+   0x1000: rdx:rax = (zx(rax.8, 8->16) * zx(rbx.8, 8->16)).16
+   0x1000: flag(cf) = mul_overflow(rax.8, rbx.8).1
+   0x1000: flag(of) = mul_overflow(rax.8, rbx.8).1
+
+== idiv rcx (bits=64) ==
+-- idiv rcx [48 f7 f9]
+   0x1000: tmp0.8 = low((((zx(rdx.8, 8->16) << 0x40.16).16 | zx(rax.8, 8->16)).16 /s sx(rcx.8, 8->16)).16, 8)
+   0x1000: rdx.8 = low((((zx(rdx.8, 8->16) << 0x40.16).16 | zx(rax.8, 8->16)).16 %s sx(rcx.8, 8->16)).16, 8)
+   0x1000: rax.8 = tmp0.8

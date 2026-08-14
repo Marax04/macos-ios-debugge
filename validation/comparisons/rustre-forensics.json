@@ -1,0 +1,70 @@
+﻿{
+  "crate": "rustre-forensics",
+  "generated": "2026-06-30",
+  "summary": {
+    "tests": 14,
+    "mismatches": 3,
+    "match": false
+  },
+  "mcp_tools": [
+    {
+      "name": "forensics_open_dump",
+      "wire_name": "forensics.open_memory_dump",
+      "mcp_response_fields": ["image_id", "path", "status", "note"],
+      "lib_rs_response_fields": ["image_id", "path", "os_type", "os_version", "arch", "physical_memory_size", "profiles"],
+      "status": "MISMATCH - MCP wrapper returns minimal schema vs lib.rs stub returns full OS/arch metadata"
+    },
+    {
+      "name": "forensics_run_plugin",
+      "wire_name": "forensics.run_plugin",
+      "mcp_response_fields": ["plugin", "image_id", "row_count", "rows"],
+      "lib_rs_response_fields": ["image_id", "plugin_name", "output"],
+      "status": "MISMATCH - field 'plugin_name' vs 'plugin', output format string vs row array"
+    },
+    {
+      "name": "forensics_list_plugins",
+      "wire_name": "forensics.list_plugins",
+      "python_coverage": "none",
+      "status": "MISMATCH - 12 plugins listed by MCP; no Python validator equivalent"
+    }
+  ],
+  "python_test_groups": [
+    {"group": "hashing", "assertions": 2, "python_pass": true, "mcp_exposed": false},
+    {"group": "EvidenceHash.compute+verify", "assertions": 2, "python_pass": true, "mcp_exposed": false},
+    {"group": "Timeline.sort+events", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "ArtifactStore.count+avg_confidence", "assertions": 2, "python_pass": true, "mcp_exposed": false},
+    {"group": "EvidenceCollector.collect+verify", "assertions": 2, "python_pass": true, "mcp_exposed": false},
+    {"group": "FileCarver.carve", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "IncidentTimeline.duration_ms", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "MalwareCase.registry_persistence", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "RegistryHiveAnalyzer.invalid_bytes", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "TimelineBuilder.build+sort", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "CorrelatedTimeline.detect_gaps", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "validator_merge_adjacent_segments", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "validator_total_coverage", "assertions": 1, "python_pass": true, "mcp_exposed": false},
+    {"group": "validator_find_segment", "assertions": 1, "python_pass": true, "mcp_exposed": false}
+  ],
+  "mismatches_detail": [
+    {
+      "id": 1,
+      "tool": "forensics_open_dump",
+      "description": "MCP wrapper returns {image_id, path, status, note}; lib.rs stub returns {image_id, path, os_type, os_version, arch, physical_memory_size, profiles}. Fields os_type/arch/profiles are absent from MCP response."
+    },
+    {
+      "id": 2,
+      "tool": "forensics_run_plugin",
+      "description": "Field name mismatch: MCP uses 'plugin' and returns structured rows array; lib.rs uses 'plugin_name' and returns a flat string 'output'. The pslist stub in lib.rs returns textual table; MCP returns empty rows array."
+    },
+    {
+      "id": 3,
+      "tool": "forensics_list_plugins",
+      "description": "MCP exposes 12 plugins via forensics_list_plugins; neither lib.rs nor the Python validator implements or tests this tool."
+    }
+  ],
+  "notes": [
+    "All 14 Python validator self-tests pass (hashing, evidence, carving, timeline, malware analysis, memory segments).",
+    "The internal library logic tested by Python is not exposed through any MCP tool — MCP only wraps open_memory_dump and run_plugin as thin stubs.",
+    "forensics.run_plugin with pslist on a non-memory-dump path returns empty rows (row_count=0); lib.rs stub would return a hardcoded text table.",
+    "No wire_tools.rs entries for forensics — the group is registered entirely in lib.rs register_forensics_group()."
+  ]
+}

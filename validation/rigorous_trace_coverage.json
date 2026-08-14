@@ -1,0 +1,8 @@
+{
+  "module": "trace_coverage",
+  "tools_hardened": 11,
+  "checks_passed": 28,
+  "checks_failed": 0,
+  "real_mismatches": 0,
+  "mismatches": []
+}

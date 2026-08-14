@@ -1,0 +1,106 @@
+{
+  "category": "pe_rebuild",
+  "generated": "2026-07-11",
+  "validator": "validate_pe_rebuild.py",
+  "tools": [
+    {
+      "name": "pe_rebuild_is_memory_pe",
+      "cases": [
+        {
+          "args": {"hex": "deadbeef001122334455667788990011"},
+          "expected": {"is_memory_pe": false},
+          "status": "PASS"
+        },
+        {
+          "args": {"hex": "4d5a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000050450000"},
+          "note": "MZ magic at offset 0, PE sig at 0x40",
+          "expected": {"is_memory_pe": true},
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "name": "pe_rebuild_compute_entropy",
+      "reference": "Shannon entropy: sum(-p*log2(p)) for each non-zero byte frequency p=count/len",
+      "cases": [
+        {
+          "args": {"hex": "deadbeef001122334455667788990011"},
+          "expected_key": "entropy",
+          "expected_approx": 3.8154648767857287,
+          "tolerance": 1e-9,
+          "status": "PASS"
+        },
+        {
+          "args": {"hex": "0000000000000000000000000000000000000000000000000000000000000000"},
+          "expected": {"entropy": 0.0},
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "name": "pe_rebuild_crc16_ccitt",
+      "reference": "CRC16-CCITT: poly=0x1021 init=0xFFFF, table-less algorithm",
+      "cases": [
+        {
+          "args": {"hex": "deadbeef001122334455667788990011"},
+          "expected_key": "crc16_ccitt",
+          "expected": 33040,
+          "status": "PASS"
+        },
+        {
+          "args": {"hex": ""},
+          "expected": {"crc16_ccitt": 65535},
+          "note": "empty input returns init value 0xFFFF=65535",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "name": "pe_rebuild_find_pe_candidates",
+      "reference": "Scan for MZ at 4-byte-aligned offsets where e_lfanew points to valid PE\\0\\0",
+      "cases": [
+        {
+          "args": {"hex": "<512-byte MZ+PE buffer>"},
+          "note": "MZ at offset 0, e_lfanew=0x40, PE sig at 0x40 → candidates=[0]",
+          "expected": {"candidates": [0], "count": 1},
+          "status": "PASS"
+        },
+        {
+          "args": {"hex": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+          "expected": {"count": 0},
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "name": "pe_rebuild_calculate_pe_checksum",
+      "reference": "PE checksum: 16-bit word accumulation with carry folding, + file size",
+      "cases": [
+        {
+          "args": {"hex": "<256-byte range(256) buffer>", "checksum_offset": 88},
+          "note": "bytes=range(256), off=0x58; expected=py_calculate_pe_checksum result",
+          "expected_key": "checksum",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "name": "pe_rebuild_infer_characteristics",
+      "reference": "Match section name to well-known PE section characteristics flags",
+      "cases": [
+        {"args": {"name": ".text"},  "expected": {"characteristics": 1610612768}, "status": "PASS"},
+        {"args": {"name": ".data"},  "expected": {"characteristics": 3221225536}, "status": "PASS"},
+        {"args": {"name": ".bss"},   "expected": {"characteristics": 3221225600}, "status": "PASS"},
+        {"args": {"name": ".rdata"}, "expected": {"characteristics": 1073741888}, "status": "PASS"}
+      ]
+    }
+  ],
+  "summary": {
+    "tools_hardened": 6,
+    "tests_run": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "mismatches": []
+  }
+}

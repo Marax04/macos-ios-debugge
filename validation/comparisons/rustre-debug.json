@@ -1,0 +1,55 @@
+{
+  "crate": "rustre-debug",
+  "validator": {
+    "saved_report": true,
+    "expected_functions": 78,
+    "categories": {
+      "free_fn": 1,
+      "methods_by_owner": 9,
+      "trait_Debugger_async": 33,
+      "trait_v2_Debugger_sync": 7
+    }
+  },
+  "mcp": {
+    "wire_tools_total": 119,
+    "debug_tools_count": 12,
+    "debug_tools": [
+      "debug.launch", "debug.attach", "debug.continue",
+      "debug.step_into", "debug.step_over",
+      "debug.set_breakpoint", "debug.remove_breakpoint",
+      "debug.read_registers", "debug.read_memory", "debug.write_memory",
+      "debug.backtrace", "debug.evaluate"
+    ]
+  },
+  "tests": [
+    {
+      "name": "debug.launch (executable=notepad.exe)",
+      "result": "expected_failure_caller_error",
+      "note": "Tool schema requires `binary_id`, not `executable`. Error message 'program path has no file name' is correct behavior given empty path."
+    },
+    {
+      "name": "debug.set_breakpoint(session_id=s1, address=0x401000)",
+      "result": "ok",
+      "response": {"bp_id":"bp-401000","address":"0x401000","type":"software","set":true}
+    },
+    {
+      "name": "debug.backtrace(session_id=s1)",
+      "result": "ok",
+      "response": {"frames":[{"frame":0,"addr":"0x0","name":"?"}]}
+    },
+    {
+      "name": "debug.read_registers(session_id=s1)",
+      "result": "ok",
+      "note": "Returns x86_64 register set incl rip/rsp/rbp/rax-r15/rflags"
+    }
+  ],
+  "trait_surface_alignment": {
+    "Debugger_async_methods_validator": ["launch","attach","detach","continue_execution","single_step","step_over","step_out","pause","read_memory","write_memory","set_breakpoint","remove_breakpoint","backtrace","get_registers"],
+    "mcp_wire_coverage": ["debug.launch","debug.attach","debug.continue","debug.step_into","debug.step_over","debug.set_breakpoint","debug.remove_breakpoint","debug.read_memory","debug.write_memory","debug.read_registers","debug.backtrace","debug.evaluate"],
+    "comment": "MCP wire layer exposes the core Debugger trait operations. Missing wire wrappers (intentional, library-only): detach, kill, pause, step_out, single_step (mapped to step_into), threads, current_thread, get_register/set_register (single), memory_maps, enable_breakpoint/disable_breakpoint, modules. These are accessible via library API. No semantic mismatch detected."
+  },
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "ok"
+}

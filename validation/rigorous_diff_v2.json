@@ -1,0 +1,192 @@
+{
+  "category": "diff",
+  "tools_hardened": 29,
+  "tools_passed": 29,
+  "tools_failed": 0,
+  "tools_skipped": 6,
+  "mismatches": [],
+  "details": [
+    {
+      "tool": "diff_simple_hash",
+      "status": "PASS",
+      "expected": 16547303524151824695,
+      "actual": 16547303524151824695
+    },
+    {
+      "tool": "diff_simple_hash",
+      "status": "PASS",
+      "expected": 14695981039346656037,
+      "actual": 14695981039346656037
+    },
+    {
+      "tool": "diff_simple_hash",
+      "status": "PASS",
+      "expected": 12638225683462629381,
+      "actual": 12638225683462629381
+    },
+    {
+      "tool": "diff_lcs_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_lcs_similarity",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_lcs_similarity",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5
+    },
+    {
+      "tool": "diff_lcs_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_byte_histogram_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_byte_histogram_similarity",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_byte_histogram_similarity",
+      "status": "PASS",
+      "expected": 0.5517766952966369,
+      "actual": 0.5517766952966369
+    },
+    {
+      "tool": "diff_ngram_jaccard_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_ngram_jaccard_similarity",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_ngram_jaccard_similarity",
+      "status": "PASS",
+      "expected": 0.1111111111111111,
+      "actual": 0.1111111111111111
+    },
+    {
+      "tool": "diff_ngram_jaccard_similarity",
+      "status": "PASS",
+      "expected": 0.2727272727272727,
+      "actual": 0.2727272727272727
+    },
+    {
+      "tool": "diff_combined_byte_similarity",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_combined_byte_similarity",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash_linear",
+      "status": "PASS",
+      "expected": 14695981039346656037,
+      "actual": 14695981039346656037
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash_linear",
+      "status": "PASS",
+      "expected": 12638153115695167455,
+      "actual": 12638153115695167455
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash_linear",
+      "status": "PASS",
+      "expected": 15657232601398921512,
+      "actual": 15657232601398921512
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash_linear",
+      "status": "PASS",
+      "expected": 3708964778940489647,
+      "actual": 3708964778940489647
+    },
+    {
+      "tool": "diff_bindiff_cfg_hash_linear",
+      "status": "PASS",
+      "expected": 10952987118811563378,
+      "actual": 10952987118811563378
+    },
+    {
+      "tool": "diff_bindiff_wl_hash",
+      "status": "PASS",
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "tool": "diff_bindiff_wl_hash",
+      "status": "PASS",
+      "expected": 13141921032047025725,
+      "actual": 13141921032047025725
+    },
+    {
+      "tool": "diff_bindiff_wl_hash",
+      "status": "PASS",
+      "expected": 4218881812416441080,
+      "actual": 4218881812416441080
+    },
+    {
+      "tool": "diff_semantic_minhash_estimate_jaccard",
+      "status": "PASS",
+      "expected": 1.0,
+      "actual": 1.0
+    },
+    {
+      "tool": "diff_semantic_minhash_estimate_jaccard",
+      "status": "PASS",
+      "expected": 0.0,
+      "actual": 0.0
+    },
+    {
+      "tool": "diff_semantic_minhash_estimate_jaccard",
+      "status": "PASS",
+      "expected": 0.5,
+      "actual": 0.5
+    },
+    {
+      "tool": "diff_semantic_minhash_signature",
+      "status": "PASS",
+      "expected": [
+        1488771351,
+        1852098119,
+        1166398052,
+        169384310
+      ],
+      "actual": [
+        1488771351,
+        1852098119,
+        1166398052,
+        169384310
+      ]
+    },
+    {
+      "tool": "diff_semantic_minhash_signature(empty)",
+      "status": "PASS"
+    }
+  ]
+}

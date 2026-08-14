@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-hex",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "No MCP tools expose rustre-hex (report 'Existing MCP Tools: None'; grep over rustre-mcp-tools/src for rustre_hex/HexBuffer/byte_statistics/xor_range returned no matches). MCP-vs-validator comparison is not possible until wrapper tools are added. Validator self-tests (rustre-hex.py) pass standalone."
+}

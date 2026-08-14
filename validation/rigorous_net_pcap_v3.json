@@ -1,0 +1,112 @@
+{
+  "category": "net_pcap",
+  "version": 3,
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "net_pcap_link_type_from_u16",
+      "description": "Convert numeric PCAP link-type code to symbolic name via rustre_net_pcap::LinkType::from_u16",
+      "cases": [
+        {
+          "input": {"code": 1},
+          "expected": {"code": 1, "link_type": "Ethernet", "roundtrip": 1},
+          "match_keys": ["code", "link_type", "roundtrip"],
+          "status": "PASS"
+        },
+        {
+          "input": {"code": 113},
+          "expected": {"code": 113, "link_type": "LinuxSll", "roundtrip": 113},
+          "match_keys": ["code", "link_type", "roundtrip"],
+          "status": "PASS"
+        },
+        {
+          "input": {"code": 999},
+          "expected": {"roundtrip": 999},
+          "match_keys": ["roundtrip"],
+          "note": "Unknown(999) — link_type string contains 'Unknown', roundtrip must equal input code",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "tool": "net_pcap_file_parse_info",
+      "description": "Parse a PCAP byte stream and return record_count, total_bytes, network, snaplen",
+      "cases": [
+        {
+          "description": "Two-packet Ethernet PCAP (14+20 = 34 bytes of payload)",
+          "input_hex_note": "PCAP magic LE 0xA1B2C3D4 + 2 records of 14 and 20 bytes",
+          "expected": {"record_count": 2, "total_bytes": 34, "network": 1, "snaplen": 65535},
+          "match_keys": ["record_count", "total_bytes", "network", "snaplen"],
+          "status": "PASS"
+        },
+        {
+          "description": "Empty PCAP (no records)",
+          "expected": {"record_count": 0, "total_bytes": 0},
+          "match_keys": ["record_count", "total_bytes"],
+          "status": "PASS"
+        },
+        {
+          "description": "Invalid bytes (0xdeadbeef) — must return ok:false",
+          "input_hex": "deadbeef",
+          "expected": {"ok": false},
+          "match_keys": ["ok"],
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "tool": "net_pcap_merge_files",
+      "description": "Merge multiple PCAP byte streams into one via rustre_net_pcap::merge_pcap_files",
+      "cases": [
+        {
+          "description": "Merge two single-packet PCaps (10+15 byte payloads); output_bytes >= 81",
+          "input_note": "files_hex: [pcapA.hex(), pcapB.hex()] each with 1 packet",
+          "expected": {"input_count": 2, "output_bytes_min": 81},
+          "match_keys": ["input_count"],
+          "note": "output_bytes must be >= 81 (24 header + 26 + 31)",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "tool": "net_pcap_split_by_count",
+      "description": "Split a PCAP into chunks of at most max_packets via rustre_net_pcap::split_pcap_by_count",
+      "cases": [
+        {
+          "description": "5-packet PCAP split at max=2 → 3 chunks (2,2,1)",
+          "input_note": "hex: 5-packet PCAP, max_packets: 2",
+          "expected": {"chunk_count": 3},
+          "match_keys": ["chunk_count"],
+          "status": "PASS"
+        },
+        {
+          "description": "Empty PCAP split → 0 chunks",
+          "input_note": "hex: empty PCAP (header only), max_packets: 2",
+          "expected": {"chunk_count": 0},
+          "match_keys": ["chunk_count"],
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "tool": "net_pcap_split_by_time",
+      "description": "Split a PCAP into time windows via rustre_net_pcap::split_pcap_by_time",
+      "cases": [
+        {
+          "description": "3 packets at t=0,5,10 secs with window=6 → 2 chunks ([0,5] and [10])",
+          "input_note": "hex: 3-packet PCAP with ts_sec=0,5,10; window_secs: 6",
+          "expected": {"chunk_count": 2},
+          "match_keys": ["chunk_count"],
+          "status": "PASS"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "tools_hardened": 4,
+    "cases_run": 10,
+    "cases_passed": 10,
+    "cases_failed": 0,
+    "mismatches": []
+  }
+}

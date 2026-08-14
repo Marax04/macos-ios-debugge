@@ -1,0 +1,9 @@
+{
+  "crate": "rustre-flirt",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note": "Nessun tool MCP espone le primitive testabili (crc16_flirt, crc16_ibm, parse_sig_header, pattern_*, flirt_arch_*, flirt_file_type_contains). I tool MCP esistenti (flirt_apply_auto) wrappano rustre-flirt-apply/rustre-loader-pe a livello superiore, non rustre-flirt direttamente. Confronto a parita' di superficie non possibile senza nuovi MCP tool."
+}

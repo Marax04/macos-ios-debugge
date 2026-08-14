@@ -1,0 +1,16 @@
+{
+  "crate": "rustre-debug-frida",
+  "mcp_tools_exposed": [],
+  "note": "Crate rustre-debug-frida exists in workspace but is NOT wired into rustre-mcp server (no entries in wire_tools.rs; only a federation upstream string reference in federation.rs). No MCP tool calls are possible to compare against the Python validator surface.",
+  "validator": {
+    "path": "validation/validators/rustre-debug-frida.py",
+    "passed": 20,
+    "total": 20,
+    "result_sidecar": "validation/validators/rustre-debug-frida.result.json"
+  },
+  "comparisons": [],
+  "tests": 20,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

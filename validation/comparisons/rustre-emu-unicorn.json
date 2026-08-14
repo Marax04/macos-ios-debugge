@@ -1,0 +1,23 @@
+{
+  "crate": "rustre-emu-unicorn",
+  "tests": 4,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface_validator_stale_expectations",
+  "note": "Il crate rustre-emu-unicorn fornisce backend Unicorn-based: arch_backends, arch_register_maps, coverage_hooks, hook_manager, instruction_trace, memory_model, os_hooks, snapshot_manager, unicorn_bindings, unicorn_context_manager, unicorn_coverage, unicorn_filesystem_emu, unicorn_hooks, unicorn_os_emulator, unicorn_os_hooks, unicorn_snapshot, unicorn_syscall_linux. Server MCP (crates/rustre-mcp-tools/src/tool_catalog.rs) espone una sola tool emulation 'emulate_function' che usa Unicorn. Nessun tool MCP wrappa direttamente la superficie pubblica granulare di rustre-emu-unicorn (memory_model, snapshot_manager, coverage_hooks, instruction_trace, hook_manager, filesystem_emu, syscall_linux). Validator Python e' uno skeleton strutturale: conta moduli, deps Cargo.toml, varianti enum Arch/Mode, e pub fn count per file. Le 17 'mismatches' segnalate dal validator sono ATTESE-STALE: il crate ha 732 pub fn vs ~641 attesi -- crescita additiva (regola: 'warnings only fix by adding code, never remove'). Tutti i moduli attesi esistono, tutte le deps presenti, tutte le varianti Arch presenti, enum Mode presente, native feature presente, unicorn-engine commentato (build con feature). Nessun bug nel workspace: il validator espone solo conteggi obsoleti. Confronto MCP-vs-validator behavioral non eseguibile (validator e' structural-only, MCP wrappa Unicorn end-to-end).",
+  "tests_run": [
+    "Cargo.toml deps present: rustre-emu, thiserror, serde, serde_json, parking_lot",
+    "Tutti i 18 moduli attesi presenti in src/",
+    "enum Arch con varianti X86/Arm/Arm64/Mips/Sparc/RiscV/M68K/Ppc/S390X presente in lib.rs",
+    "enum Mode presente in lib.rs; feature 'native' dichiarata; unicorn-engine commentato"
+  ],
+  "mcp_tools_in_scope": ["emulate_function (Unicorn-backed, fine-grained surface non confrontabile)"],
+  "validator_findings_classification": {
+    "total_findings": 17,
+    "category": "stale_expectations_additive_growth",
+    "real_bugs": 0,
+    "rationale": "validator expected ~641 pub fn total, actual 732 -- crate grown additively; no removal/silencing allowed per workspace policy"
+  },
+  "gap": "missing_mcp_tools:memory_model_*,snapshot_manager_*,coverage_hooks_*,instruction_trace_*,hook_manager_*,filesystem_emu_*,syscall_linux_*"
+}

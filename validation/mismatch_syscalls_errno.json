@@ -1,0 +1,6 @@
+{
+ "category": "syscalls_errno",
+ "checks_total": 4,
+ "checks_passed": 4,
+ "mismatches": []
+}

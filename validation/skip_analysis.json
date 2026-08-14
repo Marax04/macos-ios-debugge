@@ -1,0 +1,18 @@
+[
+  {
+    "tool": "analysis_xref_get_xrefs_to",
+    "reason": "binary-dependent: Expecting value: line 1 column 1 (char 0)"
+  },
+  {
+    "tool": "analysis_xref_get_xrefs_from",
+    "reason": "binary-dependent: Expecting value: line 1 column 1 (char 0)"
+  },
+  {
+    "tool": "analysis_xref_call_graph_root_functions",
+    "reason": "binary-dependent: Expecting value: line 1 column 1 (char 0)"
+  },
+  {
+    "tool": "analysis_xref_string_ref_counts",
+    "reason": "binary-dependent: Expecting value: line 1 column 1 (char 0)"
+  }
+]

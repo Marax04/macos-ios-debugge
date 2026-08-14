@@ -1,0 +1,44 @@
+{
+  "crate": "rustre-ttd-replay",
+  "mcp_surface": "none",
+  "note": "rustre-ttd-replay is a workspace library crate (Time-Travel Debugging deterministic replay engine: TracePosition, MemoryState/MemPage/MemDiff, Watchpoint/ReplayBreakpoint with BreakpointCondition variants, SnapshotCache, ReplayEngine forward/backward navigation, query APIs find_first/last/all_writes_to and find_all_calls_to, TtdRecordingFile binary format with magic RSTRETTD v1). It is NOT exposed via the MCP server: no references to ttd-replay/TtdReplay/ReplayEngine in crates/rustre-mcp-tools. JSON-RPC stdio comparison against rustre-mcp.exe is therefore N/A; the pure-logic Python validator IS the ground-truth comparison.",
+  "validator": "validation/validators/rustre-ttd-replay.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 13,
+    "all_passed": true,
+    "functions": [
+      "memory_state_apply_read",
+      "memory_state_diff",
+      "memory_cross_page_write",
+      "breakpoint_conditions",
+      "watchpoint_overlap",
+      "snapshot_cache",
+      "replay_engine_step_forward",
+      "watchpoint_hit_on_write",
+      "step_backward_rebuild",
+      "go_to_start_end",
+      "query_apis_find_writes_calls",
+      "breakpoint_crud",
+      "run_to_next_event_of_kind",
+      "snapshot_index_build",
+      "recording_file_roundtrip",
+      "bad_magic_and_version_rejected"
+    ],
+    "checked_against_source": {
+      "PAGE_SIZE": "4096-byte pages matches crates/rustre-ttd-replay/src",
+      "RECORDING_MAGIC": "b'RSTRETTD' (8 bytes) + version u32=1",
+      "TracePosition": "(sequence, sub) lexicographic ordering",
+      "MemoryState": "page-aligned writes, cross-page split, diff over union of page bases",
+      "BreakpointCondition": "Always | RegisterEquals | MemoryEquals | HitCountMultiple",
+      "WatchpointKind": "Read | Write | ReadWrite with overlap = !(end<=base || start>=base+size)",
+      "ReplayEngine.step_backward": "rebuilds memory by replaying events [0..index)",
+      "find_first/last/all_writes_to": "range check addr <= a < addr+len(data)",
+      "TtdRecordingFile": "magic|ver|meta_len|meta_json|event_count_u64|[event_len_u32|event_json]*"
+    }
+  },
+  "tests": 13,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

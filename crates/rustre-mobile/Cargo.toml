@@ -1,0 +1,23 @@
+[package]
+license.workspace = true
+name = "rustre-mobile"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-mobile-android = { path = "../rustre-mobile-android" }
+rustre-mobile-apktool = { path = "../rustre-mobile-apktool" }
+rustre-mobile-dyld    = { path = "../rustre-mobile-dyld" }
+rustre-mobile-ios     = { path = "../rustre-mobile-ios" }
+rustre-mobile-ipa     = { path = "../rustre-mobile-ipa" }
+rustre-mobile-jadx    = { path = "../rustre-mobile-jadx" }
+rustre-mobile-smali   = { path = "../rustre-mobile-smali" }
+
+[lints]
+workspace = true

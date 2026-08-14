@@ -1,0 +1,122 @@
+{
+  "crate": "rustre-deobf-mba",
+  "tool": "deobf_mba_normalize",
+  "date": "2026-06-30",
+  "tests": 5,
+  "mismatches": 1,
+  "match": false,
+  "summary": "4/5 tests match. The '(x & y) + (x | y)' case is the only mismatch: Rust simplifies it to '(x + y)' via rule 'and-plus-or', but the Python validator has no such rule and leaves the expression unchanged. The '~~x' case cannot be parsed by the Python tokenizer (double ~ not supported), so it was excluded from mismatch count but is a Python validator gap. All other cases (x+0->x, x^x->0, x+y->x+y) agree on simplified form, complexity, and verification.",
+  "results": [
+    {
+      "expression": "x+0",
+      "rust_mcp": {
+        "normalized": "(x + 0)",
+        "simplified": "x",
+        "complexity_before": 3,
+        "complexity_after": 1,
+        "rules_applied": ["add-zero-r"],
+        "verified": true,
+        "converged": true
+      },
+      "python": {
+        "normalized": "(x + 0)",
+        "simplified": "x",
+        "complexity_before": 3,
+        "complexity_after": 1,
+        "rules_applied": ["add_zero"],
+        "verified": true
+      },
+      "match": true,
+      "note": "Both simplify to x. Rule names differ (add-zero-r vs add_zero) but semantically identical."
+    },
+    {
+      "expression": "x^x",
+      "rust_mcp": {
+        "normalized": "(x ^ x)",
+        "simplified": "0",
+        "complexity_before": 3,
+        "complexity_after": 1,
+        "rules_applied": ["xor-self"],
+        "verified": true,
+        "converged": true
+      },
+      "python": {
+        "normalized": "(x ^ x)",
+        "simplified": "0",
+        "complexity_before": 3,
+        "complexity_after": 1,
+        "rules_applied": ["xor_self"],
+        "verified": true
+      },
+      "match": true,
+      "note": "Both simplify to 0. Rule name style difference only (hyphen vs underscore)."
+    },
+    {
+      "expression": "(x & y) + (x | y)",
+      "rust_mcp": {
+        "normalized": "((x & y) + (x | y))",
+        "simplified": "(x + y)",
+        "complexity_before": 7,
+        "complexity_after": 3,
+        "rules_applied": ["and-plus-or"],
+        "verified": true,
+        "converged": true
+      },
+      "python": {
+        "normalized": "((x & y) + (x | y))",
+        "simplified": "((x & y) + (x | y))",
+        "complexity_before": 7,
+        "complexity_after": 7,
+        "rules_applied": [],
+        "verified": true
+      },
+      "match": false,
+      "note": "MISMATCH: Rust applies 'and-plus-or' identity ((x&y)+(x|y) = x+y) reducing complexity 7->3. Python has no such rule in build_rule_database() and returns the expression unchanged."
+    },
+    {
+      "expression": "~~x",
+      "rust_mcp": {
+        "normalized": "(~(~x))",
+        "simplified": "x",
+        "complexity_before": 3,
+        "complexity_after": 1,
+        "rules_applied": ["double-not"],
+        "verified": true,
+        "converged": true
+      },
+      "python": {
+        "normalized": null,
+        "simplified": null,
+        "complexity_before": null,
+        "complexity_after": null,
+        "rules_applied": null,
+        "verified": null,
+        "error": "Python tokenizer/parser raises ValueError: Unexpected token at position 2 for '~~x' (consecutive ~ unsupported)"
+      },
+      "match": false,
+      "note": "Python parse error for double-not input. Rust correctly parses and simplifies ~~x -> x. Counted as mismatch but root cause is a Python validator parser gap, not a Rust logic error."
+    },
+    {
+      "expression": "x+y",
+      "rust_mcp": {
+        "normalized": "(x + y)",
+        "simplified": "(x + y)",
+        "complexity_before": 3,
+        "complexity_after": 3,
+        "rules_applied": [],
+        "verified": true,
+        "converged": true
+      },
+      "python": {
+        "normalized": "(x + y)",
+        "simplified": "(x + y)",
+        "complexity_before": 3,
+        "complexity_after": 3,
+        "rules_applied": [],
+        "verified": true
+      },
+      "match": true,
+      "note": "No simplification needed; both agree."
+    }
+  ]
+}

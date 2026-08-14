@@ -1,0 +1,94 @@
+{
+  "crate": "rustre-crypto-id",
+  "tests": [
+    {
+      "id": "T1_synthetic_aes_sbox_validator_only",
+      "validator_offsets": [
+        1000
+      ],
+      "expected_offset": 1000,
+      "pass": true
+    },
+    {
+      "id": "T2_real_pe_mcp_vs_validator",
+      "pe_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "validator_algorithms": [],
+      "validator_hits_per_algo": {},
+      "mcp_total_findings": 34331,
+      "mcp_algorithms_sample": [
+        "aes_rcon_1",
+        "aes_rcon_2",
+        "bignum_zero_padded",
+        "blake2s_iv0_le",
+        "blowfish_p0_le",
+        "hmac_ipad",
+        "hmac_opad",
+        "ripemd160_k0",
+        "rsa_e_65537_3b",
+        "rsa_e_65537_4b_le",
+        "sha256_h0",
+        "sha256_h0_to_h7_le",
+        "sha256_h1",
+        "sha256_h2",
+        "sha256_h3",
+        "sha256_h4",
+        "sha256_h5",
+        "sha256_h6",
+        "sha256_h7",
+        "sha256_k0",
+        "sha256_k1",
+        "sha256_k10",
+        "sha256_k11",
+        "sha256_k12",
+        "sha256_k13",
+        "sha256_k14",
+        "sha256_k15",
+        "sha256_k2",
+        "sha256_k3",
+        "sha256_k4",
+        "sha256_k5",
+        "sha256_k6",
+        "sha256_k7",
+        "sha256_k8",
+        "sha256_k9",
+        "tea_delta_le"
+      ],
+      "mcp_error": null,
+      "mcp_raw_shape_keys": [
+        "path",
+        "image_base",
+        "section_count",
+        "scanned_sections",
+        "min_confidence_applied",
+        "total",
+        "total_hits",
+        "high_confidence_count",
+        "returned",
+        "algos_present",
+        "by_algorithm",
+        "all_hits_sorted",
+        "hits",
+        "findings",
+        "auto_rename_targets"
+      ],
+      "validator_algos_missing_from_mcp": [],
+      "pass": true
+    },
+    {
+      "id": "T3_too_short_validator",
+      "validator_output": {
+        "error": "TooShort"
+      },
+      "pass": true
+    },
+    {
+      "id": "T4_combined_confidence_two_095",
+      "validator_output": 0.99,
+      "expected": 0.99,
+      "note": "clamped to 0.99 per spec (1 - 0.0025 = 0.9975 unclamped)",
+      "pass": true
+    }
+  ],
+  "mismatches_found": 0,
+  "tests_run": 4
+}

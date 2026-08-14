@@ -1,0 +1,303 @@
+[
+  {
+    "tool": "pe_rebuild_crc16_ccitt",
+    "passed": true,
+    "expected": 33234,
+    "actual": 33234,
+    "note": "CRC16-CCITT-FALSE of deadbeef00112233; response key is crc16_ccitt"
+  },
+  {
+    "tool": "pe_rebuild_compute_entropy",
+    "passed": true,
+    "expected": 3.0,
+    "actual": 3.0,
+    "note": "Shannon entropy of deadbeef00112233 (8 distinct bytes); response key is entropy"
+  },
+  {
+    "tool": "pe_rebuild_compute_entropy_wire",
+    "passed": true,
+    "expected": 3.0,
+    "actual": 3.0,
+    "note": "Same algo as pe_rebuild_compute_entropy via wire variant; response key is entropy"
+  },
+  {
+    "tool": "pe_rebuild_is_memory_pe",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "MZ-only blob (4d5a + 62 zero bytes) detected as memory PE (has MZ magic); response key is is_memory_pe"
+  },
+  {
+    "tool": "pe_rebuild_is_memory_pe_wire",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "Wire variant of pe_rebuild_is_memory_pe; same result"
+  },
+  {
+    "tool": "pe_editor_xor_section_bytes",
+    "passed": true,
+    "expected": "74161454",
+    "actual": "74161454",
+    "note": "XOR of deadbeef with repeating key aabb; response key is out_hex. DE^AA=74, AD^BB=16, BE^AA=14, EF^BB=54"
+  },
+  {
+    "tool": "pe_editor_rc4_process_bytes",
+    "passed": true,
+    "expected": "e3849036cf7d",
+    "actual": "e3849036cf7d",
+    "note": "RC4 encrypt 001122334455 with key deadbeef; response key is out_hex"
+  },
+  {
+    "tool": "pe_editor_certificate_header_new",
+    "passed": true,
+    "expected": 24,
+    "actual": 24,
+    "note": "CertificateHeader::new(16).dw_length == 16+8 == 24"
+  },
+  {
+    "tool": "pe_editor_certificate_header_dw_length",
+    "passed": true,
+    "expected": 24,
+    "actual": 24,
+    "note": "Dedicated dw_length tool returns same 24 for payload_len=16"
+  },
+  {
+    "tool": "pe_editor_certificate_header_to_bytes",
+    "passed": true,
+    "expected": "1800000000020200",
+    "actual": "1800000000020200",
+    "note": "Serialized as LE: dw_length=0x18(u32) + w_revision=0x0200(u16) + w_certificate_type=0x0002(u16)"
+  },
+  {
+    "tool": "pe_editor_certificate_header_bytes_len",
+    "passed": true,
+    "expected": 8,
+    "actual": 8,
+    "note": "CertificateHeader::to_bytes() always returns exactly 8 bytes; response key is len"
+  },
+  {
+    "tool": "pe_editor_rc4_keystream",
+    "passed": true,
+    "expected": "e395b205",
+    "actual": "e395b205",
+    "note": "First 4 keystream bytes of RC4 with key deadbeef (XOR of zeros)"
+  },
+  {
+    "tool": "pe_editor_rc4_next_byte_sequence",
+    "passed": true,
+    "expected": 559,
+    "actual": 559,
+    "note": "Sum of first 4 keystream bytes (0xe3+0x95+0xb2+0x05=559); response key is byte_sum"
+  },
+  {
+    "tool": "pe_editor_parse_dos_header",
+    "passed": true,
+    "expected": 23117,
+    "actual": 23117,
+    "note": "e_magic=0x5A4D=23117 from 64-byte DOS header with MZ magic; response key is e_magic"
+  },
+  {
+    "tool": "pe_editor_patchset_new_empty",
+    "passed": true,
+    "expected": {"is_empty": true, "len": 0},
+    "actual": {"is_empty": true, "len": 0},
+    "note": "PatchSet::new returns empty set"
+  },
+  {
+    "tool": "pe_editor_import_entry_named_is_named",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "ImportEntry::named(...).is_named() == true; response key is is_named"
+  },
+  {
+    "tool": "pe_editor_import_entry_ordinal_is_named",
+    "passed": true,
+    "expected": false,
+    "actual": false,
+    "note": "ImportEntry::ordinal(...).is_named() == false"
+  },
+  {
+    "tool": "pe_editor_import_entry_ordinal_display",
+    "passed": true,
+    "expected": "kernel32.dll!#17",
+    "actual": "kernel32.dll!#17",
+    "note": "Display format for ordinal import entry"
+  },
+  {
+    "tool": "pe_editor_export_edit_add_display",
+    "passed": true,
+    "expected": "Add export: MyFunc ord=1 rva=0x1000",
+    "actual": "Add export: MyFunc ord=1 rva=0x1000",
+    "note": "ExportEdit::add Display; response key is display"
+  },
+  {
+    "tool": "pe_editor_export_edit_remove_display",
+    "passed": true,
+    "expected": "Remove export: MyFunc",
+    "actual": "Remove export: MyFunc",
+    "note": "ExportEdit::remove Display; response key is display"
+  },
+  {
+    "tool": "pe_editor_patchset_default_empty",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "PatchSet::default().is_empty() == true"
+  },
+  {
+    "tool": "pe_editor_import_editor_default_empty",
+    "passed": true,
+    "expected": 0,
+    "actual": 0,
+    "note": "ImportEditor::default().additions_len == 0; response key is additions_len"
+  },
+  {
+    "tool": "pe_editor_export_editor_new_dll",
+    "passed": true,
+    "expected": "test.dll",
+    "actual": "test.dll",
+    "note": "ExportEditor::new('test.dll').dll_name == 'test.dll'; response key is dll_name"
+  },
+  {
+    "tool": "pe_editor_resource_editor_default_totals",
+    "passed": true,
+    "expected": 0,
+    "actual": 0,
+    "note": "ResourceEditor::default().total_data_size == 0; response key is total_data_size"
+  },
+  {
+    "tool": "pe_editor_resource_entry_manifest_len",
+    "passed": true,
+    "expected": 4,
+    "actual": 4,
+    "note": "ResourceEntry::manifest(4 bytes).len() == 4; response key is len"
+  },
+  {
+    "tool": "pe_editor_section_edit_zero_flags",
+    "passed": true,
+    "expected": {"zero_out": true, "has_new_chars": false},
+    "actual": {"zero_out": true, "has_new_chars": false},
+    "note": "SectionEdit::zero sets zero_out=true, has_new_chars=false (no characteristics field in response)"
+  },
+  {
+    "tool": "pe_editor_section_chars_constants",
+    "passed": true,
+    "expected": 536870912,
+    "actual": 536870912,
+    "note": "MEM_EXECUTE constant = 0x20000000 = 536870912; response key is MEM_EXECUTE"
+  },
+  {
+    "tool": "pe_editor_patch_empty_check",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "Patch::simple with empty replacement has is_empty()==true; response key is is_empty"
+  },
+  {
+    "tool": "pe_editor_patchset_add_multi",
+    "passed": true,
+    "expected": {"len": 2, "total_bytes": 4},
+    "actual": {"len": 2, "total_bytes": 4},
+    "note": "PatchSet after adding 2-byte and 2-byte patches: len=2, total_bytes=4"
+  },
+  {
+    "tool": "pe_editor_x_patch_is_empty",
+    "passed": true,
+    "expected": false,
+    "actual": false,
+    "note": "Patch::simple with non-empty replacement has is_empty()==false"
+  },
+  {
+    "tool": "pe_editor_x_patchset_is_empty",
+    "passed": true,
+    "expected": true,
+    "actual": true,
+    "note": "PatchSet::new with no patches has is_empty()==true"
+  },
+  {
+    "tool": "pe_editor_x_patchset_total_bytes_after_add",
+    "passed": true,
+    "expected": 14,
+    "actual": 14,
+    "note": "3 fixed patches totaling 14 bytes; response key is total_bytes"
+  },
+  {
+    "tool": "pe_editor_x_resource_entry_is_empty",
+    "passed": true,
+    "expected": false,
+    "actual": false,
+    "note": "ResourceEntry with 4-byte data has is_empty()==false"
+  },
+  {
+    "tool": "pe_editor_x_resource_editor_total_data_size",
+    "passed": true,
+    "expected": 48,
+    "actual": 48,
+    "note": "ResourceEditor with manifest+2 entries: total_data_size=48; response key is total_data_size"
+  },
+  {
+    "tool": "pe_editor_x_import_entry_is_named_flag",
+    "passed": true,
+    "expected": {"named.is_named": true, "ordinal.is_named": false},
+    "actual": {"named.is_named": true, "ordinal.is_named": false},
+    "note": "Response has nested named/ordinal objects; named.is_named=true, ordinal.is_named=false"
+  },
+  {
+    "tool": "pe_editor_x_export_editor_pending_count",
+    "passed": true,
+    "expected": 3,
+    "actual": 3,
+    "note": "ExportEditor with 3 pending operations returns pending_count=3"
+  },
+  {
+    "tool": "pe_editor_x_export_editor_dll_name",
+    "passed": true,
+    "expected": "my.dll",
+    "actual": "my.dll",
+    "note": "ExportEditor::new('my.dll').dll_name == 'my.dll'"
+  },
+  {
+    "tool": "pe_editor_x_section_edit_zero_build",
+    "passed": true,
+    "expected": {"zero_out": true, "new_characteristics": null},
+    "actual": {"zero_out": true, "new_characteristics": null},
+    "note": "SectionEdit::zero has zero_out=true, new_characteristics=null"
+  },
+  {
+    "tool": "pe_editor_x_resource_types_constants",
+    "passed": true,
+    "expected": 24,
+    "actual": 24,
+    "note": "RT_MANIFEST = 24; response key is RT_MANIFEST"
+  },
+  {
+    "tool": "pe_editor_x_signing_scaffold_payload_len",
+    "passed": true,
+    "expected": 4,
+    "actual": 4,
+    "note": "PeSigningScaffold::new(4 bytes).payload_len == 4; response key is payload_len"
+  },
+  {
+    "tool": "pe_editor_x_header_field_all_display",
+    "passed": true,
+    "expected": 15,
+    "actual": 15,
+    "note": "HeaderField has 15 variants; response key is count, names is list of 15 field names"
+  },
+  {
+    "tool": "pe_editor_section_edit_set_chars_flags",
+    "passed": true,
+    "expected": 1610612768,
+    "actual": 1610612768,
+    "note": "SectionEdit::set_chars('.text', 0x60000020).new_characteristics == 0x60000020 == 1610612768; response key is new_characteristics"
+  },
+  {
+    "tool": "pe_editor_header_field_debug",
+    "passed": true,
+    "expected": "list of 15 valid HeaderField names",
+    "actual": "list of 15 valid HeaderField names",
+    "note": "'Checksum' is not a valid HeaderField (it is not in the optional header field set). Tool returns valid_fields list; response key is valid_fields"
+  }
+]

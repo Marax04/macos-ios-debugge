@@ -1,0 +1,237 @@
+{
+  "crate": "rustre-ttd-query",
+  "saved": true,
+  "functions": [
+    {
+      "name": "time_range",
+      "ok": true,
+      "result": {
+        "range": {
+          "start": 10,
+          "end": 20
+        },
+        "contains_10": true,
+        "contains_15": true,
+        "contains_20": true,
+        "contains_21": false
+      }
+    },
+    {
+      "name": "filter_matches",
+      "ok": true,
+      "result": {
+        "call_to_0x2000": [
+          1,
+          7
+        ],
+        "mem_w_0x4000": [
+          3
+        ],
+        "syscall_60": [
+          5
+        ],
+        "thread_2": [
+          10,
+          11,
+          12
+        ]
+      }
+    },
+    {
+      "name": "logic_matches",
+      "ok": true,
+      "result": [
+        2,
+        4
+      ]
+    },
+    {
+      "name": "pattern_matches",
+      "ok": true,
+      "result": {
+        "AnyCall": [
+          1,
+          4,
+          7
+        ],
+        "AnyMemRead": [
+          2,
+          10
+        ],
+        "SyscallNr_60": [
+          5
+        ],
+        "InPositionRange_2_5": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "AnyException": [
+          11
+        ]
+      }
+    },
+    {
+      "name": "index_build",
+      "ok": true,
+      "result": {
+        "calls_to_0x2000": [
+          1,
+          7
+        ],
+        "calls_from_0x2000": [
+          4,
+          7
+        ],
+        "syscalls_60": [
+          5
+        ],
+        "accesses_0x4000": [
+          2,
+          3
+        ],
+        "events_thread_1_count": 10,
+        "events_thread_2_count": 3,
+        "by_address_keys_sorted": [
+          16384,
+          20480
+        ]
+      }
+    },
+    {
+      "name": "aggregations",
+      "ok": true,
+      "result": {
+        "hist_by_kind": {
+          "ThreadCreate": 1,
+          "Call": 3,
+          "MemoryRead": 2,
+          "MemoryWrite": 1,
+          "Syscall": 1,
+          "Return": 3,
+          "Exception": 1,
+          "ThreadExit": 1
+        },
+        "hist_by_thread": {
+          "1": 10,
+          "2": 3
+        },
+        "hist_over_time_bucket5": [
+          [
+            0,
+            5
+          ],
+          [
+            5,
+            5
+          ],
+          [
+            10,
+            3
+          ]
+        ],
+        "most_accessed_top2": [
+          [
+            16384,
+            2
+          ],
+          [
+            20480,
+            1
+          ]
+        ],
+        "most_called_top2": [
+          [
+            8192,
+            2
+          ],
+          [
+            12288,
+            1
+          ]
+        ],
+        "call_frequency": [
+          [
+            8192,
+            2
+          ],
+          [
+            12288,
+            1
+          ]
+        ],
+        "syscalls_summary": {
+          "60": {
+            "count": 1,
+            "first": 5,
+            "last": 5
+          }
+        }
+      }
+    },
+    {
+      "name": "recursive_calls",
+      "ok": true,
+      "result": [
+        {
+          "address": 8192,
+          "depth": 1,
+          "position": 7
+        }
+      ]
+    },
+    {
+      "name": "code_coverage",
+      "ok": true,
+      "result": {
+        "total_ranges": 3,
+        "hit_ranges": 2,
+        "coverage_ratio": 0.6666666666666666
+      }
+    },
+    {
+      "name": "exports",
+      "ok": true,
+      "result": {
+        "csv_thread_2_lines": [
+          "position,kind,thread,addr,from,to,nr,code",
+          "10,MemoryRead,2,20480,,,,",
+          "11,Exception,2,,,,,3221225477",
+          "12,ThreadExit,2,,,,,"
+        ],
+        "dot": [
+          "digraph CallGraph {",
+          "  \"0x1000\" -> \"0x2000\" [label=\"1\"];",
+          "  \"0x2000\" -> \"0x2000\" [label=\"1\"];",
+          "  \"0x2000\" -> \"0x3000\" [label=\"1\"];",
+          "}"
+        ],
+        "json_in_range_0_3": {
+          "events": [
+            {
+              "position": 0,
+              "kind": "ThreadCreate",
+              "thread": 1
+            },
+            {
+              "position": 1,
+              "kind": "Call",
+              "thread": 1
+            },
+            {
+              "position": 2,
+              "kind": "MemoryRead",
+              "thread": 1
+            },
+            {
+              "position": 3,
+              "kind": "MemoryWrite",
+              "thread": 1
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "crate": "rustre-dotnet-metadata",
+  "sample": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\mscorlib.dll",
+  "tests": [
+    {
+      "name": "metadata_root_parse",
+      "validator": {
+        "managed": true,
+        "version": "v4.0.30319",
+        "streams": ["#~", "#Strings", "#US", "#GUID", "#Blob"],
+        "has_tables": true,
+        "has_strings": true,
+        "has_blob": true,
+        "has_guid": true,
+        "has_us": true
+      },
+      "mcp": {
+        "tool": "survey_binary",
+        "note": "survey_binary does NOT expose CLI/.NET metadata fields (no managed flag, no streams, no metadata version). file_kind reported as 'Pe64' with no managed indicator.",
+        "managed_reported": null
+      },
+      "match": false,
+      "reason": "MCP has no tool that surfaces rustre-dotnet-metadata parse results (streams, version, managed flag)."
+    },
+    {
+      "name": "cil_disassembly",
+      "validator": {
+        "note": "validator stringifies method signatures; CIL bytecode disasm not implemented in validator"
+      },
+      "mcp": {
+        "tool": "analysis_disasm_at_path_cil",
+        "address": "0x64478002000",
+        "first_instr": {"mnemonic": "ldind.i2", "bytes": "48", "length": 1},
+        "count_returned": 5,
+        "ok": true
+      },
+      "match": true,
+      "reason": "CIL disasm tool present and functional; one-sided (validator does not cover CIL bytes)."
+    },
+    {
+      "name": "method_signature_decode",
+      "validator": {"sig_demo": "cc=0x20 params=1", "input_blob": "20 01 02 01 08"},
+      "mcp": {"tool": null, "note": "no MCP tool exposes ECMA-335 signature blob decoding"},
+      "match": false,
+      "reason": "rustre-dotnet-metadata signature/type-system functionality not exposed via MCP."
+    }
+  ],
+  "mismatches": 2,
+  "fixed": 0,
+  "fix_note": "Mismatches are MCP integration gaps (crate functionality exists but is not wired into MCP tools), not parsing bugs in rustre-dotnet-metadata. Wiring new MCP tools (e.g., dotnet.metadata_info, dotnet.decode_signature) requires adding tool handlers in rustre-mcp-server and a recompile; deferred — flagged for separate task.",
+  "match_final": false,
+  "available_mcp_dotnet_tools": ["analysis_disasm_at_path_cil"],
+  "missing_mcp_coverage": [
+    "metadata streams / tables enumeration",
+    "metadata version / managed flag in survey_binary",
+    "method signature blob decoding",
+    "type system / generic resolver",
+    "attribute reader",
+    "assembly resolver"
+  ]
+}

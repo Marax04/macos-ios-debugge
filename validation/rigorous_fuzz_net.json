@@ -1,0 +1,21 @@
+{
+  "module": "fuzz_net",
+  "tools_hardened": 12,
+  "tool_names": [
+    "fuzz_net_add_checksum",
+    "fuzz_net_crash_classify",
+    "fuzz_net_crash_classify_reason",
+    "fuzz_net_decode_frame_u32_be_ext",
+    "fuzz_net_decode_frame_u32_le",
+    "fuzz_net_frame_u32_be",
+    "fuzz_net_frame_u32_le",
+    "fuzz_net_interesting_constants",
+    "fuzz_net_protocol_load_yaml",
+    "fuzz_net_response_matcher_find",
+    "fuzz_net_response_matcher_matches",
+    "fuzz_net_xor_checksum"
+  ],
+  "checks_passed": 61,
+  "checks_failed": 0,
+  "mismatches": []
+}

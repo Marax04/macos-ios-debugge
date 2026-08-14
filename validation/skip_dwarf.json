@@ -1,0 +1,46 @@
+[
+  {
+    "tool": "dwarf_functions_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_types_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_line_info_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_functions_count_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_types_count_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_gimli_functions_path",
+    "reason": "binary-dependent: got non-empty response, cannot independently verify DWARF parse without reference binary"
+  },
+  {
+    "tool": "dwarf_gimli_types_path",
+    "reason": "binary-dependent: got non-empty response, cannot independently verify DWARF parse without reference binary"
+  },
+  {
+    "tool": "dwarf_gimli_line_info_path",
+    "reason": "binary-dependent: got non-empty response, cannot independently verify DWARF parse without reference binary"
+  },
+  {
+    "tool": "dwarf_variables_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: internal error: dwarf open failed: Not a supported binary format (ELF/Mach-O)"
+  },
+  {
+    "tool": "dwarf_symbol_set_summary_path",
+    "reason": "binary-dependent: got non-empty response, cannot independently verify DWARF parse without reference binary"
+  },
+  {
+    "tool": "dwarf_unwinder_at_path",
+    "reason": "tool returned error (likely no DWARF in PE target): execution failed: execution failed: invalid params: missing 'pc'"
+  }
+]

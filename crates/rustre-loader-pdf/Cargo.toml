@@ -1,0 +1,25 @@
+[package]
+license.workspace = true
+name = "rustre-loader-pdf"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-core = { path = "../rustre-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+flate2 = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

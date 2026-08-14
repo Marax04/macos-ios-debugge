@@ -1,0 +1,30 @@
+{
+  "crate": "rustre-debug-gdb",
+  "summary": "Validator covers GDB Remote Serial Protocol primitives (checksum, escape, mem/bp commands, stop-reply parsing, signal names). MCP server exposes only high-level debug.* abstractions (debug.set_breakpoint, etc.) - no RSP-level tools to call. Comparison is therefore validator-only; the matching Rust implementation lives in crates/rustre-debug-gdb/src/gdb_packet_protocol.rs and gdb_rsp_extensions.rs.",
+  "mcp_tools_relevant": [],
+  "mcp_calls": [],
+  "validator": {
+    "tests": 14,
+    "all_ok": true,
+    "functions": [
+      {"name": "checksum_vCont_c", "expected": "0xa8", "got": "0xa8", "ok": true},
+      {"name": "checksum_g", "expected": "0x67", "got": "0x67", "ok": true},
+      {"name": "encode_g", "expected": "$g#67", "got": "$g#67", "ok": true},
+      {"name": "escape_roundtrip", "expected": "1023247d2aff", "got": "1023247d2aff", "ok": true},
+      {"name": "escape_hash", "expected": "7d03", "got": "7d03", "ok": true},
+      {"name": "mem_read_cmd", "expected": "m1000,4", "got": "m1000,4", "ok": true},
+      {"name": "mem_write_cmd", "expected": "M1000,4:deadbeef", "got": "M1000,4:deadbeef", "ok": true},
+      {"name": "set_sw_bp_cmd", "expected": "Z0,401000,1", "got": "Z0,401000,1", "ok": true},
+      {"name": "set_watchpoint_write_cmd", "expected": "Z2,402000,4", "got": "Z2,402000,4", "ok": true},
+      {"name": "parse_stop_T05_breakpoint", "expected": "breakpoint pc=0x400500", "got": "breakpoint pc=0x400500", "ok": true},
+      {"name": "parse_stop_S05_signal", "expected": "signal 5", "got": "signal 5", "ok": true},
+      {"name": "parse_stop_W00_exit", "expected": "exit 0", "got": "exit 0", "ok": true},
+      {"name": "signal_name_5", "expected": "SIGTRAP", "got": "SIGTRAP", "ok": true},
+      {"name": "signal_name_11", "expected": "SIGSEGV", "got": "SIGSEGV", "ok": true}
+    ]
+  },
+  "tests": 14,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

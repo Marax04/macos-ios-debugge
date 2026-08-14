@@ -1,0 +1,74 @@
+{
+  "crate": "rustre-yara",
+  "tests_run": 9,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "tests": [
+    {
+      "name": "text_present",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    },
+    {
+      "name": "text_absent",
+      "expect": false,
+      "mcp_matched": false,
+      "validator_matched": false,
+      "agree": true
+    },
+    {
+      "name": "text_nocase",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    },
+    {
+      "name": "hex_present",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    },
+    {
+      "name": "hex_absent",
+      "expect": false,
+      "mcp_matched": false,
+      "validator_matched": false,
+      "agree": true
+    },
+    {
+      "name": "hex_wildcard",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    },
+    {
+      "name": "and_condition",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    },
+    {
+      "name": "and_fail",
+      "expect": false,
+      "mcp_matched": false,
+      "validator_matched": false,
+      "agree": true
+    },
+    {
+      "name": "any_of_them",
+      "expect": true,
+      "mcp_matched": true,
+      "validator_matched": true,
+      "agree": true
+    }
+  ],
+  "note": "MCP yara.scan_file (with rules_source) dispatches to rustre_yara_engine::YaraRuleSet. Compared end-to-end matched-flag against Python validator's match_text/match_hex/eval_condition over 9 cases (literal text, nocase, hex literal, hex wildcard, AND condition, any-of-them)."
+}

@@ -1,0 +1,22 @@
+[package]
+license.workspace = true
+name = "rustre-symb-engine"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-symb = { path = "../rustre-symb" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+petgraph = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

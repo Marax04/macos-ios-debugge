@@ -1,0 +1,1185 @@
+[
+  {
+    "tool": "project.open",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"project_id\": \"proj-0001\",\n  \"binary_id\": \"bin-0001\",\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"status\": \"loaded\"\n}"
+  },
+  {
+    "tool": "project.close",
+    "status": "OK",
+    "input_args": {
+      "project_id": ""
+    },
+    "output_excerpt": "{\n  \"project_id\": \"\",\n  \"binary_id\": \"bin-\",\n  \"closed\": false\n}"
+  },
+  {
+    "tool": "project.list_binaries",
+    "status": "OK",
+    "input_args": {
+      "project_id": ""
+    },
+    "output_excerpt": "{\n  \"count\": 1,\n  \"binaries\": [\n    {\n      \"binary_id\": \"bin-0001\",\n      \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n      \"format\": \"PE64\",\n      \"arch\": \"x86_64\",\n      \"size\": 1244160\n    }\n  ]\n}"
+  },
+  {
+    "tool": "project.info",
+    "status": "OK",
+    "input_args": {
+      "project_id": ""
+    },
+    "output_excerpt": "{\n  \"binary_count\": 1,\n  \"binaries\": [\n    {\n      \"binary_id\": \"bin-0001\",\n      \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n      \"format\": \"PE64\",\n      \"arch\": \"x86_64\",\n      \"size\": 1244160\n    }\n  ],\n  \"mcp_version\": \"2024-11-05\",\n  \"server\": \"rustre\",\n  \"f"
+  },
+  {
+    "tool": "binary.info",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "binary.hexdump",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "binary.read",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "binary.search_bytes",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "pattern": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "binary.search_strings",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "binary.entropy",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.full",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.function",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.basic_block",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.cross_refs",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.call_graph",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.strings",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.imports",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analyze.exports",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "disasm.at",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "count": 5
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "disasm.function",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "decompile.function",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "decompile.rename_variable",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "func_addr": "",
+      "old_name": "",
+      "new_name": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "decompile.set_type",
+    "status": "OK",
+    "input_args": {
+      "binary_id": "",
+      "func_addr": "",
+      "var_name": "",
+      "type_str": ""
+    },
+    "output_excerpt": "{\n  \"binary_id\": \"\",\n  \"addr\": \"0x0\",\n  \"set\": false,\n  \"note\": \"provide type_str and var_name\"\n}"
+  },
+  {
+    "tool": "debug.launch",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.attach",
+    "status": "OK",
+    "input_args": {
+      "pid": 0
+    },
+    "output_excerpt": "{\n  \"session_id\": \"dbg-0001\",\n  \"pid\": 0,\n  \"binary_path\": \"\",\n  \"status\": \"attached\"\n}"
+  },
+  {
+    "tool": "debug.continue",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "session_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.step_into",
+    "status": "OK",
+    "input_args": {
+      "session_id": ""
+    },
+    "output_excerpt": "{\n  \"session_id\": \"\",\n  \"step_type\": \"debug.step_into\",\n  \"status\": \"stepped\",\n  \"note\": \"static analysis mode\"\n}"
+  },
+  {
+    "tool": "debug.step_over",
+    "status": "OK",
+    "input_args": {
+      "session_id": ""
+    },
+    "output_excerpt": "{\n  \"session_id\": \"\",\n  \"step_type\": \"debug.step_over\",\n  \"status\": \"stepped\",\n  \"note\": \"static analysis mode\"\n}"
+  },
+  {
+    "tool": "debug.set_breakpoint",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "session_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.remove_breakpoint",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "session_id": "",
+      "bp_id": 0
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.read_registers",
+    "status": "OK",
+    "input_args": {
+      "session_id": ""
+    },
+    "output_excerpt": "{\n  \"registers\": {\n    \"rip\": \"0x0000000140001000\",\n    \"rsp\": \"0x00007fff0000f8d0\",\n    \"rbp\": \"0x0000000000000000\",\n    \"rax\": \"0x0000000000000000\",\n    \"rbx\": \"0x0000000000000000\",\n    \"rcx\": \"0x0000000000000000\",\n    \"rdx\": \"0x0000000000000000\",\n    \"rsi\": \"0x0000000000000000\",\n    \"rdi\": \"0x000"
+  },
+  {
+    "tool": "debug.read_memory",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "session_id": "",
+      "addr": 5368771180,
+      "len": 0
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.write_memory",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "session_id": "",
+      "addr": 5368771180,
+      "data_base64": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "debug.backtrace",
+    "status": "OK",
+    "input_args": {
+      "session_id": ""
+    },
+    "output_excerpt": "{\n  \"session_id\": \"\",\n  \"frames\": [\n    {\n      \"frame\": 0,\n      \"addr\": \"0x0\",\n      \"name\": \"?\"\n    }\n  ]\n}"
+  },
+  {
+    "tool": "debug.evaluate",
+    "status": "OK",
+    "input_args": {
+      "session_id": "",
+      "expression": "(x & y) + (x | y)"
+    },
+    "output_excerpt": "{\n  \"expression\": \"(x & y) + (x | y)\",\n  \"result\": \"<(x & y) + (x | y)>\",\n  \"type\": \"integer\"\n}"
+  },
+  {
+    "tool": "yara.scan_file",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"binary_id\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"matched\": true,\n  \"matches\": [\n    {\n      \"rule\": \"findcrypt_RC4_KSA\",\n      \"namespace\": \"default\",\n      \"tags\": [],\n      "
+  },
+  {
+    "tool": "yara.compile",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "source": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "yara.scan_memory",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "image_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "forensics.open_dump",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"image_id\": \"img-0002\",\n  \"binary_id\": \"bin-0002\",\n  \"status\": \"loaded\",\n  \"note\": \"Use forensics.run_plugin with this image_id\"\n}"
+  },
+  {
+    "tool": "forensics.run_plugin",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "image_id": "",
+      "plugin": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "forensics.list_plugins",
+    "status": "OK",
+    "input_args": {},
+    "output_excerpt": "{\n  \"count\": 12,\n  \"plugins\": [\n    {\n      \"name\": \"pslist\",\n      \"description\": \"List processes via EPROCESS linked list\"\n    },\n    {\n      \"name\": \"psscan\",\n      \"description\": \"Scan for EPROCESS structures\"\n    },\n    {\n      \"name\": \"pstree\",\n      \"description\": \"Display process tree\"\n    }"
+  },
+  {
+    "tool": "kg.query",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "sql": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "kg.annotate",
+    "status": "OK",
+    "input_args": {
+      "entity_type": "",
+      "entity_id": "",
+      "key": "",
+      "value": ""
+    },
+    "output_excerpt": "{\n  \"binary_id\": \"\",\n  \"entity_type\": \"\",\n  \"entity_id\": \"\",\n  \"key\": \"\",\n  \"value\": \"\",\n  \"annotated\": true\n}"
+  },
+  {
+    "tool": "kg.search",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "text": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "kg.set_function_name",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "name": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "kg.set_comment",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180,
+      "text": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "kg.get_function",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": "",
+      "addr": 5368771180
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "kg.list_functions",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "diff.compare",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "a_id": "",
+      "b_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "crypto.identify",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "triage.analyze",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_id": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "patch_pe_security_summary",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"aslr\": false,\n  \"dep\": false,\n  \"cfg\": false,\n  \"force_integrity\": false,\n  \"no_seh\": false,\n  \"no_isolation\": false,\n  \"no_bind\": false,\n  \"terminal_server_aware\": true,\n  \"is_64bit\": true,\n  \"dll_characteristics"
+  },
+  {
+    "tool": "patch_patch_find_code_caves",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"min_size\": 16,\n  \"count\": 13,\n  \"caves\": [\n    {\n      \"section\": \".text\",\n      \"file_offset\": 125200,\n      \"virtual_address\": 128272,\n      \"size\": 16,\n      \"fill_byte\": 204\n    },\n    {\n      \"section\": \".tex"
+  },
+  {
+    "tool": "loader_core_md5",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": "{\n  \"md5\": \"b4209e09634b503cd65320b99a247980\",\n  \"bytes\": 8,\n  \"source\": \"rustre_loader::md5\"\n}"
+  },
+  {
+    "tool": "infer_types_path",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "type_propagate_path",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "struct_field_at_path",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addr": 5368771180,
+      "offset": 0
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"addr\": 5368771180,\n  \"function\": \"sub_14000F26C\",\n  \"offset\": 0,\n  \"total_size\": 0,\n  \"field_count\": 0,\n  \"field\": null,\n  \"found\": false,\n  \"source\": \"rustre_decompiler_type::struct_recovery::RecoveredStru"
+  },
+  {
+    "tool": "type_infer",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addresses": []
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "type_query",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"count\": 1,\n  \"types\": [\n    {\n      \"name\": \"main\",\n      \"kind\": \"auto\",\n      \"size\": 32,\n      \"decl\": \"\",\n      \"source\": \"declare_type\"\n    }\n  ]\n}"
+  },
+  {
+    "tool": "type_inspect",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "name": ""
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"name\": \"\",\n  \"found\": false\n}"
+  },
+  {
+    "tool": "type_apply_batch",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "assignments": []
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"applied\": 0,\n  \"total\": 0,\n  \"results\": []\n}"
+  },
+  {
+    "tool": "declare_type",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "name": "",
+      "decl": ""
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"name\": \"\",\n  \"kind\": \"typedef\",\n  \"size\": 0,\n  \"stored_in\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.rustre-types.json\",\n  \"total_declared\": 2\n}"
+  },
+  {
+    "tool": "analysis_xref_call_graph",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": "{\n  \"node_count\": 0,\n  \"edge_count\": 0,\n  \"nodes\": [],\n  \"edges\": [],\n  \"total_xrefs\": 0,\n  \"truncated\": false,\n  \"thunk_entries\": 0,\n  \"indirect_resolved\": 0,\n  \"root\": null,\n  \"max_depth\": 4,\n  \"max_nodes\": 256,\n  \"max_edges\": 1024,\n  \"max_edges_per_func\": 32\n}"
+  },
+  {
+    "tool": "analysis_xref_callees",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"addr\": 5368771180,\n  \"raw_count\": 0,\n  \"unique_count\": 0,\n  \"callees\": [],\n  \"thunks_folded\": 0\n}"
+  },
+  {
+    "tool": "trace_data_flow",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"root\": 5368771180,\n  \"direction\": \"forward\",\n  \"max_depth\": 6,\n  \"max_nodes\": 512,\n  \"include_data\": true,\n  \"node_count\": 1,\n  \"edge_count\": 0,\n  \"nodes\": [\n    {\n      \"addr\": 5368771180,\n      \"depth\": 0\n    }\n  ],\n  \"edges\": [],\n  \"truncated\": false\n}"
+  },
+  {
+    "tool": "analysis_xref_get_xrefs_to",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"addr\": 5368771180,\n  \"count\": 0,\n  \"xrefs\": [],\n  \"callers\": []\n}"
+  },
+  {
+    "tool": "analysis_xref_get_xrefs_from",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"addr\": 5368771180,\n  \"count\": 0,\n  \"xrefs\": [],\n  \"callees\": []\n}"
+  },
+  {
+    "tool": "analysis_xref_to_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"address\": 5368771180,\n  \"count\": 0,\n  \"xrefs_to\": []\n}"
+  },
+  {
+    "tool": "analysis_xref_from_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"address\": 5368771180,\n  \"count\": 0,\n  \"xrefs_from\": []\n}"
+  },
+  {
+    "tool": "analysis_xref_call_graph_root_functions",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "function_entries": []
+    },
+    "output_excerpt": "{\n  \"roots\": [],\n  \"count\": 0,\n  \"function_entries_count\": 0\n}"
+  },
+  {
+    "tool": "analysis_xref_string_ref_counts",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233",
+      "string_addrs": []
+    },
+    "output_excerpt": "{\n  \"counts\": {},\n  \"total_refs\": 0,\n  \"string_count\": 0\n}"
+  },
+  {
+    "tool": "analysis_fn_detect_extra",
+    "status": "OK",
+    "input_args": {
+      "pdata": [],
+      "text": [],
+      "text_base": 0,
+      "image_base": 0
+    },
+    "output_excerpt": "{\n  \"extras\": [],\n  \"stats\": {\n    \"gaps_scanned\": 0,\n    \"prologue_matches\": 0,\n    \"candidates_validated\": 0,\n    \"pdata_count\": 0\n  }\n}"
+  },
+  {
+    "tool": "decompiler_core_batch_decompile",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "out_dir": ""
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"out_dir\": \"\",\n  \"decompiled\": 2315,\n  \"failed\": 4,\n  \"elapsed_ms\": 2139,\n  \"success_rate\": 0.9982751185855973\n}"
+  },
+  {
+    "tool": "flirt_apply_auto",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"min_confidence\": 50,\n  \"renames\": [\n    {\n      \"address\": 5368872798,\n      \"address_hex\": \"0x140027f5e\",\n      \"name\": \"__security_init_cookie\",\n      \"lib\": \"msvcrt\",\n      \"confidence\": 57,\n      \"patte"
+  },
+  {
+    "tool": "function_list_by_kind",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"kind\": \"all\",\n  \"lib_name\": null,\n  \"total\": 1,\n  \"library\": 1,\n  \"user\": 0,\n  \"by_lib\": {\n    \"msvcrt\": 1\n  },\n  \"functions\": [\n    {\n      \"address\": 5368872798,\n      \"address_hex\": \"0x140027f5e\",\n      "
+  },
+  {
+    "tool": "noreturn_infer",
+    "status": "OK",
+    "input_args": {
+      "functions": []
+    },
+    "output_excerpt": "{\n  \"noreturn_count\": 0,\n  \"noreturn_addresses\": [],\n  \"propagation_threshold\": 0.800000011920929\n}"
+  },
+  {
+    "tool": "decompiler_recover_structs",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"addr\": 5368771180,\n  \"name\": \"sub_14000F26C\",\n  \"variables\": [],\n  \"variable_count\": 0,\n  \"structs\": [\n    {\n      \"name\": \"struct_00000001\",\n      \"fields\": [\n        {\n          \"offset\": 0,\n          \"si"
+  },
+  {
+    "tool": "analysis_recover_structs_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"functions_scanned\": 2000,\n  \"struct_count\": 249,\n  \"structs\": [\n    {\n      \"name\": \"struct_00000001\",\n      \"fields\": [\n        {\n          \"offset\": 8,\n          \"size\": 8,\n          \"type\": \"*?\",\n          \"nam"
+  },
+  {
+    "tool": "decompiler_stack_frame_report",
+    "status": "OK",
+    "input_args": {
+      "function_addr": 0,
+      "instructions": []
+    },
+    "output_excerpt": "{\n  \"status\": \"ok\",\n  \"data\": {\n    \"function_addr\": \"0x0\",\n    \"frame_size\": 0,\n    \"saved_regs\": [],\n    \"prologue\": null,\n    \"epilogue\": null,\n    \"locals\": [],\n    \"struct_candidates\": []\n  }\n}"
+  },
+  {
+    "tool": "survey_binary",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"size\": 1244160,\n  \"file_size\": 1244160,\n  \"sha256\": \"a29ae7c817bb62b880cdd625eb6eaeea8ced86db23487503763ad282c58425aa\",\n  \"md5\": \"4d4b316a9c5eeb8308d6b3e215ffcf81\",\n  \"image_base\": 5368709120,\n  \"file_kind\": \"Pe64"
+  },
+  {
+    "tool": "patch_bytes",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "bytes": "deadbeef00112233"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"va\": 5368771180,\n  \"file_offset\": 58988,\n  \"section\": \".text\",\n  \"bytes_written\": 8,\n  \"original_hex\": \"4e 3d 2e 7f 90 81 b2 a3\",\n  \"new_hex\": \"de ad be ef 00 11 22 33\",\n  \"dry_run\": false,\n  \"backup_path\": \"C:\\\\U"
+  },
+  {
+    "tool": "patch_nop_range",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "length": 0
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"va\": 5368771180,\n  \"length\": 0,\n  \"file_offset\": 58988,\n  \"section\": \".text\",\n  \"bytes_written\": 0,\n  \"dry_run\": false,\n  \"backup_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe.rustre"
+  },
+  {
+    "tool": "patch_xor_region",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "length": 0,
+      "key": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "patch_asm",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "va": 5368771180,
+      "asm": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "patch_pe_set_security",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"old_dll_characteristics\": \"0x8020\",\n  \"new_dll_characteristics\": \"0x8020\",\n  \"old_checksum\": 1279159,\n  \"new_checksum\": 1279159,\n  \"dry_run\": false,\n  \"backup_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\rele"
+  },
+  {
+    "tool": "triage_entropy_packing_indicators",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"is_likely_packed\": false,\n  \"indicator_count\": 0,\n  \"indicators\": [],\n  \"imports_count\": 106\n}"
+  },
+  {
+    "tool": "analysis_fn_detect_functions_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"x86_64\",\n  \"bits\": 64,\n  \"format\": \"PE\",\n  \"image_base\": 5368709120,\n  \"function_count\": 1607,\n  \"raw_detection_count\": 3560,\n  \"pdb_names_applied\": 360,\n  \"pdb_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\ta"
+  },
+  {
+    "tool": "analysis_callgraph_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"x86_64\",\n  \"bits\": 64,\n  \"function_count\": 1356,\n  \"root_address\": null,\n  \"max_depth\": 3,\n  \"pdb_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo_zyphora.pdb\",\n  \"node_count\": 1384,\n  \"edg"
+  },
+  {
+    "tool": "analysis_callees_path",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analysis_string_scan_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"image_base\": 5368709120,\n  \"total\": 16731,\n  \"returned\": 10000,\n  \"strings\": [\n    {\n      \"va\": 5368713244,\n      \"length\": 24,\n      \"encoding\": \"Utf16Le\",\n      \"value\": \"\u5373\u8d48\u1842\u8b48\u4638\ub60f\u1f14\u8341\u2efa\u840f\u00a2\"\n    },\n    {\n      \"va\": 5"
+  },
+  {
+    "tool": "analysis_crypto_scan_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"image_base\": 5368709120,\n  \"section_count\": 5,\n  \"scanned_sections\": 5,\n  \"min_confidence_applied\": 88,\n  \"total\": 67,\n  \"total_hits\": 67,\n  \"high_confidence_count\": 1,\n  \"returned\": 67,\n  \"algos_present\": [\n    \""
+  },
+  {
+    "tool": "analysis_disasm_at_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "count": 5,
+      "bits": 64,
+      "addr": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"address\": \"0x14000f26c\",\n  \"arch\": \"x86_64\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"address\": 5368771180,\n      \"bytes\": \"DEADBEEF0011\",\n      \"bytes_hex\": \"DEADB"
+  },
+  {
+    "tool": "analysis_disasm_at_path_arm64",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"arm64\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"error\": \"plugin error (arm64): ARM64 decode error: InvalidOpcode\"\n    },\n    {\n"
+  },
+  {
+    "tool": "analysis_disasm_at_path_mips",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"mips\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"address\": 5368771180,\n      \"bytes\": \"DEADBEEF\",\n      \"mnemonic\": \"unknown\",\n  "
+  },
+  {
+    "tool": "analysis_disasm_at_path_riscv",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"riscv\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"address\": 5368771180,\n      \"bytes\": \"DEADBEEF\",\n      \"mnemonic\": \"unknown\",\n "
+  },
+  {
+    "tool": "analysis_disasm_at_path_wasm",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"wasm\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"error\": \"invalid file format: unknown Wasm opcode 0xde\"\n    },\n    {\n      \"addr"
+  },
+  {
+    "tool": "analysis_disasm_at_path_cil",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"cil\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"address\": 5368771180,\n      \"bytes\": \"DEAD\",\n      \"mnemonic\": \"leave.s\",\n      \""
+  },
+  {
+    "tool": "analysis_disasm_at_path_jvm",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "addr": 5368771180,
+      "count": 5,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"arch\": \"jvm\",\n  \"address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"count\": 5,\n  \"instructions\": [\n    {\n      \"addr\": \"0x14000f26c\",\n      \"error\": \"plugin error (jvm): reserved or implementation-defined opcode: 0xde\"\n   "
+  },
+  {
+    "tool": "analysis_basic_blocks_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "bits": 64
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"function_address\": \"0x14000f26c\",\n  \"bits\": 64,\n  \"block_count\": 14,\n  \"instruction_count\": 77,\n  \"blocks\": [\n    {\n      \"start_va\": \"0x14000f26c\",\n      \"start_va_int\": 5368771180,\n      \"end_va\": \"0x14000f290\","
+  },
+  {
+    "tool": "analysis_fn_cfg_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"entry_va\": \"0x14000f26c\",\n  \"entry_block_id\": 0,\n  \"exit_block_ids\": [\n    12\n  ],\n  \"block_count\": 13,\n  \"blocks\": [\n    {\n      \"block_id\": 0,\n      \"start_va\": \"0x14000f26c\",\n      \"end_va\": \"0x14000f290\",\n    "
+  },
+  {
+    "tool": "analysis_dominators_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"entry_va\": \"0x14000f26c\",\n  \"block_count\": 13,\n  \"rpo\": [\n    0,\n    1,\n    2,\n    3,\n    4,\n    6,\n    7,\n    8,\n    9,\n    10,\n    11,\n    5,\n    12\n  ],\n  \"idom\": [\n    {\n      \"block_id\": 1,\n      \"idom\": 0\n  "
+  },
+  {
+    "tool": "analysis_loops_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"entry_va\": \"0x14000f26c\",\n  \"block_count\": 13,\n  \"loop_count\": 0,\n  \"loops\": [],\n  \"sccs\": [\n    {\n      \"size\": 1,\n      \"blocks\": [\n        12\n      ]\n    },\n    {\n      \"size\": 1,\n      \"blocks\": [\n        8\n  "
+  },
+  {
+    "tool": "analysis_infer_types_path",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "deobf_mba_normalize",
+    "status": "OK",
+    "input_args": {
+      "expression": "(x & y) + (x | y)"
+    },
+    "output_excerpt": "{\n  \"normalized\": \"((x & y) + (x | y))\",\n  \"simplified\": \"(x + y)\",\n  \"complexity_before\": 7,\n  \"complexity_after\": 3,\n  \"rules_applied\": [\n    \"and-plus-or\"\n  ],\n  \"verified\": true,\n  \"converged\": true\n}"
+  },
+  {
+    "tool": "deobf_opaque_list_patterns",
+    "status": "OK",
+    "input_args": {},
+    "output_excerpt": "{\n  \"count\": 31,\n  \"patterns\": [\n    {\n      \"name\": \"eq_self\",\n      \"description\": \"x == x is always true\",\n      \"value\": \"AlwaysTrue\",\n      \"kind\": \"TrivialIdentity\"\n    },\n    {\n      \"name\": \"ne_self\",\n      \"description\": \"x != x is always false\",\n      \"value\": \"AlwaysFalse\",\n      \"kind\": "
+  },
+  {
+    "tool": "deobf_opaque_classify",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "expression": "(x & y) + (x | y)",
+      "bits": 64
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "deobf_opaque_simplify",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "expression": "(x & y) + (x | y)"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "symbols_demangle_auto",
+    "status": "OK",
+    "input_args": {
+      "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+    },
+    "output_excerpt": "{\n  \"mangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\",\n  \"demangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\"\n}"
+  },
+  {
+    "tool": "symbols_demangle_rust",
+    "status": "OK",
+    "input_args": {
+      "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+    },
+    "output_excerpt": "{\n  \"mangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\",\n  \"demangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\"\n}"
+  },
+  {
+    "tool": "symbols_demangle_msvc",
+    "status": "OK",
+    "input_args": {
+      "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+    },
+    "output_excerpt": "{\n  \"mangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\",\n  \"demangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\"\n}"
+  },
+  {
+    "tool": "symbols_demangle_itanium",
+    "status": "OK",
+    "input_args": {
+      "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+    },
+    "output_excerpt": "{\n  \"mangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\",\n  \"demangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\"\n}"
+  },
+  {
+    "tool": "symbols_demangle_swift",
+    "status": "OK",
+    "input_args": {
+      "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+    },
+    "output_excerpt": "{\n  \"mangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\",\n  \"demangled\": \"_RNvNtCs6CKzx_3foo3bar4baz\"\n}"
+  },
+  {
+    "tool": "symbols_pdb_load",
+    "status": "OK",
+    "input_args": {
+      "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"pdb_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo_zyphora.pdb\",\n  \"total_symbols\": 359,\n  \"returned\": 359,\n  \"truncated\": false,\n  \"library_marks_applied\": 307,\n  \"symbols\": [\n    {\n     "
+  },
+  {
+    "tool": "decompile_function_path",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180
+    },
+    "output_excerpt": "{\n  \"binary_path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"address\": 5368771180,\n  \"name\": \"sub_14000F26C\",\n  \"pseudo_code\": \"__int64 __fastcall sub_14000F26C(__int64 a1) {\\n    /* fisubrs 0x1100EFBE(%v7) */;\\n    dh = dh & *v2;\\n    /* cmp v1 , 0xFFFFFFFF81907F2E "
+  },
+  {
+    "tool": "crypto_xor_decode",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "length": 0
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "analysis_trace_data_flow_path",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "address": 5368771180,
+      "direction": ""
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "diff_compare",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path_a\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path_b\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"self_diff\": true,\n  \"function_count_a\": 2000,\n  \"function_count_b\": 2000,\n  \"identical\": 2000,\n  \"added\": 0,\n  \"removed\": 0,\n  "
+  },
+  {
+    "tool": "diff_bindiff",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path_a\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path_b\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"function_count_a\": 2000,\n  \"function_count_b\": 2000,\n  \"identical\": 2000,\n  \"added\": 0,\n  \"removed\": 0,\n  \"changed\": 0,\n  \"pair"
+  },
+  {
+    "tool": "diff_minhash",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path_a\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path_b\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"n\": 4,\n  \"min_similarity\": 0.3,\n  \"function_count_a\": 800,\n  \"function_count_b\": 800,\n  \"pairs\": [\n    {\n      \"name_a\": \"sub_1"
+  },
+  {
+    "tool": "fingerprint_compute",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"count\": 2319,\n  \"fingerprints\": [\n    {\n      \"name\": \"sub_140001000_0\",\n      \"addr\": \"0x140001000\",\n      \"size\": 113,\n      \"body_hash\": \"ce81571fcf6a35d2\",\n      \"prologue_hash\": \"98e3c7b5b3f1ee4c\",\n      \"cal"
+  },
+  {
+    "tool": "fingerprint_match",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path_a\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path_b\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"function_count_a\": 2319,\n  \"function_count_b\": 2319,\n  \"body_match_count\": 2328,\n  \"prologue_match_count\": 1533,\n  \"body_matche"
+  },
+  {
+    "tool": "diff_semantic",
+    "status": "OK",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+    },
+    "output_excerpt": "{\n  \"path_a\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"path_b\": \"C:\\\\Users\\\\Fra\\\\Desktop\\\\Zyphora\\\\target\\\\release\\\\cargo-zyphora.exe\",\n  \"pairs_examined\": 32,\n  \"overall_similarity\": 1.0,\n  \"pairs\": [\n    {\n      \"name_a\": \"sub_140001000_0\",\n      \"name_b\": \"sub_14"
+  },
+  {
+    "tool": "diff_bindiff_cfg_hash",
+    "status": "OK",
+    "input_args": {
+      "adjacency": []
+    },
+    "output_excerpt": "{\n  \"hash\": 0,\n  \"hash_hex\": \"0x0000000000000000\",\n  \"node_count\": 0,\n  \"edge_count\": 0,\n  \"source\": \"rustre_diff_bindiff::CfgHasher\"\n}"
+  },
+  {
+    "tool": "diff_bindiff_similarity",
+    "status": "TOOL_ERROR",
+    "input_args": {},
+    "output_excerpt": ""
+  },
+  {
+    "tool": "deobf_vmlift_detect_dispatchers",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": "{\n  \"base\": 0,\n  \"bytes\": 8,\n  \"dispatchers_found\": 0,\n  \"dispatchers\": []\n}"
+  },
+  {
+    "tool": "deobf_vmlift_lift_bytecode",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "deobf_vmlift_disasm_bytecode",
+    "status": "OK",
+    "input_args": {
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": "{\n  \"bytes\": 8,\n  \"isa_handler_count\": 9,\n  \"instruction_count\": 8,\n  \"instructions\": [\n    {\n      \"offset\": 0,\n      \"opcode\": 222,\n      \"mnemonic\": \"VUNK_DE\",\n      \"operands\": []\n    },\n    {\n      \"offset\": 1,\n      \"opcode\": 173,\n      \"mnemonic\": \"VUNK_AD\",\n      \"operands\": []\n    },\n    {\n"
+  },
+  {
+    "tool": "deobf_vmlift_pipeline",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "bytecode": []
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "macho_parse_header",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "macho_parse_fat",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "macho_load_commands",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "macho_extract_dylibs",
+    "status": "TOOL_ERROR",
+    "input_args": {
+      "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+      "bytes": "deadbeef00112233",
+      "hex": "deadbeef00112233"
+    },
+    "output_excerpt": ""
+  },
+  {
+    "tool": "macho_decode_exception",
+    "status": "OK",
+    "input_args": {
+      "number": 0
+    },
+    "output_excerpt": "{\n  \"number\": 0,\n  \"name\": \"EXC_UNKNOWN\",\n  \"posix_signal\": 0\n}"
+  }
+]

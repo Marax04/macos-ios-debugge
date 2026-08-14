@@ -1,0 +1,204 @@
+{
+  "tool": "noreturn_infer",
+  "total": 16,
+  "passed": 16,
+  "failed": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "test": "empty_input",
+      "desc": "Empty function list \u2192 noreturn_count=0",
+      "status": "PASS",
+      "expected_count": 0,
+      "actual_count": 0,
+      "expected_addresses": [],
+      "actual_addresses": []
+    },
+    {
+      "test": "single_abort_by_name",
+      "desc": "Function named 'abort' \u2192 marked noreturn via symbol pass",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        4096
+      ],
+      "actual_addresses": [
+        4096
+      ]
+    },
+    {
+      "test": "ud2_terminator",
+      "desc": "Body ends in UD2 \u2192 marked noreturn via body pass",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        8192
+      ],
+      "actual_addresses": [
+        8192
+      ]
+    },
+    {
+      "test": "hlt_terminator",
+      "desc": "Body contains HLT \u2192 marked noreturn via body pass",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        12288
+      ],
+      "actual_addresses": [
+        12288
+      ]
+    },
+    {
+      "test": "int3_cluster",
+      "desc": "Body has 4+ INT3 \u2192 marked noreturn via body pass",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        16384
+      ],
+      "actual_addresses": [
+        16384
+      ]
+    },
+    {
+      "test": "normal_function_not_noreturn",
+      "desc": "Normal function with RET \u2192 not noreturn",
+      "status": "PASS",
+      "expected_count": 0,
+      "actual_count": 0,
+      "expected_addresses": [],
+      "actual_addresses": []
+    },
+    {
+      "test": "exit_process_symbol",
+      "desc": "ExitProcess \u2192 known noreturn symbol",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        24576
+      ],
+      "actual_addresses": [
+        24576
+      ]
+    },
+    {
+      "test": "rust_panic_symbol",
+      "desc": "Rust panic helper \u2192 known noreturn symbol",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        28672
+      ],
+      "actual_addresses": [
+        28672
+      ]
+    },
+    {
+      "test": "multiple_mixed",
+      "desc": "Mixed: abort(noreturn), printf(not), ud2-body(noreturn), plain(not) \u2192 2 noreturn",
+      "status": "PASS",
+      "expected_count": 2,
+      "actual_count": 2,
+      "expected_addresses": [
+        4096,
+        12288
+      ],
+      "actual_addresses": [
+        4096,
+        12288
+      ]
+    },
+    {
+      "test": "arch_arm64_udf",
+      "desc": "ARM64 UDF#0 \u2192 noreturn via body pass",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        32768
+      ],
+      "actual_addresses": [
+        32768
+      ]
+    },
+    {
+      "test": "unnamed_function_not_noreturn",
+      "desc": "Unnamed function with RET \u2192 not noreturn",
+      "status": "PASS",
+      "expected_count": 0,
+      "actual_count": 0,
+      "expected_addresses": [],
+      "actual_addresses": []
+    },
+    {
+      "test": "rust_begin_unwind_symbol",
+      "desc": "rust_begin_unwind \u2192 known noreturn symbol",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        40960
+      ],
+      "actual_addresses": [
+        40960
+      ]
+    },
+    {
+      "test": "cxa_throw_symbol",
+      "desc": "__cxa_throw \u2192 known noreturn symbol",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        45056
+      ],
+      "actual_addresses": [
+        45056
+      ]
+    },
+    {
+      "test": "partial_name_contains_panic",
+      "desc": "Name containing 'panic_fmt' \u2192 noreturn via symbol pass (contains match)",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        49152
+      ],
+      "actual_addresses": [
+        49152
+      ]
+    },
+    {
+      "test": "arm64_brk0_wrong_bytes",
+      "desc": "ARM64 BRK with wrong encoding (0xD4400000 != 0xD43E0000) \u2192 NOT noreturn",
+      "status": "PASS",
+      "expected_count": 0,
+      "actual_count": 0,
+      "expected_addresses": [],
+      "actual_addresses": []
+    },
+    {
+      "test": "arm64_brk0_correct",
+      "desc": "ARM64 BRK#0 correct LE bytes [00 00 3E D4] \u2192 noreturn",
+      "status": "PASS",
+      "expected_count": 1,
+      "actual_count": 1,
+      "expected_addresses": [
+        57344
+      ],
+      "actual_addresses": [
+        57344
+      ]
+    }
+  ],
+  "notes": "Only symbol-pass and body-pass are testable via MCP wire schema. Propagation and tail-call passes require callees which are not in the schema."
+}

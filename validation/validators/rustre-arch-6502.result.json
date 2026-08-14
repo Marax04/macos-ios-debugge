@@ -1,0 +1,17 @@
+{
+  "crate": "rustre-arch-6502",
+  "checks_total": 31,
+  "checks_failed": [],
+  "functions": [
+    "opcode_table_lookup",
+    "addr_mode_extra_bytes",
+    "instruction_length",
+    "cycles",
+    "format_operand",
+    "branch_target",
+    "disassemble_one",
+    "disassemble_range",
+    "cpu_reset_pc",
+    "run_checks"
+  ]
+}

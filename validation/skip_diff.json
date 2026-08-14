@@ -1,0 +1,26 @@
+[
+  {
+    "tool": "diff_bindiff_similarity_score",
+    "reason": "Multi-component score (name/bytes/cfg/md_index) depends on internal normalization that requires the full FunctionInfo struct construction; nondeterministic w.r.t. name hash"
+  },
+  {
+    "tool": "diff_bindiff_cfg_hash",
+    "reason": "Delegates to wl_hash with 3 iterations; already verified via diff_bindiff_wl_hash"
+  },
+  {
+    "tool": "diff_bindiff_jaccard_bb_score",
+    "reason": "Jaccard over basic-block hash sets \u2014 requires building FunctionInfo with bb_hashes, which comes from internal hashing of BB bytes; not independently verifiable without the binary"
+  },
+  {
+    "tool": "diff_bindiff_cfg_similarity",
+    "reason": "Weighted CFG similarity combining WL hash distance + edge/block ratios; too many internal weight factors to replicate exactly without source constants"
+  },
+  {
+    "tool": "diff_semantic_signature_compute",
+    "reason": "Depends on x86/arm64 disassembly of real binary bytes \u2014 nondeterministic without binary"
+  },
+  {
+    "tool": "diff_exports",
+    "reason": "Pure set-diff over export entries \u2014 presence/shape test sufficient; no numeric ground truth needed"
+  }
+]

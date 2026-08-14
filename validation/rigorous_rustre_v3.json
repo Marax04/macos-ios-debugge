@@ -1,0 +1,1624 @@
+{
+  "tools_hardened": 85,
+  "tools_passed": 84,
+  "tools_failed": 1,
+  "tools_skipped": 0,
+  "passed": [
+    {
+      "tool": "rustre_analysis_string_scan_utf8",
+      "label": "hello_nul",
+      "input": {
+        "hex": "68656c6c6f00",
+        "base": 0
+      },
+      "expected": "count>=1",
+      "actual": {
+        "count": 1,
+        "source": "rustre_analysis_string::StringScanner::scan_utf8"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_scan_utf8",
+      "label": "empty",
+      "input": {
+        "hex": "",
+        "base": 0
+      },
+      "expected": "count=0",
+      "actual": {
+        "count": 0,
+        "source": "rustre_analysis_string::StringScanner::scan_utf8"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_scan_utf16_le",
+      "label": "hello_utf16le",
+      "input": {
+        "hex": "680065006c006c006f000000",
+        "base": 0
+      },
+      "expected": "count>=1",
+      "actual": {
+        "count": 1,
+        "source": "rustre_analysis_string::StringScanner::scan_utf16_le"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_scan_utf16_le",
+      "label": "empty",
+      "input": {
+        "hex": "",
+        "base": 0
+      },
+      "expected": "count=0",
+      "actual": {
+        "count": 0,
+        "source": "rustre_analysis_string::StringScanner::scan_utf16_le"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_scan_pascal",
+      "label": "hello_pascal",
+      "input": {
+        "hex": "0568656c6c6f",
+        "base": 0
+      },
+      "expected": "is dict",
+      "actual": {
+        "count": 1,
+        "source": "rustre_analysis_string::StringScanner::scan_pascal_strings"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_scan_pascal",
+      "label": "empty",
+      "input": {
+        "hex": "",
+        "base": 0
+      },
+      "expected": "count=0",
+      "actual": {
+        "count": 0,
+        "source": "rustre_analysis_string::StringScanner::scan_pascal_strings"
+      }
+    },
+    {
+      "tool": "rustre_analysis_string_stats",
+      "label": "hello_nul",
+      "input": {
+        "hex": "68656c6c6f00",
+        "base": 0
+      },
+      "expected": "has total field",
+      "actual": {
+        "total": 1,
+        "avg_length": 6.0,
+        "max_length": 6,
+        "interesting": 0,
+        "classified": 0,
+        "urls": 0,
+        "paths": 0,
+        "formats": 0,
+        "source": "rustre_analysis_string::StringDatabase::stats"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_strided",
+      "label": "[0,10,s=2]",
+      "input": {
+        "lo": 0,
+        "hi": 10,
+        "stride": 2
+      },
+      "expected": "has display",
+      "actual": {
+        "display": "[0x0, 0xa]/2",
+        "source": "rustre_analysis_vsa::ValueSet::strided"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_strided",
+      "label": "[5,5,s=0]",
+      "input": {
+        "lo": 5,
+        "hi": 5,
+        "stride": 0
+      },
+      "expected": "display has 5",
+      "actual": {
+        "display": "{0x5}",
+        "source": "rustre_analysis_vsa::ValueSet::strided"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_add",
+      "label": "[1,2]+[3,4]",
+      "input": {
+        "a": [
+          1,
+          2
+        ],
+        "b": [
+          3,
+          4
+        ]
+      },
+      "expected": "display = {0x4, 0x5, 0x6}",
+      "actual": {
+        "display": "{0x4, 0x5, 0x6}",
+        "source": "rustre_analysis_vsa::ValueSet::add"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_sub",
+      "label": "[10,20]-[3]",
+      "input": {
+        "a": [
+          10,
+          20
+        ],
+        "b": [
+          3
+        ]
+      },
+      "expected": "display has 0x7 (10-3=7)",
+      "actual": {
+        "display": "{0x7, 0x11}",
+        "source": "rustre_analysis_vsa::ValueSet::sub"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_bitwise_and",
+      "label": "0xFF&0x0F",
+      "input": {
+        "a": [
+          255
+        ],
+        "b": [
+          15
+        ]
+      },
+      "expected": "display has 0xf (255&15=15)",
+      "actual": {
+        "display": "{0xf}",
+        "source": "rustre_analysis_vsa::ValueSet::bitwise_and"
+      }
+    },
+    {
+      "tool": "rustre_vsa_valueset_bitwise_or",
+      "label": "0xF0|0x0F",
+      "input": {
+        "a": [
+          240
+        ],
+        "b": [
+          15
+        ]
+      },
+      "expected": "display has 0xff (240|15=255)",
+      "actual": {
+        "display": "{0xff}",
+        "source": "rustre_analysis_vsa::ValueSet::bitwise_or"
+      }
+    },
+    {
+      "tool": "rustre_vsa_strided_interval_widen",
+      "label": "widen_3_7",
+      "input": {
+        "a_lo": 3,
+        "a_hi": 3,
+        "a_stride": 0,
+        "b_lo": 7,
+        "b_hi": 7,
+        "b_stride": 0
+      },
+      "expected": "lo<=3 and hi>=7",
+      "actual": {
+        "display": "[0x3, 0xffffffffffffffff]/2",
+        "lo": 3,
+        "hi": 18446744073709551615,
+        "stride": 2,
+        "is_top": false,
+        "source": "rustre_analysis_vsa::StridedInterval::widen"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_new",
+      "label": "main@0x1000",
+      "input": {
+        "name": "main",
+        "address": 4096
+      },
+      "expected": {
+        "name": "main",
+        "address": 4096
+      },
+      "actual": {
+        "name": "main",
+        "address": 4096,
+        "display_name": "main",
+        "kind": "Function",
+        "source": "rustre_symbols::Symbol::new"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_contains",
+      "label": "contains_true",
+      "input": {
+        "address": 4096,
+        "size": 256,
+        "probe": 4176
+      },
+      "expected": true,
+      "actual": {
+        "contains": true,
+        "end_address": 4352,
+        "source": "rustre_symbols::Symbol::contains"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_contains",
+      "label": "contains_false",
+      "input": {
+        "address": 4096,
+        "size": 256,
+        "probe": 4608
+      },
+      "expected": false,
+      "actual": {
+        "contains": false,
+        "end_address": 4352,
+        "source": "rustre_symbols::Symbol::contains"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_table_add_remove",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict",
+      "actual": {
+        "before": 2,
+        "removed": true,
+        "after": 1,
+        "source": "rustre_symbols::InMemorySymbolProvider::remove_by_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_symbol_cache_ops",
+      "label": "smoke",
+      "input": {
+        "capacity": 10
+      },
+      "expected": "is dict",
+      "actual": {
+        "hit": true,
+        "miss": false,
+        "after_clear": false,
+        "source": "rustre_symbols::SymbolCache"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_store_find_ops",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict",
+      "actual": {
+        "prefix_count": 2,
+        "range_count": 2,
+        "source": "rustre_symbols::SymbolStore::find_by_prefix"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_store_export_csv",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict",
+      "actual": {
+        "lines": 2,
+        "len": 57,
+        "source": "rustre_symbols::SymbolStore::export_as_csv"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_cross_ref_index_ops",
+      "label": "smoke",
+      "input": {
+        "to": 4096
+      },
+      "expected": "is dict",
+      "actual": {
+        "refs_to": [
+          4096,
+          8192
+        ],
+        "refs_from": [
+          4096
+        ],
+        "ref_count_to": 2,
+        "source": "rustre_symbols::CrossReferenceIndex"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_synthetic_gen_all",
+      "label": "smoke",
+      "input": {
+        "addr": 4660
+      },
+      "expected": "is dict or list",
+      "actual": {
+        "function": "sub_1234",
+        "data": "byte_1234",
+        "label": "loc_1234",
+        "dword": "dword_1234",
+        "qword": "qword_1234",
+        "source": "rustre_symbols::SyntheticSymbolGen"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_exporter_all_formats",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict",
+      "actual": {
+        "json_len": 699,
+        "csv_len": 80,
+        "idc_len": 96,
+        "map_len": 76,
+        "source": "rustre_symbols::SymbolExporter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_unified_table_pdb_url_list",
+      "label": "smoke",
+      "input": {
+        "base": "https://msdl.microsoft.com/download/symbols"
+      },
+      "expected": "is dict or list",
+      "actual": {
+        "count": 0,
+        "is_empty": true,
+        "source": "rustre_symbols::UnifiedSymbolTable::pdb_url_list"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_default_options",
+      "label": "smoke",
+      "input": {},
+      "expected": "non-empty dict",
+      "actual": {
+        "target_level": "PseudoC",
+        "max_function_size": 10000,
+        "timeout_ms": 0,
+        "min_variable_confidence": 30,
+        "verbosity": 0,
+        "name_recovery": true,
+        "backend": "Internal",
+        "source": "rustre_decompiler::DecompOptions::default"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_callconv_lift_mnemonic",
+      "label": "smoke",
+      "input": {
+        "mnemonic": "call",
+        "operands": "rax"
+      },
+      "expected": "is dict",
+      "actual": {
+        "mnemonic": "call",
+        "operands": "rax",
+        "count": 1,
+        "instrs": [
+          {
+            "kind": "RegRead { reg: \"rax\" }"
+          }
+        ],
+        "source": "rustre_decompiler::callconv_bridge::lift_mnemonic"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_backends_registry",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict or list",
+      "actual": {
+        "count": 4,
+        "backends": [
+          {
+            "crate_name": "rustre-symbols-codeview",
+            "format": "CodeView",
+            "provider_type": "rustre_symbols_codeview::CodeViewProvider"
+          },
+          {
+            "crate_name": "rustre-symbols-dwarf",
+            "format": "DWARF",
+            "provider_type": "rustre_symbols_dwarf::DwarfSymbolProvider"
+          },
+          {
+            "crate_name": "rustre-symbols-pdb",
+            "format": "PDB",
+            "provider_type": "rustre_symbols_pdb::PdbReader"
+          },
+          {
+            "crate_name": "rustre-symbols-stabs",
+            "format": "STABS",
+            "provider_type": "rustre_symbols_stabs::StabsProvider"
+          }
+        ],
+        "source": "rustre_symbols::backends::registry"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_synthetic_names",
+      "label": "smoke",
+      "input": {
+        "addr": 4660
+      },
+      "expected": "is dict or list",
+      "actual": {
+        "function": "sub_1234",
+        "data": "byte_1234",
+        "label": "loc_1234",
+        "dword": "dword_1234",
+        "qword": "qword_1234",
+        "source": "rustre_symbols::SyntheticSymbolGen"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_function_boundary",
+      "label": "smoke",
+      "input": {
+        "start": 4096,
+        "end": 4352,
+        "probe": 4176,
+        "other_start": 8192,
+        "other_end": 8448
+      },
+      "expected": "is dict",
+      "actual": {
+        "size": 256,
+        "contains_probe": true,
+        "overlaps_other": false,
+        "source": "rustre_symbols::FunctionBoundary"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_cache_lru",
+      "label": "smoke",
+      "input": {
+        "capacity": 4,
+        "addrs": [
+          4096,
+          8192,
+          12288,
+          4096
+        ]
+      },
+      "expected": "is dict",
+      "actual": {
+        "capacity": 4,
+        "len": 3,
+        "inserted": 4,
+        "is_empty": false,
+        "source": "rustre_symbols::SymbolCache"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_exporter_all",
+      "label": "smoke",
+      "input": {
+        "symbols": [
+          {
+            "name": "main",
+            "address": 4096,
+            "size": 256
+          }
+        ]
+      },
+      "expected": "non-empty dict",
+      "actual": {
+        "json": "[\n  {\n    \"id\": 17,\n    \"name\": \"main\",\n    \"demangled_name\": null,\n    \"address\": 0,\n    \"size\": null,\n    \"kind\": \"Function\",\n    \"binding\": \"Global\",\n    \"visibility\": \"Default\",\n    \"section_index\": null,\n    \"file_offset\": null,\n    \"source\": \"Debug\",\n    \"source_file\": null,\n    \"source_line\": null,\n    \"ordinal\": null,\n    \"tags\": []\n  }\n]",
+        "csv": "address,name,demangled,kind,size\n0x0,main,,Function,?\n",
+        "idc": "#include <idc.idc>\nstatic main() {\n  MakeName(0x0, \"main\");\n}\n",
+        "map": "# Address         Name\n0x0000000000000000  main\n",
+        "count": 1,
+        "source": "rustre_symbols::SymbolExporter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_store_export_map",
+      "label": "smoke",
+      "input": {
+        "symbols": [
+          {
+            "name": "main",
+            "address": 4096
+          }
+        ]
+      },
+      "expected": "is dict",
+      "actual": {
+        "map": "# Symbol map\n0x0000000000000000  main\n",
+        "csv": "address,name,demangled,kind,size\n0x0,main,,Function,?\n",
+        "source": "rustre_symbols::SymbolStore"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_in_memory_provider",
+      "label": "smoke",
+      "input": {
+        "names": [
+          "main",
+          "init"
+        ],
+        "rename_from": "main",
+        "rename_to": "entry",
+        "remove": "init"
+      },
+      "expected": "is dict",
+      "actual": {
+        "renamed": true,
+        "removed": true,
+        "source": "rustre_symbols::InMemorySymbolProvider"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_conflict_resolver",
+      "label": "smoke",
+      "input": {
+        "symbols": [
+          {
+            "name": "foo",
+            "address": 4096
+          },
+          {
+            "name": "bar",
+            "address": 4096
+          }
+        ]
+      },
+      "expected": "is dict or list",
+      "actual": {
+        "input": 2,
+        "resolved": 1,
+        "source": "rustre_symbols::SymbolConflictResolver"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_debug_merger",
+      "label": "smoke",
+      "input": {
+        "batches": [
+          [
+            "main",
+            "init"
+          ],
+          [
+            "foo",
+            "bar"
+          ]
+        ]
+      },
+      "expected": "is dict",
+      "actual": {
+        "len": 4,
+        "is_empty": false,
+        "finished": 4,
+        "source": "rustre_symbols::DebugSymbolMerger"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_unified_table_ops",
+      "label": "smoke",
+      "input": {
+        "addrs": [
+          4096,
+          8192
+        ]
+      },
+      "expected": "is dict",
+      "actual": {
+        "len": 2,
+        "is_empty": false,
+        "ordered_addrs": [
+          4096,
+          8192
+        ],
+        "source": "rustre_symbols::UnifiedSymbolTable"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_type_prop_add",
+      "label": "smoke",
+      "input": {
+        "var": "x",
+        "ty": "int",
+        "rhs_const": false
+      },
+      "expected": "is dict",
+      "actual": {
+        "result": null,
+        "count": 1,
+        "source": "rustre_decompiler::TypePropagation::propagate_add"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_expr_recovery_kfc",
+      "label": "smoke",
+      "input": {
+        "functions": [
+          [
+            "call",
+            "mov",
+            "push"
+          ],
+          [
+            "mov",
+            "ret"
+          ]
+        ]
+      },
+      "expected": "is dict",
+      "actual": {
+        "known_function_count": 2,
+        "source": "rustre_decompiler::ExpressionRecovery"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_plugin_manager_count",
+      "label": "smoke",
+      "input": {},
+      "expected": "has count",
+      "actual": {
+        "count": 0,
+        "provided_passes": [],
+        "source": "rustre_decompiler::DecompilerPluginManager"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_pass_registry_new",
+      "label": "smoke",
+      "input": {},
+      "expected": "is dict",
+      "actual": {
+        "len": 0,
+        "is_empty": true,
+        "names": [],
+        "source": "rustre_decompiler::PassRegistry"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_source_priority_all",
+      "label": "smoke",
+      "input": {},
+      "expected": "non-empty",
+      "actual": {
+        "count": 12,
+        "items": [
+          {
+            "source": "Pdb",
+            "priority": 90
+          },
+          {
+            "source": "Dwarf",
+            "priority": 90
+          },
+          {
+            "source": "CodeView",
+            "priority": 90
+          },
+          {
+            "source": "Stabs",
+            "priority": 80
+          },
+          {
+            "source": "Flirt",
+            "priority": 70
+          },
+          {
+            "source": "Manual",
+            "priority": 100
+          },
+          {
+            "source": "Inferred",
+            "priority": 30
+          },
+          {
+            "source": "Import",
+            "priority": 60
+          },
+          {
+            "source": "Export",
+            "priority": 60
+          },
+          {
+            "source": "Elf",
+            "priority": 55
+          },
+          {
+            "source": "Pe",
+            "priority": 55
+          },
+          {
+            "source": "Ai",
+            "priority": 50
+          }
+        ],
+        "source": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_pdb_server_msdl_url",
+      "label": "smoke",
+      "input": {},
+      "expected": "has msdl base_url",
+      "actual": {
+        "base_url": "https://msdl.microsoft.com/download/symbols",
+        "source": "rustre_symbols::PdbSymbolServer::msdl"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_unified_table_add_lookup",
+      "label": "smoke",
+      "input": {
+        "name": "main",
+        "addr": 4096
+      },
+      "expected": "is dict",
+      "actual": {
+        "len": 1,
+        "lookup_addr_name": "main",
+        "lookup_name_count": 1,
+        "source": "rustre_symbols::UnifiedSymbolTable"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_standard_pass_specs",
+      "label": "smoke",
+      "input": {},
+      "expected": "count>0 and passes is list",
+      "actual": {
+        "count": 9,
+        "passes": [
+          {
+            "id": "disassembly",
+            "depends_on": [],
+            "output_level": "LLIL",
+            "max_retries": 0,
+            "fallback": null,
+            "is_required": true,
+            "timeout_ms": 0
+          },
+          {
+            "id": "call_sites",
+            "depends_on": [
+              "disassembly"
+            ],
+            "output_level": "LLIL",
+            "max_retries": 0,
+            "fallback": null,
+            "is_required": true,
+            "timeout_ms": 0
+          },
+          {
+            "id": "variable_collection",
+            "depends_on": [
+              "disassembly"
+            ],
+            "output_level": "LLIL",
+            "max_retries": 0,
+            "fallback": null,
+            "is_required": true,
+            "timeout_ms": 0
+          },
+          {
+            "id": "constant_propagation",
+            "depends_on": [
+              "variable_collection"
+            ],
+            "output_level": "MLIL/SSA",
+            "max_retries": 0,
+            "fallback": null,
+            "is_required": true,
+            "timeout_ms": 0
+          },
+          {
+            "id": "dead_code_elimination",
+            "depends_on": [
+              "constant_propagation"
+            ],
+            "output_level": "MLIL/SSA",
+            "max_retries": 1,
+            "fallback": null,
+            "is_required": false,
+            "timeout_ms": 0
+          },
+          {
+            "id": "hlil_build",
+            "depends_on": [
+              "dead_code_elimination"
+            ],
+            "output_level": "HLIL",
+            "max_retries": 2,
+            "fallback": "linear_emit",
+            "is_required": false,
+            "timeout_ms": 0
+          },
+          {
+            "id": "cfs",
+            "depends_on": [
+              "hlil_build"
+            ],
+            "output_level": "PseudoC",
+            "max_retries": 1,
+            "fallback": "linear_emit",
+            "is_required": false,
+            "timeout_ms": 0
+          },
+          {
+            "id": "type_infer",
+            "depends_on": [
+              "cfs"
+            ],
+            "output_level": "PseudoC",
+            "max_retries": 1,
+            "fallback": null,
+            "is_required": false,
+            "timeout_ms": 0
+          },
+          {
+            "id": "function_body",
+            "depends_on": [
+              "type_infer"
+            ],
+            "output_level": "PseudoC",
+            "max_retries": 0,
+            "fallback": null,
+            "is_required": true,
+            "timeout_ms": 0
+          }
+        ],
+        "source": "rustre_decompiler::pipeline_coordinator::standard_pass_specs"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_x86_width_hint",
+      "label": "movzx_byte",
+      "input": {
+        "mnemonic": "movzx",
+        "operands": "eax, byte ptr [rbx]"
+      },
+      "expected": "has width_bytes field",
+      "actual": {
+        "mnemonic": "movzx",
+        "operands": "eax, byte ptr [rbx]",
+        "width_bytes": 1,
+        "source": "rustre_decompiler::x86_register_width::width_hint_from_instr"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_symbol_map_resolve",
+      "label": "resolve_main",
+      "input": {
+        "pairs": [
+          [
+            4096,
+            "main"
+          ]
+        ],
+        "queries": [
+          4096
+        ],
+        "rust_demangle": false
+      },
+      "expected": "results[0].name=main",
+      "actual": {
+        "map_len": 1,
+        "results": [
+          {
+            "addr": 4096,
+            "name": "main"
+          }
+        ],
+        "source": "rustre_decompiler::SymbolMap"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_batch_is_c_keyword",
+      "label": "mixed",
+      "input": {
+        "names": [
+          "int",
+          "for",
+          "foo",
+          "return",
+          "bar"
+        ]
+      },
+      "expected": [
+        true,
+        true,
+        false,
+        true,
+        false
+      ],
+      "actual": {
+        "count": 5,
+        "keyword_hits": 3,
+        "results": [
+          {
+            "name": "int",
+            "is_keyword": true
+          },
+          {
+            "name": "for",
+            "is_keyword": true
+          },
+          {
+            "name": "foo",
+            "is_keyword": false
+          },
+          {
+            "name": "return",
+            "is_keyword": true
+          },
+          {
+            "name": "bar",
+            "is_keyword": false
+          }
+        ],
+        "source": "rustre_decompiler::pseudocode_generator::is_c_keyword"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_source_priority",
+      "label": "Pdb",
+      "input": {
+        "source": "Pdb"
+      },
+      "expected": "has priority",
+      "actual": {
+        "source": "Pdb",
+        "priority": 90,
+        "impl": "rustre_symbols::SymbolSource::priority"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_store_roundtrip",
+      "label": "one_sym",
+      "input": {
+        "symbols": [
+          {
+            "name": "main",
+            "address": 4096,
+            "size": 256
+          }
+        ]
+      },
+      "expected": "len>=1",
+      "actual": {
+        "inserted": 1,
+        "len": 1,
+        "csv": "address,name,demangled,kind,size\n0x0,main,,Function,?\n",
+        "map": "# Symbol map\n0x0000000000000000  main\n",
+        "source": "rustre_symbols::SymbolStore"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_try_demangle",
+      "label": "rust_mangled",
+      "input": {
+        "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE"
+      },
+      "expected": "demangled != None (core::ptr::drop_in_place::h1234567890abcdef)",
+      "actual": {
+        "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+        "demangled": "core::ptr::drop_in_place::h1234567890abcdef",
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_try_demangle",
+      "label": "plain",
+      "input": {
+        "name": "plain"
+      },
+      "expected": "has demangled field",
+      "actual": {
+        "name": "plain",
+        "demangled": null,
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_pdb_url_build",
+      "label": "ntdll",
+      "input": {
+        "pdb": "ntdll.pdb",
+        "guid": "ABC123",
+        "age": 1,
+        "base": "https://msdl.microsoft.com/download/symbols"
+      },
+      "expected": "url contains ntdll.pdb",
+      "actual": {
+        "url": "https://msdl.microsoft.com/download/symbols/ntdll.pdb/ABC1231/ntdll.pdb",
+        "base": "https://msdl.microsoft.com/download/symbols",
+        "source": "rustre_symbols::PdbSymbolServer"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_xref_index",
+      "label": "query_1000",
+      "input": {
+        "edges": [
+          [
+            4096,
+            8192
+          ],
+          [
+            4096,
+            12288
+          ],
+          [
+            8192,
+            16384
+          ]
+        ],
+        "query": 4096
+      },
+      "expected": "has refs_from",
+      "actual": {
+        "query": 4096,
+        "refs_to": [],
+        "refs_from": [
+          8192,
+          12288
+        ],
+        "ref_count_to": 0,
+        "source": "rustre_symbols::CrossReferenceIndex"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_stats",
+      "label": "two_syms",
+      "input": {
+        "symbols": [
+          {
+            "name": "main",
+            "address": 4096,
+            "size": 256
+          },
+          {
+            "name": "init",
+            "address": 8192,
+            "size": 80
+          }
+        ]
+      },
+      "expected": "total=2",
+      "actual": {
+        "total": 2,
+        "functions": 2,
+        "data": 0,
+        "labels": 0,
+        "sections": 0,
+        "files": 0,
+        "types": 0,
+        "tls": 0,
+        "ifunc": 0,
+        "common": 0,
+        "unknown": 0,
+        "display": "SymbolStats { total=2 fn=2 data=0 label=0 sec=0 }",
+        "source": "rustre_symbols::SymbolStats"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_filter_apply",
+      "label": "no_filter",
+      "input": {
+        "names": [
+          "main",
+          "foo",
+          "bar",
+          "init"
+        ],
+        "prefix": ""
+      },
+      "expected": "output_count=4",
+      "actual": {
+        "input_count": 4,
+        "output_count": 4,
+        "matched": [
+          "main",
+          "foo",
+          "bar",
+          "init"
+        ],
+        "source": "rustre_symbols::SymbolFilter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_symbol_filter_apply",
+      "label": "prefix_m",
+      "input": {
+        "names": [
+          "main",
+          "foo",
+          "bar",
+          "init"
+        ],
+        "prefix": "m"
+      },
+      "expected": "output_count=1 and matched=['main']",
+      "actual": {
+        "input_count": 4,
+        "output_count": 1,
+        "matched": [
+          "main"
+        ],
+        "source": "rustre_symbols::SymbolFilter"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_address_map_lookup",
+      "label": "found",
+      "input": {
+        "addrs": [
+          4096,
+          8192,
+          12288
+        ],
+        "query": 8192
+      },
+      "expected": "exact!=None (found)",
+      "actual": {
+        "query": 8192,
+        "exact": "f_2000",
+        "floor": "f_2000",
+        "total": 3,
+        "source": "rustre_symbols::AddressToSymbolMap"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_address_map_lookup",
+      "label": "not_found",
+      "input": {
+        "addrs": [
+          4096,
+          8192,
+          12288
+        ],
+        "query": 39321
+      },
+      "expected": "exact=None (not found)",
+      "actual": {
+        "query": 39321,
+        "exact": null,
+        "floor": "f_3000",
+        "total": 3,
+        "source": "rustre_symbols::AddressToSymbolMap"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_import_table_group",
+      "label": "imports",
+      "input": {
+        "imports": [
+          "kernel32.dll!CreateFile",
+          "kernel32.dll!ReadFile",
+          "ntdll.dll!NtClose"
+        ]
+      },
+      "expected": ">=2 DLL groups",
+      "actual": {
+        "count": 0,
+        "modules": [],
+        "source": "rustre_symbols::ImportTable"
+      }
+    },
+    {
+      "tool": "rustre_symbols_core_demangler_pipeline",
+      "label": "two_names",
+      "input": {
+        "names": [
+          "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+          "main"
+        ]
+      },
+      "expected": "results[0].demangled = core::ptr::drop_in_place::h1234567890abcdef",
+      "actual": {
+        "count": 2,
+        "results": [
+          {
+            "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+            "demangled": "core::ptr::drop_in_place::h1234567890abcdef"
+          },
+          {
+            "name": "main",
+            "demangled": null
+          }
+        ],
+        "source": "rustre_symbols::DemanglerPipeline"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_symbol_map_ops",
+      "label": "two_pairs",
+      "input": {
+        "pairs": [
+          [
+            4096,
+            "main"
+          ],
+          [
+            8192,
+            "init"
+          ]
+        ]
+      },
+      "expected": "len=2",
+      "actual": {
+        "len": 2,
+        "is_empty": false,
+        "source": "rustre_decompiler::SymbolMap"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_function_name_gen_count",
+      "label": "hint_main",
+      "input": {
+        "address": 4660,
+        "hint": "main"
+      },
+      "expected": "has name field",
+      "actual": {
+        "name": "main",
+        "count": 0,
+        "source": "rustre_decompiler::FunctionNameGenerator"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_var_recovery_stack_name",
+      "label": "offset_-8",
+      "input": {
+        "offset": -8
+      },
+      "expected": "has name field",
+      "actual": {
+        "name": "local_8",
+        "total_vars": 1,
+        "source": "rustre_decompiler::VariableRecovery::stack_var_name"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_var_recovery_stack_name",
+      "label": "offset_0",
+      "input": {
+        "offset": 0
+      },
+      "expected": "has name field",
+      "actual": {
+        "name": "arg_0",
+        "total_vars": 1,
+        "source": "rustre_decompiler::VariableRecovery::stack_var_name"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_var_recovery_fresh",
+      "label": "n=3",
+      "input": {
+        "n": 3
+      },
+      "expected": "names is 3-element list",
+      "actual": {
+        "names": [
+          "v0",
+          "v1",
+          "v2"
+        ],
+        "source": "rustre_decompiler::VariableRecovery::fresh_var"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_cfs_detect_loop",
+      "label": "for_loop",
+      "input": {
+        "lines": [
+          "for (int i = 0; i < 10; i++) {",
+          "  x += i;",
+          "}"
+        ]
+      },
+      "expected": "has detected field",
+      "actual": {
+        "detected": false,
+        "source": "rustre_decompiler::ControlFlowStructuring::detect_loop"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_cfs_detect_loop",
+      "label": "no_loop",
+      "input": {
+        "lines": [
+          "int x = 5;",
+          "return x;"
+        ]
+      },
+      "expected": "has detected field",
+      "actual": {
+        "detected": false,
+        "source": "rustre_decompiler::ControlFlowStructuring::detect_loop"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_cfs_detect_loop",
+      "label": "no_loop_exact",
+      "input": {
+        "lines": [
+          "int x = 5;",
+          "return x;"
+        ]
+      },
+      "expected": "detected=false",
+      "actual": {
+        "detected": false,
+        "source": "rustre_decompiler::ControlFlowStructuring::detect_loop"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_default_pipeline_standard",
+      "label": "smoke",
+      "input": {},
+      "expected": "non-empty",
+      "actual": {
+        "pass_count": 8,
+        "pass_names": [
+          "call_sites",
+          "variable_collection",
+          "struct_field_recovery",
+          "constant_propagation",
+          "dead_code_elimination",
+          "disassembly",
+          "function_header",
+          "function_body"
+        ],
+        "source": "rustre_decompiler::DefaultPipelineFactory::standard"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_default_pipeline_disasm",
+      "label": "smoke",
+      "input": {},
+      "expected": "non-empty",
+      "actual": {
+        "pass_count": 2,
+        "pass_names": [
+          "call_sites",
+          "disassembly"
+        ],
+        "source": "rustre_decompiler::DefaultPipelineFactory::disassembly_only"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_quality_from_source",
+      "label": "simple_main",
+      "input": {
+        "source": "int main() { return 0; }"
+      },
+      "expected": "has readability_score",
+      "actual": {
+        "line_count": 1,
+        "statement_count": 0,
+        "operator_count": 0,
+        "goto_count": 0,
+        "max_nesting": 1,
+        "control_constructs": 0,
+        "expression_density": 0.0,
+        "readability_score": 100.0,
+        "source": "rustre_decompiler::QualityMetrics"
+      }
+    },
+    {
+      "tool": "rustre_decompiler_quality_from_source",
+      "label": "nested_control",
+      "input": {
+        "source": "for(int i=0;i<10;i++){ if(x>y){ while(z){} } }"
+      },
+      "expected": "max_nesting>=1 (nested constructs)",
+      "actual": {
+        "line_count": 1,
+        "statement_count": 0,
+        "operator_count": 5,
+        "goto_count": 0,
+        "max_nesting": 3,
+        "control_constructs": 1,
+        "expression_density": 0.0,
+        "readability_score": 100.0,
+        "source": "rustre_decompiler::QualityMetrics"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_try_demangle_top",
+      "label": "rust_mangled",
+      "input": {
+        "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE"
+      },
+      "expected": "has demangled",
+      "actual": {
+        "input": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+        "demangled": "core::ptr::drop_in_place::h1234567890abcdef",
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_v3_try_demangle_top",
+      "label": "main",
+      "input": {
+        "name": "main"
+      },
+      "expected": "is dict",
+      "actual": {
+        "input": "main",
+        "demangled": null,
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_try_demangle",
+      "label": "rust_mangled",
+      "input": {
+        "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE"
+      },
+      "expected": "demangled != None",
+      "actual": {
+        "input": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+        "demangled": "core::ptr::drop_in_place::h1234567890abcdef",
+        "ok": true,
+        "source": "rustre_symbols::try_demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_demangler_pipeline",
+      "label": "rust_mangled",
+      "input": {
+        "name": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE"
+      },
+      "expected": "demangled != None",
+      "actual": {
+        "input": "_ZN4core3ptr13drop_in_place17h1234567890abcdefE",
+        "demangled": "core::ptr::drop_in_place::h1234567890abcdef",
+        "ok": true,
+        "source": "rustre_symbols::DemanglerPipeline::demangle"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_pdb_server_pdb_url",
+      "label": "ntdll",
+      "input": {
+        "pdb_name": "ntdll.pdb",
+        "guid": "ABCDEF0123456789ABCDEF0123456789",
+        "age": 1
+      },
+      "expected": "url contains ntdll.pdb",
+      "actual": {
+        "url": "https://msdl.microsoft.com/download/symbols/ntdll.pdb/ABCDEF0123456789ABCDEF01234567891/ntdll.pdb",
+        "source": "rustre_symbols::PdbSymbolServer::pdb_url"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_function",
+      "label": "0x1234",
+      "input": {
+        "addr": 4660
+      },
+      "expected": "sub_1234",
+      "actual": {
+        "name": "sub_1234",
+        "addr": 4660,
+        "source": "rustre_symbols::SyntheticSymbolGen::function_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_data",
+      "label": "0x5678",
+      "input": {
+        "addr": 22136
+      },
+      "expected": "name contains 5678",
+      "actual": {
+        "name": "byte_5678",
+        "addr": 22136,
+        "source": "rustre_symbols::SyntheticSymbolGen::data_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_label",
+      "label": "0xabcd",
+      "input": {
+        "addr": 43981
+      },
+      "expected": "loc_ABCD",
+      "actual": {
+        "name": "loc_ABCD",
+        "addr": 43981,
+        "source": "rustre_symbols::SyntheticSymbolGen::label_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_dword",
+      "label": "0x1111",
+      "input": {
+        "addr": 4369
+      },
+      "expected": "name contains 1111",
+      "actual": {
+        "name": "dword_1111",
+        "addr": 4369,
+        "source": "rustre_symbols::SyntheticSymbolGen::dword_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_synthetic_name_qword",
+      "label": "0x2222",
+      "input": {
+        "addr": 8738
+      },
+      "expected": "name contains 2222",
+      "actual": {
+        "name": "qword_2222",
+        "addr": 8738,
+        "source": "rustre_symbols::SyntheticSymbolGen::qword_name"
+      }
+    },
+    {
+      "tool": "rustre_symbols_ext_cross_ref_index_ops",
+      "label": "query_1000",
+      "input": {
+        "edges": [
+          [
+            4096,
+            8192
+          ],
+          [
+            4096,
+            12288
+          ]
+        ],
+        "query": 4096
+      },
+      "expected": "has refs_from",
+      "actual": {
+        "refs_to": [],
+        "refs_from": [
+          8192,
+          12288
+        ],
+        "ref_count_to": 0,
+        "source": "rustre_symbols::CrossReferenceIndex"
+      }
+    }
+  ],
+  "failed": [
+    {
+      "tool": "rustre_symbols_core_export_table_by_name",
+      "label": "ReadFile",
+      "input": {
+        "exports": [
+          "CreateFile",
+          "ReadFile",
+          "WriteFile"
+        ],
+        "query": "ReadFile"
+      },
+      "expected": {
+        "count": 3,
+        "found_not_None": true
+      },
+      "actual": {
+        "count": 0,
+        "found": null,
+        "source": "rustre_symbols::ExportTable"
+      }
+    }
+  ]
+}

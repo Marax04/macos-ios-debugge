@@ -1,0 +1,35 @@
+{
+  "crate": "rustre-arch-cil",
+  "mcp_tools_relevant": ["analysis_disasm_at_path_cil"],
+  "validator_self_tests": "passed",
+  "tests_run": [
+    {
+      "name": "validator_self_tests",
+      "result": "passed",
+      "covers": [
+        "decode (nop, ret, ldc.i4, ceq via 0xFE prefix, br.s)",
+        "decode error paths (Truncated, UnknownOpcode)",
+        "decode_compressed_uint at boundaries 0x00, 0x7F, 0x80, 0x3FFF, 0x4000",
+        "cil_fold_i32 add/xor, cil_fold_unary_i32 neg/not",
+        "stack_effect_of add/dup, cil_net_stack_delta pop",
+        "cil_max_local_slot on ldloc.s/stloc.s body",
+        "linear_disassemble_total round-trip",
+        "cil_find_blocks leader set on brfalse.s body",
+        "get_branch_target = next_addr + signed offset",
+        "type_size_in_bytes for I4/R8"
+      ]
+    },
+    {
+      "name": "mcp_analysis_disasm_at_path_cil_raw_bin",
+      "input_path": "scratchpad/cil.bin (raw CIL: nop, ret, ldc.i4 0x2A, ceq, br.s +5)",
+      "address": 0,
+      "result": "ERROR: loader: no registered loader can handle format: Unknown",
+      "note": "MCP path tool requires a recognized container (PE/.NET assembly). Raw CIL byte streams cannot be fed without a wrapping PE+CLI header."
+    }
+  ],
+  "overlap_analysis": "Per the report, rustre-arch-cil exposes no dedicated MCP cil_* tool; only analysis_disasm_at_path_cil reaches the crate (via CilArch::default in wire_tools.rs:7528) and only for binaries with a loadable container. The validator targets pure decoder/helper functions (CilInstr::decode, compressed integers, fold, stack effect, blocks, branch targets, type sizes) which have no path-accepting MCP equivalent. No baseline .NET DLL is present in the corpus (cargo-zyphora.exe is a native x64 PE), so a direct functional MCP-vs-validator comparison is not feasible. No mismatch could be observed; no crate fix is warranted.",
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true
+}

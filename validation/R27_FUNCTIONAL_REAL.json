@@ -1,0 +1,1438 @@
+{
+  "total": 119,
+  "working": 68,
+  "real_broken": 11,
+  "false_positives": 25,
+  "error_input": 15,
+  "broken_tools_real": [
+    "debug.launch",
+    "yara.compile",
+    "patch_asm",
+    "analysis_disasm_at_path",
+    "analysis_basic_blocks_path",
+    "symbols_pdb_load",
+    "diff_compare",
+    "diff_bindiff",
+    "diff_minhash",
+    "fingerprint_match",
+    "diff_semantic"
+  ],
+  "tools": {
+    "project.open": {
+      "name": "project.open",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"project_id\\\": \\\"proj-0001\\\",\\n  \\\"binary_id\\\": \\\"bin-0001\\\",\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"status\\\": \\\"loaded\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "project.close": {
+      "name": "project.close",
+      "status": "WORKING",
+      "input_used": {
+        "project_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 5, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"project_id\\\": \\\"\\\",\\n  \\\"binary_id\\\": \\\"bin-\\\",\\n  \\\"closed\\\": false\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "project.list_binaries": {
+      "name": "project.list_binaries",
+      "status": "WORKING",
+      "input_used": {
+        "project_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 6, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"count\\\": 1,\\n  \\\"binaries\\\": [\\n    {\\n      \\\"binary_id\\\": \\\"bin-0001\\\",\\n      \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n      \\\"format\\\": \\\"PE64\\\",\\n      \\\"arch\\\": \\\"x86_64\\\",\\n      \\\"size\\\": 1244160\\n    }\\n  ]\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "project.info": {
+      "name": "project.info",
+      "status": "WORKING",
+      "input_used": {
+        "project_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 7, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_count\\\": 1,\\n  \\\"binaries\\\": [\\n    {\\n      \\\"binary_id\\\": \\\"bin-0001\\\",\\n      \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n      \\\"format\\\": \\\"PE64\\\",\\n      \\\"arch\\\": \\\"x86_64\\\",\\n      \\\"size\\\": 1244160\\n    }\\n  ],\\n  \\\"mcp_version\\\": \\\"2024-11-05\\\"",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "binary.info": {
+      "name": "binary.info",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "binary.hexdump": {
+      "name": "binary.hexdump",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180,
+        "len": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 9, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "binary.read": {
+      "name": "binary.read",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180,
+        "len": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 10, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "binary.search_bytes": {
+      "name": "binary.search_bytes",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "pattern": "deadbeef00112233",
+        "mask": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 11, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "binary.search_strings": {
+      "name": "binary.search_strings",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "min_len": 1,
+        "regex": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 12, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "binary.entropy": {
+      "name": "binary.entropy",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "section": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 13, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.full": {
+      "name": "analyze.full",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "depth": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 14, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.function": {
+      "name": "analyze.function",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 15, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.basic_block": {
+      "name": "analyze.basic_block",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 16, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.cross_refs": {
+      "name": "analyze.cross_refs",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 17, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.call_graph": {
+      "name": "analyze.call_graph",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "root": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 18, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.strings": {
+      "name": "analyze.strings",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 19, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.imports": {
+      "name": "analyze.imports",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 20, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "analyze.exports": {
+      "name": "analyze.exports",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 21, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "disasm.at": {
+      "name": "disasm.at",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180,
+        "count": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 22, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "disasm.function": {
+      "name": "disasm.function",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 23, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "decompile.function": {
+      "name": "decompile.function",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 24, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "decompile.rename_variable": {
+      "name": "decompile.rename_variable",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "func_addr": 5368771180,
+        "old_name": "",
+        "new_name": "main"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 25, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "decompile.set_type": {
+      "name": "decompile.set_type",
+      "status": "WORKING",
+      "input_used": {
+        "binary_id": "",
+        "func_addr": 5368771180,
+        "var_name": "",
+        "type_str": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 26, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_id\\\": \\\"\\\",\\n  \\\"addr\\\": \\\"0x0\\\",\\n  \\\"set\\\": false,\\n  \\\"note\\\": \\\"provide type_str and var_name\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.launch": {
+      "name": "debug.launch",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "binary_id": "",
+        "args": [],
+        "env": {}
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 27, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: failed to launch '': program path has no file name\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: failed to launch '': program path has no file name"
+    },
+    "debug.attach": {
+      "name": "debug.attach",
+      "status": "WORKING",
+      "input_used": {
+        "pid": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 28, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"session_id\\\": \\\"dbg-0001\\\",\\n  \\\"pid\\\": 1,\\n  \\\"binary_path\\\": \\\"\\\",\\n  \\\"status\\\": \\\"attached\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.continue": {
+      "name": "debug.continue",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "session_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 29, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: debug session  not found\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: debug session  not found"
+    },
+    "debug.step_into": {
+      "name": "debug.step_into",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 30, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"session_id\\\": \\\"\\\",\\n  \\\"step_type\\\": \\\"debug.step_into\\\",\\n  \\\"status\\\": \\\"stepped\\\",\\n  \\\"note\\\": \\\"static analysis mode\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.step_over": {
+      "name": "debug.step_over",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 31, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"session_id\\\": \\\"\\\",\\n  \\\"step_type\\\": \\\"debug.step_over\\\",\\n  \\\"status\\\": \\\"stepped\\\",\\n  \\\"note\\\": \\\"static analysis mode\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.set_breakpoint": {
+      "name": "debug.set_breakpoint",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "session_id": "",
+        "addr": 5368771180,
+        "condition": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 32, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'address'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'address'"
+    },
+    "debug.remove_breakpoint": {
+      "name": "debug.remove_breakpoint",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "session_id": "",
+        "bp_id": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 33, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'bp_id'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'bp_id'"
+    },
+    "debug.read_registers": {
+      "name": "debug.read_registers",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": "",
+        "thread_id": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 34, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"registers\\\": {\\n    \\\"rip\\\": \\\"0x0000000140001000\\\",\\n    \\\"rsp\\\": \\\"0x00007fff0000f8d0\\\",\\n    \\\"rbp\\\": \\\"0x0000000000000000\\\",\\n    \\\"rax\\\": \\\"0x0000000000000000\\\",\\n    \\\"rbx\\\": \\\"0x0000000000000000\\\",\\n    \\\"rcx\\\": \\\"0x0000000000000000\\\",\\n    \\\"rdx\\\": \\\"0x0000000000000000\\\",\\n    \\\"rsi\\\": \\\"0x0000000000000000",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.read_memory": {
+      "name": "debug.read_memory",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "session_id": "",
+        "addr": 5368771180,
+        "len": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 35, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'binary_id'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'binary_id'"
+    },
+    "debug.write_memory": {
+      "name": "debug.write_memory",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "session_id": "",
+        "addr": 5368771180,
+        "data_base64": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 36, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'binary_id'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'binary_id'"
+    },
+    "debug.backtrace": {
+      "name": "debug.backtrace",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 37, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"session_id\\\": \\\"\\\",\\n  \\\"frames\\\": [\\n    {\\n      \\\"frame\\\": 0,\\n      \\\"addr\\\": \\\"0x0\\\",\\n      \\\"name\\\": \\\"?\\\"\\n    }\\n  ]\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "debug.evaluate": {
+      "name": "debug.evaluate",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": "",
+        "expression": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 38, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"expression\\\": \\\"\\\",\\n  \\\"result\\\": \\\"<>\\\",\\n  \\\"type\\\": \\\"integer\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "yara.scan_file": {
+      "name": "yara.scan_file",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "ruleset_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 39, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_id\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"matched\\\": true,\\n  \\\"matches\\\": [\\n    {\\n      \\\"rule\\\": \\\"findcrypt_RC4_KSA\\\",\\n      \\\"namespace\\\": \\\"de",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "yara.compile": {
+      "name": "yara.compile",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "source": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 40, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: YARA compile error: parse error at line 0: empty rule source\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: YARA compile error: parse error at line 0: empty rule source"
+    },
+    "yara.scan_memory": {
+      "name": "yara.scan_memory",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "image_id": "",
+        "ruleset_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 41, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: image  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: image  not loaded"
+    },
+    "forensics.open_dump": {
+      "name": "forensics.open_dump",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 42, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"image_id\\\": \\\"img-0002\\\",\\n  \\\"binary_id\\\": \\\"bin-0002\\\",\\n  \\\"status\\\": \\\"loaded\\\",\\n  \\\"note\\\": \\\"Use forensics.run_plugin with this image_id\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "forensics.run_plugin": {
+      "name": "forensics.run_plugin",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "image_id": "",
+        "plugin": "",
+        "args": {}
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 43, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: image  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: image  not loaded"
+    },
+    "forensics.list_plugins": {
+      "name": "forensics.list_plugins",
+      "status": "WORKING",
+      "input_used": {},
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 44, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"count\\\": 12,\\n  \\\"plugins\\\": [\\n    {\\n      \\\"name\\\": \\\"pslist\\\",\\n      \\\"description\\\": \\\"List processes via EPROCESS linked list\\\"\\n    },\\n    {\\n      \\\"name\\\": \\\"psscan\\\",\\n      \\\"description\\\": \\\"Scan for EPROCESS structures\\\"\\n    },\\n    {\\n      \\\"name\\\": \\\"pstree\\\",\\n      \\\"description\\\": \\\"Display p",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "kg.query": {
+      "name": "kg.query",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "sql": "",
+        "params": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 45, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: Only SELECT statements are allowed in kg.query\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: Only SELECT statements are allowed in kg.query"
+    },
+    "kg.annotate": {
+      "name": "kg.annotate",
+      "status": "WORKING",
+      "input_used": {
+        "entity_type": "",
+        "entity_id": "",
+        "key": "deadbeef00112233",
+        "value": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 46, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_id\\\": \\\"\\\",\\n  \\\"entity_type\\\": \\\"\\\",\\n  \\\"entity_id\\\": \\\"\\\",\\n  \\\"key\\\": \\\"deadbeef00112233\\\",\\n  \\\"value\\\": \\\"\\\",\\n  \\\"annotated\\\": true\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "kg.search": {
+      "name": "kg.search",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "text": "Rust"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 47, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'query'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'query'"
+    },
+    "kg.set_function_name": {
+      "name": "kg.set_function_name",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180,
+        "name": "main"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 48, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'addr'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'addr'"
+    },
+    "kg.set_comment": {
+      "name": "kg.set_comment",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180,
+        "text": "Rust"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 49, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'addr'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'addr'"
+    },
+    "kg.get_function": {
+      "name": "kg.get_function",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_id": "",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 50, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: invalid params: missing 'addr'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: invalid params: missing 'addr'"
+    },
+    "kg.list_functions": {
+      "name": "kg.list_functions",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": "",
+        "filter": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 51, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "diff.compare": {
+      "name": "diff.compare",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "a_id": "",
+        "b_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 52, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "crypto.identify": {
+      "name": "crypto.identify",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 53, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "triage.analyze": {
+      "name": "triage.analyze",
+      "status": "MISSING_BINARY",
+      "input_used": {
+        "binary_id": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 54, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: not found: binary  not loaded\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: not found: binary  not loaded"
+    },
+    "patch_pe_security_summary": {
+      "name": "patch_pe_security_summary",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 55, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"aslr\\\": true,\\n  \\\"dep\\\": true,\\n  \\\"cfg\\\": false,\\n  \\\"force_integrity\\\": false,\\n  \\\"no_seh\\\": false,\\n  \\\"no_isolation\\\": false,\\n  \\\"no_bind\\\": false,\\n  \\\"terminal_server_aware\\\": true,\\n  \\\"is_64bit\\\": true,\\",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "patch_patch_find_code_caves": {
+      "name": "patch_patch_find_code_caves",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "min_size": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 56, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"min_size\\\": 1,\\n  \\\"count\\\": 75949,\\n  \\\"caves\\\": [\\n    {\\n      \\\"section\\\": \\\".text\\\",\\n      \\\"file_offset\\\": 1073,\\n      \\\"virtual_address\\\": 4145,\\n      \\\"size\\\": 3,\\n      \\\"fill_byte\\\": 0\\n    },\\n    {\\n",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "loader_core_md5": {
+      "name": "loader_core_md5",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 57, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"md5\\\": \\\"b4209e09634b503cd65320b99a247980\\\",\\n  \\\"bytes\\\": 8,\\n  \\\"source\\\": \\\"rustre_loader::md5\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "infer_types_path": {
+      "name": "infer_types_path",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "addresses": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 58, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: 'addresses' empty\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: 'addresses' empty"
+    },
+    "type_propagate_path": {
+      "name": "type_propagate_path",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "addresses": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 59, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: 'addresses' empty\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: 'addresses' empty"
+    },
+    "struct_field_at_path": {
+      "name": "struct_field_at_path",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "addr": 5368771180,
+        "offset": 4096
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 60, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"addr\\\": 5368771180,\\n  \\\"function\\\": \\\"sub_14000F26C\\\",\\n  \\\"offset\\\": 4096,\\n  \\\"total_size\\\": 0,\\n  \\\"field_count\\\": 0,\\n  \\\"field\\\": null,\\n  \\\"found\\\": false,\\n  \\\"source\\\": \\\"rustre_decompiler_type::str",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "type_infer": {
+      "name": "type_infer",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "addresses": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 61, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: 'addresses' empty\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: 'addresses' empty"
+    },
+    "type_query": {
+      "name": "type_query",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "kind": "auto",
+        "name_contains": "",
+        "min_size": 1,
+        "max_size": 1,
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 62, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"count\\\": 0,\\n  \\\"types\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "type_inspect": {
+      "name": "type_inspect",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "name": "main"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 63, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"name\\\": \\\"main\\\",\\n  \\\"found\\\": false\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "type_apply_batch": {
+      "name": "type_apply_batch",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "assignments": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 64, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"applied\\\": 0,\\n  \\\"total\\\": 0,\\n  \\\"results\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "declare_type": {
+      "name": "declare_type",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "name": "main",
+        "decl": "",
+        "size": 32,
+        "kind": "auto"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 65, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"name\\\": \\\"main\\\",\\n  \\\"kind\\\": \\\"auto\\\",\\n  \\\"size\\\": 32,\\n  \\\"stored_in\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.rustre-types.json\\\",\\n  \\\"total_declared\\\": 1\\n}\"}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_call_graph": {
+      "name": "analysis_xref_call_graph",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "root": 5368771180,
+        "max_depth": 32,
+        "max_nodes": 1,
+        "max_edges": 1,
+        "max_edges_per_func": 1,
+        "thunk_map": {}
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 66, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"node_count\\\": 1,\\n  \\\"edge_count\\\": 0,\\n  \\\"nodes\\\": [\\n    5368771180\\n  ],\\n  \\\"edges\\\": [],\\n  \\\"total_xrefs\\\": 0,\\n  \\\"truncated\\\": false,\\n  \\\"thunk_entries\\\": 0,\\n  \\\"indirect_resolved\\\": 0,\\n  \\\"root\\\": 5368771180,\\n  \\\"max_depth\\\": 32,\\n  \\\"max_nodes\\\": 1,\\n  \\\"max_edges\\\": 1,\\n  \\\"max_edges_per_func\\\": 1\\",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_callees": {
+      "name": "analysis_xref_callees",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "addr": 5368771180,
+        "thunk_map": {}
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 67, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"addr\\\": 5368771180,\\n  \\\"raw_count\\\": 0,\\n  \\\"unique_count\\\": 0,\\n  \\\"callees\\\": [],\\n  \\\"thunks_folded\\\": 0\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "trace_data_flow": {
+      "name": "trace_data_flow",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "addr": 5368771180,
+        "direction": "",
+        "max_depth": 32,
+        "max_nodes": 1,
+        "include_data": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 68, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"root\\\": 5368771180,\\n  \\\"direction\\\": \\\"\\\",\\n  \\\"max_depth\\\": 32,\\n  \\\"max_nodes\\\": 1,\\n  \\\"include_data\\\": false,\\n  \\\"node_count\\\": 1,\\n  \\\"edge_count\\\": 0,\\n  \\\"nodes\\\": [\\n    {\\n      \\\"addr\\\": 5368771180,\\n      \\\"depth\\\": 0\\n    }\\n  ],\\n  \\\"edges\\\": [],\\n  \\\"truncated\\\": false\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_get_xrefs_to": {
+      "name": "analysis_xref_get_xrefs_to",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 69, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"addr\\\": 5368771180,\\n  \\\"count\\\": 0,\\n  \\\"xrefs\\\": [],\\n  \\\"callers\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_get_xrefs_from": {
+      "name": "analysis_xref_get_xrefs_from",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 70, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"addr\\\": 5368771180,\\n  \\\"count\\\": 0,\\n  \\\"xrefs\\\": [],\\n  \\\"callees\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_to_path": {
+      "name": "analysis_xref_to_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 71, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"address\\\": 5368771180,\\n  \\\"count\\\": 0,\\n  \\\"xrefs_to\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_from_path": {
+      "name": "analysis_xref_from_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 72, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"address\\\": 5368771180,\\n  \\\"count\\\": 0,\\n  \\\"xrefs_from\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_call_graph_root_functions": {
+      "name": "analysis_xref_call_graph_root_functions",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "function_entries": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 73, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"roots\\\": [],\\n  \\\"count\\\": 0,\\n  \\\"function_entries_count\\\": 0\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_xref_string_ref_counts": {
+      "name": "analysis_xref_string_ref_counts",
+      "status": "WORKING",
+      "input_used": {
+        "bytes": "deadbeef00112233",
+        "hex": "deadbeef00112233",
+        "base": 1,
+        "arch": "x86_64",
+        "string_addrs": []
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 74, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"counts\\\": {},\\n  \\\"total_refs\\\": 0,\\n  \\\"string_count\\\": 0\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_fn_detect_extra": {
+      "name": "analysis_fn_detect_extra",
+      "status": "WORKING",
+      "input_used": {
+        "pdata": [],
+        "pdata_hex": "",
+        "text": "Rust",
+        "text_hex": "",
+        "text_base": 1,
+        "image_base": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 75, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"extras\\\": [],\\n  \\\"stats\\\": {\\n    \\\"gaps_scanned\\\": 0,\\n    \\\"prologue_matches\\\": 0,\\n    \\\"candidates_validated\\\": 0,\\n    \\\"pdata_count\\\": 0\\n  }\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "decompiler_core_batch_decompile": {
+      "name": "decompiler_core_batch_decompile",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "out_dir": "",
+        "threads": 1,
+        "max_functions": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 76, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"out_dir\\\": \\\"\\\",\\n  \\\"decompiled\\\": 1,\\n  \\\"failed\\\": 0,\\n  \\\"elapsed_ms\\\": 1,\\n  \\\"success_rate\\\": 1.0\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "flirt_apply_auto": {
+      "name": "flirt_apply_auto",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "min_confidence": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 77, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"min_confidence\\\": 1,\\n  \\\"renames\\\": [\\n    {\\n      \\\"address\\\": 5368872798,\\n      \\\"address_hex\\\": \\\"0x140027f5e\\\",\\n      \\\"name\\\": \\\"__security_init_cookie\\\",\\n      \\\"lib\\\": \\\"msvcrt\\\",\\n      \\\"confid",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "function_list_by_kind": {
+      "name": "function_list_by_kind",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "kind": "auto",
+        "lib_name": "",
+        "limit": 32,
+        "min_confidence": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 78, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"kind\\\": \\\"auto\\\",\\n  \\\"lib_name\\\": \\\"\\\",\\n  \\\"total\\\": 1,\\n  \\\"library\\\": 1,\\n  \\\"user\\\": 0,\\n  \\\"by_lib\\\": {\\n    \\\"msvcrt\\\": 1\\n  },\\n  \\\"functions\\\": []\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "noreturn_infer": {
+      "name": "noreturn_infer",
+      "status": "WORKING",
+      "input_used": {
+        "functions": [],
+        "arch": "x86_64",
+        "propagation_threshold": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 79, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"noreturn_count\\\": 0,\\n  \\\"noreturn_addresses\\\": [],\\n  \\\"propagation_threshold\\\": 1.0\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "decompiler_recover_structs": {
+      "name": "decompiler_recover_structs",
+      "status": "WORKING",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "addr": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 80, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"addr\\\": 5368771180,\\n  \\\"name\\\": \\\"sub_14000F26C\\\",\\n  \\\"variables\\\": [],\\n  \\\"variable_count\\\": 0,\\n  \\\"structs\\\": [\\n    {\\n      \\\"name\\\": \\\"struct_00000001\\\",\\n      \\\"fields\\\": [\\n        {\\n          \\",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_recover_structs_path": {
+      "name": "analysis_recover_structs_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "max_functions": 1,
+        "min_fields": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 81, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"functions_scanned\\\": 1,\\n  \\\"struct_count\\\": 2,\\n  \\\"structs\\\": [\\n    {\\n      \\\"name\\\": \\\"struct_00000007\\\",\\n      \\\"fields\\\": [\\n        {\\n          \\\"offset\\\": 0,\\n          \\\"size\\\": 8,\\n          \\\"type\\\": ",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "decompiler_stack_frame_report": {
+      "name": "decompiler_stack_frame_report",
+      "status": "WORKING",
+      "input_used": {
+        "function_addr": 1,
+        "instructions": [],
+        "arch": "x86_64"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 82, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"status\\\": \\\"ok\\\",\\n  \\\"data\\\": {\\n    \\\"function_addr\\\": \\\"0x1\\\",\\n    \\\"frame_size\\\": 0,\\n    \\\"saved_regs\\\": [],\\n    \\\"prologue\\\": null,\\n    \\\"epilogue\\\": null,\\n    \\\"locals\\\": [],\\n    \\\"struct_candidates\\\": []\\n  }\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "survey_binary": {
+      "name": "survey_binary",
+      "status": "WORKING",
+      "input_used": {
+        "session_id": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 83, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"size\\\": 1244160,\\n  \\\"file_size\\\": 1244160,\\n  \\\"sha256\\\": \\\"115775acba8846591bcbf8128ff64fb3c1d5ec0053ee7fe9d016e8d0150305a7\\\",\\n  \\\"md5\\\": \\\"777a9d4b0ba006da89803d6d37e27459\\\",\\n  \\\"image_base\\\": 5368709120,\\n  \\",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "patch_bytes": {
+      "name": "patch_bytes",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "va": 5368771180,
+        "bytes": "deadbeef00112233",
+        "dry_run": false,
+        "backup": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 84, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"va\\\": 5368771180,\\n  \\\"file_offset\\\": 58988,\\n  \\\"section\\\": \\\".text\\\",\\n  \\\"bytes_written\\\": 8,\\n  \\\"original_hex\\\": \\\"cc cc cc cc 55 41 56 56\\\",\\n  \\\"new_hex\\\": \\\"de ad be ef 00 11 22 33\\\",\\n  \\\"dry_run\\\": false,",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "patch_nop_range": {
+      "name": "patch_nop_range",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "va": 5368771180,
+        "length": 32,
+        "dry_run": false,
+        "backup": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 85, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"va\\\": 5368771180,\\n  \\\"length\\\": 32,\\n  \\\"file_offset\\\": 58988,\\n  \\\"section\\\": \\\".text\\\",\\n  \\\"bytes_written\\\": 32,\\n  \\\"dry_run\\\": false,\\n  \\\"backup_path\\\": null\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "patch_xor_region": {
+      "name": "patch_xor_region",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "va": 5368771180,
+        "length": 32,
+        "key": "deadbeef00112233",
+        "dry_run": false,
+        "backup": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 86, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"va\\\": 5368771180,\\n  \\\"length\\\": 32,\\n  \\\"file_offset\\\": 58988,\\n  \\\"section\\\": \\\".text\\\",\\n  \\\"bytes_written\\\": 32,\\n  \\\"dry_run\\\": false,\\n  \\\"backup_path\\\": null\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "patch_asm": {
+      "name": "patch_asm",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "va": 5368771180,
+        "asm": "",
+        "dry_run": false,
+        "backup": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 87, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: patch_asm: unsupported asm mnemonic: \"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: patch_asm: unsupported asm mnemonic: "
+    },
+    "patch_pe_set_security": {
+      "name": "patch_pe_set_security",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "aslr": false,
+        "dep": false,
+        "cfg": false,
+        "force_integrity": false,
+        "dry_run": false,
+        "backup": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 88, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"old_dll_characteristics\\\": \\\"0x8160\\\",\\n  \\\"new_dll_characteristics\\\": \\\"0x8020\\\",\\n  \\\"old_checksum\\\": 0,\\n  \\\"new_checksum\\\": 1279159,\\n  \\\"dry_run\\\": false,\\n  \\\"backup_path\\\": null\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "triage_entropy_packing_indicators": {
+      "name": "triage_entropy_packing_indicators",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 89, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"is_likely_packed\\\": false,\\n  \\\"indicator_count\\\": 0,\\n  \\\"indicators\\\": [],\\n  \\\"imports_count\\\": 106\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_fn_detect_functions_path": {
+      "name": "analysis_fn_detect_functions_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 90, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"x86_64\\\",\\n  \\\"bits\\\": 64,\\n  \\\"format\\\": \\\"PE\\\",\\n  \\\"image_base\\\": 5368709120,\\n  \\\"function_count\\\": 1681,\\n  \\\"raw_detection_count\\\": 2319,\\n  \\\"pdb_names_applied\\\": 359,\\n  \\\"pdb_path\\\": \\\"C:\\\\\\\\User",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_callgraph_path": {
+      "name": "analysis_callgraph_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "root_address": "",
+        "max_depth": 32,
+        "node_limit": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 91, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"x86_64\\\",\\n  \\\"bits\\\": 64,\\n  \\\"function_count\\\": 1356,\\n  \\\"root_address\\\": null,\\n  \\\"max_depth\\\": 32,\\n  \\\"pdb_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo_zyphora.p",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_callees_path": {
+      "name": "analysis_callees_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "function_address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 92, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"function_address\\\": 5368771180,\\n  \\\"function_address_hex\\\": \\\"0x14000f26c\\\",\\n  \\\"function_name\\\": null,\\n  \\\"callees_count\\\": 1,\\n  \\\"callees\\\": [\\n    {\\n      \\\"va\\\": 5369705376,\\n      \\\"va_hex\\\": \\\"0x1400f33a",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_string_scan_path": {
+      "name": "analysis_string_scan_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "min_length": 1,
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 93, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"image_base\\\": 5368709120,\\n  \\\"total\\\": 53770,\\n  \\\"returned\\\": 32,\\n  \\\"strings\\\": [\\n    {\\n      \\\"va\\\": 5368713244,\\n      \\\"length\\\": 24,\\n      \\\"encoding\\\": \\\"Utf16Le\\\",\\n      \\\"value\\\": \\\"\\u5373\\u8d48\\u184",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_crypto_scan_path": {
+      "name": "analysis_crypto_scan_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "min_confidence": 1,
+        "bignum_min_zeros": 1,
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 94, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"image_base\\\": 5368709120,\\n  \\\"section_count\\\": 5,\\n  \\\"scanned_sections\\\": 5,\\n  \\\"min_confidence_applied\\\": 1,\\n  \\\"total\\\": 119698,\\n  \\\"total_hits\\\": 119698,\\n  \\\"high_confidence_count\\\": 1,\\n  \\\"returned\\\": 32",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path": {
+      "name": "analysis_disasm_at_path",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "count": 32,
+        "bits": 1,
+        "arch": "x86_64",
+        "addr": 5368771180
+      },
+      "output_excerpt": "TIMEOUT",
+      "sanity_pass": false,
+      "root_cause_if_broken": "timeout 20s"
+    },
+    "analysis_disasm_at_path_arm64": {
+      "name": "analysis_disasm_at_path_arm64",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"arm64\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"error\\\": \\\"plugin error (arm64): ARM64 decode error: Inv",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path_mips": {
+      "name": "analysis_disasm_at_path_mips",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"mips\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"address\\\": 5368771180,\\n      \\\"bytes\\\": \\\"4E3D2E7F\\\",\\n ",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path_riscv": {
+      "name": "analysis_disasm_at_path_riscv",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 5, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"riscv\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"address\\\": 5368771180,\\n      \\\"bytes\\\": \\\"4E3D2E7F\\\",\\n",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path_wasm": {
+      "name": "analysis_disasm_at_path_wasm",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 6, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"wasm\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"address\\\": 5368771180,\\n      \\\"bytes\\\": \\\"4E\\\",\\n      \\",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path_cil": {
+      "name": "analysis_disasm_at_path_cil",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 7, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"cil\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"address\\\": 5368771180,\\n      \\\"bytes\\\": \\\"4E\\\",\\n      \\\"",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_disasm_at_path_jvm": {
+      "name": "analysis_disasm_at_path_jvm",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "addr": 5368771180,
+        "count": 32,
+        "bits": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"arch\\\": \\\"jvm\\\",\\n  \\\"address\\\": \\\"0x14000f26c\\\",\\n  \\\"bits\\\": 1,\\n  \\\"count\\\": 32,\\n  \\\"instructions\\\": [\\n    {\\n      \\\"addr\\\": \\\"0x14000f26c\\\",\\n      \\\"address\\\": 5368771180,\\n      \\\"bytes\\\": \\\"4E\\\",\\n      \\\"",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_basic_blocks_path": {
+      "name": "analysis_basic_blocks_path",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "function_address": 5368771180,
+        "address": 5368771180,
+        "max_instructions": 1,
+        "bits": 1
+      },
+      "output_excerpt": "TIMEOUT",
+      "sanity_pass": false,
+      "root_cause_if_broken": "timeout 20s"
+    },
+    "analysis_fn_cfg_path": {
+      "name": "analysis_fn_cfg_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 3, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"entry_va\\\": \\\"0x14000f26c\\\",\\n  \\\"entry_block_id\\\": 0,\\n  \\\"exit_block_ids\\\": [\\n    12\\n  ],\\n  \\\"block_count\\\": 13,\\n  \\\"blocks\\\": [\\n    {\\n      \\\"block_id\\\": 0,\\n      \\\"start_va\\\": \\\"0x14000f26c\\\",\\n      \\\"en",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_dominators_path": {
+      "name": "analysis_dominators_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 4, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"entry_va\\\": \\\"0x14000f26c\\\",\\n  \\\"block_count\\\": 13,\\n  \\\"rpo\\\": [\\n    0,\\n    1,\\n    2,\\n    3,\\n    4,\\n    6,\\n    7,\\n    8,\\n    9,\\n    10,\\n    11,\\n    5,\\n    12\\n  ],\\n  \\\"idom\\\": [\\n    {\\n      \\\"block",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_loops_path": {
+      "name": "analysis_loops_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 5, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"entry_va\\\": \\\"0x14000f26c\\\",\\n  \\\"block_count\\\": 13,\\n  \\\"loop_count\\\": 0,\\n  \\\"loops\\\": [],\\n  \\\"sccs\\\": [\\n    {\\n      \\\"size\\\": 1,\\n      \\\"blocks\\\": [\\n        12\\n      ]\\n    },\\n    {\\n      \\\"size\\\": 1,\\n  ",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "analysis_infer_types_path": {
+      "name": "analysis_infer_types_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "function_address": 5368771180
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 6, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"function_address\\\": 5368771180,\\n  \\\"function_name\\\": \\\"sub_14000F26C\\\",\\n  \\\"signature\\\": \\\"void sub_14000F26C(void);\\\",\\n  \\\"locals\\\": [],\\n  \\\"locals_total\\\": 0,\\n  \\\"locals_typed\\\": 0,\\n  \\\"confidence_ove",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "deobf_mba_normalize": {
+      "name": "deobf_mba_normalize",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "expression": ""
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 7, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: parse error: unexpected end of input in primary expression\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: parse error: unexpected end of input in primary expression"
+    },
+    "symbols_demangle_auto": {
+      "name": "symbols_demangle_auto",
+      "status": "WORKING",
+      "input_used": {
+        "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 8, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"mangled\\\": \\\"_RNvNtCs6CKzx_3foo3bar4baz\\\",\\n  \\\"demangled\\\": \\\"_RNvNtCs6CKzx_3foo3bar4baz\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "symbols_demangle_rust": {
+      "name": "symbols_demangle_rust",
+      "status": "WORKING",
+      "input_used": {
+        "mangled": "_RNvNtCs6CKzx_3foo3bar4baz"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 9, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"mangled\\\": \\\"_RNvNtCs6CKzx_3foo3bar4baz\\\",\\n  \\\"demangled\\\": \\\"_RNvNtCs6CKzx_3foo3bar4baz\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "symbols_demangle_msvc": {
+      "name": "symbols_demangle_msvc",
+      "status": "WORKING",
+      "input_used": {
+        "mangled": "?Foo@Bar@@QEAAXH@Z"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 10, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"mangled\\\": \\\"?Foo@Bar@@QEAAXH@Z\\\",\\n  \\\"demangled\\\": \\\"int& __cdecl Bar::Foo()\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "symbols_demangle_itanium": {
+      "name": "symbols_demangle_itanium",
+      "status": "WORKING",
+      "input_used": {
+        "mangled": "_ZN3foo3barEv"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 11, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"mangled\\\": \\\"_ZN3foo3barEv\\\",\\n  \\\"demangled\\\": \\\"foo::bar()\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "symbols_demangle_swift": {
+      "name": "symbols_demangle_swift",
+      "status": "WORKING",
+      "input_used": {
+        "mangled": "_$s4main3FooV3barSiyF"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 12, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"mangled\\\": \\\"_$s4main3FooV3barSiyF\\\",\\n  \\\"demangled\\\": \\\"_$s4main3FooV3barSiyF\\\"\\n}\"}], \"isError\": false}}",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "symbols_pdb_load": {
+      "name": "symbols_pdb_load",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "binary_path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo_zyphora.pdb",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 13, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load failed: loader: no registered loader can handle format: Unknown\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load failed: loader: no registered loader can handle format: Unknown"
+    },
+    "decompile_function_path": {
+      "name": "decompile_function_path",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "name": "main"
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 14, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"binary_path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"address\\\": 5368771180,\\n  \\\"name\\\": \\\"main\\\",\\n  \\\"pseudo_code\\\": \\\"__int64 __fastcall sub_14000F26C(__int64 a1) {\\\\n    /* cmp v1 , 0xFFFFFFFF81907F2E */;\\\\n    dl = 0xA3;\\\\n    /* cmp v1 , 0xFFFFFFFF81907F",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "crypto_xor_decode": {
+      "name": "crypto_xor_decode",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "length": 32,
+        "key_hex": "",
+        "auto": false
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 15, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: key_hex must be even-length hex\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: key_hex must be even-length hex"
+    },
+    "analysis_trace_data_flow_path": {
+      "name": "analysis_trace_data_flow_path",
+      "status": "ERROR_INPUT",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "address": 5368771180,
+        "direction": "",
+        "max_depth": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 16, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: invalid params: 'direction' must be 'backward' or 'forward'\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: invalid params: 'direction' must be 'backward' or 'forward'"
+    },
+    "diff_compare": {
+      "name": "diff_compare",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path_a": "",
+        "path_b": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32,
+        "threshold": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 17, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)"
+    },
+    "diff_bindiff": {
+      "name": "diff_bindiff",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path_a": "",
+        "path_b": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 18, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)"
+    },
+    "diff_minhash": {
+      "name": "diff_minhash",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path_a": "",
+        "path_b": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "n": 32,
+        "limit": 32,
+        "min_similarity": 1
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 19, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)"
+    },
+    "fingerprint_compute": {
+      "name": "fingerprint_compute",
+      "status": "WORKING",
+      "input_used": {
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 20, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\Fra\\\\\\\\Desktop\\\\\\\\Zyphora\\\\\\\\target\\\\\\\\release\\\\\\\\cargo-zyphora.exe\\\",\\n  \\\"count\\\": 32,\\n  \\\"fingerprints\\\": [\\n    {\\n      \\\"name\\\": \\\"sub_140001000_0\\\",\\n      \\\"addr\\\": \\\"0x140001000\\\",\\n      \\\"size\\\": 113,\\n      \\\"body_hash\\\": \\\"ce81571fcf6a35d2\\\",\\n      \\\"prologue_hash\\\": \\\"98e3c",
+      "sanity_pass": true,
+      "root_cause_if_broken": null
+    },
+    "fingerprint_match": {
+      "name": "fingerprint_match",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path_a": "",
+        "path_b": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 21, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load failed for : read : Impossibile trovare il percorso specificato. (os error 3)"
+    },
+    "diff_semantic": {
+      "name": "diff_semantic",
+      "status": "ERROR_REAL",
+      "input_used": {
+        "path_a": "",
+        "path_b": "",
+        "path": "C:\\Users\\Fra\\Desktop\\Zyphora\\target\\release\\cargo-zyphora.exe",
+        "limit": 32
+      },
+      "output_excerpt": "{\"jsonrpc\": \"2.0\", \"id\": 22, \"result\": {\"content\": [{\"type\": \"text\", \"text\": \"execution failed: execution failed: internal error: load_a: read : Impossibile trovare il percorso specificato. (os error 3)\"}], \"isError\": true}}",
+      "sanity_pass": false,
+      "root_cause_if_broken": "execution failed: execution failed: internal error: load_a: read : Impossibile trovare il percorso specificato. (os error 3)"
+    }
+  }
+}

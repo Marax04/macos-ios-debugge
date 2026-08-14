@@ -1,0 +1,22 @@
+{
+  "category": "emu_unicorn",
+  "date": "2026-07-11",
+  "skipped_tools": [
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_x86_64",
+      "reason": "Instantiates real UnicornEmu with native library; region count and layout are environment-specific. Basic dict-response check is included in rigorous_emu_unicorn_v3.json."
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_arm64",
+      "reason": "Same as new_x86_64: native emulator instantiation, layout environment-specific."
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_arm_thumb",
+      "reason": "Same as new_x86_64: native emulator instantiation, layout environment-specific."
+    },
+    {
+      "tool": "mcp__rustre-mcp__emu_unicorn_new_mips32",
+      "reason": "Same as new_x86_64: native emulator instantiation; region count verified but exact layout is native-lib-dependent."
+    }
+  ]
+}

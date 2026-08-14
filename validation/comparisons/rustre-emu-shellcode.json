@@ -1,0 +1,31 @@
+{
+  "crate": "rustre-emu-shellcode",
+  "mcp_surface": "none",
+  "note": "rustre-emu-shellcode is a library crate (x86/x64 shellcode emulator, multi-stage decoder, heuristic scorer, shellcode classifier, tracer). It is NOT exposed via the MCP server: grep for 'shellcode' and 'emu_shellcode' in crates/rustre-mcp-tools/src/wire_tools.rs returns no matches. JSON-RPC stdio comparison against rustre-mcp.exe tools/list (119 tools) confirms zero shellcode/emu tools present.",
+  "validator": "validation/validators/rustre-emu-shellcode.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 344,
+    "all_passed": true,
+    "modules_covered": [
+      "lib.rs (ShellcodeEmulator, BehaviorAnalyzer, ShellcodeRunner, ApiDatabase)",
+      "x86_emulator.rs (X86Mem, X86Emulator)",
+      "x86_emulator_hooks.rs (HookDispatcher, WinApiStub, SyscallTable, ApiCallLog, PcTrace)",
+      "shellcode_analysis.rs (ShellcodeAnalyzer)",
+      "shellcode_classifier.rs (ShellcodeClassifier, ByteDistribution)",
+      "shellcode_decoder.rs (MultiStageDecoder, StageChain, DecoderStub)",
+      "shellcode_emulator.rs (HighLevelEmulator, ShellcodeContext, MemoryDump, ApiHook)",
+      "shellcode_heuristics.rs (HeuristicScorer, ShellcodeScore)",
+      "shellcode_loader.rs (MemoryMap, MemoryRegion, FakeIat, ShellcodeLoader)",
+      "shellcode_tracer.rs (CoverageBitmap, BlockTracer, BasicBlock)"
+    ]
+  },
+  "mcp_jsonrpc_probe": {
+    "target": "target/release/rustre-mcp.exe",
+    "total_tools": 119,
+    "shellcode_emu_tools": 0
+  },
+  "tests": 344,
+  "mismatches": 0,
+  "match": true
+}

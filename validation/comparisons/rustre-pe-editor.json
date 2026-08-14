@@ -1,0 +1,22 @@
+{
+  "crate": "rustre-pe-editor",
+  "mcp_surface": "none",
+  "note": "rustre-pe-editor is a workspace library crate (PE patching: sections, imports/exports, resources, certificates, header fields, RC4, XOR/NOP/INT3, entry-point patches, checksum zeroing). It is NOT exposed via the MCP server: no references to rustre-pe-editor or pe_editor under crates/rustre-mcp-tools. JSON-RPC stdio comparison against C:/Users/Fra/Desktop/RustRE/target/release/rustre-mcp.exe is therefore N/A. Patch-related MCP tools (patch_bytes, patch_nop_range, patch_xor_region, patch_pe_security_summary, patch_pe_set_security) are served by rustre-pe-tools, not by this editor crate.",
+  "validator": "validation/validators/rustre-pe-editor.py",
+  "validator_status": "ok",
+  "validator_summary": {
+    "tests": 43,
+    "passed": 43,
+    "missing": [],
+    "checks": [
+      "Cargo.toml name/edition2024 + deps (rustre-pe-tools, thiserror, serde, parking_lot)",
+      "modules: certificate_editor, import_editor, overlay_editor, pe_patcher, pe_import_editor, pe_resource_editor, pe_section_editor, pe_surgeon, resource_editor, section_editor, pe_header_editor, pe_certificate_table, pe_debug_directory",
+      "types: EditError, Patch, PatchSet, SectionEdit/Editor, ImportEntry/Editor, ExportEdit/Editor, ResourceType/Entry/Editor, CertificateHeader, PeSigningScaffold, HeaderField, PeEditor, Rc4",
+      "fns: xor_section, nop_range, int3_range, patch_entry_point, zero_checksum, apply_patch, apply_patchset"
+    ]
+  },
+  "tests": 43,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true
+}

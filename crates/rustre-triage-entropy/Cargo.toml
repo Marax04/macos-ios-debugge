@@ -1,0 +1,23 @@
+[package]
+license.workspace = true
+name = "rustre-triage-entropy"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-triage = { path = "../rustre-triage" }
+rustre-pe-tools = { path = "../rustre-pe-tools" }
+rustre-crypto-id = { path = "../rustre-crypto-id" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde-big-array = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

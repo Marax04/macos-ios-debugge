@@ -1,0 +1,7 @@
+{
+  "module": "yara",
+  "tools_hardened": 14,
+  "checks_passed": 37,
+  "checks_failed": 0,
+  "mismatches": []
+}

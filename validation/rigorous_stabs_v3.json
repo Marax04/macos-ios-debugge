@@ -1,0 +1,566 @@
+{
+  "summary": {
+    "tools_hardened": 13,
+    "tests_run": 63,
+    "passed": 62,
+    "failed": 1,
+    "skipped": 0
+  },
+  "mismatches": [
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "expected": "is_symbol(160)=False",
+      "actual": "is_symbol=True want False"
+    }
+  ],
+  "all_results": [
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 32
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 38
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 64
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 160
+      },
+      "status": "FAIL",
+      "note": "is_symbol=True want False"
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 68
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_symbol",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 132
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 130
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 162
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 68
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_source_file",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 68
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 70
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 72
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 76
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_line_number",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 192
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 224
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 68
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_is_scope_bracket",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 36
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 32
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 100
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 132
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 130
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 162
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 68
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 70
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 72
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 76
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 192
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 224
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 0
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_category",
+      "args": {
+        "byte": 1
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "f"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "F"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "g"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "p"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "r"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "s"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "t"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "T"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "v"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_code_from_char_v2",
+      "args": {
+        "c": "x"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_record_parse_all_be",
+      "args": {
+        "stab_hex": "000000002400000100001000",
+        "stabstr_hex": "00"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_parse_all",
+      "args": {
+        "stab_hex": "000000002400010000100000",
+        "stabstr_hex": "00"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_string_table_roundtrip",
+      "args": {
+        "strings": [
+          "hello",
+          "world",
+          "foo"
+        ]
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_string_table_roundtrip",
+      "args": {
+        "strings": []
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_parser_primitives",
+      "args": {
+        "key": "(0,1)"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_parser_parse_descriptor",
+      "args": {
+        "desc": "(0,1)"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_type_parser_parse_descriptor",
+      "args": {
+        "desc": "r1;0;127;"
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_line_number_table_lookup",
+      "args": {
+        "entries": [
+          {
+            "addr": 4096,
+            "line": 10,
+            "file": "foo.c"
+          },
+          {
+            "addr": 4112,
+            "line": 20,
+            "file": "foo.c"
+          },
+          {
+            "addr": 4128,
+            "line": 30,
+            "file": "foo.c"
+          }
+        ],
+        "addr": 4112
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_line_number_table_lookup",
+      "args": {
+        "entries": [
+          {
+            "addr": 4096,
+            "line": 10,
+            "file": "foo.c"
+          },
+          {
+            "addr": 4112,
+            "line": 20,
+            "file": "foo.c"
+          },
+          {
+            "addr": 4128,
+            "line": 30,
+            "file": "foo.c"
+          }
+        ],
+        "addr": 4095
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_provider_from_bytes",
+      "args": {
+        "stab_hex": "",
+        "stabstr_hex": "",
+        "image_base": 0
+      },
+      "status": "PASS",
+      "note": ""
+    },
+    {
+      "tool": "symbols_stabs_provider_from_bytes",
+      "args": {
+        "stab_hex": "000000002400010000100000",
+        "stabstr_hex": "00",
+        "image_base": 0
+      },
+      "status": "PASS",
+      "note": ""
+    }
+  ]
+}

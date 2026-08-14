@@ -1,0 +1,26 @@
+{
+  "crate": "rustre-deobf-iadl",
+  "tests": [
+    {
+      "name": "mcp_tools_list_filter",
+      "description": "Inspect rustre-mcp-server analysis_tools.rs for any tool exposing rustre-deobf-iadl orchestrator (IadlOrchestrator, BinaryIadlOrchestrator, IadlDetector).",
+      "method": "static_inspection",
+      "mcp_result": "no tools registered with names matching iadl/IADL/adversarial_loop/indirect_target_resolver",
+      "validator_result": "validator implements full IADL orchestrator (BinaryIadlOrchestrator, IadlDetector) but has no MCP counterpart to compare",
+      "mismatch": false,
+      "notes": "Comparison N/A: crate rustre-deobf-iadl is internal-only, not exposed via MCP. The only deobf-related MCP tools are 'deobfuscate_strings' and 'deobf_mba_normalize', which belong to other crates (rustre-deobf / rustre-deobf-mba)."
+    },
+    {
+      "name": "grep_iadl_in_mcp_crates",
+      "description": "grep -rli 'iadl|deobf_iadl|deobf-iadl' across rustre-mcp and rustre-mcp-server crates.",
+      "method": "grep",
+      "mcp_result": "no matches",
+      "validator_result": "n/a",
+      "mismatch": false
+    }
+  ],
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "summary": "rustre-deobf-iadl crate has no MCP tool exposure; the Python validator (rustre-deobf-iadl.py) reimplements the orchestrator and detector logic, but there is nothing on the MCP side to call. No real mismatch can be produced via JSON-RPC stdio; recording N/A status. Consider exposing IadlOrchestrator/BinaryIadlOrchestrator/IadlDetector through rustre-mcp-server to enable future comparison."
+}

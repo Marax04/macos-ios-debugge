@@ -1,0 +1,28 @@
+[package]
+license.workspace = true
+name = "rustre-mcp-federation"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+# rustre-mcp dependency intentionally omitted: rustre-mcp is the umbrella crate
+# that aggregates federation/server/tools, so it depends on us, not the other way.
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+toml = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+dashmap = { workspace = true }
+rustre-mcp-server = { path = "../rustre-mcp-server" }
+
+[lints]
+workspace = true

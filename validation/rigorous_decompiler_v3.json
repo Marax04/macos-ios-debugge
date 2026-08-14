@@ -1,0 +1,445 @@
+﻿{
+  "category": "decompiler",
+  "tools_hardened": 59,
+  "tools_passed": 59,
+  "tools_failed": 0,
+  "tools_skipped": 0,
+  "mismatches": [],
+  "results": [
+    {
+      "tool": "decompiler_type_int_byte_size",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "note": "I32 \u2192 4 bytes"
+    },
+    {
+      "tool": "decompiler_type_int_c_name",
+      "status": "PASS",
+      "expected": "non-empty string",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_c_indent_make",
+      "status": "PASS",
+      "expected": "string",
+      "actual": "        ",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_cfs_algorithm_display",
+      "status": "PASS",
+      "expected": "non-empty string",
+      "actual": "DREAM",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_expr_int_width_bits",
+      "status": "PASS",
+      "expected": 32,
+      "actual": 32,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_expr_int_width_bytes",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_c_name_int_wp",
+      "status": "PASS",
+      "expected": "non-empty string",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_byte_size_int_wp",
+      "status": "PASS",
+      "expected": 4,
+      "actual": 4,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_byte_size_ptr_wp",
+      "status": "PASS",
+      "expected": 8,
+      "actual": 8,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ints_wp",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_is_convertible_ints_wp",
+      "status": "PASS",
+      "expected": "bool",
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_env_set_get_wp",
+      "status": "PASS",
+      "expected": "non-empty c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_struct_field_at_wp",
+      "status": "PASS",
+      "expected": "has field key",
+      "actual": [
+        "field_at",
+        "field_exact",
+        "source"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_function_prototype_wp",
+      "status": "PASS",
+      "expected": "non-empty prototype",
+      "actual": "int32_t __cdecl foo()",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_recovery_record_get_wp",
+      "status": "PASS",
+      "expected": "non-empty c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_recovery_from_access_size_wp",
+      "status": "PASS",
+      "expected": "non-empty c_name",
+      "actual": "uint32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_pointer_analysis_alias_wp",
+      "status": "PASS",
+      "expected": "has aliases_of_a",
+      "actual": [
+        "q"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_wp",
+      "status": "PASS",
+      "expected": "has c_name",
+      "actual": "uint32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_unifier_canonical_wp",
+      "status": "PASS",
+      "expected": "has canonical_a",
+      "actual": "y",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_inference_assignment_wp",
+      "status": "PASS",
+      "expected": "has c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_propagator_assign_wp",
+      "status": "PASS",
+      "expected": "has dst_c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_typedef_wp",
+      "status": "PASS",
+      "expected": "non-empty typedef",
+      "actual": "typedef int32_t MyInt;",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_is_pointer_void_n2",
+      "status": "PASS",
+      "expected": true,
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_n2",
+      "status": "PASS",
+      "expected": "non-empty pointee_c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_name_prefix_int_n2",
+      "status": "PASS",
+      "expected": "has prefix",
+      "actual": "i",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_n2",
+      "status": "PASS",
+      "expected": "has field_exact",
+      "actual": "a",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_function_arity_n2",
+      "status": "PASS",
+      "expected": 2,
+      "actual": 2,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_qualifier_string_n2",
+      "status": "PASS",
+      "expected": "has qualifier",
+      "actual": "",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_qualified_c_name_n2",
+      "status": "PASS",
+      "expected": "non-empty c_name",
+      "actual": "const int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_layout_for_struct_n2",
+      "status": "PASS",
+      "expected": "has padded_size",
+      "actual": 12,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_union_member_named_n2",
+      "status": "PASS",
+      "expected": "has found or offset",
+      "actual": {
+        "found": 0,
+        "source": "rustre_decompiler_type::UnionType::member_named"
+      },
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_database_resolve_typedef_n2",
+      "status": "PASS",
+      "expected": "non-empty resolved_c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_env_resolve_struct_z1",
+      "status": "PASS",
+      "expected": "has struct info",
+      "actual": {
+        "name": "Foo",
+        "resolved": "Foo",
+        "size": 4,
+        "source": "rustre_decompiler_type::TypeEnvironment::resolve_struct"
+      },
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_database_get_struct_z1",
+      "status": "PASS",
+      "expected": "has name",
+      "actual": "Foo",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_database_get_union_z1",
+      "status": "PASS",
+      "expected": "has name",
+      "actual": "Bar",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_database_get_function_z1",
+      "status": "PASS",
+      "expected": "has prototype",
+      "actual": "int32_t __cdecl baz(int32_t x)",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_struct_z1",
+      "status": "PASS",
+      "expected": "struct code",
+      "actual": "struct MyS {\n    int32_t a; // offset 0x0\n    int32_t b; // offset 0x4\n}; // size = 0x8\n",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_union_z1",
+      "status": "PASS",
+      "expected": "union code",
+      "actual": "union MyU {\n    int32_t a;\n    int64_t b;\n}; // size = 0x8\n",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_ctype_emit_function_z1",
+      "status": "PASS",
+      "expected": "non-empty code",
+      "actual": "int32_t __cdecl fn1(int32_t x);",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_unifier_same_class_z1",
+      "status": "PASS",
+      "expected": "has same_class",
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_inference_pointer_deref_z1",
+      "status": "PASS",
+      "expected": "has c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_qualifier_flags_zx2",
+      "status": "PASS",
+      "expected": "has qualifier_string",
+      "actual": "",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_qualified_c_name_zx2",
+      "status": "PASS",
+      "expected": "non-empty c_name",
+      "actual": "const int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_union_member_named_zx2",
+      "status": "PASS",
+      "expected": "has member key",
+      "actual": null,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_function_arity_zx2",
+      "status": "PASS",
+      "expected": "int arity",
+      "actual": 3,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_calling_convention_zx2",
+      "status": "PASS",
+      "expected": "has cdecl",
+      "actual": "__cdecl",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_layout_padded_size_zx2",
+      "status": "PASS",
+      "expected": "has padded_size",
+      "actual": 12,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_pointer_analysis_zx2",
+      "status": "PASS",
+      "expected": "has is_definitely_not_null",
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_pointee_c_name_zx2",
+      "status": "PASS",
+      "expected": "non-empty pointee_c_name",
+      "actual": "int32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_name_prefix_zx2",
+      "status": "PASS",
+      "expected": "has bool and i32 keys",
+      "actual": {
+        "bool": "b_",
+        "i32": "i"
+      },
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_lattice_join_zx2",
+      "status": "PASS",
+      "expected": "has is_conflict",
+      "actual": false,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_lattice_from_decomp_zx2",
+      "status": "PASS",
+      "expected": "has roundtrip_c_name",
+      "actual": "int32_t *",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_access_width_sizer_zx2",
+      "status": "PASS",
+      "expected": "has inferred_c_name",
+      "actual": "uint32_t",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_array_match_zx2",
+      "status": "PASS",
+      "expected": "has matched",
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_env_struct_named_zx2",
+      "status": "PASS",
+      "expected": "has found",
+      "actual": "Foo",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_are_compatible_ptr_zx2",
+      "status": "PASS",
+      "expected": "has compatible",
+      "actual": true,
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_is_pointer_zx2",
+      "status": "PASS",
+      "expected": "has ptr/cstr/fnptr keys",
+      "actual": {
+        "ptr": true,
+        "cstr": true,
+        "fnptr": true
+      },
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_struct_field_exact_zx2",
+      "status": "PASS",
+      "expected": "has field_exact",
+      "actual": "head",
+      "note": ""
+    },
+    {
+      "tool": "decompiler_type_array_byte_size_zx2",
+      "status": "PASS",
+      "expected": "has byte_size",
+      "actual": 20,
+      "note": ""
+    }
+  ],
+  "notes": "v3 new tools (corrected validators). 59 pass, 0 fail, 0 skip."
+}

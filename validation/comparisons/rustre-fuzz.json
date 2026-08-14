@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-fuzz",
+  "tests_run": 0,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "note": "rustre-fuzz exposes no MCP JSON-RPC tools (fuzz primitives are internal Rust crate APIs: FNV1a, FuzzRng, CoverageMap, FuzzInput, Dictionary, InputQueue, Corpus, CrashDeduplicator). Python validator self-test passes; no MCP surface available to cross-check against.",
+  "validator_selftest": "OK",
+  "mcp_tools_for_crate": []
+}

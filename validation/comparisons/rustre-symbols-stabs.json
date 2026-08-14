@@ -1,0 +1,62 @@
+{
+  "crate": "rustre-symbols-stabs",
+  "mcp_transport": "JSON-RPC stdio rustre-mcp.exe",
+  "validator": "validation/validators/rustre-symbols-stabs.py",
+  "tests_run": 7,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "note_mcp_surface": "rustre-mcp.exe does not expose any STABS-specific tool. STABS parsing is reachable only indirectly when an ELF binary containing .stab/.stabstr sections is opened via project_open and the symbol pipeline runs. As with rustre-symbols-pdb, the comparison is between the validator's pure-Python reimplementation and the crate's documented Rust behaviour (see reports/rustre-symbols-stabs.md). No regressions versus the report; self-tests pass.",
+  "tests": [
+    {
+      "name": "stab_name + stab_category tables",
+      "validator_fn": "stab_name / stab_category",
+      "validator_result": {"0x24": "N_FUN", "0xC0": "N_LBRAC", "cat_0x24": "symbol", "cat_0x44": "line_number", "cat_0x64": "source_file", "cat_0xC0": "scope_bracket"},
+      "mcp_tool": "(no direct tool; values mirror StabType / StabsType enums in stabs_types.rs)",
+      "match": true
+    },
+    {
+      "name": "parse_records (LE 12-byte StabRecord)",
+      "validator_fn": "parse_records",
+      "validator_result": {"rec0": {"type_name": "N_FUN", "string": "main:F1", "value": 4096, "desc": 42}, "rec1": {"type_name": "N_PSYM", "string": "x:p1", "value": 8}},
+      "mcp_tool": "(internal: StabsParser in stabs_parser.rs / stabs_full_parser.rs)",
+      "match": true,
+      "notes": "Validator parses strx/u8/u8/u16/u32 = 12 bytes per record matching crate StabRecord layout. C-string resolution via NUL terminator."
+    },
+    {
+      "name": "parse_records (BE)",
+      "validator_fn": "parse_records be=true",
+      "validator_result": {"value": 8192, "desc": 7},
+      "match": true
+    },
+    {
+      "name": "StabsTypeParser.parse_descriptor",
+      "validator_fn": "parse_descriptor",
+      "validator_result": {"(0,1)": "int", "*(0,1)": "pointer->int", "s8int:...": "struct", "ar(0,1);0;9;(0,2)": "array"},
+      "mcp_tool": "(internal: stabs_type_parser.rs)",
+      "match": true
+    },
+    {
+      "name": "LineNumberTable insertion + binary-search lookup",
+      "validator_fn": "LineNumberTable",
+      "validator_result": {"lookup_0x1015": {"address": 4112, "line": 12, "file": "a.c"}, "lookup_underflow": null},
+      "mcp_tool": "(internal: stabs_line_info.rs / stabs_lineinfo.rs)",
+      "match": true
+    },
+    {
+      "name": "StabsStringTable intern determinism + roundtrip",
+      "validator_fn": "StabsStringTable",
+      "validator_result": {"offsets": [1, 5, 1], "roundtrip": ["foo", "bar", "foo"]},
+      "match": true,
+      "notes": "Empty string at offset 0, NUL-separated, intern returns stable offset for repeated strings."
+    },
+    {
+      "name": "parser_process end-to-end (N_FUN + N_PSYM)",
+      "validator_fn": "parser_process",
+      "validator_result": {"functions": 1, "fn_name": "main", "fn_address": 4096, "parameters": 1, "param_name": "x"},
+      "mcp_tool": "(internal: StabsParser::process pipeline)",
+      "match": true
+    }
+  ]
+}

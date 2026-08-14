@@ -1,0 +1,17 @@
+{
+  "crate": "rustre-mobile-android",
+  "generated_at": "2026-06-30",
+  "summary": {
+    "tests": 252,
+    "mcp_tools": 0,
+    "mismatches": 252,
+    "match": false
+  },
+  "detail": {
+    "python_validators": 252,
+    "python_pass": 252,
+    "python_fail": 0,
+    "mcp_tools_wired": 0,
+    "note": "No MCP tools are wired in rustre-mcp-tools/src/wire_tools.rs for the rustre-mobile-android crate. The crate (249 pub fn across lib.rs, android_manifest_parser.rs, android_permissions.rs, android_security.rs, apk_security_full.rs, android_malware.rs, dex_analysis.rs, dex_class_hierarchy.rs, dex_obfuscation.rs, jni_inference.rs, art_runtime.rs, smali_lifter.rs) is entirely unexposed via MCP. All 252 Python validator functions execute correctly against the documented logic, confirming the Rust logic is sound but zero MCP surface exists to compare against."
+  }
+}

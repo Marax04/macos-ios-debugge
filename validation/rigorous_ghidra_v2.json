@@ -1,0 +1,266 @@
+{
+  "category": "ghidra",
+  "tools_hardened": 85,
+  "tools_passed": 85,
+  "tools_failed": 0,
+  "tools_skipped": 2,
+  "mismatches": [],
+  "passed_detail": [
+    {
+      "tool": "ghidra_server_config_default"
+    },
+    {
+      "tool": "ghidra_script_command_line"
+    },
+    {
+      "tool": "ghidra_script_command_line"
+    },
+    {
+      "tool": "ghidra_decompile_response_stub"
+    },
+    {
+      "tool": "ghidra_rpc_client_endpoint"
+    },
+    {
+      "tool": "ghidra_rpc_client_request_count"
+    },
+    {
+      "tool": "ghidra_project_file"
+    },
+    {
+      "tool": "ghidra_project_path"
+    },
+    {
+      "tool": "ghidra_project_with_binary"
+    },
+    {
+      "tool": "ghidra_type_importer_type_count_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_type_importer_windows"
+    },
+    {
+      "tool": "ghidra_type_importer_add_lookup"
+    },
+    {
+      "tool": "ghidra_type_importer_get"
+    },
+    {
+      "tool": "ghidra_data_type_db_load_builtins"
+    },
+    {
+      "tool": "ghidra_data_type_db_builtins_list"
+    },
+    {
+      "tool": "ghidra_data_type_db_lookup"
+    },
+    {
+      "tool": "ghidra_data_type_db_count_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_data_type_db_add_get"
+    },
+    {
+      "tool": "ghidra_data_type_db_add"
+    },
+    {
+      "tool": "ghidra_symbol_importer_counts"
+    },
+    {
+      "tool": "ghidra_symbol_importer_import_export"
+    },
+    {
+      "tool": "ghidra_symbol_importer_resolve"
+    },
+    {
+      "tool": "ghidra_symbol_importer_symbol_count_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_symbol_importer_full_wire3"
+    },
+    {
+      "tool": "ghidra_memory_map_add_segment"
+    },
+    {
+      "tool": "ghidra_memory_map_exec_segments"
+    },
+    {
+      "tool": "ghidra_memory_map_segment_count_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_memory_map_segment_lookup"
+    },
+    {
+      "tool": "ghidra_memory_map_executable_wire3"
+    },
+    {
+      "tool": "ghidra_xml_parser_parse"
+    },
+    {
+      "tool": "ghidra_xml_parser_functions"
+    },
+    {
+      "tool": "ghidra_xml_parser_function_count_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_xml_parser_types_wire3"
+    },
+    {
+      "tool": "ghidra_varnode_classify"
+    },
+    {
+      "tool": "ghidra_varnode_classify"
+    },
+    {
+      "tool": "ghidra_varnode_classify"
+    },
+    {
+      "tool": "ghidra_varnode_classify"
+    },
+    {
+      "tool": "ghidra_varnode_const_flags_gwx4"
+    },
+    {
+      "tool": "ghidra_varnode_ram_display_gwx4"
+    },
+    {
+      "tool": "ghidra_varnode_unique_flags_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_nop_wire3"
+    },
+    {
+      "tool": "ghidra_pcode_translate_ret"
+    },
+    {
+      "tool": "ghidra_pcode_translate_call"
+    },
+    {
+      "tool": "ghidra_pcode_translate_mov_wire3"
+    },
+    {
+      "tool": "ghidra_pcode_translate_push_wire3"
+    },
+    {
+      "tool": "ghidra_pcode_translate_add_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_sub_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_xor_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_and_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_or_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_jmp_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_jz_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_pop_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_translate_unknown_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_lifter_pseudo_c"
+    },
+    {
+      "tool": "ghidra_pcode_lifter_empty_wire3"
+    },
+    {
+      "tool": "ghidra_pcode_lifter_two_insts_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_lifter_variables"
+    },
+    {
+      "tool": "ghidra_pcode_op_display_gwx4"
+    },
+    {
+      "tool": "ghidra_pcode_parser_parse_json"
+    },
+    {
+      "tool": "ghidra_pcode_translator_arch"
+    },
+    {
+      "tool": "ghidra_backend_supported_archs"
+    },
+    {
+      "tool": "ghidra_backend_arch_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_backend_arm64_info"
+    },
+    {
+      "tool": "ghidra_backend_for_arm64_wire3"
+    },
+    {
+      "tool": "ghidra_backend_for_x86_64_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_backend_new_custom_arch_gwx4"
+    },
+    {
+      "tool": "ghidra_availability_check"
+    },
+    {
+      "tool": "ghidra_config_from_home"
+    },
+    {
+      "tool": "ghidra_bridge_module"
+    },
+    {
+      "tool": "ghidra_ast_printer_module"
+    },
+    {
+      "tool": "ghidra_decompile_script_template"
+    },
+    {
+      "tool": "ghidra_list_functions_script_template"
+    },
+    {
+      "tool": "ghidra_write_script_to_temp"
+    },
+    {
+      "tool": "ghidra_rpc_client_decompile"
+    },
+    {
+      "tool": "ghidra_rpc_client_decompile_wire3"
+    },
+    {
+      "tool": "ghidra_rpc_client_config_port_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_server_localhost"
+    },
+    {
+      "tool": "ghidra_server_localhost_connect_wire3"
+    },
+    {
+      "tool": "ghidra_decompile_response_stub_build"
+    },
+    {
+      "tool": "ghidra_decompile_response_stub_batch"
+    },
+    {
+      "tool": "ghidra_script_builder"
+    },
+    {
+      "tool": "ghidra_script_chain_args"
+    },
+    {
+      "tool": "ghidra_project_name_ghidfixp1"
+    },
+    {
+      "tool": "ghidra_data_type_db_builtins_wire3"
+    }
+  ],
+  "failed_detail": []
+}

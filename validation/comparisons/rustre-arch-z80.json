@@ -1,0 +1,11 @@
+{
+  "crate": "rustre-arch-z80",
+  "notes": "No Z80-specific MCP tool exposed (no analysis_disasm_at_path_z80 counterpart to mips/arm64/riscv/wasm/cil/jvm). Server has no 'z80' references. Validator is self-contained (encodes Z80 opcodes per Zilog UM008011 without importing the Rust crate or calling MCP), so comparison is validator-only.",
+  "mcp_tools_relevant": [],
+  "validator_total": 15,
+  "validator_mismatches": 0,
+  "mcp_outputs": {},
+  "mismatches": [],
+  "fixed": 0,
+  "match_final": true
+}

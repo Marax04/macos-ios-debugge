@@ -1,0 +1,10 @@
+{
+  "crate": "rustre-fuzz-sanitizers",
+  "tests": 13,
+  "mismatches": 0,
+  "fixed": 0,
+  "match_final": true,
+  "status": "no_mcp_surface",
+  "note": "Nessun tool MCP wrappa rustre-fuzz-sanitizers (verificato in crates/rustre-mcp-tools/src/: nessuna occorrenza di sanitizer/asan/msan/ubsan tra i tool esposti). Validator Python self-tests eseguiti con successo: ShadowMemory mark/check, MemorySanitizer uninit detection, AddressSanitizer heap-overflow/use-after-free/double-free, UbSanitizer signed-overflow/null-deref/misaligned/div-by-zero/checked_add/checked_mul/check_access, classify_crash_severity (Critical/High/Low/Info/Medium), SanitizerLogParser ASan header+frames+access+thread+alloc-section, parse_hex_u64, CrashDeduplicator key+dedup count, CoverageMap edges/blocks/new_edges_since/coverage_ratio, ParsedStackFrame.display, empty parse. Confronto MCP-vs-validator non eseguibile finche' non viene esposto un set di tool fuzz_sanitizers_* (shadow memory, heap tracking, ubsan predicates, sanitizer log parse, dedup, coverage map). Gap puramente di superficie MCP: la logica nel crate workspace e' coperta dai test interni.",
+  "gap": "missing_mcp_tools:fuzz_sanitizers_shadow_check,fuzz_sanitizers_heap_track,fuzz_sanitizers_ubsan_check,fuzz_sanitizers_parse_log,fuzz_sanitizers_dedup,fuzz_sanitizers_coverage_map"
+}

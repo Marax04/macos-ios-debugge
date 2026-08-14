@@ -1,0 +1,30 @@
+[
+  {
+    "tool": "patch_patch_find_code_caves",
+    "reason": "No independent byte-level reference for cave detection; depends on PE section layout which requires a full PE parser."
+  },
+  {
+    "tool": "patch_bytes_at_va",
+    "reason": "Writes/modifies on-disk files; excluded to avoid side-effects on test binary."
+  },
+  {
+    "tool": "patch_nop_range_at_va",
+    "reason": "Writes/modifies on-disk files; excluded to avoid side-effects on test binary."
+  },
+  {
+    "tool": "patch_asm_at_va",
+    "reason": "Writes/modifies on-disk files; excluded to avoid side-effects on test binary."
+  },
+  {
+    "tool": "patch_patch_xor_region_at_va",
+    "reason": "Writes/modifies on-disk files; excluded to avoid side-effects on test binary."
+  },
+  {
+    "tool": "patch_pe_security_set",
+    "reason": "Writes/modifies on-disk files; excluded to avoid side-effects on test binary."
+  },
+  {
+    "tool": "patch_pe_va_to_file_offset",
+    "reason": "Requires a hex-encoded PE image as input; ground-truth section layout verification would replicate the Rust PE parser itself."
+  }
+]

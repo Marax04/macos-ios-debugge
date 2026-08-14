@@ -1,0 +1,15 @@
+{
+  "crate": "rustre-loader-wasm",
+  "tests_run": 0,
+  "mismatches_found": 0,
+  "fixes_applied": [],
+  "build_ok_after_fix": true,
+  "final_match": true,
+  "notes": [
+    "Il validator (validation/validators/rustre-loader-wasm.py) controlla esclusivamente la struttura interna del crate via lettura sorgenti: presenza di costanti (WASM_MAGIC, WASM_VERSION, MAX_SECTION_SIZE), tipi (WasmModule, WasmParser, WasmLoader, WasmStats, WasmValType, ...), varianti di errore (InvalidMagic, Leb128Error, ...), metodi del Leb128Decoder, metodi di WasmModule, campi di WasmStats e moduli interni (wasm_analyzer, wasm_disassembler, ...). Nessuna chiamata MCP.",
+    "Lato MCP (crates/rustre-mcp-tools/src/wire_tools.rs): nessun tool wasm-loader-specifico esposto. Le uniche occorrenze 'wasm' sono AnalysisDisasmAtPathWasmTool ('analysis_disasm_at_path_wasm', via rustre_arch_wasm::WasmArch) - che e' un disassembler di architettura, non un'API loader - e la menzione di 'wasm' tra le architetture accettate dal generic disasm tool.",
+    "WASM e' integrato indirettamente: project.open usa WasmLoader (impl Loader) per produrre un BinaryView, dopodiche' i tool generici (binary.*, analysis.*, disasm.*) operano sul view senza esporre le API WASM-specifiche (WasmModule::function_type, exported_function_names, imports_from, memory_pages_min, has_start_function, WasmStats, WasmNameSection, custom sections, DWARF detect, ...).",
+    "Validator eseguito: 0 mismatches (tutti i check OK su sorgenti del crate). Output: validation/out/rustre-loader-wasm.json.",
+    "Conclusione: confronto MCP vs validator NON applicabile a questo crate (nessuna API loader WASM esposta come endpoint MCP). Nessun mismatch da registrare, nessun fix sul crate da applicare, nessuna rebuild necessaria."
+  ]
+}

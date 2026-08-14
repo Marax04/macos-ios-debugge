@@ -1,0 +1,64 @@
+{
+  "category": "trace_pt",
+  "version": 3,
+  "generated": "2026-07-11",
+  "tools": [
+    {
+      "tool": "trace_pt_decode_buffer",
+      "description": "Decode raw Intel PT bytes; returns packet_count, unique_ips, bytes_in.",
+      "test_input": {"hex": "000000"},
+      "reference": "3 PAD bytes (0x00) → 3 Pad packets, 0 unique IPs",
+      "expected": {"bytes_in": 3, "packet_count": 3, "unique_ips": 0},
+      "status": "pass"
+    },
+    {
+      "tool": "trace_pt_coverage",
+      "description": "Decode raw PT bytes; returns sorted unique IPs (edge/block coverage set).",
+      "test_input": {"hex": "000000"},
+      "reference": "3 PAD bytes → no TIP packets → empty coverage",
+      "expected": {"bytes_in": 3, "unique_ips": 0, "ips": []},
+      "status": "pass"
+    },
+    {
+      "tool": "trace_pt_drcov",
+      "description": "Decode raw PT bytes and emit DRcov v2 file (hex-encoded).",
+      "test_input": {"hex": "000000", "module_name": "test.exe"},
+      "reference": "DRcov file always starts with ASCII 'DRCOV' (0x4452434f56); bytes_in == 3",
+      "expected": {"bytes_in": 3, "drcov_header_prefix_hex": "4452434f56"},
+      "status": "pass"
+    },
+    {
+      "tool": "trace_pt_decoder_remaining_bytes",
+      "description": "PtDecoder::remaining_bytes — returns buf.len() - pos.",
+      "test_cases": [
+        {
+          "test_input": {},
+          "reference": "Fresh decoder: no bytes fed, remaining = 0",
+          "expected": {"remaining_bytes": 0},
+          "status": "pass"
+        },
+        {
+          "test_input": {"bytes_hex": "4889c0"},
+          "reference": "Feed 3 bytes ('4889c0') without decoding; remaining = 3",
+          "expected": {"remaining_bytes": 3},
+          "status": "pass"
+        }
+      ],
+      "status": "pass"
+    },
+    {
+      "tool": "trace_pt_flow_event_count",
+      "description": "PtFlow::event_count for a fresh (empty) flow.",
+      "test_input": {},
+      "reference": "PtFlow::new() has events=[], so event_count() == 0",
+      "expected": {"event_count": 0},
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "tools_hardened": 5,
+    "tools_passed": 5,
+    "tools_failed": 0,
+    "tools_skipped": 0
+  }
+}

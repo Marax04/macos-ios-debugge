@@ -1,0 +1,76 @@
+---
+source: crates/rustre-arch-x86/tests/snapshots_llil.rs
+assertion_line: 212
+expression: "render_corpus(\"control flow (64-bit)\", 64, corpus)"
+---
+# control flow (64-bit)
+
+== jmp +0x10 (rel8) (bits=64) ==
+-- jmp short 0000000000001012h [eb 10]
+   0x1000: jump 0x1012.8
+
+== jmp rax (bits=64) ==
+-- jmp rax [ff e0]
+   0x1000: jump_to rax.8
+
+== je +0x20 (bits=64) ==
+-- je short 0000000000001022h [74 20]
+   0x1000: if ((flag(zf) == 0x1.1)) then 0x1022 else 0x1002
+
+== jne +0x20 (bits=64) ==
+-- jne short 0000000000001022h [75 20]
+   0x1000: if ((flag(zf) == 0x0.1)) then 0x1022 else 0x1002
+
+== jl +5 (bits=64) ==
+-- jl short 0000000000001007h [7c 05]
+   0x1000: if ((flag(sf) != flag(of))) then 0x1007 else 0x1002
+
+== ja +5 (bits=64) ==
+-- ja short 0000000000001007h [77 05]
+   0x1000: if (((flag(cf) == 0x0.1) & (flag(zf) == 0x0.1)).1) then 0x1007 else 0x1002
+
+== js +5 (bits=64) ==
+-- js short 0000000000001007h [78 05]
+   0x1000: if ((flag(sf) == 0x1.1)) then 0x1007 else 0x1002
+
+== jo +5 (bits=64) ==
+-- jo short 0000000000001007h [70 05]
+   0x1000: if ((flag(of) == 0x1.1)) then 0x1007 else 0x1002
+
+== call +0x100 (rel32) (bits=64) ==
+-- call 0000000000001105h [e8 00 01 00 00]
+   0x1000: call 0x1105.8
+
+== call rax (bits=64) ==
+-- call rax [ff d0]
+   0x1000: call rax.8
+
+== ret (bits=64) ==
+-- ret [c3]
+   0x1000: ret
+
+== ret 8 (bits=64) ==
+-- ret 8 [c2 08 00]
+   0x1000: rsp.8 = (rsp.8 + 0x8.8).8
+   0x1000: ret
+
+== loop -2 (bits=64) ==
+-- loop 0000000000001000h [e2 fe]
+   0x1000: rcx.8 = (rcx.8 - 0x1.8).8
+   0x1000: if ((rcx.8 != 0x0.8)) then 0x1000 else 0x1002
+
+== sete al (bits=64) ==
+-- sete al [0f 94 c0]
+   0x1000: rax.8 = ((rax.8 & 0xffffffffffffff00.8).8 | (zx((flag(zf) == 0x1.1), 1->8) & 0xff.8).8).8
+
+== setg cl (bits=64) ==
+-- setg cl [0f 9f c1]
+   0x1000: rcx.8 = ((rcx.8 & 0xffffffffffffff00.8).8 | (zx(((flag(zf) == 0x0.1) & (flag(sf) == flag(of))).1, 1->8) & 0xff.8).8).8
+
+== cmove rax, rbx (bits=64) ==
+-- cmove rax,rbx [48 0f 44 c3]
+   0x1000: rax.8 = ((flag(zf) == 0x1.1) ? rbx.8 : rax.8).8
+
+== cmovne eax, ecx (bits=64) ==
+-- cmovne eax,ecx [0f 45 c1]
+   0x1000: rax.8 = zx(((flag(zf) == 0x0.1) ? low(rcx.8, 4) : low(rax.8, 4)).4, 4->8)

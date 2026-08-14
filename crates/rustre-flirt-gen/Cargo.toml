@@ -1,0 +1,37 @@
+[package]
+license.workspace = true
+name = "rustre-flirt-gen"
+version = "0.1.0"
+edition = "2024"
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustre-flirt = { path = "../rustre-flirt" }
+rustre-core = { path = "../rustre-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+object = { workspace = true }
+goblin = { workspace = true }
+rustc-demangle = { workspace = true }
+
+[[bin]]
+name = "rust-stdlib-sigs"
+path = "src/bin/rust_stdlib_sigs.rs"
+
+[[bin]]
+name = "msvcrt-sigs"
+path = "src/bin/msvcrt_sigs.rs"
+
+[dev-dependencies]
+rustre-flirt-apply = { path = "../rustre-flirt-apply" }
+tempfile = "3"
+
+[lints]
+workspace = true

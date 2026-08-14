@@ -1,0 +1,7 @@
+{
+  "module": "ttd_query",
+  "tools_hardened": 16,
+  "checks_passed": 16,
+  "checks_failed": 0,
+  "mismatches": []
+}
