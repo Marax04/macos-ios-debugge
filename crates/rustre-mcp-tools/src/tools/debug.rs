@@ -2511,11 +2511,17 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     .map_err(|_| anyhow!("invalid watchpoint_id '{wp_raw}'"))?;
 
                 if let Some(r) = with_live(&session_id, |sess| {
-                    // Disarm through the debugger, which is what holds the
-                    // registers now, and only then drop the id.
-                    let removed = sess.watchpoints.remove(wp_id).map_err(|e| anyhow!("{e}"))?;
-                    block_on(sess.dbg.remove_breakpoint(Address::new(removed.address)))
+                    // Disarm the HARDWARE first, and only free the id once that
+                    // succeeded. The other order looks equivalent and is not:
+                    // if the disarm fails, the id is already gone from this
+                    // table while the debug register is still armed, so the
+                    // watchpoint keeps firing and nothing can name it any more.
+                    let addr = sess.watchpoints.get(wp_id)
+                        .ok_or_else(|| anyhow!("no watchpoint wp_{wp_id} in this session"))?
+                        .address;
+                    block_on(sess.dbg.remove_breakpoint(Address::new(addr)))
                         .map_err(|e| anyhow!("remove_breakpoint: {e}"))?;
+                    let removed = sess.watchpoints.remove(wp_id).map_err(|e| anyhow!("{e}"))?;
                     let (dr7, _) = sess.live_debug_registers();
                     Ok(json!({
                         "session_id": session_id,
@@ -2585,6 +2591,14 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                                 "kind": rustre_debug::watchpoint_engine::WatchpointType::from_breakpoint_kind(bp.kind).map(|w| w.to_string()),
                                 "enabled": bp.enabled,
                                 "hit_count": bp.hit_count,
+                                // `enabled` is this tool's own bookkeeping:
+                                // it says the user did not disable it, NOT
+                                // that the CPU is watching. The backend sets
+                                // this label when a resume-time re-arm could
+                                // not put the watchpoint into every thread's
+                                // debug registers, which is precisely the case
+                                // where "enabled": true is true and useless.
+                                "note": bp.label,
                             })
                         })
                         .collect();

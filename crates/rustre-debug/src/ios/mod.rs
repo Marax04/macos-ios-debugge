@@ -122,9 +122,26 @@ pub const BACKEND_NAME: &str = "apple";
 /// `arm64e` is listed apart from `arm64` because pointer authentication changes
 /// how return addresses must be read while unwinding; conflating them is a
 /// known source of wrong backtraces.
+///
+/// `x86_64` was listed here and must not be: `lib.rs` documents this value as
+/// the answer callers read to PICK a backend, and `AppleDebugger::require_arm64`
+/// refuses four trait methods — `set_breakpoint` for the code kinds,
+/// `step_over`, `step_out` and `backtrace` — the moment the session reports
+/// `TargetArch::X86_64`. Every code path behind those methods is A64
+/// arithmetic (4-byte alignment, `brk #0`, the trap masking in `read_memory`,
+/// the arm64 unwinder). A caller that believed the advertisement and selected
+/// this backend for an x86-64 target got one that cannot set a code
+/// breakpoint, step over a call, step out, or produce a backtrace. The claim
+/// and the gate could not both be right; the gate is the one backed by working
+/// code, so the claim is the half that changes.
+///
+/// This is NOT the `env::consts::ARCH` question the three native backends
+/// answer — this backend drives a REMOTE target over RSP, so the host it runs
+/// on says nothing about what it can debug. The list is what the arm64-only
+/// implementation below it actually supports.
 #[must_use]
 pub fn supported_architectures() -> Vec<String> {
-    ["arm64", "arm64e", "x86_64"]
+    ["arm64", "arm64e"]
         .iter()
         .map(|s| (*s).to_string())
         .collect()
@@ -140,7 +157,13 @@ mod lib_tests {
         let arches = supported_architectures();
         assert!(arches.contains(&"arm64".to_string()));
         assert!(arches.contains(&"arm64e".to_string()));
-        assert!(arches.contains(&"x86_64".to_string()));
+        // `x86_64` used to be asserted PRESENT here, which froze the wrong
+        // half of a contradiction: the backend refuses code breakpoints,
+        // `step_over`, `step_out` and `backtrace` on an x86-64 session.
+        assert!(
+            !arches.contains(&"x86_64".to_string()),
+            "advertising an architecture whose code breakpoints and unwinder are refused"
+        );
     }
 
     #[test]

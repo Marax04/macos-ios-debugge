@@ -677,6 +677,27 @@ pub fn build_a_packet<S: AsRef<str>>(argv: &[S]) -> String {
     format!("A{}", parts.join(","))
 }
 
+/// Hex-encode a string for the `Q` launch packets.
+fn hex_of(text: &str) -> String {
+    text.as_bytes().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Build `QSetWorkingDir:<hex path>` — the working directory the inferior is
+/// launched in. Hex-encoded so a path with spaces or `#`/`$` survives the RSP
+/// framing.
+#[must_use]
+pub fn build_set_working_dir(dir: &str) -> String {
+    format!("QSetWorkingDir:{}", hex_of(dir))
+}
+
+/// Build `QEnvironmentHexEncoded:<hex of KEY=VALUE>` — one variable to add to
+/// the inferior's environment. The hex form is used unconditionally because the
+/// plain `QEnvironment:` form cannot carry a value containing `#`, `$` or `*`.
+#[must_use]
+pub fn build_environment(key: &str, value: &str) -> String {
+    format!("QEnvironmentHexEncoded:{}", hex_of(&format!("{key}={value}")))
+}
+
 /// Architecture slice to select before launching a universal binary.
 #[must_use]
 pub fn build_launch_arch(arch: &str) -> String {
@@ -1247,4 +1268,20 @@ mod tests {
         let hi = from_packet(&pkt, HostInfo::parse).unwrap();
         assert!(hi.is_arm64e());
     }
+
+#[cfg(test)]
+mod launch_env_packet_tests {
+    use super::{build_environment, build_set_working_dir};
+
+    #[test]
+    fn working_dir_and_environment_are_hex_encoded() {
+        assert_eq!(
+            build_set_working_dir("/private/tmp"),
+            "QSetWorkingDir:2f707269766174652f746d70"
+        );
+        // A value containing `#` — the RSP frame terminator — survives only
+        // because the hex form is used; plain `QEnvironment:` would not.
+        assert_eq!(build_environment("K", "a#b"), "QEnvironmentHexEncoded:4b3d612362");
+    }
+}
 }

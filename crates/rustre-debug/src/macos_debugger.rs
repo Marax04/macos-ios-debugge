@@ -471,6 +471,15 @@ pub struct MacosDebugger {
     /// alternative was a per-platform exemption on the single method most
     /// likely to need a shared fix.
     hw_watchpoints: parking_lot::Mutex<HashMap<u64, (BreakpointKind, u8)>>,
+    /// Watchpoints that the last resume-time re-arm could NOT put into every
+    /// thread's debug registers.
+    ///
+    /// A resume must not FAIL because a watchpoint could not be re-armed on a
+    /// thread that just appeared — but the fact has to survive the resume.
+    /// Discarded, the watchpoint silently stops watching and no caller can
+    /// ever learn it, which is the failure mode a watchpoint exists to rule
+    /// out. `breakpoints()` labels the entries named here.
+    unarmed_since_resume: parking_lot::Mutex<std::collections::HashSet<u64>>,
     /// Per-address breakpoint conditions, as written by the caller.
     ///
     /// Kept beside the breakpoint table rather than inside `Breakpoint` because
@@ -515,6 +524,7 @@ impl MacosDebugger {
             thread_filters: parking_lot::Mutex::new(HashMap::new()),
             disabled: parking_lot::Mutex::new(std::collections::HashSet::new()),
             hw_watchpoints: parking_lot::Mutex::new(HashMap::new()),
+            unarmed_since_resume: parking_lot::Mutex::new(std::collections::HashSet::new()),
             conditions: parking_lot::Mutex::new(HashMap::new()),
             pending: parking_lot::Mutex::new(crate::pending_breakpoint::PendingBreakpoints::new()),
             internal_stops: parking_lot::Mutex::new(std::collections::HashSet::new()),
@@ -590,7 +600,18 @@ impl MacosDebugger {
         let tids = self.threads().await?;
         let mut found = false;
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // NOT `else { continue }`. A thread whose registers cannot be read
+            // is a thread whose debug registers were not inspected, and this
+            // function's `bool` means "a slot was holding this address" — the
+            // caller cannot tell that from "I could not look". It then clears
+            // its own bookkeeping either way, which would forget a watchpoint
+            // still live in the CPU.
+            let mut regs = self.get_registers(tid).await.map_err(|e| {
+                DebugError::RegisterError(format!(
+                    "cannot read thread {}'s registers, so it is not known whether a debug                      register still holds {addr:#x}: {e}",
+                    tid.0
+                ))
+            })?;
             let dr7 = regs.get("dr7").unwrap_or(0);
             let mut cleared_here = false;
             for slot in 0u8..4 {
@@ -614,7 +635,15 @@ impl MacosDebugger {
                     break;
                 }
             }
-            if cleared_here && self.set_registers(tid, regs).await.is_ok() {
+            if cleared_here {
+                // A write that fails must not be reported as "nothing found":
+                // the slot IS holding the address and is still armed.
+                self.set_registers(tid, regs).await.map_err(|e| {
+                    DebugError::RegisterError(format!(
+                        "the debug register holding {addr:#x} on thread {} could not be                          cleared, so the watchpoint is still armed: {e}",
+                        tid.0
+                    ))
+                })?;
                 found = true;
             }
         }
@@ -653,10 +682,27 @@ impl MacosDebugger {
         // `get_registers` per thread on a session that armed nothing. That is
         // paid once per detach or drop, and the per-thread `dr7 == 0` check
         // below still skips the write for every thread that is clean.
-        let Ok(tids) = self.threads().await else { return Ok(()) };
+        // Being unable to LIST the threads is not "everything is clear".
+        //
+        // This function promises, in its own error text, that no thread is left
+        // with its debug registers armed. Answering `Ok(())` without having
+        // examined a single one is that promise made without the check: the
+        // target is detached with a live `DR7`, traps on its next watched
+        // access, and finds no debugger attached to take the trap. It dies from
+        // having been inspected.
+        let tids = self.threads().await.map_err(|e| {
+            DebugError::DetachError(format!(
+                "cannot list the target'''s threads, so it is not known whether any debug                  register is still armed: {e}"
+            ))
+        })?;
         let mut still_armed: Vec<u32> = Vec::new();
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // A thread whose registers cannot be read is UNVERIFIED, not
+            // clean — and it is the likeliest one to be in a bad state.
+            let Ok(mut regs) = self.get_registers(tid).await else {
+                still_armed.push(tid.0);
+                continue;
+            };
             if regs.get("dr7").unwrap_or(0) == 0 {
                 continue;
             }
@@ -717,7 +763,13 @@ impl MacosDebugger {
         let Ok(tids) = self.threads().await else { return wanted.iter().map(|(a, _, _)| *a).collect() };
         let mut unarmed: Vec<u64> = Vec::new();
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // A thread whose registers cannot be read was never inspected, so
+            // NONE of the wanted watchpoints is armed on it. Skipping it in
+            // silence reported it as watched while nothing watched it.
+            let Ok(mut regs) = self.get_registers(tid).await else {
+                unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
+                continue;
+            };
             let mut dr7 = regs.get("dr7").unwrap_or(0);
             let mut changed = false;
             for (addr, kind, size) in &wanted {
@@ -752,6 +804,33 @@ impl MacosDebugger {
                 dr7 = new_dr7;
                 changed = true;
             }
+            // Ask the registers, do not trust the loop above.
+            //
+            // There are three ways for a watchpoint not to land on this thread
+            // — all four debug registers already occupied (`break`), a dr7
+            // encoding the CPU would reject (`continue`), and the unreadable
+            // registers handled above — and every one of them leaves the same
+            // observable trace: the address is absent from these registers.
+            // One check after the fact catches all three, and unlike reporting
+            // each `break`/`continue` site it cannot over-report a watchpoint
+            // that was ALREADY armed here, which would make `enable_breakpoint`
+            // raise a failure that did not happen.
+            let missed: Vec<u64> = wanted
+                .iter()
+                .filter(|(addr, _, _)| {
+                    !(0u8..4).any(|slot| {
+                        let name = match slot {
+                            0 => "dr0",
+                            1 => "dr1",
+                            2 => "dr2",
+                            _ => "dr3",
+                        };
+                        dr7 & (1u64 << (2 * u32::from(slot))) != 0
+                            && regs.get(name) == Some(*addr)
+                    })
+                })
+                .map(|(a, _, _)| *a)
+                .collect();
             if changed {
                 regs.set("dr7", dr7);
                 // A re-arm that did not land leaves this thread UNWATCHED.
@@ -769,8 +848,10 @@ impl MacosDebugger {
                 // request to re-arm and CAN answer, is the one that acts on it.
                 if self.set_registers(tid, regs).await.is_err() {
                     unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
+                    continue;
                 }
             }
+            unarmed.extend(missed);
         }
         unarmed.sort_unstable();
         unarmed.dedup();
@@ -3292,7 +3373,12 @@ impl crate::Debugger for MacosDebugger {
         // continue.
         loop {
             self.step_off_planted_breakpoint(None).await;
-            let _ = self.rearm_watchpoints_on_new_threads().await;
+            let missed = self.rearm_watchpoints_on_new_threads().await;
+            // Not `let _ =`. The resume still does not fail — that part of the
+            // old comment was right — but the answer is RECORDED instead of
+            // dropped. Assigning, not extending: an address that has since been
+            // re-armed clears itself, so this never accumulates stale claims.
+            *self.unarmed_since_resume.lock() = missed.into_iter().collect();
             let mut r = match self.send(Command::ContinueExecution)? {
                 Reply::Event(r) => r,
                 _ => return Err(DebugError::StepError("unexpected reply".into())),
@@ -3454,7 +3540,12 @@ impl crate::Debugger for MacosDebugger {
         // every resume; the stepping door never did, so stepping through the
         // code that spawns a thread left that thread unwatched — silently, which
         // is the failure mode a watchpoint exists to rule out.
-        let _ = self.rearm_watchpoints_on_new_threads().await;
+        let missed = self.rearm_watchpoints_on_new_threads().await;
+            // Not `let _ =`. The resume still does not fail — that part of the
+            // old comment was right — but the answer is RECORDED instead of
+            // dropped. Assigning, not extending: an address that has since been
+            // re-armed clears itself, so this never accumulates stale claims.
+            *self.unarmed_since_resume.lock() = missed.into_iter().collect();
         if let Some(ev) = self.step_off_planted_breakpoint(Some(tid)).await {
             *self.current_tid.lock() = Some(ev.tid);
             if ev.reason.is_exit() {
@@ -3768,13 +3859,27 @@ impl crate::Debugger for MacosDebugger {
                 "a software breakpoint at {addr:?} is not {alignment}-byte aligned; on this                  architecture a trap there would straddle two instructions and corrupt both"
             )));
         }
-        const X86_TRAP_BYTE_IS_VALID_HERE: bool =
-            cfg!(any(target_arch = "x86_64", target_arch = "x86"));
-        if !X86_TRAP_BYTE_IS_VALID_HERE {
-            return Err(DebugError::Unsupported(
-                "software breakpoints on this backend implant the x86 int3 (0xCC), which is not a breakpoint on this host architecture".into(),
-            ));
-        }
+        // The blanket refusal off x86 that used to sit here has been REMOVED.
+        //
+        // It said this backend "implants the x86 int3 (0xCC)", true when it was
+        // written and no longer what this function does: the implant below
+        // writes `crate::host_trap_bytes()` — `BRK #0` on AArch64, derived from
+        // this crate's single arm64 encoder, four bytes wide per `trap_len`,
+        // with `pc_after_trap` already accounting for the ARM-vs-x86 difference
+        // in the PC reported on trap. The alignment check above already asks
+        // `host_trap_alignment()`, and remains the one architecture-dependent
+        // refusal this function is entitled to give.
+        //
+        // Removed in all THREE backends, not one. Scoping it to Linux was the
+        // first instinct and it was wrong twice over: the trap derivation is
+        // shared and identical, so the refusal is stale by the same argument
+        // everywhere, and `the_logic_shared_by_the_three_backends_stays_identical`
+        // exists precisely to stop a non-platform-specific divergence like that.
+        //
+        // Two of the three are PROVEN by runners that already exist and already
+        // run: `ubuntu-24.04-arm` and `macos-14` (Apple Silicon) execute this
+        // path on real ARM hardware. Windows-on-ARM has no runner here, so that
+        // one is structurally identical and unproven — stated, not glossed.
         // Idempotency guard (iter 153/180 on the other two backends, never
         // applied here — this file is not compilable or live-testable on the
         // development hosts, so it silently kept every defect its twins
@@ -4237,6 +4342,16 @@ impl crate::Debugger for MacosDebugger {
                 // watchpoints exactly as it does to software breakpoints.
                 bp.ignore_count = self.ignore_counts.lock().get(&addr).copied().unwrap_or(0);
                 bp.only_thread = self.thread_filters.lock().get(&addr).copied().map(ThreadId);
+                // The last field of this block that was maintained nowhere and
+                // published nowhere. A watchpoint listed as enabled and
+                // hit-counted while no debug register on some thread holds it
+                // is the most expensive wrong answer this tool can give, and
+                // until now the listing had no way to say it.
+                if self.unarmed_since_resume.lock().contains(&addr) {
+                    bp.label = Some(
+                        "not armed on every thread as of the last resume".to_string(),
+                    );
+                }
                 bp
             }))
             .collect())
@@ -4702,18 +4817,21 @@ mod live_tests {
         );
     }
 
-    /// Software breakpoints on Apple Silicon are REFUSED, and that must show up
-    /// as a refusal rather than as a silent success.
+    /// Software breakpoints must be ACCEPTED on both halves of macOS.
     ///
-    /// The refusal (`X86_TRAP_BYTE_IS_VALID_HERE`) is deliberate. Iteration 548
-    /// removed the defect that made it necessary — `set_breakpoint` saved one
-    /// byte and wrote four, so removing a breakpoint on ARM64 would have left
-    /// three bytes of `BRK` behind — but lifting it needs more than that.
+    /// Renamed and inverted in iteration 569. It used to assert the refusal on
+    /// Apple Silicon, by the design stated in its own old text — *"asserted per
+    /// architecture rather than skipped on one, so the day the refusal is
+    /// lifted this test fails and has to be updated deliberately"*. That day is
+    /// this one, and this is the deliberate update.
     ///
-    /// Asserted per architecture rather than skipped on one, so the day the
-    /// refusal is lifted this test fails and has to be updated deliberately.
+    /// What changed is not judgement but the implant: `set_breakpoint` writes
+    /// `host_trap_bytes()`, a real `BRK #0` on AArch64, so the refusal was
+    /// citing a byte it no longer plants. `macos-14` is Apple Silicon and runs
+    /// this test on real ARM hardware, which is what turns the removal from a
+    /// prediction into a measurement.
     #[tokio::test]
-    async fn a_software_breakpoint_is_accepted_on_intel_and_refused_on_apple_silicon() {
+    async fn a_software_breakpoint_is_accepted_on_intel_and_on_apple_silicon() {
         let dbg = MacosDebugger::new();
         let Ok(_pid) = dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await else {
             panic!("launch failed — see launch_runs_a_child_to_exit for the cause");
@@ -4729,13 +4847,13 @@ mod live_tests {
         let Some(outcome) = outcome else {
             panic!("the target has no executable region to plant a breakpoint in");
         };
-        #[cfg(target_arch = "aarch64")]
+        // Both architectures, one assertion: the implant is derived from the
+        // host, so there is nothing left for an arch gate to say here. A region
+        // base is page-aligned, so the surviving alignment refusal cannot
+        // legitimately fire at this address either.
         assert!(
-            matches!(outcome, Err(DebugError::Unsupported(_))),
-            "Apple Silicon must REFUSE a software breakpoint while the x86 trap byte is what \
-             this backend plants; got {outcome:?}"
+            outcome.is_ok(),
+            "a software breakpoint must be accepted on this host: the backend plants              `host_trap_bytes()`, a real trap on both x86_64 and AArch64; got {outcome:?}"
         );
-        #[cfg(target_arch = "x86_64")]
-        assert!(outcome.is_ok(), "Intel must accept a software breakpoint; got {outcome:?}");
     }
 }

@@ -722,7 +722,17 @@ pub fn parse_compile_units(sections: &DwarfSections) -> Vec<CompileUnit> {
         if unit_len == 0 || unit_end > info.len() {
             break;
         }
-        if let Some(cu) = parse_one_unit(sections, &mut c, pos as u64, is_64bit) {
+        // Parse the root DIE against a cursor bounded by the extent the unit
+        // itself declares. Sharing the section-wide cursor lets a unit whose
+        // DIE outruns its `unit_length` keep reading into the NEXT unit's
+        // header and report those bytes as its own attributes — a stmt_list
+        // scavenged from a neighbour points at another translation unit's line
+        // program, which is a confidently wrong file:line rather than a
+        // failure. Bounded, the overrun is a truncation error and the unit is
+        // dropped by the `Option` this call already returns.
+        let Some(unit_bytes) = info.get(..unit_end) else { break };
+        let mut die = Cursor::at(unit_bytes, after_len);
+        if let Some(cu) = parse_one_unit(sections, &mut die, pos as u64, is_64bit) {
             out.push(cu);
         }
         pos = unit_end;
@@ -2244,6 +2254,75 @@ mod tests {
         assert_eq!(cu.address_size, 8);
     }
 
+    /// A unit's attributes must lie inside the extent that unit declares.
+    ///
+    /// `unit_length` is validated and then used only to advance the walk; the
+    /// root DIE is parsed against a cursor over the whole `__debug_info`. A unit
+    /// that declares 8 bytes but whose DIE needs 12 therefore reads its last
+    /// attribute out of the NEXT unit's header and reports it as its own — a
+    /// wrong `DW_AT_stmt_list` maps every address in the unit to a file:line
+    /// from another translation unit, which is exactly the silent-wrong-answer
+    /// class this module exists to avoid.
+    #[test]
+    fn compile_unit_attributes_stay_inside_the_declared_unit() {
+        // One abbrev: DW_TAG_compile_unit, no children, DW_AT_stmt_list/data4.
+        let mut abbrev = Vec::new();
+        uleb(1, &mut abbrev);
+        uleb(DW_TAG_COMPILE_UNIT, &mut abbrev);
+        abbrev.push(0);
+        uleb(dw_at::STMT_LIST, &mut abbrev);
+        uleb(dw_form::DATA4, &mut abbrev);
+        uleb(0, &mut abbrev);
+        uleb(0, &mut abbrev);
+        uleb(0, &mut abbrev);
+
+        // A unit whose root DIE occupies 12 bytes after the length field.
+        let unit = |declared_len: u32, stmt: u32| {
+            let mut out = Vec::new();
+            out.extend_from_slice(&declared_len.to_le_bytes());
+            out.extend_from_slice(&4u16.to_le_bytes()); // version
+            out.extend_from_slice(&0u32.to_le_bytes()); // abbrev offset
+            out.push(8); // address size
+            uleb(1, &mut out); // abbrev code
+            out.extend_from_slice(&stmt.to_le_bytes());
+            out
+        };
+
+        // Honest control: both units declare their true 12-byte extent.
+        let mut honest = unit(12, 0xAAAA_AAAA);
+        honest.extend_from_slice(&unit(12, 0x7777_7777));
+        let cus = parse_compile_units(&DwarfSections {
+            debug_info: honest,
+            debug_abbrev: abbrev.clone(),
+            ..DwarfSections::default()
+        });
+        assert_eq!(cus.len(), 2);
+        assert_eq!(cus[0].stmt_list, Some(0xAAAA_AAAA));
+        assert_eq!(cus[1].stmt_list, Some(0x7777_7777));
+
+        // Hostile: unit 1 declares 8 bytes (ending at 12) but its DIE wants 16.
+        // Unit 2 begins at exactly the boundary unit 1 declared.
+        let mut hostile = unit(8, 0)[..12].to_vec(); // truncated at its declared end
+        hostile.extend_from_slice(&unit(12, 0x7777_7777));
+        let cus = parse_compile_units(&DwarfSections {
+            debug_info: hostile,
+            debug_abbrev: abbrev,
+            ..DwarfSections::default()
+        });
+        // Unit 1 is genuinely truncated: it must drop out, never complete
+        // itself with unit 2's `unit_length` field as its DW_AT_stmt_list.
+        for cu in &cus {
+            assert_ne!(
+                (cu.unit_offset, cu.stmt_list),
+                (0, Some(12)),
+                "unit at 0x0 harvested the next unit's length field as its stmt_list"
+            );
+        }
+        assert_eq!(cus.len(), 1, "the truncated unit must be dropped, not completed");
+        assert_eq!(cus[0].unit_offset, 12);
+        assert_eq!(cus[0].stmt_list, Some(0x7777_7777));
+    }
+
     #[test]
     fn compile_unit_walk_survives_truncation() {
         let full = build_debug_info(0);
@@ -3153,5 +3232,73 @@ mod tests {
                 lp.program_start
             );
         }
+    }
+
+    /// A compile unit's root DIE must be read inside the extent the unit
+    /// declares. When `parse_compile_units` computed that extent and used it
+    /// only to advance the walk — parsing the DIE against a cursor over the
+    /// whole `.debug_info` — a unit whose declared length is shorter than its
+    /// DIE harvested the bytes of the NEXT unit's header and reported them as
+    /// its own attributes. A `stmt_list` scavenged that way names another
+    /// translation unit's line program, so every address in the unit gets a
+    /// file:line from the wrong source file: confidently wrong, never a
+    /// failure. Same discipline the line-program header is already bounded by.
+    #[test]
+    fn truncated_compile_unit_does_not_read_into_the_next_unit() {
+        // One abbrev: DW_TAG_compile_unit, no children, DW_AT_stmt_list/data4.
+        let abbrev: Vec<u8> = vec![1, 0x11, 0, 0x10, 0x06, 0, 0, 0];
+
+        // v4 root DIE: version(2) + abbrev_off(4) + addr_size(1) + code(1)
+        // = 8 bytes, then the 4-byte DW_AT_stmt_list = 12 in all.
+        let head = |len: u32| {
+            let mut v = Vec::new();
+            v.extend_from_slice(&len.to_le_bytes());
+            v.extend_from_slice(&4u16.to_le_bytes());
+            v.extend_from_slice(&0u32.to_le_bytes());
+            v.push(8);
+            v.push(1);
+            v
+        };
+        // Unit 2 declares 0x40 so its length field is a value no honest unit 1
+        // could produce, and pads out to that extent.
+        let mut unit2 = head(0x40);
+        unit2.extend_from_slice(&0x7777_7777u32.to_le_bytes());
+        unit2.resize(4 + 0x40, 0);
+
+        // Honest control: unit 1 declares its true 12 bytes, so unit 2 sits at
+        // offset 16 and both decode from their own bytes.
+        let mut info = head(12);
+        info.extend_from_slice(&0xaaaa_aaaau32.to_le_bytes());
+        info.extend_from_slice(&unit2);
+        let s = DwarfSections {
+            debug_info: info,
+            debug_abbrev: abbrev.clone(),
+            ..DwarfSections::default()
+        };
+        let cus = parse_compile_units(&s);
+        assert_eq!(cus.len(), 2);
+        assert_eq!((cus[0].unit_offset, cus[0].stmt_list), (0, Some(0xaaaa_aaaa)));
+        assert_eq!((cus[1].unit_offset, cus[1].stmt_list), (16, Some(0x7777_7777)));
+
+        // Hostile: only `unit_length` changes. Unit 1 declares 8 bytes — its
+        // DIE needs 12 — and unit 2 begins at exactly the boundary unit 1
+        // declared, offset 12. Unit 1's DW_AT_stmt_list therefore falls on
+        // offsets 12..16: unit 2's `unit_length` field, 0x40.
+        let mut info = head(8);
+        info.extend_from_slice(&unit2);
+        let s = DwarfSections { debug_info: info, debug_abbrev: abbrev, ..DwarfSections::default() };
+        let cus = parse_compile_units(&s);
+
+        for cu in &cus {
+            assert_ne!(
+                cu.stmt_list,
+                Some(0x40),
+                "unit at 0x{:x} reported the NEXT unit's length field as its stmt_list",
+                cu.unit_offset
+            );
+        }
+        // The truncated unit must drop out; the intact one must still decode.
+        assert_eq!(cus.len(), 1, "truncated unit was completed with foreign bytes");
+        assert_eq!((cus[0].unit_offset, cus[0].stmt_list), (12, Some(0x7777_7777)));
     }
 }

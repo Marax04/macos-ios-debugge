@@ -400,6 +400,12 @@ impl Perms {
     }
 }
 
+/// Largest `_M` allocation the mock will attempt. The simulated address space
+/// is a handful of small regions, so anything past this is a malformed request
+/// and is answered `E01` — as a device would — rather than handed to the
+/// allocator, where it would abort the whole test process.
+pub const MAX_ALLOC_BYTES: usize = 64 * 1024 * 1024;
+
 /// One mapped region of the simulated address space.
 #[derive(Debug, Clone)]
 pub struct MemoryRegion {
@@ -505,10 +511,14 @@ impl MemorySpace {
     /// same way and clients must handle it.
     #[must_use]
     pub fn read(&self, addr: u64, len: usize) -> Option<Vec<u8>> {
+        // Logged only once the access has SUCCEEDED: an access that faulted is
+        // not something the program touched — the instruction aborted and the
+        // hardware takes a translation fault instead of reporting a watchpoint.
+        let out = self.read_untracked(addr, len)?;
         if self.recording {
             self.access_log.borrow_mut().push(MemAccess { addr, len, write: false });
         }
-        self.read_untracked(addr, len)
+        Some(out)
     }
 
     /// [`MemorySpace::read`] without touching the access log. Used for
@@ -540,13 +550,24 @@ impl MemorySpace {
 
     /// Write bytes; fails if unmapped, read-only, or not fully contained.
     pub fn write(&mut self, addr: u64, bytes: &[u8]) -> bool {
-        if self.recording {
+        let ok = self.write_untracked(addr, bytes);
+        // Only an access that COMPLETED is an access the program performed: a
+        // faulting store takes the translation fault and its data never reaches
+        // the watchpoint comparators, so it must not be logged.
+        if ok && self.recording {
             self.access_log.borrow_mut().push(MemAccess {
                 addr,
                 len: bytes.len(),
                 write: true,
             });
         }
+        ok
+    }
+
+    /// [`MemorySpace::write`] without touching the access log. Used for
+    /// debugger-initiated (`M`/`X`) writes, which are not accesses by the
+    /// target and so may not fire a watchpoint.
+    pub fn write_untracked(&mut self, addr: u64, bytes: &[u8]) -> bool {
         let Some(r) = self.region_at_mut(addr) else {
             return false;
         };
@@ -798,6 +819,26 @@ pub struct MockDebugserver {
     /// a client's manual patch-the-instruction fallback is reachable from a
     /// test instead of only against such a stub in the wild.
     refuse_z_software: bool,
+    /// When `Some(n)`, the next `n` software `Z0` INSERTS are answered `OK`
+    /// and every later one is refused. Models the stub that accepted a trap
+    /// while it still had room and refuses the RE-arm after the resource was
+    /// given up and taken by something else. `refuse_z_software` cannot reach
+    /// that path: it refuses from the very first insert, so the client never
+    /// gets a stub-managed trap to re-enable in the first place.
+    z_software_budget: Option<usize>,
+    /// When set, every `z` REMOVAL is answered `E01` while `Z` insertions keep
+    /// working — a stub that refuses to uninstall a trap it still holds. Models
+    /// the real refusals debugserver returns for a `z` it cannot honour (wrong
+    /// length for the installed trap, target no longer writable), which are the
+    /// only way to observe that a client checks the removal reply at all.
+    refuse_z_removals: bool,
+    /// Let this many `Z0` INSERTS through, then answer every later one with an
+    /// empty reply. Distinct from `refuse_z_software`, which refuses from the
+    /// first packet: a stub can perfectly well accept the initial insert and
+    /// refuse a later one (the page stopped being writable, the image was
+    /// unloaded), and that is the only shape in which a client's RE-arm path
+    /// can be observed separately from its first-arm path.
+    sw_inserts_before_failing: Option<usize>,
     /// Answer memory WRITEs with `E09` once this many have succeeded.
     writes_before_failing: Option<usize>,
     /// Refuse the `g` register-block read with `E09` once this many have
@@ -815,6 +856,14 @@ pub struct MockDebugserver {
     /// way a stub that predates the extension does — the only way to reach a
     /// client's fallback path from a test.
     jthreads_info_supported: bool,
+    /// When false the server answers `QSetWorkingDir`/`QEnvironmentHexEncoded`
+    /// with an empty packet, the way a stub without launch-environment support
+    /// does.
+    launch_env_supported: bool,
+    /// `KEY=VALUE` pairs decoded from `QEnvironmentHexEncoded`.
+    launch_env: Vec<String>,
+    /// Path decoded from `QSetWorkingDir`.
+    launch_working_dir: Option<String>,
     /// Loaded images reported by `jGetLoadedDynamicLibrariesInfos`.
     images: Vec<LoadedImage>,
     /// Payload served by `qXfer:features:read:target.xml`.
@@ -850,12 +899,21 @@ pub struct MockDebugserver {
     pub retransmissions: usize,
     inbound: Vec<u8>,
     exit_code: Option<u8>,
+    /// Set once a stop reply that ANNOUNCES the death (`X`) has actually gone
+    /// out, which is what makes the target unreachable — see `target_is_gone`.
+    death_reported: bool,
     /// Signal the target died OF, reported as an `X` stop reply.
     ///
     /// Distinct from `exit_code`: `W` says "exited with status", `X` says
     /// "killed by signal". Both mean the process is gone, and a debugger that
     /// treats only the first as an ending keeps talking to a corpse.
     killed_by: Option<u8>,
+    /// Accept this many `Z0` inserts, then answer every further one with an
+    /// error. Models a stub that armed a software breakpoint happily and later
+    /// cannot re-arm it — the page turned read-only, the slot table filled,
+    /// the region was unmapped. A client that never reads the reply cannot
+    /// tell that case from a successful re-arm.
+    sw_inserts_before_refusing: Option<usize>,
     /// Addresses handed out by `_M` (allocate) and freed by `_m`.
     allocations: BTreeMap<u64, u64>,
     next_alloc: u64,
@@ -887,6 +945,9 @@ impl MockDebugserver {
             z_inserts: 0,
             z_removes: 0,
             refuse_z_software: false,
+            z_software_budget: None,
+            refuse_z_removals: false,
+            sw_inserts_before_failing: None,
             writes_before_failing: None,
             reg_reads_before_failing: None,
             short_reads: false,
@@ -895,6 +956,9 @@ impl MockDebugserver {
             thread_suffix_supported: false,
             list_threads_in_stop_reply: false,
             jthreads_info_supported: true,
+            launch_env_supported: false,
+            launch_env: Vec::new(),
+            launch_working_dir: None,
             images: Vec::new(),
             target_xml: default_target_xml(),
             faults: FaultInjection::default(),
@@ -909,10 +973,29 @@ impl MockDebugserver {
             retransmissions: 0,
             inbound: Vec::new(),
             exit_code: None,
+            death_reported: false,
             killed_by: None,
+            sw_inserts_before_refusing: None,
             allocations: BTreeMap::new(),
             next_alloc: 0x7000_0000_0000,
         }
+    }
+
+    /// Enable `QSetWorkingDir` / `QEnvironmentHexEncoded` support.
+    pub fn set_launch_env_supported(&mut self, on: bool) {
+        self.launch_env_supported = on;
+    }
+
+    /// `KEY=VALUE` pairs received via `QEnvironmentHexEncoded`.
+    #[must_use]
+    pub fn launch_env(&self) -> &[String] {
+        &self.launch_env
+    }
+
+    /// Working directory received via `QSetWorkingDir`.
+    #[must_use]
+    pub fn launch_working_dir(&self) -> Option<&str> {
+        self.launch_working_dir.as_deref()
     }
 
     /// A ready-to-drive target: 64 KiB of stack at `0x1_6f00_0000`, a text
@@ -1034,6 +1117,33 @@ impl MockDebugserver {
 
     pub const fn refuse_software_breakpoints(&mut self) {
         self.refuse_z_software = true;
+    }
+
+    /// Accept `n` more `Z0` inserts, then answer every later one with `E22`.
+    pub const fn refuse_software_breakpoints_after(&mut self, n: usize) {
+        self.sw_inserts_before_refusing = Some(n);
+    }
+
+    /// Answer the next `n` software `Z0` inserts `OK` and refuse every later
+    /// one, as a stub that ran out of trap slots between the first arm and a
+    /// later re-arm does.
+    pub const fn accept_software_breakpoints_then_refuse(&mut self, n: usize) {
+        self.z_software_budget = Some(n);
+    }
+
+    /// Accept `Z` but answer every `z` with `E01`: the trap stays installed in
+    /// the target and the stub says so.
+    pub const fn refuse_breakpoint_removal(&mut self) {
+        self.refuse_z_removals = true;
+    }
+
+    /// Accept `n` server-managed `Z0` inserts, then answer every later one with
+    /// the empty reply that means "not supported / not honoured". Threshold
+    /// rather than on/off because the interesting case needs BOTH: the first
+    /// arm must succeed, so the client records a stub-managed trap with no
+    /// saved bytes, and the RE-arm must be refused.
+    pub const fn fail_software_breakpoint_inserts_after(&mut self, n: usize) {
+        self.sw_inserts_before_failing = Some(n);
     }
 
     /// Refuse the `g` register-block read with `E09`, as a stub whose target
@@ -1342,6 +1452,15 @@ impl MockDebugserver {
         }
         let target_tid = suffix_tid.unwrap_or(self.current_g_thread);
 
+        // Once the inferior is gone its task port dies with it: on a real
+        // device `mach_vm_read`/`mach_vm_write` and the thread-state calls all
+        // fail, and debugserver answers `E`. Answering these positively lets a
+        // client that missed the `W`/`X` reply keep "reading the target" and
+        // look indistinguishable from a correct one.
+        if self.target_is_gone() && packet_needs_live_target(pkt) {
+            return ("E09".to_string(), false);
+        }
+
         if pkt == "?" {
             return (self.stop_reply(self.current_c_thread), false);
         }
@@ -1354,6 +1473,30 @@ impl MockDebugserver {
                     .to_string(),
                 false,
             );
+        }
+        if let Some(rest) = pkt.strip_prefix("QSetWorkingDir:") {
+            if !self.launch_env_supported {
+                return (String::new(), false);
+            }
+            return match decode_hex(rest).and_then(|b| String::from_utf8(b).ok()) {
+                Some(dir) => {
+                    self.launch_working_dir = Some(dir);
+                    ("OK".to_string(), false)
+                }
+                None => ("E01".to_string(), false),
+            };
+        }
+        if let Some(rest) = pkt.strip_prefix("QEnvironmentHexEncoded:") {
+            if !self.launch_env_supported {
+                return (String::new(), false);
+            }
+            return match decode_hex(rest).and_then(|b| String::from_utf8(b).ok()) {
+                Some(kv) => {
+                    self.launch_env.push(kv);
+                    ("OK".to_string(), false)
+                }
+                None => ("E01".to_string(), false),
+            };
         }
         if pkt == "QStartNoAckMode" {
             self.no_ack_mode = true;
@@ -1449,23 +1592,6 @@ impl MockDebugserver {
         }
         if let Some(rest) = pkt.strip_prefix('H') {
             return (self.handle_h(rest), false);
-        }
-        // Once the inferior is gone its task port dies with it: on a real
-        // device `mach_vm_read`/`mach_vm_write` and the thread-state calls all
-        // fail, and debugserver answers `E`. Answering these positively lets a
-        // client that missed the `W`/`X` reply keep "reading the target" and
-        // look indistinguishable from a correct one.
-        if self.target_is_gone()
-            && (pkt == "g"
-                || pkt.starts_with('G')
-                || pkt.starts_with('p')
-                || pkt.starts_with('P')
-                || pkt.starts_with('m')
-                || pkt.starts_with('M')
-                || pkt.starts_with('Z')
-                || pkt.starts_with('z'))
-        {
-            return ("E09".to_string(), false);
         }
         if pkt == "g" {
             if let Some(remaining) = self.reg_reads_before_failing.as_mut() {
@@ -1662,6 +1788,17 @@ impl MockDebugserver {
             // `X addr,0:` is the probe for binary-write support.
             return "OK".to_string();
         }
+        // An unwritable target is unwritable through BOTH encodings: `M` and
+        // `X` differ only in how the payload is spelled and debugserver funnels
+        // both into the same `mach_vm_write`. Gating only `M` would make the
+        // injected fault a property of the packet the client happens to choose.
+        // The zero-length probe above is exempt on purpose: it writes nothing.
+        if let Some(remaining) = self.writes_before_failing.as_mut() {
+            if *remaining == 0 {
+                return "E09".to_string();
+            }
+            *remaining -= 1;
+        }
         if self.memory.write(addr, data) { "OK".to_string() } else { "E09".to_string() }
     }
 
@@ -1684,6 +1821,27 @@ impl MockDebugserver {
         };
         if self.refuse_z_software && kind == BpKind::Software {
             return String::new();
+        }
+        if insert && kind == BpKind::Software && let Some(left) = self.sw_inserts_before_refusing.as_mut() {
+            if *left == 0 {
+                return "E22".to_string();
+            }
+            *left -= 1;
+        }
+        if insert && kind == BpKind::Software && let Some(left) = self.z_software_budget.as_mut() {
+            if *left == 0 {
+                return String::new();
+            }
+            *left -= 1;
+        }
+        if insert && kind == BpKind::Software && let Some(left) = self.sw_inserts_before_failing.as_mut() {
+            if *left == 0 {
+                return String::new();
+            }
+            *left -= 1;
+        }
+        if self.refuse_z_removals && !insert {
+            return "E01".to_string();
         }
         if insert {
             // Geometry is a property of the REQUEST, so it is checked before
@@ -1839,16 +1997,28 @@ impl MockDebugserver {
         let Some(size) = hex_u64(size_hex) else {
             return "E01".to_string();
         };
+        // The size field is untrusted 64-bit input. `mach_vm_allocate` fails
+        // for a request the kernel cannot satisfy and debugserver answers `E`;
+        // there is no size at which it aborts. Building `vec![0; len]` eagerly
+        // would abort this process instead (or panic with "capacity overflow"),
+        // so the client bug that produced the bad size could never be observed.
+        // Reject above a cap far larger than anything the simulated address
+        // space holds, and never attempt the allocation.
         let Ok(len) = usize::try_from(size) else {
             return "E01".to_string();
         };
+        if len > MAX_ALLOC_BYTES {
+            return "E01".to_string();
+        }
         let base = self.next_alloc;
         if !self.memory.map(MemoryRegion::zeroed(base, len, perms, "_M")) {
             return "E01".to_string();
         }
         // Page-align the next handout so consecutive allocations never abut in
         // a way that hides an off-by-one in the client.
-        self.next_alloc = base + ((size + 0xFFF) & !0xFFF) + 0x1000;
+        self.next_alloc = base
+            .saturating_add((size.saturating_add(0xFFF)) & !0xFFF)
+            .saturating_add(0x1000);
         self.allocations.insert(base, size);
         format!("{base:x}")
     }
@@ -1887,10 +2057,27 @@ impl MockDebugserver {
         // field one place left — passes every test here and is answered `E00`
         // by the device on its very first descriptor fetch.
         let annex = parts[3];
-        let payload = match (parts[1], annex) {
-            ("features", "target.xml") => self.target_xml.clone(),
-            ("libraries", "") => self.libraries_xml(),
-            _ => return "E00".to_string(),
+        // The two failures are NOT the same reply. `E00` is reserved for a
+        // malformed request or an invalid annex on an object the stub serves;
+        // an object the stub does not serve at all gets the EMPTY reply, the
+        // same "unsupported" spelling `jThreadsInfo` uses above. A client
+        // probing for an optional object keys its fallback on that difference,
+        // so collapsing them makes the probe a hard failure here and a clean
+        // capability miss on the device.
+        let payload = match parts[1] {
+            "features" => {
+                if annex != "target.xml" {
+                    return "E00".to_string();
+                }
+                self.target_xml.clone()
+            }
+            "libraries" => {
+                if !annex.is_empty() {
+                    return "E00".to_string();
+                }
+                self.libraries_xml()
+            }
+            _ => return String::new(),
         };
         let Some((off_s, len_s)) = parts[4].split_once(',') else {
             return "E00".to_string();
@@ -1994,11 +2181,13 @@ impl MockDebugserver {
     /// more. `killed_by` is NOT part of this test: it is armed BEFORE the
     /// resume that reports the death, so it says "will die", not "is dead".
     const fn target_is_gone(&self) -> bool {
-        self.exit_code.is_some()
+        self.exit_code.is_some() || self.death_reported
     }
 
     fn stop_reply(&self, tid: u32) -> String {
-        if let Some(sig) = self.killed_by {
+        if let Some(sig) = self.killed_by
+            && self.death_reported
+        {
             return format!("X{sig:02x}");
         }
         if let Some(code) = self.exit_code {
@@ -2056,6 +2245,13 @@ impl MockDebugserver {
     fn resume(&mut self, tid: u32, single_step: bool) -> String {
         if self.thread(tid).is_none() {
             return "E01".to_string();
+        }
+        // The armed signal death happens HERE — the resume is what reports it —
+        // and from this reply on the target is gone: its task port is dead, so
+        // every later read/write/arm must fail exactly as it does after a `W`.
+        if let Some(sig) = self.killed_by {
+            self.death_reported = true;
+            return format!("X{sig:02x}");
         }
         let limit = if single_step { 1 } else { self.max_steps_per_continue };
         // Watchpoints are evaluated from the accesses the emulated instruction
@@ -2532,6 +2728,32 @@ fn read_u32_le(b: &[u8]) -> u32 {
     u32::from_le_bytes(buf)
 }
 
+/// Does this packet require a live task/thread port to be answered?
+///
+/// Stated as the invariant rather than as a list of letters somebody happened
+/// to think of: every packet here is a `mach_vm_*` or `thread_*` call against
+/// the inferior's task port, which dies with the inferior. `mach_vm_allocate`
+/// (`_M`), `mach_vm_deallocate` (`_m`), `mach_vm_region` (`qMemoryRegionInfo`)
+/// and `task_resume`/`thread_resume` (`c`/`s`/`C`/`S`/`vCont`) all return
+/// `KERN_INVALID_TASK` once it is gone, and debugserver answers `E`.
+/// `vCont?` is excluded: it is a capability query, answered without the task.
+fn packet_needs_live_target(pkt: &str) -> bool {
+    if pkt == "vCont?" {
+        return false;
+    }
+    if pkt.starts_with("vCont")
+        || pkt.starts_with("_M")
+        || pkt.starts_with("_m")
+        || pkt.starts_with("qMemoryRegionInfo")
+    {
+        return true;
+    }
+    matches!(
+        pkt.chars().next(),
+        Some('g' | 'G' | 'p' | 'P' | 'm' | 'M' | 'Z' | 'z' | 'c' | 'C' | 's' | 'S')
+    )
+}
+
 /// Parse the permission field of an `_M size,perms` allocation request.
 ///
 /// `debugserver` accepts any combination of `r`, `w` and `x` (including none)
@@ -2655,7 +2877,7 @@ fn validate_a_packet(rest: &str) -> String {
 mod tests {
     use super::*;
 
-    fn one_shot(srv: &mut MockDebugserver, pkt: &str) -> String {
+    pub(super) fn one_shot(srv: &mut MockDebugserver, pkt: &str) -> String {
         let out = srv.feed(&encode_packet(pkt)).expect("connection open");
         // Strip a leading ack, then unwrap `$...#xx`.
         let s = String::from_utf8_lossy(&out).to_string();
@@ -3137,6 +3359,43 @@ mod tests {
         assert!(one_shot(&mut srv, "g").starts_with('E'));
     }
 
+    /// The dead-target gate must express "the task port is dead", not a list of
+    /// letters somebody remembered. `_M`/`_m` (`mach_vm_allocate`/`_deallocate`),
+    /// `qMemoryRegionInfo` (`mach_vm_region`) and the resume packets all target
+    /// the same dead task and all fail on a real debugserver.
+    #[test]
+    fn dead_target_rejects_alloc_region_info_and_resume() {
+        let mut srv = MockDebugserver::with_program(1, 0x5000, &[Arm64Interp::RET]);
+        assert_eq!(one_shot(&mut srv, "vCont;c"), "W00");
+
+        assert!(
+            one_shot(&mut srv, "_M100,rw").starts_with('E'),
+            "allocation in a dead task must fail"
+        );
+        assert!(
+            one_shot(&mut srv, "_m5000").starts_with('E'),
+            "deallocation in a dead task must fail"
+        );
+        let region = one_shot(&mut srv, "qMemoryRegionInfo:5000");
+        assert!(
+            region.starts_with('E'),
+            "region info for a dead task must fail, got {region}"
+        );
+
+        // The sharpest case: resuming must not execute instructions in a
+        // process the mock has already reported as exited.
+        let pc_before = srv.thread(1).expect("thread").regs.pc;
+        let unknown_before = srv.unknown_insn_count;
+        assert!(
+            one_shot(&mut srv, "vCont;c").starts_with('E'),
+            "resume of a dead task must fail"
+        );
+        assert!(one_shot(&mut srv, "c").starts_with('E'));
+        assert!(one_shot(&mut srv, "s").starts_with('E'));
+        assert_eq!(srv.thread(1).expect("thread").regs.pc, pc_before, "PC moved after exit");
+        assert_eq!(srv.unknown_insn_count, unknown_before);
+    }
+
     #[test]
     fn runaway_loop_reports_sigxcpu_instead_of_hanging() {
         // `b .` — an infinite self-branch.
@@ -3448,6 +3707,23 @@ mod tests {
         assert_eq!(one_shot(&mut srv, "m4000,4"), "deadbeef");
     }
 
+    /// An `_M` request carries an untrusted 64-bit size. `mach_vm_allocate`
+    /// fails and a real debugserver answers `E`; it never aborts. Building
+    /// `vec![0; len]` eagerly instead takes the whole harness down, so the
+    /// client bug that produced the absurd size can never be observed.
+    #[test]
+    fn an_absurd_allocation_is_refused_not_attempted() {
+        let mut srv = MockDebugserver::new(1);
+        assert_eq!(
+            one_shot(&mut srv, "_Mfffffffffffffff0,rw"),
+            "E01",
+            "a 16-exabyte request must be answered with an error, not attempted"
+        );
+        // The mock is still usable afterwards: a sane allocation still works.
+        let base = one_shot(&mut srv, "_M100,rw");
+        assert!(u64::from_str_radix(&base, 16).is_ok(), "got {base}");
+    }
+
     /// `_M size,perms` asks for a mapping with specific protection. Handing
     /// back `rw` whatever was requested means a client that allocates `rx` and
     /// then writes there succeeds in-process and takes EXC_BAD_ACCESS on a
@@ -3506,6 +3782,61 @@ mod tests {
         );
     }
 
+    /// `fail_memory_writes_after` models a target that became UNWRITABLE, not
+    /// a packet that became unsupported. `M` and `X` differ only in payload
+    /// encoding and both land in `mach_vm_write` on a device, so the injected
+    /// fault must gate both; exempting `X` makes the fault a property of the
+    /// encoding the client happens to pick.
+    #[test]
+    fn injected_write_failure_gates_the_binary_x_packet_too() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data")));
+        srv.fail_memory_writes_after(1);
+
+        // The one allowed write, spent through `X`.
+        assert_eq!(one_shot_bytes(&mut srv, b"X4000,1:\x11"), "OK");
+        // Budget exhausted: both encodings must now be refused.
+        assert_eq!(one_shot(&mut srv, "M4001,1:22"), "E09", "`M` past the budget");
+        assert_eq!(
+            one_shot_bytes(&mut srv, b"X4002,1:\x33"),
+            "E09",
+            "`X` must honour the same injected write failure as `M`"
+        );
+        assert_eq!(
+            one_shot(&mut srv, "m4002,1"),
+            "00",
+            "a refused write must not have touched memory"
+        );
+    }
+
+    /// The n=0 boundary of the same knob: a target that is unwritable from the
+    /// very first packet, which is what a process that already died looks like.
+    /// Kept apart from the threshold test above because the two fail
+    /// DIFFERENTLY when `X` is ungated — there the first refused packet is the
+    /// `M` that inherited the unspent budget, so the red accuses the encoding
+    /// that is innocent; here nothing may succeed, so the first assertion to
+    /// blow is the `X` itself. The read-back is the part that matters: an `X`
+    /// answered `OK` has also MOVED the byte, and a client that later reads its
+    /// patch back finds it installed on a target that cannot be written.
+    #[test]
+    fn an_unwritable_target_refuses_the_binary_write_too() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data")));
+        srv.fail_memory_writes_after(0); // no write may succeed from here on
+
+        assert_eq!(one_shot(&mut srv, "M4000,1:aa"), "E09", "baseline: `M` is refused");
+        assert_eq!(
+            one_shot_bytes(&mut srv, b"X4000,1:\xbb"),
+            "E09",
+            "the same unwritable target must refuse the binary write"
+        );
+        assert_eq!(
+            one_shot(&mut srv, "m4000,2"),
+            "0000",
+            "no refused write may have landed"
+        );
+    }
+
     /// `qXfer:<object>:read:<annex>:off,len` — the annex names WHICH document.
     /// `features` is only defined for `target.xml` and `libraries` requires an
     /// empty annex; serving any annex means a client that sends the wrong one
@@ -3534,6 +3865,35 @@ mod tests {
         );
         // The well-formed library read still works.
         assert!(one_shot(&mut srv, "qXfer:libraries:read::0,4").starts_with(['m', 'l']));
+    }
+
+    /// `qXfer:object:read` reserves two DIFFERENT replies: `E00` means the
+    /// request was malformed or the annex was invalid, while an EMPTY reply
+    /// means the stub does not recognise the object at all. This mock only
+    /// advertises `features` and `libraries`; a probe for any other object is
+    /// the unsupported case, exactly like `jThreadsInfo` above. Answering
+    /// `E00` makes a capability probe look like a hard remote failure here and
+    /// like a clean "not supported" on the device — the client's fallback path
+    /// keys on precisely that difference.
+    #[test]
+    fn qxfer_answers_an_unknown_object_with_an_empty_reply() {
+        let mut srv = MockDebugserver::new(1);
+        srv.set_target_xml("ABCDEFGHIJ");
+
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:auxv:read::0,100"),
+            "",
+            "`auxv` is not an object this stub serves — unsupported, not malformed"
+        );
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:threads:read::0,100"),
+            "",
+            "`threads` is likewise unrecognised"
+        );
+        // A *known* object with a bad annex stays an error: the two failures
+        // must not collapse into one another in either direction.
+        assert_eq!(one_shot(&mut srv, "qXfer:features:read:nope.xml:0,4"), "E00");
+        assert_eq!(one_shot(&mut srv, "qXfer:features:read:target.xml:0,4"), "mABCD");
     }
 
     /// A free debug-register slot is not enough: the geometry must fit the
@@ -3645,7 +4005,8 @@ mod tests {
 
 #[cfg(test)]
 mod retransmission_tests {
-    use super::MockDebugserver;
+    use super::{Arm64Interp, MockDebugserver};
+    use super::tests::one_shot;
     use crate::ios::rsp::{RspClient, TcpTransport};
     use std::time::Duration;
 
@@ -3671,5 +4032,98 @@ mod retransmission_tests {
         assert_eq!(srv.packet_log, vec!["M4000,4:1f2003d5".to_string()]);
         assert_eq!(srv.nacks_received, 1, "client must repair with `-`");
         assert_eq!(srv.retransmissions, 1, "server must re-emit, not re-run");
+    }
+    /// A target the mock reports dead with `X<sig>` must be as unreachable as
+    /// one reported dead with `W<code>`.
+    #[test]
+    fn an_x_stop_reply_latches_the_target_as_gone() {
+        let base = 0x4000_u64;
+        let mut srv = MockDebugserver::with_program(1, base, &[Arm64Interp::RET]);
+        srv.kill_with_signal(9);
+        assert_eq!(one_shot(&mut srv, "c"), "X09", "the resume must report the signal death");
+        assert_eq!(
+            one_shot(&mut srv, &format!("m{base:x},4")),
+            "E09",
+            "memory of a target reported dead with `X` is still readable"
+        );
+        assert_eq!(one_shot(&mut srv, "g"), "E09", "registers of an `X`-dead target are still readable");
+        assert_eq!(
+            one_shot(&mut srv, &format!("Z0,{base:x},4")),
+            "E09",
+            "a breakpoint can still be armed in an `X`-dead target"
+        );
+    }
+
+    /// An access that FAULTS never happened: the translation fault is taken and
+    /// the data never reaches the watchpoint comparators. The mock logs the
+    /// access before it looks the region up, so a store to an unmapped page
+    /// covered by a `Z2` reports a fabricated watchpoint hit AND swallows the
+    /// SIGSEGV the client's fault path exists to handle.
+    #[test]
+    fn a_faulting_access_reports_sigsegv_not_a_watchpoint() {
+        let mut srv = MockDebugserver::with_program(1, 0x4000, &[Arm64Interp::STP_FP_LR_PRE]);
+        // Park sp so that the pre-index store targets an unmapped page.
+        srv.thread_mut_for_test(1).unwrap().regs.sp = 0x9000_0000;
+        // 0x9000_0000 - 16 is where `stp x29, x30, [sp, #-16]!` writes.
+        assert_eq!(one_shot(&mut srv, "Z2,8ffffff0,8"), "OK");
+
+        let reply = one_shot(&mut srv, "vCont;c");
+        assert!(
+            !reply.contains("reason:watchpoint"),
+            "a store to an unmapped page never reached memory; it cannot fire a watchpoint: {reply}"
+        );
+        assert!(
+            reply.starts_with("T0b"),
+            "the translation fault must surface as SIGSEGV: {reply}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod faulted_access_is_not_a_watchpoint_hit {
+    use super::tests::one_shot;
+    use super::*;
+
+    /// A store to an unmapped page aborts: on real hardware the translation
+    /// fault is taken and no watchpoint is reported. Logging the access before
+    /// the region is looked up (and consulting the watchpoints before
+    /// `StepOutcome::Fault`) replaced the SIGSEGV with a fabricated
+    /// `reason:watchpoint` for an address the target never touched.
+    #[test]
+    fn a_store_that_faults_reports_sigsegv_not_a_watchpoint() {
+        let mut srv = MockDebugserver::with_program(1, 0x5000, &[Arm64Interp::STP_FP_LR_PRE]);
+        // STP pre-decrements by 16, so the access goes to 0x9000_0000 — unmapped.
+        srv.thread_mut_for_test(1).unwrap().regs.sp = 0x9000_0010;
+        assert_eq!(one_shot(&mut srv, "Z2,90000000,8"), "OK");
+
+        let reply = one_shot(&mut srv, "vCont;c");
+        assert!(
+            !reply.contains("watchpoint"),
+            "an access that faulted never happened, so it cannot fire a watchpoint: {reply}"
+        );
+        assert!(reply.starts_with("T0b"), "the fault must surface as SIGSEGV: {reply}");
+    }
+
+    /// The same for a load: `LDP` off an unmapped stack must fault, not read.
+    #[test]
+    fn a_load_that_faults_reports_sigsegv_not_a_watchpoint() {
+        let mut srv = MockDebugserver::with_program(1, 0x5000, &[Arm64Interp::LDP_FP_LR_POST]);
+        srv.thread_mut_for_test(1).unwrap().regs.sp = 0x9000_0000;
+        assert_eq!(one_shot(&mut srv, "Z3,90000000,8"), "OK");
+
+        let reply = one_shot(&mut srv, "vCont;c");
+        assert!(!reply.contains("watchpoint"), "a load that faulted never happened: {reply}");
+        assert!(reply.starts_with("T0b"), "the fault must surface as SIGSEGV: {reply}");
+    }
+
+    /// The guard must not silence a REAL watchpoint: the same store into mapped
+    /// stack memory still stops with `reason:watchpoint`.
+    #[test]
+    fn a_store_that_succeeds_still_fires_the_watchpoint() {
+        let mut srv = MockDebugserver::with_program(1, 0x5000, &[Arm64Interp::STP_FP_LR_PRE]);
+        let sp = srv.thread(1).unwrap().regs.sp;
+        assert_eq!(one_shot(&mut srv, &format!("Z2,{:x},8", sp - 16)), "OK");
+        let reply = one_shot(&mut srv, "vCont;c");
+        assert!(reply.contains("reason:watchpoint"), "a completed store must still fire: {reply}");
     }
 }

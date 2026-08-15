@@ -98,6 +98,25 @@ pub enum RspError {
         requested: usize,
         returned: usize,
     },
+    /// A chunked `M` failed after earlier chunks had been acknowledged.
+    ///
+    /// The mirror of [`Self::ShortRead`], and needed for the opposite reason: a
+    /// short read loses data we asked for, a short WRITE has already changed
+    /// the target. Once the stub answers `OK` to a chunk those bytes are in the
+    /// process and no later failure takes them back, so an error that says only
+    /// "the write failed" is a false statement about the target's memory.
+    /// `AppleDebugger::write_memory` is the consumer that needs the number: it
+    /// records the caller's bytes as the new saved originals of a self-planted
+    /// `BRK` only for the prefix that actually landed, and without a count on
+    /// this path it records nothing and a later restore puts the stale word
+    /// back over bytes the target really took.
+    #[error("short write at {addr:#x}: {written} of {requested} bytes landed before the stub refused ({cause})")]
+    ShortWrite {
+        addr: u64,
+        requested: usize,
+        written: usize,
+        cause: String,
+    },
 }
 
 impl RspError {
@@ -1597,7 +1616,24 @@ impl<T: RspTransport> RspClient<T> {
         let mut written = 0usize;
         for chunk in data.chunks(per_packet) {
             let at = addr.wrapping_add(written as u64);
-            written += self.write_memory_chunk(at, chunk)?;
+            match self.write_memory_chunk(at, chunk) {
+                Ok(n) => written += n,
+                // KEEP the count. The chunks already acknowledged are in the
+                // target's memory; reporting a bare failure would claim the
+                // write left the process untouched, which is false the moment
+                // one chunk was accepted. Nothing before this chunk landed =>
+                // the original error is the whole truth, so pass it through
+                // unwrapped and reserve `ShortWrite` for real partial writes.
+                Err(e) if written == 0 => return Err(e),
+                Err(e) => {
+                    return Err(RspError::ShortWrite {
+                        addr,
+                        requested: data.len(),
+                        written,
+                        cause: e.to_string(),
+                    })
+                }
+            }
         }
         Ok(written)
     }
@@ -3184,5 +3220,44 @@ mod packet_size_tests {
             "longest M packet is {longest} bytes but the stub advertised \
              PacketSize={advertised}"
         );
+    }
+
+    /// A chunked `M` that fails PART WAY THROUGH has already changed the
+    /// target: the acknowledged chunks are in the process's memory and cannot
+    /// be taken back. Returning a bare `Err` asserts the opposite, and the
+    /// consumer that needs the number — `AppleDebugger::write_memory`, which
+    /// records new saved-original bytes "only for bytes the target actually
+    /// took" — gets no count at all on that path and records nothing, so a
+    /// later `remove_breakpoint` restores the stale word over bytes that DID
+    /// land. The count has to survive the failure, exactly as `ShortRead`
+    /// carries it on the read side.
+    #[test]
+    fn a_write_that_fails_after_a_chunk_landed_reports_how_much_landed() {
+        const BASE: u64 = 0x1_6f00_0000;
+        let mut srv = MockDebugserver::with_program(1, 0x4000, &[0xd503_201f]);
+        // First `M` accepted, every later one refused: the partial-write case.
+        srv.fail_memory_writes_after(1);
+        let (addr, handle) = srv.spawn_tcp().expect("spawn tcp mock");
+
+        let transport =
+            TcpTransport::connect(&addr, Some(Duration::from_secs(5))).expect("connect");
+        let mut client = RspClient::new(transport);
+        client.handshake(&[]).expect("handshake");
+        // 75 - M_HEADER_MAX(35) = 40, halved by hex: 20 bytes per packet.
+        let () = client.set_packet_size_for_test(75);
+
+        let payload = vec![0xAAu8; 40];
+        let err = client.write_memory(BASE, &payload).expect_err("second chunk is refused");
+
+        // The first chunk is in the target whatever the error says.
+        let head = client.read_memory(BASE, 20).expect("read back the first chunk");
+        assert_eq!(head, vec![0xAAu8; 20], "the first chunk must have landed");
+
+        assert!(
+            format!("{err}").contains("20"),
+            "a partial write must report its count, got {err:?}"
+        );
+        drop(client);
+        let _ = handle.join();
     }
 }

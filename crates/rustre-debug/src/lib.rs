@@ -7880,8 +7880,15 @@ mod tests_expanded {
             // meant a backend could go vacuous simply by spelling the patch
             // differently — the guard would have reported success while
             // checking nothing at all.
+            // `host_trap_bytes()` joined the accepted spellings in 569, when
+            // the blanket refusal was removed. The requirement is unchanged and
+            // is the one that always mattered: NEVER plant a hardcoded x86 byte
+            // without asking the host. Deriving the trap from the architecture
+            // satisfies that more completely than refusing to run does — a
+            // refusal keeps the backend honest by keeping it useless.
             let refuses = src.contains("X86_TRAP_BYTE_IS_VALID_HERE");
-            let arch_aware = src.contains("trap_implant::");
+            let arch_aware =
+                src.contains("trap_implant::") || src.contains("host_trap_bytes()");
             assert!(
                 refuses || arch_aware,
                 "{name}: implants a software breakpoint without accounting for the host \
@@ -9824,7 +9831,12 @@ mod tests_extra {
                 "async fn set_breakpoint(",
                 &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
             );
-            let guard = body.find("X86_TRAP_BYTE_IS_VALID_HERE").unwrap_or_else(|| {
+            // Anchored on the ALIGNMENT gate since 569. The blanket
+            // architecture refusal this used to find was removed there, but the
+            // property is untouched and still worth enforcing: a refusal that
+            // has already patched memory is not a refusal, so whatever
+            // architecture-dependent gate remains must precede the write.
+            let guard = body.find("host_trap_alignment").unwrap_or_else(|| {
                 panic!(
                     "{name}: set_breakpoint() no longer checks the host architecture before \
                      planting an x86 int3"
@@ -10121,6 +10133,295 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// Linux must reach the AArch64 watchpoint registers, not refuse them
+    /// while the crate already holds the translation.
+    ///
+    /// `set_watchpoint_sized` on the Linux backend answers:
+    ///
+    /// ```text
+    /// "hardware watchpoints on this backend program the x86 debug registers,
+    ///  which this host architecture does not have"
+    /// ```
+    ///
+    /// The second half is true — ptrace on AArch64 does not expose `DR0`-`DR7`.
+    /// What makes it a gap rather than a fact is that the hard half of the work
+    /// is already done and sits in the SHARED crate root, not in a backend:
+    /// `arm64_watchpoint_from_dr_slot` / `dr_slot_from_arm64_watchpoint`
+    /// (lib.rs) translate the engine's `dr0`-`dr3` + `DR7` vocabulary to
+    /// `DBGWVR`/`DBGWCR` and back, and they are already exercised. macOS uses
+    /// them. Linux declines, citing the absence of something this crate owns.
+    ///
+    /// What Linux genuinely still needs is TRANSPORT: `PTRACE_GETREGSET` /
+    /// `PTRACE_SETREGSET` with `NT_ARM_HW_WATCH` and the kernel's
+    /// `user_hwdebug_state` layout. The `iovec` plumbing for that already
+    /// exists too — iteration 552 wrote it for `NT_PRSTATUS`.
+    ///
+    /// So this is family 2 of the three this crate produces: shared logic
+    /// present, one backend wired to it, another refusing.
+    ///
+    /// **This guard is a source-level statement, not a proof.** Whether the
+    /// registers are programmed CORRECTLY can only be answered by
+    /// `ubuntu-24.04-arm`, which executes this path on real ARM hardware. The
+    /// layout in particular is the dangerous part: a struct that drifts is read
+    /// in silence and yields a watchpoint that looks armed and watches the
+    /// wrong address — which is why the macOS side carries
+    /// `assert!(ARM_DEBUG_STATE64_COUNT == 130)` at compile time and why the
+    /// Linux side must carry the equivalent size assertion.
+    #[test]
+    fn linux_reaches_the_arm64_watchpoint_registers() {
+        let src = include_str!("linux_debugger.rs");
+        assert!(
+            src.contains("dr_slot_from_arm64_watchpoint")
+                && src.contains("arm64_watchpoint_from_dr_slot"),
+            "linux: the dr <-> DBGWVR/DBGWCR translation is not reached from this backend, so \
+             the shared watchpoint engine addresses registers that do not exist on this CPU — \
+             while the translation itself sits ready in lib.rs and macOS already uses it"
+        );
+        assert!(
+            src.contains("NT_ARM_HW_WATCH"),
+            "linux: no `NT_ARM_HW_WATCH` transport, so there is no way to carry a translated \
+             watchpoint to the kernel even once it is computed"
+        );
+        assert!(
+            src.contains("size_of::<UserHwdebugState>() == 264"),
+            "linux: the compile-time size check on the hand-declared `user_hwdebug_state` is \
+             missing. A layout drift there is read in SILENCE and arms a watchpoint on the \
+             wrong address — the macOS side carries the same check for the same reason"
+        );
+    }
+
+    /// A backend that implants `host_trap_bytes()` must not refuse on the
+    /// grounds that it implants the x86 `int3`.
+    ///
+    /// `set_breakpoint` on the Linux backend refuses outright off x86:
+    ///
+    /// ```text
+    /// const X86_TRAP_BYTE_IS_VALID_HERE: bool = cfg!(any(target_arch = "x86_64", ...));
+    /// if !X86_TRAP_BYTE_IS_VALID_HERE {
+    ///     return Err(Unsupported("software breakpoints on this backend implant
+    ///                             the x86 int3 (0xCC), which is not a breakpoint
+    ///                             on this host architecture"))
+    /// }
+    /// ```
+    ///
+    /// The refusal describes an implant this function no longer performs.
+    /// Twenty lines below it writes `crate::host_trap_bytes()`, which is
+    /// `BRK #0` on AArch64 — derived from this crate's single arm64 encoder,
+    /// four bytes wide per `trap_len`, with `pc_after_trap` already accounting
+    /// for the x86-vs-ARM difference in the reported PC. The alignment check
+    /// immediately above it already asks `host_trap_alignment()`.
+    ///
+    /// So the refusal was true when it was written and was made false by the
+    /// architecture-derived trap work: the backend would now plant a correct
+    /// `BRK` and declines to, citing a `0xCC` it no longer writes.
+    ///
+    /// This is the MIRROR of lesson 14. There, a defence looked stale and was
+    /// protecting something real. Here the defence really is stale — and the
+    /// difference between the two cases is not judgement but evidence: the
+    /// `ubuntu-24.04-arm` CI row EXECUTES this path on real ARM hardware. This
+    /// guard states the contradiction; that runner is what proves the removal.
+    ///
+    /// Deliberately scoped to Linux. The same refusal sits in the Windows and
+    /// macOS backends, and macOS aarch64 is a real and common host — but no
+    /// machine reachable from here can run those paths on ARM, and removing a
+    /// defence where nothing can answer is predicting, not measuring. That is
+    /// the mistake iteration 561 was withdrawn for.
+    #[test]
+    fn linux_does_not_refuse_a_trap_it_would_now_plant_correctly() {
+        let src = include_str!("linux_debugger.rs");
+        assert!(
+            !src.contains("X86_TRAP_BYTE_IS_VALID_HERE"),
+            "linux: `set_breakpoint` refuses off x86 because it implants the x86 int3, but it \
+             implants `host_trap_bytes()` — `BRK #0` on AArch64. The refusal outlived the \
+             reason for it"
+        );
+    }
+
+    /// The resume paths may decline to FAIL on a missed re-arm; they may not
+    /// discard the fact.
+    ///
+    /// ```text
+    /// let _ = self.rearm_watchpoints_on_new_threads().await;
+    /// ```
+    ///
+    /// The comment beside it justifies not failing, and it is right to: a
+    /// resume must not break because a watchpoint could not be re-armed on a
+    /// thread that appeared. But `let _ =` does not discard the FAILURE, it
+    /// discards the INFORMATION. After such a resume the watchpoint has stopped
+    /// watching the new threads and nothing will ever say so — which is the
+    /// precise failure mode a watchpoint exists to rule out.
+    ///
+    /// Round 567 made this function report every miss instead of one in four.
+    /// That work is wasted on the two callers that throw the answer away.
+    #[test]
+    fn a_resume_may_decline_to_fail_on_a_missed_rearm_but_not_to_record_it() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let discarded = src
+                .matches("let _ = self.rearm_watchpoints_on_new_threads().await;")
+                .count();
+            assert_eq!(
+                discarded, 0,
+                "{name}: {discarded} resume path(s) discard the list of watchpoints that could \
+                 not be re-armed, so a watchpoint silently stops watching threads that appeared \
+                 and no caller can ever learn it"
+            );
+        }
+    }
+
+    /// Every way of leaving a thread unwatched must reach `unarmed`.
+    ///
+    /// `rearm_watchpoints_on_new_threads` already decided how to report a miss:
+    /// it returns the addresses that are NOT armed, and `enable_breakpoint`
+    /// answers on that list. Its own comment states the rule — *"A re-arm that
+    /// did not land leaves this thread UNWATCHED ... the caller was still told
+    /// it was watched"*.
+    ///
+    /// But only ONE of the four ways to leave a thread unwatched reached that
+    /// list (the failed `set_registers`). The other three were silent:
+    ///
+    /// - `let Ok(mut regs) = self.get_registers(tid).await else { continue }`
+    ///   — the thread was never inspected, so it is certainly not armed;
+    /// - `let Some(slot) = x86_free_watchpoint_slot(dr7) else { break }`
+    ///   — all four debug registers are occupied, so this watchpoint and every
+    ///     one after it in `wanted` do not fit on this thread;
+    /// - `let Ok(new_dr7) = x86_encode_watchpoint_dr7(..) else { continue }`
+    ///   — the encoding was rejected, so nothing was programmed.
+    ///
+    /// In all three the address stays in `hw_watchpoints` — the caller is told
+    /// it is watched — while no debug register on that thread holds it. That is
+    /// the "silent miss, not an error" this crate condemns, sitting in the
+    /// siblings of the line that condemns it.
+    #[test]
+    fn every_way_of_leaving_a_thread_unwatched_is_reported_not_swallowed() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let body = item_body(
+                src,
+                "async fn rearm_watchpoints_on_new_threads(",
+                &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
+            );
+            assert!(
+                !body.contains("self.get_registers(tid).await else { continue }"),
+                "{name}: a thread whose registers cannot be read is skipped without reaching \
+                 `unarmed`, so it is reported as watched while nothing watches it"
+            );
+            // The write-failure path is one. A body that still reports only
+            // through it has not learned about the other three.
+            let reported = body.matches("unarmed.extend").count()
+                + body.matches("unarmed.push").count();
+            assert!(
+                reported >= 2,
+                "{name}: only {reported} path(s) record into `unarmed`, but there are four \
+                 distinct ways for this function to leave a thread unwatched"
+            );
+        }
+    }
+
+    /// A failed disarm must not be reported as "there was nothing to disarm".
+    ///
+    /// `disarm_watchpoint_registers` documents its `bool` as *"whether a slot
+    /// was actually holding this address"*, and computed it as:
+    ///
+    /// ```text
+    /// if cleared_here && self.set_registers(tid, regs).await.is_ok() {
+    ///     found = true;
+    /// }
+    /// ```
+    ///
+    /// So a write that FAILED left `found` at `false` — the same answer as a
+    /// watchpoint that was never armed. The caller cannot tell "it was not
+    /// there" from "it was there and I could not clear it".
+    ///
+    /// Its caller then makes that indistinguishability expensive:
+    /// `remove_hardware_watchpoint` clears `hw_watchpoints` and `disabled`
+    /// UNCONDITIONALLY. A failed disarm therefore removes the debugger's only
+    /// record of a watchpoint that is still live in the CPU's debug registers:
+    /// it keeps firing, and nothing knows what it is.
+    ///
+    /// Sibling of the defect in `disarm_all_hardware_watchpoints`, and the same
+    /// rule: a step that could not be performed is not a step that found
+    /// nothing to do.
+    #[test]
+    fn a_failed_watchpoint_disarm_is_not_reported_as_nothing_to_disarm() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let body = item_body(
+                src,
+                "async fn disarm_watchpoint_registers(",
+                &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
+            );
+            assert!(
+                !body.contains("if cleared_here && self.set_registers(tid, regs).await.is_ok()"),
+                "{name}: a failed register write leaves `found` false, which is the same answer \
+                 as a watchpoint that was never armed — and the caller clears its bookkeeping on \
+                 that answer, forgetting a watchpoint still live in the debug registers"
+            );
+            assert!(
+                !body.contains("self.get_registers(tid).await else { continue }"),
+                "{name}: a thread whose registers cannot be read is skipped silently, so a \
+                 watchpoint armed on exactly that thread is reported as absent"
+            );
+        }
+    }
+
+    /// «Non ho potuto controllare» non è «ho verificato che è pulito».
+    ///
+    /// `disarm_all_hardware_watchpoints` states its own contract in its error
+    /// text: *"debug registers still armed on thread(s) …; detaching now would
+    /// leave the target trapping with no debugger to take the trap"*. It must
+    /// therefore guarantee that no thread is left armed — and it reported
+    /// success down two paths where it had verified nothing:
+    ///
+    /// ```text
+    /// let Ok(tids) = self.threads().await else { return Ok(()) };
+    /// let Ok(mut regs) = self.get_registers(tid).await else { continue };
+    /// ```
+    ///
+    /// The first returns "all clear" without having examined a single thread.
+    /// The second skips a thread whose registers could not be read — exactly
+    /// the thread most likely to be in a bad state. A target detached after
+    /// either one keeps a live `DR7`, traps on its next watched access, and
+    /// finds no debugger attached to take the trap: it dies from having been
+    /// inspected.
+    ///
+    /// Identical in all three backends, so this is shared logic that drifted
+    /// once and stayed drifted.
+    #[test]
+    fn disarming_watchpoints_does_not_report_success_it_never_verified() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let body = item_body(
+                src,
+                "async fn disarm_all_hardware_watchpoints(",
+                &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
+            );
+            assert!(
+                !body.contains("else { return Ok(()) }"),
+                "{name}: disarm_all_hardware_watchpoints answers Ok when it could not even list \
+                 the threads, so it promises every debug register is clear without having read one"
+            );
+            assert!(
+                !body.contains("self.get_registers(tid).await else { continue }"),
+                "{name}: a thread whose registers cannot be read is SKIPPED, so it is reported \
+                 clear while it may still be armed — and it is the likeliest thread to be in a \
+                 bad state"
+            );
+        }
     }
 
     /// Neither must `kill`.

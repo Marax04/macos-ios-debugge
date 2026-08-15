@@ -98,6 +98,15 @@ pub struct LinuxDebugger {
     /// nothing to re-apply to it, and the caller is silently watching fewer
     /// threads as the target spawns more.
     hw_watchpoints: parking_lot::Mutex<HashMap<u64, (BreakpointKind, u8)>>,
+    /// Watchpoints that the last resume-time re-arm could NOT put into every
+    /// thread's debug registers.
+    ///
+    /// A resume must not FAIL because a watchpoint could not be re-armed on a
+    /// thread that just appeared — but the fact has to survive the resume.
+    /// Discarded, the watchpoint silently stops watching and no caller can
+    /// ever learn it, which is the failure mode a watchpoint exists to rule
+    /// out. `breakpoints()` labels the entries named here.
+    unarmed_since_resume: parking_lot::Mutex<std::collections::HashSet<u64>>,
     /// Per-address breakpoint conditions, as written by the caller.
     ///
     /// Kept beside the breakpoint table rather than inside `Breakpoint` because
@@ -144,6 +153,7 @@ impl LinuxDebugger {
             thread_filters: parking_lot::Mutex::new(HashMap::new()),
             disabled: parking_lot::Mutex::new(std::collections::HashSet::new()),
             hw_watchpoints: parking_lot::Mutex::new(HashMap::new()),
+            unarmed_since_resume: parking_lot::Mutex::new(std::collections::HashSet::new()),
             conditions: parking_lot::Mutex::new(HashMap::new()),
             pending: parking_lot::Mutex::new(crate::pending_breakpoint::PendingBreakpoints::new()),
             internal_stops: parking_lot::Mutex::new(std::collections::HashSet::new()),
@@ -206,7 +216,18 @@ impl LinuxDebugger {
         let tids = self.threads().await?;
         let mut found = false;
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // NOT `else { continue }`. A thread whose registers cannot be read
+            // is a thread whose debug registers were not inspected, and this
+            // function's `bool` means "a slot was holding this address" — the
+            // caller cannot tell that from "I could not look". It then clears
+            // its own bookkeeping either way, which would forget a watchpoint
+            // still live in the CPU.
+            let mut regs = self.get_registers(tid).await.map_err(|e| {
+                DebugError::RegisterError(format!(
+                    "cannot read thread {}'s registers, so it is not known whether a debug                      register still holds {addr:#x}: {e}",
+                    tid.0
+                ))
+            })?;
             let dr7 = regs.get("dr7").unwrap_or(0);
             let mut cleared_here = false;
             for slot in 0u8..4 {
@@ -230,7 +251,15 @@ impl LinuxDebugger {
                     break;
                 }
             }
-            if cleared_here && self.set_registers(tid, regs).await.is_ok() {
+            if cleared_here {
+                // A write that fails must not be reported as "nothing found":
+                // the slot IS holding the address and is still armed.
+                self.set_registers(tid, regs).await.map_err(|e| {
+                    DebugError::RegisterError(format!(
+                        "the debug register holding {addr:#x} on thread {} could not be                          cleared, so the watchpoint is still armed: {e}",
+                        tid.0
+                    ))
+                })?;
                 found = true;
             }
         }
@@ -282,10 +311,27 @@ impl LinuxDebugger {
         // `get_registers` per thread on a session that armed nothing. That is
         // paid once per detach or drop, and the per-thread `dr7 == 0` check
         // below still skips the write for every thread that is clean.
-        let Ok(tids) = self.threads().await else { return Ok(()) };
+        // Being unable to LIST the threads is not "everything is clear".
+        //
+        // This function promises, in its own error text, that no thread is left
+        // with its debug registers armed. Answering `Ok(())` without having
+        // examined a single one is that promise made without the check: the
+        // target is detached with a live `DR7`, traps on its next watched
+        // access, and finds no debugger attached to take the trap. It dies from
+        // having been inspected.
+        let tids = self.threads().await.map_err(|e| {
+            DebugError::DetachError(format!(
+                "cannot list the target'''s threads, so it is not known whether any debug                  register is still armed: {e}"
+            ))
+        })?;
         let mut still_armed: Vec<u32> = Vec::new();
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // A thread whose registers cannot be read is UNVERIFIED, not
+            // clean — and it is the likeliest one to be in a bad state.
+            let Ok(mut regs) = self.get_registers(tid).await else {
+                still_armed.push(tid.0);
+                continue;
+            };
             if regs.get("dr7").unwrap_or(0) == 0 {
                 continue;
             }
@@ -353,7 +399,13 @@ impl LinuxDebugger {
         let Ok(tids) = self.threads().await else { return wanted.iter().map(|(a, _, _)| *a).collect() };
         let mut unarmed: Vec<u64> = Vec::new();
         for tid in tids {
-            let Ok(mut regs) = self.get_registers(tid).await else { continue };
+            // A thread whose registers cannot be read was never inspected, so
+            // NONE of the wanted watchpoints is armed on it. Skipping it in
+            // silence reported it as watched while nothing watched it.
+            let Ok(mut regs) = self.get_registers(tid).await else {
+                unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
+                continue;
+            };
             let mut dr7 = regs.get("dr7").unwrap_or(0);
             let mut changed = false;
             for (addr, kind, size) in &wanted {
@@ -388,6 +440,33 @@ impl LinuxDebugger {
                 dr7 = new_dr7;
                 changed = true;
             }
+            // Ask the registers, do not trust the loop above.
+            //
+            // There are three ways for a watchpoint not to land on this thread
+            // — all four debug registers already occupied (`break`), a dr7
+            // encoding the CPU would reject (`continue`), and the unreadable
+            // registers handled above — and every one of them leaves the same
+            // observable trace: the address is absent from these registers.
+            // One check after the fact catches all three, and unlike reporting
+            // each `break`/`continue` site it cannot over-report a watchpoint
+            // that was ALREADY armed here, which would make `enable_breakpoint`
+            // raise a failure that did not happen.
+            let missed: Vec<u64> = wanted
+                .iter()
+                .filter(|(addr, _, _)| {
+                    !(0u8..4).any(|slot| {
+                        let name = match slot {
+                            0 => "dr0",
+                            1 => "dr1",
+                            2 => "dr2",
+                            _ => "dr3",
+                        };
+                        dr7 & (1u64 << (2 * u32::from(slot))) != 0
+                            && regs.get(name) == Some(*addr)
+                    })
+                })
+                .map(|(a, _, _)| *a)
+                .collect();
             if changed {
                 regs.set("dr7", dr7);
                 // A re-arm that did not land leaves this thread UNWATCHED.
@@ -405,8 +484,10 @@ impl LinuxDebugger {
                 // request to re-arm and CAN answer, is the one that acts on it.
                 if self.set_registers(tid, regs).await.is_err() {
                     unarmed.extend(wanted.iter().map(|(a, _, _)| *a));
+                    continue;
                 }
             }
+            unarmed.extend(missed);
         }
         unarmed.sort_unstable();
         unarmed.dedup();
@@ -1431,11 +1512,21 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     // fetched via PTRACE_PEEKUSER per-slot. A read failure here
                     // (e.g. an odd kernel) is tolerated — GP registers are still
                     // valid — rather than failing the whole GetRegisters call.
+                    #[cfg(not(target_arch = "aarch64"))]
                     for idx in [0usize, 1, 2, 3, 6, 7] {
                         if let Ok(v) = read_debug_reg(target, idx) {
                             regs.set(&format!("dr{idx}"), v);
                         }
                     }
+                    // AArch64 has no `DR` file to peek at: the same four slots
+                    // live behind NT_ARM_HW_WATCH as DBGWVR/DBGWCR pairs and
+                    // are translated into the `dr` vocabulary here, so every
+                    // caller above stays byte-identical with the other
+                    // backends. Same disposition as the x86 loop: a read
+                    // failure leaves the GP registers valid rather than
+                    // failing the whole GetRegisters.
+                    #[cfg(target_arch = "aarch64")]
+                    merge_debug_state(target, &mut regs);
                     regs
                 });
                 let _ = reply_tx.send(Reply::Registers(result));
@@ -1456,11 +1547,20 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     // would return Ok(()) (no error) while never touching the
                     // tracee's actual debug registers, so the watchpoint would
                     // never fire — reported live:true but functionally dead.
+                    #[cfg(not(target_arch = "aarch64"))]
                     for idx in [0usize, 1, 2, 3, 6, 7] {
                         if let Some(v) = regs.get(&format!("dr{idx}")) {
                             write_debug_reg(target, idx, v)?;
                         }
                     }
+                    // Whole-set on AArch64, because DBGWVR/DBGWCR are computed
+                    // from the slot address AND DR7 together — a per-register
+                    // write could not express `dr0` without already knowing
+                    // `dr7`. Unlike the read side this DOES propagate: a
+                    // watchpoint the caller asked for and that was not
+                    // programmed must not be reported as set.
+                    #[cfg(target_arch = "aarch64")]
+                    write_debug_registers(target, &regs)?;
                     Ok(())
                 });
                 let _ = reply_tx.send(Reply::Ack(result));
@@ -2526,6 +2626,186 @@ fn write_debug_reg(_pid: libc::pid_t, idx: usize, _value: u64) -> Result<(), Deb
     )))
 }
 
+/// The kernel's `user_hwdebug_state`, hand-declared because `libc` does not
+/// expose it.
+///
+/// ```c
+/// struct user_hwdebug_state {
+///     __u32 dbg_info;
+///     __u32 pad;
+///     struct { __u64 addr; __u32 ctrl; __u32 pad; } dbg_regs[16];
+/// };
+/// ```
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct HwDebugReg {
+    addr: u64,
+    ctrl: u32,
+    pad: u32,
+}
+
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct UserHwdebugState {
+    dbg_info: u32,
+    pad: u32,
+    dbg_regs: [HwDebugReg; 16],
+}
+
+#[cfg(target_arch = "aarch64")]
+impl Default for UserHwdebugState {
+    fn default() -> Self {
+        Self { dbg_info: 0, pad: 0, dbg_regs: [HwDebugReg::default(); 16] }
+    }
+}
+
+/// 8 bytes of header plus sixteen 16-byte pairs.
+///
+/// Checked at COMPILE time, for the same reason the macOS backend checks
+/// `ARM_DEBUG_STATE64_COUNT == 130`: this struct is hand-written against a
+/// kernel ABI, `iov_len` is computed from its size, and a layout that drifted
+/// would be read in SILENCE — arming a watchpoint that looks correct and
+/// watches the wrong address. That is the one failure mode this crate treats as
+/// worse than a refusal.
+#[cfg(target_arch = "aarch64")]
+const _: () = assert!(std::mem::size_of::<UserHwdebugState>() == 264);
+
+/// `NT_ARM_HW_WATCH`, not exposed by `libc`.
+#[cfg(target_arch = "aarch64")]
+const NT_ARM_HW_WATCH: libc::c_int = 0x403;
+
+/// How many AArch64 watchpoint pairs are presented as `dr` slots.
+///
+/// AArch64 offers up to sixteen; the shared engine speaks x86's four. Exposing
+/// four is honest — the engine cannot address a fifth — and keeps `DR7`'s slot
+/// bits meaningful. Same choice, same number, as the macOS backend.
+#[cfg(target_arch = "aarch64")]
+const TRANSLATED_SLOTS: u8 = 4;
+
+#[cfg(target_arch = "aarch64")]
+fn read_arm_hw_watch(pid: libc::pid_t) -> Result<UserHwdebugState, DebugError> {
+    let mut state = UserHwdebugState::default();
+    // SAFETY: `state` is a valid, fully-initialised repr(C) struct whose size
+    // is checked at compile time; the kernel writes at most `iov_len` bytes
+    // into it and reports how many through the same `iovec`.
+    // INVARIANT: pid must refer to a currently-stopped ptrace tracee.
+    debug_assert!(pid > 0, "read_arm_hw_watch: pid must be positive, got {pid}");
+    let ok = unsafe {
+        let mut iov = libc::iovec {
+            iov_base: std::ptr::addr_of_mut!(state).cast::<libc::c_void>(),
+            iov_len: std::mem::size_of::<UserHwdebugState>(),
+        };
+        libc::ptrace(
+            libc::PTRACE_GETREGSET,
+            pid,
+            NT_ARM_HW_WATCH as *mut libc::c_void,
+            std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
+        )
+    };
+    if ok < 0 {
+        return Err(DebugError::RegisterError(format!(
+            "reading the AArch64 watchpoint registers (NT_ARM_HW_WATCH) failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(state)
+}
+
+#[cfg(target_arch = "aarch64")]
+fn write_arm_hw_watch(pid: libc::pid_t, state: &UserHwdebugState) -> Result<(), DebugError> {
+    // SAFETY: as `read_arm_hw_watch`, except the kernel only READS the struct
+    // here; the cast away from const is confined to this call because the
+    // `iovec` interface is shared with the write-through GET side.
+    debug_assert!(pid > 0, "write_arm_hw_watch: pid must be positive, got {pid}");
+    let ok = unsafe {
+        let mut iov = libc::iovec {
+            iov_base: std::ptr::addr_of!(*state).cast::<libc::c_void>().cast_mut(),
+            iov_len: std::mem::size_of::<UserHwdebugState>(),
+        };
+        libc::ptrace(
+            libc::PTRACE_SETREGSET,
+            pid,
+            NT_ARM_HW_WATCH as *mut libc::c_void,
+            std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
+        )
+    };
+    if ok < 0 {
+        return Err(DebugError::RegisterError(format!(
+            "writing the AArch64 watchpoint registers (NT_ARM_HW_WATCH) failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(())
+}
+
+/// Present the AArch64 watchpoint pairs to the engine as `dr0`-`dr3` + `dr7`.
+///
+/// The whole point of translating HERE is that nothing above this line has to
+/// know: `set_watchpoint_sized`, `disarm_watchpoint_registers`,
+/// `disarm_all_hardware_watchpoints` and `rearm_watchpoints_on_new_threads`
+/// stay byte-identical with the other backends — the property this crate has
+/// repeatedly paid for losing.
+///
+/// Deliberately the same shape as the macOS backend's `merge_debug_state`,
+/// including the failure disposition: a pair that cannot be described in the
+/// `dr` vocabulary is reported as an EMPTY slot rather than a wrong one.
+#[cfg(target_arch = "aarch64")]
+fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
+    let Ok(state) = read_arm_hw_watch(pid) else { return };
+    let mut dr7 = 0u64;
+    for slot in 0..TRANSLATED_SLOTS {
+        let i = slot as usize;
+        let wvr = state.dbg_regs[i].addr;
+        let wcr = u64::from(state.dbg_regs[i].ctrl);
+        match crate::dr_slot_from_arm64_watchpoint(wvr, wcr, slot) {
+            Some((addr, bits)) => {
+                regs.set(&format!("dr{slot}"), addr);
+                dr7 |= bits;
+            }
+            None => regs.set(&format!("dr{slot}"), 0),
+        }
+    }
+    regs.set("dr6", 0);
+    regs.set("dr7", dr7);
+}
+
+/// Program the AArch64 watchpoint pairs from a `dr`-flavoured register set.
+///
+/// Whole-set, not per-register, and that is not a style choice: `DBGWVR`/
+/// `DBGWCR` are computed from the slot's address AND `DR7` together, so a
+/// per-register seam could not express `dr0` without already knowing `dr7`.
+#[cfg(target_arch = "aarch64")]
+fn write_debug_registers(pid: libc::pid_t, regs: &RegisterSet) -> Result<(), DebugError> {
+    let Some(dr7) = regs.get("dr7") else {
+        // No `DR7` means the caller is not talking about watchpoints at all.
+        // Touching the debug state on the strength of a stray `dr0` would arm
+        // or clear something nobody asked about.
+        return Ok(());
+    };
+    let mut state = read_arm_hw_watch(pid)?;
+    for slot in 0..TRANSLATED_SLOTS {
+        let i = slot as usize;
+        let addr = regs.get(&format!("dr{slot}")).unwrap_or(0);
+        match crate::arm64_watchpoint_from_dr_slot(addr, dr7, slot) {
+            Some((wvr, wcr)) => {
+                state.dbg_regs[i].addr = wvr;
+                state.dbg_regs[i].ctrl = u32::try_from(wcr & 0xFFFF_FFFF).unwrap_or(0);
+            }
+            None => {
+                // Disabled in `DR7`, or a request AArch64 cannot express.
+                // Clearing is right for the first and safe for the second:
+                // leaving a stale pair armed is the leak `detach` exists to
+                // prevent.
+                state.dbg_regs[i].addr = 0;
+                state.dbg_regs[i].ctrl = 0;
+            }
+        }
+    }
+    write_arm_hw_watch(pid, &state)
+}
+
 /// The backing-file path of a `/proc/<pid>/maps` line, if it has one.
 ///
 /// `modules()` counts columns differently from [`parse_maps_line`] (it skips
@@ -2769,7 +3049,12 @@ impl crate::Debugger for LinuxDebugger {
         // continue.
         loop {
             self.step_off_planted_breakpoint(None).await;
-            let _ = self.rearm_watchpoints_on_new_threads().await;
+            let missed = self.rearm_watchpoints_on_new_threads().await;
+            // Not `let _ =`. The resume still does not fail — that part of the
+            // old comment was right — but the answer is RECORDED instead of
+            // dropped. Assigning, not extending: an address that has since been
+            // re-armed clears itself, so this never accumulates stale claims.
+            *self.unarmed_since_resume.lock() = missed.into_iter().collect();
             let mut r = match self.send(Command::ContinueExecution)? {
                 Reply::Event(r) => r,
                 _ => return Err(DebugError::StepError("unexpected reply".into())),
@@ -2931,7 +3216,12 @@ impl crate::Debugger for LinuxDebugger {
         // every resume; the stepping door never did, so stepping through the
         // code that spawns a thread left that thread unwatched — silently, which
         // is the failure mode a watchpoint exists to rule out.
-        let _ = self.rearm_watchpoints_on_new_threads().await;
+        let missed = self.rearm_watchpoints_on_new_threads().await;
+            // Not `let _ =`. The resume still does not fail — that part of the
+            // old comment was right — but the answer is RECORDED instead of
+            // dropped. Assigning, not extending: an address that has since been
+            // re-armed clears itself, so this never accumulates stale claims.
+            *self.unarmed_since_resume.lock() = missed.into_iter().collect();
         if let Some(ev) = self.step_off_planted_breakpoint(Some(tid)).await {
             *self.current_tid.lock() = Some(ev.tid);
             if ev.reason.is_exit() {
@@ -3223,13 +3513,25 @@ impl crate::Debugger for LinuxDebugger {
                 "a software breakpoint at {addr:?} is not {alignment}-byte aligned; on this                  architecture a trap there would straddle two instructions and corrupt both"
             )));
         }
-        const X86_TRAP_BYTE_IS_VALID_HERE: bool =
-            cfg!(any(target_arch = "x86_64", target_arch = "x86"));
-        if !X86_TRAP_BYTE_IS_VALID_HERE {
-            return Err(DebugError::Unsupported(
-                "software breakpoints on this backend implant the x86 int3 (0xCC), which is not a breakpoint on this host architecture".into(),
-            ));
-        }
+        // The blanket refusal off x86 that used to sit here has been REMOVED.
+        //
+        // It said this backend "implants the x86 int3 (0xCC)", and that was
+        // true when it was written. It is no longer what this function does:
+        // the implant below writes `crate::host_trap_bytes()` — `BRK #0` on
+        // AArch64, derived from this crate's single arm64 encoder, four bytes
+        // wide per `trap_len`, with `pc_after_trap` already accounting for the
+        // ARM-vs-x86 difference in the PC reported on trap. The alignment
+        // check immediately above already asks `host_trap_alignment()`.
+        //
+        // So the refusal outlived its reason: the backend would plant a correct
+        // trap and declined to, citing a byte it no longer writes.
+        //
+        // What proves this is not the removal but `ubuntu-24.04-arm`, which
+        // EXECUTES this path on real ARM hardware. The same stale refusal is
+        // still present in the Windows and macOS backends and is deliberately
+        // left there: no machine reachable from here runs those on ARM, and
+        // lifting a defence where nothing can answer is predicting, not
+        // measuring.
         // Idempotency guard: if this address is ALREADY tracked, do nothing
         // further — a live test proved that calling `set_breakpoint` twice
         // at the same address (e.g. a caller re-enabling an already-active
@@ -3330,11 +3632,18 @@ impl crate::Debugger for LinuxDebugger {
         if matches!(kind, BreakpointKind::Software) {
             return self.set_breakpoint(addr, kind).await;
         }
-        if !cfg!(any(target_arch = "x86_64", target_arch = "x86")) {
-            return Err(DebugError::Unsupported(
-                "hardware watchpoints on this backend program the x86 debug registers,                  which this host architecture does not have".into(),
-            ));
-        }
+        // The refusal that used to sit here — "this backend programs the x86
+        // debug registers, which this host architecture does not have" — is
+        // gone as of iteration 570. Its second half was true and is no longer
+        // the whole story: the `dr` vocabulary this function speaks is now
+        // TRANSLATED to DBGWVR/DBGWCR on AArch64 by `merge_debug_state` /
+        // `write_debug_registers`, through NT_ARM_HW_WATCH, using the same
+        // `arm64_watchpoint_from_dr_slot` pair that lib.rs already held and
+        // that macOS already used. This function is unchanged below and stays
+        // byte-identical with the other backends, which is the point.
+        //
+        // Proof is delegated, not claimed: `ubuntu-24.04-arm` executes this on
+        // real ARM hardware. Nothing reachable from here can.
         let tids = self.threads().await?;
         if tids.is_empty() {
             return Err(DebugError::NotAttached);
@@ -3686,6 +3995,16 @@ impl crate::Debugger for LinuxDebugger {
                 // watchpoints exactly as it does to software breakpoints.
                 bp.ignore_count = self.ignore_counts.lock().get(&addr).copied().unwrap_or(0);
                 bp.only_thread = self.thread_filters.lock().get(&addr).copied().map(ThreadId);
+                // The last field of this block that was maintained nowhere and
+                // published nowhere. A watchpoint listed as enabled and
+                // hit-counted while no debug register on some thread holds it
+                // is the most expensive wrong answer this tool can give, and
+                // until now the listing had no way to say it.
+                if self.unarmed_since_resume.lock().contains(&addr) {
+                    bp.label = Some(
+                        "not armed on every thread as of the last resume".to_string(),
+                    );
+                }
                 bp
             }))
             .collect())
@@ -4063,29 +4382,27 @@ mod live_tests {
     /// Returns `false` when this architecture refuses them, so the caller can
     /// stop instead of asserting behaviour that cannot happen here.
     ///
-    /// This is NOT a skip. The refusal IS the contract on AArch64
-    /// (`X86_TRAP_BYTE_IS_VALID_HERE`), and it is ASSERTED: a test that merely
-    /// returned early would stay green on a backend that had quietly started
-    /// accepting a request it cannot serve. Measured on ubuntu-24.04-arm,
-    /// 2026-08-15, where six live tests failed with
-    /// `Unsupported("software breakpoints ... x86 int3 ...")` — the backend
-    /// answering correctly to a test that assumed x86.
+    /// This is NOT a skip, and what it asserts CHANGED in iteration 569.
+    ///
+    /// It used to assert the blanket refusal off x86 — measured on
+    /// ubuntu-24.04-arm, 2026-08-15, where six live tests failed with
+    /// `Unsupported("software breakpoints ... x86 int3 ...")`. That refusal has
+    /// been removed: the backend implants `host_trap_bytes()`, a real `BRK #0`
+    /// on AArch64, so a software breakpoint is now expected to be ACCEPTED on
+    /// every architecture.
+    ///
+    /// One refusal survives and is still asserted: a trap must be aligned. On
+    /// AArch64 an unaligned implant would straddle two instructions and corrupt
+    /// both, so that `Unsupported` is a correct answer, not a gap — and
+    /// accepting any other refusal here would let a re-introduced blanket
+    /// refusal pass unnoticed.
     async fn plant_software_bp(dbg: &LinuxDebugger, at: Address, what: &str) -> bool {
-        const X86: bool = cfg!(any(target_arch = "x86_64", target_arch = "x86"));
         match dbg.set_breakpoint(at, BreakpointKind::Software).await {
-            Ok(()) => {
+            Ok(()) => true,
+            Err(DebugError::Unsupported(msg)) => {
                 assert!(
-                    X86,
-                    "{what}: a software breakpoint was ACCEPTED on an architecture whose \
-                     implant is refused — the refusal was lifted without these tests being \
-                     updated"
-                );
-                true
-            }
-            Err(DebugError::Unsupported(msg)) if !X86 => {
-                assert!(
-                    msg.contains("int3") || msg.contains("aligned"),
-                    "{what}: refused, but not for either documented reason: {msg}"
+                    msg.contains("aligned"),
+                    "{what}: refused, and alignment is the only refusal this backend is now                      entitled to give — a blanket architecture refusal was removed in 569 and                      must not come back: {msg}"
                 );
                 false
             }
@@ -4098,28 +4415,26 @@ mod live_tests {
     /// Returns `false` when this architecture has no `DR0`-`DR7`, so a test
     /// about them can stop instead of asserting behaviour that cannot exist.
     ///
-    /// Like `plant_software_bp`, this ASSERTS rather than skips: AArch64 has
-    /// hardware breakpoints, but behind `NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH` —
-    /// a different register file reached a different way, which iteration 552
-    /// made return `Unsupported` rather than a plausible zero. A test that
-    /// merely returned early would stay green if that refusal were replaced by
-    /// a fabricated answer, which is the failure mode it exists to prevent.
+    /// Like `plant_software_bp`, this ASSERTS rather than skips — and what it
+    /// asserts was INVERTED in iteration 570.
+    ///
+    /// It used to assert that `dr0` is REFUSED on AArch64 and return `false`,
+    /// so every watchpoint test skipped there. That refusal is gone: the four
+    /// slots are now translated to `DBGWVR`/`DBGWCR` through `NT_ARM_HW_WATCH`,
+    /// so `dr0` is readable on every architecture this backend runs on.
+    ///
+    /// Inverting it is the whole point of the round rather than a side effect.
+    /// Left as it was, `debug_registers_available` would have returned `false`
+    /// on ARM, every watchpoint test would have skipped, and the ARM CI row
+    /// would have gone GREEN while proving nothing about the code 570 added —
+    /// the vacuous-guard failure this crate names explicitly. Returning `true`
+    /// is what turns `ubuntu-24.04-arm` into the measurement.
     async fn debug_registers_available(dbg: &LinuxDebugger, tid: ThreadId) -> bool {
-        const X86: bool = cfg!(any(target_arch = "x86_64", target_arch = "x86"));
         match dbg.get_register(tid, "dr0").await {
-            Ok(_) => {
-                assert!(X86, "dr0 was READ on an architecture that has no debug registers");
-                true
-            }
-            Err(e) if !X86 => {
-                let msg = format!("{e}");
-                assert!(
-                    msg.contains("dr0") || msg.contains("AArch64"),
-                    "dr0 was refused, but not for the documented reason: {msg}"
-                );
-                false
-            }
-            Err(e) => panic!("dr0 must be readable on x86: {e}"),
+            Ok(_) => true,
+            Err(e) => panic!(
+                "dr0 must be readable on every architecture this backend supports: on x86 it                  is the register file itself, on AArch64 it is the NT_ARM_HW_WATCH translation                  added in 570. A refusal here means that translation did not reach the                  register set: {e}"
+            ),
         }
     }
 

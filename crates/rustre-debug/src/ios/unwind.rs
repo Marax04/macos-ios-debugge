@@ -610,17 +610,37 @@ impl CompactUnwindInfo {
             return Err(UnwindError::NoEntryForPc(function_offset));
         }
 
-        self.lookup_in_page(page_offset, first_level_fn, function_offset)
+        // Where this page ENDS: the next index entry's page starts there. A
+        // page offset of 0 is the sentinel, and a non-increasing one is
+        // nonsense, so both degrade to the end of the section.
+        let next_page = self.index_entry(lo + 1)?.1 as usize;
+        let page_end =
+            if next_page > page_offset as usize { next_page } else { self.data.len() };
+
+        self.lookup_in_page(page_offset, page_end, first_level_fn, function_offset)
     }
 
     fn lookup_in_page(
         &self,
         page_offset: u32,
+        page_end: usize,
         first_level_fn: u32,
         function_offset: u32,
     ) -> Result<CompactEntry, UnwindError> {
         const W: &str = "__unwind_info second-level page";
         let page = page_offset as usize;
+        // A page's entry array lies INSIDE that page. `entryCount` is a u16
+        // read straight out of the file; bounding the search by it alone lets
+        // the search step into the NEXT page and hand back whatever it finds
+        // there as a perfectly well-formed compact-unwind rule — an `Ok` with
+        // a fabricated function offset and encoding, which is worse than an
+        // error. `array_end` is the last byte the array may occupy.
+        let entries_fit = |base: usize, count: u32, stride: usize, array_end: usize| {
+            (count as usize)
+                .checked_mul(stride)
+                .and_then(|bytes| base.checked_add(bytes))
+                .is_some_and(|end| end <= array_end)
+        };
         match rd_u32(&self.data, page, W)? {
             SECOND_LEVEL_REGULAR => {
                 let entry_page_offset = rd_u16(&self.data, page + 4, W)? as usize;
@@ -629,6 +649,14 @@ impl CompactUnwindInfo {
                     return Err(UnwindError::NoEntryForPc(function_offset));
                 }
                 let base = page + entry_page_offset;
+                if !entries_fit(base, entry_count, 8, page_end) {
+                    return Err(UnwindError::Truncated {
+                        what: "__unwind_info second-level page entries",
+                        offset: base,
+                        need: (entry_count as usize).saturating_mul(8),
+                        have: page_end.saturating_sub(base),
+                    });
+                }
                 // Regular entries carry absolute (image-relative) offsets.
                 let get = |i: u32| -> Result<u32, UnwindError> {
                     rd_u32(&self.data, base + (i as usize) * 8, W)
@@ -655,6 +683,20 @@ impl CompactUnwindInfo {
                     return Err(UnwindError::NoEntryForPc(function_offset));
                 }
                 let base = page + entry_page_offset;
+                // Within a compressed page the format supplies a tighter
+                // bound than the page end: the entry array must stop at or
+                // before the page-local encodings array.
+                let encodings_base = page.saturating_add(encodings_page_offset);
+                let array_end =
+                    if encodings_base > base { encodings_base.min(page_end) } else { page_end };
+                if !entries_fit(base, entry_count, 4, array_end) {
+                    return Err(UnwindError::Truncated {
+                        what: "__unwind_info second-level page entries",
+                        offset: base,
+                        need: (entry_count as usize).saturating_mul(4),
+                        have: array_end.saturating_sub(base),
+                    });
+                }
                 // Compressed entries pack a 24-bit function offset *relative
                 // to the first-level entry* with an 8-bit encoding index.
                 let Some(relative) = function_offset.checked_sub(first_level_fn) else {
@@ -2122,6 +2164,101 @@ mod tests {
         let data = build_unwind_info(&common, &[(0x8000, ok)], 0x9000);
         let info = CompactUnwindInfo::parse(&data).unwrap();
         assert_eq!(info.lookup(0x8000).unwrap().encoding, local[0]);
+    }
+
+    /// A second-level page's entry array must stay inside its own page.
+    /// `entryCount` is a u16 read straight out of the file, and it is the
+    /// ONLY bound on the entry search, so an inflated one walks into the NEXT
+    /// page and returns whatever it finds there as a compact-unwind rule.
+    ///
+    /// The layout is chosen so the failure is observable as `Ok`: page A has
+    /// no page-local encodings, so its entry array is provably one word long
+    /// and page B starts immediately after it, and page B's first word
+    /// (kind == 3) has top byte 0 — a COMMON encoding index — so the
+    /// fabricated entry resolves cleanly instead of erroring.
+    #[test]
+    fn unwind_info_inflated_entry_count_fabricates_a_rule_from_the_next_page() {
+        let common = [UNWIND_ARM64_MODE_FRAMELESS | (3 << 12), UNWIND_ARM64_MODE_FRAME];
+        // One entry at relative 0 using common[1]; NO page-local encodings.
+        let page_a = compressed_page(&[(0, 1)], &[]);
+        // A compressed page whose header words, read as entries, sort above
+        // the probe, so the search settles on page B's first word.
+        let filler: Vec<(u32, u8)> = (0..64u32).map(|i| (i * 4, 0)).collect();
+        let page_b = compressed_page(&filler, &[]);
+        let honest = build_unwind_info(&common, &[(0x1000, page_a), (0x9000, page_b)], 0xA000);
+
+        let info = CompactUnwindInfo::parse(&honest).unwrap();
+        let good = info.lookup(0x3000).expect("the single honest entry covers 0x3000");
+        assert_eq!(good.function_offset, 0x1000);
+        assert_eq!(good.encoding, common[1]);
+
+        // The ONLY difference: page A's `entryCount` claims 5 entries while
+        // its own `encodingsPageOffset` proves the array holds exactly one.
+        let page_a_off = 28 + common.len() * 4 + 3 * 12;
+        assert_eq!(u32::from(honest[page_a_off]), SECOND_LEVEL_COMPRESSED);
+        let mut hostile = honest.clone();
+        hostile[page_a_off + 6] = 5;
+        hostile[page_a_off + 7] = 0;
+
+        let info = CompactUnwindInfo::parse(&hostile).unwrap();
+        match info.lookup(0x3000) {
+            Err(_) => {}
+            Ok(entry) => assert_eq!(
+                entry, good,
+                "the entry search must stay inside page A's own entry array; \
+                 it walked into page B and fabricated a rule"
+            ),
+        }
+    }
+
+    /// The REGULAR arm has the same shape as the compressed one above and
+    /// needs the same bound: `entryCount` is a u16 out of the file and the
+    /// only thing stopping `base + i * 8` is the length of the WHOLE section,
+    /// so an inflated count walks into the next page.
+    ///
+    /// A regular page carries no page-local encodings array, so the only
+    /// bound the format supplies is where the next page starts — which the
+    /// first-level index already states. The layout below makes the failure
+    /// deterministic rather than incidental: page A holds exactly one 8-byte
+    /// entry, page B begins immediately after it, and `entryCount` is
+    /// inflated to 2, so the search's single probe lands on page B's own
+    /// header. Read as an entry that header is `function_offset = 2` (the
+    /// page-kind word) with `encoding = 0x0003_0008` (`entryPageOffset = 8`
+    /// packed with `entryCount = 3`) — a rule assembled entirely out of
+    /// another page's structural fields.
+    #[test]
+    fn unwind_info_regular_page_entry_count_cannot_escape_its_own_page() {
+        let enc = UNWIND_ARM64_MODE_FRAME | 0x3;
+        // Page A: ONE entry, so its array provably ends 16 bytes into the page.
+        let page_a = regular_page(&[(0x1000, enc)]);
+        assert_eq!(page_a.len(), 16, "page A must be header + exactly one entry");
+        // Page B starts right there; three entries so its header's second
+        // word is the distinctive 0x0003_0008.
+        let page_b = regular_page(&[(0x9000, enc), (0x9100, enc), (0x9200, enc)]);
+        let honest = build_unwind_info(&[], &[(0x1000, page_a), (0x9000, page_b)], 0xA000);
+
+        let info = CompactUnwindInfo::parse(&honest).unwrap();
+        let good = info.lookup(0x3000).expect("the single honest entry covers 0x3000");
+        assert_eq!(good.function_offset, 0x1000);
+        assert_eq!(good.encoding, enc);
+
+        // The ONLY difference: page A's `entryCount` claims two entries while
+        // the next first-level index entry proves the page holds one.
+        let page_a_off = 28 + 3 * 12;
+        assert_eq!(u32::from(honest[page_a_off]), SECOND_LEVEL_REGULAR);
+        let mut hostile = honest.clone();
+        hostile[page_a_off + 6] = 2;
+        hostile[page_a_off + 7] = 0;
+
+        let info = CompactUnwindInfo::parse(&hostile).unwrap();
+        match info.lookup(0x3000) {
+            Err(_) => {}
+            Ok(entry) => assert_eq!(
+                entry, good,
+                "the entry search must stay inside page A's own entry array; \
+                 it walked into page B's header and fabricated a rule"
+            ),
+        }
     }
 
     #[test]

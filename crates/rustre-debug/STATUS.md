@@ -1,306 +1,233 @@
-# STATUS — `rustre-debug`
+# rustre-debug — stato misurato
 
-> **Cruscotto del debugger.** Aggiornato a **ogni iterazione**. Ogni numero qui è
-> **misurato**, mai stimato: se una cosa non è stata misurata, è scritto che non
-> lo è stata.
+> **Regola di questo file.** Ogni 4 iterazioni va riscritto da zero. Non è un
+> registro storico: è un cruscotto. Se cresce per stratificazione smette di
+> rispondere alla domanda per cui esiste — *a che punto siamo davvero?* — e
+> diventa un archivio che nessuno rilegge. Riscrittura precedente: 560.
+> Questa: **569**.
 >
-> **Ogni 4 iterazioni questo file va riscritto da zero**, non solo esteso: il
-> semaforo e le dimensioni si rimisurano, i difetti chiusi escono dalla tabella
-> degli aperti, le iterazioni vecchie si comprimono in una riga di totale.
->
-> Ultimo aggiornamento: **iterazione 560** · 2026-08-15
-> **Riscrittura completa.** Precedente al 556. Prossima: iterazione 564.
+> **Ogni numero qui è misurato, mai dedotto.** Se una riga dice «non
+> dimostrato», significa che nessuna macchina raggiungibile ha risposto a quella
+> domanda, e va letta come una lacuna dichiarata, non come un dettaglio.
 
 ---
 
 ## 1. Dove siamo
 
-**Tutte e quattro le piattaforme sono ora ESEGUITE, non solo compilate.**
+Quattro backend — Windows (Win32 debug API), Linux (ptrace), macOS (ptrace BSD +
+Mach), iOS (GDB Remote Serial Protocol verso `debugserver`) — con una superficie
+MCP condivisa in `rustre-mcp-tools/src/tools/debug.rs`.
 
-| | Windows x64 | Linux x64 | macOS ARM | macOS Intel | iOS Sim | Linux ARM |
-|---|---|---|---|---|---|---|
-| Compila | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ¹ |
-| **Eseguito** | ✅ | ✅ | ✅ CI | ✅ CI | ✅ CI | ✅ CI |
-| Suite | **1969/1969** | **1952/1952** | success | success | success | 1893 + 13 live |
+Il traguardo raggiunto e mantenuto: **tutte e quattro le piattaforme sono
+ESEGUITE, non solo compilate.** Compilare è una verifica sulla sintassi;
+eseguire è l'unica che risponde sul comportamento.
 
-¹ Dal 552. Prima falliva il **build** con 43 errori.
+## 2. Semaforo (al 569)
 
-Il limite dichiarato del progetto per 539 iterazioni — «macOS non è mai stato
-eseguito» — non era un difetto da correggere: il repo **non aveva nessun commit
-né remote**, quindi il workflow macOS esisteva e non era mai partito.
-
----
-
-## 2. Semaforo
-
-| Indicatore | Valore | Note |
+| Piattaforma | Come è verificata | Esito |
 |---|---|---|
-| **Test Windows** | **1969 / 1969** ✅ | rimisurato al 559; **zero** rossi |
-| **Test Linux** (WSL, seriale) | **1952 / 1952** ✅ | rimisurato al 559 |
-| **Test MCP** | 392 / 392 ✅ | rimisurato al 559 |
-| **macOS x86_64 / aarch64** (`check`) | ✅ 0 errori | rimisurato al 559 |
-| **CI macOS ARM** | ✅ job intero | backend + MCP su hardware Apple |
-| **CI iOS Simulator + device triple** | ✅ | dal 553 |
-| **CI Linux aarch64** | 1893 passati, 13 live | 11 attesi · 2 reali, **entrambi chiusi al 559-560** |
-| **Regressioni aperte** | **0** | |
+| Windows x86_64 | suite locale | **2008 passed, 0 falliti** |
+| Linux x86_64 | WSL, `--test-threads=1` | **1990 passed, 0 falliti** (al 568) |
+| Linux aarch64 | CI `ubuntu-24.04-arm` | esegue; `continue-on-error` ancora presente, da togliere quando il prossimo run lo dimostra |
+| macOS Intel | CI `macos-15-intel` | esegue dopo il fix del tetto a 90′ (564) |
+| macOS Apple Silicon | CI `macos-14` | esegue |
+| iOS Simulator | CI | esegue |
+| iOS device | CI | **solo compilazione** — serve un runner self-hosted con hardware |
+| MCP | suite locale | **392 passed, 0 falliti** |
+| Darwin ×2 | `cargo check` locale | entrambi compilano |
 
-### Copertura live
+## 3. Le tre famiglie di difetti che questo crate produce
 
-| | Windows | Linux | macOS | iOS |
-|---|---|---|---|---|
-| Test live | 67 ¹ | 34 ¹ | **4** | 0 |
-| di cui passano | 67 | 34 | **1** | — |
+Non è una tassonomia teorica: quasi ogni iterazione recente cade in una di
+queste, e riconoscerla è ciò che rende veloce il round successivo.
 
-¹ non rimisurato in questo consolidamento.
+1. **Un fallimento riportato come successo.** `Ok(())` letterale, `let _ =`,
+   `else { continue }`, o un `bool` in cui «non trovato» e «non riuscito»
+   collassano. È la famiglia più numerosa e la più costosa: compila, passa i
+   test, e mente al chiamante.
+2. **Logica condivisa in tre copie che deriva.** I tre backend hanno lo stesso
+   corpo per la stessa operazione; una copia viene corretta e due no.
+   `the_logic_shared_by_the_three_backends_stays_identical` esiste per questo e
+   ha già impedito una deriva (569).
+3. **Un'assunzione x86 in codice che gira anche su ARM.** Byte di trappola,
+   allineamento, nomi dei registri, PC riportato al trap. I round 548-563 hanno
+   sistematicamente sostituito le costanti con derivazioni dall'architettura.
 
-Su macOS solo `launch_runs_a_child_to_exit` passa: `fork` + `PT_TRACE_ME` +
-`execvp` e il ciclo di wait funzionano **senza privilegi**, tutto ciò che
-richiede una task port Mach no — `task_for_pid` risponde `kern_return 5` senza
-root o l'entitlement. **È un vincolo di deployment da documentare, non un
-difetto da correggere.**
+## 4. Iterazioni 566-569 — un unico difetto in quattro strati
 
----
+566, 567 e 568 sono risultati **lo stesso difetto a tre livelli della catena**,
+trovati risalendola. Chiudere solo quello di mezzo avrebbe prodotto valore zero.
 
-## 3. Dimensioni
+| # | Strato | Difetto | Esito |
+|---|---|---|---|
+| 566 | produttore, foglia | `disarm_watchpoint_registers`: una scrittura fallita lasciava `found = false`, la stessa risposta di «mai armato» — e il chiamante cancellava la contabilità su quel `false`, dimenticando un watchpoint ancora vivo nei registri | propagato nei 3 backend; nell'MCP invertito l'ordine disarmo/liberazione-id |
+| 567 | produttore, aggregato | `rearm_watchpoints_on_new_threads` aveva già la lista `unarmed` per riportare i thread scoperti, e di **quattro** modi di lasciarne uno scoperto ne raccoglieva **uno** | fix verificativo: si chiede ai registri cosa manca, invece di riportare a ogni sito |
+| 568 | chiamante | i sei `let _ = self.rearm_watchpoints_on_new_threads().await;` buttavano via la lista appena completata | registrata in `unarmed_since_resume`, esposta via `Breakpoint.label` e come `"note"` in `debug.watchpoints` |
+| 569 | difesa obsoleta | il rifiuto dei breakpoint software fuori da x86 citava un `int3` che la funzione **non impianta più**: venti righe sotto scrive `host_trap_bytes()`, cioè `BRK #0` su AArch64 | rimosso nei 3 backend; resta il solo rifiuto per allineamento |
 
-Rimisurate al 560.
+**Il guadagno per l'utente del 568 merita di essere detto esplicitamente.**
+`debug.watchpoints` pubblicava `"enabled": true`, che è contabilità *nostra* —
+«l'utente non l'ha disabilitato» — e veniva letto come «la CPU sta
+sorvegliando». Quando un re-arm mancava un thread i due divergevano e l'API
+continuava a dire `true`. Ora accanto compare
+`"note": "not armed on every thread as of the last resume"`.
 
-| Componente | File | Righe |
-|---|---|---|
-| `src/*.rs` (primo livello) | 55 | **71 436** |
-| ├─ `lib.rs` | | 12 393 |
-| ├─ `windows_debugger.rs` | | 8 518 |
-| ├─ `linux_debugger.rs` | | 5 724 |
-| ├─ `macos_debugger.rs` | | 4 741 |
-| └─ `memory_layout_view.rs` | | 2 033 |
-| `src/ios/` (**576** test) | 17 | **34 778** |
-| `src/codeview/` | 15 | **19 539** |
-| **totale** | **87** | **125 753** |
+**Il 569 in dettaglio, perché è quello dove ho sbagliato due volte.** Avevo
+limitato la rimozione a Linux con una motivazione che suonava rigorosa — «solo
+il runner ARM può dimostrarlo». La premessa era falsa: `macos-14` è Apple
+Silicon e già esegue quei test. E il guard sull'identità dei tre backend ha
+rifiutato la divergenza, correttamente: un byte di trappola derivato
+dall'architettura è logica condivisa, non specificità di piattaforma. Aggiornati
+insieme al fix, deliberatamente: `plant_software_bp` (l'allineamento resta
+l'unico rifiuto ammesso, così un rifiuto generico reintrodotto non passa), il
+test live macOS che era *progettato* per fallire quel giorno, e i due guard
+sorgente preservandone l'intento.
 
-`src/ios` è passato da 30 739 righe / 502 test a **34 778 / 576** in due giri di
-workflow.
+## 4-bis. Iterazione 570 — watchpoint hardware su ARM64 Linux
 
----
+Il gap funzionale più grande rimasto: un debugger senza watchpoint su ARM non è
+enterprise. Linux rifiutava con *«this backend programs the x86 debug registers,
+which this host architecture does not have»* — vero sulla seconda metà, ptrace
+su AArch64 non espone `DR0`-`DR7`, e proprio per questo il round **non** è stato
+«togliere un rifiuto» come il 569.
 
-## 4. Le tre famiglie di difetti
+Quello che il crate possedeva già, e che ha ridotto il round da giorni a ore:
 
-I ventitré difetti di 540-560 non sono indipendenti.
-
-### A. «Esito affermato, non derivato» — 6 iterazioni
-540 rewind · 542a restore · 544 `detach` · 554 `kill` · 557 `pause`.
-Tutti rispondevano con un letterale dopo aver scartato l'esito della syscall.
-
-La sfumatura che si ripete: **rendere severo alla cieca è un difetto nuovo**.
-`ESRCH` su un detach o un kill è l'esito *riuscito* scritto come errore — un
-processo già andato non ha più nulla da cui staccarsi né da uccidere.
-
-Il 557 aggiunge il rovescio: **la variante non era la bugia, il record lo era**.
-Riclassificare lo stop faceva cadere sei test live che avevano ragione; bastava
-smettere di affermare che il breakpoint fosse nostro.
-
-### B. «Assunzione x86 / elenco di piattaforme» — 8 difetti
-Una causa sola: il workspace è stato scritto e verificato **solo su Windows x86**
-per tutta la sua vita.
-
-| Difetto | Invisibile su |
+| pezzo | dov'era |
 |---|---|
-| `pyo3` vs Python del runner · `fuser` obbligatorio · `#[path]` in modulo inline · `const fn` con corpo `cfg(linux)` | Windows |
-| 546 PC-1 e `0xCC` nei classificatori — **su arm64 nessun breakpoint riconosciuto** | x86 |
-| 548 salva 1 byte, ne scrive 4 → tre byte di `BRK` lasciati nel target | x86 |
-| 552 `PTRACE_GETREGS` e `user_regs_struct.rip` inesistenti | x86 |
-| 559 PAC nell'unwinder condiviso — **ogni frame dopo il primo in nessun modulo** | x86 |
+| semantica — cosa scrivere in `DBGWVR`/`DBGWCR` | **`lib.rs`**, condivisa, testata, già usata da macOS |
+| trasporto `PTRACE_GETREGSET` + `iovec` | scritto al 552 per `NT_PRSTATUS` |
+| layout `user_hwdebug_state`, `NT_ARM_HW_WATCH` | scritto ora |
 
-### C. «Lo strumento di misura era sbagliato» — 7 difetti
-Ogni volta che ho aggiunto una misura, il primo risultato è stato che la misura
-stessa era difettosa. Ed è il gruppo che ha insegnato di più.
+La forma è copiata da macOS e non è una scelta di stile: la traduzione lavora
+sull'intero `RegisterSet` (`merge_debug_state` / `write_debug_registers`) perché
+`WVR`/`WCR` si calcolano da `dr{n}` **e** `dr7` insieme — una cucitura per
+singolo registro non potrebbe esprimere `dr0` senza già conoscere `dr7`. Tutto
+ciò che sta sopra quella linea resta byte-identico agli altri backend.
 
-| # | Cosa |
+### Cosa è verificato e cosa no — la parte importante
+
+| | esito |
 |---|---|
-| 549/553 | guard che leggevano `src/` a runtime; il fix del 549 ne ha mancato **una seconda copia** |
-| 550/556 | il job x86_64 **cancellato** al timeout, e il summary lo firmava `success` perché testava `!= failure` |
-| 555 | il passo principale eseguiva i test live senza `sudo`: **riportava un fallimento e tratteneva la risposta insieme** |
-| 544-556 | `macos-13` ritirato: l'etichetta si legge e non viene **mai schedulata** |
-| 558 | i test live chiedevano `rax` a un backend che risponde `x0` |
-| 560 | il test multi-thread prendeva il **primo stop qualunque**, e l'iterazione 526 gli aveva cambiato il flusso di eventi sotto |
+| Trasporto + layout, type-check per `aarch64-unknown-linux-gnu` | ✅ **verificato** |
+| `assert!(size_of::<UserHwdebugState>() == 264)` sul target reale | ✅ **passa** |
+| Nessuna regressione sul percorso x86 | ✅ suite Windows e Linux |
+| Le due cuciture nel command loop, compilate | ❌ **non verificato** |
+| I registri vengono programmati CORRETTAMENTE | ❌ **non verificato** |
 
----
+**Il «2009 passed» su Windows non prova nulla di questo codice**: sta sotto
+`#[cfg(target_arch = "aarch64")]` e su Windows non viene compilato. Due strade
+per compilarlo davvero sono fallite — `cargo check --target
+aarch64-unknown-linux-gnu` da Windows richiede un cross-compiler C per
+`libsqlite3-sys`, e installarlo in WSL richiede una password sudo. La terza ha
+funzionato: il blocco è stato copiato **verbatim** in un crate di scratch con il
+solo `libc` e type-checkato per il target ARM reale. Copiato, non parafrasato —
+altrimenti avrei verificato una parafrasi.
 
-## 5. Iterazioni 556-560
+Resta che la prova del comportamento può darla solo `ubuntu-24.04-arm`.
 
-### 557 — `pause()` riportava un breakpoint inesistente
-Vedi famiglia A. Fix a raggio zero: `label` + `enabled: false` in
-`enrich_event_breakpoint`, il primo punto che ha la tabella dei piantati.
-MCP invariato: `stop_reason` è il `Debug` dell'intera ragione, quindi
-l'etichetta arriva già. Verificato, non assunto.
+### Cosa il 570 NON ha portato
 
-### 558 — triage dei 13 rossi ARM
-6 rifiuti attesi · 5 test x86 · 2 reali. Corretti i nomi dei registri via
-`instr_step::pc_key`. **Non** toccati i 16 punti di `set_breakpoint`: silenziare
-11 fallimenti attesi non insegna nulla. Il job CI è rinominato
-`11 expected, 2 unexplained` — il delta del prossimo run è ora leggibile.
+Watchpoint **dati** (`DataWrite`, `DataReadWrite`), non «i watchpoint su ARM».
+Gli slot di ESECUZIONE — `rw == 0b00` in `DR7`, cioè i breakpoint hardware —
+finiscono nel ramo `None` della traduzione, che li azzera. È corretto e
+deliberato, e il commento in `lib.rs` lo diceva già prima di questo round:
+*«AArch64 puts those in `DBGBVR`/`DBGBCR`, so there is no watchpoint pair that
+expresses it; saying so beats arming a data watchpoint that would fire on the
+wrong events»*.
 
-### 559 — PAC nell'unwinder condiviso
-Strippa **solo** quando il grezzo non risolve e lo strippato sì: `strip_pac`
-codifica lo split a 47 bit di **Apple** e Linux AArch64 è comunemente a 48,
-quindi dove la maschera è sbagliata non cambia nulla. È la proprietà che lo rende
-spedibile **senza una macchina ARM su cui provarlo**.
+Va però riletto alla luce del 570: quel `None` non significa più «non
+supportato su questa piattaforma», significa **«esiste, dietro l'altro
+regset»**. È il 571, ed è il gemello di questo round — `NT_ARM_HW_BREAK`,
+`DBGBVR`/`DBGBCR`, una coppia di traduzione per gli slot di esecuzione —
+riusando per intero il trasporto appena scritto: cambia l'id del regset e il
+campo della struct, non il meccanismo.
 
-⚠️ Il test è diventato verde **senza che il difetto fosse mai stato visto**: i due
-rossi precedenti erano il guard del *fixture*, per due errori miei. Ho revertito
-il fix per misurare il rosso vero e poi ripristinato.
+### La correzione che ha salvato il round dall'essere inutile
 
-### 560 — un test che passava per tempismo
-`secondary_thread_is_really_traced_and_controllable` prendeva il primo stop e
-enumerava subito. Corretto fino all'**iterazione 526**, che ha iniziato a
-riportare `ThreadCreate`: da allora il primo stop è la nascita del worker, e il
-test enumerava `/proc/<pid>/task` nell'istante del clone. Su x86 la voce c'è
-già; su aarch64 no.
+`debug_registers_available` asseriva che su ARM `dr0` è RIFIUTATO e restituiva
+`false`, facendo **saltare tutti i test dei watchpoint** su quella piattaforma.
+Lasciato com'era, sarebbe successo questo: la riga `ubuntu-24.04-arm` sarebbe
+diventata **verde senza eseguire una sola riga** del codice del 570, e quel verde
+si sarebbe potuto spacciare per una dimostrazione.
 
-**Nessuno ha rotto questo test**: un'iterazione ha cambiato il flusso di eventi
-sotto di lui, legittimamente, e lui ha continuato a passare per un accidente di
-scheduling. Ora salta le nascite thread e attende lo stop della fixture.
+Sarebbe stato il fallimento «guard vacuo» che questo file nomina altrove, con
+l'aggravante del verde a coprirlo. Invertirlo non è un effetto collaterale del
+round: è ciò che rende `ubuntu-24.04-arm` una MISURA invece che una conferma di
+comodo. Ora un rifiuto lì dice esattamente cosa è rotto — *«a refusal here means
+that translation did not reach the register set»*.
 
-### 561 — RITIRATO, ed è la voce più istruttiva di questa sezione
+**Terza volta in due round che un guard scritto da iterazioni precedenti
+intercetta una mossa di chi lavora oggi**: l'identità dei tre backend e il test
+live macOS al 569, questo al 570. Nessuno aggirato, tutti aggiornati
+deliberatamente. È la prova che scrivere guard che ASSERISCONO invece di
+SALTARE ripaga: fanno da controllo su chi scrive, non solo sul codice.
 
-Avevo visto `combined_dr7` nel corpo di `macos_debugger::set_watchpoint_sized`,
-concluso «registri x86», e ristretto il gate di architettura togliendo
-`aarch64`. Avevo anche scritto un guard che codificava quella conclusione.
+## 5. Il fronte Apple
 
-**Era falso.** Il guard preesistente
-`the_macos_backend_reaches_the_arm64_watchpoint_registers` mi ha fermato: macOS
-dichiara `ARM_DEBUG_STATE64 = 15`, ha un controllo a compile time sul conteggio
-di parole della sua `ArmDebugState64`, e possiede
-`dr_slot_from_arm64_watchpoint` / `arm64_watchpoint_from_dr_slot`.
+Tre giri di workflow multi-agente con verifica avversariale. Il terzo: **104
+agenti, 31 difetti trovati, 6 confermati, 25 confutati, 9 chiusi.** Il rapporto
+25/31 confutati è il dato che conta — significa che la verifica sta scartando i
+plausibili-ma-falsi invece di accumulare risultati.
 
-Quel `dr7` **non è x86**: è la rappresentazione **condivisa** dei watchpoint di
-questo crate, e macOS la traduce nelle coppie `DBGWVR`/`DBGWCR`. Il «fix»
-rimuoveva supporto AArch64 funzionante — e il guard che l'accompagnava era
-peggio, perché avrebbe impedito per sempre di riconoscere che quel percorso
-esiste.
-
-Entrambi ritirati; `git diff` su quei due file è tornato vuoto.
-
-**L'errore ha un nome: è la lezione 14 violata al contrario.** Al 548 quella
-lezione mi aveva salvato dal togliere il rifiuto dei breakpoint ARM64, che stava
-difendendo il target dalla corruzione. Qui ho fatto lo speculare: **ho letto un
-nome come se fosse un'implementazione**, senza controllare se fosse
-un'astrazione.
-
-Merito al codice: quel guard è scritto per fallire se qualcuno rimuove la
-traduzione ARM64 — e ha fallito su di me, che è esattamente il suo mestiere. Non
-c'è divergenza fra backend da sanare: macOS è **più avanti** degli altri due, che
-gateano su x86 perché quella traduzione non ce l'hanno.
-
-### 562 — i test live asserivano il byte di trappola x86 scritto a mano
-
-Lo stesso difetto del **548** — *«salva 1 byte, ne scrive 4»* — nello strato dei
-test, che non ha mai seguito quel fix. Cinque siti in `linux_debugger.rs`
-leggevano **un** byte e lo confrontavano con un `0xCC` letterale: su AArch64
-asserirebbero l'`int3` x86 contro un `BRK` da quattro byte.
-
-Ora derivano da `host_trap_bytes()`, come fa la produzione dal 548. Il confronto
-del ripristino è esteso a **tutti** i byte della trappola: verificarne uno solo
-passerebbe su ARM mentre tre byte di `BRK` restano nel target — esattamente il
-difetto che il 548 ha chiuso nel percorso di produzione.
-
-Aggiunto `plant_software_bp`, che **asserisce il rifiuto documentato** invece di
-saltare: un test che uscisse in silenzio resterebbe verde su un backend che
-avesse ricominciato ad accettare una richiesta che non sa servire.
-
-Riduce da 11 a ~5 i fallimenti attesi della riga CI `Linux aarch64`; i restanti
-sono i test dei registri di debug, che ricevono l'`Unsupported` del 552.
-
-### 563 — gli ultimi test che assumevano x86, e il flag che ora si può togliere
-
-I due test dei registri di debug (`hardware_debug_registers_*`) sono interamente
-su `DR0`-`DR7`: non hanno equivalente ARM da esercitare con lo stesso codice.
-Aggiunto `debug_registers_available`, che **asserisce il rifiuto documentato**
-invece di saltare — AArch64 i breakpoint hardware ce li ha, ma dietro
-`NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH`, e il 552 ha fatto sì che quella via
-rispondesse `Unsupported` invece di uno zero plausibile. Un test che uscisse in
-silenzio resterebbe verde se quel rifiuto venisse sostituito da una risposta
-inventata, che è il fallimento che esiste per prevenire.
-
-Verificato su x86: entrambi passano, comportamento invariato.
-
-**Con questo la riga CI `Linux aarch64` dovrebbe essere verde**: i due «reali»
-chiusi al 559 e 560, gli attesi resi consapevoli dell'architettura al 558, 562 e
-563.
-
-Il `continue-on-error` **resta finché il prossimo run non lo dimostra**.
-Toglierlo adesso renderebbe la CI rossa per una mia previsione invece che per un
-difetto — e il punto di quella riga è misurare, non prevedere.
-
----
-
-## 6. Il fronte Apple: tre giri di workflow
-
-| Giro | Trovati | Confermati | Confutati | Chiusi |
-|---|---|---|---|---|
-| 1 | 34 | 24 | **10** | 26 su 13 file |
-| 2 | 36 | 27 | **9** | 22 su 9 file |
-| 3 | in corso — prima lente: **meta-revisione delle 48 correzioni dei giri 1-2** | | | |
-
-Il valore non è nel conteggio ma nelle **bocciature**. Al giro 1 due file sono
-tornati «dubbio» e i revisori avevano ragione: guard che vivevano solo in uno
-scratchpad, un test che cristallizzava `Return { reg: 31 }` per `retaa` quando il
-ritorno passa da **x30**, e una motivazione tecnica **rovesciata**.
-
-Al giro 2 il rapporto migliore è venuto da un agente che ha trovato i propri
-difetti **già corretti** da un altro, ha rifiutato di rivendicarli, li ha
-revertiti per misurare il rosso, li ha ripristinati, e ha lasciato aperto un
-irrigidimento che non poteva giustificare con un test rosso — *«inventarne uno
-sarebbe teatro»*.
-
----
-
-## 7. Difetti aperti — dichiarati, non nascosti
+## 6. Difetti aperti — dichiarati, non nascosti
 
 | Cosa | Dove | Perché non è chiuso |
 |---|---|---|
-| **`task_for_pid` richiede root** | macOS | Vincolo di piattaforma, misurato al 555. Serve decidere se il prodotto chiede l'entitlement o l'esecuzione privilegiata. ⚠️ **decisione dell'utente**. |
-| **Breakpoint sw su ARM64** | tutti e 3 | `X86_TRAP_BYTE_IS_VALID_HERE`. Il 548 ha tolto il difetto che lo rendeva necessario e il 552 ha portato i registri; resta da esercitarlo. |
-| **16 `set_breakpoint` nei test live** | Linux | Assumono x86. Meccanico, non fatto: vedi 558. |
-| **Registri di debug su ARM64** | Linux | `Unsupported` esplicito dal 552: `NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH` sono un sottosistema, non una rinominazione. |
-| **Indirizzo faultante** | macOS | Via più leggera identificata (`__far`/`__faultvaddr` via `thread_get_state`), **non implementata**: `mach2` non espone le struct e senza poter eseguire un offset sbagliato darebbe un indirizzo plausibile e falso — peggio di `None`. |
+| **Breakpoint sw su ARM64: rimozione non ancora dimostrata** | 3 backend | Il rifiuto è stato tolto al 569. `ubuntu-24.04-arm` e `macos-14` lo dimostreranno; **Windows-on-ARM non ha runner: strutturalmente identico, non dimostrato.** |
+| **`task_for_pid` richiede root** | macOS | Vincolo di piattaforma (555). Serve decidere fra entitlement ed esecuzione privilegiata. ⚠️ **decisione dell'utente**. |
+| **Registri di debug su ARM64** | Linux | `Unsupported` esplicito: `NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH` sono un sottosistema, non una rinominazione. |
+| **Watchpoint hw su ARM64** | Linux | Stesso motivo: il backend programma i registri di debug x86. |
+| **Indirizzo faultante** | macOS | Via identificata (`__far` via `thread_get_state`), non implementata: senza poter eseguire, un offset sbagliato darebbe un indirizzo plausibile e falso — peggio di `None`. |
 | **Eventi thread** | macOS | Nessun equivalente di `PTRACE_O_TRACECLONE`. |
-| **Canonico del frame pointer** | crate | `x29` vs `fp`. Il 552 pubblica **entrambi** per non decidere di nascosto. ⚠️ **decisione dell'utente**. |
-| **iOS su hardware** | infrastruttura | Non ottenibile su Actions: serve un device fisico e un runner self-hosted. |
-| **`pyo3 0.23`** | workspace | Il pin a 3.13 rende il build riproducibile; alzarlo richiede l'upgrade su tre crate. |
+| **Canonico del frame pointer** | crate | `x29` vs `fp`: il 552 pubblica **entrambi** per non decidere di nascosto. ⚠️ **decisione dell'utente**. |
+| **iOS su hardware** | infrastruttura | Non ottenibile su Actions: serve un runner self-hosted. |
+| **`continue-on-error` su Linux aarch64** | CI | Da togliere appena un run verde lo dimostra. Toglierlo ora renderebbe la CI rossa per una previsione. |
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente**. |
 
----
+## 7. Lezioni di metodo
 
-## 8. Lezioni di metodo
+Consolidate: le 26 accumulate fino al 569 si riducono a queste, che sono quelle
+che hanno effettivamente cambiato il modo di lavorare.
 
-1. **Un test che si *appende* quando il codice è sbagliato non è un test.**
-2. **Un commento che giustifica l'azione non giustifica lo scarto del suo esito**
-   — vista 8 volte.
-3. **Un'eccezione motivata va ristretta al caso che la motiva.**
-4. **Quando un silenzio non si può trasformare in errore, cercare un chiamante
-   diverso che possa rispondere** (541).
-5. **Leggere il consumatore, non provare varianti del produttore** (528).
-6. **Misurare prima di correggere.**
-7. **Un guard ancorato a una stringa è fragile** (540, 546).
-8. **Una funzione che ritorna `()` non ha dove mettere un fallimento** (540).
-9. **Un numero va ricontrollato quando lo si eredita** (540).
-10. **Rendere un controllo severo alla cieca è un difetto nuovo** (544, 554).
-11. **Un elenco di piattaforme si verifica compilando, non rileggendo.**
-12. **L'assenza di un fallimento non è la presenza di un successo** (556).
-13. **Un guard può portare il difetto che dovrebbe prevenire** (546).
-14. **Quando una difesa sembra stantia, cercare cosa sta difendendo** (548, 557).
-15. **Un guard che si salta non è un guard** (549).
-16. **Correggere una copia su due lascia il difetto** (553).
-17. **Riportare un fallimento e trattenere la risposta è la disposizione
-    peggiore** (555).
-18. **Misurare un albero in movimento non è misurare** (551).
-19. **Un test che passa senza aver mai fallito non dimostra nulla** (559): se il
-    fix è già presente, revertirlo per vedere il rosso e poi ripristinarlo.
-20. **Un test può passare per tempismo** (560): nessuno lo rompe, cambia il
-    flusso di eventi sotto di lui e continua a passare su una piattaforma sola.
-21. **Un nome non è un'implementazione** (561, ritirato): `dr7` in un corpo
-    macOS sembrava «registri x86» ed era la rappresentazione CONDIVISA, tradotta
-    in `DBGWVR`/`DBGWCR`. È la lezione 14 al contrario — lì una difesa sembrava
-    obsoleta e proteggeva qualcosa, qui un'implementazione sembrava sbagliata ed
-    era un'astrazione. In entrambi i casi la domanda è la stessa: **cosa c'è
-    davvero dietro il nome che sto per cambiare?**
+1. **Misurare il rosso PRIMA di dichiarare il fix.** Un test che passa senza aver
+   mai fallito non dimostra nulla (559). Se il fix è già scritto, revertirlo per
+   vedere il rosso e poi ripristinarlo. Vale anche per il tempismo: un test può
+   passare perché nessuno lo rompe, non perché il codice è giusto (560).
+2. **Un fallimento che non si distingue da una risposta negativa è un
+   fallimento taciuto** (566). Non serve un `Ok(())` per mentire: basta un
+   `bool` in cui «non trovato» e «non riuscito» collassano.
+3. **Un commento che giustifica l'azione non giustifica lo scarto del suo
+   esito** — vista 9 volte, da ultimo al 568. `let _ =` non scarta il
+   fallimento, scarta l'informazione.
+4. **Quando una funzione si è già data un modo di riportare un fallimento,
+   controllare che TUTTI i suoi fallimenti lo usino** (567). Un meccanismo di
+   report presente è più insidioso di uno assente: a lettura veloce sembra che
+   il caso sia coperto.
+5. **Preferire un fix verificativo a uno additivo** (567). Riportare a ogni sito
+   di fallimento è fragile e sovra-riporta; chiedere *dopo* allo stato reale
+   «cosa manca davvero?» copre anche i percorsi non enumerati.
+6. **Un flag di contabilità propria non è una misura dello stato reale** (568).
+   Per ogni campo pubblicato: *questo misura il target o misura noi?*
+7. **Risalire la catena prima di dichiarare chiuso** (566→568). Il fix a metà
+   catena vale zero se il chiamante butta via il risultato.
+8. **Correggere una copia su due lascia il difetto** — orizzontalmente fra i tre
+   backend (553) e verticalmente fra backend e MCP (566).
+9. **Cosa c'è davvero dietro il nome che sto per cambiare?** Una difesa che
+   sembra obsoleta può proteggere qualcosa di vivo (14, 548, 557) e
+   un'implementazione che sembra sbagliata può essere un'astrazione condivisa
+   (561, **iterazione ritirata**). Il 569 è il caso in cui la difesa era
+   davvero obsoleta — e la differenza non è stata il giudizio ma l'evidenza.
+10. **La cautela costruita su una premessa non verificata non è cautela** (569).
+    Avevo limitato un fix «perché nessuno può dimostrarlo», e un runner che
+    poteva dimostrarlo esisteva già.
+11. **Rendere un controllo severo alla cieca è un difetto nuovo** (544, 554,
+    567). Un falso allarme non è un passo verso la correttezza.
+12. **Misurare un albero in movimento non è misurare** (551). Più agenti
+    scrivono in questo workspace: usare `git worktree` per il sorgente e un
+    `CARGO_TARGET_DIR` per attore. La contesa sul target dir condiviso ha già
+    bloccato build per decine di minuti senza alcun errore di compilazione.
+13. **L'assenza di un fallimento non è la presenza di un successo** (556). Un
+    job cancellato non è un job passato; `= success`, mai `!= failure`.
+14. **Un elenco di piattaforme si verifica compilando, non rileggendo**; e un
+    comportamento si verifica eseguendo, non compilando.

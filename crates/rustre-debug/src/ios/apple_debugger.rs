@@ -1321,12 +1321,24 @@ impl AppleDebugger {
             .get(&(pc, BpClass::Code))
             .is_some_and(|rec| rec.bp.enabled && rec.saved.is_some());
         if still_tracked {
-            let _ = self.with_session(|s| {
+            let replanted = self.with_session(|s| {
                 s.client
                     .write_memory(pc, &arm64::brk_bytes(0))
                     .map(drop)
                     .map_err(|e| DebugError::MemoryError(pc, format!("replant BRK: {e}")))
             });
+            // A refused re-plant is exactly the state `disable_one` produces:
+            // the original word is back in the target and no trap is armed. Say
+            // so, instead of leaving the record claiming `enabled` over code
+            // that will never trap again — `breakpoints()` would report an armed
+            // breakpoint the target does not have. `saved` stays, as it does
+            // after a normal disable, so a later enable/remove still knows the
+            // original word.
+            if replanted.is_err()
+                && let Some(rec) = self.breakpoints.write().get_mut(&(pc, BpClass::Code))
+            {
+                rec.bp.enabled = false;
+            }
         }
         stepped.map(Some)
     }
@@ -1696,11 +1708,20 @@ impl AppleDebugger {
         Ok(Some(original))
     }
 
-    /// Undo a [`Self::plant_temp_breakpoint`]. Best-effort: the target may
-    /// already be gone, and a failure here must not mask the stop event the
-    /// caller is returning.
-    fn unplant_temp_breakpoint(&self, addr: u64, saved: Option<Vec<u8>>) {
-        let _ = match saved {
+    /// Undo a [`Self::plant_temp_breakpoint`]. The target may already be gone,
+    /// and a failure here must not MASK the stop event the caller is returning
+    /// — which is a reason not to `?` it away, not a reason to erase it. The
+    /// outcome is handed back so the caller can record the trap that is still
+    /// in the target; see [`Self::retrack_abandoned_temp_breakpoint`].
+    ///
+    /// # Errors
+    /// The restoring write, or the `z0`, refused by the stub or the transport.
+    fn unplant_temp_breakpoint(
+        &self,
+        addr: u64,
+        saved: Option<Vec<u8>>,
+    ) -> Result<(), DebugError> {
+        match saved {
             Some(orig) => self.with_session(|s| {
                 s.client
                     .write_memory(addr, &orig)
@@ -1712,7 +1733,51 @@ impl AppleDebugger {
                     .remove_breakpoint(ZKind::Software, addr, A64_BP_LEN)
                     .map_err(|e| rsp_err("z0", &e))
             }),
-        };
+        }
+    }
+
+    /// Track a temporary breakpoint whose un-plant was refused, so it is not
+    /// abandoned in the target.
+    ///
+    /// `step_over`'s return-site trap is deliberately never inserted into
+    /// `self.breakpoints`: it belongs to one call and is gone by the time that
+    /// call returns. That holds only while the removal SUCCEEDS. When it does
+    /// not, the trap is armed in the target and named by nothing —
+    /// [`Self::disarm_all_breakpoints`], `Drop` and `remove_breakpoint` all walk
+    /// that one map, so none of them can ever reach it. An A64 `BRK #0` left
+    /// behind raises SIGTRAP with no debugger attached, which kills the process;
+    /// a stub-managed `Z0` left behind is inherited by the next attach.
+    ///
+    /// Adopting the address into the map is the same answer `remove_one` already
+    /// gives for a tracked breakpoint whose un-patch fails (keep the record, so
+    /// a later sweep retries) — reached through the temporary trap instead.
+    ///
+    /// `saved` carries the same meaning as in [`BpRecord`]: `Some` is a
+    /// self-patched `BRK` that a sweep undoes by writing the original word back,
+    /// `None` a stub-managed `Z0` a sweep undoes with `z0`.
+    ///
+    /// A record may already sit here — `step_over` plants over a DISABLED one,
+    /// which stops nothing and so is not a usable trap. That record is marked
+    /// armed rather than replaced: the caller's identity for the address is
+    /// kept, and `enabled` goes back to describing what is actually in the
+    /// target, which is what the sweeps and `breakpoints()` read it for.
+    fn retrack_abandoned_temp_breakpoint(&self, addr: u64, saved: Option<Vec<u8>>) {
+        let mut guard = self.breakpoints.write();
+        if let Some(rec) = guard.get_mut(&(addr, BpClass::Code)) {
+            rec.bp.enabled = true;
+            if rec.saved.is_none() {
+                rec.saved = saved;
+            }
+            return;
+        }
+        guard.insert(
+            (addr, BpClass::Code),
+            BpRecord {
+                bp: Breakpoint::new_software(Address(addr)),
+                saved,
+                hw_size: None,
+            },
+        );
     }
 
     /// Fully-qualified Swift type name of the instance at `ptr`.
@@ -2011,7 +2076,19 @@ impl AppleDebugger {
                         .write_memory(a, &arm64::brk_bytes(0))
                         .map_err(|e| DebugError::MemoryError(a, format!("re-patch BRK: {e}")))?;
                 } else {
-                    s.text(&commands::insert_breakpoint(zkind, a, size), "Z")?;
+                    // The reply decides. `set_breakpoint` reads
+                    // `starts_with("OK")` and the hardware half of this very
+                    // function rolls its slot back on refusal; marking the
+                    // record enabled after a `Z` the stub declined published a
+                    // breakpoint that is not in the target, which a caller
+                    // cannot tell from one the program never reaches.
+                    let reply = s.text(&commands::insert_breakpoint(zkind, a, size), "Z")?;
+                    if !reply.starts_with("OK") {
+                        return Err(DebugError::Os(format!(
+                            "stub refused to re-arm the breakpoint at {a:#x} (Z{}): {reply:?}",
+                            zkind.code()
+                        )));
+                    }
                 }
                 Ok(())
             })?;
@@ -2068,7 +2145,14 @@ impl AppleDebugger {
                         .write_memory(a, orig)
                         .map_err(|e| DebugError::MemoryError(a, format!("unpatch BRK: {e}")))?;
                 } else {
-                    s.text(&commands::remove_breakpoint(zkind, a, size), "z")?;
+                    // CHECKED: `Session::text` hands the reply back verbatim, so an
+                    // `Exx` refusal arrives as `Ok("E01")` and `?` waves it through —
+                    // the stub keeps the trap armed while this side untracks it (or
+                    // calls it disabled). `RspClient::remove_breakpoint` applies
+                    // `ok_or_err` and demands `OK`.
+                    s.client
+                        .remove_breakpoint(zkind, a, size)
+                        .map_err(|e| rsp_err("z", &e))?;
                 }
                 Ok(())
             })?;
@@ -2138,7 +2222,14 @@ impl AppleDebugger {
                             DebugError::MemoryError(a, format!("restore original: {e}"))
                         })?;
                     } else {
-                        s.text(&commands::remove_breakpoint(zkind, a, size), "z")?;
+                        // CHECKED: `Session::text` hands the reply back verbatim, so an
+                        // `Exx` refusal arrives as `Ok("E01")` and `?` waves it through —
+                        // the stub keeps the trap armed while this side untracks it (or
+                        // calls it disabled). `RspClient::remove_breakpoint` applies
+                        // `ok_or_err` and demands `OK`.
+                        s.client
+                            .remove_breakpoint(zkind, a, size)
+                            .map_err(|e| rsp_err("z", &e))?;
                     }
                     Ok(())
                 })?;
@@ -2173,7 +2264,12 @@ impl Debugger for AppleDebugger {
     // -- lifecycle ----------------------------------------------------------
 
     async fn launch(&self, opts: LaunchOptions) -> Result<ProcessId, DebugError> {
-        if self.session.lock().is_some() {
+        // Deliberately NOT `self.session.lock()`: a parked resume owns that
+        // mutex for the whole run, so this pure-bookkeeping refusal used to
+        // wait for the stub to speak — 30 s under a read timeout, forever
+        // without one. The answer is in the `attached` mirror, written at
+        // attach and cleared at detach/kill, which `is_attached()` also reads.
+        if self.attached.load(Ordering::SeqCst) {
             return Err(DebugError::LaunchError(
                 "already attached; detach before launching another target".to_string(),
             ));
@@ -2187,6 +2283,31 @@ impl Debugger for AppleDebugger {
         }
         let transport = self.factory.connect(&ConnectRequest::Launch(&opts))?;
         let mut session = Session::establish(transport)?;
+
+        // `working_dir` and `env` change what the inferior IS, so they are sent
+        // before `A` and their refusal is an error: a launch that quietly
+        // dropped them would report success for a process started with neither.
+        // An empty reply means "unsupported packet" in RSP, which is exactly
+        // the case that must not be swallowed.
+        if let Some(dir) = &opts.working_dir {
+            let reply = session.text(lldb_ext::build_set_working_dir(dir).as_bytes(), "QSetWorkingDir")?;
+            if !reply.starts_with("OK") {
+                return Err(DebugError::Unsupported(format!(
+                    "stub will not set the working directory {dir:?} (QSetWorkingDir reply {reply:?});                      launch debugserver already in that directory"
+                )));
+            }
+        }
+        // Sorted so the wire order is reproducible across runs.
+        let mut env: Vec<(&String, &String)> = opts.env.iter().collect();
+        env.sort_by(|a, b| a.0.cmp(b.0));
+        for (k, v) in env {
+            let reply = session.text(lldb_ext::build_environment(k, v).as_bytes(), "QEnvironmentHexEncoded")?;
+            if !reply.starts_with("OK") {
+                return Err(DebugError::Unsupported(format!(
+                    "stub will not set the environment variable {k:?}                      (QEnvironmentHexEncoded reply {reply:?}); launch debugserver with it already set"
+                )));
+            }
+        }
 
         // `A` carries argv; argv[0] is the executable.
         let mut argv = vec![opts.executable.clone()];
@@ -2222,7 +2343,9 @@ impl Debugger for AppleDebugger {
     }
 
     async fn attach(&self, pid: ProcessId) -> Result<(), DebugError> {
-        if self.session.lock().is_some() {
+        // Same reasoning as `launch` above: answer from the lock-free mirror,
+        // never from the mutex a running target is holding.
+        if self.attached.load(Ordering::SeqCst) {
             return Err(DebugError::LaunchError(
                 "already attached; detach first".to_string(),
             ));
@@ -2279,9 +2402,15 @@ impl Debugger for AppleDebugger {
         // Restore BEFORE the `D`: once the stub has detached, the target is
         // no longer writable through this connection.
         self.disarm_all_breakpoints(session);
-        let reply = session
-            .text(&commands::detach(), "D")
-            .map_err(|e| DebugError::DetachError(e.to_string()))?;
+        // NOT `?`: the overwhelmingly likely reason `D` fails is a transport
+        // that is already gone, which is exactly when the teardown below
+        // matters most. Returning here left the object half-torn-down —
+        // `attached` still true over a dead socket, so `attach` answered
+        // "already attached; detach first" and `detach` was the only way out,
+        // failing the same way every time. `kill` takes the shape this now
+        // takes, and for the same reason: the teardown happens either way,
+        // and the RESULT still says what the wire did.
+        let sent = session.text(&commands::detach(), "D");
         *guard = None;
         self.attached.store(false, Ordering::SeqCst);
         self.pid.store(0, Ordering::SeqCst);
@@ -2306,6 +2435,7 @@ impl Debugger for AppleDebugger {
         // the next attach through a tunnel that outlived the `D`.
         self.breakpoints.write().clear();
         *self.hw.lock() = None;
+        let reply = sent.map_err(|e| DebugError::DetachError(e.to_string()))?;
         if reply.starts_with("OK") || reply.is_empty() {
             Ok(())
         } else {
@@ -2422,8 +2552,13 @@ impl Debugger for AppleDebugger {
             Some(self.plant_temp_breakpoint(ret)?)
         };
         let event = self.resume(Some(tid), false);
-        if let Some(saved) = planted {
-            self.unplant_temp_breakpoint(ret, saved);
+        if let Some(saved) = planted
+            && self.unplant_temp_breakpoint(ret, saved.clone()).is_err()
+        {
+            // The trap is still in the target. Adopt it into the map rather
+            // than dropping the only evidence it exists — the stop event is
+            // still what this call returns, but the sweeps can now reach it.
+            self.retrack_abandoned_temp_breakpoint(ret, saved);
         }
         event
     }
@@ -2534,10 +2669,21 @@ impl Debugger for AppleDebugger {
     async fn threads(&self) -> Result<Vec<ThreadId>, DebugError> {
         self.with_session(|s| {
             let ids = s.client.thread_ids().map_err(|e| rsp_err("qfThreadInfo", &e))?;
-            Ok(ids
-                .into_iter()
-                .map(|t| ThreadId(u32::try_from(t).unwrap_or(0)))
-                .collect())
+            // An id that does not fit must NOT become `ThreadId(0)`: zero is
+            // this backend's "leave the stub's selection alone" wildcard
+            // (`Session::select_thread` sends no `Hg`/`Hc` for it), so a
+            // truncated id would be handed out as a working handle that
+            // silently addresses another thread. `threads.rs` already refuses
+            // the same input; this is the matching answer.
+            ids.into_iter()
+                .map(|t| {
+                    u32::try_from(t).map(ThreadId).map_err(|_| {
+                        DebugError::Os(format!(
+                            "stub reported thread id {t} which exceeds 32 bits"
+                        ))
+                    })
+                })
+                .collect()
         })
     }
 
@@ -3023,7 +3169,13 @@ impl Debugger for AppleDebugger {
         // the target is expensive).
         self.maybe_auto_load_symbols().await;
         if let Some(resolver) = self.resolver.read().clone() {
-            crate::symbol_resolver::enrich_frames(&mut frames, resolver.as_ref());
+            // NOT the plain `enrich_frames`: that looks every frame up at its
+            // stored pc, and beyond frame 0 a stored pc is a RETURN address.
+            // For a call in tail position that address is the first byte of
+            // the next function, so the frame came back named after a function
+            // the thread was never inside — while the unwinder, one step
+            // earlier, had already corrected the same pc for its own lookups.
+            crate::ios::frame_resolver::enrich_apple_backtrace(&mut frames, resolver.as_ref());
         }
         Ok(frames)
     }
@@ -3227,7 +3379,8 @@ mod tests {
     ///
     /// The self-patch fallback writes a fixed four-byte A64 `BRK #0`
     /// (`00 00 20 D4`). On an x86-64 target — a state this backend models
-    /// (`TargetArch::X86_64`) and advertises (`supported_architectures`) —
+    /// (`TargetArch::X86_64`), and reaches through `from_cpu` whenever the stub
+    /// reports one, whatever `supported_architectures` advertises —
     /// those bytes are not a trap at all, so the caller was told `Ok(())`, the
     /// breakpoint was listed as enabled and never fired, and four bytes of the
     /// target's code had been replaced by a different instruction.
@@ -3264,6 +3417,56 @@ mod tests {
             before,
             "the target's code was rewritten with a foreign instruction"
         );
+    }
+
+    /// Every ADVERTISED architecture must survive the backend's own gates.
+    ///
+    /// `supported_architectures` is documented (`lib.rs`) as the value callers
+    /// read to PICK a backend. This backend answered a frozen list containing
+    /// `x86_64`, while `require_arm64` refuses four of its trait methods —
+    /// `set_breakpoint` (code kinds), `step_over`, `step_out` and `backtrace` —
+    /// on exactly that architecture. A caller that believed the advertisement
+    /// and selected this backend for an x86-64 target got one that cannot set a
+    /// code breakpoint, step over a call, step out, or produce a backtrace.
+    ///
+    /// The claim and the gate cannot both be right; this test makes them agree
+    /// by driving the real methods with the session arch set to each advertised
+    /// name, so it fails whichever half is wrong.
+    #[tokio::test]
+    async fn every_advertised_architecture_is_one_this_backend_can_debug() {
+        for name in crate::ios::supported_architectures() {
+            let arch = match name.as_str() {
+                "arm64" => TargetArch::Arm64,
+                "arm64e" => TargetArch::Arm64e,
+                "x86_64" => TargetArch::X86_64,
+                other => panic!("advertised architecture `{other}` is not one this backend models"),
+            };
+            let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+            let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+            dbg.attach(ProcessId(4242)).await.expect("attach");
+            if let Some(s) = dbg.session.lock().as_mut() {
+                s.arch = arch;
+            }
+
+            let set = dbg
+                .set_breakpoint(Address::new(TEXT_BASE), BreakpointKind::Software)
+                .await;
+            assert!(
+                !matches!(set, Err(DebugError::Unsupported(_))),
+                "`{name}` is advertised by supported_architectures() but set_breakpoint refuses it: {set:?}"
+            );
+            let cur = dbg.current_thread().await.expect("current thread");
+            for (what, res) in [
+                ("step_over", dbg.step_over(cur).await.err()),
+                ("step_out", dbg.step_out(cur).await.err()),
+                ("backtrace", dbg.backtrace(cur).await.err()),
+            ] {
+                assert!(
+                    !matches!(res, Some(DebugError::Unsupported(_))),
+                    "`{name}` is advertised by supported_architectures() but {what} refuses it: {res:?}"
+                );
+            }
+        }
     }
 
     #[tokio::test]
@@ -3339,6 +3542,48 @@ mod tests {
             writes >= 3,
             "expected the original word written back, then the BRK re-planted, on top of the initial patch — only {writes} memory writes reached the target. Packets seen: {:?}",
             srv.packet_log
+        );
+    }
+
+    /// A step-off whose RE-PLANT is refused must not keep calling the
+    /// breakpoint armed.
+    ///
+    /// `step_off_planted_breakpoint` discards the result of the re-plant write.
+    /// When the stub answers `E09` the `BRK` is NOT back, yet the record still
+    /// says `enabled` and still holds `saved`, so `breakpoints()` reports an
+    /// armed trap over memory that holds the original instruction.
+    #[tokio::test]
+    async fn a_refused_replant_does_not_leave_the_breakpoint_listed_as_armed() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints(); // force the self-patched BRK path
+        // Write 1 = the initial patch, write 2 = the step-off's un-patch.
+        // Write 3, the re-plant, is refused.
+        srv.fail_memory_writes_after(2);
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        dbg.set_register(tid, "pc", TEXT_BASE).await.unwrap();
+        let addr = Address::new(TEXT_BASE);
+        dbg.set_breakpoint(addr, BreakpointKind::Software).await.unwrap();
+
+        let stepped = dbg.single_step(tid).await;
+
+        // Precondition: the re-plant really was refused, so no trap is there.
+        let word = dbg.read_memory(addr, 4).await.unwrap();
+        assert_ne!(
+            word,
+            arm64::brk_bytes(0).to_vec(),
+            "precondition: the re-plant was expected to be refused"
+        );
+        let listed_armed = dbg
+            .breakpoints()
+            .await
+            .unwrap()
+            .iter()
+            .any(|b| b.address == addr && b.enabled);
+        assert!(
+            !listed_armed || stepped.is_err(),
+            "the re-plant was refused, so the trap is gone from the target, yet the step reported success and the breakpoint is still listed as enabled"
         );
     }
 
@@ -3437,6 +3682,51 @@ mod tests {
             dbg.read_memory(addr, 4).await.expect("masked read after write"),
             patch,
             "the caller's own write is not visible through the mask, so the saved original is stale and removing the breakpoint would undo it"
+        );
+    }
+
+    /// A `z` the stub REFUSED must not untrack the record, and must not report
+    /// the breakpoint disabled.
+    ///
+    /// `Session::text` returns the reply verbatim without applying `ok_or_err`,
+    /// so `E01` arrives as `Ok("E01")` and `?` waves it through. The trap the
+    /// stub planted is still installed in the target while this side drops the
+    /// record — precisely the abandoned patch `remove_one`'s own doc comment
+    /// says it exists to prevent, since `detach`'s restore sweep walks this map.
+    #[tokio::test]
+    async fn a_refused_z_removal_keeps_the_breakpoint_tracked() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // `Z0` still works, so the trap is STUB-managed: `saved` is None and
+        // removal goes through the `z` packet rather than a memory write.
+        srv.refuse_breakpoint_removal();
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let addr = Address(TEXT_BASE);
+        dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("set_breakpoint");
+        assert_eq!(dbg.breakpoints().await.expect("list").len(), 1);
+
+        let err = dbg.remove_breakpoint(addr).await;
+        assert!(
+            err.is_err(),
+            "the stub answered the `z` with E01 — the trap is still armed in the target — yet removal reported success"
+        );
+        assert_eq!(
+            dbg.breakpoints().await.expect("list after refused removal").len(),
+            1,
+            "the record was dropped while the stub still holds the trap: detach's restore sweep walks this map and will never find it"
+        );
+
+        // Same reply, same rule for disable: reporting it disabled while the
+        // stub-managed trap still stops the program is the inverse lie.
+        let dis = dbg.disable_breakpoint(addr).await;
+        assert!(
+            dis.is_err(),
+            "disable reported success for a `z` the stub refused; the trap still stops the program"
+        );
+        assert!(
+            dbg.breakpoints().await.expect("list").iter().all(|b| b.enabled),
+            "the breakpoint is listed as disabled while the stub-managed trap is still installed"
         );
     }
 
@@ -3819,6 +4109,49 @@ mod tests {
         assert!(inserts >= 2, "both resources must really have been armed, got {inserts}");
     }
 
+    /// A re-enable the stub REFUSED must not be reported as armed.
+    ///
+    /// `set_breakpoint` reads the `Z` reply and, when it is not `OK`, either
+    /// errors out or falls back to patching `BRK #0` itself. `enable_one`'s
+    /// stub-managed branch fired the same `Z` and then set `enabled = true`
+    /// without looking at the answer, so a caller who disabled and re-enabled a
+    /// breakpoint was told `Ok(())`, saw `enabled: true`, and never stopped.
+    #[tokio::test]
+    async fn re_enable_refused_by_the_stub_is_not_reported_as_armed() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // One insert accepted (the initial arm), every later one refused: the
+        // stub had room then and does not now.
+        srv.accept_software_breakpoints_then_refuse(1);
+        let (addr, _server) = srv.spawn_tcp().expect("spawn tcp mock");
+        let dbg = AppleDebugger::tcp(addr, Some(std::time::Duration::from_secs(30)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let a = Address::new(TEXT_BASE + 0x18);
+        let original = dbg.read_memory_raw(a, 4).await.expect("read original");
+        dbg.set_breakpoint(a, BreakpointKind::Software).await.expect("set_breakpoint");
+        assert_eq!(
+            dbg.read_memory_raw(a, 4).await.expect("read after set"),
+            original,
+            "the stub ACCEPTED this Z0, so the client must not have patched memory —              otherwise the re-enable below is not testing the stub-managed path"
+        );
+
+        dbg.disable_breakpoint(a).await.expect("disable_breakpoint");
+        // Refusing is a legitimate answer; SILENTLY claiming success is not.
+        let outcome = dbg.enable_breakpoint(a).await;
+
+        let listed = dbg.breakpoints().await.expect("breakpoints");
+        let armed = listed.iter().any(|b| b.address == a && b.enabled);
+        let patched = dbg.read_memory_raw(a, 4).await.expect("read after enable");
+        if outcome.is_ok() {
+            assert!(
+                patched == arm64::brk_bytes(0),
+                "enable returned Ok after the stub REFUSED the Z0, and nothing is armed at                  the address: memory still reads {patched:?}"
+            );
+        } else {
+            assert!(!armed, "enable failed but the record still claims to be enabled");
+        }
+    }
+
     /// Disabling an address must disable BOTH resources on it.
     ///
     /// Once the two kinds were allowed to coexist (previous iteration),
@@ -4041,6 +4374,38 @@ mod tests {
         );
     }
 
+    /// Re-arming must be believed only when the stub says it worked.
+    ///
+    /// `enable_one`'s software branch sent `Z0` and never looked at the reply,
+    /// then marked the record `enabled = true` unconditionally. A stub that
+    /// refuses the re-arm (page turned read-only, region unmapped) answers
+    /// `E22`; the caller got `Ok(())` and `breakpoints()` reported an armed
+    /// breakpoint that the target does not carry — indistinguishable from a
+    /// breakpoint at an address the program never reaches. The hardware half
+    /// of the same function has always accounted for a refusal, and
+    /// `set_breakpoint` reads `text.starts_with("OK")`; only this path did not.
+    #[tokio::test]
+    async fn a_refused_rearm_does_not_report_the_breakpoint_as_enabled() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // One `Z0` accepted — the original arming — then refusals.
+        srv.refuse_software_breakpoints_after(1);
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let addr = Address::new(TEXT_BASE + 0x20);
+
+        dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("set");
+        assert!(dbg.breakpoints().await.unwrap()[0].enabled);
+        dbg.disable_breakpoint(addr).await.expect("disable");
+        assert!(!dbg.breakpoints().await.unwrap()[0].enabled);
+
+        let re = dbg.enable_breakpoint(addr).await;
+        assert!(re.is_err(), "stub refused the Z0 re-arm, yet enable reported {re:?}");
+        assert!(
+            !dbg.breakpoints().await.unwrap()[0].enabled,
+            "breakpoint marked enabled after a re-arm the stub refused"
+        );
+    }
+
     /// Removing an already-DISABLED breakpoint must not touch the target.
     ///
     /// `disable_breakpoint` has already written the original word back, so the
@@ -4253,6 +4618,76 @@ mod tests {
         let _ = running.await;
     }
 
+    /// "Already attached" must be ANSWERED while the target runs, not waited on.
+    ///
+    /// `launch` and `attach` both open with `self.session.lock()`, the mutex a
+    /// parked resume owns for the whole run — the same trap already fixed in
+    /// `pause`, `detach` and `kill`. Refusing a second target is pure
+    /// bookkeeping and the answer is sitting in `self.attached`, so consulting
+    /// the session instead turns an instant `Err("already attached")` into a
+    /// wait that lasts as long as the parked read: 30 s here, unbounded on a
+    /// transport configured without a read timeout. Last member of the family.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_second_launch_or_attach_is_refused_while_the_target_runs() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.run_until_interrupt = true;
+        let (addr, _server) = srv.spawn_tcp().expect("spawn tcp mock");
+        let dbg = Arc::new(AppleDebugger::tcp(
+            addr,
+            Some(std::time::Duration::from_secs(30)),
+        ));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let runner = Arc::clone(&dbg);
+        let running = tokio::task::spawn(async move { runner.continue_execution().await });
+        let mut waited = 0u32;
+        while !*dbg.resume_in_flight.lock() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            waited += 1;
+            assert!(waited < 2000, "the continue never became outstanding");
+        }
+
+        // The runner owns the session mutex. Both entry points must still say no.
+        //
+        // Timed rather than raced against a `tokio::time::timeout`: the parked
+        // resume blocks a worker thread outright, so a blocked refusal starves
+        // the timer too and `timeout` then observes the inner future as ready
+        // the moment the 30 s read gives up — reporting `Ok` for a call that
+        // took thirty seconds. Wall-clock is the only honest measure here.
+        let started = std::time::Instant::now();
+        let second = Arc::clone(&dbg);
+        let err = tokio::task::spawn(async move { second.attach(ProcessId(4243)).await })
+            .await
+            .expect("attach task")
+            .expect_err("a second attach while attached must be refused");
+        assert!(
+            err.to_string().contains("already attached"),
+            "expected the bookkeeping refusal, got: {err}"
+        );
+
+        let third = Arc::clone(&dbg);
+        let err = tokio::task::spawn(async move {
+            third.launch(LaunchOptions::new("/usr/bin/true")).await
+        })
+        .await
+        .expect("launch task")
+        .expect_err("a launch while attached must be refused");
+        assert!(
+            err.to_string().contains("already attached"),
+            "expected the bookkeeping refusal, got: {err}"
+        );
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(3),
+            "refusing a second target is bookkeeping and must be immediate; \
+             it waited {elapsed:?} for the running target instead"
+        );
+
+        // Let the runner finish so the mock thread can wind down.
+        dbg.pause().await.expect("pause");
+        let _ = running.await;
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn pause_interrupts_a_running_target_over_a_real_socket() {
         let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
@@ -4308,6 +4743,53 @@ mod tests {
         dbg.pause().await.expect("pause on a stopped target is a no-op");
         let regs = dbg.get_registers(ThreadId(1)).await.expect("registers still in step");
         assert!(regs.pc >= TEXT_BASE, "pc {:#x} is not in the program", regs.pc);
+
+        drop(dbg);
+        let _ = server.join();
+    }
+
+    /// Re-arming a stub-managed trap must not be reported on the strength of
+    /// having SENT the `Z0`.
+    ///
+    /// `enable_one` sent the insert and then set `enabled = true` without ever
+    /// looking at the reply, while `set_breakpoint` fourteen lines away builds
+    /// `accepted` from `text.starts_with("OK")` and falls back to patching the
+    /// `BRK` itself when the stub says no. So a caller who disabled a
+    /// breakpoint and re-enabled it got `Ok(())` and saw `enabled: true` for an
+    /// address with nothing armed on it — indistinguishable from a breakpoint
+    /// the program never reaches.
+    #[tokio::test]
+    async fn re_enabling_a_refused_software_breakpoint_is_not_reported_as_armed() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // The FIRST insert is honoured, so the record is stub-managed with no
+        // saved bytes; the re-arm is refused, which is the branch under test.
+        srv.fail_software_breakpoint_inserts_after(1);
+        let (addr, server) = srv.spawn_tcp().expect("spawn tcp mock");
+        let dbg = AppleDebugger::tcp(addr, Some(std::time::Duration::from_secs(30)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let a = Address::new(TEXT_BASE + 0x20);
+        dbg.set_breakpoint(a, BreakpointKind::Software).await.expect("first arm is accepted");
+        dbg.disable_breakpoint(a).await.expect("disable");
+
+        let outcome = dbg.enable_breakpoint(a).await;
+        if outcome.is_ok() {
+            // Reporting success is only honest if the trap is really there —
+            // i.e. the same self-patch fallback `set_breakpoint` uses ran.
+            let armed = dbg.read_memory_raw(a, 4).await.expect("raw read");
+            assert_eq!(
+                armed,
+                arm64::brk_bytes(0),
+                "enable_breakpoint returned Ok and lists the breakpoint as enabled, but the                  stub refused the Z0 and nothing is armed at {a:?}"
+            );
+        }
+        let listed = dbg.breakpoints().await.expect("breakpoints");
+        let enabled = listed.iter().any(|b| b.address == a && b.enabled);
+        assert_eq!(
+            enabled,
+            outcome.is_ok(),
+            "the enabled flag must follow what is actually armed, not what was requested"
+        );
 
         drop(dbg);
         let _ = server.join();
@@ -4583,6 +5065,55 @@ mod tests {
         );
     }
 
+    /// A temporary return-site breakpoint whose un-plant FAILS must stay
+    /// known to this side.
+    ///
+    /// `step_over` never puts `ret` in `self.breakpoints`, and
+    /// `unplant_temp_breakpoint` discards every error, so a refused restore
+    /// leaves a live `BRK #0` in the target that no map contains: `detach`'s
+    /// sweep, `Drop`'s sweep and `remove_breakpoint` all walk that same map.
+    /// On ARM64 a stray `BRK #0` raises SIGTRAP with no debugger attached and
+    /// the process dies. Same defect class as
+    /// `a_failed_unpatch_keeps_the_breakpoint_tracked`, reached through the
+    /// temporary breakpoint instead of the tracked one.
+    #[tokio::test]
+    async fn a_temp_breakpoint_that_cannot_be_unplanted_stays_tracked() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints(); // force the self-patched BRK path
+        // The plant must land; only the RESTORE is refused.
+        srv.fail_memory_writes_after(1);
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        dbg.set_register(tid, "pc", TEXT_BASE + 8).await.unwrap();
+
+        dbg.step_over(tid).await.expect("step_over");
+
+        // Precondition: the un-plant really did fail, so the trap is still in
+        // the target's code.
+        //
+        // RAW deliberately. `read_memory` masks self-planted traps out of what
+        // it returns, using the very map this test is about — so once the
+        // address is tracked, the masked read answers with the original word
+        // and the precondition would read as "the restore succeeded" while a
+        // `BRK` sits in the target. Only `read_memory_raw` reports the bytes
+        // the process will actually execute.
+        let left = dbg.read_memory_raw(Address::new(TEXT_BASE + 0xC), 4).await.unwrap();
+        assert_eq!(
+            left,
+            arm64::brk_bytes(0).to_vec(),
+            "precondition: the restore was expected to be refused"
+        );
+        assert!(
+            dbg.breakpoints()
+                .await
+                .unwrap()
+                .iter()
+                .any(|b| b.address.as_u64() == TEXT_BASE + 0xC),
+            "a BRK that could not be removed is in the target with nothing tracking it"
+        );
+    }
+
     /// The same step-over, against a stub with no server-managed software
     /// breakpoints — the case `set_breakpoint` has always handled by patching
     /// `BRK #0` itself.
@@ -4853,6 +5384,100 @@ mod tests {
         let opts = LaunchOptions::new("/usr/bin/true").with_args(vec!["-x".to_string()]);
         assert_eq!(dbg.launch(opts).await.unwrap(), ProcessId(4242));
         assert!(dbg.is_attached());
+    }
+
+    /// `env` and `working_dir` are launch options with observable effect on
+    /// the inferior. Dropping them silently makes `launch` report success for a
+    /// process that was started with neither, so a stub that cannot carry them
+    /// must be an ERROR, not a quiet no-op.
+    #[tokio::test]
+    async fn launch_refuses_to_drop_env_and_working_dir_on_a_stub_that_cannot_carry_them() {
+        let dbg = debugger(); // mock without QEnvironment/QSetWorkingDir support
+        let mut opts = LaunchOptions::new("/usr/bin/true");
+        opts.env.insert("DYLD_INSERT_LIBRARIES".to_string(), "/tmp/x.dylib".to_string());
+        let err = dbg
+            .launch(opts)
+            .await
+            .expect_err("env must not be silently dropped");
+        assert!(matches!(err, DebugError::Unsupported(_)), "got {err:?}");
+        assert!(!dbg.is_attached(), "a refused launch must not leave a session");
+
+        let dbg = debugger();
+        let mut opts = LaunchOptions::new("/usr/bin/true");
+        opts.working_dir = Some("/private/tmp".to_string());
+        let err = dbg
+            .launch(opts)
+            .await
+            .expect_err("working_dir must not be silently dropped");
+        assert!(matches!(err, DebugError::Unsupported(_)), "got {err:?}");
+    }
+
+    /// When the stub does carry them, they reach the wire hex-encoded and
+    /// verbatim — asserted on the bytes actually written, not on the launch
+    /// merely succeeding.
+    #[tokio::test]
+    async fn launch_sends_env_and_working_dir_when_the_stub_supports_them() {
+        struct Recorder {
+            inner: Box<dyn RspTransport>,
+            seen: Arc<Mutex<Vec<String>>>,
+        }
+        impl RspTransport for Recorder {
+            fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+                self.seen.lock().push(String::from_utf8_lossy(data).into_owned());
+                self.inner.send(data)
+            }
+            fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.inner.recv(buf)
+            }
+            fn description(&self) -> String {
+                self.inner.description()
+            }
+            fn interrupter(&self) -> Option<Arc<dyn crate::ios::rsp::RspInterrupter>> {
+                self.inner.interrupter()
+            }
+        }
+        struct RecordingFactory {
+            inner: LoopbackFactory,
+            seen: Arc<Mutex<Vec<String>>>,
+        }
+        impl TransportFactory for RecordingFactory {
+            fn connect(
+                &self,
+                request: &ConnectRequest<'_>,
+            ) -> Result<Box<dyn RspTransport>, DebugError> {
+                Ok(Box::new(Recorder {
+                    inner: self.inner.connect(request)?,
+                    seen: Arc::clone(&self.seen),
+                }))
+            }
+            fn description(&self) -> String {
+                "recording".to_string()
+            }
+        }
+
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.set_launch_env_supported(true);
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let dbg = AppleDebugger::new(Arc::new(RecordingFactory {
+            inner: LoopbackFactory::new(srv, 7),
+            seen: Arc::clone(&seen),
+        }));
+        let mut opts = LaunchOptions::new("/usr/bin/true");
+        opts.working_dir = Some("/private/tmp".to_string());
+        opts.env.insert("FOO".to_string(), "bar baz".to_string());
+        dbg.launch(opts).await.unwrap();
+        assert!(dbg.is_attached());
+
+        let wire = seen.lock().concat();
+        // "/private/tmp" and "FOO=bar baz", hex-encoded.
+        assert!(
+            wire.contains("QSetWorkingDir:2f707269766174652f746d70"),
+            "working directory never reached the wire: {wire}"
+        );
+        assert!(
+            wire.contains("QEnvironmentHexEncoded:464f4f3d6261722062617a"),
+            "environment never reached the wire: {wire}"
+        );
     }
 
     #[tokio::test]
@@ -5222,6 +5847,36 @@ mod tests {
         );
     }
 
+    /// A `D` that cannot be written must still finish the teardown.
+    ///
+    /// The overwhelmingly likely reason `D` fails is a transport that is
+    /// already gone — exactly when the teardown matters most. `kill` states
+    /// the intended contract ("the teardown above happens either way ... but
+    /// the RESULT still says whether the target was actually killed");
+    /// `detach` returned on the `?` before any of it ran, leaving `attached`
+    /// true, the dead session installed, the pid published and the interrupt
+    /// handle alive — the very handle the code below says must be dropped
+    /// because otherwise a later `pause()` writes 0x03 into a closed
+    /// descriptor and reports success.
+    #[tokio::test]
+    async fn detach_tears_down_even_when_the_d_packet_cannot_be_written() {
+        let dbg = censoring_debugger(Arc::new(|pkt: &str| pkt.contains("$D#")));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let outcome = dbg.detach().await;
+        assert!(outcome.is_err(), "a `D` that never reached the wire must be reported");
+        assert!(
+            !dbg.is_attached(),
+            "detach left the debugger attached to a dead connection: attach() now answers              `already attached; detach first` and detach() is the only way out, which fails              the same way forever"
+        );
+        assert!(dbg.target_pid().is_none(), "the pid of the departed target is still published");
+        assert!(
+            dbg.interrupter.read().is_none(),
+            "the interrupt handle for a closed socket survived: a later pause() writes 0x03              into it and reports success"
+        );
+        assert!(dbg.breakpoints.read().is_empty(), "the departed process's breakpoints survived");
+    }
+
     /// A stop whose program counter cannot be read must not be classified from
     /// a fabricated `pc = 0`.
     ///
@@ -5261,5 +5916,279 @@ mod tests {
                 ),
             },
         }
+    }
+
+    // -- a transport that can REWRITE a reply -------------------------------
+    //
+    // The mock debugserver stores thread ids in a `u32`, so a stub that reports
+    // a thread id wider than 32 bits — which the RSP field and
+    // `RspClient::thread_ids` (`Vec<u64>`) both allow — cannot be expressed
+    // with it at all. This wrapper leaves the debugger and the mock untouched
+    // and rewrites exactly one reply on the wire: the answer to
+    // `qfThreadInfo`.
+
+    struct RewritingTransport {
+        inner: Box<dyn RspTransport>,
+        /// Payload to serve instead of the next `qfThreadInfo` reply.
+        replacement: String,
+        armed: bool,
+        out: Vec<u8>,
+    }
+
+    impl RewritingTransport {
+        /// Reassemble one whole `$…#xx` frame from the inner transport.
+        fn pull_frame(&mut self) -> std::io::Result<Vec<u8>> {
+            let mut acc: Vec<u8> = Vec::new();
+            let mut buf = [0u8; 64];
+            loop {
+                if let Some(hash) = acc.iter().position(|b| *b == b'#')
+                    && acc.len() >= hash + 3
+                {
+                    return Ok(acc);
+                }
+                let n = self.inner.recv(&mut buf)?;
+                if n == 0 {
+                    return Ok(acc);
+                }
+                acc.extend_from_slice(&buf[..n]);
+            }
+        }
+    }
+
+    fn framed(payload: &str) -> Vec<u8> {
+        let sum: u8 = payload.bytes().fold(0u8, u8::wrapping_add);
+        format!("${payload}#{sum:02x}").into_bytes()
+    }
+
+    impl RspTransport for RewritingTransport {
+        fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+            if String::from_utf8_lossy(data).contains("qfThreadInfo") {
+                self.armed = true;
+            }
+            self.inner.send(data)
+        }
+        fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.out.is_empty() && self.armed {
+                let frame = self.pull_frame()?;
+                if frame.is_empty() {
+                    return Ok(0);
+                }
+                self.armed = false;
+                // Preserve whatever framing bytes precede the payload (an `+`
+                // ack while acks are still in use), replace only the payload.
+                let lead = frame.iter().position(|b| *b == b'$').unwrap_or(0);
+                self.out.extend_from_slice(&frame[..lead]);
+                self.out.extend_from_slice(&framed(&self.replacement));
+            }
+            if self.out.is_empty() {
+                return self.inner.recv(buf);
+            }
+            let n = self.out.len().min(buf.len()).min(7);
+            buf[..n].copy_from_slice(&self.out[..n]);
+            self.out.drain(..n);
+            Ok(n)
+        }
+        fn description(&self) -> String {
+            self.inner.description()
+        }
+        fn interrupter(&self) -> Option<Arc<dyn crate::ios::rsp::RspInterrupter>> {
+            self.inner.interrupter()
+        }
+    }
+
+    struct RewritingFactory {
+        inner: LoopbackFactory,
+        replacement: String,
+    }
+
+    impl TransportFactory for RewritingFactory {
+        fn connect(
+            &self,
+            request: &ConnectRequest<'_>,
+        ) -> Result<Box<dyn RspTransport>, DebugError> {
+            Ok(Box::new(RewritingTransport {
+                inner: self.inner.connect(request)?,
+                replacement: self.replacement.clone(),
+                armed: false,
+                out: Vec::new(),
+            }))
+        }
+        fn description(&self) -> String {
+            "rewriting-loopback".to_string()
+        }
+    }
+
+    fn thread_list_debugger(replacement: &str) -> AppleDebugger {
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        AppleDebugger::new(Arc::new(RewritingFactory {
+            inner: LoopbackFactory::new(srv, 7),
+            replacement: replacement.to_string(),
+        }))
+    }
+
+    /// A thread id that does not fit in `ThreadId`'s `u32` must not be turned
+    /// into `ThreadId(0)`.
+    ///
+    /// Zero is not a free value in this backend: `Session::select_thread`
+    /// returns early for it without sending `Hg`/`Hc`, so every subsequent
+    /// `g`/`p`/`P`/`vCont` acts on whatever thread the stub had selected last.
+    /// A `ThreadId(0)` handed out by `threads()` is therefore a live handle
+    /// that silently addresses the WRONG thread — `get_registers` on it
+    /// succeeds and returns another thread's registers under this thread's
+    /// name. `query_threads_the_slow_way` in `threads.rs` already refuses the
+    /// same input honestly; this path is its unfixed twin.
+    #[tokio::test]
+    async fn threads_does_not_collapse_a_wide_thread_id_to_the_wildcard() {
+        let dbg = thread_list_debugger("m100000007");
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        match dbg.threads().await {
+            // Honest: the id cannot be represented, and the caller is told.
+            Err(_) => {}
+            Ok(ids) => assert!(
+                !ids.contains(&ThreadId(0)),
+                "a stub-reported thread id of 0x100000007 came back as {ids:?}: the \
+                 wildcard ThreadId(0) is now a thread handle, and operations on it \
+                 silently target whatever thread the stub last selected"
+            ),
+        }
+    }
+
+    /// Refusing a SECOND attach must not wait for the first target to stop.
+    ///
+    /// `attach` opens with `self.session.lock()`, the mutex a parked resume owns
+    /// for the whole run, so the pure-bookkeeping answer "already attached"
+    /// arrives only when the stub finally speaks — 30 s here, unbounded on a
+    /// transport configured without a read timeout. The answer is already in
+    /// `self.attached`, the same mirror `is_attached()` reads.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_second_attach_is_refused_without_waiting_for_the_running_target() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.run_until_interrupt = true;
+        let (addr, _server) = srv.spawn_tcp().expect("spawn tcp mock");
+        let dbg = Arc::new(AppleDebugger::tcp(
+            addr,
+            Some(std::time::Duration::from_secs(30)),
+        ));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let runner = Arc::clone(&dbg);
+        let running = tokio::task::spawn(async move { runner.continue_execution().await });
+        let mut waited = 0u32;
+        while !*dbg.resume_in_flight.lock() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            waited += 1;
+            assert!(waited < 2000, "the continue never became outstanding");
+        }
+
+        let second = Arc::clone(&dbg);
+        let attaching = tokio::task::spawn(async move { second.attach(ProcessId(9999)).await });
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), attaching)
+            .await
+            .expect("a second attach must be refused, not parked behind the running target")
+            .expect("attach task");
+        assert!(
+            outcome.is_err(),
+            "a second attach while already attached must be refused"
+        );
+
+        dbg.release_parked_resume();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), running).await;
+    }
+
+    /// A transport that reports the connection as dead exactly when the `D`
+    /// packet is written, and stays dead afterwards.
+    ///
+    /// This is the shape a real detach hits most often: the target is gone or
+    /// the tunnel collapsed, which is precisely when teardown matters.
+    struct DyingOnDetach {
+        inner: crate::ios::mock_client::LoopbackTransport,
+        dead: bool,
+    }
+
+    impl RspTransport for DyingOnDetach {
+        fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+            if self.dead || data.windows(3).any(|w| w == b"$D#") {
+                self.dead = true;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "connection reset",
+                ));
+            }
+            RspTransport::send(&mut self.inner, data)
+        }
+        fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.dead {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "connection reset",
+                ));
+            }
+            RspTransport::recv(&mut self.inner, buf)
+        }
+        fn description(&self) -> String {
+            "dying-on-detach".to_string()
+        }
+    }
+
+    struct DyingFactory {
+        server: Mutex<Option<MockDebugserver>>,
+    }
+
+    impl TransportFactory for DyingFactory {
+        fn connect(
+            &self,
+            _request: &ConnectRequest<'_>,
+        ) -> Result<Box<dyn RspTransport>, DebugError> {
+            let server = self
+                .server
+                .lock()
+                .take()
+                .ok_or_else(|| DebugError::Os("already connected".to_string()))?;
+            Ok(Box::new(DyingOnDetach {
+                inner: crate::ios::mock_client::LoopbackTransport::new(server).with_chunk(7),
+                dead: false,
+            }))
+        }
+    }
+
+    /// `detach()` must tear the session down even when the `D` packet fails.
+    ///
+    /// The overwhelmingly likely reason `D` fails is that the transport is
+    /// already dead — exactly when teardown matters most. Returning through
+    /// `?` before any of it left the debugger permanently attached: `attached`
+    /// still true (so `attach()` answers "already attached; detach first"),
+    /// the pid still published, the breakpoint table still populated, and the
+    /// interrupter still naming a closed descriptor, so a later `pause()`
+    /// writes 0x03 into it and reports success. `kill()` takes the opposite
+    /// shape on purpose: teardown happens either way, the RESULT reports what
+    /// the target did.
+    #[tokio::test]
+    async fn detach_tears_down_even_when_the_d_packet_fails() {
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        let dbg = AppleDebugger::new(Arc::new(DyingFactory { server: Mutex::new(Some(srv)) }));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        dbg.set_breakpoint(Address::new(TEXT_BASE), BreakpointKind::Software)
+            .await
+            .expect("breakpoint");
+
+        // The failure must be reported...
+        let err = dbg.detach().await;
+        assert!(err.is_err(), "a failed `D` must still be reported as an error");
+
+        // ...and the object must be usable again anyway.
+        assert!(
+            !dbg.is_attached(),
+            "detach left `attached` true after a failed `D`: the debugger is wedged permanently attached"
+        );
+        assert!(dbg.target_pid().is_none(), "detach left the pid published after a failed `D`");
+        assert!(
+            dbg.breakpoints().await.expect("breakpoints").is_empty(),
+            "detach left the breakpoint table of the departed process behind"
+        );
+        assert!(
+            dbg.interrupter.read().is_none(),
+            "detach kept the interrupt handle for a closed descriptor: a later pause() reports success having written into nothing"
+        );
     }
 }
