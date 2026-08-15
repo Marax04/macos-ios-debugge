@@ -39,7 +39,12 @@ jobs:
   linux:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # 90, not 45. Measured on 3e8cb04: the x86_64 row was CANCELLED at exactly
+    # 45 minutes, part-way through `Test rustre-mcp-tools` — a cold release
+    # build of this workspace plus two test runs does not fit in that. A job
+    # killed by its own ceiling reads as a failure of the code, which is the
+    # most expensive kind of false signal.
+    timeout-minutes: 90
     # An architecture failing must not cancel the other: knowing whether a
     # defect is x86-only or ARM-only is half the diagnosis.
     continue-on-error: ${{ matrix.expected_to_fail }}
@@ -135,4 +140,12 @@ jobs:
           echo "The aarch64 row is allowed to fail while the register port is"
           echo "outstanding; its result is visible in the job list above and is"
           echo "the measurement this workflow was added to take."
-          test "${{ needs.linux.result }}" != "failure"
+          #
+          # `= success`, not `!= failure`.
+          #
+          # Measured on 3e8cb04: the x86_64 row was CANCELLED by the timeout and
+          # this summary reported SUCCESS, because "cancelled" is not "failure".
+          # A job that never finished had been signed off as passing — the same
+          # shape as a job that sits queued forever and is therefore never red.
+          # The absence of a failure is not the presence of a pass.
+          test "${{ needs.linux.result }}" = "success"
