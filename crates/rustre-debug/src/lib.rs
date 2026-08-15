@@ -510,6 +510,28 @@ pub fn require_full_write(addr: u64, wrote: usize, wanted: usize) -> Result<(), 
     Ok(())
 }
 
+/// The read counterpart of [`require_full_write`].
+///
+/// Added with the AArch64 trap-length fix: `set_breakpoint` now saves
+/// `host_trap_bytes().len()` bytes as the original, and a SHORT read would give
+/// a short "original" that `remove_breakpoint` then restores — leaving the tail
+/// of the trap in place. That is the same permanent corruption the length fix
+/// exists to prevent, arriving through the other door.
+///
+/// # Errors
+/// Returns [`DebugError::MemoryError`] when fewer bytes were read than asked for.
+include!(concat!(env!("OUT_DIR"), "/embedded_sources.rs"));
+
+pub fn require_full_read(addr: u64, read: usize, wanted: usize) -> Result<(), DebugError> {
+    if read < wanted {
+        return Err(DebugError::MemoryError(
+            addr,
+            format!("partial read: {read} of {wanted} bytes available"),
+        ));
+    }
+    Ok(())
+}
+
 #[must_use]
 pub(crate) const fn host_trap_bytes() -> &'static [u8] {
     #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
@@ -5773,25 +5795,21 @@ mod tests_expanded {
     /// that attribute also gates individual helpers hundreds of lines earlier,
     /// and cutting there once hid a real backend from a sibling guard.
     fn production_sources() -> Vec<(String, String)> {
-        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-            let Ok(entries) = std::fs::read_dir(dir) else { return };
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    walk(&p, out);
-                } else if p.extension().is_some_and(|x| x == "rs") {
-                    out.push(p);
-                }
-            }
-        }
-        let mut files = Vec::new();
-        walk(std::path::Path::new("src"), &mut files);
-        assert!(!files.is_empty(), "found no sources — is the test CWD the crate root?");
+        // Embedded at COMPILE time by `build.rs`, not walked at run time.
+        //
+        // This used to `read_dir("src")`, which works only when the test binary
+        // runs with the crate root as its working directory. It does not under
+        // `xcrun simctl spawn`: five guards failed at once the first time this
+        // suite ran for an Apple triple, because the simulator sandbox has no
+        // repository at any path. `build.rs` explains why a generated list and
+        // not a hand-written one.
+        let files: &[(&str, &str)] = crate::EMBEDDED_SOURCES;
+        assert!(!files.is_empty(), "build.rs embedded no sources");
 
         let mut out = Vec::new();
-        for f in files {
-            let Ok(text) = std::fs::read_to_string(&f) else { continue };
-            let name = f.file_name().unwrap_or_default().to_string_lossy().to_string();
+        for (name, text) in files {
+            let text: &str = text;
+            let name = (*name).to_string();
             // Strip the SPAN of every test module, rather than truncating at the
             // first one. Truncating was wrong, and silently so: `lib.rs` has a
             // test module at ~1611 and another at ~3992 with real production
@@ -10005,6 +10023,58 @@ mod tests_extra {
                 ),
                 "{name}: rewind_past_own_breakpoint returns (), so it has no way to tell its \
                  caller the target is not resumable"
+            );
+        }
+    }
+
+    /// A backend must save exactly as many bytes as its trap overwrites.
+    ///
+    /// All three read **one** byte as the "original" and then write
+    /// `host_trap_bytes()`, which is one byte on x86 and **four** on AArch64.
+    /// Removing the breakpoint restores what was saved, so on ARM64 that
+    /// restores one byte and leaves **three bytes of `BRK`** behind — the
+    /// instruction stream is corrupted permanently, in a process the user asked
+    /// only to observe.
+    ///
+    /// `arch_breakpoint::trap_len` exists for exactly this, and its own doc
+    /// names the failure: *"the single most damaging thing a naive port does is
+    /// save one byte on ARM64"*. The saving code was the one place that did not
+    /// ask.
+    ///
+    /// This is also why `X86_TRAP_BYTE_IS_VALID_HERE` must stay for now. That
+    /// refusal looks stale — the implant derives its bytes from the host arch,
+    /// and `macos_debugger` is no longer x86-only at compile time (`thread_pc`
+    /// is cfg'd per architecture). It is not stale: it is the last line of
+    /// defence in front of THIS defect. Removing it before this is fixed would
+    /// be the "fix that believes more was fixed than was" the guard on that
+    /// constant explicitly warns about.
+    ///
+    /// On x86 the derived length is 1, so nothing changes there — which is why
+    /// this can be fixed on a host that cannot run the architecture it matters
+    /// on.
+    #[test]
+    fn every_backend_saves_as_many_bytes_as_its_trap_overwrites() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let body = item_body(
+                src,
+                "async fn set_breakpoint(",
+                &["\n    fn ", "\n    async fn ", "\n    pub async fn "],
+            );
+            assert!(
+                body.contains("host_trap_bytes()"),
+                "guard is misanchored: `{name}`'s set_breakpoint no longer plants \
+                 `host_trap_bytes()`"
+            );
+            assert!(
+                !body.contains("read_memory(addr, 1)"),
+                "{name}: set_breakpoint saves ONE byte and then writes `host_trap_bytes()`, \
+                 which is four on AArch64. Removing the breakpoint would restore one byte and \
+                 leave three bytes of BRK in the instruction stream — permanent corruption of \
+                 a process the caller asked only to inspect"
             );
         }
     }

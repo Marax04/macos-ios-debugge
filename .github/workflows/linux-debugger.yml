@@ -1,0 +1,138 @@
+name: Linux debugger
+
+# Why this exists
+# ---------------
+# Two gaps, one file.
+#
+# 1. Linux had NO CI at all. It was verified only on the maintainer's WSL, which
+#    is x86_64 and reports "nested virtualization is not supported" on every
+#    run — a single machine, one architecture, one kernel configuration. The
+#    macOS workflow proved in one afternoon what a second environment finds that
+#    inspection does not.
+#
+# 2. `linux_debugger.rs` is believed not to compile for aarch64: it reads
+#    `libc::user_regs_struct`'s `rip`, a field that does not exist on ARM64,
+#    where ptrace uses PTRACE_GETREGSET with a completely different struct
+#    (`regs[31]`, `sp`, `pc`, `pstate`). That belief has never been MEASURED,
+#    because this workspace cannot cross-check for aarch64-unknown-linux-gnu:
+#    `libsqlite3-sys` needs a C cross-compiler that is not installed. A native
+#    ARM runner answers it without cross-compiling anything.
+#
+# The second point matters beyond tidiness. `X86_TRAP_BYTE_IS_VALID_HERE`
+# refuses every software breakpoint on ARM64 in all three backends, and the
+# stated prerequisite for lifting that refusal is porting `read_regs` /
+# `regs_to_register_set`. Until this job exists, "does Linux build on ARM?" is an
+# assumption in a comment.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  linux:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    # An architecture failing must not cancel the other: knowing whether a
+    # defect is x86-only or ARM-only is half the diagnosis.
+    continue-on-error: ${{ matrix.expected_to_fail }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: Linux x86_64
+            expected_to_fail: false
+          # ── The measurement ──────────────────────────────────────────────
+          #
+          # `continue-on-error` here is NOT a way to ignore a failure. It is
+          # used because this row is expected to be RED today for a documented
+          # reason (the aarch64 register port has not been written), and a
+          # workflow that is permanently red for a known gap trains people to
+          # stop reading it.
+          #
+          # What it must never become is a silent skip: the summary job below
+          # prints this result explicitly, so the gap is reported every run.
+          #
+          # DELETE this flag the moment the port lands. If it is still here
+          # after that, the job has stopped being a measurement.
+          - os: ubuntu-24.04-arm
+            name: Linux aarch64 (known gap — measuring)
+            expected_to_fail: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Same reason the macOS workflow pins it: pyo3 0.23 caps at Python 3.13,
+      # and rustre-mcp-tools pulls it in through two crates, so whichever Python
+      # a runner image happens to ship decides whether the workspace builds.
+      - name: Pin Python to a version PyO3 0.23 supports
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ matrix.os }}-cargo-
+
+      - name: Show host facts
+        run: |
+          echo "arch:   $(uname -m)"
+          echo "kernel: $(uname -r)"
+          echo "rustc:  $(rustc -vV | tr '\n' ' ')"
+          echo "yama ptrace_scope: $(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null || echo n/a)"
+
+      # ptrace_scope=1 (the Ubuntu default) forbids attaching to a process that
+      # is not a descendant, which several live tests do. Relaxing it is what
+      # makes those tests meaningful rather than skipped — and printing the
+      # value above means a future runner image change is visible, not silent.
+      - name: Allow ptrace attach for the live tests
+        run: sudo sysctl -w kernel.yama.ptrace_scope=0 || true
+
+      - name: Build (release)
+        run: cargo build --release -p rustre-debug
+
+      # `--test-threads=1` is not optional here: several tests drive a real
+      # traced process, and two of those in parallel fight over the same debug
+      # registers and wait queues.
+      - name: Test (release, serial)
+        run: cargo test --release -p rustre-debug --lib -- --test-threads=1
+
+      - name: Test rustre-mcp-tools
+        run: cargo test --release -p rustre-mcp-tools --lib
+
+      - name: Clippy (informational)
+        continue-on-error: true
+        run: cargo clippy --release -p rustre-debug -- -W clippy::all
+
+  summary:
+    name: Linux verified
+    runs-on: ubuntu-latest
+    needs: linux
+    if: always()
+    steps:
+      - name: Report
+        run: |
+          echo "linux job result: ${{ needs.linux.result }}"
+          echo ""
+          echo "The aarch64 row is allowed to fail while the register port is"
+          echo "outstanding; its result is visible in the job list above and is"
+          echo "the measurement this workflow was added to take."
+          test "${{ needs.linux.result }}" != "failure"

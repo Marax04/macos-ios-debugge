@@ -3777,7 +3777,19 @@ impl crate::Debugger for MacosDebugger {
         // Track only AFTER the `0xCC` write is confirmed: inserting first
         // meant a failed `write_memory` left a phantom tracked entry for a
         // breakpoint that was never actually installed.
-        let original = self.read_memory(addr, 1).await?;
+        // As many bytes as the trap will overwrite, not one.
+        //
+        // `host_trap_bytes()` is one byte on x86 and FOUR on AArch64, and
+        // `remove_breakpoint` restores exactly what was saved here. Saving one
+        // byte on ARM64 therefore restored one and left three bytes of `BRK`
+        // in the instruction stream — permanent corruption of a process the
+        // caller asked only to inspect. `arch_breakpoint::trap_len`'s own doc
+        // calls this "the single most damaging thing a naive port does".
+        //
+        // On x86 the derived length is 1, so this changes nothing there.
+        let want = crate::host_trap_bytes().len();
+        let original = self.read_memory(addr, want).await?;
+        crate::require_full_read(addr.as_u64(), original.len(), want)?;
         // RESERVE the address under one lock, then write.
         //
         // The idempotency guard above is checked before two `await` points and
