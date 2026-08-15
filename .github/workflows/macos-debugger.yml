@@ -34,9 +34,21 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     # A hung ptrace/Mach wait must not burn a whole runner hour: the Linux work
-    # in this project already produced tests that hang rather than fail, so the
+    # in this project already produced tests that hang rather than fail, so a
     # ceiling is deliberate.
-    timeout-minutes: 45
+    #
+    # 90, not 45. Measured: the Intel row was CANCELLED at exactly 45 minutes on
+    # both 360222a and c060f3a, each time part-way through
+    # `Test rustre-mcp-tools`. Not a defect in the code — the ceiling. The
+    # Apple Silicon row finishes well inside it because those runners are much
+    # faster, so only Intel ever hit it, and its result was never reported at
+    # all.
+    #
+    # Identical to what iteration 556 measured and fixed on the Linux workflow,
+    # at the same step. A job killed by its own timeout reads as a failure of
+    # the code, which is the most expensive kind of false signal — and a job
+    # that never finishes reports nothing, which is worse than red.
+    timeout-minutes: 90
     strategy:
       # One architecture failing must not cancel the other: knowing whether a
       # defect is Intel-only or ARM-only is half the diagnosis.
@@ -203,6 +215,12 @@ jobs:
   ios:
     name: iOS ${{ matrix.name }}
     runs-on: macos-14
+    # 45 here, 90 above, and the asymmetry is deliberate rather than an
+    # oversight: this job builds only `rustre-debug` for a cross target, not
+    # `rustre-mcp-tools`, and it demonstrably completes — both rows have
+    # reported `success`. The macOS job needed 90 because its Intel row was
+    # being cancelled part-way through the MCP suite. Raising a ceiling that is
+    # not being hit buys nothing and hides the day it starts being hit.
     timeout-minutes: 45
     strategy:
       fail-fast: false
