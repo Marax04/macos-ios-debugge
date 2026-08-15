@@ -177,10 +177,37 @@ jobs:
       # anyone deploying this backend on macOS needs to know it before they
       # find out from a user.
       - name: Live tests (root — task_for_pid requires it)
+        id: live
         continue-on-error: true
         run: |
           sudo -E env "PATH=$PATH" cargo test --release -p rustre-debug --lib \
             --target ${{ matrix.target }} -- --test-threads=1 live_tests
+
+      # WITHOUT this step the failures above were INVISIBLE.
+      #
+      # Measured on 1c70fff: macOS Intel ran the live tests and reported
+      # "FAILED. 2 passed; 2 failed", Apple Silicon "FAILED. 3 passed; 1
+      # failed", and BOTH jobs concluded `success` -- because a
+      # `continue-on-error` step's failure never reaches the job result, and
+      # the summary below only reads the job result.
+      #
+      # That is the same defect the Linux workflow carried and 572 fixed, in
+      # its macOS twin: "cancelled is not failure" (556), then "a tolerated
+      # failure is not a failure" (572), now here. Three spellings of one
+      # mistake -- signing off as passed something that did not pass.
+      #
+      # The step is still allowed to fail: task_for_pid needs root and the
+      # backend has real open defects. What is not allowed is failing in
+      # silence, so the outcome is printed either way and named as a gap.
+      - name: Report the live-test outcome (it is allowed to fail, not to hide)
+        if: always()
+        run: |
+          echo "live tests on ${{ matrix.target }}: ${{ steps.live.outcome }}"
+          if [ "${{ steps.live.outcome }}" != "success" ]; then
+            echo "::warning title=macOS live tests failed::${{ matrix.target }} live tests \
+          did not pass. This row still reports success because the step is \
+          continue-on-error; read the step log for the failing test names."
+          fi
 
       # ── 3. The MCP surface, which is what a user actually calls ────────────
       - name: Test rustre-mcp-tools
@@ -334,4 +361,15 @@ jobs:
         run: |
           echo "macOS job result: ${{ needs.macos.result }}"
           echo "iOS   job result: ${{ needs.ios.result }}  (informational)"
+          echo ""
+          echo "READ THIS BEFORE TRUSTING THE GREEN:"
+          echo "  the macOS rows contain a continue-on-error live-test step, so"
+          echo "  `success` here means the BUILD and the non-live suites passed."
+          echo "  Measured on 1c70fff: Intel 2 passed / 2 FAILED, Apple Silicon"
+          echo "  3 passed / 1 FAILED, both rows still green. Each row now"
+          echo "  prints its live-test outcome and emits a ::warning when it"
+          echo "  fails -- look for that warning, not for a red job."
+          echo ""
+          echo "  iOS device triple is COMPILE ONLY, by name and by design:"
+          echo "  it executes nothing. The simulator row is what runs tests."
           test "${{ needs.macos.result }}" = "success"

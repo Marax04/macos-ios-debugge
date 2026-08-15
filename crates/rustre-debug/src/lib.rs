@@ -1132,6 +1132,104 @@ pub const SUB_REGISTER_NAMES: &[&str] = &[
 /// half of the register — the kind of answer that is never questioned because
 /// it looks like data.
 #[must_use]
+/// One thing a backend can or cannot do, with the reason it cannot.
+///
+/// `supported: false` is the point of this type. A capability that is simply
+/// absent from an API is indistinguishable from one that is present and never
+/// triggered, and a caller cannot wait correctly for either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackendCapability {
+    /// Stable identifier, e.g. `"thread_events"`.
+    pub name: &'static str,
+    /// Whether this backend can do it AT ALL on this host.
+    pub supported: bool,
+    /// Why not, in the caller's terms. Empty when supported.
+    ///
+    /// Not a log line: this is what an operator reads instead of waiting for
+    /// an event that cannot arrive, so it names the platform reason.
+    pub because: &'static str,
+}
+
+/// What the backend compiled into this binary can and cannot do.
+///
+/// Every entry is MEASURED, not aspirational. Where a capability is missing the
+/// reason is a platform fact, not a to-do: publishing "not yet implemented"
+/// where the truth is "the OS has no such notification" would send a caller
+/// looking for a workaround that does not exist.
+///
+/// Deliberately compiled per target rather than probed at runtime: these are
+/// properties of the backend that IS built, and a runtime probe would have to
+/// invent an answer before a process is attached.
+#[must_use]
+pub fn backend_capabilities() -> &'static [BackendCapability] {
+    #[cfg(target_os = "windows")]
+    {
+        &[
+            BackendCapability {
+                name: "thread_events",
+                supported: true,
+                because: "",
+            },
+            BackendCapability {
+                name: "hardware_watchpoints",
+                supported: true,
+                because: "",
+            },
+            BackendCapability {
+                name: "fault_address",
+                supported: true,
+                because: "",
+            },
+        ]
+    }
+    #[cfg(target_os = "linux")]
+    {
+        &[
+            BackendCapability {
+                name: "thread_events",
+                supported: true,
+                because: "",
+            },
+            BackendCapability {
+                name: "hardware_watchpoints",
+                supported: true,
+                because: "",
+            },
+            BackendCapability {
+                name: "fault_address",
+                supported: true,
+                because: "",
+            },
+        ]
+    }
+    #[cfg(target_os = "macos")]
+    {
+        &[
+            // Measured, not assumed: `StopReason::ThreadCreate` appears 5 times
+            // in the Windows backend, 18 in the Linux one and ZERO here.
+            BackendCapability {
+                name: "thread_events",
+                supported: false,
+                because: "Mach has no equivalent of PTRACE_O_TRACECLONE, so no stop is                           delivered when a thread is created. A client must poll threads()                           instead of waiting for an event that cannot arrive.",
+            },
+            BackendCapability {
+                name: "hardware_watchpoints",
+                supported: true,
+                because: "",
+            },
+            BackendCapability {
+                name: "fault_address",
+                supported: false,
+                because: "the faulting address would come from __far via thread_get_state,                           which mach2 does not expose; a guessed offset would report a                           plausible wrong address, which is worse than none.",
+            },
+        ]
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        &[]
+    }
+}
+
 pub fn sub_register_of(name: &str) -> Option<(&'static str, u32, u64)> {
     const M8: u64 = 0xFF;
     const M16: u64 = 0xFFFF;
@@ -10238,6 +10336,75 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// macOS must make a code page writable before implanting a trap.
+    ///
+    /// Measured on `macos-15-intel` (1c70fff), where the live test fails with
+    ///
+    /// ```text
+    /// Intel must accept a software breakpoint;
+    /// got Err(MemoryError(4532346880, "mach_vm_write failed: kern_return 1"))
+    /// ```
+    ///
+    /// `kern_return 1` is `KERN_INVALID_ADDRESS`. The address is fine — the
+    /// PAGE is not writable. A `__TEXT` page is mapped `r-x`, and Mach refuses
+    /// the write rather than silently succeeding.
+    ///
+    /// So software breakpoints have never worked on macOS. Not "work with a
+    /// caveat": `set_breakpoint` cannot put its byte in the target at all, on
+    /// either architecture, and the failure was invisible because the live
+    /// tests run in a `continue-on-error` step whose result never reached the
+    /// job (fixed in 578).
+    ///
+    /// The missing call is `mach_vm_protect`. `VM_PROT_*` constants are already
+    /// declared in that backend and used only to REPORT region permissions;
+    /// nothing ever changes them. lldb does exactly this: raise the page to
+    /// writable, poke, restore — and `VM_PROT_COPY` matters, because a shared
+    /// page must become a private copy rather than have the change escape into
+    /// every other process mapping that library.
+    #[test]
+    fn macos_makes_a_page_writable_before_implanting_a_trap() {
+        let src = include_str!("macos_debugger.rs");
+        assert!(
+            src.contains("mach_vm_protect("),
+            "macos: nothing ever changes page protection, so `mach_vm_write` into a read-only \
+             __TEXT page fails with KERN_INVALID_ADDRESS and software breakpoints do not work \
+             at all — measured on macos-15-intel, not predicted"
+        );
+        assert!(
+            src.contains("VM_PROT_COPY"),
+            "macos: the page is made writable without VM_PROT_COPY, so a trap planted in a \
+             SHARED library page would be written through to every process mapping it instead \
+             of into a private copy"
+        );
+    }
+
+    /// A backend must publish what it CANNOT do, not only what it is called.
+    ///
+    /// `debug.health` reports the backend name and nothing about its
+    /// capabilities. That is not a cosmetic gap: the macOS backend emits
+    /// `StopReason::ThreadCreate` exactly ZERO times — measured, `grep -c`
+    /// gives 5 on Windows, 18 on Linux, 0 on macOS — because Mach has no
+    /// equivalent of `PTRACE_O_TRACECLONE`. An MCP client that waits for a
+    /// thread-creation event on macOS waits forever, and nothing in the API
+    /// says so. Silence about a limit reads as support for it.
+    ///
+    /// The fix is NOT to synthesise the event. Linux and Windows get a real
+    /// kernel stop — the CLONE birth-stop, `CREATE_THREAD_DEBUG_EVENT` — so
+    /// `ThreadCreate` there means "we stopped BECAUSE a thread was born".
+    /// Diffing `task_threads()` on macOS would mean "one appeared meanwhile",
+    /// which is a different claim wearing the same name: an answer invented to
+    /// fill a signature, which this crate holds to be worse than a refusal.
+    ///
+    /// So the honest move is to publish the absence.
+    #[test]
+    fn every_backend_publishes_its_own_limits() {
+        assert!(
+            crate::backend_capabilities().iter().any(|c| c.name == "thread_events"),
+            "no backend capability is published, so a caller cannot tell a limitation from a \
+             silence — on macOS `ThreadCreate` never arrives and the API does not say so"
         );
     }
 

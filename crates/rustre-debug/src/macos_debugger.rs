@@ -95,7 +95,10 @@ use mach2::task_info::task_flavor_t;
 use mach2::thread_act::{thread_get_state, thread_set_state};
 use mach2::mach_port::mach_port_deallocate;
 use mach2::traps::{mach_task_self, task_for_pid};
-use mach2::vm::{mach_vm_deallocate, mach_vm_read_overwrite, mach_vm_region_recurse, mach_vm_write};
+use mach2::vm::{
+    mach_vm_deallocate, mach_vm_protect, mach_vm_read_overwrite, mach_vm_region_recurse,
+    mach_vm_write,
+};
 use mach2::vm_types::{mach_vm_address_t, mach_vm_size_t, vm_offset_t};
 
 use rustre_core::address::Address;
@@ -169,6 +172,13 @@ const THREAD_STATE_COUNT: mach_msg_type_number_t =
 const VM_PROT_READ: i32 = 0x01;
 const VM_PROT_WRITE: i32 = 0x02;
 const VM_PROT_EXECUTE: i32 = 0x04;
+/// `VM_PROT_COPY` — ask for a PRIVATE copy when raising protection.
+///
+/// Without it, making a shared library page writable and poking a trap into it
+/// writes THROUGH to every process that maps the same page. With it, the kernel
+/// performs copy-on-write and the trap stays inside this target. lldb sets the
+/// same bit for the same reason.
+const VM_PROT_COPY: i32 = 0x10;
 
 // `flavor: task_flavor_t` (real `mach2::task::task_info` signature) is
 // `natural_t` = `u32`, not `libc::c_int` — fixed after cross-checking the
@@ -2764,6 +2774,41 @@ fn mach_write_memory(task: task_t, addr: u64, data: &[u8]) -> Result<(), DebugEr
     if task == 0 {
         return Err(DebugError::MemoryError(addr, "no Mach task port (task_for_pid failed at startup)".into()));
     }
+    // A `__TEXT` page is mapped `r-x`, and `mach_vm_write` into it fails with
+    // KERN_INVALID_ADDRESS rather than silently succeeding. Measured on
+    // macos-15-intel: `set_breakpoint` returned
+    // `mach_vm_write failed: kern_return 1`, i.e. software breakpoints had
+    // never worked on this backend at all.
+    //
+    // So the page is raised to writable first and put back afterwards, which is
+    // what lldb does. Failure to raise is NOT fatal here: some pages are
+    // already writable and some refuse the change, and in both cases the write
+    // below is the honest test of whether this can be done -- reporting a
+    // protection error for a write that would have succeeded would be its own
+    // wrong answer.
+    // ASKED, not assumed: 4 KiB on Intel and 16 KiB on Apple Silicon, and a
+    // hardcoded 4096 would under-cover a straddling write on the latter.
+    let page = {
+        let sc = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if sc > 0 { sc as u64 } else { 4096 }
+    };
+    let page_base = addr & !(page - 1);
+    let span = {
+        let end = addr + data.len() as u64;
+        let last_page = (end - 1) & !(page - 1);
+        last_page - page_base + page
+    };
+    let restore = unsafe {
+        let raised = mach_vm_protect(
+            task,
+            page_base as mach_vm_address_t,
+            span as mach_vm_size_t,
+            0,
+            VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY,
+        );
+        raised == KERN_SUCCESS
+    };
+
     let kr = unsafe {
         mach_vm_write(
             task,
@@ -2779,8 +2824,29 @@ fn mach_write_memory(task: task_t, addr: u64, data: &[u8]) -> Result<(), DebugEr
             data.len() as mach_msg_type_number_t,
         )
     };
+    // Put the protection back BEFORE reporting either outcome. A target left
+    // with a writable `__TEXT` page is a target this debugger silently made
+    // less safe than it found it, and that must not depend on whether the
+    // write succeeded.
+    if restore {
+        unsafe {
+            mach_vm_protect(
+                task,
+                page_base as mach_vm_address_t,
+                span as mach_vm_size_t,
+                0,
+                VM_PROT_READ | VM_PROT_EXECUTE,
+            );
+        }
+    }
     if kr != KERN_SUCCESS {
-        return Err(DebugError::MemoryError(addr, format!("mach_vm_write failed: kern_return {kr}")));
+        return Err(DebugError::MemoryError(
+            addr,
+            format!(
+                "mach_vm_write failed: kern_return {kr} (page protection was {} raised first)",
+                if restore { "successfully" } else { "NOT" }
+            ),
+        ));
     }
     Ok(())
 }
@@ -4801,11 +4867,30 @@ mod live_tests {
         let Ok(_pid) = dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await else {
             panic!("launch failed — see launch_runs_a_child_to_exit for the cause");
         };
-        let regs = dbg.get_registers(ThreadId(0)).await;
+        // A REAL thread id, asked of the target.
+        //
+        // This used to pass `ThreadId(0)` as a stand-in for "the current
+        // thread", and measured on macos-15-intel AND macos-14 it failed with
+        // `no live thread with id 0 in this task`. Nothing in this crate treats
+        // 0 as a convention -- no backend has a `tid.0 == 0` branch -- so the
+        // backend was answering correctly to a question about a thread that
+        // does not exist. The refusal is the defence working; the test was
+        // asking wrongly, exactly like the unaligned `run_to_return` address in
+        // 575.
+        //
+        // Inventing the convention now would be worse than fixing the test: a
+        // magic 0 that means "current" is the kind of implicit API that makes
+        // `get_registers(tid)` mean two different things depending on a value.
+        let tids = dbg.threads().await;
         let maps = dbg.memory_maps().await;
+        let tids = tids.unwrap_or_else(|e| panic!("threads() failed: {e}"));
+        let tid = *tids
+            .first()
+            .unwrap_or_else(|| panic!("a launched, stopped target must expose at least one thread"));
+        let regs = dbg.get_registers(tid).await;
         let _ = dbg.kill().await;
 
-        let regs = regs.unwrap_or_else(|e| panic!("read_registers failed: {e}"));
+        let regs = regs.unwrap_or_else(|e| panic!("read_registers failed for {tid:?}: {e}"));
         let maps = maps.unwrap_or_else(|e| panic!("memory_maps failed: {e}"));
         let pc = regs.pc;
         assert!(pc != 0, "the reported program counter is zero");

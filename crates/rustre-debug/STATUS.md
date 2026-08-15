@@ -345,6 +345,74 @@ incompleta del 560, l'«attesa verde» nel workflow, questa nota `SAFETY`. In un
 repo dove i commenti spiegano il PERCHÉ, un commento falso è un difetto a tutti
 gli effetti — è ciò su cui si baserà chi legge dopo.
 
+## 4-sexies. Iterazioni 577-580 — il fronte macOS, aperto leggendo i log
+
+Partito da una domanda dell'utente su come stessero iOS e macOS su GitHub. La
+risposta ha richiesto di leggere i LOG e non le conclusioni, e ha aperto quattro
+round.
+
+### Quello che i job dicevano, e quello che era vero
+
+| riga | job | cosa aveva davvero eseguito |
+|---|---|---|
+| macOS Intel | ✅ success | live test **2 passed, 2 FAILED** |
+| macOS Apple Silicon | ✅ success | live test **3 passed, 1 FAILED** |
+| iOS simulator | ✅ success | **1881 passed, 0 falliti** — verde vero |
+| iOS device triple | ✅ success | **nessun test**: compile-only, per progetto |
+
+### 578 — terza grafia dello stesso sbaglio
+
+I fallimenti macOS erano invisibili: i live test girano in uno step
+`continue-on-error` il cui esito non raggiunge il job, e il riepilogo legge solo
+il job. È **la stessa cosa** del 556 (*cancelled non è failure*) e del 572 (*un
+fallimento tollerato non è un fallimento*), ora nel gemello macOS. Ogni riga
+stampa l'esito ed emette un `::warning`; il riepilogo dichiara cosa il verde
+copre e cosa no.
+
+*Prima si è corretta la misura, poi la misura ha rivelato i difetti* — lo stesso
+ordine seguito su Linux.
+
+### 579 — i breakpoint software su macOS non hanno MAI funzionato
+
+`mach_vm_write failed: kern_return 1` = `KERN_INVALID_ADDRESS`. L'indirizzo era
+giusto, la PAGINA no: `__TEXT` è mappata `r-x` e Mach rifiuta. `mach_vm_protect`
+non compariva da nessuna parte nel backend — le costanti `VM_PROT_*` c'erano,
+ma solo per LEGGERE i permessi delle regioni.
+
+Tre dettagli non ovvi del fix:
+- **`VM_PROT_COPY`**: senza, rendere scrivibile la pagina di una libreria
+  condivisa scriverebbe ATTRAVERSO a ogni processo che la mappa. Con, il kernel
+  fa copy-on-write e la trappola resta nel target. lldb fa lo stesso.
+- **Il ripristino precede il report**, riuscito o fallito: un target lasciato
+  con `__TEXT` scrivibile è un target reso meno sicuro di come lo si è trovato.
+- **La pagina si chiede a `sysconf`**: 4 KiB su Intel, **16 KiB su Apple
+  Silicon**. Un 4096 cablato coprirebbe meno del necessario proprio dove serve.
+
+### 580 — `ThreadId(0)` non è una convenzione
+
+`no live thread with id 0 in this task`, su entrambe le architetture. Nessun
+backend ha un ramo `tid.0 == 0`: il backend rispondeva correttamente a una
+domanda su un thread inesistente. **Corretto il test, non la difesa** — come
+per l'indirizzo non allineato del 575.
+
+Far significare a `0` «il thread corrente» avrebbe fatto passare il test subito,
+e sarebbe stato peggio: un valore magico che cambia il senso di
+`get_registers(tid)` rende poi indistinguibile un errore da una convenzione, e
+l'avrei introdotto su una piattaforma sola.
+
+### 577 — l'API taceva sui propri limiti
+
+`debug.health` pubblicava il nome del backend e nient'altro. Su macOS
+`StopReason::ThreadCreate` è emesso **zero volte** (misurato: 5 Windows, 18
+Linux, 0 macOS) perché Mach non ha equivalente di `PTRACE_O_TRACECLONE`: un
+client che aspetta quell'evento aspetta per sempre. Ora `backend_capabilities()`
+pubblica l'assenza **con il motivo**, ed è esposta in `debug.health`.
+
+Sintetizzare l'evento diffando `task_threads()` era possibile e sarebbe stato
+sbagliato: su Linux e Windows `ThreadCreate` significa «ci siamo fermati PERCHÉ
+è nato un thread», un diff significherebbe «nel frattempo è comparso» — stesso
+nome per un'affermazione più debole.
+
 ## 5. Il fronte Apple
 
 Tre giri di workflow multi-agente con verifica avversariale. Il terzo: **104

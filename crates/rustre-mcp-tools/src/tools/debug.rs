@@ -4386,6 +4386,28 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     "open_duration_secs": 60
                 },
                 "rss_bytes": rss_bytes,
+                // What this backend CANNOT do, and why.
+                //
+                // Reporting only the backend's name left a caller unable to
+                // tell a limitation from a silence: on macOS `ThreadCreate` is
+                // emitted exactly zero times, because Mach has no equivalent of
+                // PTRACE_O_TRACECLONE, so a client waiting for a thread-created
+                // event waits forever and nothing in this API says so.
+                //
+                // The absence is published rather than papered over. Diffing
+                // the thread list on macOS would let us emit a `ThreadCreate`,
+                // but it would mean "one appeared meanwhile" where the other
+                // two backends mean "we stopped BECAUSE one was born" — the
+                // same name for a weaker claim, which is how an API becomes
+                // confidently wrong.
+                "capabilities": rustre_debug::backend_capabilities()
+                    .iter()
+                    .map(|c| json!({
+                        "name": c.name,
+                        "supported": c.supported,
+                        "because": c.because,
+                    }))
+                    .collect::<Vec<_>>(),
                 "source": "debug.health"
             }))
         },
