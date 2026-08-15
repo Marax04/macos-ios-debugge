@@ -4195,8 +4195,33 @@ int main(void) {
         // in between must be handled transparently — if it is not, this call
         // never returns and the test hangs, which is precisely the failure
         // mode of the earlier attempts.
-        let ev = dbg.continue_execution().await.expect("continue should reach the fixture's raise(SIGTRAP)");
+        // Resume until the fixture reaches ITS OWN stop, skipping thread births.
+        //
+        // This used to take the first stop, whatever it was, and enumerate
+        // immediately. That was correct until iteration 526 started REPORTING
+        // `StopReason::ThreadCreate`: with `PTRACE_O_TRACECLONE` the first stop
+        // after launch is now the worker'''s birth, not the `raise(SIGTRAP)`
+        // this test is waiting for — so it enumerated `/proc/<pid>/task` at the
+        // instant of the clone.
+        //
+        // On x86-64 the task entry is there by then and the test passes. On
+        // aarch64 it is not: measured on ubuntu-24.04-arm, 2026-08-15,
+        // "pthread_create fixture should expose >= 2 threads, got
+        // [ThreadId(6365)]". The test was passing by timing, not by design, and
+        // a different machine was enough to show it.
+        let mut ev = dbg.continue_execution().await.expect("continue should not error");
+        for _ in 0..64 {
+            if !matches!(ev.reason, StopReason::ThreadCreate { .. }) {
+                break;
+            }
+            ev = dbg.continue_execution().await.expect("continue should not error");
+        }
         assert!(!ev.reason.is_exit(), "fixture should stop, not exit: {:?}", ev.reason);
+        assert!(
+            !matches!(ev.reason, StopReason::ThreadCreate { .. }),
+            "still at a thread birth after 64 resumes: {:?}",
+            ev.reason
+        );
 
         eprintln!("[test] stopped, enumerating threads");
         let tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
