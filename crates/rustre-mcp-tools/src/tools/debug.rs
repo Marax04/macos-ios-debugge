@@ -884,6 +884,22 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The PORTABLE answer to "did it fault, and where?".
+                        //
+                        // `stop_reason` above is a Rust `Debug` string, and the
+                        // same crash renders as `AccessViolation { .. }` on
+                        // Windows and `Signal { signum: 11, .. }` on Linux and
+                        // macOS -- so a client asking that question had to
+                        // parse a debug string AND know which OS produced it.
+                        //
+                        // `null` here means "not a memory fault". A non-null
+                        // `address`/`is_write` of `null` inside it means the
+                        // OS does not report that fact, which is different
+                        // from reporting zero or false.
+                        "fault": ev.reason.access_fault().map(|f| json!({
+                            "address": f.address.map(|a| a.as_u64()),
+                            "is_write": f.is_write,
+                        })),
                         "tid": ev.tid.0,
                         "live": true,
                         "source": "rustre_debug::Debugger::continue_execution (live OS backend)"
@@ -922,6 +938,22 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The PORTABLE answer to "did it fault, and where?".
+                        //
+                        // `stop_reason` above is a Rust `Debug` string, and the
+                        // same crash renders as `AccessViolation { .. }` on
+                        // Windows and `Signal { signum: 11, .. }` on Linux and
+                        // macOS -- so a client asking that question had to
+                        // parse a debug string AND know which OS produced it.
+                        //
+                        // `null` here means "not a memory fault". A non-null
+                        // `address`/`is_write` of `null` inside it means the
+                        // OS does not report that fact, which is different
+                        // from reporting zero or false.
+                        "fault": ev.reason.access_fault().map(|f| json!({
+                            "address": f.address.map(|a| a.as_u64()),
+                            "is_write": f.is_write,
+                        })),
                         "rip": rip,
                         "live": true,
                         "source": "rustre_debug::Debugger::single_step (live OS backend)"
@@ -958,6 +990,22 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The PORTABLE answer to "did it fault, and where?".
+                        //
+                        // `stop_reason` above is a Rust `Debug` string, and the
+                        // same crash renders as `AccessViolation { .. }` on
+                        // Windows and `Signal { signum: 11, .. }` on Linux and
+                        // macOS -- so a client asking that question had to
+                        // parse a debug string AND know which OS produced it.
+                        //
+                        // `null` here means "not a memory fault". A non-null
+                        // `address`/`is_write` of `null` inside it means the
+                        // OS does not report that fact, which is different
+                        // from reporting zero or false.
+                        "fault": ev.reason.access_fault().map(|f| json!({
+                            "address": f.address.map(|a| a.as_u64()),
+                            "is_write": f.is_write,
+                        })),
                         "rip": rip,
                         "live": true,
                         "source": "rustre_debug::Debugger::step_over (live OS backend)"
@@ -1553,6 +1601,22 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "tid": step_tid.0,
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The PORTABLE answer to "did it fault, and where?".
+                        //
+                        // `stop_reason` above is a Rust `Debug` string, and the
+                        // same crash renders as `AccessViolation { .. }` on
+                        // Windows and `Signal { signum: 11, .. }` on Linux and
+                        // macOS -- so a client asking that question had to
+                        // parse a debug string AND know which OS produced it.
+                        //
+                        // `null` here means "not a memory fault". A non-null
+                        // `address`/`is_write` of `null` inside it means the
+                        // OS does not report that fact, which is different
+                        // from reporting zero or false.
+                        "fault": ev.reason.access_fault().map(|f| json!({
+                            "address": f.address.map(|a| a.as_u64()),
+                            "is_write": f.is_write,
+                        })),
                         "live": true,
                         "source": "rustre_debug::Debugger::single_step (live OS backend)"
                     }))
@@ -2070,6 +2134,22 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     Ok(json!({
                         "session_id": session_id,
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The PORTABLE answer to "did it fault, and where?".
+                        //
+                        // `stop_reason` above is a Rust `Debug` string, and the
+                        // same crash renders as `AccessViolation { .. }` on
+                        // Windows and `Signal { signum: 11, .. }` on Linux and
+                        // macOS -- so a client asking that question had to
+                        // parse a debug string AND know which OS produced it.
+                        //
+                        // `null` here means "not a memory fault". A non-null
+                        // `address`/`is_write` of `null` inside it means the
+                        // OS does not report that fact, which is different
+                        // from reporting zero or false.
+                        "fault": ev.reason.access_fault().map(|f| json!({
+                            "address": f.address.map(|a| a.as_u64()),
+                            "is_write": f.is_write,
+                        })),
                         "stepped_out": true,
                         "live": true,
                         "source": "rustre_debug::Debugger::step_out (live OS backend)"

@@ -1621,6 +1621,28 @@ pub enum StopReason {
     Unknown { description: String },
 }
 
+/// What is known about a memory fault, with the unknowns spelled as unknown.
+///
+/// Every field is an `Option` on purpose. A backend that cannot tell the
+/// direction of the access says `None` rather than guessing `false`, and one
+/// that cannot report the address says `None` rather than `0` — a plausible
+/// wrong answer is the failure mode this crate treats as worse than an absent
+/// one, because a caller cannot tell it from a real reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccessFault {
+    /// The address the target tried to touch, when the OS reports it.
+    ///
+    /// Windows: `ExceptionInformation[1]`. Linux: `si_addr` via
+    /// `PTRACE_GETSIGINFO`. macOS: `None` — see `backend_capabilities`.
+    pub address: Option<Address>,
+    /// `true` write, `false` read, `None` when the OS does not say.
+    ///
+    /// Only Windows reports this, through `ExceptionInformation[0]`. It is NOT
+    /// derivable from `si_addr` on Linux, and defaulting it to `false` would
+    /// turn "unknown" into "it was a read".
+    pub is_write: Option<bool>,
+}
+
 impl fmt::Display for StopReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1664,6 +1686,40 @@ impl fmt::Display for StopReason {
 }
 
 impl StopReason {
+    /// Was this stop a memory fault, and what is known about it?
+    ///
+    /// ONE question with one portable answer. The same crash reaches a caller
+    /// as `AccessViolation` on Windows and as `Signal { SIGSEGV, .. }` on Linux
+    /// and macOS, because those kernels report a signal where Windows reports a
+    /// structured exception. `AccessViolation` is CONSTRUCTED only by the
+    /// Windows backend, so the obvious `match` arm for it is silently dead on
+    /// the other two: the crash happens and the handler never runs.
+    ///
+    /// This reads whichever shape arrived and reports what that backend
+    /// actually knows. It deliberately does NOT normalise them into one shape:
+    /// `is_write` cannot be derived from `si_addr`, and manufacturing it would
+    /// be the invented answer this crate refuses everywhere else.
+    ///
+    /// `SIGBUS` counts too. It is a different fault from `SIGSEGV` — misaligned
+    /// or unbacked rather than unmapped — but it is still "the target died
+    /// touching memory", which is the question being asked.
+    #[must_use]
+    pub fn access_fault(&self) -> Option<AccessFault> {
+        match self {
+            Self::AccessViolation { address, is_write } => Some(AccessFault {
+                address: Some(*address),
+                is_write: Some(*is_write),
+            }),
+            // 11 = SIGSEGV; 10 = SIGBUS on BSD/macOS, 7 = SIGBUS on Linux.
+            // Spelled as numbers because this type is shared by backends
+            // compiled for different targets, where `libc::SIGBUS` differs.
+            Self::Signal { signum, address, .. } if matches!(signum, 11 | 10 | 7) => {
+                Some(AccessFault { address: *address, is_write: None })
+            }
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this stop represents process termination.
     #[must_use]
     pub const fn is_exit(&self) -> bool {
@@ -10336,6 +10392,107 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// One question — "did it fault, and where?" — must have one portable answer.
+    ///
+    /// The same crash arrives in three shapes, measured:
+    ///
+    /// | backend | shape |
+    /// |---|---|
+    /// | Windows | `AccessViolation { address, is_write }` |
+    /// | Linux   | `Signal { SIGSEGV, address: Some(si_addr) }` |
+    /// | macOS   | `Signal { SIGSEGV, address: None }` |
+    ///
+    /// `AccessViolation` is CONSTRUCTED only by the Windows backend — in the
+    /// Linux one the name appears solely inside comments. So a caller writing
+    /// the obvious `match ev.reason { StopReason::AccessViolation { .. } => …
+    /// }` handles crashes on Windows and silently never fires on the other two,
+    /// where the crash did happen. Nothing errors; the arm is simply dead.
+    ///
+    /// The fix must not be to make Linux emit `AccessViolation`: `is_write` is
+    /// not derivable from `si_addr`, and inventing it would be exactly the
+    /// fabricated answer this crate refuses. Nor to drop the Windows variant,
+    /// which carries a fact the others genuinely lack.
+    ///
+    /// So the answer is a predicate over what each backend ALREADY reports,
+    /// with the unknowns spelled as unknown — the same discipline
+    /// `backend_capabilities` applies to a whole backend, applied to one event.
+    #[test]
+    fn a_fault_is_recognisable_without_knowing_which_backend_produced_it() {
+        use crate::{Address, StopReason};
+
+        let win = StopReason::AccessViolation { address: Address(0x1000), is_write: true };
+        let lin = StopReason::Signal {
+            signum: 11,
+            signame: "SIGSEGV".to_string(),
+            address: Some(Address(0x1000)),
+        };
+        let mac = StopReason::Signal {
+            signum: 11,
+            signame: "SIGSEGV".to_string(),
+            address: None,
+        };
+        let not_a_fault = StopReason::Signal {
+            signum: 2,
+            signame: "SIGINT".to_string(),
+            address: None,
+        };
+
+        let w = win.access_fault().expect("windows reports a fault");
+        assert_eq!(w.address, Some(Address(0x1000)));
+        assert_eq!(w.is_write, Some(true), "windows knows the direction");
+
+        let l = lin.access_fault().expect("linux reports the same fault");
+        assert_eq!(l.address, Some(Address(0x1000)));
+        assert_eq!(l.is_write, None, "linux cannot tell the direction, and must say so");
+
+        let m = mac.access_fault().expect("macos reports the same fault");
+        assert_eq!(m.address, None, "macos knows neither, and must not invent one");
+        assert_eq!(m.is_write, None);
+
+        assert!(
+            not_a_fault.access_fault().is_none(),
+            "a SIGINT is not a memory fault; widening the predicate to any signal would make \
+             it useless"
+        );
+    }
+
+    /// `AccessViolation.address` must be the DATA address, on every backend.
+    ///
+    /// Windows built it from `ExceptionRecord.ExceptionAddress`, which is the
+    /// address of the INSTRUCTION that faulted. The address the program tried
+    /// to touch is `ExceptionInformation[1]` — a different number, and the one
+    /// a caller wants. Linux reports `si_addr`, which IS the data address.
+    ///
+    /// So the same crash answered with two different KINDS of address depending
+    /// on the OS, under one field name. That is family 2 (shared meaning
+    /// drifting between backends) producing family 1 (a confidently wrong
+    /// answer): nothing errors, the field is populated, and a caller comparing
+    /// it against a buffer range gets the code address instead.
+    ///
+    /// The variant settles which one is meant. It carries exactly ONE address
+    /// and an `is_write` flag beside it, and `is_write` describes the DATA
+    /// access — `ExceptionInformation[0]`. An address that is not the datum
+    /// that `is_write` talks about makes the pair self-contradictory.
+    ///
+    /// The instruction address is not lost: it is the program counter, which
+    /// every caller can read from the register set at the same stop.
+    #[test]
+    fn an_access_violation_reports_the_address_that_was_touched() {
+        let src = include_str!("windows_debugger.rs");
+        let body = item_body(
+            src,
+            "0xC000_0005 => StopReason::AccessViolation {",
+            &["\n                other =>", "\n            }"],
+        );
+        assert!(
+            body.contains("ExceptionInformation[1]"),
+            "windows: the reported address is `ExceptionAddress`, i.e. the faulting \
+             INSTRUCTION, while Linux reports the faulting DATUM via si_addr. One field name, \
+             two meanings, and the `is_write` flag beside it describes the datum — so the pair \
+             contradicts itself"
         );
     }
 

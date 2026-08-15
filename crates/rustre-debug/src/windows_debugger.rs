@@ -1832,7 +1832,25 @@ fn classify_event(ev: &DEBUG_EVENT) -> StopReason {
                     }
                 }
                 0xC000_0005 => StopReason::AccessViolation {
-                    address: addr,
+                    // `ExceptionInformation[1]`, NOT `ExceptionAddress`.
+                    //
+                    // `ExceptionAddress` is the INSTRUCTION that faulted;
+                    // `ExceptionInformation[1]` is the address the program
+                    // tried to touch. This reported the former under a field
+                    // whose sibling — `is_write`, read from
+                    // `ExceptionInformation[0]` — describes the DATA access, so
+                    // the pair contradicted itself: a read/write flag about one
+                    // address attached to another.
+                    //
+                    // Linux answers the same crash with `si_addr`, which is the
+                    // datum. One field name meant two different things
+                    // depending on the OS, and neither errored: a caller
+                    // comparing this against a buffer range simply got the code
+                    // address and believed it.
+                    //
+                    // The instruction address is not lost -- it is the program
+                    // counter, readable from the register set at this same stop.
+                    address: Address(info.ExceptionRecord.ExceptionInformation[1] as u64),
                     is_write: info.ExceptionRecord.ExceptionInformation[0] == 1,
                 },
                 other => StopReason::Exception {
