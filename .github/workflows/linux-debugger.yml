@@ -92,8 +92,17 @@ jobs:
           #        - an unwound frame reports a pc in no loaded module.
           #      Neither reproduces on x86, and no machine here can run ARM
           #      Linux, so this job is the only place they are visible.
+          # STATO AL 563: entrambi i «reali» sono chiusi (559 il PAC
+          # nell'unwinder, 560 il test che passava per tempismo) e tutti gli
+          # attesi sono stati resi consapevoli dell'architettura — 558 i nomi
+          # dei registri, 562 il byte di trappola derivato, 563 i registri di
+          # debug. Questa riga DOVREBBE ora essere verde.
+          #
+          # Il flag resta finché il prossimo run non lo dimostra. Toglierlo
+          # adesso renderebbe la CI rossa per una mia previsione invece che per
+          # un difetto, e il punto di questa riga è misurare, non prevedere.
           - os: ubuntu-24.04-arm
-            name: Linux aarch64 (11 expected, 2 unexplained)
+            name: Linux aarch64 (attesa verde — flag da togliere se lo e)
             expected_to_fail: true
 
     steps:

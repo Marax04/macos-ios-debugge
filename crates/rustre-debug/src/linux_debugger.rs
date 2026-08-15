@@ -4058,6 +4058,71 @@ mod live_tests {
         crate::instr_step::pc_key(crate::instr_step::native_arch())
     }
 
+    /// Plant a software breakpoint, or assert the documented refusal.
+    ///
+    /// Returns `false` when this architecture refuses them, so the caller can
+    /// stop instead of asserting behaviour that cannot happen here.
+    ///
+    /// This is NOT a skip. The refusal IS the contract on AArch64
+    /// (`X86_TRAP_BYTE_IS_VALID_HERE`), and it is ASSERTED: a test that merely
+    /// returned early would stay green on a backend that had quietly started
+    /// accepting a request it cannot serve. Measured on ubuntu-24.04-arm,
+    /// 2026-08-15, where six live tests failed with
+    /// `Unsupported("software breakpoints ... x86 int3 ...")` — the backend
+    /// answering correctly to a test that assumed x86.
+    async fn plant_software_bp(dbg: &LinuxDebugger, at: Address, what: &str) -> bool {
+        const X86: bool = cfg!(any(target_arch = "x86_64", target_arch = "x86"));
+        match dbg.set_breakpoint(at, BreakpointKind::Software).await {
+            Ok(()) => {
+                assert!(
+                    X86,
+                    "{what}: a software breakpoint was ACCEPTED on an architecture whose \
+                     implant is refused — the refusal was lifted without these tests being \
+                     updated"
+                );
+                true
+            }
+            Err(DebugError::Unsupported(msg)) if !X86 => {
+                assert!(
+                    msg.contains("int3") || msg.contains("aligned"),
+                    "{what}: refused, but not for either documented reason: {msg}"
+                );
+                false
+            }
+            Err(e) => panic!("{what}: {e}"),
+        }
+    }
+
+    /// Probe the x86 debug-register file, or assert the documented refusal.
+    ///
+    /// Returns `false` when this architecture has no `DR0`-`DR7`, so a test
+    /// about them can stop instead of asserting behaviour that cannot exist.
+    ///
+    /// Like `plant_software_bp`, this ASSERTS rather than skips: AArch64 has
+    /// hardware breakpoints, but behind `NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH` —
+    /// a different register file reached a different way, which iteration 552
+    /// made return `Unsupported` rather than a plausible zero. A test that
+    /// merely returned early would stay green if that refusal were replaced by
+    /// a fabricated answer, which is the failure mode it exists to prevent.
+    async fn debug_registers_available(dbg: &LinuxDebugger, tid: ThreadId) -> bool {
+        const X86: bool = cfg!(any(target_arch = "x86_64", target_arch = "x86"));
+        match dbg.get_register(tid, "dr0").await {
+            Ok(_) => {
+                assert!(X86, "dr0 was READ on an architecture that has no debug registers");
+                true
+            }
+            Err(e) if !X86 => {
+                let msg = format!("{e}");
+                assert!(
+                    msg.contains("dr0") || msg.contains("AArch64"),
+                    "dr0 was refused, but not for the documented reason: {msg}"
+                );
+                false
+            }
+            Err(e) => panic!("dr0 must be readable on x86: {e}"),
+        }
+    }
+
     fn sh_launch_options(args: &[&str]) -> LaunchOptions {
         LaunchOptions {
             executable: "/bin/sh".to_string(),
@@ -4614,10 +4679,19 @@ int main(void) {
             let tid = ThreadId(pid.0);
             let regs = dbg.get_registers(tid).await.expect("get_registers");
             let addr = Address(regs.pc);
-            dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("set_breakpoint");
+            if !plant_software_bp(&dbg, addr, "detach fixture").await {
+                let _ = dbg.kill().await;
+                return;
+            }
+            // The trap bytes are DERIVED, like `set_breakpoint` derives them
+            // since iteration 548. Reading one byte and comparing it to a
+            // hand-written `0xCC` asserts the x86 int3 against a four-byte
+            // `BRK` on AArch64 — the test layer never followed the fix the
+            // production code got.
+            let want = crate::host_trap_bytes();
             assert_eq!(
-                dbg.read_memory_raw(addr, 1).await.expect("read_memory")[0], 0xCC,
-                "the 0xCC must really be planted for this test to mean anything"
+                dbg.read_memory_raw(addr, want.len()).await.expect("read_memory"), want,
+                "the trap must really be planted for this test to mean anything"
             );
             pid
             // dropped here, still attached, with a live breakpoint
@@ -4848,14 +4922,32 @@ int main(void) {
         let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
         let addr = Address(regs.pc);
 
-        let true_original = dbg.read_memory(addr, 1).await.expect("read_memory should succeed")[0];
+        // As many bytes as the trap will overwrite — see iteration 548.
+        let trap_len = crate::host_trap_bytes().len();
+        let true_original = dbg
+            .read_memory(addr, trap_len)
+            .await
+            .expect("read_memory should succeed");
 
-        dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("first set_breakpoint should succeed");
-        dbg.set_breakpoint(addr, BreakpointKind::Software).await.expect("second set_breakpoint (already enabled) should succeed");
+        if !plant_software_bp(&dbg, addr, "first set_breakpoint").await {
+            let _ = dbg.kill().await;
+            return;
+        }
+        assert!(
+            plant_software_bp(&dbg, addr, "second set_breakpoint (already enabled)").await,
+            "the first plant succeeded, so the second must too"
+        );
 
         dbg.remove_breakpoint(addr).await.expect("remove_breakpoint should succeed");
-        let restored = dbg.read_memory(addr, 1).await.expect("read_memory should succeed")[0];
-        assert_eq!(restored, true_original, "remove_breakpoint restored {restored:#x}, but the true original byte was {true_original:#x} — the second set_breakpoint call corrupted the tracked original");
+        // As many bytes as the trap overwrote — the restore is only correct if
+        // ALL of them came back. Comparing one byte would pass on AArch64 while
+        // three bytes of `BRK` remained, which is the exact defect iteration
+        // 548 fixed in the production path.
+        let restored = dbg.read_memory(addr, trap_len).await.expect("read_memory should succeed");
+        assert_eq!(
+            restored, true_original,
+            "remove_breakpoint restored {restored:02x?}, but the true original bytes were              {true_original:02x?} — the second set_breakpoint call corrupted the tracked original"
+        );
 
         eprintln!("[test] single_step ok; killing");
         let _ = dbg.kill().await;
@@ -4988,6 +5080,10 @@ int main(void) {
         dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await.expect("launch should succeed");
         let tid = dbg.target_pid().map(|p| ThreadId(p.0)).expect("expected a live pid");
 
+        if !debug_registers_available(&dbg, tid).await {
+            let _ = dbg.kill().await;
+            return;
+        }
         let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
         let watch_addr = regs.pc; // any stable, non-zero address the process actually has mapped
 
@@ -5024,6 +5120,10 @@ int main(void) {
         dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await.expect("launch should succeed");
         let tid = dbg.target_pid().map(|p| ThreadId(p.0)).expect("expected a live pid");
 
+        if !debug_registers_available(&dbg, tid).await {
+            let _ = dbg.kill().await;
+            return;
+        }
         let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
         let addr0 = regs.pc;
         let addr1 = regs.sp;
@@ -5144,11 +5244,17 @@ int main(void) {
         let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
         let addr = Address(regs.pc);
 
-        let original = dbg.read_memory(addr, 1).await.expect("read_memory should succeed").to_vec();
-
-        dbg.set_breakpoint(addr, BreakpointKind::Software)
+        let trap_len = crate::host_trap_bytes().len();
+        let original = dbg
+            .read_memory(addr, trap_len)
             .await
-            .expect("set_breakpoint should succeed against a live process");
+            .expect("read_memory should succeed")
+            .to_vec();
+
+        if !plant_software_bp(&dbg, addr, "software breakpoint implant").await {
+            let _ = dbg.kill().await;
+            return;
+        }
         // The implant is what this line is about, and `read_memory` now
         // masks it — the raw view is the one that can see it.
         let patched = dbg.read_memory_raw(addr, 1).await.expect("read_memory should succeed");
@@ -5693,9 +5799,10 @@ int main(void) {
         let tid = ThreadId(pid.0);
 
         let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
-        dbg.set_breakpoint(Address(regs.pc), BreakpointKind::Software)
-            .await
-            .expect("set_breakpoint should succeed");
+        if !plant_software_bp(&dbg, Address(regs.pc), "breakpoint at the live pc").await {
+            let _ = dbg.kill().await;
+            return;
+        }
 
         dbg.detach().await.expect("detach should succeed");
 

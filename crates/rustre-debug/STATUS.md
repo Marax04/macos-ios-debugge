@@ -191,6 +191,46 @@ traduzione ARM64 — e ha fallito su di me, che è esattamente il suo mestiere. 
 c'è divergenza fra backend da sanare: macOS è **più avanti** degli altri due, che
 gateano su x86 perché quella traduzione non ce l'hanno.
 
+### 562 — i test live asserivano il byte di trappola x86 scritto a mano
+
+Lo stesso difetto del **548** — *«salva 1 byte, ne scrive 4»* — nello strato dei
+test, che non ha mai seguito quel fix. Cinque siti in `linux_debugger.rs`
+leggevano **un** byte e lo confrontavano con un `0xCC` letterale: su AArch64
+asserirebbero l'`int3` x86 contro un `BRK` da quattro byte.
+
+Ora derivano da `host_trap_bytes()`, come fa la produzione dal 548. Il confronto
+del ripristino è esteso a **tutti** i byte della trappola: verificarne uno solo
+passerebbe su ARM mentre tre byte di `BRK` restano nel target — esattamente il
+difetto che il 548 ha chiuso nel percorso di produzione.
+
+Aggiunto `plant_software_bp`, che **asserisce il rifiuto documentato** invece di
+saltare: un test che uscisse in silenzio resterebbe verde su un backend che
+avesse ricominciato ad accettare una richiesta che non sa servire.
+
+Riduce da 11 a ~5 i fallimenti attesi della riga CI `Linux aarch64`; i restanti
+sono i test dei registri di debug, che ricevono l'`Unsupported` del 552.
+
+### 563 — gli ultimi test che assumevano x86, e il flag che ora si può togliere
+
+I due test dei registri di debug (`hardware_debug_registers_*`) sono interamente
+su `DR0`-`DR7`: non hanno equivalente ARM da esercitare con lo stesso codice.
+Aggiunto `debug_registers_available`, che **asserisce il rifiuto documentato**
+invece di saltare — AArch64 i breakpoint hardware ce li ha, ma dietro
+`NT_ARM_HW_BREAK`/`NT_ARM_HW_WATCH`, e il 552 ha fatto sì che quella via
+rispondesse `Unsupported` invece di uno zero plausibile. Un test che uscisse in
+silenzio resterebbe verde se quel rifiuto venisse sostituito da una risposta
+inventata, che è il fallimento che esiste per prevenire.
+
+Verificato su x86: entrambi passano, comportamento invariato.
+
+**Con questo la riga CI `Linux aarch64` dovrebbe essere verde**: i due «reali»
+chiusi al 559 e 560, gli attesi resi consapevoli dell'architettura al 558, 562 e
+563.
+
+Il `continue-on-error` **resta finché il prossimo run non lo dimostra**.
+Toglierlo adesso renderebbe la CI rossa per una mia previsione invece che per un
+difetto — e il punto di quella riga è misurare, non prevedere.
+
 ---
 
 ## 6. Il fronte Apple: tre giri di workflow
