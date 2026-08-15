@@ -2676,6 +2676,16 @@ const _: () = assert!(std::mem::size_of::<UserHwdebugState>() == 264);
 #[cfg(target_arch = "aarch64")]
 const NT_ARM_HW_WATCH: libc::c_int = 0x403;
 
+/// `NT_ARM_HW_BREAK` — the EXECUTION breakpoint file, `DBGBVR`/`DBGBCR`.
+///
+/// A separate regset with the same `user_hwdebug_state` layout. x86 shares four
+/// slots between breakpoints and watchpoints; AArch64 keeps two INDEPENDENT
+/// files, so slot `n` is programmed into exactly one of them according to
+/// `DR7`s `rw` bits and cleared in the other. Without that, one `dr` slot would
+/// mean two different armed things at once, and disarming it would find one.
+#[cfg(target_arch = "aarch64")]
+const NT_ARM_HW_BREAK: libc::c_int = 0x402;
+
 /// How many AArch64 watchpoint pairs are presented as `dr` slots.
 ///
 /// AArch64 offers up to sixteen; the shared engine speaks x86's four. Exposing
@@ -2685,13 +2695,16 @@ const NT_ARM_HW_WATCH: libc::c_int = 0x403;
 const TRANSLATED_SLOTS: u8 = 4;
 
 #[cfg(target_arch = "aarch64")]
-fn read_arm_hw_watch(pid: libc::pid_t) -> Result<UserHwdebugState, DebugError> {
+fn read_arm_hw_regset(
+    pid: libc::pid_t,
+    regset: libc::c_int,
+) -> Result<UserHwdebugState, DebugError> {
     let mut state = UserHwdebugState::default();
     // SAFETY: `state` is a valid, fully-initialised repr(C) struct whose size
     // is checked at compile time; the kernel writes at most `iov_len` bytes
     // into it and reports how many through the same `iovec`.
     // INVARIANT: pid must refer to a currently-stopped ptrace tracee.
-    debug_assert!(pid > 0, "read_arm_hw_watch: pid must be positive, got {pid}");
+    debug_assert!(pid > 0, "read_arm_hw_regset: pid must be positive, got {pid}");
     let ok = unsafe {
         let mut iov = libc::iovec {
             iov_base: std::ptr::addr_of_mut!(state).cast::<libc::c_void>(),
@@ -2700,13 +2713,13 @@ fn read_arm_hw_watch(pid: libc::pid_t) -> Result<UserHwdebugState, DebugError> {
         libc::ptrace(
             libc::PTRACE_GETREGSET,
             pid,
-            NT_ARM_HW_WATCH as *mut libc::c_void,
+            regset as *mut libc::c_void,
             std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
         )
     };
     if ok < 0 {
         return Err(DebugError::RegisterError(format!(
-            "reading the AArch64 watchpoint registers (NT_ARM_HW_WATCH) failed: {}",
+            "reading the AArch64 debug registers (regset {regset:#x}) failed: {}",
             std::io::Error::last_os_error()
         )));
     }
@@ -2714,11 +2727,15 @@ fn read_arm_hw_watch(pid: libc::pid_t) -> Result<UserHwdebugState, DebugError> {
 }
 
 #[cfg(target_arch = "aarch64")]
-fn write_arm_hw_watch(pid: libc::pid_t, state: &UserHwdebugState) -> Result<(), DebugError> {
+fn write_arm_hw_regset(
+    pid: libc::pid_t,
+    regset: libc::c_int,
+    state: &UserHwdebugState,
+) -> Result<(), DebugError> {
     // SAFETY: as `read_arm_hw_watch`, except the kernel only READS the struct
     // here; the cast away from const is confined to this call because the
     // `iovec` interface is shared with the write-through GET side.
-    debug_assert!(pid > 0, "write_arm_hw_watch: pid must be positive, got {pid}");
+    debug_assert!(pid > 0, "write_arm_hw_regset: pid must be positive, got {pid}");
     let ok = unsafe {
         let mut iov = libc::iovec {
             iov_base: std::ptr::addr_of!(*state).cast::<libc::c_void>().cast_mut(),
@@ -2727,13 +2744,13 @@ fn write_arm_hw_watch(pid: libc::pid_t, state: &UserHwdebugState) -> Result<(), 
         libc::ptrace(
             libc::PTRACE_SETREGSET,
             pid,
-            NT_ARM_HW_WATCH as *mut libc::c_void,
+            regset as *mut libc::c_void,
             std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
         )
     };
     if ok < 0 {
         return Err(DebugError::RegisterError(format!(
-            "writing the AArch64 watchpoint registers (NT_ARM_HW_WATCH) failed: {}",
+            "writing the AArch64 debug registers (regset {regset:#x}) failed: {}",
             std::io::Error::last_os_error()
         )));
     }
@@ -2753,13 +2770,33 @@ fn write_arm_hw_watch(pid: libc::pid_t, state: &UserHwdebugState) -> Result<(), 
 /// `dr` vocabulary is reported as an EMPTY slot rather than a wrong one.
 #[cfg(target_arch = "aarch64")]
 fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
-    let Ok(state) = read_arm_hw_watch(pid) else { return };
+    let Ok(watch) = read_arm_hw_regset(pid, NT_ARM_HW_WATCH) else { return };
+    // The breakpoint file is read separately and may legitimately be absent: a
+    // kernel that refuses NT_ARM_HW_BREAK still has usable watchpoints, and
+    // failing both because one is missing would throw away working
+    // functionality to report a gap.
+    let brk = read_arm_hw_regset(pid, NT_ARM_HW_BREAK).ok();
     let mut dr7 = 0u64;
     for slot in 0..TRANSLATED_SLOTS {
         let i = slot as usize;
-        let wvr = state.dbg_regs[i].addr;
-        let wcr = u64::from(state.dbg_regs[i].ctrl);
-        match crate::dr_slot_from_arm64_watchpoint(wvr, wcr, slot) {
+        // Watchpoint file first, then the breakpoint file. A slot can only be
+        // armed in one of them, and that is an INVARIANT established by
+        // `write_debug_registers`, not a coincidence relied on here.
+        let found = crate::dr_slot_from_arm64_watchpoint(
+            watch.dbg_regs[i].addr,
+            u64::from(watch.dbg_regs[i].ctrl),
+            slot,
+        )
+        .or_else(|| {
+            brk.as_ref().and_then(|b| {
+                crate::dr_slot_from_arm64_breakpoint(
+                    b.dbg_regs[i].addr,
+                    u64::from(b.dbg_regs[i].ctrl),
+                    slot,
+                )
+            })
+        });
+        match found {
             Some((addr, bits)) => {
                 regs.set(&format!("dr{slot}"), addr);
                 dr7 |= bits;
@@ -2784,26 +2821,50 @@ fn write_debug_registers(pid: libc::pid_t, regs: &RegisterSet) -> Result<(), Deb
         // or clear something nobody asked about.
         return Ok(());
     };
-    let mut state = read_arm_hw_watch(pid)?;
+    let mut watch = read_arm_hw_regset(pid, NT_ARM_HW_WATCH)?;
+    let mut brk = read_arm_hw_regset(pid, NT_ARM_HW_BREAK).ok();
     for slot in 0..TRANSLATED_SLOTS {
         let i = slot as usize;
         let addr = regs.get(&format!("dr{slot}")).unwrap_or(0);
+        // Exactly ONE of the two files owns this slot, decided by `DR7`s `rw`
+        // bits, and the other is CLEARED. Programming both would arm a single
+        // `dr` slot as two different things, and a later disarm would find one
+        // of them and report success.
         match crate::arm64_watchpoint_from_dr_slot(addr, dr7, slot) {
             Some((wvr, wcr)) => {
-                state.dbg_regs[i].addr = wvr;
-                state.dbg_regs[i].ctrl = u32::try_from(wcr & 0xFFFF_FFFF).unwrap_or(0);
+                watch.dbg_regs[i].addr = wvr;
+                watch.dbg_regs[i].ctrl = u32::try_from(wcr & 0xFFFF_FFFF).unwrap_or(0);
             }
             None => {
-                // Disabled in `DR7`, or a request AArch64 cannot express.
-                // Clearing is right for the first and safe for the second:
-                // leaving a stale pair armed is the leak `detach` exists to
-                // prevent.
-                state.dbg_regs[i].addr = 0;
-                state.dbg_regs[i].ctrl = 0;
+                // Disabled in `DR7`, or an EXECUTION slot, which the watchpoint
+                // file cannot express. Clearing is right for the first and
+                // required for the second: leaving a stale pair armed is the
+                // leak `detach` exists to prevent.
+                watch.dbg_regs[i].addr = 0;
+                watch.dbg_regs[i].ctrl = 0;
+            }
+        }
+        if let Some(b) = brk.as_mut() {
+            match crate::arm64_breakpoint_from_dr_slot(addr, dr7, slot) {
+                Some((bvr, bcr)) => {
+                    b.dbg_regs[i].addr = bvr;
+                    b.dbg_regs[i].ctrl = u32::try_from(bcr & 0xFFFF_FFFF).unwrap_or(0);
+                }
+                None => {
+                    b.dbg_regs[i].addr = 0;
+                    b.dbg_regs[i].ctrl = 0;
+                }
             }
         }
     }
-    write_arm_hw_watch(pid, &state)
+    write_arm_hw_regset(pid, NT_ARM_HW_WATCH, &watch)?;
+    // Propagated, not discarded: a hardware breakpoint the caller asked for and
+    // that was not programmed must not be reported as set. A kernel with no
+    // NT_ARM_HW_BREAK at all was already handled by leaving `brk` at `None`.
+    if let Some(b) = brk.as_ref() {
+        write_arm_hw_regset(pid, NT_ARM_HW_BREAK, b)?;
+    }
+    Ok(())
 }
 
 /// The backing-file path of a `/proc/<pid>/maps` line, if it has one.

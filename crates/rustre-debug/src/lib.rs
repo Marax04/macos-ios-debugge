@@ -734,6 +734,57 @@ pub(crate) const fn arm64_watchpoint_wvr(addr: u64) -> u64 {
     addr & !7
 }
 
+/// Program an AArch64 EXECUTION breakpoint pair from a `dr` slot.
+///
+/// The twin of [`arm64_watchpoint_from_dr_slot`], for the case that one
+/// deliberately refuses: `rw == 0b00` in `DR7` is an execution breakpoint on
+/// x86, and AArch64 puts those in `DBGBVR`/`DBGBCR` — a different register
+/// file, reached through a different regset (`NT_ARM_HW_BREAK`).
+///
+/// Returns `None` when the slot is disabled in `DR7`, when it is a DATA slot
+/// (which belongs to the watchpoint pair, not here), or when the address is not
+/// 4-byte aligned. That last one is a refusal and not a rounding: `DBGBVR`'s
+/// low two bits are RES0, so quietly aligning it down would arm a breakpoint on
+/// a different instruction than the caller named.
+pub(crate) fn arm64_breakpoint_from_dr_slot(addr: u64, dr7: u64, slot: u8) -> Option<(u64, u64)> {
+    if dr7 & (1u64 << (2 * u32::from(slot))) == 0 {
+        return None;
+    }
+    let shift = 16 + 4 * u32::from(slot);
+    if (dr7 >> shift) & 0b11 != 0b00 {
+        // A data slot. The watchpoint pair expresses it; this one must not,
+        // or the same slot would be armed twice in two register files.
+        return None;
+    }
+    if addr & 0b11 != 0 {
+        return None;
+    }
+    use crate::ios::arm64::hw::bits as f;
+    // ENABLE, PRIV = EL0 (unprivileged), BAS = all four bytes of the
+    // instruction, BT = 0 (unlinked address match). Byte-address-select is
+    // `0b1111` for a breakpoint, four bits wide, where a watchpoint's is eight.
+    let bcr = u64::from(f::ENABLE | (0b10 << f::PRIV_SHIFT) | (0b1111 << f::BAS_SHIFT));
+    Some((addr, bcr))
+}
+
+/// The inverse: describe an armed `DBGBVR`/`DBGBCR` pair in the `dr`
+/// vocabulary.
+///
+/// Same contract as [`dr_slot_from_arm64_watchpoint`] and for the same reason:
+/// the engine reads `DR7` to find a free slot and to recognise what it already
+/// armed, so a read-back that does not match the write would make `set` keep
+/// allocating slots and `disarm` never recognise its own work.
+pub(crate) fn dr_slot_from_arm64_breakpoint(bvr: u64, bcr: u64, slot: u8) -> Option<(u64, u64)> {
+    if bcr & 1 == 0 {
+        return None;
+    }
+    // Enabled, `rw = 0b00` (execute), `len = 0b00` (one byte). x86 requires an
+    // execution breakpoint to be encoded with exactly that length; anything
+    // else is an invalid DR7 the engine would not have written.
+    let enable = 1u64 << (2 * u32::from(slot));
+    Some((bvr, enable))
+}
+
 /// First disabled slot among the 16 `DBGWCR` values, or `None` if all are armed.
 pub(crate) fn arm64_free_watchpoint_slot(wcr: &[u64]) -> Option<usize> {
     wcr.iter().position(|w| w & 1 == 0)
@@ -6692,6 +6743,61 @@ mod tests_expanded {
     /// it finds a free slot, and the address register is how it recognises the
     /// watchpoint it must disarm. A lossy round trip would make `set` allocate a
     /// fresh slot on every call and `disarm` never find its own work.
+    /// The same round-trip property for EXECUTION slots, added with the
+    /// `NT_ARM_HW_BREAK` transport in iteration 571.
+    ///
+    /// The property is the one that makes the whole `dr` abstraction safe on
+    /// AArch64, and it is not "the bits look right": what the engine reads back
+    /// must EQUAL what it wrote. `DR7` is how it finds a free slot and the
+    /// address register is how it recognises the breakpoint it must disarm, so
+    /// a lossy trip would make `set` allocate a fresh slot every call and
+    /// `disarm` never find its own work.
+    ///
+    /// This runs on any host: it is arithmetic over two integers, no ARM
+    /// hardware involved. That matters, because everything else about the 571
+    /// transport can only be answered by `ubuntu-24.04-arm`.
+    #[test]
+    fn the_dr_to_arm64_breakpoint_translation_round_trips() {
+        use crate::{arm64_breakpoint_from_dr_slot as to_arm, dr_slot_from_arm64_breakpoint as to_dr};
+
+        for (slot, addr) in [(0u8, 0x1000u64), (1, 0x2004), (3, 0x400_0000)] {
+            // Execution breakpoint: `RW` = 00, `LEN` = 00, slot enabled. The
+            // Intel manual requires exactly that pairing, so this is also the
+            // only DR7 the engine is entitled to have written.
+            let dr7 = 1u64 << (2 * u32::from(slot));
+            let (bvr, bcr) = to_arm(addr, dr7, slot).expect("an enabled execution slot must translate");
+            assert_eq!(bvr, addr, "DBGBVR holds the instruction address unmodified");
+            assert_eq!(bcr & 1, 1, "the pair must come out ENABLED");
+            assert_eq!((bcr >> 5) & 0xF, 0b1111, "BAS must select all four bytes of the instruction");
+
+            let (back_addr, back_dr7) = to_dr(bvr, bcr, slot).expect("an armed pair must translate back");
+            assert_eq!(back_addr, addr, "the address must survive the round trip");
+            assert_eq!(back_dr7, dr7, "DR7 must come back identical, bit for bit");
+        }
+
+        // A disabled slot is not a breakpoint in either direction.
+        assert!(to_arm(0x1000, 0, 0).is_none());
+        assert!(to_dr(0x1000, 0, 0).is_none());
+
+        // A DATA slot belongs to the watchpoint file. Translating it here as
+        // well would arm one `dr` slot in BOTH register files, and a later
+        // disarm would clear one of them and report success.
+        let data_dr7 = 1u64 | (0b01 << 16);
+        assert!(
+            to_arm(0x1000, data_dr7, 0).is_none(),
+            "RW=01 is a data watchpoint and must not also become an execution breakpoint"
+        );
+
+        // AArch64 instructions are 4-byte aligned and `DBGBVR`s low two bits
+        // are RES0. Refusing beats aligning down: quietly arming a breakpoint
+        // one or two bytes earlier would stop on a different instruction than
+        // the caller named, which is worse than an error.
+        assert!(
+            to_arm(0x1002, 1, 0).is_none(),
+            "an unaligned execution breakpoint must be refused, not rounded"
+        );
+    }
+
     #[test]
     fn the_dr_to_arm64_watchpoint_translation_round_trips() {
         use crate::{arm64_watchpoint_from_dr_slot as to_arm, dr_slot_from_arm64_watchpoint as to_dr};
@@ -10132,6 +10238,56 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// An execution slot must reach `DBGBVR`/`DBGBCR`, not be silently zeroed.
+    ///
+    /// Iteration 570 brought hardware DATA watchpoints to ARM64 Linux. It did
+    /// not bring hardware BREAKpoints, and the difference is invisible from the
+    /// outside: a slot with `rw == 0b00` in `DR7` — an execution breakpoint on
+    /// x86 — falls into the `None` arm of `arm64_watchpoint_from_dr_slot`, and
+    /// `write_debug_registers` clears the pair. The caller asked for a hardware
+    /// breakpoint, got `Ok`, and nothing is armed.
+    ///
+    /// That `None` is CORRECT and was correct before 570: AArch64 really does
+    /// put execution breakpoints in a different register file, and arming a
+    /// data watchpoint instead would fire on the wrong events. What changed is
+    /// what it MEANS. Before 570 it said "not supported on this platform";
+    /// after 570 it says "supported, behind the other regset" — the same
+    /// unchanged line, given a new meaning by the code around it.
+    ///
+    /// Everything needed is already here: `ios::arm64::hw_breakpoints` holds
+    /// the `DBGBCR` field layout, and iteration 570 wrote the `NT_ARM_HW_WATCH`
+    /// transport whose only differences here are the regset id and the struct
+    /// field.
+    ///
+    /// Mapping note, because it is the one real design decision: x86 has four
+    /// slots shared between breakpoints and watchpoints, AArch64 has two
+    /// SEPARATE files each with its own slots. Slot `n` is therefore programmed
+    /// into exactly one of them according to `rw`, and the other is cleared —
+    /// so a slot never means two things at once.
+    ///
+    /// As with 570, this guard is a source-level statement. `ubuntu-24.04-arm`
+    /// is what proves the registers are programmed correctly.
+    #[test]
+    fn an_execution_slot_reaches_the_arm64_breakpoint_registers() {
+        assert!(
+            crate::arm64_breakpoint_from_dr_slot(0x1000, 0b1, 0).is_some(),
+            "an execution slot (rw == 0b00) has no translation to DBGBVR/DBGBCR, so a hardware \
+             breakpoint request on AArch64 is accepted and then silently zeroed"
+        );
+        let src = include_str!("linux_debugger.rs");
+        // NOT `contains("NT_ARM_HW_BREAK")`. That was the first spelling of
+        // this assertion and it was VACUOUS: the string already appeared in
+        // the text of a refusal MESSAGE, so the guard passed while no transport
+        // existed. Anchoring on the translation call instead ties the assertion
+        // to something that cannot be satisfied by prose.
+        assert!(
+            src.contains("dr_slot_from_arm64_breakpoint")
+                && src.contains("arm64_breakpoint_from_dr_slot"),
+            "linux: the dr <-> DBGBVR/DBGBCR translation is not reached from this backend, so a \
+             hardware breakpoint on AArch64 is accepted and then silently zeroed"
         );
     }
 

@@ -163,6 +163,49 @@ live macOS al 569, questo al 570. Nessuno aggirato, tutti aggiornati
 deliberatamente. È la prova che scrivere guard che ASSERISCONO invece di
 SALTARE ripaga: fanno da controllo su chi scrive, non solo sul codice.
 
+## 4-ter. Iterazione 571 — breakpoint hardware su ARM64 Linux
+
+Il gemello del 570, e la chiusura della lacuna che quel round aveva lasciato
+aperta: gli slot di ESECUZIONE (`rw == 0b00` in `DR7`) cadevano nel ramo `None`
+e venivano azzerati, quindi un breakpoint hardware su ARM veniva **accettato e
+poi silenziosamente non armato**.
+
+Aggiunti: la coppia `arm64_breakpoint_from_dr_slot` /
+`dr_slot_from_arm64_breakpoint` in `lib.rs`, accanto a quella dei watchpoint, e
+il regset `NT_ARM_HW_BREAK` accanto a `NT_ARM_HW_WATCH` — le due funzioni di
+trasporto del 570 sono state generalizzate sull'id del regset invece di essere
+duplicate.
+
+**L'unica vera decisione di progetto** è la mappatura degli slot: x86 condivide
+quattro slot fra breakpoint e watchpoint, AArch64 tiene **due file separati**,
+ciascuno con i propri. Uno slot `dr` va quindi in **esattamente uno** dei due
+secondo i bit `rw`, e nell'altro viene azzerato. Programmarli entrambi
+significherebbe uno slot armato come due cose diverse, e un disarmo successivo
+ne troverebbe una e riporterebbe successo.
+
+L'assenza del regset dei breakpoint è tollerata in LETTURA (un kernel senza
+quel file ha comunque watchpoint usabili: fallire entrambi butterebbe via
+funzionalità che funziona per segnalare una lacuna) e PROPAGATA in scrittura
+(un breakpoint richiesto e non programmato non va riportato come armato).
+
+### Il mio guard era vacuo, ed è la parte istruttiva
+
+La prima stesura asseriva `src.contains("NT_ARM_HW_BREAK")` ed è passata **al
+primo colpo** — non perché il trasporto esistesse, ma perché quella stringa era
+già nel file, dentro il TESTO di un messaggio di rifiuto scritto al 552. Il
+guard era soddisfatto da della prosa.
+
+L'ho notato solo perché un test che passa senza aver mai fallito insospettisce
+(lezione 1); la causa è la lezione 7, un guard ancorato a una stringa. Riancorato
+su `dr_slot_from_arm64_breakpoint` — che un commento non può soddisfare — il
+rosso è arrivato vero. **Lezione 7, corollario: ancorare a un IDENTIFICATORE che
+deve esistere per compilare, mai a una stringa che può comparire in un
+commento.**
+
+Stessa disciplina di verifica del 570, con lo stesso limite: type-check reale su
+`aarch64-unknown-linux-gnu` (e verificato che fosse una compilazione vera, non
+una cache), comportamento **non verificato** — risponde `ubuntu-24.04-arm`.
+
 ## 5. Il fronte Apple
 
 Tre giri di workflow multi-agente con verifica avversariale. Il terzo: **104
