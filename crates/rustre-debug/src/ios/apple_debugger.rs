@@ -841,19 +841,21 @@ impl Drop for AppleDebugger {
     ///
     /// Same contract the other three backends grew in iters 249-250: a
     /// debugger that disappears must leave the target running, not carrying
-    /// the instructions this backend patched into it. Only the manual
-    /// fallback breakpoints are ours to undo — the `Z0` ones belong to the
-    /// stub, which drops them when the connection does.
+    /// the instructions this backend patched into it. This is the same wire
+    /// situation `detach` faces minus the `D`, so it runs the same sweep:
+    /// self-patched words written back, stub-managed `Z0` given its `z0`, and
+    /// hardware resources their `z1`/`z2`/`z3`/`z4`. Restoring only the
+    /// self-patched words — on the justification `disarm_all_breakpoints`
+    /// records as refuted — left every `Z`-managed trap installed with a
+    /// refcount of 1, and drop is the one teardown path that can run without
+    /// the caller's knowledge.
     ///
     /// After an explicit `detach()`/`kill()` there is no session left and this
     /// is a no-op, which is correct.
     fn drop(&mut self) {
         let mut guard = self.session.lock();
         let Some(session) = guard.as_mut() else { return };
-        for record in self.breakpoints.read().values() {
-            let Some(saved) = record.saved.as_ref() else { continue };
-            let _ = session.client.write_memory(record.bp.address.as_u64(), saved);
-        }
+        self.disarm_all_breakpoints(session);
     }
 }
 
@@ -1431,6 +1433,86 @@ impl AppleDebugger {
                 arch.name()
             )))
         }
+    }
+
+    /// Total mapped footprint of the Mach-O image loaded at `base`, summed
+    /// from the image's OWN `LC_SEGMENT_64` load commands, read out of the
+    /// target.
+    ///
+    /// This is the measurement `macos_debugger` makes
+    /// ([`crate::macho_image_size::parse_mach_o_segments_total_size`]); the
+    /// alternative — the VM region containing the header — answers with
+    /// `__TEXT` alone, because `mach_vm_region` coalesces only same-protection
+    /// ranges and `__DATA` (rw-) and `__LINKEDIT` (r--) are separate regions.
+    /// A `__TEXT`-sized window excludes the `LC_SYMTAB` payload that lives in
+    /// `__LINKEDIT`, and every consumer of `ModuleInfo::size` reads exactly
+    /// `[base, base + size)`.
+    ///
+    /// The load-command span is read in two steps because its length lives in
+    /// the header: 32 bytes first, then `sizeofcmds` more once the magic has
+    /// been checked. Checking the magic BEFORE trusting `sizeofcmds` matters —
+    /// otherwise four bytes of a non-Mach-O image can ask the target for a
+    /// four-gigabyte read.
+    fn image_size_from_segments(&self, base: u64) -> Result<u64, DebugError> {
+        use crate::macho_image_size::{
+            MACH_HEADER_64_SIZE, MH_MAGIC_64, parse_mach_o_segments_total_size,
+        };
+        /// A real image's load commands are kilobytes; this bound exists only
+        /// so a corrupt `sizeofcmds` cannot turn into an enormous read.
+        const MAX_LOAD_COMMANDS: usize = 1 << 20;
+
+        let header = self.read_exactly(base, MACH_HEADER_64_SIZE)?;
+        let magic = u32::from_le_bytes(header[0..4].try_into().unwrap_or_default());
+        if magic != MH_MAGIC_64 {
+            return Err(DebugError::Os(format!(
+                "image at {base:#x} is not a 64-bit Mach-O: magic {magic:#010x}"
+            )));
+        }
+        let sizeofcmds = u32::from_le_bytes(header[20..24].try_into().unwrap_or_default()) as usize;
+        if sizeofcmds > MAX_LOAD_COMMANDS {
+            return Err(DebugError::Os(format!(
+                "image at {base:#x} claims {sizeofcmds} bytes of load commands; refusing to read it"
+            )));
+        }
+        let buf = self.read_exactly(base, MACH_HEADER_64_SIZE + sizeofcmds)?;
+        parse_mach_o_segments_total_size(&buf)
+            .map_err(|e| DebugError::Os(format!("image at {base:#x}: {e}")))
+    }
+
+    /// Size of the mapped VM region that CONTAINS `base`.
+    ///
+    /// Kept as the explicit fallback of [`Self::image_size_from_segments`] for
+    /// an image whose header is not a Mach-O at all (a raw code image), and
+    /// returning an error rather than `0` when the region is unmapped so the
+    /// caller can tell "not measured" from "measured as empty".
+    fn header_region_size(&self, base: u64) -> Result<u64, DebugError> {
+        self.with_session(|s| {
+            let text = s.text(MemoryRegionInfo::command(base).as_bytes(), "qMemoryRegionInfo")?;
+            let info = MemoryRegionInfo::parse(&text)
+                .map_err(|e| DebugError::Os(format!("qMemoryRegionInfo at {base:#x}: {e}")))?;
+            if info.is_mapped() {
+                Ok(info.size)
+            } else {
+                Err(DebugError::Os(format!("no mapped region at {base:#x}")))
+            }
+        })
+    }
+
+    /// Read exactly `len` bytes at `addr`, treating a short reply as a failure
+    /// rather than as a shorter buffer.
+    fn read_exactly(&self, addr: u64, len: usize) -> Result<Vec<u8>, DebugError> {
+        let bytes = self.with_session(|s| {
+            s.client
+                .read_memory(addr, len)
+                .map_err(|e| DebugError::MemoryError(addr, format!("read {len} bytes: {e}")))
+        })?;
+        if bytes.len() < len {
+            return Err(DebugError::MemoryError(
+                addr,
+                format!("short read: asked for {len} bytes, got {}", bytes.len()),
+            ));
+        }
+        Ok(bytes)
     }
 
     /// Walk the address space with `qMemoryRegionInfo`.
@@ -2653,6 +2735,14 @@ impl Debugger for AppleDebugger {
             return Err(DebugError::BreakpointExists(a));
         }
         if kind == BreakpointKind::Software || kind == BreakpointKind::Hardware {
+            // Every code-trap path below is A64 arithmetic: the 4-byte
+            // alignment rule, `arm64::brk_bytes(0)` in the self-patch fallback,
+            // the `A64_BP_LEN` masking in `read_memory`, and the re-patch in
+            // `enable_one`. On an x86-64 target those bytes are not a trap, so
+            // an unchecked patch reports success while silently rewriting the
+            // target's code. Refuse explicitly, as every other arch-sensitive
+            // method here does.
+            self.require_arm64("code breakpoints")?;
             arm64::check_instruction_alignment(a).map_err(|e| {
                 DebugError::Unsupported(format!("breakpoint at {a:#x} is not A64-aligned: {e}"))
             })?;
@@ -2858,14 +2948,39 @@ impl Debugger for AppleDebugger {
                 .get("mach_header")
                 .and_then(|h| h.get("filetype"))
                 .and_then(serde_json::Value::as_u64);
-            // Size is not in the reply. Rather than reporting 0 as if it were
-            // measured, take it from the region the header sits in.
-            let size = self
-                .with_session(|s| {
-                    let text = s.text(MemoryRegionInfo::command(base).as_bytes(), "qMemoryRegionInfo")?;
-                    Ok(MemoryRegionInfo::parse(&text).ok().filter(MemoryRegionInfo::is_mapped).map_or(0, |r| r.size))
-                })
-                .unwrap_or(0);
+            // Size is not in the reply, so it is MEASURED — from the image's
+            // own segments first, exactly as `macos_debugger` does. The VM
+            // region containing the header is the fallback, not the answer:
+            // it is `__TEXT` alone (same-protection coalescing), so it cuts
+            // `__DATA` and `__LINKEDIT` — and with them the `LC_SYMTAB`
+            // payload — out of the `[base, base + size)` window every consumer
+            // of this field reads. When neither measurement is possible the 0
+            // still goes out, because inventing a size would be worse, but it
+            // is logged with the reason instead of being swallowed twice.
+            let size = match self.image_size_from_segments(base) {
+                Ok(total) => total,
+                Err(segments) => match self.header_region_size(base) {
+                    Ok(region) => {
+                        tracing::debug!(
+                            module = %path,
+                            base = format_args!("{base:#x}"),
+                            error = %segments,
+                            "image segments unreadable; falling back to the region holding the header"
+                        );
+                        region
+                    }
+                    Err(region) => {
+                        tracing::warn!(
+                            module = %path,
+                            base = format_args!("{base:#x}"),
+                            segments = %segments,
+                            region = %region,
+                            "could not compute Mach-O image size; reporting size 0"
+                        );
+                        0
+                    }
+                },
+            };
             out.push(ModuleInfo {
                 name: path.rsplit('/').next().unwrap_or(&path).to_string(),
                 path,
@@ -3108,6 +3223,49 @@ mod tests {
     /// breakpoints that exist nowhere and debug-register slots held by a dead
     /// process. `StopReply::is_exit` in the protocol layer already said `X` was
     /// an ending; the classification above it disagreed.
+    /// A code breakpoint on a non-ARM64 target must be refused, not patched.
+    ///
+    /// The self-patch fallback writes a fixed four-byte A64 `BRK #0`
+    /// (`00 00 20 D4`). On an x86-64 target — a state this backend models
+    /// (`TargetArch::X86_64`) and advertises (`supported_architectures`) —
+    /// those bytes are not a trap at all, so the caller was told `Ok(())`, the
+    /// breakpoint was listed as enabled and never fired, and four bytes of the
+    /// target's code had been replaced by a different instruction.
+    #[tokio::test]
+    async fn a_code_breakpoint_on_a_non_arm64_target_is_refused_not_patched() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.refuse_software_breakpoints(); // force the self-patching fallback
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let before = dbg
+            .read_memory_raw(Address::new(TEXT_BASE), 4)
+            .await
+            .expect("read original word");
+        if let Some(s) = dbg.session.lock().as_mut() {
+            s.arch = TargetArch::X86_64;
+        }
+
+        let err = dbg
+            .set_breakpoint(Address::new(TEXT_BASE), BreakpointKind::Software)
+            .await
+            .expect_err("an A64 BRK must not be planted in an x86-64 instruction stream");
+        assert!(
+            matches!(err, DebugError::Unsupported(_)),
+            "wrong failure mode: {err}"
+        );
+        assert!(
+            dbg.breakpoints().await.expect("breakpoints").is_empty(),
+            "a refused breakpoint must not be tracked"
+        );
+        assert_eq!(
+            dbg.read_memory_raw(Address::new(TEXT_BASE), 4)
+                .await
+                .expect("re-read"),
+            before,
+            "the target's code was rewritten with a foreign instruction"
+        );
+    }
+
     #[tokio::test]
     async fn a_target_killed_by_a_signal_is_reported_as_gone() {
         let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
@@ -3414,17 +3572,24 @@ mod tests {
             .expect("a 4-byte watchpoint");
 
         // Close the connection so the stub thread hands the server back.
+        // Dropping an attached debugger disarms what it armed, so the width is
+        // read off the wire rather than off the stub's surviving table — the
+        // `Z` packet is what the target was actually told.
         drop(dbg);
         let srv = server.join().expect("stub thread");
-        let planted = srv.breakpoints();
-        let wp = planted
+        let insert = srv
+            .packet_log
             .iter()
-            .find(|b| b.addr == TEXT_BASE + 0x20)
+            .find(|p| p.starts_with(&format!("Z2,{:x},", TEXT_BASE + 0x20)))
             .expect("the watchpoint reached the stub");
+        let len: u64 = insert
+            .rsplit(',')
+            .next()
+            .and_then(|s| u64::from_str_radix(s, 16).ok())
+            .expect("a `Z` length field");
         assert_eq!(
-            wp.len, 4,
-            "the stub was asked to watch {} bytes for a 4-byte field",
-            wp.len
+            len, 4,
+            "the stub was asked to watch {len} bytes for a 4-byte field: {insert}"
         );
     }
 
@@ -3563,6 +3728,48 @@ mod tests {
             (inserts, removes),
             (2, 2),
             "arming and disarming must be symmetric on the wire. Packets: {:?}",
+            srv.packet_log
+        );
+    }
+
+    /// Dropping an attached debugger must disarm what it armed, in the TARGET.
+    ///
+    /// Same wire situation as `detach`, minus the `D`: a panic, an early
+    /// return, or a session object simply dropped instead of detached. `Drop`
+    /// wrote back only the self-patched `saved` bytes and skipped the
+    /// stub-managed `Z0` and the hardware `Z2`, on the justification
+    /// `disarm_all_breakpoints` documents as refuted — against this stub the
+    /// traps survive with a refcount of 1 and nothing ever sends the `z`.
+    #[tokio::test]
+    async fn drop_disarms_stub_managed_and_hardware_breakpoints_in_the_target() {
+        use crate::ios::mock_debugserver::BpKind;
+
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.set_hw_slots(4, 4);
+        let (addr, server) = srv.spawn_tcp().expect("spawn tcp mock");
+
+        {
+            let dbg = AppleDebugger::tcp(addr, Some(std::time::Duration::from_secs(30)));
+            dbg.attach(ProcessId(4242)).await.expect("attach");
+            dbg.set_breakpoint(Address::new(TEXT_BASE), BreakpointKind::Software)
+                .await
+                .expect("software breakpoint");
+            dbg.set_breakpoint(Address::new(TEXT_BASE + 0x40), BreakpointKind::DataWrite)
+                .await
+                .expect("data watchpoint");
+        } // dropped while still attached
+
+        let srv = server.join().expect("mock server thread");
+        assert_eq!(
+            srv.breakpoint_refs(TEXT_BASE, BpKind::Software),
+            0,
+            "the stub-managed `Z0` is still armed in the target after drop. Packets: {:?}",
+            srv.packet_log
+        );
+        assert_eq!(
+            srv.breakpoint_refs(TEXT_BASE + 0x40, BpKind::WriteWatch),
+            0,
+            "the hardware write watchpoint is still armed in the target after drop.              Packets: {:?}",
             srv.packet_log
         );
     }
@@ -4448,6 +4655,43 @@ mod tests {
         assert!(maps.iter().any(|m| m.writable && m.name.as_deref() == Some("Stack")));
     }
 
+    /// A module's `size` must be summed from the image's OWN segments, not
+    /// taken from the VM region the Mach-O header happens to sit in.
+    ///
+    /// `qMemoryRegionInfo` at the header answers with the region containing
+    /// it — `__TEXT`, `r-x` — because `mach_vm_region` coalesces only
+    /// same-protection ranges: `__DATA` (rw-) and `__LINKEDIT` (r--) are
+    /// separate regions and are excluded. The field is load-bearing, not
+    /// decorative: `symbolication::symbolicator_from_modules` and
+    /// `unwind_images` both read exactly `[base, base + size)` and skip the
+    /// image when that buffer does not parse, so with a `__TEXT`-sized window
+    /// the `LC_SYMTAB` payload in `__LINKEDIT` is never read and every frame
+    /// in the image stays nameless — the outcome the auto-load path exists to
+    /// prevent. `macos_debugger` computes the same field from the image, via
+    /// `parse_mach_o_segments_total_size`.
+    ///
+    /// The fixture disagrees on purpose: `symbol_image` declares `__TEXT` with
+    /// `vmsize = 0x1000` while the region it is mapped in is
+    /// [`SYM_IMAGE_REGION_SIZE`] (`0x2000`) — so a size taken from the region
+    /// and a size summed from the segments cannot be confused here.
+    #[tokio::test]
+    async fn module_size_is_summed_from_the_mach_o_segments_not_the_header_region() {
+        let dbg = debugger_with_symbols();
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let m = dbg
+            .modules()
+            .await
+            .expect("modules")
+            .into_iter()
+            .find(|m| m.base.as_u64() == SYM_IMAGE_BASE)
+            .expect("the probe image is in the module list");
+        assert_eq!(
+            m.size, 0x1000,
+            "size is not the image's own LC_SEGMENT_64 footprint; the VM region holding the \
+             header is {SYM_IMAGE_REGION_SIZE:#x} bytes"
+        );
+    }
+
     #[tokio::test]
     async fn threads_are_enumerated() {
         let dbg = debugger();
@@ -4760,12 +5004,33 @@ mod tests {
         b
     }
 
+    /// Size of the VM region the probe image is mapped in.
+    ///
+    /// Deliberately NOT equal to the image's own segment footprint (`__TEXT`,
+    /// `vmsize = 0x1000`): a region is an allocation, an image is a set of
+    /// segments, and the two agree only by accident. Real targets show the
+    /// disagreement in the other direction too — `mach_vm_region` coalesces
+    /// only same-protection ranges, so the region at a Mach-O header is
+    /// `__TEXT` alone and stops short of `__DATA`/`__LINKEDIT`. That direction
+    /// cannot be modelled here: [`MockDebugserver`]'s memory refuses a read
+    /// that is not backed by ONE region, so an image split across regions
+    /// would make every consumer's `[base, base + size)` read fail for a
+    /// reason that has nothing to do with the size. What this fixture pins is
+    /// the same claim either way — the reported size is the image's own
+    /// arithmetic, never the region's.
+    const SYM_IMAGE_REGION_SIZE: usize = 0x2000;
+
     /// The usual mock, plus a second image that actually carries a symbol
     /// table, mapped at a base whose slide is non-zero.
     fn debugger_with_symbols() -> AppleDebugger {
         use crate::ios::mock_debugserver::{LoadedImage, MemoryRegion, Perms};
         let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
-        let image = symbol_image();
+        let mut image = symbol_image();
+        // The image's declared `__TEXT` footprint must be backed by mapped
+        // memory, as it is in a live process: `load_symbols_from_target` and
+        // `unwind_images` read exactly `[base, base + size)`.
+        assert!(image.len() <= SYM_IMAGE_REGION_SIZE);
+        image.resize(SYM_IMAGE_REGION_SIZE, 0);
         assert!(srv.memory.map(MemoryRegion::new(
             SYM_IMAGE_BASE,
             image,

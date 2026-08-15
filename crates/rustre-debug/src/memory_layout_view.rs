@@ -1039,6 +1039,37 @@ impl FramePointerUnwinder {
             if return_addr == 0 || saved_fp == 0 {
                 break;
             }
+            // Pointer authentication: the saved `LR` may not be an address.
+            //
+            // On AArch64 built with branch protection — the norm on Apple
+            // arm64e, increasingly common on Linux — the return address at
+            // `[fp+8]` carries a PAC in its high bits. Used raw it resolves to
+            // no module, so every frame past the first lost its name. Measured
+            // on ubuntu-24.04-arm, 2026-08-15:
+            //
+            //   unwound frame pc 0x77aba8e6a55c0c should fall inside a loaded module
+            //
+            // — 55 bits wide, above the 48-bit user range: a signed pointer,
+            // not an address.
+            //
+            // Stripped ONLY when the raw value resolves to nothing and the
+            // stripped one resolves to something. That condition is doing real
+            // work, not hedging: `strip_pac` encodes Apple'''s 47-bit user
+            // split and Linux AArch64 is commonly 48, so on a platform where
+            // the mask is wrong the stripped value resolves to nothing either
+            // and this changes nothing. It cannot turn a working backtrace into
+            // a broken one, which is the property that lets it ship without an
+            // ARM machine to try it on.
+            let return_addr = if regions.find(return_addr).is_none() {
+                let stripped = crate::ios::arm64::strip_pac(return_addr);
+                if stripped != return_addr && regions.find(stripped).is_some() {
+                    stripped
+                } else {
+                    return_addr
+                }
+            } else {
+                return_addr
+            };
             // A return address must point at CODE.
             //
             // `saved_fp`/`return_addr` come out of the debuggee's stack, so a
@@ -1568,6 +1599,65 @@ mod tests {
     /// then landed on the wrong slot and reported `None` for an address that is
     /// mapped — a wrong answer about the target's memory, with nothing to
     /// suggest the answer was unreliable.
+    /// A return address that carries pointer-authentication bits must still
+    /// resolve to the function it points at.
+    ///
+    /// Measured on ubuntu-24.04-arm, 2026-08-15 — the first time this crate's
+    /// live tests ran on ARM hardware:
+    ///
+    ///   unwound frame pc 0x77aba8e6a55c0c should fall inside a loaded module
+    ///
+    /// That value is 55 bits wide, above the 48-bit user range: it is a signed
+    /// pointer, not an address. On AArch64 the saved `LR` at `[fp+8]` carries a
+    /// PAC in its high bits whenever the target was built with branch
+    /// protection — the norm on Apple arm64e and increasingly on Linux — and
+    /// this unwinder read it raw. Every frame past the first therefore landed
+    /// in no module, on both ARM platforms, which is the whole value of a
+    /// backtrace gone.
+    ///
+    /// The fix strips ONLY when the raw address resolves to nothing and the
+    /// stripped one resolves to something. That conditional shape is not
+    /// timidity: `strip_pac` is documented as Apple's 47-bit user split, and
+    /// Linux AArch64 is commonly 48 — so a mask that is wrong for the platform
+    /// produces an address that resolves to nothing either, and nothing
+    /// changes. It cannot make a working backtrace worse.
+    #[test]
+    fn a_pac_signed_return_address_still_finds_its_module() {
+        let mut view = MappedRegionView::default();
+        // The only mapped code lives at the STRIPPED address.
+        view.regions.push(make_region(0x2BA8_E6A5_0000, 0x2BA8_E6A6_0000, true, false, true));
+
+        let signed_ret: u64 = 0x0077_ABA8_E6A5_5C0C;
+        let stripped = crate::ios::arm64::strip_pac(signed_ret);
+        assert!(
+            view.find(stripped).is_some() && view.find(signed_ret).is_none(),
+            "fixture is wrong: the point is that only the stripped address resolves"
+        );
+
+        // One frame record at `fp`: [saved_fp, return_addr].
+        let fp = 0x7000_u64;
+        let unwinder = FramePointerUnwinder::new(4);
+        let frames = unwinder.unwind(0x2BA8_E6A5_1000, 0x6F00, Some(fp), &view, |addr, len| {
+            // `saved_fp` must be NON-zero: the walk breaks on a zero saved fp
+            // BEFORE the return address is used, so a zero here would stop the
+            // frame under test from ever being built. The walk ends instead at
+            // the next record, which this reader refuses to supply.
+            let word = match addr {
+                a if a == fp => 0x8000_u64,
+                a if a == fp + 8 => signed_ret, // saved lr, PAC-signed
+                _ => return None,
+            };
+            Some(word.to_le_bytes()[..len.min(8)].to_vec())
+        });
+
+        assert!(
+            frames.iter().any(|f| f.pc == stripped),
+            "the unwound frame kept the pointer-authentication bits, so its pc is in no module: \
+             {:?}",
+            frames.iter().map(|f| f.pc).collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn find_is_correct_even_when_regions_were_pushed_out_of_order() {
         let mut view = MappedRegionView::default();

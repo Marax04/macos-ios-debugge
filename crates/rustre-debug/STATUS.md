@@ -145,6 +145,83 @@ crate su sé stesso.
   il summary faceva `!= "failure"` — quindi **un job annullato riportava
   successo**. Ora `= "success"`. Il summary macOS aveva già la forma giusta.
 
+### 557 — `pause()` su Windows riportava un breakpoint che non esiste
+
+`classify_event` trasforma ogni `EXCEPTION_BREAKPOINT` in
+`StopReason::Breakpoint { bp: new_software(addr) }` — inevitabile lì, è una
+funzione libera sull'evento grezzo. Ma nulla a valle correggeva, quindi tre cose
+diverse arrivavano al chiamante come «hai colpito un breakpoint software»:
+`pause()` (che funziona iniettandone uno con `DebugBreakProcess`), il breakpoint
+iniziale che Windows consegna sempre, e un `__debugbreak()` nel codice del
+target. Con `enabled: true`, a un indirizzo mai impostato dall'utente.
+
+**Il primo tentativo era troppo largo, e la misura l'ha fermato.** Riclassificare
+in `StopReason::Exception` ha fatto cadere **sei test live** più
+`initial_stop_tid` dell'MCP: aspettano un `Breakpoint` per sapere che il processo
+è fermo e pronto, e hanno ragione — Windows *consegna* letteralmente un
+breakpoint lì.
+
+La variante non era la bugia: **il record lo era**. Fix a raggio zero in
+`enrich_event_breakpoint`, che è il primo punto ad avere la tabella dei piantati:
+`label` che dice cosa è davvero, ed `enabled: false` perché un breakpoint mai
+piantato non può essere armato. `original_byte` e `hit_count` erano già veritieri
+(`None` e `0`); ora la ragione è detta invece che lasciata da dedurre da due
+campi assenti.
+
+MCP: nessuna modifica: `"stop_reason": format!("{:?}", ev.reason)` include già il
+`Debug` di `Breakpoint`, quindi l'etichetta raggiunge l'utente. Verificato, non
+assunto.
+
+### 558 — i test live chiedevano `rax` a un backend che risponde `x0`
+
+Il port del 552 ha portato aarch64 da **43 errori di build** a **1893 test passati,
+13 falliti**, tutti live: gli unit test passano tutti, il port è strutturalmente
+corretto. Il triage dei 13 dice che la maggioranza non sono difetti del backend:
+
+- **6** rifiuti attesi — `Unsupported("software breakpoints … x86 int3 …")` e
+  `RegisterError("unknown register dr0")`: le difese di 548 e 552 che funzionano;
+- **5** test scritti per x86 che chiedono `rax`/`rip` a un register set che
+  pubblica `x0`-`x30`/`sp`/`pc`/`pstate`, e piantano breakpoint a indirizzi non
+  allineati a 4 byte;
+- **2** reali e inspiegati.
+
+Corretti i nomi dei registri (il PC via `instr_step::pc_key`, non una quinta
+grafia). **Non** corretti i 16 punti di chiamata a `set_breakpoint`: silenziare
+11 fallimenti attesi non insegna nulla. Reso invece **preciso il permesso** sulla
+riga aarch64 — il job si chiama ora `11 expected, 2 unexplained`, così il
+prossimo delta è leggibile.
+
+### 559 — l'unwinder condiviso usava un puntatore firmato come indirizzo
+
+Uno dei due «reali» del 558. La CI ARM:
+
+```
+unwound frame pc 0x77aba8e6a55c0c should fall inside a loaded module
+```
+
+55 bit, sopra l'intervallo utente a 48: **un puntatore firmato, non un
+indirizzo**. Su AArch64 con branch protection — norma su arm64e Apple, sempre più
+comune su Linux — il `LR` salvato a `[fp+8]` porta un PAC nei bit alti, e
+`memory_layout_view` (l'unwinder **condiviso dai tre backend**) lo usava grezzo.
+Ogni frame dopo il primo cadeva in nessun modulo, su entrambe le piattaforme ARM.
+
+`strip_pac` esisteva già in `ios/arm64.rs` — aritmetica pura che gira su ogni
+host — e l'unico consumatore era il runtime ObjC.
+
+Il fix strippa **solo** quando il grezzo non risolve e lo strippato sì. Non è
+prudenza: `strip_pac` codifica lo split utente a 47 bit di **Apple** e Linux
+AArch64 è comunemente a 48, quindi dove la maschera è sbagliata lo strippato non
+risolve e nulla cambia. È la proprietà che permette di spedirlo **senza una
+macchina ARM su cui provarlo**.
+
+⚠️ **Nota di metodo**: i primi due rossi di questo round erano il guard del
+*fixture*, non l'asserzione. Il verde è arrivato senza che il difetto fosse mai
+stato visto. Ho revertito il fix per misurare il rosso vero
+(`[48004424077312, 33684264141020172]` — il puntatore firmato conservato tale e
+quale) e poi ripristinato. **Un test che passa senza aver mai fallito non
+dimostra nulla**, ed è la contestazione che un revisore avversariale aveva già
+mosso al primo giro Apple.
+
 ---
 
 ## 5. Difetti aperti — dichiarati, non nascosti

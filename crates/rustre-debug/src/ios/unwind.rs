@@ -301,7 +301,11 @@ pub const DARWIN_ARM64_VA_BITS: u32 = 47;
 #[must_use]
 pub const fn strip_pac(addr: u64) -> u64 {
     let mask = (1u64 << DARWIN_ARM64_VA_BITS) - 1;
-    if addr & (1u64 << 63) != 0 { addr | !mask } else { addr & mask }
+    // Discriminate on the top bit of the ADDRESS (bit VA_BITS-1), not on bit
+    // 63: on arm64e bit 63 belongs to the PAC payload of a signed user
+    // pointer, so branching on it sign-extends roughly half of all signed
+    // user return addresses into bogus kernel addresses.
+    if addr & (1u64 << (DARWIN_ARM64_VA_BITS - 1)) != 0 { addr | !mask } else { addr & mask }
 }
 
 // ---------------------------------------------------------------------------
@@ -800,9 +804,15 @@ impl EhFrameSection {
             if id != 0 {
                 // FDE. `id` is the distance backwards from this field to the
                 // owning CIE's length field.
-                let cie_len_pos = body_start.checked_sub(id as usize)?;
-                if let Some(m) = self.parse_fde_at(pc, cie_len_pos, body_start + 4, body_end) {
-                    return Some(m);
+                // A back-pointer past the start of the section is corruption
+                // in THIS record only: `length` is already validated and
+                // `body_end` is known, so the walk stays synchronised and the
+                // record is skipped rather than ending the search — the same
+                // degrade `parse_fde_at` returning `None` already gets.
+                if let Some(cie_len_pos) = body_start.checked_sub(id as usize) {
+                    if let Some(m) = self.parse_fde_at(pc, cie_len_pos, body_start + 4, body_end) {
+                        return Some(m);
+                    }
                 }
             }
             pos = body_end;
@@ -1067,9 +1077,6 @@ impl AppleUnwinder {
         while frames.len() < self.max_depth {
             let index = frames.len();
             let Ok((next, provenance)) = self.step(current, index, mem) else { break };
-            if self.validate(current, next).is_err() {
-                break;
-            }
             frames.push(UnwindFrame { index, regs: next, provenance });
             current = next;
         }
@@ -1110,19 +1117,58 @@ impl AppleUnwinder {
         mem: &dyn MemoryReader,
     ) -> Result<(Arm64UnwindRegs, FrameProvenance), UnwindError> {
         let mut failures = Vec::new();
+        // A frameless function never wrote a frame record, so its `x29` still
+        // holds the CALLER's — non-null, aligned and above sp, i.e. every
+        // check in `unwind_frame_pointer` passes and the walk silently steps
+        // through the caller's record, dropping the immediate caller from the
+        // backtrace. Only the table knows the function is frameless, so ask
+        // it before letting the register answer.
+        let frameless = self.compact_says_frameless(regs.pc, depth);
         for strategy in self.order.sequence() {
             let attempt = match strategy {
+                FrameProvenance::FramePointerChain if frameless => Err(
+                    UnwindError::ImplausibleFrame(
+                        "function is frameless: x29 holds the caller's frame pointer",
+                    ),
+                ),
                 FrameProvenance::FramePointerChain => unwind_frame_pointer(regs, mem),
                 FrameProvenance::CompactUnwind => self.unwind_compact(regs, depth, mem),
                 FrameProvenance::EhFrame => self.unwind_eh_frame(regs, depth, mem),
                 FrameProvenance::Initial => continue,
             };
             match attempt {
-                Ok(next) => return Ok((next, strategy)),
+                // A strategy's own checks cannot see the whole-walk
+                // invariants (non-null pc, growing sp, pc inside a known
+                // image), so `validate` runs INSIDE the cascade: a rejected
+                // candidate means "ask the next strategy", not "the stack
+                // ends here".
+                Ok(next) => match self.validate(regs, next) {
+                    Ok(()) => return Ok((next, strategy)),
+                    Err(e) => failures.push((strategy, e)),
+                },
                 Err(e) => failures.push((strategy, e)),
             }
         }
         Err(UnwindError::AllStrategiesFailed(failures))
+    }
+
+    /// Does the compact table describe the function containing `pc` as
+    /// `Frameless`?
+    ///
+    /// Only a table can answer this: no property of the *register* `x29`
+    /// distinguishes a leaf's inherited value from a real frame record, which
+    /// is why the fp strategy's validations cannot catch this case on their
+    /// own. Any uncertainty (no image, no table, undecodable entry) answers
+    /// `false`, leaving the existing cascade exactly as it was.
+    fn compact_says_frameless(&self, pc: u64, depth: usize) -> bool {
+        let lookup_pc = if depth > 1 { pc.wrapping_sub(1) } else { pc };
+        let Some(image) = self.image_for(lookup_pc) else { return false };
+        let Some(compact) = image.compact.as_ref() else { return false };
+        let Ok(fn_offset) = u32::try_from(lookup_pc.wrapping_sub(image.image_base)) else {
+            return false;
+        };
+        let Ok(entry) = compact.lookup(fn_offset) else { return false };
+        matches!(Arm64Encoding::decode(entry.encoding), Ok(Arm64Encoding::Frameless { .. }))
     }
 
     fn unwind_compact(
@@ -1154,7 +1200,13 @@ impl AppleUnwinder {
         let entry = compact.lookup(fn_offset)?;
 
         match Arm64Encoding::decode(entry.encoding)? {
-            Arm64Encoding::Frame { .. } => frame_record_step(regs, mem),
+            // The FRAME encoding asserts a frame record EXISTS at x29; it does
+            // not assert that x29 is well-formed. The same well-formedness
+            // tests the fp strategy applies must therefore run here too, or the
+            // default cascade launders a rejected x29 into a frame stamped
+            // `CompactUnwind` — table-derived provenance for a read off a
+            // demonstrably invalid pointer.
+            Arm64Encoding::Frame { .. } => validated_frame_record_step(regs, mem),
             Arm64Encoding::Frameless { stack_size } => {
                 // `lr` is only the return address until the callee spills it.
                 // Beyond frame 0 we do not know it, and guessing is exactly
@@ -1246,6 +1298,19 @@ impl AppleUnwinder {
 /// "succeeds" on a mapped stack, so without these tests the fp strategy
 /// would never degrade and the other two would be dead code.
 fn unwind_frame_pointer(
+    regs: Arm64UnwindRegs,
+    mem: &dyn MemoryReader,
+) -> Result<Arm64UnwindRegs, UnwindError> {
+    validated_frame_record_step(regs, mem)
+}
+
+/// [`frame_record_step`] preceded by the well-formedness tests on `x29`.
+///
+/// Shared by the fp-chain strategy and the compact `FRAME` encoding: both read
+/// the same two words through the same register, so both owe the same checks.
+/// Splitting them once let the compact path read through an x29 the fp path had
+/// just rejected and report the result as table-derived.
+fn validated_frame_record_step(
     regs: Arm64UnwindRegs,
     mem: &dyn MemoryReader,
 ) -> Result<Arm64UnwindRegs, UnwindError> {
@@ -1597,6 +1662,19 @@ mod tests {
         let signed = real | 0x00A5_0000_0000_0000;
         assert_eq!(strip_pac(signed), real);
         assert_eq!(strip_pac(real), real, "identity on an unsigned pointer");
+    }
+
+    #[test]
+    fn strip_pac_strips_user_pointer_whose_pac_has_bit63_set() {
+        // A signed arm64e USER return address: bits 63..47 are PAC payload and
+        // the top PAC bit happens to be 1 (half of all signings). The address
+        // itself is 0x1_0000_1000, well below the 2^47 user boundary.
+        let real = 0x0000_0001_0000_1000u64;
+        let signed = 0x951D_8001_0000_1000u64;
+        assert_eq!(signed & ((1u64 << DARWIN_ARM64_VA_BITS) - 1), real);
+        assert_eq!(strip_pac(signed), real);
+        // Must agree with the sibling implementation in arm64.rs.
+        assert_eq!(strip_pac(signed), crate::ios::arm64::strip_pac(signed));
     }
 
     #[test]
@@ -2188,6 +2266,50 @@ mod tests {
         );
     }
 
+    /// The compact `FRAME` encoding must not read a frame record through an
+    /// x29 the fp strategy just rejected.
+    ///
+    /// AAPCS64 mandates 16-byte stack alignment, so an unaligned x29 cannot be
+    /// addressing a frame record. `FRAME` asserts a record exists at x29; it
+    /// does not assert x29 is well-formed. Without the same guard the fp
+    /// strategy applies, the default `FramePointerFirst` cascade turns a
+    /// rejection into a fabricated frame stamped `CompactUnwind`.
+    #[test]
+    fn compact_frame_encoding_rejects_a_malformed_frame_pointer() {
+        let page = regular_page(&[(0x1000, UNWIND_ARM64_MODE_FRAME)]);
+        let data = build_unwind_info(&[], &[(0x1000, page)], 0x2000);
+        let unw = AppleUnwinder::new().with_image(image_with_compact(&data)); // default order
+
+        // The real frame record lives at the 16-aligned STACK_BASE + 0x100.
+        let mut mem = SliceMemory::new(STACK_BASE, vec![0u8; 0x1000]);
+        mem.write_u64(STACK_BASE + 0x100, STACK_BASE + 0x200); // caller fp
+        mem.write_u64(STACK_BASE + 0x108, IMAGE_BASE + 0x1500); // caller lr (truth)
+        mem.write_u64(STACK_BASE + 0x110, IMAGE_BASE + 0x1600); // next slot
+
+        // x29 is off by 8: unaligned, so not a frame record at all.
+        let regs = Arm64UnwindRegs {
+            pc: IMAGE_BASE + 0x1010,
+            sp: STACK_BASE + 0x50,
+            fp: STACK_BASE + 0x108,
+            lr: None,
+        };
+
+        assert_eq!(
+            unwind_frame_pointer(regs, &mem).unwrap_err(),
+            UnwindError::ImplausibleFrame("frame pointer not 16-byte aligned"),
+            "precondition: the fp strategy refuses this x29",
+        );
+
+        let err = unw
+            .step(regs, 1, &mem)
+            .map(|(next, prov)| format!("{prov:?} pc={:#x} sp={:#x}", next.pc, next.sp))
+            .expect_err("no strategy may unwind through an unaligned x29");
+        assert!(
+            matches!(err, UnwindError::AllStrategiesFailed(_)),
+            "expected every strategy to fail, got {err:?}"
+        );
+    }
+
     #[test]
     fn compact_frameless_uses_lr_only_at_depth_one() {
         let enc = UNWIND_ARM64_MODE_FRAMELESS | (4 << 12); // 64-byte frame
@@ -2218,6 +2340,44 @@ mod tests {
                 && matches!(e, UnwindError::FramelessWithoutLiveLr(2))),
             "{fails:?}"
         );
+    }
+
+    /// A frameless LEAF still holds the CALLER's `x29` in x29 — non-null,
+    /// 16-byte aligned and above sp, so every validation in
+    /// `unwind_frame_pointer` passes and the default (fp-first) cascade walks
+    /// the CALLER's frame record, returning the caller's caller and dropping
+    /// the immediate caller from the backtrace. The compact table's
+    /// `Frameless` encoding — the information that says "use the live lr" —
+    /// is never consulted because the fp strategy answered first.
+    #[test]
+    fn a_frameless_leaf_must_not_be_unwound_through_the_callers_frame_record() {
+        let enc = UNWIND_ARM64_MODE_FRAMELESS | (4 << 12); // 64-byte frame
+        let page = regular_page(&[(0x1000, enc)]);
+        let data = build_unwind_info(&[], &[(0x1000, page)], 0x2000);
+        // DEFAULT order: frame pointer first.
+        let unw = AppleUnwinder::new().with_image(image_with_compact(&data));
+
+        // The caller's frame record, which the leaf's inherited x29 points at.
+        let caller_fp = STACK_BASE + 0x100;
+        let mem = build_fp_stack(&[(caller_fp, IMAGE_BASE + 0x9999)]);
+
+        let regs = Arm64UnwindRegs {
+            pc: IMAGE_BASE + 0x1004,
+            sp: STACK_BASE + 0x40,
+            fp: caller_fp,                    // inherited: the CALLER's x29
+            lr: Some(IMAGE_BASE + 0x5555),    // return address into the caller
+        };
+
+        let (next, prov) = unw.step(regs, 1, &mem).unwrap();
+        assert_eq!(
+            next.pc,
+            IMAGE_BASE + 0x5555,
+            "the immediate caller must not be skipped: got {:#x}",
+            next.pc
+        );
+        assert_eq!(prov, FrameProvenance::CompactUnwind);
+        assert_eq!(next.sp, STACK_BASE + 0x80, "sp += 4 * 16");
+        assert_eq!(next.fp, caller_fp, "a frameless function never touched x29");
     }
 
     #[test]
@@ -2259,6 +2419,28 @@ mod tests {
         // After it, sp+16.
         let r1 = eh.cfa_rule_at(EH_FN + 0x20).unwrap();
         assert_eq!(r1, dwarf_cfi::CfaRule { register: DWARF_ARM64_SP, offset: 16 });
+    }
+
+    /// A corrupt FDE whose CIE back-pointer underflows must not hide the
+    /// structurally intact records that follow it. The stream is not
+    /// desynchronised at that point (`length` was validated, `body_end` is
+    /// known), so the correct degrade is to skip the record and continue.
+    #[test]
+    fn eh_frame_skips_a_record_whose_cie_pointer_underflows() {
+        // 12 bytes of junk record, then the good section, kept at the exact
+        // vaddrs it was built for (its FDE stores a pc-relative delta).
+        const PREFIX: usize = 12;
+        let good = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
+        let mut data = Vec::new();
+        push_u32(&mut data, 8); // length: CIE_id + 4 body bytes
+        push_u32(&mut data, 0x8000_0000); // CIE_pointer larger than body_start
+        data.extend_from_slice(&[0u8; 4]);
+        assert_eq!(data.len(), PREFIX);
+        data.extend_from_slice(&good.data);
+
+        let eh = EhFrameSection::new(data, EH_VMADDR - PREFIX as u64);
+        let r = eh.cfa_rule_at(EH_FN + 0x20).expect("later FDE must remain visible");
+        assert_eq!(r, dwarf_cfi::CfaRule { register: DWARF_ARM64_SP, offset: 16 });
     }
 
     #[test]
@@ -2348,6 +2530,60 @@ mod tests {
         );
     }
 
+    /// A record whose CIE back-pointer underflows must not blind the walk to
+    /// every later, structurally intact FDE.
+    #[test]
+    fn eh_frame_bad_cie_pointer_does_not_hide_later_fdes() {
+        // --- CIE (same shape as build_eh_frame) ---
+        let mut cie_body = Vec::new();
+        cie_body.push(1u8);
+        cie_body.extend_from_slice(b"zR\0");
+        uleb(&mut cie_body, 1);
+        sleb(&mut cie_body, -8);
+        uleb(&mut cie_body, 30);
+        uleb(&mut cie_body, 1);
+        cie_body.push(dwarf_cfi::DW_EH_PE_PCREL_SDATA4);
+        cie_body.push(0x0C);
+        uleb(&mut cie_body, u64::from(DWARF_ARM64_SP));
+        uleb(&mut cie_body, 0);
+        while (cie_body.len() + 8) % 8 != 0 {
+            cie_body.push(0x00);
+        }
+        let mut out = Vec::new();
+        push_u32(&mut out, u32::try_from(4 + cie_body.len()).unwrap());
+        push_u32(&mut out, 0);
+        out.extend_from_slice(&cie_body);
+
+        // --- a corrupt FDE: CIE_pointer far larger than its own offset ---
+        push_u32(&mut out, 4);
+        push_u32(&mut out, 0x7FFF_FFFF);
+
+        // --- a perfectly good FDE covering EH_FN, built for its offset ---
+        let fde_len_pos = out.len();
+        let fde_id = u32::try_from(fde_len_pos + 4).unwrap();
+        let init_loc_vaddr = EH_VMADDR + (fde_len_pos as u64) + 8;
+        let pcrel = i32::try_from(EH_FN.wrapping_sub(init_loc_vaddr).cast_signed()).unwrap();
+        let mut fde_body = Vec::new();
+        fde_body.extend_from_slice(&pcrel.to_le_bytes());
+        fde_body.extend_from_slice(&0x100u32.to_le_bytes());
+        fde_body.push(0x00);
+        fde_body.push(0x40 | 4);
+        fde_body.push(0x0E);
+        uleb(&mut fde_body, 16);
+        push_u32(&mut out, u32::try_from(4 + fde_body.len()).unwrap());
+        push_u32(&mut out, fde_id);
+        out.extend_from_slice(&fde_body);
+        push_u32(&mut out, 0);
+
+        let eh = EhFrameSection::new(out, EH_VMADDR);
+        let r = eh.cfa_rule_at(EH_FN + 0x20);
+        assert_eq!(
+            r.unwrap(),
+            dwarf_cfi::CfaRule { register: DWARF_ARM64_SP, offset: 16 },
+            "the intact FDE after a corrupt record must still be found"
+        );
+    }
+
     #[test]
     fn eh_frame_corrupt_bytes_never_panic() {
         let good = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
@@ -2433,6 +2669,43 @@ mod tests {
         let unw = AppleUnwinder::new().with_max_depth(5);
         let regs = Arm64UnwindRegs::new(0x1_0000_0000, STACK_BASE, STACK_BASE + 0x20, 0);
         assert_eq!(unw.backtrace(regs, &mem).len(), 5);
+    }
+
+    /// A candidate frame rejected by `validate()` must not end the walk while
+    /// untried strategies remain: the fp chain can succeed on garbage while
+    /// `__eh_frame` holds the true caller.
+    #[test]
+    fn validate_rejection_falls_through_to_the_remaining_strategies() {
+        let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
+        let image = ImageUnwindTables {
+            image_base: IMAGE_BASE,
+            image_end: IMAGE_BASE + 0x10_0000,
+            compact: None,
+            eh_frame: Some(eh),
+        };
+        // Default order: frame pointer first.
+        let unw = AppleUnwinder::new().with_image(image);
+
+        let mut mem = SliceMemory::new(STACK_BASE, vec![0u8; 0x1000]);
+        // Bogus but plausible x29: aligned, above sp, and [fp+8] holds a word
+        // that is not a return address in any image.
+        let bogus_fp = STACK_BASE + 0x200;
+        mem.write_u64(bogus_fp, STACK_BASE + 0x400);
+        mem.write_u64(bogus_fp + 8, 0xBADD_0000_0000);
+        // The truth, per the FDE: CFA = sp + 16, [CFA-8] = lr, [CFA-16] = fp.
+        let cfa = STACK_BASE + 0x110;
+        mem.write_u64(cfa - 8, IMAGE_BASE + 0x4444);
+        mem.write_u64(cfa - 16, STACK_BASE + 0x300);
+
+        let regs = Arm64UnwindRegs::new(EH_FN + 0x20, STACK_BASE + 0x100, bogus_fp, 0);
+
+        // The eh_frame strategy on its own recovers the real caller.
+        assert_eq!(unw.unwind_eh_frame(regs, 1, &mem).unwrap().pc, IMAGE_BASE + 0x4444);
+
+        let frames = unw.backtrace(regs, &mem);
+        assert_eq!(frames.len(), 2, "the eh_frame caller must still be recovered");
+        assert_eq!(frames[1].regs.pc, IMAGE_BASE + 0x4444);
+        assert_eq!(frames[1].provenance, FrameProvenance::EhFrame);
     }
 
     #[test]

@@ -187,6 +187,95 @@ impl AppleFrameResolver {
         self.mappers.get(&uuid)
     }
 
+    /// The combined name + coordinates answer for one lookup key.
+    ///
+    /// `lookup_pc` is the address the tables are *asked about*, which is not
+    /// always the address being reported — see [`Self::resolve_return_address`].
+    fn resolve_at(&self, lookup_pc: u64) -> Option<ResolvedFrameSymbol> {
+        // `bounded` is a claim about *containment*, and Mach-O supports it
+        // exactly twice: `ImageSymbols::resolve` only returns `Nlist` or
+        // `FunctionStart` when `pc` lies below the next symbol/function start
+        // *and* inside a mapped segment, so both are demonstrated containment.
+        // `ModuleOnly` is the third rung — no symbol covered the address and the
+        // "name" returned is the module's own — so it must not be reported as a
+        // containing function.
+        let resolved_addr = self.symbols.resolve(lookup_pc);
+        let bounded = resolved_addr
+            .as_ref()
+            .is_some_and(|r| !matches!(r.source, Symbolication::ModuleOnly));
+        // The symbol's own runtime address, kept so the frame can be rendered
+        // as `func+0x1c`. Only for a BOUNDED match: a module-only "name" would
+        // otherwise yield an offset measured from the image base and printed as
+        // if it were a function offset.
+        let start = bounded.then(|| resolved_addr.as_ref().map(|r| r.symbol_address)).flatten();
+        let function = resolved_addr.map(|r| r.display_name().to_string());
+        let (file, line) = self
+            .mapper_containing(lookup_pc)
+            .and_then(|m| m.runtime_addr_to_source(lookup_pc))
+            .map_or((None, None), |loc| {
+                (
+                    Some(loc.file.to_string_lossy().into_owned()),
+                    Some(loc.line),
+                )
+            });
+        let resolved = ResolvedFrameSymbol {
+            function,
+            file,
+            // A dSYM line row exists only for an address the line table
+            // actually covers, so it is independent evidence of containment.
+            bounded: bounded || line.is_some(),
+            line,
+            start,
+        };
+        (!resolved.is_empty()).then_some(resolved)
+    }
+
+    /// Symbolicate frame `frame_index` of a backtrace, whose stored pc is
+    /// `pc`.
+    ///
+    /// Only frame 0 is stopped *at* its pc. Every outer frame's pc is a
+    /// **return address**: the address of the instruction after the `bl`. When
+    /// that call is the last instruction of its function the return address is
+    /// the first byte of the NEXT function, so looking it up verbatim names a
+    /// function the thread was never inside — and, worse, reports it with
+    /// `bounded: true`, the demonstrated-containment claim this module exists
+    /// to keep honest.
+    ///
+    /// [`crate::ios::unwind::AppleUnwinder`] already applies exactly this
+    /// correction to its own table lookups (`unwind.rs`: `let lookup_pc = if
+    /// depth > 1 { regs.pc.wrapping_sub(1) } else { regs.pc }`). The
+    /// symbolicator has to agree with the unwinder about which function a pc
+    /// belongs to, or the same frame is attributed to two different functions
+    /// by two halves of the same backtrace.
+    ///
+    /// Only the LOOKUP key moves; the reported pc, and therefore the
+    /// `func+0x1c` offset derived from `start`, still refer to the exact
+    /// return address.
+    #[must_use]
+    pub fn resolve_frame_at(&self, pc: u64, frame_index: usize) -> Option<ResolvedFrameSymbol> {
+        if frame_index == 0 {
+            self.resolve_at(pc)
+        } else {
+            self.resolve_return_address(pc)
+        }
+    }
+
+    /// Symbolicate a pc that is known to be a **return address**, i.e. the
+    /// value a `bl` pushed, not an address the thread ever executed.
+    ///
+    /// The frame index is not always to hand (a caller may hold a single
+    /// return address recovered from `lr` or from a frame record), so this is
+    /// the index-free spelling of [`Self::resolve_frame_at`] with a non-zero
+    /// index.
+    #[must_use]
+    pub fn resolve_return_address(&self, pc: u64) -> Option<ResolvedFrameSymbol> {
+        // `wrapping_sub` and not a saturating/checked form on purpose: a pc of
+        // 0 is not a return address any call could have produced, and
+        // `u64::MAX` lies in no mapped image, so it resolves to nothing —
+        // which is the honest answer for a corrupt frame.
+        self.resolve_at(pc.wrapping_sub(1))
+    }
+
     /// Runtime addresses a `file:line` breakpoint should be planted at, across
     /// every attached dSYM. Each mapper already applies its own image's slide.
     #[must_use]
@@ -208,44 +297,16 @@ impl AppleFrameResolver {
 /// containing image. Either half may be absent — a stripped image yields no
 /// name, an image with no dSYM yields no coordinates — and the result is
 /// whatever was actually established, never a filled-in guess.
+///
+/// The trait carries a bare `pc` and no frame index, so this impl can only
+/// answer for the **innermost** frame, the one the thread is actually stopped
+/// at. A caller walking a whole backtrace must use
+/// [`AppleFrameResolver::resolve_frame_at`] instead, or every outer frame is
+/// symbolicated at its return address — which, for a call in tail position,
+/// names the following function.
 impl FrameSymbolResolver for AppleFrameResolver {
     fn resolve_frame(&self, pc: u64) -> Option<ResolvedFrameSymbol> {
-        // `bounded` is a claim about *containment*, and Mach-O supports it
-        // exactly twice: `ImageSymbols::resolve` only returns `Nlist` or
-        // `FunctionStart` when `pc` lies below the next symbol/function start
-        // *and* inside a mapped segment, so both are demonstrated containment.
-        // `ModuleOnly` is the third rung — no symbol covered the address and the
-        // "name" returned is the module's own — so it must not be reported as a
-        // containing function.
-        let resolved_addr = self.symbols.resolve(pc);
-        let bounded = resolved_addr
-            .as_ref()
-            .is_some_and(|r| !matches!(r.source, Symbolication::ModuleOnly));
-        // The symbol's own runtime address, kept so the frame can be rendered
-        // as `func+0x1c`. Only for a BOUNDED match: a module-only "name" would
-        // otherwise yield an offset measured from the image base and printed as
-        // if it were a function offset.
-        let start = bounded.then(|| resolved_addr.as_ref().map(|r| r.symbol_address)).flatten();
-        let function = resolved_addr.map(|r| r.display_name().to_string());
-        let (file, line) = self
-            .mapper_containing(pc)
-            .and_then(|m| m.runtime_addr_to_source(pc))
-            .map_or((None, None), |loc| {
-                (
-                    Some(loc.file.to_string_lossy().into_owned()),
-                    Some(loc.line),
-                )
-            });
-        let resolved = ResolvedFrameSymbol {
-            function,
-            file,
-            // A dSYM line row exists only for an address the line table
-            // actually covers, so it is independent evidence of containment.
-            bounded: bounded || line.is_some(),
-            line,
-            start,
-        };
-        (!resolved.is_empty()).then_some(resolved)
+        self.resolve_at(pc)
     }
 }
 
@@ -1025,6 +1086,144 @@ mod tests {
         assert_eq!(frames[0].function_name.as_deref(), Some("main"));
         assert_eq!((frames[0].source_file.as_deref(), frames[0].source_line), (None, None));
         assert!(dbg.dsym_attach_errors().is_empty());
+    }
+
+    // ── return addresses ────────────────────────────────────────────────────
+
+    /// `_callee` starts exactly where the line rows for `_caller` end, so the
+    /// return address pushed by a call in tail position is the first byte of
+    /// the next function.
+    const STATIC_CALLEE: u64 = STATIC_FN + 8;
+
+    /// Two adjacent functions in one image, with the dSYM covering only the
+    /// first: `_caller` spans `[STATIC_FN, STATIC_CALLEE)` and its last
+    /// instruction is the `bl`, so the pushed return address is exactly
+    /// `STATIC_CALLEE`.
+    fn caller_callee_resolver() -> AppleFrameResolver {
+        let macho = build_exec_macho(
+            APP_UUID,
+            STATIC_BASE,
+            0x4000,
+            &[("_caller", STATIC_FN), ("_callee", STATIC_CALLEE)],
+        );
+        let image = ImageSymbols::from_bytes("MyApp", &macho, ArchPreference::Arm64)
+            .expect("synthetic executable should parse")
+            .with_runtime_base(STATIC_BASE)
+            .expect("image has a mapped segment to anchor the slide");
+        let mut sym = Symbolicator::new();
+        sym.add_image(image);
+        let mut r = AppleFrameResolver::new(sym);
+        r.attach_dsym(&app_dsym(APP_UUID, STATIC_FN), &SourceRootMapper::new())
+            .expect("matching UUID must attach");
+        r
+    }
+
+    /// The fixture must really put the boundary where the test claims, or the
+    /// assertions below would pass for the wrong reason.
+    #[test]
+    fn caller_callee_fixture_really_is_adjacent() {
+        let r = caller_callee_resolver();
+        let last_byte_of_caller = r
+            .resolve_address(STATIC_CALLEE - 1)
+            .expect("the byte before the boundary is inside `_caller`");
+        assert_eq!(last_byte_of_caller.symbol, "_caller", "got {last_byte_of_caller:?}");
+        let boundary = r
+            .resolve_address(STATIC_CALLEE)
+            .expect("the boundary byte is the first byte of `_callee`");
+        assert_eq!(boundary.symbol, "_callee", "got {boundary:?}");
+    }
+
+    /// Beyond the innermost frame the stored pc is a RETURN address: it points
+    /// at the instruction *after* the `bl`. When the call is the last
+    /// instruction of its function that address is the first byte of the NEXT
+    /// function, and symbolicating it verbatim attributes the frame to a
+    /// function the thread was never in — while stamping it `bounded`.
+    ///
+    /// The unwinder already corrects this for its own table lookups
+    /// (`unwind.rs`: `let lookup_pc = if depth > 1 { pc.wrapping_sub(1) } else
+    /// { pc }`); the symbolicator must agree with it on the same pc.
+    #[test]
+    fn a_return_address_at_a_function_boundary_names_the_caller() {
+        let r = caller_callee_resolver();
+
+        // Frame 0 stopped AT this pc, so it really is inside `_callee`.
+        let innermost = r
+            .resolve_frame_at(STATIC_CALLEE, 0)
+            .expect("frame 0 resolves");
+        assert_eq!(
+            innermost.function.as_deref(),
+            Some("callee"),
+            "a pc the thread is stopped at is inside the function that starts there; got {innermost:?}"
+        );
+
+        // Frame 1 holds the same value as a RETURN address: the call it came
+        // back from lives in `_caller`.
+        let outer = r
+            .resolve_frame_at(STATIC_CALLEE, 1)
+            .expect("frame 1 resolves");
+        assert_eq!(
+            outer.function.as_deref(),
+            Some("caller"),
+            "a return address belongs to the function containing the call; got {outer:?}"
+        );
+        assert_eq!(
+            outer.line,
+            Some(11),
+            "the source line must be the call site in `_caller`, not `_callee`'s first row; got {outer:?}"
+        );
+        assert_eq!(
+            outer.start,
+            Some(STATIC_FN),
+            "the offset landmark must be `_caller`'s entry; got {outer:?}"
+        );
+        assert!(outer.bounded, "containment in `_caller` is demonstrated; got {outer:?}");
+    }
+
+    /// The correction must not disturb the ordinary case. A return address in
+    /// the middle of its caller is already inside the right function and the
+    /// right line row, so moving the lookup key back one byte must change
+    /// nothing at all.
+    #[test]
+    fn a_mid_function_return_address_is_unchanged_by_the_correction() {
+        let r = caller_callee_resolver();
+        // Inside `_caller`, and inside the row that covers [+4, +8) → line 11.
+        let mid = STATIC_FN + 6;
+        let stopped = r.resolve_frame_at(mid, 0).expect("frame 0 resolves");
+        let returned = r.resolve_frame_at(mid, 2).expect("frame 2 resolves");
+        assert_eq!(
+            returned, stopped,
+            "a return address that is not at a function boundary must symbolicate \
+             exactly like a stopped-at pc"
+        );
+        assert_eq!(
+            (returned.function.as_deref(), returned.line),
+            (Some("caller"), Some(11)),
+            "got {returned:?}"
+        );
+    }
+
+    /// Every non-zero index means the same thing — "this pc is a return
+    /// address" — and [`AppleFrameResolver::resolve_return_address`] is the
+    /// spelling for a caller that holds one without knowing its depth.
+    #[test]
+    fn resolve_return_address_is_the_index_free_spelling() {
+        let r = caller_callee_resolver();
+        let want = r
+            .resolve_return_address(STATIC_CALLEE)
+            .expect("a return address at the boundary resolves");
+        assert_eq!(want.function.as_deref(), Some("caller"), "got {want:?}");
+        for index in [1usize, 2, 7] {
+            assert_eq!(
+                r.resolve_frame_at(STATIC_CALLEE, index).as_ref(),
+                Some(&want),
+                "frame index {index} must agree with resolve_return_address"
+            );
+        }
+        // A corrupt/absent return address must not wrap into some image.
+        assert!(
+            r.resolve_return_address(0).is_none(),
+            "0 is not an address any `bl` could have pushed"
+        );
     }
 
     #[test]

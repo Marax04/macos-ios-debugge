@@ -66,10 +66,34 @@ jobs:
           # What it must never become is a silent skip: the summary job below
           # prints this result explicitly, so the gap is reported every run.
           #
-          # DELETE this flag the moment the port lands. If it is still here
-          # after that, the job has stopped being a measurement.
+          # DELETE this flag the moment the remaining two are understood. If it
+          # is still here after that, the job has stopped being a measurement.
+          #
+          # WHAT THE PORT ACHIEVED (36dad1b, 2026-08-15). It used to fail at
+          # `Build (release)` with 43 errors. It now fails at
+          # `Test (release, serial)` with **1893 passed, 13 failed**, and every
+          # unit test passes — the register port compiles and is structurally
+          # right. The 13 are all LIVE tests, and they are not one problem:
+          #
+          #   6  expected refusals. `set_breakpoint` answers
+          #      Unsupported("software breakpoints ... x86 int3 ..."), and
+          #      `set_register(dr0)` answers "unknown register dr0". Those are
+          #      the defences added in 548 and 552 working exactly as designed.
+          #
+          #   5  tests written for x86 asking a correct backend the wrong
+          #      question: `rax`/`rip` on a register set that publishes
+          #      x0-x30/sp/pc/pstate, and breakpoints at addresses that are not
+          #      4-byte aligned. Three of these are fixed in 558; the rest need
+          #      the software-breakpoint tests to assert the refusal per
+          #      architecture, which is mechanical and not yet done.
+          #
+          #   2  REAL and unexplained, and the reason this row still matters:
+          #        - a `pthread_create` fixture exposes ONE thread, not two;
+          #        - an unwound frame reports a pc in no loaded module.
+          #      Neither reproduces on x86, and no machine here can run ARM
+          #      Linux, so this job is the only place they are visible.
           - os: ubuntu-24.04-arm
-            name: Linux aarch64 (known gap — measuring)
+            name: Linux aarch64 (11 expected, 2 unexplained)
             expected_to_fail: true
 
     steps:

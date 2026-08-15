@@ -741,6 +741,47 @@ impl WindowsDebugger {
             return;
         };
         let a = address.as_u64();
+        // A breakpoint exception we did NOT plant is not a breakpoint.
+        //
+        // `classify_event` turns every `EXCEPTION_BREAKPOINT` into
+        // `StopReason::Breakpoint`, which is all a free function over the raw
+        // event can do. Nothing corrected it afterwards, so three unrelated
+        // things reached the caller as "you hit a software breakpoint":
+        // `pause()` (which works by `DebugBreakProcess` injecting one), the
+        // initial process breakpoint Windows always delivers, and a
+        // `__debugbreak()` in the target's own code. The caller was handed a
+        // full `Breakpoint` record — `hit_count: 0`, `enabled: true` — for a
+        // breakpoint that does not exist at an address they never set.
+        //
+        // Linux and macOS report their own pause as `StopReason::Signal`. This
+        // is the first place on Windows that HAS the planted table, so it is
+        // where the record can be turned back into what actually happened.
+        //
+        // Hardware watchpoints are checked too: they arrive through this same
+        // reason with the WATCHED address, and they are ours.
+        let planted = self.breakpoints.lock().contains_key(&a)
+            || self.hw_watchpoints.lock().contains_key(&a);
+        if !planted {
+            // LABELLED, not reclassified.
+            //
+            // Turning this into `StopReason::Exception` was tried first and
+            // measured: six live tests and the MCP layer'''s `initial_stop_tid`
+            // wait for a `Breakpoint` to know the process has stopped and is
+            // ready, because Windows genuinely delivers a breakpoint there. The
+            // variant is not the lie — the RECORD is. It claimed a planted
+            // software breakpoint, with `enabled: true`, at an address the
+            // caller never set.
+            //
+            // `original_byte` and `hit_count` are already truthful here (None
+            // and 0), and now the label says so out loud instead of leaving it
+            // to be inferred from two absent fields.
+            bp.label = Some(
+                "not planted by this debugger — DebugBreakProcess (pause), the initial                  process breakpoint, or a __debugbreak() in the target"
+                    .to_string(),
+            );
+            bp.enabled = false;
+            return;
+        }
         if let Some(orig) = self.breakpoints.lock().get(&a) {
             bp.original_byte = orig.first().copied();
         }
@@ -8410,5 +8451,68 @@ mod live_tests {
         );
 
         let _ = dbg.kill().await;
+    }
+}
+
+#[cfg(test)]
+mod stop_classification_tests {
+    use super::*;
+
+    /// A stop at an address we never planted is not OUR breakpoint.
+    ///
+    /// `classify_event` turns every `EXCEPTION_BREAKPOINT` into
+    /// `StopReason::Breakpoint { bp: new_software(addr) }`, because it is a free
+    /// function over the raw event and has no way to know. That is fine there —
+    /// but nothing downstream corrected it, so three different things all
+    /// arrived at the caller as "you hit a software breakpoint":
+    ///
+    ///   * `pause()`, which works by `DebugBreakProcess` injecting one;
+    ///   * the initial process breakpoint Windows always delivers;
+    ///   * a `__debugbreak()` in the target's own code.
+    ///
+    /// The user asked to pause and was told they had hit a breakpoint at an
+    /// address they never set — a breakpoint that does not exist, described
+    /// with a full `Breakpoint` record. Linux and macOS report their own pause
+    /// as `StopReason::Signal`, which is honest.
+    ///
+    /// `enrich_event_breakpoint` is where this is fixable because it is the
+    /// first place that HAS the planted-breakpoint table.
+    #[test]
+    fn a_stop_at_an_address_we_never_planted_is_not_reported_as_our_breakpoint() {
+        let dbg = WindowsDebugger::new();
+        let at = Address(0x7FF8_1234_5678);
+        let mut ev = DebugEvent::new(
+            ProcessId(1),
+            ThreadId(1),
+            StopReason::Breakpoint { address: at, bp: Breakpoint::new_software(at) },
+        );
+        dbg.enrich_event_breakpoint(&mut ev);
+        let StopReason::Breakpoint { bp, .. } = &ev.reason else {
+            panic!("the variant must stay Breakpoint — six live tests and the MCP initial-stop                     path wait for it, and Windows does deliver a breakpoint here");
+        };
+        assert!(
+            bp.label.is_some(),
+            "a breakpoint exception at an address absent from the planted table is described as              a breakpoint this debugger set, with nothing saying otherwise: {bp:?}"
+        );
+        assert!(!bp.enabled, "a breakpoint that was never planted cannot be enabled: {bp:?}");
+    }
+
+    /// ...and one we DID plant still is, so the fix is not simply refusing
+    /// everything.
+    #[test]
+    fn a_stop_at_an_address_we_planted_is_still_our_breakpoint() {
+        let dbg = WindowsDebugger::new();
+        let at = Address(0x1000);
+        dbg.breakpoints.lock().insert(at.as_u64(), vec![0x90]);
+        let mut ev = DebugEvent::new(
+            ProcessId(1),
+            ThreadId(1),
+            StopReason::Breakpoint { address: at, bp: Breakpoint::new_software(at) },
+        );
+        dbg.enrich_event_breakpoint(&mut ev);
+        let StopReason::Breakpoint { bp, .. } = &ev.reason else {
+            panic!("a breakpoint we planted must still be reported as one: {:?}", ev.reason)
+        };
+        assert!(bp.label.is_none(), "one of ours must not carry the not-ours label: {bp:?}");
     }
 }

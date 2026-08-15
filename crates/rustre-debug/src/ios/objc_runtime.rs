@@ -338,6 +338,19 @@ impl ObjcAbi {
         }
     }
 
+    /// Shift dell'indice di classe **esteso** (8 bit), usato quando lo slot
+    /// vale 7: objc4 `_OBJC_TAG_EXT_INDEX_SHIFT`.
+    ///
+    /// arm64: 52 (l'indice sta appena sotto lo slot a 60..62).
+    /// x86_64: 4 (l'indice sta appena sopra i 4 bit di tag+slot).
+    #[must_use]
+    pub const fn tag_ext_index_shift(self) -> u32 {
+        match self {
+            Self::Arm64 => 52,
+            Self::X86_64 => 4,
+        }
+    }
+
     /// `FAST_DATA_MASK`: estrae `class_rw_t`/`class_ro_t` da `objc_class::bits`.
     /// Identica sulle due ABI a 64 bit.
     #[must_use]
@@ -424,6 +437,12 @@ pub struct TaggedPointer {
     pub class: TaggedClass,
     /// Payload (bit utili) già allineato a destra.
     pub payload: u64,
+    /// Indice di classe **esteso** (8 bit) quando lo slot vale 7, altrimenti
+    /// `None`. Non lo traduciamo in un nome: la tabella `OBJC_TAG_*` oltre lo
+    /// slot 7 è privata e varia fra versioni, e inventare un nome sarebbe il
+    /// "confidently wrong" che questo modulo vieta. L'indice grezzo invece è
+    /// un fatto letto dal puntatore.
+    pub ext_index: Option<u8>,
 }
 
 /// Decodifica `ptr` come tagged pointer, o `None` se è un puntatore normale.
@@ -433,6 +452,27 @@ pub fn decode_tagged_pointer(ptr: u64, abi: ObjcAbi) -> Option<TaggedPointer> {
         return None;
     }
     let slot = ((ptr >> abi.tag_slot_shift()) & 0x7) as u8;
+    // Lo slot 7 non è riservato: è la *fuga* verso i tag estesi
+    // (objc4 `_OBJC_TAG_EXT_MASK`). Otto bit di indice di classe stanno
+    // subito sotto lo slot, quindi il payload utile è di 52 bit, non 60:
+    // lasciarli dentro `payload` — il campo che esiste solo per farci
+    // aritmetica — lo gonfierebbe di `indice << _OBJC_TAG_EXT_INDEX_SHIFT`.
+    if slot == 0x7 {
+        let ext_index = ((ptr >> abi.tag_ext_index_shift()) & 0xff) as u8;
+        // arm64: payload = bit 0..51 (tag 63, slot 60..62, indice 52..59).
+        // x86_64: payload = bit 12..63 (tag 0, slot 1..3, indice 4..11).
+        let payload = match abi {
+            ObjcAbi::Arm64 => ptr & 0x000f_ffff_ffff_ffff,
+            ObjcAbi::X86_64 => ptr >> 12,
+        };
+        return Some(TaggedPointer {
+            raw: ptr,
+            slot,
+            class: TaggedClass::from_slot(slot),
+            payload,
+            ext_index: Some(ext_index),
+        });
+    }
     // arm64: payload = bit 0..59 (il tag occupa 60..63).
     // x86_64: payload = bit 4..63 (tag bit 0, slot bit 1..3).
     let payload = match abi {
@@ -444,6 +484,7 @@ pub fn decode_tagged_pointer(ptr: u64, abi: ObjcAbi) -> Option<TaggedPointer> {
         slot,
         class: TaggedClass::from_slot(slot),
         payload,
+        ext_index: None,
     })
 }
 
@@ -961,11 +1002,23 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
                 let imp_off = self.mem.read_i32(entry + 8)?;
                 // `name` punta a un *selRef*: una parola che contiene il
                 // puntatore al nome, non il nome stesso.
-                let sel_ref = rel_target(entry, name_off);
-                let name_ptr = strip_pac(self.mem.read_u64(sel_ref)?);
+                let sel_target = rel_target(entry, name_off);
+                // Nel dyld shared cache le liste uniquificate puntano invece
+                // direttamente alla stringa (objc4 `small().inSharedCache()`).
+                // Senza il range della cache si prova il deref e si ricade
+                // sulla forma diretta quando non e' leggibile.
+                let name = match self
+                    .mem
+                    .read_u64(sel_target)
+                    .map(strip_pac)
+                    .and_then(|p| self.mem.read_cstring(p, MAX_NAME_LEN))
+                {
+                    Ok(n) => n,
+                    Err(_) => self.mem.read_cstring(sel_target, MAX_NAME_LEN)?,
+                };
                 let types_ptr = rel_target(entry + 4, types_off);
                 ObjcMethod {
-                    name: self.mem.read_cstring(name_ptr, MAX_NAME_LEN)?,
+                    name,
                     types: self
                         .mem
                         .read_cstring(types_ptr, MAX_NAME_LEN)
@@ -1052,7 +1105,17 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
                         TaggedNumber::Double(v) => format!("__NSCFNumber({v})"),
                     },
                 ),
-                other => format!("{}(tagged payload {:#x})", other.name(), tp.payload),
+                // Per un tag esteso l'indice di classe è appena stato tolto dal
+                // payload: se non lo stampassimo qui l'informazione sparirebbe
+                // dall'output, che è peggio del payload gonfio di prima.
+                other => match tp.ext_index {
+                    Some(ix) => format!(
+                        "{}(ext class {ix}, tagged payload {:#x})",
+                        other.name(),
+                        tp.payload
+                    ),
+                    None => format!("{}(tagged payload {:#x})", other.name(), tp.payload),
+                },
             });
         }
         if let Ok(cf) = self.read_cfstring(obj) {
@@ -1110,12 +1173,36 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
         let flags = self.mem.read_u64(obj + 8)?;
         let data_ptr = strip_pac(self.mem.read_u64(obj + 16)?);
         let length = self.mem.read_u64(obj + 24)?;
+        // La parola dei flag è il CFRuntimeBase info word: 32 bit, e per le
+        // stringhe costanti/inline porta sempre il marcatore 0x700. Senza
+        // questo controllo QUALUNQUE oggetto con 32 byte leggibili passa per
+        // una CFString, e `describe` lo stampa come @"..." — la risposta
+        // "confidently wrong" che questo modulo vieta.
+        const CONST_STRING_MARKER: u64 = 0x0700;
+        if (flags >> 32) != 0 || flags & CONST_STRING_MARKER != CONST_STRING_MARKER {
+            return Err(ObjcError::Unsupported(format!(
+                "{obj:#x}: info word {flags:#x} non è una stringa costante"
+            )));
+        }
         if length > u64::from(MAX_LIST_ENTRIES) * 16 {
             return Err(ObjcError::Implausible {
                 what: "CFString length",
                 value: length,
                 limit: u64::from(MAX_LIST_ENTRIES) * 16,
             });
+        }
+        // La parola a +8 è `_cfinfo`: per le stringhe con i byte INLINE (i
+        // literal `__cfstring` e le costanti create a runtime) porta sempre
+        // almeno un bit di forma del contenuto — 0x8 byte a 8 bit immutabili,
+        // 0x10 contenuto UTF-16. Un oggetto qualunque ha lì un ivar, tipicamente
+        // 0: senza questo controllo ogni oggetto con 32 byte leggibili veniva
+        // accettato come stringa, che è il "confidently wrong" vietato qui.
+        const CF_INLINE_CONTENT_BITS: u64 = 0x18;
+        if flags & CF_INLINE_CONTENT_BITS == 0 {
+            return Err(ObjcError::Unsupported(format!(
+                "flag CFString {flags:#x}: nessun bit di contenuto inline, \
+                 non è una stringa costante"
+            )));
         }
         let len = usize::try_from(length).unwrap_or(0);
         // Bit 2 dei flag = "contenuto Unicode a 16 bit"; altrimenti 8 bit.
@@ -1500,6 +1587,32 @@ mod tests {
         assert_eq!(methods[0].imp, IMP);
     }
 
+    /// Nel dyld shared cache le small method list uniquificate hanno `name`
+    /// che punta DIRETTAMENTE alla stringa del selettore, non a un selRef
+    /// (objc4: `small().inSharedCache() ? name.get() : *(SEL*)name.get()`).
+    #[test]
+    fn small_method_list_shared_cache_name_is_the_selector_string() {
+        let mut m = SparseMemory::new();
+        const LIST: u64 = 0x4_0000_0000;
+        const SELNAME: u64 = 0x4_0000_1000;
+        const TYPESTR: u64 = 0x4_0000_1200;
+        const IMP: u64 = 0x4_0000_2000;
+        let entry = LIST + 8;
+        let mut ml = Vec::new();
+        ml.extend_from_slice(&(12u32 | 0x8000_0000).to_le_bytes());
+        ml.extend_from_slice(&1u32.to_le_bytes());
+        ml.extend_from_slice(&i32::try_from(SELNAME - entry).unwrap().to_le_bytes());
+        ml.extend_from_slice(&i32::try_from(TYPESTR - (entry + 4)).unwrap().to_le_bytes());
+        ml.extend_from_slice(&i32::try_from(IMP - (entry + 8)).unwrap().to_le_bytes());
+        m.write(LIST, ml);
+        // Nessun selRef: all'indirizzo c'e' la stringa stessa.
+        m.write_cstr(SELNAME, "initialize");
+        m.write_cstr(TYPESTR, "v16@0:8");
+
+        let methods = rt(&m).read_method_list(LIST).unwrap();
+        assert_eq!(methods[0].name, "initialize");
+    }
+
     /// Il campo `entsizeAndFlags` di una small method list vale
     /// `12 | 0x8000_0000`. Se il bit 31 finisce nello stride, la seconda voce
     /// viene cercata a `list + 8 + 0x8000_000C` invece che a `list + 20`.
@@ -1582,7 +1695,10 @@ mod tests {
         let mut m = SparseMemory::new();
         const S: u64 = 0x5_0000_0000;
         const D: u64 = 0x5_0000_1000;
-        m.write_u64s(S, &[0x1000, 0x10, D, 3]);
+        // 0x7D0 è l'info word reale di una stringa costante UTF-16: il
+        // marcatore 0x700 più il bit 0x10 "contenuto a 16 bit". Prima qui
+        // c'era il solo 0x10, che nessuna CFString reale porta da sola.
+        m.write_u64s(S, &[0x1000, 0x07D0, D, 3]);
         let mut data = Vec::new();
         for c in "cià".encode_utf16() {
             data.extend_from_slice(&c.to_le_bytes());
@@ -1615,6 +1731,71 @@ mod tests {
         // perché allineato, ma un dispari sarebbe tagged.
         assert!(decode_tagged_pointer(CLASS, ObjcAbi::X86_64).is_none());
         assert!(decode_tagged_pointer(CLASS | 1, ObjcAbi::X86_64).is_some());
+    }
+
+    /// Lo slot 7 non è uno slot riservato: è la *fuga* verso i tag estesi
+    /// (objc4 `_OBJC_TAG_EXT_MASK`). L'indice di classe esteso occupa 8 bit
+    /// appena sotto lo slot, quindi il payload utile è più corto — su arm64
+    /// bit 0..51, non 0..59. Se l'indice resta dentro `payload`, il campo che
+    /// esiste solo per farci aritmetica vale `indice << 52` di troppo.
+    #[test]
+    fn extended_tagged_pointer_payload_excludes_the_class_index() {
+        // arm64: bit di tag 63 + slot 7 (bit 60..62) = tag esteso;
+        // indice di classe esteso 2 ai bit 52..59; payload 5.
+        let ptr = (1u64 << 63) | (7 << 60) | (2 << 52) | 5;
+        let tp = decode_tagged_pointer(ptr, ObjcAbi::Arm64).unwrap();
+        assert_eq!(
+            tp.payload, 5,
+            "l'indice di classe esteso non fa parte del payload"
+        );
+        assert_eq!(tp.ext_index, Some(2));
+        // Il payload esteso è largo 52 bit: i bit 0..51 tutti accesi passano
+        // interi, e nessun bit dell'indice ci finisce dentro.
+        let full = decode_tagged_pointer(
+            (1u64 << 63) | (7 << 60) | (0xff << 52) | 0x000f_ffff_ffff_ffff,
+            ObjcAbi::Arm64,
+        )
+        .unwrap();
+        assert_eq!(full.payload, 0x000f_ffff_ffff_ffff);
+        assert_eq!(full.ext_index, Some(0xff));
+
+        // x86_64: bit di tag 0, slot ai bit 1..3 -> slot 7 = 0xF nei 4 bit
+        // bassi; indice esteso a 4..11; payload da 12 in su.
+        let ptr = (5u64 << 12) | (2 << 4) | 0xF;
+        let tp = decode_tagged_pointer(ptr, ObjcAbi::X86_64).unwrap();
+        assert_eq!(
+            tp.payload, 5,
+            "l'indice di classe esteso non fa parte del payload"
+        );
+        assert_eq!(tp.ext_index, Some(2));
+    }
+
+    /// Il ramo esteso non deve toccare i tag base: gli slot 0..6 tengono i 60
+    /// bit di payload di sempre e non hanno indice esteso.
+    #[test]
+    fn basic_tagged_pointer_payload_is_unchanged_by_the_extended_branch() {
+        for slot in 0u64..7 {
+            let tp = decode_tagged_pointer((1u64 << 63) | (slot << 60) | 0x1234, ObjcAbi::Arm64)
+                .unwrap();
+            assert_eq!(tp.payload, 0x1234, "slot {slot}");
+            assert_eq!(tp.ext_index, None, "slot {slot}");
+
+            let tp = decode_tagged_pointer((0x1234u64 << 4) | (slot << 1) | 1, ObjcAbi::X86_64)
+                .unwrap();
+            assert_eq!(tp.payload, 0x1234, "slot {slot}");
+            assert_eq!(tp.ext_index, None, "slot {slot}");
+        }
+    }
+
+    /// `describe` non deve perdere l'indice di classe estratto dal payload.
+    #[test]
+    fn describe_names_the_extended_tag_index() {
+        let m = build_target();
+        let ptr = (1u64 << 63) | (7 << 60) | (2 << 52) | 5;
+        assert_eq!(
+            rt(&m).describe(ptr).unwrap(),
+            "(tagged slot 7)(ext class 2, tagged payload 0x5)"
+        );
     }
 
     #[test]
@@ -1704,6 +1885,46 @@ mod tests {
         }
         let s = (1u64 << 63) | (2 << 60) | (bits << 4) | 2;
         assert_eq!(r.describe(s).unwrap(), "NSTaggedPointerString(\"hi\")");
+    }
+
+    /// Un oggetto qualunque (non una stringa) con almeno 32 byte leggibili e
+    /// una parola nulla a +24 non deve essere descritto come `@""`.
+    #[test]
+    fn describe_does_not_call_a_plain_object_a_cfstring() {
+        let mut m = build_target();
+        let packed_isa = CLASS | ObjcAbi::Arm64.isa_nonpointer_bit() | (0x2 << 56);
+        // Istanza "grassa": isa + tre parole di ivar azzerate.
+        m.write_u64s(OBJECT, &[packed_isa, 0, 0, 0]);
+        assert_eq!(
+            rt(&m).describe(OBJECT).unwrap(),
+            format!("<Widget: {OBJECT:#x}>")
+        );
+        // E la stessa cosa detta sull'API pubblica: il ramo `Unsupported` che
+        // il doc di `read_cfstring` promette deve esistere davvero su un
+        // oggetto qualunque, non solo essere aggirato da `describe`.
+        assert!(matches!(
+            rt(&m).read_cfstring(OBJECT),
+            Err(ObjcError::Unsupported(_))
+        ));
+    }
+
+    /// Il doc di `read_cfstring` promette `Unsupported` quando i flag non sono
+    /// quelli di una stringa costante: prima quel ramo non esisteva e la
+    /// funzione accettava qualunque oggetto con 32 byte leggibili.
+    #[test]
+    fn read_cfstring_rejects_flags_without_inline_content_bits() {
+        let mut m = SparseMemory::new();
+        const O: u64 = 0x7_0000_0000;
+        const D: u64 = 0x7_0000_1000;
+        m.write_u64s(O, &[0x1000, 0, D, 5]);
+        m.write(D, b"hello".to_vec());
+        assert!(matches!(
+            rt(&m).read_cfstring(O),
+            Err(ObjcError::Unsupported(_))
+        ));
+        // Con il bit dei byte inline acceso la stessa memoria si legge.
+        m.write_u64s(O, &[0x1000, 0x7C8, D, 5]);
+        assert_eq!(rt(&m).read_cfstring(O).unwrap().value, "hello");
     }
 
     #[test]

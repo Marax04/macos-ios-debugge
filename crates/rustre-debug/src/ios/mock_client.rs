@@ -160,6 +160,13 @@ impl StopReply {
             .ok_or_else(|| ClientError::Malformed("empty stop reply".into()))?;
         let rest = &payload[1..];
         let sig_hex: String = rest.chars().take(2).collect();
+        // A stop reply always carries exactly two hex digits of signal/exit
+        // code. Anything shorter is a truncated payload, not a one-digit
+        // signal: accepting it would also make the `rest[2..]` slice below
+        // index past the end of the string.
+        if sig_hex.len() != 2 {
+            return Err(ClientError::Malformed(format!("truncated stop reply: {payload:?}")));
+        }
         let sig = u8::from_str_radix(&sig_hex, 16)
             .map_err(|_| ClientError::Malformed(format!("bad signal in {payload:?}")))?;
         match kind {
@@ -902,6 +909,20 @@ mod tests {
         }
         assert!(StopReply::parse("").is_err());
         assert!(StopReply::parse("Zzz").is_err());
+        // A truncated payload carries fewer than the two mandatory hex digits
+        // of signal/exit code. Every kind must surface that as an error: `T`
+        // used to index `rest[2..]` and panic, while `W`/`X`/`S` used to
+        // silently accept the single digit as a whole signal.
+        assert!(matches!(StopReply::parse("W"), Err(ClientError::Malformed(_))));
+        assert!(matches!(StopReply::parse("W5"), Err(ClientError::Malformed(_))));
+        assert!(matches!(StopReply::parse("X5"), Err(ClientError::Malformed(_))));
+        assert!(matches!(StopReply::parse("S5"), Err(ClientError::Malformed(_))));
+        assert!(matches!(StopReply::parse("T5"), Err(ClientError::Malformed(_))));
+    }
+
+    #[test]
+    fn stop_reply_truncated_t_is_malformed_not_a_panic() {
+        assert!(matches!(StopReply::parse("T5"), Err(ClientError::Malformed(_))));
     }
 
     #[test]

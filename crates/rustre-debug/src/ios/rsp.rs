@@ -61,6 +61,15 @@ pub enum RspError {
     /// The remote replied `Exx` to a command.
     #[error("remote returned error code {0:#04x}")]
     Remote(u8),
+    /// The remote replied `E.errtext`, the protocol's textual error form.
+    ///
+    /// Distinct from [`Self::Remote`] because there is no code to map: the
+    /// stub explained itself in words, and the words are the diagnosis. Also
+    /// distinct from [`Self::Hex`], which is where these replies used to end
+    /// up: "the stub refused, and here is why" and "the line is corrupt, try
+    /// again" are opposite instructions to whoever is debugging.
+    #[error("remote returned error: {0}")]
+    RemoteText(String),
     /// The remote replied with an empty packet, i.e. "command unsupported".
     #[error("remote does not support command {0}")]
     Unsupported(String),
@@ -372,13 +381,37 @@ impl RspPacket {
         }
     }
 
-    /// Turn `Exx` / empty replies into typed errors; pass anything else through.
+    /// Text of an `E.errtext` reply, if this is one.
+    ///
+    /// The protocol defines TWO error replies — `E NN` and `E.errtext`, the
+    /// latter documented as "errtext is the textual representation of the
+    /// error" — and only the numeric one was recognised here. The textual one
+    /// therefore passed [`Self::ok_or_err`] as an ordinary payload and was
+    /// destroyed downstream by whatever consumed it (in `read_memory`, the hex
+    /// decoder, reporting a corrupt line for a stub that had answered
+    /// perfectly clearly).
+    ///
+    /// The `E.` prefix cannot collide with a hex payload: `.` is not a hex
+    /// digit. Undecodable bytes are rendered lossily rather than dropped —
+    /// losing the reason is the defect being fixed.
+    #[must_use]
+    pub fn error_text(&self) -> Option<String> {
+        let rest = self.data.strip_prefix(b"E." as &[u8])?;
+        Some(String::from_utf8_lossy(rest).into_owned())
+    }
+
+    /// Turn `Exx` / `E.errtext` / empty replies into typed errors; pass
+    /// anything else through.
     ///
     /// # Errors
-    /// [`RspError::Remote`] for `Exx`, [`RspError::Unsupported`] for empty.
+    /// [`RspError::Remote`] for `Exx`, [`RspError::RemoteText`] for
+    /// `E.errtext`, [`RspError::Unsupported`] for empty.
     pub fn ok_or_err(self, cmd: &str) -> RspResult<Self> {
         if let Some(code) = self.error_code() {
             return Err(RspError::Remote(code));
+        }
+        if let Some(text) = self.error_text() {
+            return Err(RspError::RemoteText(text));
         }
         if self.data.is_empty() {
             return Err(RspError::Unsupported(cmd.to_string()));
@@ -1259,6 +1292,17 @@ const RSP_DEFAULT_PACKET_SIZE: usize = 400;
 /// full 16 hex digits a 64-bit value can need.
 const M_HEADER_MAX: usize = 1 + 16 + 1 + 16 + 1;
 
+/// Characters a packet costs before it carries any payload: `$`, `#`, and the
+/// two checksum digits.
+///
+/// The gdb manual's `qSupported` entry says of `PacketSize=bytes`: "This is a
+/// limit on the data characters in the packet, **including the frame and
+/// checksum**". Treating the advertised value as a payload budget therefore
+/// overshoots by exactly four characters on every maximal packet — which is
+/// invisible against a permissive mock and a truncation against a stub that
+/// enforces its own limit.
+const RSP_FRAME_OVERHEAD: usize = 4;
+
 /// Extract `PacketSize=<hex>` from a `qSupported` reply.
 ///
 /// The value is hex per the protocol. Returns `None` when absent or malformed,
@@ -1355,6 +1399,18 @@ impl<T: RspTransport> RspClient<T> {
     /// # Errors
     /// See [`RspError`].
     pub fn request(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
+        let outcome = self.request_inner(payload);
+        if outcome.is_err() {
+            // Every error exit above may abandon a half-read packet in the
+            // framer. Those bytes are meaningless now, and keeping them would
+            // splice them onto the NEXT command's reply — a permanent desync
+            // on a link that may well be healthy again.
+            self.framer.reset();
+        }
+        outcome
+    }
+
+    fn request_inner(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
         let wire = RspPacket::new(payload.to_vec()).encode();
         let mut attempt = 0u32;
         // Sent ONCE, outside the loop. Which failure happened decides whether
@@ -1481,7 +1537,14 @@ impl<T: RspTransport> RspClient<T> {
         // like "dump 4 KiB" simply FAILED against a stub advertising 1 KiB,
         // while the same call on the three native backends works. The write path
         // has chunked since it was written; the read path never did.
-        let per_packet = (self.packet_budget() / 2).max(1);
+        //
+        // The reply is `$` + 2 hex digits per byte + `#` + two checksum
+        // digits, and `PacketSize` covers the frame as well as the payload
+        // (see `RSP_FRAME_OVERHEAD`), so the four framing characters have to
+        // come off the budget before it is halved. Without that subtraction
+        // every maximal chunk asks for exactly four characters more than the
+        // stub said it can produce.
+        let per_packet = (self.packet_budget().saturating_sub(RSP_FRAME_OVERHEAD) / 2).max(1);
         if len == 0 {
             return Ok(Vec::new());
         }
@@ -1586,12 +1649,18 @@ impl<T: RspTransport> RspClient<T> {
         // by definition. So this refuses and names the way out, which already
         // exists — `P` writes one register at a time and is what
         // `set_register` uses.
-        let needed = 1 + raw.len() * 2;
+        //
+        // `needed` counts the whole packet, not just its payload: `PacketSize`
+        // is a limit on the framed characters (see `RSP_FRAME_OVERHEAD`), so a
+        // block whose hex body exactly fills the advertised buffer is still
+        // four characters too long — and the boundary case is the one this
+        // guard exists for.
+        let needed = 1 + raw.len() * 2 + RSP_FRAME_OVERHEAD;
         let budget = self.packet_budget();
         if needed > budget {
             return Err(RspError::Framing(format!(
-                "a G packet of {needed} bytes does not fit the stub's PacketSize of {budget}; \
-                 write the registers individually with P instead"
+                "a G packet of {needed} framed bytes does not fit the stub's PacketSize of \
+                 {budget}; write the registers individually with P instead"
             )));
         }
         let reply = self
@@ -1705,10 +1774,27 @@ impl<T: RspTransport> RspClient<T> {
     pub fn thread_ids(&mut self) -> RspResult<Vec<u64>> {
         let mut out = Vec::new();
         let mut payload = commands::q_first_thread_info();
+        let mut first = true;
         loop {
             let reply = self.request(&payload)?;
+            if first {
+                // An empty reply is "packet not supported", NOT "end of list":
+                // only `l` terminates an enumeration. Reporting it as an empty
+                // list would claim a live process has zero threads.
+                reply.clone().ok_or_err("qfThreadInfo")?;
+                first = false;
+            }
             let s = reply.as_str().into_owned();
-            if s.is_empty() || s.starts_with('l') {
+            if s.is_empty() {
+                // RSP gives the empty reply and `l` two DIFFERENT meanings:
+                // empty is "packet not supported", `l` is "end of list".
+                // Treating them alike would report a live process as having
+                // ZERO threads instead of "this stub cannot enumerate them".
+                return Err(RspError::Unsupported(
+                    String::from_utf8_lossy(&payload).into_owned(),
+                ));
+            }
+            if s.starts_with('l') {
                 break;
             }
             let list = s.strip_prefix('m').unwrap_or(&s);
@@ -2184,13 +2270,14 @@ mod tests {
     /// never did, and the asymmetry sat in the same file.
     #[test]
     fn a_read_larger_than_the_packet_size_is_split_into_several_m_packets() {
-        // Budget 16 => 8 bytes per `m`. Four replies of 8 bytes each cover 32.
+        // Budget 20 => (20 - 4 framing characters) / 2 = 8 bytes per `m`.
+        // Four replies of 8 bytes each cover 32.
         let mut t = MockTransport::new();
         for _ in 0..4 {
             t.push_reply(b"aabbccddeeff0011"); // 8 bytes, hex-encoded
         }
         let mut c = RspClient::new(t);
-        let () = c.set_packet_size_for_test(16);
+        let () = c.set_packet_size_for_test(20);
 
         let got = c.read_memory(0x1000, 32).expect("a 32-byte read must succeed");
         assert_eq!(got.len(), 32, "the read came back short instead of being split");
@@ -2208,6 +2295,121 @@ mod tests {
         assert!(
             sent.contains("$m1008,8#"),
             "each chunk must continue where the last one ended: {sent}"
+        );
+    }
+
+    /// `PacketSize` counts the FRAME, so a maximal `m` chunk must leave room
+    /// for it.
+    ///
+    /// The gdb manual's `qSupported` entry says of `PacketSize=bytes`: "This is
+    /// a limit on the data characters in the packet, including the frame and
+    /// checksum". An `m` reply is `$` + two hex digits per byte + `#` + two
+    /// checksum digits, so asking for `budget / 2` bytes always puts
+    /// `budget + 4` characters on the wire — four over the limit that was just
+    /// negotiated. Against a stub that enforces the limit literally the chunk
+    /// comes back truncated, and `read_memory` then reports `ShortRead`: a
+    /// perfectly ordinary read fails, and the reason is invisible to the caller.
+    #[test]
+    fn a_maximal_m_chunk_fits_the_packet_size_including_frame_and_checksum() {
+        const BUDGET: usize = 16;
+        let mut t = MockTransport::new();
+        // Six bytes per reply — the largest chunk that fits BUDGET once the
+        // frame is paid for.
+        for _ in 0..4 {
+            t.push_reply(b"aabbccddeeff");
+        }
+        let mut c = RspClient::new(t);
+        let () = c.set_packet_size_for_test(BUDGET);
+
+        let got = c.read_memory(0x1000, 12);
+
+        let sent = c.transport().sent_str();
+        let len_hex = sent
+            .split("$m")
+            .nth(1)
+            .expect("an `m` packet must have been sent")
+            .split('#')
+            .next()
+            .expect("split always yields a first element")
+            .split(',')
+            .nth(1)
+            .expect("`m` carries <addr>,<len>");
+        let want = usize::from_str_radix(len_hex, 16).expect("the length field is hex");
+        let wire = 2 * want + 4; // `$` + hex payload + `#` + two checksum digits
+        assert!(
+            wire <= BUDGET,
+            "an `m` for {want} bytes makes the stub answer with {wire} characters \
+             against a negotiated PacketSize of {BUDGET}: the frame and the checksum \
+             count towards that limit, so the last chunk of every read is truncated"
+        );
+        assert_eq!(
+            got.expect("the split read must complete").len(),
+            12,
+            "the chunks did not add up to the requested length"
+        );
+    }
+
+    /// The `G` guard has to pay for the frame too.
+    ///
+    /// Same arithmetic as the `m` chunking above, on the other side of the
+    /// wire: a register block whose hex body exactly fills the advertised
+    /// buffer still needs `$`, `#` and two checksum digits, so it is four
+    /// characters too long. That is precisely the truncation the guard exists
+    /// to prevent — a `G` the stub applies half of, leaving the target with
+    /// half its registers overwritten — let through on the boundary.
+    #[test]
+    fn the_g_guard_counts_the_frame_and_checksum_against_the_packet_size() {
+        const BUDGET: usize = 16;
+        let mut t = MockTransport::new();
+        t.push_reply(b"OK"); // the stub would answer, if we sent it
+        let mut c = RspClient::new(t);
+        let () = c.set_packet_size_for_test(BUDGET);
+
+        // `G` + 2*7 hex digits = 15 payload characters, which fits 16 — but
+        // 19 characters go on the wire once framed.
+        let err = c.write_registers(&[0xAAu8; 7]).expect_err(
+            "a G whose framed length is 19 characters was accepted against a PacketSize of 16: \
+             the stub truncates it, and a truncated G overwrites half the register file",
+        );
+        assert!(
+            err.to_string().contains("PacketSize"),
+            "the refusal must name the limit so the caller can act on it: {err}"
+        );
+        assert!(
+            c.transport().sent_str().is_empty(),
+            "the oversized packet went on the wire anyway: {}",
+            c.transport().sent_str()
+        );
+
+        // Still a limit and not a wall: 5 registers bytes = 11 payload plus 4
+        // frame = 15 characters, which does fit.
+        c.write_registers(&[0xAAu8; 5])
+            .expect("a block that fits once framed must still be written");
+    }
+
+    /// `E.errtext` is the spec's OTHER error form and must be reported as a
+    /// refusal, not as a corrupt line.
+    ///
+    /// The gdb manual lists two error replies: `E NN` and `E.errtext`, where
+    /// "errtext is the textual representation of the error". Only the first was
+    /// recognised, so the second sailed through `ok_or_err` as a valid payload
+    /// and died in the hex decoder as `RspError::Hex("E.")` — which reads
+    /// "the line is corrupt, retry" and is even classified `is_retryable()`,
+    /// the exact opposite of what the stub said. The operator is handed a
+    /// transmission fault where the target gave a reason.
+    #[test]
+    fn a_textual_error_reply_is_a_refusal_not_corrupt_hex() {
+        let mut c = client_with(&[b"E.memory allocation failed"]);
+        let err = c
+            .read_memory(0x1000, 4)
+            .expect_err("the stub refused the read");
+        assert!(
+            err.to_string().contains("memory allocation failed"),
+            "the stub's own explanation was thrown away and replaced by a hex complaint: {err}"
+        );
+        assert!(
+            !err.is_retryable(),
+            "a stub that refused in words refused definitively; retrying it is pointless: {err}"
         );
     }
 
@@ -2427,6 +2629,66 @@ mod tests {
         assert!(matches!(c.request(b"?"), Err(RspError::Transport(_))));
     }
 
+    /// A transport error mid-packet must not leave the half-read bytes in the
+    /// framer: they would be glued to the NEXT command's reply, so every later
+    /// command reads corrupted (or somebody else's) data on a link that is
+    /// otherwise healthy. `RspClient` survives such an error
+    /// (`AppleDebugger::with_session` does not drop the session), so the
+    /// recovery has to happen here.
+    #[test]
+    fn transport_error_does_not_leave_a_dirty_framer() {
+        let mut t = MockTransport::new();
+        // Half of a reply arrives, then the read fails (no more bytes).
+        t.push_raw(b"$OK");
+        let mut c = RspClient::new(t);
+        assert!(c.request(b"?").is_err(), "the truncated read must fail");
+
+        // The link recovers and the stub answers the NEXT command normally.
+        c.transport_mut().push_reply(b"T05");
+        let reply = c
+            .request(b"?")
+            .expect("next command must not inherit the abandoned bytes");
+        assert_eq!(reply.as_str(), "T05");
+    }
+
+    /// The severe form of the same defect: the abandoned bytes complete into a
+    /// VALID packet, so the next command gets a perfectly well-formed reply
+    /// that belongs to the previous one.
+    ///
+    /// `transport_error_does_not_leave_a_dirty_framer` above leaves a stump
+    /// that can only produce a checksum complaint — noisy, but loud. Here the
+    /// tail of the old `m` reply arrives after the error and splices into a
+    /// clean `$41414141#94`, which `request` hands back to `qC` as if the stub
+    /// had answered it. Nothing fails, nothing is logged, and from that moment
+    /// every reply is one command behind: a debugger reading memory and
+    /// registers that belong to another question, silently. This is the
+    /// failure `console_output_is_not_consumed_as_a_reply` calls unacceptable,
+    /// reached by a different road.
+    #[test]
+    fn a_transport_error_mid_packet_does_not_hand_the_next_command_the_old_reply() {
+        let mut t = MockTransport::new();
+        // Everything but the final checksum digit of the reply to `m`.
+        let mut partial = RspPacket::new(b"41414141".to_vec()).encode();
+        let tail = partial.pop().expect("an encoded packet ends in a checksum digit");
+        t.push_raw(&partial);
+        let mut c = RspClient::new(t);
+        c.read_memory(0x1000, 4)
+            .expect_err("a reply cut short mid-packet must fail the read");
+
+        // The link is healthy again: the missing digit turns up, and then the
+        // stub answers the NEXT command.
+        c.transport_mut().push_raw(&[tail]);
+        c.transport_mut().push_reply(b"OK");
+        let reply = c.request(b"qC").expect("qC must be answered");
+        assert_eq!(
+            reply.as_str(),
+            "OK",
+            "`qC` was handed the reply to the previous `m`: the framer kept the \
+             half-read packet across the error, so the stream is one packet out \
+             of step from here on and no later reply can be trusted"
+        );
+    }
+
     #[test]
     fn closed_connection_is_reported_not_hung() {
         let mut c = RspClient::new(MockTransport::new());
@@ -2539,6 +2801,30 @@ mod tests {
         // whole list.
         let mut c2 = client_with(&[b"m1,zz,3", b"l"]);
         assert!(c2.thread_ids().is_err());
+    }
+
+    /// An EMPTY reply to `qfThreadInfo` means "packet not supported", not
+    /// "the process has zero threads".
+    ///
+    /// The RSP spec gives the two forms distinct meanings: `l` terminates the
+    /// enumeration, an empty packet says the stub does not implement the
+    /// command at all. Folding them together makes `thread_ids` answer
+    /// `Ok(vec![])` — a live process with no threads, which cannot exist — and
+    /// the caller (`AppleDebugger::threads`) presents that empty session as a
+    /// complete one.
+    ///
+    /// Not vacuous: the scripted reply is exactly one empty packet, so the
+    /// assertion runs unconditionally.
+    #[test]
+    fn thread_enumeration_rejects_an_unsupported_qfthreadinfo() {
+        let mut c = client_with(&[b""]);
+        let err = c
+            .thread_ids()
+            .expect_err("an empty qfThreadInfo reply is `unsupported`, not `no threads`");
+        assert!(
+            matches!(err, RspError::Unsupported(_)),
+            "expected Unsupported, got: {err:?}"
+        );
     }
 
     #[test]

@@ -67,6 +67,22 @@ pub enum SwiftRuntimeError {
         addr: u64,
     },
 
+    /// The class object is a pure Objective-C class, not Swift metadata.
+    ///
+    /// `TargetClassMetadata::isTypeMetadata()` is false — the Swift bit of
+    /// `class_data_bits_t` is clear — so the object is `{isa, superclass,
+    /// cache, cache, bits}` and has no `Description` field to read.
+    #[error(
+        "class metadata at {addr:#x} is a pure Objective-C class \
+         (class data {class_data:#x} has no Swift bit): no nominal type descriptor"
+    )]
+    NotSwiftClass {
+        /// Metadata address.
+        addr: u64,
+        /// The `class_data_bits_t` word that failed the test.
+        class_data: u64,
+    },
+
     /// The operation is only defined for nominal types (struct/enum/class).
     #[error("metadata at {addr:#x} has kind {kind} which carries no nominal type descriptor")]
     NotNominal {
@@ -572,6 +588,17 @@ const STRUCT_DESCRIPTOR_OFFSET: u64 = 8;
 const CLASS_DESCRIPTOR_OFFSET: u64 = 64;
 /// Offset from any metadata record *back* to its value-witness table pointer.
 const VALUE_WITNESS_OFFSET: i64 = -8;
+/// Offset of the `Data` word (`class_data_bits_t`) inside the `ObjC`-compatible
+/// class prefix `{isa, superclass, cache, cache, bits}`.
+const CLASS_DATA_OFFSET: u64 = 32;
+/// `SWIFT_CLASS_IS_SWIFT_MASK` on Apple platforms; objc4 calls the same bit
+/// `FAST_IS_SWIFT_STABLE`.
+///
+/// This is the ABI's own `TargetClassMetadata::isTypeMetadata()` test. When it
+/// is clear the class object is a *pure Objective-C* class: 40 bytes with no
+/// Swift `Description` field, so [`CLASS_DESCRIPTOR_OFFSET`] is 24 bytes past
+/// its end and the word there belongs to whatever `__DATA` follows.
+const CLASS_IS_SWIFT_MASK: u64 = 0x2;
 
 /// A Swift type metadata record read from the target.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -583,7 +610,16 @@ pub struct TypeMetadata {
     pub kind: SwiftMetadataKind,
     /// Raw first word; for a class this is the `ObjC` `isa` (possibly 0).
     pub raw_kind: u64,
+    /// `class_data_bits_t` (the `Data` word at +32), for class metadata only.
+    ///
+    /// `None` for every other kind, which has no `ObjC` class prefix. Its
+    /// [`CLASS_IS_SWIFT_MASK`] bit is what tells a Swift class apart from a
+    /// pure Objective-C one; see [`is_swift_class`](TypeMetadata::is_swift_class).
+    pub class_data: Option<u64>,
     /// Nominal type descriptor address, for kinds that have one.
+    ///
+    /// Always `None` for a pure Objective-C class: that object has no
+    /// descriptor field at all, so there is nothing honest to report.
     pub descriptor: Option<u64>,
 }
 
@@ -605,19 +641,33 @@ impl TypeMetadata {
         let kind = SwiftMetadataKind::from_raw(raw_kind)
             .ok_or(SwiftRuntimeError::UnknownMetadataKind { raw: raw_kind, addr: address })?;
 
-        let descriptor = if kind.is_nominal() {
-            let off = if kind == SwiftMetadataKind::Class {
-                CLASS_DESCRIPTOR_OFFSET
-            } else {
-                STRUCT_DESCRIPTOR_OFFSET
-            };
-            let raw = strip_pac(reader.read_pointer(address + off)?);
-            (raw != 0).then_some(raw)
+        // Only a class carries the ObjC prefix, and only its `Data` word can
+        // say whether a Swift `Description` field exists behind it.
+        let class_data = if kind == SwiftMetadataKind::Class {
+            Some(reader.read_u64(address + CLASS_DATA_OFFSET)?)
         } else {
             None
         };
+        let is_swift_class = class_data.is_some_and(|d| d & CLASS_IS_SWIFT_MASK != 0);
 
-        Ok(Self { address, kind, raw_kind, descriptor })
+        let descriptor = if !kind.is_nominal() {
+            None
+        } else if kind == SwiftMetadataKind::Class {
+            // `isTypeMetadata()`: a pure ObjC class ends at 40 bytes, so
+            // reading +64 would report a neighbouring `__DATA` word as a
+            // nominal type descriptor.
+            if is_swift_class {
+                let raw = strip_pac(reader.read_pointer(address + CLASS_DESCRIPTOR_OFFSET)?);
+                (raw != 0).then_some(raw)
+            } else {
+                None
+            }
+        } else {
+            let raw = strip_pac(reader.read_pointer(address + STRUCT_DESCRIPTOR_OFFSET)?);
+            (raw != 0).then_some(raw)
+        };
+
+        Ok(Self { address, kind, raw_kind, class_data, descriptor })
     }
 
     /// Address of this type's value-witness table.
@@ -629,14 +679,33 @@ impl TypeMetadata {
         Ok(strip_pac(reader.read_pointer(at)?))
     }
 
+    /// Is this Swift's own class metadata (`isTypeMetadata()`), as opposed to a
+    /// pure Objective-C class object?
+    ///
+    /// `false` for every non-class kind, which has no class data word.
+    #[must_use]
+    pub const fn is_swift_class(&self) -> bool {
+        match self.class_data {
+            Some(data) => data & CLASS_IS_SWIFT_MASK != 0,
+            None => false,
+        }
+    }
+
     /// Nominal type descriptor, or an error explaining why there is none.
     ///
     /// # Errors
     /// [`SwiftRuntimeError::NotNominal`] for non-nominal kinds,
+    /// [`SwiftRuntimeError::NotSwiftClass`] for a pure Objective-C class,
     /// [`SwiftRuntimeError::NullPointer`] if the slot is null.
     pub fn require_descriptor(&self) -> SwiftResult<u64> {
         if !self.kind.is_nominal() {
             return Err(SwiftRuntimeError::NotNominal { addr: self.address, kind: self.kind });
+        }
+        if matches!(self.kind, SwiftMetadataKind::Class) && !self.is_swift_class() {
+            return Err(SwiftRuntimeError::NotSwiftClass {
+                addr: self.address,
+                class_data: self.class_data.unwrap_or(0),
+            });
         }
         self.descriptor.ok_or(SwiftRuntimeError::NullPointer {
             what: "nominal type descriptor",
@@ -1064,8 +1133,22 @@ const STR_DISC_SMALL: u8 = 0x20;
 /// Discriminator bit: the string is foreign (bridged `NSString`), i.e. it does
 /// not provide contiguous UTF-8 and must be read via the `ObjC` runtime.
 const STR_DISC_FOREIGN: u8 = 0x10;
-/// Discriminator bit: large storage is *shared*, not a native `__StringStorage`.
-const STR_DISC_SHARED: u8 = 0x08;
+/// `isTailAllocated` — bit 60 of `_countAndFlagsBits`.
+///
+/// A large string is a native `__StringStorage` (UTF-8 tail-allocated right
+/// after the header) only when this is set. When it is clear the payload lives
+/// somewhere else entirely — `__SharedStringStorage`'s `start` pointer, or the
+/// `__TEXT` bytes of an immortal literal — so `object + 32` is not the text.
+///
+/// This is NOT expressible in the `_object` discriminator: there the top nibble
+/// is the whole discriminator (`0xF000_0000_0000_0000`) and every lower bit,
+/// including bit 59, belongs to `largeAddressMask`.
+const STR_LARGE_TAIL_ALLOCATED: u64 = 1 << 60;
+/// Discriminator bit b62: for a *large* string, the storage is bridged/shared
+/// (`Nibbles.largeCocoa` / `largeShared`) rather than a native
+/// `__StringStorage`. For a *small* string the same bit means `isASCII`, so it
+/// may only be tested after the small check.
+const STR_DISC_LARGE_IS_BRIDGED: u8 = 0x40;
 /// Discriminator bit: an immortal (literal) string.
 const STR_DISC_IMMORTAL: u8 = 0x80;
 /// Mask selecting the count nibble of a small string's discriminator.
@@ -1138,7 +1221,9 @@ impl SwiftString {
             SwiftStringForm::Small
         } else if disc & STR_DISC_FOREIGN != 0 {
             SwiftStringForm::Foreign
-        } else if disc & STR_DISC_SHARED != 0 {
+        } else if disc & STR_DISC_LARGE_IS_BRIDGED != 0
+            || count_and_flags & STR_LARGE_TAIL_ALLOCATED == 0
+        {
             SwiftStringForm::Shared
         } else {
             SwiftStringForm::NativeLarge
@@ -1604,10 +1689,57 @@ mod tests {
         let mut m = SparseMemory::new();
         // A realized class keeps an isa pointer in word 0.
         m.write_u64(0x6000, 0x0000_0000_7FF0_0000);
+        // A *Swift* class: class_data_bits_t carries the Swift bit, which is
+        // what makes the Description field at +64 exist at all.
+        m.write_u64(0x6000 + CLASS_DATA_OFFSET, CLASS_IS_SWIFT_MASK);
         m.write_u64(0x6000 + CLASS_DESCRIPTOR_OFFSET, 0x7000);
         let md = TypeMetadata::read(&m, 0x6000).unwrap();
         assert_eq!(md.kind, SwiftMetadataKind::Class);
         assert_eq!(md.descriptor, Some(0x7000));
+    }
+
+    /// A *pure Objective-C* class object is `{isa, superclass, cache, cache,
+    /// bits}` — 40 bytes, no Swift `Description` field. The ABI's own guard is
+    /// `TargetClassMetadata::isTypeMetadata()`, i.e. the Swift bit (0x2,
+    /// objc4's `FAST_IS_SWIFT_STABLE`) in `class_data_bits_t` at +32. With it
+    /// clear, `+64` is 24 bytes past the end of the object and whatever sits
+    /// there is an unrelated `__DATA` word, not a nominal type descriptor.
+    #[test]
+    fn pure_objc_class_metadata_has_no_nominal_descriptor() {
+        let mut m = SparseMemory::new();
+        let md = 0x22_0000u64;
+        m.write_u64(md, 0x1_0000_0000); // an isa pointer => Class kind
+        m.write_u64(md + 32, 0x30_0000); // class_data_bits_t WITHOUT bit 0x2
+        m.write_u64(md + CLASS_DESCRIPTOR_OFFSET, 0x5000); // neighbouring word
+        let t = TypeMetadata::read(&m, md).unwrap();
+        assert_eq!(t.kind, SwiftMetadataKind::Class);
+        assert_eq!(
+            t.descriptor, None,
+            "a non-Swift class has no nominal type descriptor to report"
+        );
+        assert!(
+            t.require_descriptor().is_err(),
+            "require_descriptor handed out {:?} for a pure ObjC class",
+            t.require_descriptor()
+        );
+        assert!(
+            type_name(&m, md).is_err(),
+            "type_name walked an ObjC class's neighbouring word as a descriptor"
+        );
+    }
+
+    /// The same class object with the Swift bit set *does* have a descriptor:
+    /// the guard must not refuse real Swift class metadata.
+    #[test]
+    fn swift_class_metadata_still_reports_its_descriptor() {
+        let mut m = SparseMemory::new();
+        let md = 0x23_0000u64;
+        m.write_u64(md, 0x1_0000_0000);
+        m.write_u64(md + 32, 0x30_0000 | 0x2); // Swift bit set
+        m.write_u64(md + CLASS_DESCRIPTOR_OFFSET, 0x5000);
+        let t = TypeMetadata::read(&m, md).unwrap();
+        assert_eq!(t.descriptor, Some(0x5000));
+        assert_eq!(t.require_descriptor().unwrap(), 0x5000);
     }
 
     #[test]
@@ -1868,7 +2000,7 @@ mod tests {
         let mut m = SparseMemory::new();
         // Header: count word claims ~2^47 bytes, object word is a plain
         // native-large pointer (no discriminator bits set).
-        m.write_u64(0xD_0000, 0x0000_7FFF_FFFF_FFFF);
+        m.write_u64(0xD_0000, 0x0000_7FFF_FFFF_FFFF | STR_LARGE_TAIL_ALLOCATED);
         m.write_u64(0xD_0008, 0xE_0000);
         let s = SwiftString::read(&m, 0xD_0000).unwrap();
         assert_eq!(s.form, SwiftStringForm::NativeLarge);
@@ -1902,7 +2034,8 @@ mod tests {
         let mut m = SparseMemory::new();
         let text = "a rather longer string than fifteen bytes";
         let storage = 0xD_0000u64;
-        m.write_u64(0xD_8000, text.len() as u64); // _countAndFlagsBits
+        // _countAndFlagsBits: count + isTailAllocated (b60), i.e. really native.
+        m.write_u64(0xD_8000, text.len() as u64 | STR_LARGE_TAIL_ALLOCATED);
         m.write_u64(0xD_8008, storage); // _object, native discriminator = 0
         m.write(storage + NATIVE_STRING_STORAGE_HEADER, text.as_bytes().to_vec());
         let s = SwiftString::read(&m, 0xD_8000).unwrap();
@@ -1924,17 +2057,64 @@ mod tests {
             Err(SwiftRuntimeError::UnsupportedStringForm { .. })
         ));
 
+        // Shared: native-looking discriminator, isTailAllocated clear.
         m.write_u64(0xE_1000, 10);
-        m.write_u64(0xE_1008, u64::from(STR_DISC_SHARED) << 56 | 0x1234);
+        m.write_u64(0xE_1008, 0x1234);
         let s2 = SwiftString::read(&m, 0xE_1000).unwrap();
         assert_eq!(s2.form, SwiftStringForm::Shared);
         assert!(s2.contents(&m).is_err());
     }
 
+    /// A bridged (Cocoa) string that *does* provide fast UTF-8 has top nibble
+    /// 0b0100 (`Nibbles.largeCocoa(providesFastUTF8: true)` == 0x4000…), i.e.
+    /// b62 set and b60 (foreign) clear. It must NOT be decoded as a native
+    /// `__StringStorage` at `object + 32`.
+    #[test]
+    fn bridged_cocoa_fast_utf8_is_not_native_large() {
+        let mut m = SparseMemory::new();
+        let nsstring = 0xB_0000u64;
+        m.write_u64(0xB_8000, 5); // count
+        m.write_u64(0xB_8008, 0x4000_0000_0000_0000 | nsstring);
+        // Whatever happens to sit 32 bytes into the NSString object.
+        m.write(nsstring + 32, b"JUNK!".to_vec());
+        let s = SwiftString::read(&m, 0xB_8000).unwrap();
+        assert_ne!(
+            s.form,
+            SwiftStringForm::NativeLarge,
+            "bridged Cocoa string classified as NativeLarge"
+        );
+        assert!(
+            s.contents(&m).is_err(),
+            "bridged Cocoa string decoded as {:?}",
+            s.contents(&m)
+        );
+    }
+
+    /// A real `__SharedStringStorage` string carries the SAME `_object`
+    /// discriminator as a native one (top nibble 0); the two are told apart by
+    /// `isTailAllocated` (bit 60 of `_countAndFlagsBits`), which is clear here.
+    /// Its UTF-8 is behind a `start` pointer, NOT tail-allocated at `+32`.
+    #[test]
+    fn real_shared_string_is_not_decoded_as_native() {
+        let mut m = SparseMemory::new();
+        let storage = 0xA_0000u64;
+        m.write_u64(0xA_8000, 5); // count 5, isTailAllocated (b60) clear => shared
+        m.write_u64(0xA_8008, storage); // native-looking discriminator
+        // Inside a __SharedStringStorage this offset holds header words, not text.
+        m.write(storage + 32, b"JUNK!".to_vec());
+        let s = SwiftString::read(&m, 0xA_8000).unwrap();
+        assert_ne!(
+            s.form,
+            SwiftStringForm::NativeLarge,
+            "shared string classified as NativeLarge"
+        );
+        assert!(s.contents(&m).is_err(), "shared string decoded as {:?}", s.contents(&m));
+    }
+
     #[test]
     fn immortal_flag_is_surfaced() {
         let mut m = SparseMemory::new();
-        m.write_u64(0xE_2000, 4);
+        m.write_u64(0xE_2000, 4 | STR_LARGE_TAIL_ALLOCATED);
         m.write_u64(0xE_2008, u64::from(STR_DISC_IMMORTAL) << 56 | 0x5000);
         let s = SwiftString::read(&m, 0xE_2000).unwrap();
         assert!(s.is_immortal);
@@ -2139,6 +2319,7 @@ mod tests {
         struct_descriptor(&mut m, 0x18_1000, 0x18_0000, 0x18_1800, "Model");
         // Class metadata whose descriptor slot points at the type descriptor.
         m.write_u64(0x18_2000, 0x1_0000_0000); // isa-looking word => Class
+        m.write_u64(0x18_2000 + CLASS_DATA_OFFSET, CLASS_IS_SWIFT_MASK); // a Swift class
         m.write_u64(0x18_2000 + CLASS_DESCRIPTOR_OFFSET, 0x18_1000);
         m.write_u64(0x18_3000, 0x18_2000); // object's isa
         m.write_u64(0x18_4000, 0x18_3000); // the variable holding the reference

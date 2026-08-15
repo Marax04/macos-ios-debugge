@@ -1010,6 +1010,19 @@ pub fn parse_line_program(sections: &DwarfSections, offset: u64) -> DsymResult<L
     let mut primary_file = None;
     let mut header_comp_dir = None;
 
+    // The directory/file tables live *inside* the header: `program_start` is
+    // the exclusive end the header declares for itself. Parsing them against a
+    // cursor over the whole section lets a table with a missing terminator (v4)
+    // or an oversized entry count (v5) keep reading into the opcode stream and
+    // into the next line program, and come back with file names that belong to
+    // another translation unit. Bound the cursor to the declared header so a
+    // read past it is a truncation error instead.
+    let header_end = usize::try_from(program_start)
+        .ok()
+        .filter(|e| *e <= data.len())
+        .ok_or_else(|| bad("header_length overruns section"))?;
+    let mut c = Cursor::at(&data[..header_end], c.pos());
+
     if version >= 5 {
         let dirs = read_v5_entries(sections, &mut c, is_64bit)?;
         let files = read_v5_entries(sections, &mut c, is_64bit)?;
@@ -1111,8 +1124,21 @@ fn read_v5_entries(
     // `.debug_str_offsets` header, which is what a single-contribution section
     // (what clang emits for one dSYM) always has.
     let default_str_offsets_base = if is_64bit { 16 } else { 8 };
-    // A hostile count cannot be trusted to allocate against; the loop below
-    // fails fast on truncation anyway, so the vector grows only as it decodes.
+    // A hostile count cannot be trusted to allocate against, and it cannot be
+    // trusted as a trip count either: the claim that "the loop fails fast on
+    // truncation" only holds when every entry consumes input. It does not —
+    // `format_count == 0` makes the inner loop a no-op, and even a non-empty
+    // format table can be made of `DW_FORM_flag_present`/`DW_FORM_implicit_const`,
+    // which decode without moving the cursor. Either way a `count` of
+    // `u64::MAX` spins forever against a fixed position while appending one
+    // entry per turn. No entry can be shorter than one byte of real input, so
+    // the bytes left in the header are a hard ceiling on how many there are.
+    let remaining = c.remaining() as u64;
+    if count > remaining {
+        return Err(bad(&format!(
+            "entry count {count} exceeds the {remaining} bytes left in the header"
+        )));
+    }
     let mut out: Vec<V5Entry> = Vec::new();
     for _ in 0..count {
         let mut e = V5Entry::default();
@@ -2233,6 +2259,60 @@ mod tests {
 
     // ── line program ────────────────────────────────────────────────────────
 
+    /// A v4 file_names table whose terminating NUL falls outside the declared
+    /// header must be refused, not silently completed from the opcode stream.
+    ///
+    /// `header_length` names the exclusive end of the header (`program_start`).
+    /// Here the table is left unterminated at that point and the bytes that
+    /// follow — which belong to the line *program* — happen to read as another
+    /// file entry. Accepting it produces a `LineProgram` whose `file_names`
+    /// were harvested from opcodes.
+    #[test]
+    fn v4_file_table_must_not_run_past_program_start() {
+        let mut header_tail = Vec::new();
+        header_tail.push(1); // minimum_instruction_length
+        header_tail.push(1); // maximum_ops_per_instruction
+        header_tail.push(1); // default_is_stmt
+        header_tail.push(0xFBu8); // line_base
+        header_tail.push(14); // line_range
+        header_tail.push(13); // opcode_base
+        header_tail.extend_from_slice(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
+        header_tail.push(0); // no include_directories
+        cstr("main.c", &mut header_tail);
+        uleb(0, &mut header_tail);
+        uleb(0, &mut header_tail);
+        uleb(0, &mut header_tail);
+        // NOTE: no terminating NUL — the header ends right here.
+        let header_len = header_tail.len() as u32;
+
+        // Bytes past `program_start`, i.e. the line program region.
+        let mut prog = Vec::new();
+        cstr("ghost_tu.c", &mut prog);
+        uleb(0, &mut prog);
+        uleb(0, &mut prog);
+        uleb(0, &mut prog);
+        prog.push(0); // end of file names, in the wrong place
+
+        let mut out = Vec::new();
+        let unit_len = 2 + 4 + header_len + prog.len() as u32;
+        out.extend_from_slice(&unit_len.to_le_bytes());
+        out.extend_from_slice(&4u16.to_le_bytes());
+        out.extend_from_slice(&header_len.to_le_bytes());
+        out.extend_from_slice(&header_tail);
+        out.extend_from_slice(&prog);
+
+        let s = DwarfSections { debug_line: out, ..DwarfSections::default() };
+        match parse_line_program(&s, 0) {
+            Err(DsymError::MalformedDwarf(_)) => {}
+            Err(e) => panic!("wrong error: {e}"),
+            Ok(p) => panic!(
+                "accepted a header that overran program_start: file_names = {:?}",
+                p.header.file_names.iter().map(|f| f.name.clone()).collect::<Vec<_>>()
+            ),
+        }
+    }
+
+
     fn line_sections() -> DwarfSections {
         DwarfSections { debug_line: build_debug_line_v4(), ..DwarfSections::default() }
     }
@@ -2918,5 +2998,160 @@ mod tests {
             "indexed path lost: {}",
             loc.file.display()
         );
+    }
+
+    /// A DWARF 5 line header whose directory-entry format table is EMPTY: the
+    /// per-entry loop then consumes no input, so a hostile entry count is a
+    /// pure trip count. `read_v5_entries` had no cap, so `count = u64::MAX`
+    /// looped forever pushing one `V5Entry` each time.
+    fn build_debug_line_v5_zero_format_huge_count() -> Vec<u8> {
+        let mut tail = Vec::new();
+        tail.push(1); // minimum_instruction_length
+        tail.push(1); // maximum_ops_per_instruction
+        tail.push(1); // default_is_stmt
+        tail.push(0xFB); // line_base -5
+        tail.push(14); // line_range
+        tail.push(13); // opcode_base
+        tail.extend_from_slice(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
+        tail.push(0); // directory_entry_format_count == 0
+        uleb(u64::MAX, &mut tail); // directories_count
+
+        let mut out = Vec::new();
+        let header_len = tail.len() as u32;
+        let unit_len = 2 + 1 + 1 + 4 + header_len;
+        out.extend_from_slice(&unit_len.to_le_bytes());
+        out.extend_from_slice(&5u16.to_le_bytes());
+        out.push(8); // address_size
+        out.push(0); // segment selector size
+        out.extend_from_slice(&header_len.to_le_bytes());
+        out.extend_from_slice(&tail);
+        out
+    }
+
+    #[test]
+    fn v5_entry_count_cannot_drive_an_unbounded_loop_or_allocation() {
+        let s = DwarfSections {
+            debug_line: build_debug_line_v5_zero_format_huge_count(),
+            ..DwarfSections::default()
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(parse_line_program(&s, 0).is_err());
+        });
+        let verdict = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("parse_line_program hung on a hostile v5 entry count");
+        assert!(verdict, "a v5 entry count larger than the section must be rejected");
+    }
+
+    /// The same defect as above, made observable without relying on a timeout:
+    /// a directory table with an EMPTY format list and a count of one million,
+    /// followed by a perfectly well-formed file table.
+    ///
+    /// Because the per-entry loop consumes nothing, an uncapped decoder walks
+    /// the count to completion against a fixed cursor, then finds the file
+    /// table exactly where it left it and returns `Ok` — a `LineProgram`
+    /// carrying 999_999 phantom directories decoded out of a header that is
+    /// only a few dozen bytes long. That makes the failure a value assertion
+    /// rather than a hang, and it costs ~100 MB instead of all of RAM.
+    fn build_debug_line_v5_zero_format_count(dirs_count: u64) -> Vec<u8> {
+        let mut tail = Vec::new();
+        tail.push(1); // minimum_instruction_length
+        tail.push(1); // maximum_ops_per_instruction
+        tail.push(1); // default_is_stmt
+        tail.push(0xFB); // line_base -5
+        tail.push(14); // line_range
+        tail.push(13); // opcode_base
+        tail.extend_from_slice(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
+        tail.push(0); // directory_entry_format_count == 0
+        uleb(dirs_count, &mut tail); // directories_count
+        // A valid file table right behind it: one format (path, string), one
+        // entry. Nothing else in the header is malformed.
+        tail.push(1);
+        uleb(dw_lnct::PATH, &mut tail);
+        uleb(dw_form::STRING, &mut tail);
+        uleb(1, &mut tail);
+        cstr("main.c", &mut tail);
+
+        let mut out = Vec::new();
+        let header_len = tail.len() as u32;
+        let unit_len = 2 + 1 + 1 + 4 + header_len;
+        out.extend_from_slice(&unit_len.to_le_bytes());
+        out.extend_from_slice(&5u16.to_le_bytes());
+        out.push(8); // address_size
+        out.push(0); // segment selector size
+        out.extend_from_slice(&header_len.to_le_bytes());
+        out.extend_from_slice(&tail);
+        out
+    }
+
+    #[test]
+    fn v5_entry_count_larger_than_the_header_is_refused_not_looped() {
+        let s = DwarfSections {
+            debug_line: build_debug_line_v5_zero_format_count(1_000_000),
+            ..DwarfSections::default()
+        };
+        match parse_line_program(&s, 0) {
+            Err(DsymError::MalformedDwarf(_)) => {}
+            Err(e) => panic!("wrong error: {e}"),
+            Ok(p) => panic!(
+                "a directory count of 1_000_000 was decoded out of a {}-byte header: \
+                 include_directories.len() == {}",
+                s.debug_line.len(),
+                p.header.include_directories.len()
+            ),
+        }
+    }
+
+    /// A DWARF 2-4 header whose `include_directories` list is missing its
+    /// terminating NUL. The lists must be clamped to `program_start`; if they
+    /// are not, the cursor walks out of the header, through the opcode stream,
+    /// and into the NEXT line program, harvesting that unit's bytes as this
+    /// unit's file table.
+    fn build_debug_line_v4_unterminated_dirs() -> Vec<u8> {
+        let mut tail = Vec::new();
+        tail.push(1); // minimum_instruction_length
+        tail.push(1); // default_is_stmt
+        tail.push(0); // line_base
+        tail.push(1); // line_range
+        tail.push(1); // opcode_base (no standard opcode lengths follow)
+        tail.extend_from_slice(b"d1\0"); // one directory, then NO terminator
+
+        let program = [0x11u8, 0x22, 0x33, 0x44]; // opcode bytes, no NUL
+        let header_len = tail.len() as u32;
+        let unit_len = 2 + 4 + header_len + program.len() as u32;
+
+        let mut out = Vec::new();
+        out.extend_from_slice(&unit_len.to_le_bytes());
+        out.extend_from_slice(&2u16.to_le_bytes()); // version 2
+        out.extend_from_slice(&header_len.to_le_bytes());
+        out.extend_from_slice(&tail);
+        out.extend_from_slice(&program);
+
+        // Whatever follows in the section belongs to another line program.
+        out.extend_from_slice(b"XY\0");
+        out.push(0); // empty string: would terminate the directory list
+        out.extend_from_slice(b"otherunit.c\0");
+        out.extend_from_slice(&[0, 0, 0]); // dir_index, mtime, length
+        out.push(0); // empty string: would terminate the file list
+        out
+    }
+
+    #[test]
+    fn line_header_tables_are_clamped_to_program_start() {
+        let s = DwarfSections {
+            debug_line: build_debug_line_v4_unterminated_dirs(),
+            ..DwarfSections::default()
+        };
+        let parsed = parse_line_program(&s, 0);
+        if let Ok(lp) = &parsed {
+            let names: Vec<String> =
+                lp.header.file_names.iter().map(|f| f.name.display().to_string()).collect();
+            panic!(
+                "a header whose tables run past program_start ({}) parsed successfully \
+                 with file names harvested from the next unit: {names:?}",
+                lp.program_start
+            );
+        }
     }
 }

@@ -4034,6 +4034,30 @@ mod live_tests {
 
     use crate::{Debugger, LaunchOptions, OutputRedirect};
 
+    /// A general-purpose scratch register this architecture actually has.
+    ///
+    /// These tests were written on x86-64 and asked for `rax` by name. On
+    /// AArch64 the register set publishes `x0`-`x30`, `sp`, `pc` and
+    /// `pstate`, so that name is simply absent and the test failed against a
+    /// backend that was answering correctly. Measured on ubuntu-24.04-arm,
+    /// 2026-08-15, the first time this suite ran on ARM hardware:
+    ///
+    ///   set_register should reach the real ptrace register set:
+    ///   RegisterError("unknown register rax")
+    ///
+    /// A test that fails because of the architecture it was written on is
+    /// measuring the wrong thing.
+    #[cfg(target_arch = "x86_64")]
+    const SCRATCH_REG: &str = "rax";
+    #[cfg(target_arch = "aarch64")]
+    const SCRATCH_REG: &str = "x0";
+
+    /// The program counter's name here, DERIVED from the crate's one answer
+    /// rather than spelled a fifth time.
+    fn pc_reg() -> &'static str {
+        crate::instr_step::pc_key(crate::instr_step::native_arch())
+    }
+
     fn sh_launch_options(args: &[&str]) -> LaunchOptions {
         LaunchOptions {
             executable: "/bin/sh".to_string(),
@@ -4189,7 +4213,7 @@ int main(void) {
             .get_registers(secondary)
             .await
             .unwrap_or_else(|e| panic!("get_registers on real secondary tid {secondary:?} failed: {e:?}"));
-        let rip = regs.get("rip").expect("rip should be present for a traced secondary thread");
+        let rip = regs.get(pc_reg()).expect("the program counter should be present for a traced secondary thread");
         assert_ne!(rip, 0, "secondary thread's rip should be a real address");
         eprintln!("[test] secondary rip = {rip:#x}; about to single_step");
 
@@ -5040,11 +5064,11 @@ int main(void) {
         // with the shift table broken. Measured: they did. A live test that
         // cannot fail is worse than none.
         const PROBE: u64 = 0x1122_3344_5566_7788;
-        dbg.set_register(tid, "rax", PROBE)
+        dbg.set_register(tid, SCRATCH_REG, PROBE)
             .await
             .expect("set_register should reach the real ptrace register set");
         let regs = dbg.get_registers(tid).await.expect("re-read after set_register");
-        let live_rax = regs.get("rax").expect("ptrace must report rax on x86-64");
+        let live_rax = regs.get(SCRATCH_REG).expect("ptrace must report this architecture's scratch register");
         assert_eq!(live_rax, PROBE, "the value written must be the value read back");
         let al = regs.get_narrowed("al").expect("al must derive from the live rax");
         let ah = regs.get_narrowed("ah").expect("ah must derive from the live rax");
@@ -5531,7 +5555,7 @@ int main(void) {
         let tid = dbg.target_pid().map(|p| ThreadId(p.0)).expect("expected a live pid");
 
         // Execute from an unmapped page: the faulting address is the pc itself.
-        dbg.set_register(tid, "rip", BAD).await.expect("set_register(rip) should succeed");
+        dbg.set_register(tid, pc_reg(), BAD).await.expect("set_register(pc) should succeed");
         let event = dbg.continue_execution().await.expect("continue should report an event");
 
         let reason = &event.reason;

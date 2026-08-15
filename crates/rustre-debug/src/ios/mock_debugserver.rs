@@ -146,13 +146,15 @@ impl Arm64Registers {
         out
     }
 
-    /// Decode from the payload of a `G` packet. Returns `None` on a short or
-    /// non-hex payload rather than filling in zeros, because a partially
-    /// applied register write is worse than a rejected one.
+    /// Decode from the payload of a `G` packet. Returns `None` unless the
+    /// payload is hex and exactly [`G_PACKET_BYTES`] long: a short one would
+    /// have to be zero-filled (a partially applied register write is worse
+    /// than a rejected one) and a long one would have its tail silently
+    /// dropped, reporting a full-register write that did not happen.
     #[must_use]
     pub fn decode_g(hex: &str) -> Option<Self> {
         let bytes = decode_hex(hex)?;
-        if bytes.len() < G_PACKET_BYTES {
+        if bytes.len() != G_PACKET_BYTES {
             return None;
         }
         let mut regs = Self::default();
@@ -198,7 +200,9 @@ impl Arm64Registers {
         match idx {
             0..=33 | 66 | 67 => {
                 let want = if (0..=32).contains(&idx) { 8 } else { 4 };
-                if bytes.len() < want {
+                // The value must be exactly the register's width: a short one
+                // would be zero-extended, a long one silently truncated.
+                if bytes.len() != want {
                     return false;
                 }
                 match idx {
@@ -212,7 +216,7 @@ impl Arm64Registers {
                 true
             }
             34..=65 => {
-                if bytes.len() < 16 {
+                if bytes.len() != 16 {
                     return false;
                 }
                 let mut buf = [0u8; 16];
@@ -1288,7 +1292,8 @@ impl MockDebugserver {
         let body = self.inbound[1..hash].to_vec();
         let csum_hex = String::from_utf8_lossy(&self.inbound[hash + 1..hash + 3]).to_string();
         self.inbound.drain(..hash + 3);
-        let got = u8::from_str_radix(&csum_hex, 16)
+        let got = hex_u8(&csum_hex)
+            .ok_or(())
             .map_err(|_| MockError::Framing(format!("non-hex checksum {csum_hex:?}")))?;
         let expected = checksum(&body);
         if expected != got {
@@ -1311,6 +1316,9 @@ impl MockDebugserver {
     /// packet is ASCII by construction and goes on to [`Self::dispatch`].
     fn dispatch_raw(&mut self, raw: &[u8]) -> (String, bool) {
         if let Some(rest) = raw.strip_prefix(b"X") {
+            if self.target_is_gone() {
+                return ("E09".to_string(), false);
+            }
             return (self.handle_write_memory_bin(rest), false);
         }
         let pkt = String::from_utf8_lossy(raw).to_string();
@@ -1387,7 +1395,7 @@ impl MockDebugserver {
             );
         }
         if let Some(n) = pkt.strip_prefix("qRegisterInfo") {
-            let idx = usize::from_str_radix(n, 16).unwrap_or(usize::MAX);
+            let idx = hex_usize(n).unwrap_or(usize::MAX);
             let table = register_info_table();
             return table
                 .get(idx)
@@ -1404,7 +1412,7 @@ impl MockDebugserver {
             return (format!("QC{:x}", self.current_g_thread), false);
         }
         if let Some(rest) = pkt.strip_prefix("qThreadStopInfo") {
-            let tid = u32::from_str_radix(rest, 16).unwrap_or(0);
+            let tid = hex_u32(rest).unwrap_or(0);
             return if self.thread(tid).is_some() {
                 (self.stop_reply(tid), false)
             } else {
@@ -1412,7 +1420,7 @@ impl MockDebugserver {
             };
         }
         if let Some(rest) = pkt.strip_prefix("qThreadExtraInfo,") {
-            let tid = u32::from_str_radix(rest, 16).unwrap_or(0);
+            let tid = hex_u32(rest).unwrap_or(0);
             return self.thread(tid).map_or_else(
                 || ("E01".to_string(), false),
                 |t| (hex_encode(t.name.as_bytes()), false),
@@ -1442,6 +1450,23 @@ impl MockDebugserver {
         if let Some(rest) = pkt.strip_prefix('H') {
             return (self.handle_h(rest), false);
         }
+        // Once the inferior is gone its task port dies with it: on a real
+        // device `mach_vm_read`/`mach_vm_write` and the thread-state calls all
+        // fail, and debugserver answers `E`. Answering these positively lets a
+        // client that missed the `W`/`X` reply keep "reading the target" and
+        // look indistinguishable from a correct one.
+        if self.target_is_gone()
+            && (pkt == "g"
+                || pkt.starts_with('G')
+                || pkt.starts_with('p')
+                || pkt.starts_with('P')
+                || pkt.starts_with('m')
+                || pkt.starts_with('M')
+                || pkt.starts_with('Z')
+                || pkt.starts_with('z'))
+        {
+            return ("E09".to_string(), false);
+        }
         if pkt == "g" {
             if let Some(remaining) = self.reg_reads_before_failing.as_mut() {
                 if *remaining == 0 {
@@ -1464,7 +1489,7 @@ impl MockDebugserver {
             };
         }
         if let Some(rest) = pkt.strip_prefix('p') {
-            let idx = usize::from_str_radix(rest, 16).unwrap_or(usize::MAX);
+            let idx = hex_usize(rest).unwrap_or(usize::MAX);
             return self
                 .thread(target_tid)
                 .and_then(|t| t.regs.read_indexed(idx))
@@ -1474,7 +1499,7 @@ impl MockDebugserver {
             let Some((n, v)) = rest.split_once('=') else {
                 return ("E01".to_string(), false);
             };
-            let idx = usize::from_str_radix(n, 16).unwrap_or(usize::MAX);
+            let idx = hex_usize(n).unwrap_or(usize::MAX);
             let ok = self
                 .thread_mut(target_tid)
                 .is_some_and(|t| t.regs.write_indexed(idx, v));
@@ -1510,7 +1535,7 @@ impl MockDebugserver {
             return (self.resume(self.current_c_thread, true), false);
         }
         if let Some(rest) = pkt.strip_prefix("vAttach;") {
-            let pid = u32::from_str_radix(rest, 16).unwrap_or(0);
+            let pid = hex_u32(rest).unwrap_or(0);
             if pid == self.pid {
                 return (self.stop_reply(self.current_c_thread), false);
             }
@@ -1529,16 +1554,14 @@ impl MockDebugserver {
             return (self.handle_alloc(rest), false);
         }
         if let Some(rest) = pkt.strip_prefix("_m") {
-            let addr = u64::from_str_radix(rest, 16).unwrap_or(0);
+            let addr = hex_u64(rest).unwrap_or(0);
             return (
                 if self.allocations.remove(&addr).is_some() { "OK" } else { "E01" }.to_string(),
                 false,
             );
         }
-        if pkt.starts_with('A') {
-            // argv vector — accepted and acknowledged; the mock's process image
-            // is whatever the test preloaded, so there is nothing to exec.
-            return ("OK".to_string(), false);
+        if let Some(rest) = pkt.strip_prefix('A') {
+            return (validate_a_packet(rest), false);
         }
         // Unknown packet: the empty reply is the protocol's "unsupported".
         (String::new(), false)
@@ -1552,7 +1575,7 @@ impl MockDebugserver {
         let tid = if id == "-1" || id == "0" {
             self.threads.first().map_or(0, |t| t.tid)
         } else {
-            u32::from_str_radix(id.trim_start_matches('p'), 16).unwrap_or(0)
+            hex_u32(id.trim_start_matches('p')).unwrap_or(0)
         };
         if self.thread(tid).is_none() {
             return "E01".to_string();
@@ -1574,7 +1597,7 @@ impl MockDebugserver {
         let Some((a, l)) = rest.split_once(',') else {
             return "E01".to_string();
         };
-        let (Ok(addr), Ok(len)) = (u64::from_str_radix(a, 16), usize::from_str_radix(l, 16)) else {
+        let (Some(addr), Some(len)) = (hex_u64(a), hex_usize(l)) else {
             return "E01".to_string();
         };
         let effective = if self.short_reads { len.saturating_sub(1) } else { len };
@@ -1590,8 +1613,8 @@ impl MockDebugserver {
         let Some((a, l)) = head.split_once(',') else {
             return "E01".to_string();
         };
-        let (Ok(addr), Ok(declared), Some(bytes)) =
-            (u64::from_str_radix(a, 16), usize::from_str_radix(l, 16), decode_hex(data))
+        let (Some(addr), Some(declared), Some(bytes)) =
+            (hex_u64(a), hex_usize(l), decode_hex(data))
         else {
             return "E01".to_string();
         };
@@ -1622,12 +1645,18 @@ impl MockDebugserver {
             return "E01".to_string();
         };
         let data = &rest[colon + 1..];
-        let Some((a, _l)) = head.split_once(',') else {
+        let Some((a, l)) = head.split_once(',') else {
             return "E01".to_string();
         };
-        let Ok(addr) = u64::from_str_radix(a, 16) else {
+        let (Some(addr), Ok(declared)) = (hex_u64(a), usize::from_str_radix(l, 16)) else {
             return "E01".to_string();
         };
+        // `X` carries the same `addr,len:` contract as `M`; only the payload
+        // encoding differs. debugserver consumes exactly `len` bytes, so a
+        // payload of any other length is a malformed packet, not a short write.
+        if data.len() != declared {
+            return "E01".to_string();
+        }
         // The payload arrived already unescaped by the framer.
         if data.is_empty() {
             // `X addr,0:` is the probe for binary-write support.
@@ -1643,10 +1672,10 @@ impl MockDebugserver {
         if parts.len() < 3 {
             return "E01".to_string();
         }
-        let (Ok(code), Ok(addr), Ok(len)) = (
-            parts[0].parse::<u8>(),
-            u64::from_str_radix(parts[1], 16),
-            u64::from_str_radix(parts[2], 16),
+        let (Some(code), Some(addr), Some(len)) = (
+            dec_u8(parts[0]),
+            hex_u64(parts[1]),
+            hex_u64(parts[2]),
         ) else {
             return "E01".to_string();
         };
@@ -1657,6 +1686,29 @@ impl MockDebugserver {
             return String::new();
         }
         if insert {
+            // Geometry is a property of the REQUEST, so it is checked before
+            // anything else — before the refcount fast path especially. An
+            // unencodable request that happens to share an address with an
+            // installed trap must not be waved through as a duplicate: that
+            // path also ignores `len`, so `Z2,4000,1000` would be answered `OK`
+            // and silently refcount an 8-byte watchpoint. `arm64::hw` owns the
+            // rule (4-byte aligned DBGBVR for an instruction breakpoint; a
+            // 1/2/4/8-byte naturally aligned range inside one 8-byte DBGWCR
+            // granule for a watchpoint). Answering OK to anything else models a
+            // stub that installs a watchpoint the hardware cannot express, and
+            // hides from every client the splitting it must do to cover a wider
+            // or misaligned range.
+            let encodable = match kind {
+                BpKind::Software => true,
+                BpKind::Hardware => {
+                    arm64::hw::breakpoint(addr, arm64::hw::PrivilegeControl::El0).is_ok()
+                }
+                _ => usize::try_from(len)
+                    .is_ok_and(|size| arm64::hw::watchpoint_bas(addr, size).is_ok()),
+            };
+            if !encodable {
+                return "E09".to_string();
+            }
             if let Some(existing) =
                 self.breakpoints.iter_mut().find(|b| b.addr == addr && b.kind == kind)
             {
@@ -1698,30 +1750,79 @@ impl MockDebugserver {
         // that tid and resuming the current thread instead is invisible in a
         // single-threaded test and wrong on every multi-threaded one.
         let mut cont_tid: Option<u32> = None;
+        // `C`/`S` mean "resume DELIVERING signal N to the inferior" — that is
+        // the entire difference from `c`/`s`, and `vCont?` advertises both. The
+        // hex digits after the verb ARE the signal and are not optional:
+        // dropping them makes `C` a synonym for `c`, so a client that forwards
+        // SIGSEGV/SIGUSR1 is confirmed working here and silently swallows it
+        // against a debugserver that actually delivers it.
+        let mut signal: Option<u8> = None;
         for action in rest.split(';').filter(|s| !s.is_empty()) {
             let (verb, tid) = match action.split_once(':') {
-                Some((v, t)) => (v, u32::from_str_radix(t, 16).ok()),
+                Some((v, t)) => (v, hex_u32(t)),
                 None => (action, None),
             };
-            match verb.chars().next() {
-                Some('s' | 'S') => step_tid = tid.or(Some(self.current_c_thread)),
-                Some('c' | 'C') => {
-                    cont = true;
-                    // First matching action wins, as in the vCont spec.
-                    if cont_tid.is_none() {
-                        cont_tid = tid;
+            let Some(op) = verb.chars().next() else {
+                continue;
+            };
+            let arg = &verb[op.len_utf8()..];
+            match op {
+                's' | 'S' | 'c' | 'C' => {
+                    if op.is_ascii_uppercase() {
+                        // A missing or non-hex signal is a malformed action, not
+                        // an excuse to resume unsignalled.
+                        let Some(sig) = hex_u8(arg) else {
+                            return "E01".to_string();
+                        };
+                        // Signal 0 is the spelling for "no signal".
+                        if sig != 0 && signal.is_none() {
+                            signal = Some(sig);
+                        }
+                    } else if !arg.is_empty() {
+                        // Lowercase `c`/`s` carry no argument at all.
+                        return "E01".to_string();
+                    }
+                    if op == 's' || op == 'S' {
+                        step_tid = tid.or(Some(self.current_c_thread));
+                    } else {
+                        cont = true;
+                        // First matching action wins, as in the vCont spec.
+                        if cont_tid.is_none() {
+                            cont_tid = tid;
+                        }
                     }
                 }
                 _ => {}
             }
         }
-        if let Some(tid) = step_tid {
-            self.resume(tid, true)
+        let (tid, single_step) = if let Some(tid) = step_tid {
+            (tid, true)
         } else if cont {
-            self.resume(cont_tid.unwrap_or(self.current_c_thread), false)
+            (cont_tid.unwrap_or(self.current_c_thread), false)
         } else {
-            "E01".to_string()
+            return "E01".to_string();
+        };
+        if let Some(sig) = signal {
+            return self.deliver_signal(tid, sig);
         }
+        self.resume(tid, single_step)
+    }
+
+    /// Forward a signal named by `vCont;C<sig>` / `vCont;S<sig>` to the thread.
+    ///
+    /// The mock's interpreter installs no signal handlers, so a delivered
+    /// signal stops the thread and is reported as `T<sig>` — which is what
+    /// debugserver reports once the inferior takes it. The alternative, running
+    /// the thread as if nothing had been delivered, is precisely the defect
+    /// this models away.
+    fn deliver_signal(&mut self, tid: u32, sig: u8) -> String {
+        if self.thread(tid).is_none() {
+            return "E01".to_string();
+        }
+        if let Some(t) = self.thread_mut(tid) {
+            t.stop = StopKind::Signal(sig);
+        }
+        self.stop_reply(tid)
     }
 
     fn handle_alloc(&mut self, rest: &str) -> String {
@@ -1735,7 +1836,7 @@ impl MockDebugserver {
         let Some(perms) = parse_alloc_perms(perms_str) else {
             return "E01".to_string();
         };
-        let Ok(size) = u64::from_str_radix(size_hex, 16) else {
+        let Some(size) = hex_u64(size_hex) else {
             return "E01".to_string();
         };
         let Ok(len) = usize::try_from(size) else {
@@ -1753,7 +1854,7 @@ impl MockDebugserver {
     }
 
     fn memory_region_info(&self, addr_hex: &str) -> String {
-        let Ok(addr) = u64::from_str_radix(addr_hex, 16) else {
+        let Some(addr) = hex_u64(addr_hex) else {
             return "E01".to_string();
         };
         self.memory.region_at(addr).map_or_else(
@@ -1779,15 +1880,22 @@ impl MockDebugserver {
         if parts.len() < 5 || parts[2] != "read" {
             return "E00".to_string();
         }
-        let payload = match parts[1] {
-            "features" => self.target_xml.clone(),
-            "libraries" => self.libraries_xml(),
+        // The annex names WHICH document is wanted, and it is part of the
+        // contract: `features` is only defined for `target.xml`, and
+        // `libraries` takes no annex at all. Serving any annex means a client
+        // that sends the wrong one — or omits it, which shifts every following
+        // field one place left — passes every test here and is answered `E00`
+        // by the device on its very first descriptor fetch.
+        let annex = parts[3];
+        let payload = match (parts[1], annex) {
+            ("features", "target.xml") => self.target_xml.clone(),
+            ("libraries", "") => self.libraries_xml(),
             _ => return "E00".to_string(),
         };
         let Some((off_s, len_s)) = parts[4].split_once(',') else {
             return "E00".to_string();
         };
-        let (Ok(off), Ok(len)) = (usize::from_str_radix(off_s, 16), usize::from_str_radix(len_s, 16))
+        let (Some(off), Some(len)) = (hex_usize(off_s), hex_usize(len_s))
         else {
             return "E00".to_string();
         };
@@ -1882,6 +1990,13 @@ impl MockDebugserver {
     // -- execution ----------------------------------------------------------
 
     /// Build the `T`/`W` stop reply for `tid`.
+    /// The inferior has exited; nothing about it can be read or written any
+    /// more. `killed_by` is NOT part of this test: it is armed BEFORE the
+    /// resume that reports the death, so it says "will die", not "is dead".
+    const fn target_is_gone(&self) -> bool {
+        self.exit_code.is_some()
+    }
+
     fn stop_reply(&self, tid: u32) -> String {
         if let Some(sig) = self.killed_by {
             return format!("X{sig:02x}");
@@ -2439,7 +2554,7 @@ fn split_thread_suffix(pkt: &str) -> (&str, Option<u32>) {
     if let Some(idx) = pkt.rfind(";thread:") {
         let tail = &pkt[idx + ";thread:".len()..];
         let tid_str = tail.strip_suffix(';').unwrap_or(tail);
-        if let Ok(tid) = u32::from_str_radix(tid_str, 16) {
+        if let Some(tid) = hex_u32(tid_str) {
             return (&pkt[..idx], Some(tid));
         }
     }
@@ -2466,6 +2581,75 @@ fn default_target_xml() -> String {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+
+/// RSP numeric fields are bare digit runs. `from_str_radix` additionally accepts
+/// a leading `+`, which is the acknowledgement byte at the framing layer and is
+/// never part of a field: debugserver's reader stops at the first non-digit and
+/// rejects the packet. These wrappers restore that, so the mock cannot accept a
+/// family of malformed packets the device would refuse.
+fn is_hex_run(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn hex_u64(s: &str) -> Option<u64> {
+    if is_hex_run(s) { u64::from_str_radix(s, 16).ok() } else { None }
+}
+
+fn hex_u32(s: &str) -> Option<u32> {
+    if is_hex_run(s) { u32::from_str_radix(s, 16).ok() } else { None }
+}
+
+fn hex_usize(s: &str) -> Option<usize> {
+    if is_hex_run(s) { usize::from_str_radix(s, 16).ok() } else { None }
+}
+
+fn hex_u8(s: &str) -> Option<u8> {
+    if is_hex_run(s) { u8::from_str_radix(s, 16).ok() } else { None }
+}
+
+fn dec_u8(s: &str) -> Option<u8> {
+    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) { s.parse().ok() } else { None }
+}
+
+fn dec_usize(s: &str) -> Option<usize> {
+    if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) { s.parse().ok() } else { None }
+}
+
+/// Validate an `A` packet: `A<arglen>,<argnum>,<hex-arg>[,<arglen>,…]`.
+///
+/// Nothing is executed — the mock's process image is whatever the test
+/// preloaded, so there is nothing to exec — but the packet is still parsed.
+/// debugserver walks every triplet and answers `E` on any malformation before
+/// it will launch, so a mock that replies `OK` to whatever follows the letter
+/// is the strongest possible form of "always answers positively": a client that
+/// builds argv with the wrong length, an odd-length hex body, or a missing
+/// separator is never contradicted until it fails to launch on a device.
+///
+/// `arglen` counts the HEX CHARACTERS of the argument (twice its byte length)
+/// and is decimal, exactly as this crate's own `lldb_ext::build_a_packet`
+/// emits it and as debugserver's `HandlePacket_A` reads it back.
+fn validate_a_packet(rest: &str) -> String {
+    if rest.is_empty() {
+        return "E01".to_string();
+    }
+    let fields: Vec<&str> = rest.split(',').collect();
+    if !fields.len().is_multiple_of(3) {
+        return "E01".to_string();
+    }
+    for triplet in fields.chunks_exact(3) {
+        let (Some(arglen), Some(_argnum)) = (dec_usize(triplet[0]), dec_usize(triplet[1])) else {
+            return "E01".to_string();
+        };
+        let body = triplet[2];
+        // The declared length is in characters, and the body must be hex —
+        // `decode_hex` also rejects the odd-length case for free.
+        if body.len() != arglen || decode_hex(body).is_none() {
+            return "E01".to_string();
+        }
+    }
+    "OK".to_string()
+}
 
 #[cfg(test)]
 mod tests {
@@ -2541,6 +2725,27 @@ mod tests {
         assert!(Arm64Registers::decode_g("zz").is_none());
     }
 
+    /// The `G` payload is a fixed-size image of the register context. A client
+    /// that appends extra registers (wrong register set, doubled buffer) must
+    /// be told so, exactly as a short payload is — silently dropping the tail
+    /// reports a successful full-register write that did not happen.
+    #[test]
+    fn g_packet_rejects_long_payload() {
+        let regs = Arm64Registers::default();
+        let long = format!("{}00112233445566778899aabbccddeeff", regs.encode_g());
+        assert!(
+            Arm64Registers::decode_g(&long).is_none(),
+            "a payload longer than the register context must be rejected"
+        );
+
+        let mut srv = MockDebugserver::new(1);
+        assert_eq!(
+            one_shot(&mut srv, &format!("G{long}")),
+            "E01",
+            "the G handler must reject an over-long register block"
+        );
+    }
+
     #[test]
     fn indexed_register_access_matches_g_layout() {
         let mut regs = Arm64Registers::default();
@@ -2552,6 +2757,7 @@ mod tests {
         // A too-short value must be rejected, not zero-extended.
         assert!(!regs.write_indexed(0, "ff"));
     }
+
 
     #[test]
     fn memory_map_rejects_overlap_and_reads_exactly() {
@@ -2696,6 +2902,21 @@ mod tests {
         // Unmapped access must be a typed error, not empty data.
         assert_eq!(one_shot(&mut srv, "m9000,4"), "E09");
         assert_eq!(one_shot(&mut srv, "qMemoryRegionInfo:4001").contains("permissions:rw"), true);
+    }
+
+    /// `from_str_radix` accepts a leading `+` for unsigned types, so every hex
+    /// field in the dispatcher silently swallows one. debugserver's reader
+    /// consumes hex digits only: `+` is the ack byte, never part of a field.
+    #[test]
+    fn skeptic_hex_fields_reject_leading_plus() {
+        let mut srv = MockDebugserver::new(1);
+        srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data"));
+        assert_eq!(one_shot(&mut srv, "M4000,4:deadbeef"), "OK");
+
+        assert_eq!(one_shot(&mut srv, "m+4000,4"), "E01", "`m` address must reject `+`");
+        assert_eq!(one_shot(&mut srv, "m4000,+4"), "E01", "`m` length must reject `+`");
+        assert_eq!(one_shot(&mut srv, "Z0,+2008,4"), "E01", "`Z` address must reject `+`");
+        assert_eq!(one_shot(&mut srv, "Z+0,2008,4"), "E01", "`Z` kind must reject `+`");
     }
 
     #[test]
@@ -2846,6 +3067,42 @@ mod tests {
         assert_eq!(one_shot(&mut srv, "vCont;c"), "W07");
     }
 
+    /// The debug registers cannot encode every `Z` geometry, and this crate
+    /// already models the rule in `arm64::hw`: `breakpoint` refuses an
+    /// unaligned instruction address, `watchpoint_bas` refuses a size other
+    /// than 1/2/4/8, a misaligned address, and a range crossing the 8-byte
+    /// granule. A stub that answers `OK` to any of those hands the client a
+    /// watchpoint the hardware cannot install, so client-side splitting and
+    /// alignment logic is never exercised in-process.
+    #[test]
+    fn z_geometry_the_debug_registers_cannot_encode_is_refused() {
+        let mut srv = MockDebugserver::with_program(1, 0x2000, &[Arm64Interp::RET]);
+        for pkt in [
+            "Z1,2002,4",  // unaligned instruction breakpoint
+            "Z2,4001,3",  // size 3 is not 1/2/4/8, and 0x4001 is misaligned
+            "Z2,4007,8",  // crosses the 8-byte watchpoint granule
+            "Z3,4001,4",  // misaligned 4-byte read watchpoint
+            "Z4,4000,1000", // far larger than a debug register can cover
+        ] {
+            let reply = one_shot(&mut srv, pkt);
+            assert!(
+                reply.starts_with('E'),
+                "`{pkt}` is unencodable in DBGBVR/DBGWVR+DBGWCR, the mock answered {reply:?}"
+            );
+        }
+        assert!(
+            srv.breakpoints().is_empty(),
+            "a refused request must not leave a trap behind: {:?}",
+            srv.breakpoints()
+        );
+
+        // The encodable neighbours of each refusal still succeed.
+        assert_eq!(one_shot(&mut srv, "Z1,2004,4"), "OK");
+        assert_eq!(one_shot(&mut srv, "Z2,4000,8"), "OK");
+        assert_eq!(one_shot(&mut srv, "Z3,4004,4"), "OK");
+        assert_eq!(one_shot(&mut srv, "Z4,4002,2"), "OK");
+    }
+
     #[test]
     fn single_step_advances_exactly_one_instruction() {
         let base = 0x3000u64;
@@ -2864,6 +3121,20 @@ mod tests {
         let reply = one_shot(&mut srv, "vCont;c");
         assert_eq!(reply, "W00");
         assert_eq!(srv.unknown_insn_count, 1);
+    }
+
+    #[test]
+    fn packets_fail_after_the_process_has_exited() {
+        let mut srv = MockDebugserver::with_program(1, 0x5000, &[Arm64Interp::RET]);
+        assert_eq!(one_shot(&mut srv, "vCont;c"), "W00");
+        assert!(
+            one_shot(&mut srv, "m5000,4").starts_with('E'),
+            "memory read after exit must fail: {}",
+            one_shot(&mut srv, "m5000,4")
+        );
+        assert!(one_shot(&mut srv, "M5000,1:00").starts_with('E'));
+        assert!(one_shot(&mut srv, "Z0,5000,4").starts_with('E'));
+        assert!(one_shot(&mut srv, "g").starts_with('E'));
     }
 
     #[test]
@@ -3205,6 +3476,170 @@ mod tests {
         // A permission string the target cannot honour is an error, not an
         // arbitrary default.
         assert_eq!(one_shot(&mut srv, "_M100,q"), "E01");
+    }
+
+    /// `X addr,len:` carries the same length contract as `M`; only the payload
+    /// encoding differs. debugserver reads exactly `len` bytes off the packet,
+    /// so a payload of any other size is malformed — and an empty payload is
+    /// the zero-length probe ONLY when the header declared zero.
+    #[test]
+    fn x_packet_enforces_its_declared_length() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data")));
+
+        let short = {
+            let mut p = b"X4000,8:".to_vec();
+            p.extend_from_slice(&[0xAA, 0xBB]);
+            p
+        };
+        assert_eq!(one_shot_bytes(&mut srv, &short), "E01", "2 bytes supplied, 8 declared");
+        assert_eq!(
+            one_shot_bytes(&mut srv, b"X4000,10:"),
+            "E01",
+            "no payload at all, 16 bytes declared — not the zero-length probe"
+        );
+        assert_eq!(one_shot_bytes(&mut srv, b"X4000,0:"), "OK", "only `,0:` is the probe");
+        assert_eq!(
+            one_shot(&mut srv, "m4000,4"),
+            "00000000",
+            "a rejected write must not have touched memory"
+        );
+    }
+
+    /// `qXfer:<object>:read:<annex>:off,len` — the annex names WHICH document.
+    /// `features` is only defined for `target.xml` and `libraries` requires an
+    /// empty annex; serving any annex means a client that sends the wrong one
+    /// (or omits it, which shifts every following field) passes here and gets
+    /// `E00` from the device on its first descriptor fetch.
+    #[test]
+    fn qxfer_rejects_an_unknown_annex() {
+        let mut srv = MockDebugserver::new(1);
+        srv.set_target_xml("ABCDEFGHIJ");
+
+        assert_eq!(one_shot(&mut srv, "qXfer:features:read:target.xml:0,4"), "mABCD");
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:features:read:not-target.xml:0,4"),
+            "E00",
+            "`features` is defined for target.xml alone"
+        );
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:features:read::0,4"),
+            "E00",
+            "an omitted annex is not target.xml"
+        );
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:libraries:read:target.xml:0,4"),
+            "E00",
+            "`libraries` takes no annex"
+        );
+        // The well-formed library read still works.
+        assert!(one_shot(&mut srv, "qXfer:libraries:read::0,4").starts_with(['m', 'l']));
+    }
+
+    /// A free debug-register slot is not enough: the geometry must fit the
+    /// register too. `arm64::hw` owns that rule, and answering `OK` to a
+    /// watchpoint the hardware cannot encode hides from every client the
+    /// splitting/alignment work it must do.
+    #[test]
+    fn z_packets_reject_geometry_the_debug_registers_cannot_encode() {
+        let mut srv = MockDebugserver::new(1);
+
+        assert_eq!(one_shot(&mut srv, "Z2,4000,8"), "OK", "aligned 8-byte watchpoint is legal");
+        for pkt in ["Z2,4001,3", "Z2,4007,8", "Z2,4000,1000", "Z1,2002,4"] {
+            let reply = one_shot(&mut srv, pkt);
+            assert!(
+                reply.starts_with('E'),
+                "{pkt} cannot be encoded into DBGWVR/DBGWCR, got {reply}"
+            );
+        }
+        assert_eq!(
+            srv.breakpoints().len(),
+            1,
+            "only the encodable watchpoint may have been installed: {:?}",
+            srv.breakpoints()
+        );
+    }
+
+    /// `P<n>=<value>` must carry exactly the register's width. A wider value is
+    /// silently truncated by a `min`-clamped decoder, so a client with a width
+    /// bug in its register map is confirmed correct here and corrupts — or is
+    /// rejected by — the device.
+    #[test]
+    fn p_packet_rejects_a_value_wider_than_the_register() {
+        let mut regs = Arm64Registers::default();
+
+        assert!(!regs.write_indexed(33, &hex_encode(&[0u8; 8])), "cpsr is 32-bit");
+        assert!(!regs.write_indexed(66, &hex_encode(&[0u8; 8])), "fpsr is 32-bit");
+        assert!(!regs.write_indexed(0, &hex_encode(&[0u8; 16])), "x0 is 64-bit");
+        assert!(!regs.write_indexed(34, &hex_encode(&[0u8; 32])), "v0 is 128-bit");
+
+        assert!(regs.write_indexed(33, &hex_encode(&[0u8; 4])), "exact width still accepted");
+        assert!(regs.write_indexed(0, &hex_encode(&[0u8; 8])), "exact width still accepted");
+        assert!(regs.write_indexed(34, &hex_encode(&[0u8; 16])), "exact width still accepted");
+
+        let mut srv = MockDebugserver::new(1);
+        // 0x21 = 33 = cpsr, a 32-bit register handed a 64-bit value.
+        assert_eq!(one_shot(&mut srv, "P21=0000000000000000"), "E01");
+    }
+
+    /// `vCont;C<sig>` means "resume DELIVERING signal <sig>" — that is the whole
+    /// difference from `c`. Executing it as a plain continue swallows the signal
+    /// while `vCont?` advertises `C`/`S`, so a client that forwards SIGSEGV is
+    /// confirmed working here and silently drops it on a device.
+    #[test]
+    fn vcont_delivers_the_signal_named_in_a_c_action() {
+        let base = 0x7000u64;
+        let mut srv = MockDebugserver::with_program(1, base, &[Arm64Interp::RET]);
+        // Sanity: unsignalled, this program runs off its outermost frame.
+        assert_eq!(one_shot(&mut srv, "vCont;c"), "W00", "baseline: runs to exit");
+
+        let mut srv = MockDebugserver::with_program(1, base, &[Arm64Interp::RET]);
+        let reply = one_shot(&mut srv, "vCont;C0b");
+        assert!(reply.starts_with("T0b"), "SIGSEGV must be delivered, got {reply}");
+
+        let mut srv = MockDebugserver::with_program(1, base, &[Arm64Interp::RET]);
+        assert_eq!(
+            one_shot(&mut srv, "vCont;Cxx"),
+            "E01",
+            "a non-hex signal is a malformed action, not a plain continue"
+        );
+    }
+
+    /// RSP address/length/thread fields are bare hex digit runs. debugserver's
+    /// reader consumes hex digits only, so a `+` fails the field parse there —
+    /// accepting it here blesses a client that formats through a signed path.
+    #[test]
+    fn hex_fields_reject_a_sign_prefix() {
+        let mut srv = MockDebugserver::new(1);
+        assert!(srv.memory.map(MemoryRegion::zeroed(0x4000, 32, Perms::rw(), "data")));
+
+        assert_eq!(one_shot(&mut srv, "m+4000,4"), "E01");
+        assert_eq!(one_shot(&mut srv, "Z0,+2008,4"), "E01");
+        assert_eq!(one_shot(&mut srv, "Hg+1"), "E01");
+        assert_eq!(one_shot(&mut srv, "p+20"), "E01");
+        // The unsigned forms are unaffected.
+        assert_eq!(one_shot(&mut srv, "m4000,4"), "00000000");
+        assert_eq!(one_shot(&mut srv, "Z0,2008,4"), "OK");
+    }
+
+    /// `A<arglen>,<argnum>,<hex-arg>,...` is triplet-structured, and `arglen`
+    /// counts the HEX CHARACTERS of the argument (this crate's own
+    /// `lldb_ext::build_a_packet` emits exactly that). debugserver parses each
+    /// triplet and rejects a body whose length disagrees; answering `OK` to
+    /// anything at all is the strongest form of "always answers positively".
+    #[test]
+    fn a_packet_validates_its_triplets() {
+        let mut srv = MockDebugserver::new(1);
+
+        // "/bin" = 2f62696e = 8 hex characters, argument index 0.
+        assert_eq!(one_shot(&mut srv, "A8,0,2f62696e"), "OK");
+        assert_eq!(one_shot(&mut srv, "A8,0,2f62696e,4,1,2d78"), "OK", "two triplets");
+
+        assert_eq!(one_shot(&mut srv, "A"), "E01", "no argv at all");
+        assert_eq!(one_shot(&mut srv, "Awibble"), "E01", "not a triplet");
+        assert_eq!(one_shot(&mut srv, "A8,0"), "E01", "length and index with no body");
+        assert_eq!(one_shot(&mut srv, "A6,0,2f62696e"), "E01", "8 supplied, 6 declared");
+        assert_eq!(one_shot(&mut srv, "A7,0,2f62696ez"), "E01", "odd length, non-hex body");
     }
 }
 
