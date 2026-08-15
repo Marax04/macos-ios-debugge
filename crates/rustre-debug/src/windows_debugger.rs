@@ -1554,11 +1554,29 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 return;
             }
             Command::Kill => {
+                // The answer is DERIVED from the syscall, not asserted.
+                //
+                // `TerminateProcess` returns a BOOL and it was thrown away, so
+                // `kill()` reported success for a process that may still be
+                // running — most plausibly when the handle lacks
+                // PROCESS_TERMINATE, which fails with ERROR_ACCESS_DENIED and
+                // leaves the target very much alive.
+                //
+                // `last_os_error()` is read before `CloseHandle`, which would
+                // overwrite it. The handle is closed either way: it is ours,
+                // and whether the kill worked says nothing about whether we
+                // still need it.
+                let terminated = unsafe { TerminateProcess(process_handle, 1) };
+                let last_err = std::io::Error::last_os_error();
                 unsafe {
-                    TerminateProcess(process_handle, 1);
                     CloseHandle(process_handle);
                 }
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                let result = if terminated == 0 {
+                    Err(DebugError::Os(format!("TerminateProcess({pid}) failed: {last_err}")))
+                } else {
+                    Ok(())
+                };
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
         }

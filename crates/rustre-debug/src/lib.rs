@@ -10123,6 +10123,45 @@ mod tests_extra {
         );
     }
 
+    /// Neither must `kill`.
+    ///
+    /// Same shape as the `detach` guard below, found by asking where else a
+    /// literal `Ok(())` survived. All three backends issue their kill — Windows
+    /// `TerminateProcess`, Linux `SIGKILL`, macOS `PT_KILL` + `SIGKILL` — and
+    /// then answer with a constant:
+    ///
+    /// * Windows discards the BOOL from `TerminateProcess` entirely;
+    /// * macOS stores `waitpid`'s result in `_already_reaped` and never reads
+    ///   it, which is a discard wearing a name.
+    ///
+    /// Iteration 538 made the MCP layer stop claiming "the process was killed"
+    /// without checking. This is what it had to check against: nothing.
+    ///
+    /// As with `detach`, the fix is not "propagate everything". A process that
+    /// is already gone cannot be killed and does not need to be — `ESRCH` is
+    /// the successful outcome spelled as an error. `EPERM` is not: it says the
+    /// target is still running and still not ours.
+    #[test]
+    fn kill_does_not_claim_success_without_checking_it() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let start = src
+                .find("Command::Kill => {")
+                .unwrap_or_else(|| panic!("{name}: no Kill arm to check"));
+            let arm = &src[start..];
+            let end = arm.find("\n            }").unwrap_or(arm.len());
+            let arm = &arm[..end];
+            assert!(
+                !arm.contains("Reply::Ack(Ok(()))"),
+                "{name}: the Kill arm answers with a literal Ok — the kill syscall's result is \
+                 discarded, so `kill()` reports success for a process that may still be running"
+            );
+        }
+    }
+
     /// `detach` must not answer with a constant.
     ///
     /// All three backends issued their detach syscalls — `DebugActiveProcessStop`

@@ -1549,8 +1549,26 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 if ptrace_trace_enabled() {
                     eprintln!("[ptrace] Kill: SIGKILL pid={pid}");
                 }
+                // The answer is DERIVED from the syscall, not asserted.
+                //
+                // ESRCH is forgiven for the same reason as in `Detach`: a
+                // process that is already gone cannot be killed and does not
+                // need to be — that errno is the successful outcome spelled as
+                // a failure. EPERM is not: it says the target is still running
+                // and still not ours to end.
+                //
+                // The reaping below stays UNCHECKED on purpose: it drains
+                // children the event loop may already have taken, so a failure
+                // there is expected and says nothing about whether the kill
+                // landed.
+                let mut failure: Option<String> = None;
                 unsafe {
-                    libc::kill(pid, libc::SIGKILL);
+                    if libc::kill(pid, libc::SIGKILL) < 0 {
+                        let err = std::io::Error::last_os_error();
+                        if err.raw_os_error() != Some(libc::ESRCH) {
+                            failure = Some(format!("SIGKILL({pid}) failed: {err}"));
+                        }
+                    }
                     // Reap `pid` itself with a BLOCKING wait first — `kill()`
                     // callers (e.g. `kill_actually_terminates_the_process`)
                     // rely on the process being fully dead-and-reaped by the
@@ -1595,7 +1613,8 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                         }
                     }
                 }
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                let result = failure.map_or(Ok(()), |m| Err(DebugError::Os(m)));
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
         }

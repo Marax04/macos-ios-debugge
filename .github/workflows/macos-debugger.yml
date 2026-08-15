@@ -113,8 +113,19 @@ jobs:
       # `--test-threads=1` for the same reason the Linux runs need it: several
       # tests drive a real traced process, and two of those in parallel fight
       # over the same debug registers and wait queues.
+      # `--skip live_tests` is not a way of avoiding them — they run in their own
+      # step below, under sudo, because `task_for_pid` needs it.
+      #
+      # Without the skip this step ran them unprivileged, they failed, and the
+      # job stopped: the privileged step that exists to run them never
+      # executed. Measured on macos-14, 2026-08-15 — the first run after the
+      # live tests were added regressed this job from `success` to `failure`
+      # while the sudo step was `skipped`, which is the worst arrangement of
+      # the two: it reports a failure AND withholds the answer.
       - name: Test (release, serial)
-        run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} -- --test-threads=1
+        run: |
+          cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} \
+            -- --test-threads=1 --skip live_tests
 
       # ── 2b. The LIVE tests — a real child process, real ptrace + Mach ──────
       #
@@ -136,6 +147,23 @@ jobs:
       # not mask the compile-and-unit-test result above, which is a different
       # question. Remove the flag once the live tests pass — leaving it after
       # that turns a measurement into an ignored alarm.
+      #
+      # WHAT THE FIRST RUN ANSWERED (macos-14, 2026-08-15), recorded here
+      # because it is a deployment fact and not a CI detail:
+      #
+      #   launch_runs_a_child_to_exit ....................... PASSED
+      #   the_task_port_is_obtainable_for_our_own_child ..... failed
+      #   a_stopped_thread_reports_a_pc_inside_a_mapped_region failed
+      #   a_software_breakpoint_..._apple_silicon ........... failed
+      #
+      #   task_for_pid failed (kern_return 5) — needs root or the debugger
+      #   entitlement
+      #
+      # So `fork` + `PT_TRACE_ME` + `execvp` and the wait loop all work
+      # unprivileged on Apple Silicon; everything that needs a Mach task port
+      # does not. That is why this step is the one that runs as root, and why
+      # anyone deploying this backend on macOS needs to know it before they
+      # find out from a user.
       - name: Live tests (root — task_for_pid requires it)
         continue-on-error: true
         run: |

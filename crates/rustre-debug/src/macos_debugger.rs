@@ -1809,6 +1809,7 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 return;
             }
             Command::Kill => {
+                let mut failure: Option<String> = None;
                 unsafe {
                     // `PT_KILL` only reaches a tracee that is currently in a
                     // ptrace-stop. A target killed while RUNNING would survive
@@ -1816,7 +1817,22 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     // not one: `PT_KILL` also releases the trace, which a bare
                     // SIGKILL to a stopped tracee does not.
                     libc::ptrace(PT_KILL, pid, std::ptr::null_mut(), 0);
-                    libc::kill(pid, libc::SIGKILL);
+                    // Its result is CHECKED — `PT_KILL` above is not.
+                    //
+                    // `SIGKILL` is the one that decides: `PT_KILL` is a courtesy
+                    // to the ptrace session and legitimately fails once the
+                    // target is no longer traced, so reporting its outcome
+                    // would mislead. ESRCH from the signal is forgiven — a
+                    // process that is already gone cannot be killed and does
+                    // not need to be, which is the successful outcome spelled
+                    // as a failure. EPERM is not: it says the target is still
+                    // running and still not ours to end.
+                    if libc::kill(pid, libc::SIGKILL) < 0 {
+                        let err = std::io::Error::last_os_error();
+                        if err.raw_os_error() != Some(libc::ESRCH) {
+                            failure = Some(format!("SIGKILL({pid}) failed: {err}"));
+                        }
+                    }
                     // And REAP it. This backend killed the process and returned
                     // immediately, which is wrong twice over:
                     //
@@ -1848,8 +1864,13 @@ fn ptrace_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 // — but the value is named rather than dropped, so the rule stays
                 // one rule with no exceptions to remember.
                 let rc = unsafe { libc::waitpid(pid, &raw mut status, 0) };
-                let _already_reaped = rc < 0;
-                let _ = reply_tx.send(Reply::Ack(Ok(())));
+                // This was `let _already_reaped = rc < 0;` — a discard wearing
+                // a name, since the value was never read. The reap stays
+                // unchecked on purpose (the event loop may have taken the child
+                // first), but it no longer pretends to be consulted.
+                let _ = rc;
+                let result = failure.map_or(Ok(()), |m| Err(DebugError::Os(m)));
+                let _ = reply_tx.send(Reply::Ack(result));
                 return;
             }
         }
