@@ -1978,7 +1978,7 @@ fn classify_status(pid: libc::pid_t, tid_raw: libc::pid_t, status: libc::c_int) 
             read_regs(tid_raw).map_or(
                 StopReason::Unknown { description: "SIGTRAP but GETREGS failed".into() },
                 |regs| {
-                    let rip = regs.rip as u64;
+                    let rip = regs_pc(&regs);
                     if let Some(trap) = trap_at_reported_pc(tid_raw, rip) {
                         StopReason::Breakpoint {
                             address: Address(trap),
@@ -2049,6 +2049,7 @@ fn watchpoint_hit(pid: libc::pid_t) -> Option<(Address, BreakpointKind)> {
 /// Byte offset of `struct user.u_debugreg[idx]` (`<sys/user.h>`), computed
 /// from the real `libc::user` layout rather than hand-copied so it can't
 /// drift from whatever glibc/libc-crate actually defines.
+#[cfg(target_arch = "x86_64")]
 fn debugreg_offset(idx: usize) -> i64 {
     // INVARIANT: x86/x86-64 `struct user` has 8 debug registers (DR0-DR7).
     debug_assert!(idx < 8, "debug register index out of range: {idx}");
@@ -2065,6 +2066,7 @@ fn debugreg_offset(idx: usize) -> i64 {
 /// `-1` is ambiguous with a legitimate all-ones register value — `errno` is
 /// cleared first and checked to disambiguate, per the standard glibc
 /// `ptrace(2)` idiom for `PEEK*` requests.
+#[cfg(target_arch = "x86_64")]
 fn read_debug_reg(pid: libc::pid_t, idx: usize) -> Result<u64, DebugError> {
     unsafe {
         *libc::__errno_location() = 0;
@@ -2089,6 +2091,7 @@ fn read_debug_reg(pid: libc::pid_t, idx: usize) -> Result<u64, DebugError> {
 /// Write hardware debug register `dr{idx}` via `PTRACE_POKEUSER` — see
 /// `read_debug_reg`'s doc comment for why this is a separate call from
 /// `write_regs`.
+#[cfg(target_arch = "x86_64")]
 fn write_debug_reg(pid: libc::pid_t, idx: usize, value: u64) -> Result<(), DebugError> {
     let ok = unsafe {
         libc::ptrace(
@@ -2277,14 +2280,34 @@ fn read_regs(pid: libc::pid_t) -> Result<libc::user_regs_struct, DebugError> {
     debug_assert!(pid > 0, "read_regs: pid must be positive, got {pid}");
     unsafe {
         let mut regs: libc::user_regs_struct = zeroed();
+        // `PTRACE_GETREGS` does not exist on AArch64 — the whole "one request
+        // per register file" design was replaced by `PTRACE_GETREGSET`, which
+        // names the set (`NT_PRSTATUS` for the general-purpose registers) and
+        // takes an `iovec` so the kernel can report how much it actually
+        // wrote. Measured on ubuntu-24.04-arm, 2026-08-15: the constant is
+        // simply absent from `libc` there.
+        #[cfg(target_arch = "x86_64")]
         let ok = libc::ptrace(
             libc::PTRACE_GETREGS,
             pid,
             std::ptr::null_mut::<libc::c_void>(),
             std::ptr::addr_of_mut!(regs).cast::<libc::c_void>(),
         );
+        #[cfg(target_arch = "aarch64")]
+        let ok = {
+            let mut iov = libc::iovec {
+                iov_base: std::ptr::addr_of_mut!(regs).cast::<libc::c_void>(),
+                iov_len: std::mem::size_of::<libc::user_regs_struct>(),
+            };
+            libc::ptrace(
+                libc::PTRACE_GETREGSET,
+                pid,
+                libc::NT_PRSTATUS as *mut libc::c_void,
+                std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
+            )
+        };
         if ok < 0 {
-            return Err(DebugError::RegisterError(format!("PTRACE_GETREGS failed: {}", std::io::Error::last_os_error())));
+            return Err(DebugError::RegisterError(format!("reading the register set failed: {}", std::io::Error::last_os_error())));
         }
         Ok(regs)
     }
@@ -2298,19 +2321,37 @@ fn write_regs(pid: libc::pid_t, regs: &libc::user_regs_struct) -> Result<(), Deb
     // INVARIANT: pid must refer to a currently-stopped ptrace tracee.
     debug_assert!(pid > 0, "write_regs: pid must be positive, got {pid}");
     unsafe {
+        #[cfg(target_arch = "x86_64")]
         let ok = libc::ptrace(
             libc::PTRACE_SETREGS,
             pid,
             std::ptr::null_mut::<libc::c_void>(),
             std::ptr::addr_of!(*regs).cast::<libc::c_void>(),
         );
+        // The `iovec` is written through by the kernel on the GET side, so it
+        // cannot be shared with a `&` borrow here; the cast away from const is
+        // confined to this call, which only READS the struct.
+        #[cfg(target_arch = "aarch64")]
+        let ok = {
+            let mut iov = libc::iovec {
+                iov_base: std::ptr::addr_of!(*regs).cast::<libc::c_void>().cast_mut(),
+                iov_len: std::mem::size_of::<libc::user_regs_struct>(),
+            };
+            libc::ptrace(
+                libc::PTRACE_SETREGSET,
+                pid,
+                libc::NT_PRSTATUS as *mut libc::c_void,
+                std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
+            )
+        };
         if ok < 0 {
-            return Err(DebugError::RegisterError(format!("PTRACE_SETREGS failed: {}", std::io::Error::last_os_error())));
+            return Err(DebugError::RegisterError(format!("writing the register set failed: {}", std::io::Error::last_os_error())));
         }
         Ok(())
     }
 }
 
+#[cfg(target_arch = "x86_64")]
 fn regs_to_register_set(r: &libc::user_regs_struct) -> RegisterSet {
     let mut regs = RegisterSet::new();
     regs.set("rax", r.rax);
@@ -2337,6 +2378,7 @@ fn regs_to_register_set(r: &libc::user_regs_struct) -> RegisterSet {
     regs
 }
 
+#[cfg(target_arch = "x86_64")]
 fn apply_register_set(r: &mut libc::user_regs_struct, regs: &RegisterSet) {
     if let Some(v) = regs.get("rax") { r.rax = v; }
     if let Some(v) = regs.get("rbx") { r.rbx = v; }
@@ -2356,6 +2398,113 @@ fn apply_register_set(r: &mut libc::user_regs_struct, regs: &RegisterSet) {
     if let Some(v) = regs.get("r15") { r.r15 = v; }
     if let Some(v) = regs.get("rip") { r.rip = v; }
     if let Some(v) = regs.get("eflags") { r.eflags = v; }
+}
+
+/// AArch64 general-purpose registers: `x0`-`x30`, `sp`, `pc`, `pstate`.
+///
+/// `x29` and `x30` are published under BOTH their architectural names and
+/// their role names (`fp`, `lr`). That is deliberate and not redundancy: this
+/// crate currently disagrees with itself about which spelling is canonical —
+/// `RegisterSchema` says `x29`, `register_context` says `fp` — and that
+/// disagreement is recorded as an OPEN DECISION for the maintainer, not
+/// something a port should quietly settle by publishing one and not the other.
+/// Emitting both means whichever way it is decided, no reader of this backend
+/// was ever given a register file missing the name it looked for.
+#[cfg(target_arch = "aarch64")]
+fn regs_to_register_set(r: &libc::user_regs_struct) -> RegisterSet {
+    let mut regs = RegisterSet::new();
+    for (i, v) in r.regs.iter().enumerate() {
+        regs.set(&format!("x{i}"), *v);
+    }
+    regs.set("fp", r.regs[29]);
+    regs.set("lr", r.regs[30]);
+    regs.set("sp", r.sp);
+    regs.set("pc", r.pc);
+    regs.set("pstate", r.pstate);
+    regs.pc = r.pc;
+    regs.sp = r.sp;
+    regs.fp = Some(r.regs[29]);
+    regs
+}
+
+/// The inverse of [`regs_to_register_set`] on AArch64.
+///
+/// Accepts `x29`/`x30` under either spelling, and lets the architectural name
+/// win when both are present: a caller that set `x29` meant the register, while
+/// `fp` may have been carried along by a round trip through a `RegisterSet`
+/// that publishes both.
+#[cfg(target_arch = "aarch64")]
+fn apply_register_set(r: &mut libc::user_regs_struct, regs: &RegisterSet) {
+    for i in 0..31 {
+        if let Some(v) = regs.get(&format!("x{i}")) {
+            r.regs[i] = v;
+        }
+    }
+    if let Some(v) = regs.get("fp") {
+        r.regs[29] = v;
+    }
+    if let Some(v) = regs.get("lr") {
+        r.regs[30] = v;
+    }
+    if let Some(v) = regs.get("x29") {
+        r.regs[29] = v;
+    }
+    if let Some(v) = regs.get("x30") {
+        r.regs[30] = v;
+    }
+    if let Some(v) = regs.get("sp") {
+        r.sp = v;
+    }
+    if let Some(v) = regs.get("pc") {
+        r.pc = v;
+    }
+    if let Some(v) = regs.get("pstate") {
+        r.pstate = v;
+    }
+}
+
+/// The program counter, whatever this architecture calls it.
+///
+/// Mirrors `macos_debugger::thread_pc`, and exists for the same reason: reading
+/// `regs.rip` unconditionally is what stopped that backend compiling for arm64
+/// at all.
+#[cfg(target_arch = "x86_64")]
+const fn regs_pc(r: &libc::user_regs_struct) -> u64 {
+    r.rip
+}
+
+#[cfg(target_arch = "aarch64")]
+const fn regs_pc(r: &libc::user_regs_struct) -> u64 {
+    r.pc
+}
+
+/// AArch64 has no `DR0`-`DR7`, and saying so is the only honest answer.
+///
+/// Hardware breakpoints and watchpoints exist on this architecture, but they
+/// live behind a different interface entirely: `PTRACE_GETREGSET` with
+/// `NT_ARM_HW_BREAK` / `NT_ARM_HW_WATCH`, a variable-length set of
+/// `DBGBVR`/`DBGBCR` and `DBGWVR`/`DBGWCR` pairs whose count the kernel
+/// reports. That is a subsystem, not a rename, and this crate already holds the
+/// control-register layouts for it in `ios::arm64::hw_breakpoints`.
+///
+/// Returning `Unsupported` rather than a plausible zero is the same rule this
+/// backend follows everywhere else: an answer invented to fill a signature is
+/// worse than a refusal, because the caller cannot tell it from a real one.
+/// The x86 debug-register path already refuses on architectures whose trap byte
+/// it cannot write; this refuses on the register file it cannot address.
+#[cfg(target_arch = "aarch64")]
+fn read_debug_reg(_pid: libc::pid_t, idx: usize) -> Result<u64, DebugError> {
+    Err(DebugError::Unsupported(format!(
+        "dr{idx} does not exist on AArch64 — hardware breakpoints there are DBGBVR/DBGBCR and          DBGWVR/DBGWCR, reached through PTRACE_GETREGSET with NT_ARM_HW_BREAK/NT_ARM_HW_WATCH"
+    )))
+}
+
+/// The write half of the same refusal — see [`read_debug_reg`].
+#[cfg(target_arch = "aarch64")]
+fn write_debug_reg(_pid: libc::pid_t, idx: usize, _value: u64) -> Result<(), DebugError> {
+    Err(DebugError::Unsupported(format!(
+        "dr{idx} does not exist on AArch64 — writing it would be writing nowhere"
+    )))
 }
 
 /// The backing-file path of a `/proc/<pid>/maps` line, if it has one.

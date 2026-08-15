@@ -116,6 +116,32 @@ jobs:
       - name: Test (release, serial)
         run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} -- --test-threads=1
 
+      # ── 2b. The LIVE tests — a real child process, real ptrace + Mach ──────
+      #
+      # In their own step, and under sudo, for one reason: `task_for_pid` needs
+      # root or the debugger entitlement on modern macOS. `resolve_task_port`
+      # has said so in its error text for a long time; whether it holds on a
+      # stock runner has never been measured, and this is the step that
+      # measures it.
+      #
+      # sudo is scoped to HERE rather than applied to the whole suite: running
+      # every test as root would change `$HOME` and with it the symbol-cache
+      # path, so a privilege needed by four tests would quietly alter the
+      # environment of two thousand.
+      #
+      # `-E env PATH=$PATH` because sudo resets PATH and would not find cargo.
+      #
+      # `continue-on-error` because this backend has never executed: the first
+      # run is a MEASUREMENT of which assumption is wrong, and a red here must
+      # not mask the compile-and-unit-test result above, which is a different
+      # question. Remove the flag once the live tests pass — leaving it after
+      # that turns a measurement into an ignored alarm.
+      - name: Live tests (root — task_for_pid requires it)
+        continue-on-error: true
+        run: |
+          sudo -E env "PATH=$PATH" cargo test --release -p rustre-debug --lib \
+            --target ${{ matrix.target }} -- --test-threads=1 live_tests
+
       # ── 3. The MCP surface, which is what a user actually calls ────────────
       - name: Test rustre-mcp-tools
         run: cargo test --release -p rustre-mcp-tools --lib --target ${{ matrix.target }}

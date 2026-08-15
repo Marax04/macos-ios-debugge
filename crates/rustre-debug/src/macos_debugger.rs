@@ -4555,3 +4555,166 @@ mod tests {
     // compiled on a non-macOS host, let alone run. In their new home they
     // execute on every platform.
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime integration tests — real child process, real ptrace(2) + Mach
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Until 2026-08-15 this backend had **zero** live tests. Windows has 67 and
+// Linux 34; macOS had only source guards, which check the code and not its
+// behaviour. That was not an oversight: nothing in this workspace could execute
+// macOS, so a live test would have been unrunnable code.
+//
+// The macOS CI job changed that — the suite now runs on macos-14 (Apple
+// Silicon) and macos-15-intel — so these are the first tests that drive the
+// real thing. They are deliberately few and foundational: the point of the
+// first run is to learn WHICH assumption below is wrong, and a large suite
+// would bury that under noise.
+//
+// `task_for_pid` is the one to watch. On modern macOS it needs root or the
+// debugger entitlement, which `resolve_task_port` already says in its error
+// text. If these fail on that, it is a real finding about how this backend can
+// be deployed, not a flake — and CI runs them in their own step so the answer
+// is unambiguous.
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use crate::{BreakpointKind, Debugger, LaunchOptions, OutputRedirect};
+
+    /// `/bin/sh` exists on every macOS, which is why the Linux live tests drive
+    /// the same target: the fixture is not the thing under test.
+    fn sh_launch_options(args: &[&str]) -> LaunchOptions {
+        LaunchOptions {
+            executable: "/bin/sh".to_string(),
+            args: args.iter().map(|s| (*s).to_string()).collect(),
+            env: std::collections::HashMap::new(),
+            working_dir: None,
+            stop_at_entry: false,
+            follow_forks: false,
+            redirect: OutputRedirect::default(),
+        }
+    }
+
+    /// The foundational one: can this backend start a process and see it end?
+    ///
+    /// Everything else depends on it. If it fails, the failure text — not a
+    /// guess — says whether the obstacle is `fork`/`PT_TRACE_ME`, the
+    /// `task_for_pid` privilege, or the wait loop.
+    #[tokio::test]
+    async fn launch_runs_a_child_to_exit() {
+        let dbg = MacosDebugger::new();
+        let pid = match dbg.launch(sh_launch_options(&["-c", "exit 0"])).await {
+            Ok(p) => p,
+            Err(e) => panic!("launch against /bin/sh failed: {e}"),
+        };
+        assert!(dbg.is_attached(), "launch returned {pid:?} but is_attached() is false");
+        assert_eq!(dbg.target_pid(), Some(pid));
+
+        let mut saw_exit = false;
+        for _ in 0..2000 {
+            match dbg.continue_execution().await {
+                Ok(ev) => {
+                    if ev.reason.is_exit() {
+                        saw_exit = true;
+                        break;
+                    }
+                }
+                Err(e) => panic!("continue_execution failed before the child exited: {e}"),
+            }
+        }
+        assert!(saw_exit, "no ProcessExit within 2000 debug events");
+    }
+
+    /// Names the privilege question instead of letting it hide inside another
+    /// test's failure.
+    ///
+    /// `resolve_task_port` already documents that `task_for_pid` "needs root or
+    /// the debugger entitlement". Whether that holds on a stock CI runner has
+    /// never been measured. A dedicated test makes the answer appear as itself
+    /// rather than as a confusing failure somewhere downstream.
+    #[tokio::test]
+    async fn the_task_port_is_obtainable_for_our_own_child() {
+        let dbg = MacosDebugger::new();
+        let Ok(_pid) = dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await else {
+            panic!("launch failed — see launch_runs_a_child_to_exit for the cause");
+        };
+        let maps = dbg.memory_maps().await;
+        let _ = dbg.kill().await;
+        match maps {
+            Ok(m) => assert!(
+                !m.is_empty(),
+                "task_for_pid succeeded but the target has no mapped regions, which cannot be true"
+            ),
+            Err(e) => panic!(
+                "could not read the target's memory map: {e}\nIf this is `task_for_pid failed`, \
+                 the backend needs root or the debugger entitlement on this host — a deployment \
+                 fact worth knowing, not a flake"
+            ),
+        }
+    }
+
+    /// A stopped thread must report a program counter inside mapped memory.
+    ///
+    /// Weak on purpose. The strong assertion — that the PC is inside the
+    /// executable's `__TEXT` — depends on module resolution that has also never
+    /// run here; this one fails only if the register read or the map is
+    /// fundamentally wrong, which is what a first live test should isolate.
+    #[tokio::test]
+    async fn a_stopped_thread_reports_a_pc_inside_a_mapped_region() {
+        let dbg = MacosDebugger::new();
+        let Ok(_pid) = dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await else {
+            panic!("launch failed — see launch_runs_a_child_to_exit for the cause");
+        };
+        let regs = dbg.get_registers(ThreadId(0)).await;
+        let maps = dbg.memory_maps().await;
+        let _ = dbg.kill().await;
+
+        let regs = regs.unwrap_or_else(|e| panic!("read_registers failed: {e}"));
+        let maps = maps.unwrap_or_else(|e| panic!("memory_maps failed: {e}"));
+        let pc = regs.pc;
+        assert!(pc != 0, "the reported program counter is zero");
+        assert!(
+            maps.iter()
+                .any(|m| pc >= m.base.as_u64() && pc < m.base.as_u64().saturating_add(m.size)),
+            "pc {pc:#x} is in none of the {} mapped regions",
+            maps.len()
+        );
+    }
+
+    /// Software breakpoints on Apple Silicon are REFUSED, and that must show up
+    /// as a refusal rather than as a silent success.
+    ///
+    /// The refusal (`X86_TRAP_BYTE_IS_VALID_HERE`) is deliberate. Iteration 548
+    /// removed the defect that made it necessary — `set_breakpoint` saved one
+    /// byte and wrote four, so removing a breakpoint on ARM64 would have left
+    /// three bytes of `BRK` behind — but lifting it needs more than that.
+    ///
+    /// Asserted per architecture rather than skipped on one, so the day the
+    /// refusal is lifted this test fails and has to be updated deliberately.
+    #[tokio::test]
+    async fn a_software_breakpoint_is_accepted_on_intel_and_refused_on_apple_silicon() {
+        let dbg = MacosDebugger::new();
+        let Ok(_pid) = dbg.launch(sh_launch_options(&["-c", "sleep 5"])).await else {
+            panic!("launch failed — see launch_runs_a_child_to_exit for the cause");
+        };
+        let maps = dbg.memory_maps().await.unwrap_or_default();
+        let exec = maps.iter().find(|m| m.executable).map(|m| m.base);
+        let outcome = match exec {
+            Some(at) => Some(dbg.set_breakpoint(at, BreakpointKind::Software).await),
+            None => None,
+        };
+        let _ = dbg.kill().await;
+
+        let Some(outcome) = outcome else {
+            panic!("the target has no executable region to plant a breakpoint in");
+        };
+        #[cfg(target_arch = "aarch64")]
+        assert!(
+            matches!(outcome, Err(DebugError::Unsupported(_))),
+            "Apple Silicon must REFUSE a software breakpoint while the x86 trap byte is what \
+             this backend plants; got {outcome:?}"
+        );
+        #[cfg(target_arch = "x86_64")]
+        assert!(outcome.is_ok(), "Intel must accept a software breakpoint; got {outcome:?}");
+    }
+}

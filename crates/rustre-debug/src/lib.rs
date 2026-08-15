@@ -5721,26 +5721,26 @@ mod tests_expanded {
         // oversight this guard silently blesses.
         const TEST_SUPPORT: &[&str] = &["lib.rs"];
 
-        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-            let Ok(entries) = std::fs::read_dir(dir) else { return };
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    walk(&p, out);
-                } else if p.extension().is_some_and(|x| x == "rs") {
-                    out.push(p);
-                }
-            }
-        }
-
-        let mut files = Vec::new();
-        walk(std::path::Path::new("src"), &mut files);
-        assert!(!files.is_empty(), "found no sources — is the test CWD the crate root?");
+        // The COMPILE-time list, same as every other source guard.
+        //
+        // This walked `src/` itself until iteration 553 — a SECOND copy of the
+        // discovery that `production_sources` already does. Iteration 549
+        // converted that one and missed this one, so four guards started
+        // working outside the repository and this one did not: it was the only
+        // test still red on the iOS Simulator, for a reason that had nothing to
+        // do with what it checks.
+        //
+        // This crate names the hazard elsewhere in its own words — "two parsers
+        // of one format is how iteration 344's field-shift bug happened" — and
+        // this was the same shape: two readers of one directory, one of them
+        // fixed.
+        let files: &[(&str, &str)] = EMBEDDED_SOURCES;
+        assert!(!files.is_empty(), "build.rs embedded no sources");
 
         let mut backends = Vec::new();
-        for f in files {
-            let Ok(text) = std::fs::read_to_string(&f) else { continue };
-            let name = f.file_name().unwrap_or_default().to_string_lossy().to_string();
+        for (name, text) in files {
+            let text: &str = text;
+            let name = (*name).to_string();
             // Only PRODUCTION impls count. Cut at the test MODULE, not at the
             // first `#[cfg(test)]`: that attribute also gates individual
             // helpers — `linux_debugger.rs` has one at line ~792, hundreds of
@@ -5762,7 +5762,7 @@ mod tests_expanded {
             let production: String = match test_mod {
                 Some(cut) => lines[..cut].join("
 "),
-                None => text.clone(),
+                None => text.to_string(),
             };
             let implements = production
                 .lines()
