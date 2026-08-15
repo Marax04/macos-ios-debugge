@@ -2676,6 +2676,77 @@ const _: () = assert!(std::mem::size_of::<UserHwdebugState>() == 264);
 #[cfg(target_arch = "aarch64")]
 const NT_ARM_HW_WATCH: libc::c_int = 0x403;
 
+/// `NT_ARM_PAC_MASK`, not exposed by `libc`.
+///
+/// Reports the pointer-authentication masks the kernel actually applies to
+/// THIS process, as `struct user_pac_mask { __u64 data_mask; __u64 insn_mask; }`.
+#[cfg(target_arch = "aarch64")]
+const NT_ARM_PAC_MASK: libc::c_int = 0x406;
+
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct UserPacMask {
+    data_mask: u64,
+    insn_mask: u64,
+}
+
+#[cfg(target_arch = "aarch64")]
+const _: () = assert!(std::mem::size_of::<UserPacMask>() == 16);
+
+/// The kernel's own instruction-pointer PAC mask for `pid`, or `None`.
+///
+/// `None` means "no pointer authentication here" — an older kernel, or a CPU
+/// without the feature — and the caller must then leave addresses ALONE. That
+/// is not a degraded mode: without PAC there are no signed pointers to strip,
+/// so doing nothing is the correct answer rather than a fallback.
+///
+/// ASKING is the point of this function. `ios::arm64::strip_pac` hardcodes
+/// `VA_BITS = 47`, which is Apple's user address split; Linux arm64 is normally
+/// 48-bit and can be 52. Reusing that constant here would clear one bit too
+/// many and could turn a valid address into a bogus one — swapping a visible
+/// failure for a silent wrong answer.
+#[cfg(target_arch = "aarch64")]
+fn pac_insn_mask(pid: libc::pid_t) -> Option<u64> {
+    let mut mask = UserPacMask::default();
+    // SAFETY: `mask` is a valid, fully-initialised repr(C) struct whose size is
+    // checked at compile time; the kernel writes at most `iov_len` bytes.
+    // INVARIANT: pid must refer to a currently-stopped ptrace tracee.
+    debug_assert!(pid > 0, "pac_insn_mask: pid must be positive, got {pid}");
+    let ok = unsafe {
+        let mut iov = libc::iovec {
+            iov_base: std::ptr::addr_of_mut!(mask).cast::<libc::c_void>(),
+            iov_len: std::mem::size_of::<UserPacMask>(),
+        };
+        libc::ptrace(
+            libc::PTRACE_GETREGSET,
+            pid,
+            NT_ARM_PAC_MASK as *mut libc::c_void,
+            std::ptr::addr_of_mut!(iov).cast::<libc::c_void>(),
+        )
+    };
+    if ok < 0 || mask.insn_mask == 0 {
+        return None;
+    }
+    Some(mask.insn_mask)
+}
+
+/// Remove the authentication code from a return address, given the kernel mask.
+///
+/// Sign-preserving, for the reason `ios::arm64::strip_pac` gives and which is
+/// architecture-independent: kernel addresses have the top bits set, and simply
+/// clearing the masked bits would turn one into a bogus user pointer. A user
+/// address (bit 55 clear) has the mask bits cleared; a kernel address has them
+/// SET, which is the canonical form on the other side of the split.
+#[cfg(target_arch = "aarch64")]
+const fn strip_pac_with(addr: u64, insn_mask: u64) -> u64 {
+    if addr & (1 << 55) == 0 {
+        addr & !insn_mask
+    } else {
+        addr | insn_mask
+    }
+}
+
 /// `NT_ARM_HW_BREAK` — the EXECUTION breakpoint file, `DBGBVR`/`DBGBCR`.
 ///
 /// A separate regset with the same `user_hwdebug_state` layout. x86 shares four
@@ -4228,6 +4299,26 @@ impl crate::Debugger for LinuxDebugger {
                     let Ok(ret_bytes) = self.read_memory(Address(ret_addr_loc), 8).await else { break };
                     let Ok(ret_bytes8): Result<[u8; 8], _> = ret_bytes.as_slice().try_into() else { break };
                     let ret_addr = u64::from_le_bytes(ret_bytes8);
+                    // Strip pointer authentication BEFORE the address is used
+                    // as an address. Measured on ubuntu-24.04-arm: an unwound
+                    // pc came back as 0x31ab6b12435c0c and fell inside no
+                    // loaded module, because the high bits are a signature,
+                    // not address.
+                    //
+                    // Iteration 559 fixed exactly this in the SHARED
+                    // frame-pointer unwinder and the defect was then recorded
+                    // as closed. It was not: this backend unwinds through its
+                    // own DWARF CFI path and never reaches that code. A fix in
+                    // one unwinder is not a fix for unwinding.
+                    //
+                    // The mask is the KERNEL's, not a constant of ours -- see
+                    // `pac_insn_mask`. No PAC on this host means nothing to
+                    // strip, which is why `None` leaves the address untouched.
+                    #[cfg(target_arch = "aarch64")]
+                    let ret_addr = match pac_insn_mask(tid.0 as libc::pid_t) {
+                        Some(m) => strip_pac_with(ret_addr, m),
+                        None => ret_addr,
+                    };
                     if ret_addr == 0 {
                         break;
                     }
@@ -4431,6 +4522,25 @@ mod live_tests {
     const SCRATCH_REG: &str = "rax";
     #[cfg(target_arch = "aarch64")]
     const SCRATCH_REG: &str = "x0";
+
+    /// The NARROWED view of `SCRATCH_REG`, named per architecture too.
+    ///
+    /// `al` is the low byte of `rax` and does not exist on AArch64, where the
+    /// narrowed view is `w0`, the low 32 bits of `x0`. Hardcoding `al` made
+    /// this test fail on ubuntu-24.04-arm with `al must derive from the live
+    /// rax` — the assertion was about narrowing and was failing on naming.
+    ///
+    /// `sub_register_of` already knows both spellings; only the test did not.
+    #[cfg(target_arch = "x86_64")]
+    const SCRATCH_REG_NARROW: &str = "al";
+    #[cfg(target_arch = "aarch64")]
+    const SCRATCH_REG_NARROW: &str = "w0";
+
+    /// The mask that narrowed view applies: 8 bits on x86, 32 on AArch64.
+    #[cfg(target_arch = "x86_64")]
+    const SCRATCH_NARROW_MASK: u64 = 0xFF;
+    #[cfg(target_arch = "aarch64")]
+    const SCRATCH_NARROW_MASK: u64 = 0xFFFF_FFFF;
 
     /// The program counter's name here, DERIVED from the crate's one answer
     /// rather than spelled a fifth time.
@@ -4650,9 +4760,35 @@ int main(void) {
         // "pthread_create fixture should expose >= 2 threads, got
         // [ThreadId(6365)]". The test was passing by timing, not by design, and
         // a different machine was enough to show it.
+        // ITERATION 574. The loop above used to consume `ThreadCreate` stops
+        // and then count threads. That is right only if such a stop ARRIVES:
+        // if none does, the loop exits on the first iteration and the count
+        // happens before the clone exists. So the failure "got 1 thread" could
+        // mean two OPPOSITE things -- the event never came, or it came and
+        // enumeration missed the task -- and the message named neither.
+        //
+        // 560 diagnosed this as "passing by timing, not by design" and added
+        // the loop. It still failed on ubuntu-24.04-arm, so that diagnosis was
+        // incomplete rather than wrong. What follows resumes until the
+        // CONDITION holds instead of until a proxy event stops arriving, and
+        // records whether a birth was ever observed so a failure says WHICH of
+        // the two happened.
         let mut ev = dbg.continue_execution().await.expect("continue should not error");
+        let mut saw_thread_birth = false;
+        let mut tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
         for _ in 0..64 {
-            if !matches!(ev.reason, StopReason::ThreadCreate { .. }) {
+            if matches!(ev.reason, StopReason::ThreadCreate { .. }) {
+                saw_thread_birth = true;
+            }
+            tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
+            // The condition this test is actually about. Stopping here rather
+            // than after a fixed number of resumes is what makes it independent
+            // of how many stops the kernel chooses to deliver, which is exactly
+            // what differs between x86-64 and aarch64.
+            if tids.len() >= 2 && !matches!(ev.reason, StopReason::ThreadCreate { .. }) {
+                break;
+            }
+            if ev.reason.is_exit() {
                 break;
             }
             ev = dbg.continue_execution().await.expect("continue should not error");
@@ -4665,9 +4801,16 @@ int main(void) {
         );
 
         eprintln!("[test] stopped, enumerating threads");
-        let tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
-        eprintln!("[test] tids = {tids:?}");
-        assert!(tids.len() >= 2, "pthread_create fixture should expose >= 2 threads, got {tids:?}");
+        eprintln!("[test] tids = {tids:?}, saw_thread_birth = {saw_thread_birth}");
+        assert!(
+            tids.len() >= 2,
+            "pthread_create fixture should expose >= 2 threads, got {tids:?}. \
+             saw_thread_birth = {saw_thread_birth}: if FALSE, no ThreadCreate stop was ever \
+             delivered, so PTRACE_O_TRACECLONE is not reporting clones on this host and the \
+             defect is in event delivery. If TRUE, the birth was reported and \
+             /proc/<pid>/task still does not list the task, so the defect is in enumeration. \
+             The two need opposite fixes, which is why this assertion names which one."
+        );
         let secondary = tids
             .iter()
             .copied()
@@ -5363,7 +5506,23 @@ int main(void) {
             .iter()
             .find(|m| m.executable && m.size > 16)
             .expect("the target must have at least one executable mapping");
-        let unreachable_target = Address(exec.base.as_u64() + exec.size - 1);
+        // ALIGNED to the host trap, not simply the last byte.
+        //
+        // `base + size - 1` is unreachable, which was the intent, and on
+        // AArch64 it is also odd — so it met the alignment refusal added in 562
+        // and `run_to_return` answered `Unsupported` instead of running the
+        // target to exit. Measured on ubuntu-24.04-arm: "a software breakpoint
+        // at Address(187883824603135) is not 4-byte aligned".
+        //
+        // That refusal is CORRECT and must not be softened to make a test pass:
+        // an unaligned implant on AArch64 straddles two instructions and
+        // corrupts both. What was wrong is the address this test chose. The
+        // same mistake as the one the comment above already records — the
+        // intent was "somewhere execution never arrives", and it accidentally
+        // also said "somewhere a trap cannot legally go".
+        let align = crate::host_trap_alignment();
+        let last = exec.base.as_u64() + exec.size - 1;
+        let unreachable_target = Address(last - (last % align));
 
         let result = dbg.run_to_return(tid, unreachable_target, 0).await;
         match result {
@@ -5571,7 +5730,9 @@ int main(void) {
         let regs = dbg.get_registers(tid).await.expect("re-read after set_register");
         let live_rax = regs.get(SCRATCH_REG).expect("ptrace must report this architecture's scratch register");
         assert_eq!(live_rax, PROBE, "the value written must be the value read back");
-        let al = regs.get_narrowed("al").expect("al must derive from the live rax");
+        let al = regs
+            .get_narrowed(SCRATCH_REG_NARROW)
+            .expect("the narrowed view must derive from the live scratch register");
         let ah = regs.get_narrowed("ah").expect("ah must derive from the live rax");
         let eax = regs.get_narrowed("eax").expect("eax must derive from the live rax");
 
@@ -5589,7 +5750,11 @@ int main(void) {
         let listed = dbg.breakpoints().await.ok();
         let _ = dbg.kill().await;
 
-        assert_eq!(al, live_rax & 0xFF, "al is the low byte of the live rax");
+        assert_eq!(
+            al,
+            live_rax & SCRATCH_NARROW_MASK,
+            "{SCRATCH_REG_NARROW} must be the low bits of the live {SCRATCH_REG}"
+        );
         assert_eq!(
             ah,
             (live_rax >> 8) & 0xFF,

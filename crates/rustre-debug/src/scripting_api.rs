@@ -1387,7 +1387,14 @@ mod live_tests {
         let mut ctx = LiveScriptContext::new(Box::new(dbg), tid, types, omni);
 
         // read_register via dispatch
-        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: "rip".into() }).unwrap() {
+        // The PC register is NAMED per architecture. Hardcoding the x86
+        // spelling made this fail on ubuntu-24.04-arm with `unknown register
+        // rip`, against a register set publishing x0-x30/pc. `pc_key` is the
+        // crate's existing answer and already carries a test forbidding it to
+        // invent an x86 name on ARM64. Asking it keeps this test about the
+        // DISPATCH path, which is what it exists to check.
+        let pc = crate::instr_step::pc_key(crate::instr_step::native_arch());
+        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: pc.into() }).unwrap() {
             ScriptResponse::Register { value, .. } => {
                 assert_eq!(value, live_pc + 1, "rip should read one byte past the foreign int3");
             }
@@ -1493,7 +1500,14 @@ mod live_tests_linux {
         let mut ctx = LiveScriptContext::new(Box::new(dbg), tid, types, omni);
 
         // read_register via dispatch
-        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: "rip".into() }).unwrap() {
+        // The PC register is NAMED per architecture. Hardcoding the x86
+        // spelling made this fail on ubuntu-24.04-arm with `unknown register
+        // rip`, against a register set publishing x0-x30/pc. `pc_key` is the
+        // crate's existing answer and already carries a test forbidding it to
+        // invent an x86 name on ARM64. Asking it keeps this test about the
+        // DISPATCH path, which is what it exists to check.
+        let pc = crate::instr_step::pc_key(crate::instr_step::native_arch());
+        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: pc.into() }).unwrap() {
             ScriptResponse::Register { value, .. } => assert_eq!(value, live_pc),
             other => panic!("expected Register, got {other:?}"),
         }

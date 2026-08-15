@@ -10241,6 +10241,57 @@ mod tests_extra {
         );
     }
 
+    /// The Linux unwinder must strip PAC, and must ASK the kernel for the mask.
+    ///
+    /// Measured on `ubuntu-24.04-arm` (1c70fff): the live test
+    /// `backtrace_unwinds_past_the_first_frame_via_dwarf_cfi` fails with
+    ///
+    /// ```text
+    /// unwound frame pc 0x31ab6b12435c0c should fall inside a loaded module
+    /// ```
+    ///
+    /// That is a pointer-authentication code in the high bits — the same shape
+    /// as the address iteration 559 fixed. 559 stripped PAC in the SHARED
+    /// frame-pointer unwinder (`memory_layout_view.rs`), and this crate then
+    /// recorded the defect as closed. It is not: the Linux backend unwinds
+    /// through its own DWARF CFI path, which never goes through that code.
+    /// A fix in one unwinder was read as a fix for unwinding.
+    ///
+    /// **The mask must come from the kernel, not from a constant.**
+    /// `ios::arm64::strip_pac` hardcodes `VA_BITS = 47`, which is Apple's user
+    /// address split. Linux arm64 is normally 48-bit (and can be 52), so
+    /// reusing that constant here would strip one bit too many and could turn
+    /// a legitimate address into a bogus one — trading a visible failure for a
+    /// silent corruption, which is the worse of the two.
+    ///
+    /// `PTRACE_GETREGSET` with `NT_ARM_PAC_MASK` reports the exact instruction
+    /// and data masks for the traced process, so there is nothing left to
+    /// assume. The transport for it already exists: iterations 570 and 571
+    /// wrote it for `NT_ARM_HW_WATCH` / `NT_ARM_HW_BREAK`.
+    #[test]
+    fn the_linux_unwinder_strips_pac_using_the_kernels_own_mask() {
+        let src = include_str!("linux_debugger.rs");
+        assert!(
+            src.contains("NT_ARM_PAC_MASK"),
+            "linux: the DWARF unwinder does not ask the kernel for the PAC mask, so a signed \
+             return address is compared against module ranges as-is and falls inside none of \
+             them — measured on ubuntu-24.04-arm, not predicted"
+        );
+        // The `(` is load-bearing, and this is the THIRD time in three rounds
+        // that a string-anchored assertion has meant something other than what
+        // it said. 571's guard went vacuously GREEN because `NT_ARM_HW_BREAK`
+        // appeared inside a refusal message; this one went falsely RED because
+        // `ios::arm64::strip_pac` appears in the doc comments that explain why
+        // this backend does NOT use it. Matching the call syntax distinguishes
+        // a use from a mention, which is the distinction actually intended.
+        assert!(
+            !src.contains("ios::arm64::strip_pac("),
+            "linux: PAC is being stripped with Apple's hardcoded VA_BITS = 47. Linux arm64 is \
+             normally 48-bit, so that removes one bit too many and can corrupt a valid address \
+             — a silent wrong answer in place of a visible failure"
+        );
+    }
+
     /// An execution slot must reach `DBGBVR`/`DBGBCR`, not be silently zeroed.
     ///
     /// Iteration 570 brought hardware DATA watchpoints to ARM64 Linux. It did

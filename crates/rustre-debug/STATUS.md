@@ -28,7 +28,7 @@ eseguire è l'unica che risponde sul comportamento.
 |---|---|---|
 | Windows x86_64 | suite locale | **2008 passed, 0 falliti** |
 | Linux x86_64 | WSL, `--test-threads=1` | **1990 passed, 0 falliti** (al 568) |
-| Linux aarch64 | CI `ubuntu-24.04-arm` | esegue; `continue-on-error` ancora presente, da togliere quando il prossimo run lo dimostra |
+| Linux aarch64 | CI `ubuntu-24.04-arm` | **1946 passed, 6 FAILED** — misurato su `1c70fff`, non previsto |
 | macOS Intel | CI `macos-15-intel` | esegue dopo il fix del tetto a 90′ (564) |
 | macOS Apple Silicon | CI `macos-14` | esegue |
 | iOS Simulator | CI | esegue |
@@ -205,6 +205,145 @@ commento.**
 Stessa disciplina di verifica del 570, con lo stesso limite: type-check reale su
 `aarch64-unknown-linux-gnu` (e verificato che fosse una compilazione vera, non
 una cache), comportamento **non verificato** — risponde `ubuntu-24.04-arm`.
+
+## 4-quater. Iterazione 572 — l'hardware ARM smentisce due dichiarazioni di questo file
+
+Primo run letto **per riga** invece che per aggregato, ed è servito: la riga
+`Linux aarch64` è **FAILURE** (1946 passed, 6 failed) mentre il run complessivo
+diceva `success`.
+
+### Due difetti nel modo in cui misuravamo
+
+1. **Il job `Linux verified` non vede il fallimento che esiste per riportare.**
+   Il fix del 556 (`= success`, non `!= failure`) copriva i job CANCELLATI, non
+   le righe `continue-on-error`, il cui fallimento non entra in
+   `needs.linux.result`. Il job stampa il testo giusto e asserisce la cosa
+   sbagliata — la stessa forma del difetto che il 556 ha corretto, un livello
+   più in là.
+2. **Questo file e il workflow dichiaravano chiusi due difetti che sono ancora
+   rossi.** Testuale: *«STATO AL 563: entrambi i "reali" sono chiusi (559 il PAC
+   nell'unwinder, 560 il test che passava per tempismo)»*. Sull'hardware ARM
+   sono entrambi vivi. Una previsione scritta al presente è diventata una
+   dichiarazione di fatto, e nessuno poteva accorgersene senza un ARM.
+
+### I 6 fallimenti, classificati sui messaggi reali
+
+| fallimento | natura |
+|---|---|
+| `unwound frame pc 0x31ab6b12435c0c should fall inside a loaded module` | **reale** — puntatore firmato PAC, NON risolto dal 559 su questo percorso |
+| `pthread_create fixture should expose >= 2 threads, got [1]` | **reale** — enumerazione dei thread |
+| `al must derive from the live rax` | test che assume x86 |
+| `run_to_return`: indirizzo non allineato a 4 | test che pianta a un indirizzo arbitrario |
+| `unknown register rip` (×2) | test che assumono x86 |
+
+Il quarto è istruttivo: il rifiuto per allineamento è la difesa **corretta**
+sopravvissuta al 569, che fa il suo lavoro contro un test scritto per x86.
+
+**`continue-on-error` resta.** Toglierlo ora renderebbe la CI rossa per difetti
+noti e dichiarati; va tolto quando i sei sono chiusi, non prima — e la lezione è
+che non andava annunciato «attesa verde» in un commento.
+
+## 4-quinquies. Iterazioni 573-574 — i primi round guidati dall'hardware
+
+Non da una lettura del sorgente: da un rosso vero su `ubuntu-24.04-arm`.
+
+### 573 — PAC nell'unwinder DWARF di Linux
+
+`unwound frame pc 0x31ab6b12435c0c should fall inside a loaded module`. I bit
+alti sono una firma, non indirizzo.
+
+**Il 559 aveva corretto questo e il repo lo dava per chiuso.** Il fix stava
+nell'unwinder CONDIVISO; il backend Linux srotola con il proprio percorso DWARF
+CFI, che quel codice non attraversa mai. *Una correzione in un unwinder era
+stata letta come una correzione dell'unwinding* — e senza un ARM nessuno poteva
+accorgersene.
+
+**La scorciatoia rifiutata**: riusare `ios::arm64::strip_pac` era a portata di
+mano e cabla `VA_BITS = 47`, la scelta di APPLE. Linux arm64 è normalmente a 48
+bit e può essere a 52: toglierebbe un bit di troppo e potrebbe trasformare un
+indirizzo valido in uno fasullo — un fallimento *visibile* scambiato con una
+risposta *silenziosamente sbagliata*, che qui è la categoria peggiore. La
+maschera si chiede al kernel (`NT_ARM_PAC_MASK`), che la riporta esatta per quel
+processo, riusando il trasporto dei round 570-571. Niente PAC sull'host ⇒ niente
+da togliere: `None` lascia l'indirizzo intatto, che è la risposta corretta e non
+un ripiego.
+
+### 574 — un test che non sapeva quale difetto stesse trovando
+
+`pthread_create fixture should expose >= 2 threads, got [1]`.
+
+Il 560 aveva già provato a chiuderlo, diagnosticando *«passava per tempismo, non
+per progetto»* e aggiungendo un ciclo che consuma gli stop `ThreadCreate`.
+Giusto — **se uno di quegli stop arriva**. Su ARM non arriva: il ciclo esce alla
+prima iterazione e il conteggio precede il clone. Il test era stato reso robusto
+a un'ipotesi e restava fragile a quella opposta.
+
+Il difetto più grave era però nel MESSAGGIO: `got [1]` è compatibile con due
+cause che vogliono correzioni opposte — l'evento mai consegnato
+(`PTRACE_O_TRACECLONE`) oppure il task mai elencato (`/proc/<pid>/task`). Ora il
+test aspetta la CONDIZIONE invece di un evento-proxy e registra
+`saw_thread_birth`, così il fallimento nomina quale delle due.
+
+**Non è dichiarato risolto**: se su ARM i thread non compaiono davvero, resterà
+rosso — ma rosso con una diagnosi. Trasformare un fallimento ambiguo in uno che
+nomina la causa è il massimo ottenibile onestamente da una macchina x86, e vale
+più di un fix indovinato che potrebbe mascherarlo.
+
+### 575 — i quattro test che assumevano x86
+
+Chiusi tutti, e in nessun caso saltando su ARM: un test che si salta su una
+piattaforma smette di sorvegliarla.
+
+| fallimento | correzione |
+|---|---|
+| `unknown register rip` ×2 | `pc_key(native_arch())`, che il crate GIÀ possedeva con un test dal nome `pc_key_never_invents_an_x86_name_for_arm64` |
+| `al must derive from the live rax` | `SCRATCH_REG_NARROW` accanto a `SCRATCH_REG`, **più la maschera** |
+| `run_to_return`, indirizzo non allineato | allineato l'indirizzo del TEST |
+
+Tre trappole evitate, e sono il contenuto vero del round:
+
+1. **La CI segnalava 2 fallimenti `rip`, i siti erano 4.** Gli altri due sarebbero
+   diventati rossi al giro dopo, uno alla volta. *Il log dice quali test hanno
+   fallito, non quanti siti hanno il difetto.*
+2. **Nome e maschera insieme.** `al` è 8 bit, `w0` ne è 32: rinominare soltanto
+   avrebbe lasciato `assert_eq!(al, live_rax & 0xFF)` a confrontare `w0` con un
+   byte — verde su x86, rosso su ARM per una ragione DIVERSA dall'originale.
+   Una correzione che sposta il difetto invece di chiuderlo.
+3. **Il rifiuto per allineamento non andava ammorbidito.** Era la difesa a
+   funzionare e il test a scegliere male l'indirizzo: voleva «un posto dove
+   l'esecuzione non arriva mai» e diceva senza accorgersene anche «un posto dove
+   una trappola non può stare» — la stessa forma di errore che il commento
+   accanto documentava già per la versione precedente dello stesso test, quando
+   piantava nello stack.
+
+### 576 — la correzione precedente aveva creato il difetto che inseguivo
+
+`pdb_symbol_server::tests::a_valid_cache_entry_is_still_returned` falliva nella
+suite completa e passava isolato. Registrato come difetto invece che archiviato
+come rumore, e la causa è più istruttiva del sintomo.
+
+Il commento in quel file documentava GIÀ l'instabilità, attribuendola a un
+percorso cablato condiviso fra PROCESSI di test; la soluzione fu introdurre
+l'override `RUSTRE_PDB_CACHE`. Corretta per quella causa — ma un'variabile
+d'ambiente è stato globale di PROCESSO, e `cargo test` esegue in parallelo
+dentro uno solo. Il test che imposta l'override ha così reso instabili gli altri
+due, che chiamano `cache_path` in concorrenza. **Una causa chiusa, l'altra
+aperta dalla chiusura.**
+
+E la nota `SAFETY` affermava il falso: *«the variable is read by `cache_path`
+and by nothing else in the process»* — `cache_path` è chiamata proprio dagli
+altri due test della cache. Non era un'imprecisione di stile: era la
+giustificazione dell'`unsafe`, e giustificava una cosa non vera.
+
+Chiuso con un `Mutex` preso da tutti e tre. Tre esecuzioni consecutive della
+suite: 2012/0 ognuna — non una prova di assenza, ma la causa è stata TROVATA,
+non tamponata.
+
+**Il difetto stava nella frase, non nel codice**, ed è ormai un motivo
+ricorrente in questa sessione: la portata dichiarata del 559, la diagnosi
+incompleta del 560, l'«attesa verde» nel workflow, questa nota `SAFETY`. In un
+repo dove i commenti spiegano il PERCHÉ, un commento falso è un difetto a tutti
+gli effetti — è ciò su cui si baserà chi legge dopo.
 
 ## 5. Il fronte Apple
 

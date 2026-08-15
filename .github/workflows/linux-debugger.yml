@@ -92,15 +92,27 @@ jobs:
           #        - an unwound frame reports a pc in no loaded module.
           #      Neither reproduces on x86, and no machine here can run ARM
           #      Linux, so this job is the only place they are visible.
-          # STATO AL 563: entrambi i «reali» sono chiusi (559 il PAC
-          # nell'unwinder, 560 il test che passava per tempismo) e tutti gli
-          # attesi sono stati resi consapevoli dell'architettura — 558 i nomi
-          # dei registri, 562 il byte di trappola derivato, 563 i registri di
-          # debug. Questa riga DOVREBBE ora essere verde.
+          # MEASURED on 1c70fff, 2026-08-15: 1946 passed, 6 FAILED. The
+          # paragraph that used to sit here said both "real" ones were closed
+          # by 559 and 560 and that this row "should now be green". It was a
+          # prediction written in the present tense, and the hardware says
+          # otherwise -- BOTH are still failing:
           #
-          # Il flag resta finché il prossimo run non lo dimostra. Toglierlo
-          # adesso renderebbe la CI rossa per una mia previsione invece che per
-          # un difetto, e il punto di questa riga è misurare, non prevedere.
+          #   REAL  an unwound frame pc is PAC-signed (0x31ab6b12435c0c) and
+          #         falls inside no loaded module. 559 stripped PAC in the
+          #         SHARED unwinder; this path does not go through it.
+          #   REAL  the pthread_create fixture still exposes ONE thread.
+          #   test  `al must derive from the live rax` and `unknown register
+          #         rip` x2 -- asserted on a register set publishing x0-x30.
+          #   test  run_to_return plants a breakpoint at an unaligned address
+          #         and meets the alignment refusal, which is the defence
+          #         working correctly against a test written for x86.
+          #
+          # The flag stays until those six are closed. Not because the row is
+          # expected to be green, but because it is measured to be red for
+          # reasons that are written down. The lesson recorded in STATUS.md:
+          # never annotate a row with what it should do -- only with what it
+          # did.
           - os: ubuntu-24.04-arm
             name: Linux aarch64 (attesa verde — flag da togliere se lo e)
             expected_to_fail: true
@@ -181,4 +193,33 @@ jobs:
           # A job that never finished had been signed off as passing — the same
           # shape as a job that sits queued forever and is therefore never red.
           # The absence of a failure is not the presence of a pass.
+          # `needs.linux.result` is NOT enough, measured on 1c70fff: the
+          # aarch64 row was FAILURE and this job reported success, because a
+          # `continue-on-error` row's failure never reaches the needs result.
+          #
+          # That is the 556 defect one level further out. There the hole was
+          # "cancelled is not failure"; here it is "a tolerated failure is not
+          # a failure". Both let a job that did not pass be signed off as
+          # passing, which is the one thing this summary exists to prevent.
+          #
+          # So the row is queried DIRECTLY and its result printed, whatever it
+          # is. The `exit 0` is deliberate and is the whole point of the flag:
+          # the aarch64 row is allowed to be red while its defects are open.
+          # What is NOT allowed is for it to be red and unreported.
           test "${{ needs.linux.result }}" = "success"
+
+      - name: Report the aarch64 row explicitly
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs"             --jq '.jobs[] | select(.name | contains("aarch64")) | "aarch64 row: \(.conclusion)"'
+          echo ""
+          echo "Known open on this row (measured on 1c70fff, 1946 passed / 6 failed):"
+          echo "  REAL  unwound frame pc is PAC-signed and falls in no module"
+          echo "  REAL  pthread_create fixture exposes 1 thread, not 2"
+          echo "  test  al/rax and rip asserted on a register set that has neither"
+          echo "  test  a breakpoint planted at a non-4-byte-aligned address"
+          echo ""
+          echo "Delete continue-on-error when those are closed -- not before,"
+          echo "and never on the strength of a prediction that they should be."

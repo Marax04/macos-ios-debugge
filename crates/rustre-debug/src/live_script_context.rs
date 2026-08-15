@@ -545,8 +545,15 @@ mod live_tests {
         let mut ctx = LiveScriptContext::new(&dbg);
 
         // ReadRegister through the full dispatch path.
-        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: "rip".to_string() }) {
-            Ok(ScriptResponse::Register { value, .. }) => assert_ne!(value, 0, "rip should be non-zero on a live thread"),
+        // The PC register is NAMED per architecture. Hardcoding the x86
+        // spelling made this fail on ubuntu-24.04-arm with `unknown register
+        // rip`, against a register set publishing x0-x30/pc. `pc_key` is the
+        // crate's existing answer and already carries a test forbidding it to
+        // invent an x86 name on ARM64. Asking it keeps this test about the
+        // DISPATCH path, which is what it exists to check.
+        let pc = crate::instr_step::pc_key(crate::instr_step::native_arch());
+        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: pc.to_string() }) {
+            Ok(ScriptResponse::Register { value, .. }) => assert_ne!(value, 0, "{pc} should be non-zero on a live thread"),
             other => panic!("unexpected ReadRegister response: {other:?}"),
         }
 
@@ -620,8 +627,15 @@ mod linux_live_tests {
         let mut ctx = LiveScriptContext::new(&dbg);
 
         // ReadRegister through the full dispatch path.
-        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: "rip".to_string() }) {
-            Ok(ScriptResponse::Register { value, .. }) => assert_ne!(value, 0, "rip should be non-zero on a live thread"),
+        // The PC register is NAMED per architecture. Hardcoding the x86
+        // spelling made this fail on ubuntu-24.04-arm with `unknown register
+        // rip`, against a register set publishing x0-x30/pc. `pc_key` is the
+        // crate's existing answer and already carries a test forbidding it to
+        // invent an x86 name on ARM64. Asking it keeps this test about the
+        // DISPATCH path, which is what it exists to check.
+        let pc = crate::instr_step::pc_key(crate::instr_step::native_arch());
+        match dispatch(&mut ctx, ScriptRequest::ReadRegister { name: pc.to_string() }) {
+            Ok(ScriptResponse::Register { value, .. }) => assert_ne!(value, 0, "{pc} should be non-zero on a live thread"),
             other => panic!("unexpected ReadRegister response: {other:?}"),
         }
 

@@ -749,10 +749,15 @@ mod tests {
     /// nothing else is running.
     #[test]
     fn the_cache_directory_can_be_overridden() {
+        // Held for the whole test: the cache root is process-global.
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = PdbIdentity::new(&[0x11; 16], 3, "over.pdb");
         let dir = std::env::temp_dir().join(format!("rustre-pdb-{}", std::process::id()));
-        // SAFETY: single-threaded within this test; the variable is read by
-        // `cache_path` and by nothing else in the process.
+        // SAFETY: the write itself is unsynchronised process-global state,
+        // which is why `CACHE_ENV_LOCK` is held above. The previous note here
+        // claimed the variable was "read by `cache_path` and by nothing else
+        // in the process"; the two cache-fixture tests call `cache_path` too,
+        // and in parallel, which is exactly how they became flaky.
         unsafe { std::env::set_var("RUSTRE_PDB_CACHE", &dir) };
         let got = cache_path(&id);
         unsafe { std::env::remove_var("RUSTRE_PDB_CACHE") };
@@ -765,10 +770,32 @@ mod tests {
         );
     }
 
+    /// Serialises every test that reads or writes the PDB cache root.
+    ///
+    /// `RUSTRE_PDB_CACHE` is process-global state, and `cargo test` runs these
+    /// in parallel in ONE process. `the_cache_directory_can_be_overridden`
+    /// carried a `SAFETY` note claiming the variable "is read by `cache_path`
+    /// and by nothing else in the process" — that is false, and the two
+    /// fixture tests below are the counter-example: they call `cache_path`
+    /// concurrently, so one of them can compute its path under the real root
+    /// and then have `cached()` resolve the overridden one, or the reverse.
+    ///
+    /// Measured: `a_valid_cache_entry_is_still_returned` failed once in the
+    /// full suite and passed in isolation. That is not noise, it is the
+    /// signature of shared mutable state, and it would have come back.
+    ///
+    /// The comment above the override test already recorded the flakiness and
+    /// attributed it to a hard-coded path shared between test PROCESSES. That
+    /// was one cause; this is the other, inside a single process, and the
+    /// override introduced to fix the first is what creates the second.
+    static CACHE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// A cache entry that is not a PDB must be ignored, so it can be fetched
     /// again instead of being served for the rest of the installation life.
     #[test]
     fn a_poisoned_cache_entry_is_not_returned() {
+        // Held for the whole test: the cache root is process-global.
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = PdbIdentity::new(&[0xAB; 16], 1, &format!("poisoned-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
@@ -791,6 +818,8 @@ mod tests {
     /// everything.
     #[test]
     fn a_valid_cache_entry_is_still_returned() {
+        // Held for the whole test: the cache root is process-global.
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let id = PdbIdentity::new(&[0xCD; 16], 2, &format!("valid-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
