@@ -4776,23 +4776,38 @@ int main(void) {
         let mut ev = dbg.continue_execution().await.expect("continue should not error");
         let mut saw_thread_birth = false;
         let mut tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
-        for _ in 0..64 {
-            if matches!(ev.reason, StopReason::ThreadCreate { .. }) {
-                saw_thread_birth = true;
-            }
+        // ITERATION 585 — this loop RESUMES ONLY WHILE AT A THREAD BIRTH.
+        //
+        // 574 wrote it the other way round: resume until `tids.len() >= 2`.
+        // That reads well and hangs, because a resume is not free — it waits
+        // for the NEXT stop, and if the target has no further stop to give
+        // (precisely the case on ARM, where the second thread never appears)
+        // the wait never returns.
+        //
+        // Measured on ubuntu-24.04-arm: `Test (release, serial)` ran for 87
+        // minutes and was killed by the 90-minute ceiling, where the same step
+        // had taken 1.59 SECONDS one commit earlier. And a job killed by its
+        // own timeout destroys the signal for every OTHER test in it, so the
+        // 573 and 575 fixes went unmeasured too. A diagnostic improvement that
+        // hangs is worse than the ambiguity it replaced.
+        //
+        // The condition is now the one that is always bounded: consume the
+        // birth-stops the kernel actually delivers, and poll `threads()` after
+        // each. Where no birth-stop arrives the loop simply does not spin, and
+        // the assertion below reports that fact instead of waiting for it.
+        while matches!(ev.reason, StopReason::ThreadCreate { .. }) && !ev.reason.is_exit() {
+            saw_thread_birth = true;
             tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
-            // The condition this test is actually about. Stopping here rather
-            // than after a fixed number of resumes is what makes it independent
-            // of how many stops the kernel chooses to deliver, which is exactly
-            // what differs between x86-64 and aarch64.
-            if tids.len() >= 2 && !matches!(ev.reason, StopReason::ThreadCreate { .. }) {
-                break;
-            }
-            if ev.reason.is_exit() {
+            if tids.len() >= 2 {
+                // Already visible: resuming again would only risk another wait.
                 break;
             }
             ev = dbg.continue_execution().await.expect("continue should not error");
         }
+        // Read once more AFTER the loop: on a backend that delivers no
+        // birth-stop at all the body above never ran, and the initial reading
+        // was taken before the clone had any chance to happen.
+        tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
         assert!(!ev.reason.is_exit(), "fixture should stop, not exit: {:?}", ev.reason);
         assert!(
             !matches!(ev.reason, StopReason::ThreadCreate { .. }),

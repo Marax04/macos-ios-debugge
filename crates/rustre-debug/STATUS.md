@@ -91,6 +91,77 @@ ciò che rende veloce il round successivo.
   Verificato per perturbazione: degradando `is_write: None` a `Some(false)` —
   «sconosciuto» che diventa «era una lettura» — il test va rosso.
 
+- **583 — il falso positivo che avevo introdotto io nel 582.** `access_fault`
+  accettava `11 | 10 | 7` ovunque, con un commento che RICONOSCEVA che `SIGBUS`
+  cambia numero fra piattaforme e lo «risolveva» accettandoli entrambi. Ma quei
+  numeri non sono liberi dall'altra parte:
+
+  | numero | Linux | macOS |
+  |---|---|---|
+  | 7 | `SIGBUS` | **`SIGEMT`** |
+  | 10 | **`SIGUSR1`** | `SIGBUS` |
+
+  Quindi un normalissimo `SIGUSR1` veniva riportato come fault di memoria su
+  Linux. Per un round è stato **peggio** del difetto che correggeva: prima il
+  ramo era morto, dopo era attivo e mentiva. *L'unione delle costanti di due
+  piattaforme non è una costante portabile.*
+
+  Il test passava A VUOTO su Windows, dove i `cfg` sono compilati via: il rosso
+  è stato misurato in WSL, l'unica piattaforma dove quell'asserzione significa
+  qualcosa.
+
+- **584 — «l'indirizzo» erano due cose, e la doc ne prometteva una.**
+  `StopReason::address()` diceva *«the address associated with this stop
+  event»* e restituiva indirizzi di CODICE per `Breakpoint`/`SingleStep`/
+  `LibraryLoad` e il DATO toccato per `AccessViolation`/`Signal`. Chi credeva
+  alla frase e disassemblava otteneva l'istruzione per un breakpoint e un
+  puntatore a dati per un segfault, senza nulla che segnalasse la differenza.
+
+  **Onestamente: nessun chiamante lo usa male oggi** — gli unici consumatori
+  sono test e l'MCP non lo pubblica. La trappola è latente; il difetto
+  PRESENTE è la frase, sesta volta in questa sessione.
+
+  Il 581 non ha causato l'ambiguità (`Signal` restituiva già `si_addr`) ma l'ha
+  resa massima, togliendo l'ultima variante in cui i due tipi coincidevano per
+  caso su Windows. `address()` resta — «dammi qualunque indirizzo» è legittimo
+  per logging — e accanto c'è `code_address()`, che per i fault risponde `None`
+  invece di restituire un dato. `Exception` è escluso di proposito: il suo
+  indirizzo è l'istruzione su Windows ma la variante è usata anche per stop
+  riempiti da altre fonti, e promettere «questo è codice» sarebbe una garanzia
+  che il tipo non può mantenere.
+
+- **585 — il blocco che avevo introdotto io nel 574, e il suo costo.**
+
+  | step, riga aarch64 | durata |
+  |---|---|
+  | `Build (release)` | 3 min |
+  | `Test (release, serial)` | **87 min → ucciso dal tetto** |
+  | stesso step, un commit prima | **1,59 secondi** |
+
+  Non lentezza dell'ARM. Nel 574 avevo riscritto un ciclo come «riprendi finché
+  non vedi due thread»: si legge bene e si blocca, perché **un resume non è
+  gratis** — aspetta lo stop successivo. Se il target non ha altri stop da dare,
+  cioè esattamente il caso ARM che stavo diagnosticando, la PRIMA attesa non
+  torna mai. Il `for _ in 0..64` sembrava prudente ma limitava i TENTATIVI, non
+  il TEMPO.
+
+  **Il costo supera il test**: un job ucciso dal proprio tetto cancella il
+  segnale di ogni altro test al suo interno, quindi le correzioni di 573 e 575
+  — già spinte e pronte — non sono mai state misurate su ARM.
+
+  I due cicli vicini nello stesso file erano CORRETTI (`_ => break`: riprendono
+  solo finché arrivano eventi di quel tipo, quindi sono limitati dagli eventi
+  reali). Il codebase aveva già l'idioma giusto e me ne sono allontanato io.
+
+  Tetto alzato a 120 min, ma scrivendo nel workflow che la causa era il blocco e
+  che **a 120 non va rialzato**: significherebbe che qualcosa si blocca di nuovo
+  e il numero lo starebbe nascondendo. Alzare un timeout è la reazione istintiva
+  e quasi sempre quella che nasconde il problema.
+
+  Conferma collaterale: `Linux verified` ha riportato **failure** su quel run —
+  il fix del 572 che funziona in produzione, dove prima una riga cancellata
+  sarebbe passata in silenzio.
+
 ## 4. Difetti aperti — dichiarati, non nascosti
 
 | Cosa | Dove | Perché non è chiuso |

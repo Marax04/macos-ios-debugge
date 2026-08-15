@@ -1621,6 +1621,17 @@ pub enum StopReason {
     Unknown { description: String },
 }
 
+/// `SIGBUS` for the target this crate is compiled for.
+///
+/// 7 on Linux, 10 on BSD and macOS. Named rather than inlined because the two
+/// numbers each mean something ELSE on the other platform (`SIGUSR1` and
+/// `SIGEMT`), so a reader meeting a bare 7 or 10 cannot tell a deliberate
+/// choice from a copied constant.
+#[cfg(target_os = "linux")]
+const SIGBUS_ON_THIS_TARGET: i32 = 7;
+#[cfg(not(target_os = "linux"))]
+const SIGBUS_ON_THIS_TARGET: i32 = 10;
+
 /// What is known about a memory fault, with the unknowns spelled as unknown.
 ///
 /// Every field is an `Option` on purpose. A backend that cannot tell the
@@ -1710,12 +1721,44 @@ impl StopReason {
                 address: Some(*address),
                 is_write: Some(*is_write),
             }),
-            // 11 = SIGSEGV; 10 = SIGBUS on BSD/macOS, 7 = SIGBUS on Linux.
-            // Spelled as numbers because this type is shared by backends
-            // compiled for different targets, where `libc::SIGBUS` differs.
-            Self::Signal { signum, address, .. } if matches!(signum, 11 | 10 | 7) => {
+            // Chosen PER TARGET, not unioned.
+            //
+            // `SIGSEGV` is 11 everywhere, but `SIGBUS` is 7 on Linux and 10 on
+            // BSD/macOS -- and those numbers are not free on the other side:
+            // 10 is `SIGUSR1` on Linux and 7 is `SIGEMT` on macOS. Accepting
+            // `11 | 10 | 7` everywhere, as this did for one iteration, reported
+            // an ordinary `SIGUSR1` as a memory fault on Linux and `SIGEMT` on
+            // macOS: a false positive in the very predicate written so callers
+            // would not have to guess. The union of two platforms' constants is
+            // not a portable constant.
+            Self::Signal { signum, address, .. }
+                if *signum == 11 || *signum == SIGBUS_ON_THIS_TARGET =>
+            {
                 Some(AccessFault { address: *address, is_write: None })
             }
+            _ => None,
+        }
+    }
+
+    /// The address of the CODE, when this stop has one.
+    ///
+    /// `None` for `AccessViolation` and `Signal`: their address is the datum
+    /// the target touched, and returning it here would be the confusion this
+    /// method exists to remove. The code location for those stops is the
+    /// program counter, which the caller reads from the register set — a
+    /// different source, correctly.
+    ///
+    /// Use this to disassemble, symbolicate, or look a module up. Use
+    /// [`Self::address`] only to display whatever the stop happens to carry.
+    #[must_use]
+    pub const fn code_address(&self) -> Option<Address> {
+        match self {
+            Self::Breakpoint { address, .. } | Self::SingleStep { address } => Some(*address),
+            Self::LibraryLoad { base, .. } => Some(*base),
+            // Deliberately NOT `Exception`: on Windows its address is the
+            // faulting instruction, but the variant is also used for stops
+            // whose address the backend filled from elsewhere, so promising
+            // "this is code" would be a guarantee this type cannot keep.
             _ => None,
         }
     }
@@ -1726,7 +1769,24 @@ impl StopReason {
         matches!(self, Self::ProcessExit { .. })
     }
 
-    /// Return the address associated with this stop event, if any.
+    /// Return this variant's address field, WHATEVER KIND it is.
+    ///
+    /// The old sentence here was *"the address associated with this stop
+    /// event"*, which promises one kind of value and delivers two:
+    ///
+    /// - `Breakpoint`, `SingleStep` — the program counter: a CODE address.
+    /// - `LibraryLoad` — a module base: a code region.
+    /// - `AccessViolation`, `Signal` — the DATUM the target touched, which has
+    ///   nothing to do with where the code was.
+    ///
+    /// A caller who believed the sentence and disassembled from it got the
+    /// instruction stream for a breakpoint and a data pointer for a segfault,
+    /// with nothing to signal the difference.
+    ///
+    /// This method is kept, because "give me whatever address this stop
+    /// carries" is a legitimate question for logging and display. For the other
+    /// question — "where was the code?" — use [`Self::code_address`], which
+    /// answers `None` rather than handing back a datum.
     #[must_use]
     pub const fn address(&self) -> Option<Address> {
         match self {
@@ -10393,6 +10453,151 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// A tool must not advertise a timeout it never reads.
+    ///
+    /// `debug.continue_until` declares in its JSON schema:
+    ///
+    /// ```text
+    /// "timeout_ms": { "description": "Wall-clock timeout in milliseconds (default 30000)" }
+    /// ```
+    ///
+    /// and never reads it. Measured: `timeout_ms` appears twice in `debug.rs`,
+    /// both times inside a schema, and zero times in code. The loop resumes the
+    /// target with no deadline at all.
+    ///
+    /// So a caller passes `timeout_ms: 5000`, the parameter is ACCEPTED — it is
+    /// in the schema, so nothing rejects it — and the call still blocks
+    /// forever. A promise that cannot fail loudly, which is this repo's most
+    /// frequent defect: the same file already records `download_http` claiming
+    /// to follow HTTP redirects while sending every 3xx into the error branch.
+    ///
+    /// It is also iteration 585's defect moved to the user-facing surface. An
+    /// unbounded wait for a stop that may never come cost 87 minutes of CI and
+    /// two lost measurements there; here it hangs an operator's session, with
+    /// no way to interrupt it.
+    #[test]
+    fn a_declared_timeout_is_a_timeout_that_is_read() {
+        let src = include_str!("../../rustre-mcp-tools/src/tools/debug.rs");
+        let declared = src.matches("\"timeout_ms\"").count();
+        // Anchored on the CALL, not on a substring of the name. The first
+        // spelling of this counted `timeout_ms")` and stayed red after the fix,
+        // because the real read is `opt_u64(&args, "timeout_ms", 30_000)` —
+        // the quote is followed by a comma, not a paren. Third time this
+        // session that a string-anchored assertion has meant something other
+        // than intended; `opt_u64(` must exist for the file to compile.
+        let read = src.matches("opt_u64(&args, \"timeout_ms\"").count();
+        assert!(
+            read > 0,
+            "`timeout_ms` is declared in {declared} schema(s) and read {read} times: the tool \
+             accepts the parameter and ignores it, so a bounded call blocks forever anyway"
+        );
+    }
+
+    /// "The address" is two different things, and the doc said one.
+    ///
+    /// `StopReason::address()` is documented as *"the address associated with
+    /// this stop event"* — a phrase that promises one kind of value. It returns
+    /// two:
+    ///
+    /// | variante | kind |
+    /// |---|---|
+    /// | `Breakpoint`, `SingleStep` | the PC: a CODE address |
+    /// | `LibraryLoad` | a module base: code region |
+    /// | `AccessViolation`, `Signal` | the DATUM the target touched |
+    ///
+    /// A caller who believes the sentence and disassembles from it gets the
+    /// instruction stream for a breakpoint and a data pointer for a segfault.
+    /// Nothing errors; the disassembly is simply garbage.
+    ///
+    /// Iteration 581 sharpened this rather than causing it — `Signal` already
+    /// returned `si_addr` — but by making `AccessViolation` report the datum it
+    /// removed the last variant where the two kinds happened to coincide.
+    ///
+    /// **Stated honestly: no caller misuses it today.** The only consumers in
+    /// this workspace are tests. This is a latent trap in a public API, closed
+    /// preventively — but the FALSE SENTENCE is a present defect, and this
+    /// session has now hit that family six times.
+    #[test]
+    fn a_code_address_is_never_confused_with_a_touched_datum() {
+        use crate::{Address, StopReason};
+
+        let bp = StopReason::Breakpoint {
+            address: Address(0x1000),
+            bp: crate::Breakpoint::new_software(Address(0x1000)),
+        };
+        let av = StopReason::AccessViolation { address: Address(0xDEAD), is_write: true };
+        let sig = StopReason::Signal {
+            signum: 11,
+            signame: "SIGSEGV".to_string(),
+            address: Some(Address(0xBEEF)),
+        };
+
+        assert_eq!(
+            bp.code_address(),
+            Some(Address(0x1000)),
+            "a breakpoint's address IS a code location"
+        );
+        assert!(
+            av.code_address().is_none(),
+            "an access violation's address is the DATUM touched, not code — handing it to a \
+             disassembler yields garbage, and the caller cannot tell"
+        );
+        assert!(
+            sig.code_address().is_none(),
+            "si_addr is the datum, not the instruction"
+        );
+    }
+
+    /// A signal number means different things on different kernels.
+    ///
+    /// MY OWN DEFECT, introduced one iteration earlier. `access_fault` matched
+    /// `11 | 10 | 7` on every platform, reasoning that `libc::SIGBUS` differs
+    /// between targets. It does — and accepting both spellings is how you get
+    /// it wrong on BOTH platforms instead of one:
+    ///
+    /// | number | Linux | macOS |
+    /// |---|---|---|
+    /// | 7  | `SIGBUS` | **`SIGEMT`** |
+    /// | 10 | **`SIGUSR1`** | `SIGBUS` |
+    /// | 11 | `SIGSEGV` | `SIGSEGV` |
+    ///
+    /// So a `SIGUSR1` — a signal programs use for their own purposes, and which
+    /// this crate's own comments cite as an ordinary occurrence — was reported
+    /// to every caller as a memory fault on Linux, and `SIGEMT` likewise on
+    /// macOS. A false positive in the exact predicate written to stop callers
+    /// guessing.
+    ///
+    /// The union of two platforms' constants is not a portable constant. The
+    /// numbers must be chosen per target, which is what `cfg!` is for.
+    #[test]
+    fn a_signal_number_is_read_against_the_right_kernel() {
+        use crate::{Address, StopReason};
+
+        let sig = |n: i32| StopReason::Signal {
+            signum: n,
+            signame: format!("SIG{n}"),
+            address: Some(Address(0x2000)),
+        };
+
+        assert!(sig(11).access_fault().is_some(), "SIGSEGV is 11 on both");
+
+        #[cfg(target_os = "linux")]
+        {
+            assert!(sig(7).access_fault().is_some(), "linux: 7 is SIGBUS");
+            assert!(
+                sig(10).access_fault().is_none(),
+                "linux: 10 is SIGUSR1, a signal programs use on purpose — reporting it as a \
+                 memory fault is a false positive in the predicate that exists to prevent \
+                 guessing"
+            );
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert!(sig(10).access_fault().is_some(), "macos: 10 is SIGBUS");
+            assert!(sig(7).access_fault().is_none(), "macos: 7 is SIGEMT, not a memory fault");
+        }
     }
 
     /// One question — "did it fault, and where?" — must have one portable answer.

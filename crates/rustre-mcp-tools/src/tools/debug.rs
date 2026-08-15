@@ -2781,6 +2781,16 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 let addr = req_u64(&args, "addr")?;
                 let condition = req_str(&args, "condition")?.to_string();
                 let max_hits = opt_u64(&args, "max_hits", 1000);
+                // READ, not merely declared.
+                //
+                // This parameter has been in the schema — "Wall-clock timeout
+                // in milliseconds (default 30000)" — while nothing ever looked
+                // at it. A caller passing `timeout_ms: 5000` had it accepted,
+                // because it IS in the schema and so nothing rejects it, and
+                // then blocked forever anyway. A promise that cannot fail
+                // loudly is this file's most frequent defect; `download_http`
+                // above records the same shape with HTTP redirects.
+                let timeout_ms = opt_u64(&args, "timeout_ms", 30_000);
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     // Plant the breakpoint (idempotent at the backend level).
@@ -2792,7 +2802,23 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     let mut met = false;
                     let mut exited = false;
                     let mut exit_code: Option<i64> = None;
+                    // The deadline is checked BEFORE each resume, not after.
+                    //
+                    // `continue_execution` blocks until the next stop, so a
+                    // check placed after it is only reached if the target
+                    // stopped — exactly the case where the timeout is not
+                    // needed. The wait that has to be bounded is the one that
+                    // may never return, and the only place to refuse it is
+                    // before entering it. This is iteration 585's lesson at the
+                    // user-facing surface: a bound on ATTEMPTS is not a bound on
+                    // TIME.
+                    let started = std::time::Instant::now();
+                    let mut timed_out = false;
                     loop {
+                        if started.elapsed().as_millis() as u64 >= timeout_ms {
+                            timed_out = true;
+                            break;
+                        }
                         let ev = block_on(sess.dbg.continue_execution())
                             .map_err(|e| anyhow!("continue: {e}"))?;
                         if let rustre_debug::StopReason::ProcessExit { exit_code: ec } = ev.reason {
@@ -2862,6 +2888,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "condition_met": met,
                         "exited": exited,
                         "exit_code": exit_code,
+                        // Enforcing the timeout without SAYING SO would trade
+                        // one silence for another: the call would stop waiting
+                        // and report `condition_met: false`, which reads as
+                        // "the condition never held" when the truth is "we
+                        // stopped looking". Those are different answers and the
+                        // caller must be able to tell them apart -- retry with
+                        // a longer budget, or conclude the condition is false.
+                        "timed_out": timed_out,
+                        "timeout_ms": timeout_ms,
                         "live": true,
                         "source": "rustre_debug conditional breakpoint (live continue loop + expression_evaluator)"
                     }))

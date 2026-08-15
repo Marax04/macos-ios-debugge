@@ -44,7 +44,21 @@ jobs:
     # build of this workspace plus two test runs does not fit in that. A job
     # killed by its own ceiling reads as a failure of the code, which is the
     # most expensive kind of false signal.
-    timeout-minutes: 90
+    # 90 -> 120. Raised ONCE, and the reason is recorded so nobody raises it
+    # again reflexively: on 34cef08 the aarch64 row spent 87 minutes in
+    # `Test (release, serial)` and was killed by the ceiling, where the same
+    # step took 1.59 SECONDS one commit earlier. That was NOT slowness -- it was
+    # a test of mine (574) that resumed the target waiting for a stop the kernel
+    # never delivers on ARM. Fixed in 585.
+    #
+    # The ceiling is still raised, because the lesson of that run is what a
+    # timeout costs: a job killed this way destroys the signal for every OTHER
+    # test in it, so two unrelated fixes went unmeasured. Headroom is cheaper
+    # than a lost measurement.
+    #
+    # If this row ever hits 120, do not raise it again: something is hanging,
+    # and the number is hiding it.
+    timeout-minutes: 120
     # An architecture failing must not cancel the other: knowing whether a
     # defect is x86-only or ARM-only is half the diagnosis.
     continue-on-error: ${{ matrix.expected_to_fail }}
