@@ -65,6 +65,23 @@ dove prima c'era un rifiuto.
 | **iOS su hardware** | infrastruttura | non ottenibile su Actions |
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
+## 4-bis. Un difetto reso impossibile da reintrodurre (592)
+
+`ptrace` è valido SOLO dal thread che ha fatto l'attach — regola già scritta in
+`linux_debugger.rs` per `PTRACE_POKEUSER`, e violata comunque per diciotto round
+(il 573, scoperto al 591). Da un thread qualsiasi risponde ESRCH: il codice
+compila, gira, ed è **silenziosamente un no-op** solo sull'architettura che
+nessuno può eseguire in locale.
+
+Nessun compilatore e nessun test x86 può coglierlo, quindi ora c'è un guard che
+lo vieta a livello di sorgente. Perturbato per dimostrare che sa fallire:
+reintroducendo il difetto nomina la funzione e l'helper esatti.
+
+**Il guard ha trovato subito un secondo caso — che era un FALSO POSITIVO suo.**
+Cercava `byte_at(` e lo trovava dentro un commento (*«This used to be spelled
+inline as `byte_at(pid, rip - 1)`»*): la lezione 2 violata proprio dal guard che
+la applica. Ora i commenti vengono rimossi prima dell'analisi.
+
 ## 5. Lezioni di metodo
 
 1. **Misurare il rosso PRIMA del fix.** Un test che passa senza aver mai fallito

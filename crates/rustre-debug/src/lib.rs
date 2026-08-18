@@ -10495,6 +10495,80 @@ mod tests_extra {
         );
     }
 
+    /// `ptrace` may only be called from the thread that attached.
+    ///
+    /// This file already states the rule for `PTRACE_POKEUSER` — "only valid
+    /// from the tracer thread" — and iteration 591 found it broken anyway, in
+    /// code I had written eighteen rounds earlier. 573 read `NT_ARM_PAC_MASK`
+    /// by calling `libc::ptrace` straight from the async `backtrace`. From any
+    /// other thread ptrace answers ESRCH, so the helper returned `None` every
+    /// time, no address was ever stripped, and the ARM test stayed red while
+    /// the fix looked present in the source.
+    ///
+    /// That is the worst shape a defect can take here: it compiles, it runs, it
+    /// is silently a no-op, and ONLY on the architecture nobody can execute
+    /// locally. No compiler and no x86 test can catch it — which is why it is
+    /// worth a source guard rather than a comment.
+    ///
+    /// The helpers below are the ones that issue `ptrace` directly. Each is
+    /// correct when called from `ptrace_loop`, `do_launch` or `do_attach`, and
+    /// wrong from anywhere `async` — because the async surface runs on the
+    /// caller's executor thread, not on the tracer.
+    #[test]
+    fn no_async_body_calls_ptrace_behind_the_command_channels_back() {
+        // COMMENTS STRIPPED FIRST, and this guard needed it on its own first
+        // run: it flagged `run_to_return` for calling `byte_at()`, and the only
+        // occurrence there is inside a doc comment reading "This used to be
+        // spelled inline as `byte_at(pid, rip - 1)`". A guard anchored to a
+        // string that can appear in prose reports a defect that is not there —
+        // the mirror of the vacuous-green version of the same mistake, and the
+        // reason this crate now insists on anchoring to something the compiler
+        // must see.
+        let raw = include_str!("linux_debugger.rs");
+        let src: String = raw
+            .lines()
+            .map(|l| match l.find("//") {
+                Some(i) => &l[..i],
+                None => l,
+            })
+            .collect::<Vec<_>>()
+            .join("
+");
+        let src = src.as_str();
+        // Helpers that issue ptrace themselves. Named explicitly: deriving the
+        // list by scanning for `libc::ptrace` would silently shrink if one were
+        // renamed, and a guard that quietly checks less is the failure mode
+        // this crate has already been bitten by twice.
+        const TRACER_ONLY: &[&str] = &[
+            "byte_at(",
+            "trap_at_reported_pc(",
+            "read_debug_reg(",
+            "write_debug_reg(",
+            "signal_fault_address(",
+            "read_regs(",
+            "write_regs(",
+            "read_arm_hw_regset(",
+            "write_arm_hw_regset(",
+            "pac_insn_mask(",
+        ];
+        // Every `async fn` body in the file, cut at the next item at the same
+        // indentation. Crude on purpose: it over-approximates the body, so it
+        // can only ever report MORE than the truth, never less.
+        for (i, chunk) in src.split("
+    async fn ").enumerate().skip(1) {
+            let body = chunk.split("
+    }
+").next().unwrap_or(chunk);
+            let name = body.split('(').next().unwrap_or("?");
+            for helper in TRACER_ONLY {
+                assert!(
+                    !body.contains(helper),
+                    "linux: async fn `{name}` (body #{i}) calls `{helper})` directly. That                      helper issues ptrace, which is only valid from the tracer thread; from an                      async body it answers ESRCH and the call becomes a silent no-op. Route it                      through the command channel, as `merge_debug_state` does for the PAC mask."
+                );
+            }
+        }
+    }
+
     /// A tool must not advertise a timeout it never reads.
     ///
     /// `debug.continue_until` declares in its JSON schema:
