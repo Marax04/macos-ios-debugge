@@ -70,34 +70,34 @@ pub mod cop0 {
     pub const ENTRY_LO1: Cop0Register = Cop0Register::r(3);
     /// TLB context register.
     pub const CONTEXT: Cop0Register = Cop0Register::r(4);
-    /// User-local register: CP0 register 4, select 2 (MIPS32r2+).
+    /// User-local register: CP0 register 4, select 2 (`MIPS32r2`+).
     ///
     /// Previously documented as `CONTEXT_CONFIG` in some vendor manuals; the
-    /// MIPS32r2 architecture specification uses the name `UserLocal` for this
+    /// `MIPS32r2` architecture specification uses the name `UserLocal` for this
     /// encoding.  `CONTEXT_CONFIG` was an alias used under older revision names
     /// and has been removed to avoid duplicate-key confusion in decode lookups.
     pub const USER_LOCAL: Cop0Register = Cop0Register::new(4, 2);
     /// Page mask for variable TLB page sizes.
     pub const PAGE_MASK: Cop0Register = Cop0Register::r(5);
-    /// Page grain (MIPS32r2+).
+    /// Page grain (`MIPS32r2`+).
     pub const PAGE_GRAIN: Cop0Register = Cop0Register::new(5, 1);
     /// TLB wired boundary.
     pub const WIRED: Cop0Register = Cop0Register::r(6);
-    /// Hardware write-enable (MIPS32r2+).
+    /// Hardware write-enable (`MIPS32r2`+).
     pub const HW_RENA: Cop0Register = Cop0Register::new(7, 0);
     /// Bad virtual address (set on address exceptions).
     pub const BAD_VADDR: Cop0Register = Cop0Register::r(8);
-    /// Bad instruction (MIPS32r5+).
+    /// Bad instruction (`MIPS32r5`+).
     pub const BAD_INSN: Cop0Register = Cop0Register::new(8, 1);
     /// Count register (free-running timer).
     pub const COUNT: Cop0Register = Cop0Register::r(9);
     /// TLB entry hi-half (virtual page number + ASID).
     pub const ENTRY_HI: Cop0Register = Cop0Register::r(10);
-    /// GuestCtl1 (virtualisation, MIPS32r5+).
+    /// `GuestCtl1` (virtualisation, `MIPS32r5`+).
     pub const GUEST_CTL1: Cop0Register = Cop0Register::new(10, 4);
     /// Timer compare register.
     pub const COMPARE: Cop0Register = Cop0Register::r(11);
-    /// GuestCtl2 (virtualisation, MIPS32r5+).
+    /// `GuestCtl2` (virtualisation, `MIPS32r5`+).
     pub const GUEST_CTL2: Cop0Register = Cop0Register::new(11, 4);
 
     // ── Status / Control ────────────────────────────────────────────────────
@@ -109,27 +109,27 @@ pub mod cop0 {
     pub const SRS_CTL: Cop0Register = Cop0Register::new(12, 2);
     /// SRS map (select 3).
     pub const SRS_MAP: Cop0Register = Cop0Register::new(12, 3);
-    /// GuestCtl0 (virtualisation, select 6).
+    /// `GuestCtl0` (virtualisation, select 6).
     pub const GUEST_CTL0: Cop0Register = Cop0Register::new(12, 6);
-    /// GuestCtl0Ext (select 7).
+    /// `GuestCtl0Ext` (select 7).
     pub const GUEST_CTL0_EXT: Cop0Register = Cop0Register::new(12, 7);
     /// Cause register (exception cause).
     pub const CAUSE: Cop0Register = Cop0Register::r(13);
-    /// NestedExc (select 5).
+    /// `NestedExc` (select 5).
     pub const NESTED_EXC: Cop0Register = Cop0Register::new(13, 5);
     /// Exception program counter.
     pub const EPC: Cop0Register = Cop0Register::r(14);
-    /// NestedEPC (select 2).
+    /// `NestedEPC` (select 2).
     pub const NESTED_EPC: Cop0Register = Cop0Register::new(14, 2);
 
     // ── Identification ──────────────────────────────────────────────────────
     /// Processor identification register.
     pub const PRID: Cop0Register = Cop0Register::r(15);
-    /// EBase (exception vector base address, MIPS32r2+).
+    /// `EBase` (exception vector base address, `MIPS32r2`+).
     pub const EBASE: Cop0Register = Cop0Register::new(15, 1);
-    /// CDMMBase (MIPS32r5+).
+    /// `CDMMBase` (`MIPS32r5`+).
     pub const CDMM_BASE: Cop0Register = Cop0Register::new(15, 2);
-    /// CMGCRBase (MIPS32r5+, select 3).
+    /// `CMGCRBase` (`MIPS32r5`+, select 3).
     pub const CMGCR_BASE: Cop0Register = Cop0Register::new(15, 3);
 
     // ── Cache / Config ──────────────────────────────────────────────────────
@@ -141,9 +141,9 @@ pub mod cop0 {
     pub const CONFIG2: Cop0Register = Cop0Register::new(16, 2);
     /// Config3: extended features.
     pub const CONFIG3: Cop0Register = Cop0Register::new(16, 3);
-    /// Config4 (MIPS32r5+).
+    /// Config4 (`MIPS32r5`+).
     pub const CONFIG4: Cop0Register = Cop0Register::new(16, 4);
-    /// Config5 (MIPS32r5+).
+    /// Config5 (`MIPS32r5`+).
     pub const CONFIG5: Cop0Register = Cop0Register::new(16, 5);
     /// Config6 (implementation-specific).
     pub const CONFIG6: Cop0Register = Cop0Register::new(16, 6);
@@ -151,9 +151,9 @@ pub mod cop0 {
     pub const CONFIG7: Cop0Register = Cop0Register::new(16, 7);
     /// Load linked address.
     pub const LLADDR: Cop0Register = Cop0Register::r(17);
-    /// MAAR (memory accessibility attribute register, MIPS32r5+, sel 1).
+    /// MAAR (memory accessibility attribute register, `MIPS32r5`+, sel 1).
     pub const MAAR: Cop0Register = Cop0Register::new(17, 1);
-    /// MAARi (indirect access).
+    /// `MAARi` (indirect access).
     pub const MAARI: Cop0Register = Cop0Register::new(17, 2);
 
     // ── Watchpoints ────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ pub mod cop0 {
     pub const WATCH_HI: Cop0Register = Cop0Register::r(19);
 
     // ── MIPS64 TLB context ──────────────────────────────────────────────────
-    /// XContext (64-bit context register, MIPS64).
+    /// `XContext` (64-bit context register, MIPS64).
     pub const XCONTEXT: Cop0Register = Cop0Register::r(20);
 
     // ── Debug ───────────────────────────────────────────────────────────────
@@ -187,13 +187,13 @@ pub mod cop0 {
     // ── Cache / ECC ─────────────────────────────────────────────────────────
     /// Cache error register.
     pub const CACHE_ERR: Cop0Register = Cop0Register::r(27);
-    /// TagLo (cache tag, select 0).
+    /// `TagLo` (cache tag, select 0).
     pub const TAG_LO: Cop0Register = Cop0Register::r(28);
-    /// DataLo (cache data, select 1).
+    /// `DataLo` (cache data, select 1).
     pub const DATA_LO: Cop0Register = Cop0Register::new(28, 1);
-    /// TagHi (select 0).
+    /// `TagHi` (select 0).
     pub const TAG_HI: Cop0Register = Cop0Register::r(29);
-    /// DataHi (select 1).
+    /// `DataHi` (select 1).
     pub const DATA_HI: Cop0Register = Cop0Register::new(29, 1);
     /// Error exception PC.
     pub const ERROR_EPC: Cop0Register = Cop0Register::r(30);
@@ -411,11 +411,13 @@ fn cp0_desc_table() -> &'static HashMap<Cop0Register, &'static str> {
 }
 
 /// Return the canonical name of a CP0 register, or `None` if unknown.
+#[must_use]
 pub fn get_cp0_name(reg: Cop0Register) -> Option<&'static str> {
     cp0_name_table().get(&reg).copied()
 }
 
 /// Return the description of a CP0 register or a generic placeholder.
+#[must_use]
 pub fn get_cp0_desc(reg: Cop0Register) -> &'static str {
     cp0_desc_table().get(&reg).copied().unwrap_or("Unknown CP0 register")
 }
@@ -474,7 +476,7 @@ impl Cop0RegisterDb {
 
     /// Total number of entries.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.entries.len()
     }
 }
@@ -509,7 +511,7 @@ impl StatusFields {
     /// Kernel/User mode (bit 3; 0 = kernel).
     #[must_use]
     pub const fn ksu(&self) -> u8 { ((self.raw >> 3) & 0x3) as u8 }
-    /// User Extension Enable (bit 5, MIPS32r2+).
+    /// User Extension Enable (bit 5, `MIPS32r2`+).
     #[must_use]
     pub const fn ux(&self) -> bool { self.raw & 0x20 != 0 }
     /// Supervisor Extension Enable (bit 6).
@@ -580,7 +582,7 @@ impl CauseFields {
         self.raw & (1 << 31) != 0
     }
 
-    /// Coprocessor unit number for CpU exceptions (bits 28–29).
+    /// Coprocessor unit number for `CpU` exceptions (bits 28–29).
     #[must_use]
     pub const fn ce(&self) -> u8 {
         ((self.raw >> 28) & 0x3) as u8
@@ -588,7 +590,7 @@ impl CauseFields {
 
     /// Human-readable exception code name.
     #[must_use]
-    pub fn exc_name(&self) -> &'static str {
+    pub const fn exc_name(&self) -> &'static str {
         match self.exc_code() {
             0 => "Int",
             1 => "MOD",

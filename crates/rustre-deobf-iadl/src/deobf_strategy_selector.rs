@@ -54,7 +54,8 @@ pub enum StrategyFeature {
 
 impl StrategyFeature {
     /// Human-readable name for this feature.
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             StrategyFeature::OpaquePredDensity(_)  => "opaque_pred_density",
             StrategyFeature::IndirectCallRatio(_)  => "indirect_call_ratio",
@@ -70,6 +71,7 @@ impl StrategyFeature {
     }
 
     /// Return the normalised floating-point value (booleans → 0.0/1.0).
+    #[must_use]
     pub fn as_f64(&self) -> f64 {
         match self {
             StrategyFeature::OpaquePredDensity(v)  => *v,
@@ -98,6 +100,7 @@ pub struct FeatureVector {
 
 impl FeatureVector {
     /// Create an empty feature vector.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -108,6 +111,7 @@ impl FeatureVector {
     }
 
     /// Look up the first feature of a given name and return its f64 value.
+    #[must_use]
     pub fn get_f64(&self, name: &str) -> Option<f64> {
         self.features.iter().find(|f| f.name() == name).map(|f| f.as_f64())
     }
@@ -118,16 +122,19 @@ impl FeatureVector {
     }
 
     /// Number of features.
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.features.len()
     }
 
     /// Whether the vector is empty.
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.features.is_empty()
     }
 
     /// Build a name→value map for scoring.
+    #[must_use]
     pub fn as_map(&self) -> BTreeMap<&str, f64> {
         self.features.iter().map(|f| (f.name(), f.as_f64())).collect()
     }
@@ -164,7 +171,8 @@ pub enum DeobfStrategy {
 
 impl DeobfStrategy {
     /// Human-readable name.
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             DeobfStrategy::OpaquePredicateElimination => "opaque-predicate-elimination",
             DeobfStrategy::IndirectCallResolution      => "indirect-call-resolution",
@@ -180,7 +188,8 @@ impl DeobfStrategy {
     }
 
     /// All non-NoOp strategies.
-    pub fn all() -> &'static [DeobfStrategy] {
+    #[must_use]
+    pub const fn all() -> &'static [DeobfStrategy] {
         &[
             DeobfStrategy::OpaquePredicateElimination,
             DeobfStrategy::IndirectCallResolution,
@@ -217,7 +226,7 @@ pub struct StrategyScore {
 }
 
 impl StrategyScore {
-    fn new(strategy: DeobfStrategy, score: f64, components: BTreeMap<String, f64>) -> Self {
+    const fn new(strategy: DeobfStrategy, score: f64, components: BTreeMap<String, f64>) -> Self {
         Self { strategy, score, components }
     }
 }
@@ -250,7 +259,7 @@ struct ScoringRule {
 pub struct DeobfStrategySelector {
     /// Weight given to rule-based score vs. history-based score.
     rule_weight: f64,
-    /// History of selections: (strategy, outcome_score).
+    /// History of selections: (strategy, `outcome_score`).
     history: Vec<(DeobfStrategy, f64)>,
     /// Accumulated success scores per strategy.
     success: HashMap<DeobfStrategy, f64>,
@@ -262,6 +271,7 @@ pub struct DeobfStrategySelector {
 
 impl DeobfStrategySelector {
     /// Create a new selector.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             rule_weight: 0.7,
@@ -273,7 +283,7 @@ impl DeobfStrategySelector {
     }
 
     /// Set the weight of rule-based vs. history-based scoring (0.0–1.0).
-    pub fn set_rule_weight(&mut self, w: f64) {
+    pub const fn set_rule_weight(&mut self, w: f64) {
         // `f64::clamp` propagates NaN, which would poison every score this
         // weight multiplies. Fall back to the documented lower bound.
         self.rule_weight = if w.is_nan() { 0.0 } else { w.clamp(0.0, 1.0) };
@@ -281,6 +291,7 @@ impl DeobfStrategySelector {
 
     /// Score all strategies against the given feature vector and return them
     /// sorted by descending score.
+    #[must_use]
     pub fn score_all(&self, features: &FeatureVector) -> Vec<StrategyScore> {
         let map = features.as_map();
         let mut scores: HashMap<DeobfStrategy, (f64, BTreeMap<String, f64>)> = HashMap::new();
@@ -326,12 +337,14 @@ impl DeobfStrategySelector {
     }
 
     /// Select the best strategy for the given feature vector.
+    #[must_use]
     pub fn select_best(&self, features: &FeatureVector) -> DeobfStrategy {
         let scores = self.score_all(features);
         scores.first().map(|s| s.strategy).unwrap_or(DeobfStrategy::NoOp)
     }
 
     /// Select the top-N strategies.
+    #[must_use]
     pub fn select_top_n(&self, features: &FeatureVector, n: usize) -> Vec<DeobfStrategy> {
         self.score_all(features)
             .into_iter()
@@ -355,6 +368,7 @@ impl DeobfStrategySelector {
     }
 
     /// Average outcome score for a given strategy.
+    #[must_use]
     pub fn avg_outcome(&self, strategy: DeobfStrategy) -> f64 {
         let uses = self.use_count.get(&strategy).copied().unwrap_or(0);
         if uses == 0 {

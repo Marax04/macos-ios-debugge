@@ -318,7 +318,7 @@ impl Default for PrimeTable {
 /// First prime larger than 2^32.
 const MOD: u64 = 4_294_967_311;
 
-fn mul_mod(a: u64, b: u64) -> u64 {
+const fn mul_mod(a: u64, b: u64) -> u64 {
     // Use 128-bit multiplication to avoid overflow
     let result = (a as u128) * (b as u128) % (MOD as u128);
     result as u64
@@ -362,7 +362,7 @@ impl BlockHash {
 
     /// Whether this block is empty (product = 1 means no mnemonics).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instr_count == 0
     }
 }
@@ -412,7 +412,7 @@ impl FunctionHash {
 
     /// Whether two functions are likely identical (same hash).
     #[must_use]
-    pub fn likely_identical(&self, other: &Self) -> bool {
+    pub const fn likely_identical(&self, other: &Self) -> bool {
         self.value == other.value
     }
 
@@ -602,7 +602,7 @@ impl FuzzyHash {
 /// Index for fast fuzzy matching using band decomposition.
 #[derive(Debug, Default)]
 pub struct FuzzyHashIndex {
-    /// band_hash → list of (address, fuzzy_hash_index)
+    /// `band_hash` → list of (address, `fuzzy_hash_index`)
     bands: HashMap<u64, Vec<u64>>,
     pub hashes: Vec<FuzzyHash>,
 }
@@ -653,7 +653,7 @@ impl FuzzyHashIndex {
 
     /// Number of indexed hashes.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.hashes.len()
     }
 }
@@ -789,7 +789,7 @@ impl MnemonicFrequencyTable {
 
     /// Total instruction count.
     #[must_use]
-    pub fn total(&self) -> u64 {
+    pub const fn total(&self) -> u64 {
         self.total_instructions
     }
 }
@@ -815,7 +815,7 @@ pub struct BinDiffMatch {
 
 impl BinDiffMatcher {
     #[must_use]
-    pub fn new(threshold: f64) -> Self {
+    pub const fn new(threshold: f64) -> Self {
         Self { threshold }
     }
 
@@ -1644,13 +1644,13 @@ impl BlockHashSequence {
 
     /// Length of the sequence.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.values.len()
     }
 
     /// Whether the sequence is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 }

@@ -42,7 +42,7 @@ pub const FPU_REGS: [&str; 8] = [
 
 /// Return the FPU stack register name for slot `n` (0–7).
 #[must_use]
-pub fn fpu_reg(n: u8) -> &'static str {
+pub const fn fpu_reg(n: u8) -> &'static str {
     FPU_REGS[(n & 0x7) as usize]
 }
 

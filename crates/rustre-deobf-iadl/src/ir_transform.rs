@@ -112,15 +112,18 @@ pub trait TransformPass: Send {
 }
 
 impl DeobfuscationPipeline {
+    #[must_use]
     pub fn new() -> Self {
         Self { passes: Vec::new(), stats: PipelineStats::default() }
     }
 
+    #[must_use]
     pub fn add_pass(mut self, pass: Box<dyn TransformPass>) -> Self {
         self.passes.push(pass);
         self
     }
 
+    #[must_use]
     pub fn standard() -> Self {
         Self::new()
             .add_pass(Box::new(ConstantFoldingPass))
@@ -296,7 +299,7 @@ impl TransformPass for DeadCodeElimination {
     }
 }
 
-fn has_side_effects(op: &IrOp) -> bool {
+const fn has_side_effects(op: &IrOp) -> bool {
     matches!(op, IrOp::Store { .. } | IrOp::Call { .. } | IrOp::Ret
         | IrOp::Branch | IrOp::CondBranch)
 }
@@ -440,7 +443,7 @@ impl TransformPass for BooleanSimplification {
                     insn.op = IrOp::Move;
                     insn.src = vec![new_val];
                     insn.flags.was_obfuscated = true;
-                    insn.flags.deobf_note = Some(format!("simplified {:?}", op));
+                    insn.flags.deobf_note = Some(format!("simplified {op:?}"));
                     changed = true;
                     stats.insns_simplified += 1;
                 }
@@ -482,7 +485,7 @@ impl TransformPass for XorChainSimplifier {
                     if insn.op == IrOp::Xor {
                         insn.src = vec![IrValue::Var(*base), IrValue::Const(*acc_const)];
                         insn.flags.was_obfuscated = true;
-                        insn.flags.deobf_note = Some(format!("XOR chain collapsed, const={:#x}", acc_const));
+                        insn.flags.deobf_note = Some(format!("XOR chain collapsed, const={acc_const:#x}"));
                         changed = true;
                         stats.insns_simplified += 1;
                     }
@@ -564,7 +567,7 @@ impl TransformPass for OpaquePredicateElim {
                 if !matches!(insn.op, IrOp::CmpEq | IrOp::CmpNe | IrOp::CondBranch) { continue; }
                 // Check if condition is always-true or always-false
                 if let Some(const_val) = evaluate_opaque(func, insn) {
-                    let note = format!("opaque predicate folded to {}", const_val);
+                    let note = format!("opaque predicate folded to {const_val}");
                     if let Some(i) = func.insns.get_mut(&id) {
                         i.op = IrOp::Move;
                         i.src = vec![IrValue::Const(const_val)];

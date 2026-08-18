@@ -105,13 +105,13 @@ impl TemplateField {
 
     /// Returns `true` if this field has nested children.
     #[must_use]
-    pub fn is_group(&self) -> bool {
+    pub const fn is_group(&self) -> bool {
         !self.children.is_empty()
     }
 
     /// Total byte span covered by this field (including children).
     #[must_use]
-    pub fn end_offset(&self) -> usize {
+    pub const fn end_offset(&self) -> usize {
         self.offset + self.size
     }
 }
@@ -134,7 +134,7 @@ pub struct TemplateResult {
 }
 
 impl TemplateResult {
-    fn new(template: BuiltinTemplate) -> Self {
+    const fn new(template: BuiltinTemplate) -> Self {
         Self {
             template,
             fields: Vec::new(),
@@ -1442,7 +1442,7 @@ impl PngTemplate {
 
 // Helper for conditional color selection
 impl Color {
-    fn if_true(cond: bool, a: Color, b: Color) -> Color {
+    const fn if_true(cond: bool, a: Color, b: Color) -> Color {
         if cond { a } else { b }
     }
 }

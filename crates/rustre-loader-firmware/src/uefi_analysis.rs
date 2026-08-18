@@ -28,7 +28,7 @@ pub enum UefiError {
 impl std::fmt::Display for UefiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidFvSignature { got } => write!(f, "invalid FV signature: {:?}", got),
+            Self::InvalidFvSignature { got } => write!(f, "invalid FV signature: {got:?}"),
             Self::TruncatedData { offset, needed } => write!(
                 f,
                 "truncated UEFI data at offset {offset:#x}, need {needed}"
@@ -66,6 +66,7 @@ impl std::error::Error for UefiError {}
 pub type Guid = [u8; 16];
 
 /// Format a GUID in the standard `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}` form.
+#[must_use]
 pub fn format_guid(g: &Guid) -> String {
     format!(
         "{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}",
@@ -94,11 +95,13 @@ pub struct GuidDatabase {
 }
 
 impl GuidDatabase {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Load the standard set of well-known UEFI GUIDs.
+    #[must_use]
     pub fn load_standard() -> Self {
         let mut db = Self::new();
         // FV filesystem GUIDs
@@ -133,13 +136,16 @@ impl GuidDatabase {
         }
     }
 
+    #[must_use]
     pub fn lookup(&self, guid: &Guid) -> Option<&str> {
         self.entries.get(guid).map(|s| s.as_str())
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -200,7 +206,7 @@ pub enum FfsFileType {
 }
 
 impl FfsFileType {
-    pub fn from_u8(v: u8) -> Result<Self, UefiError> {
+    pub const fn from_u8(v: u8) -> Result<Self, UefiError> {
         match v {
             0x01 => Ok(Self::Raw),
             0x02 => Ok(Self::Freeform),
@@ -220,7 +226,8 @@ impl FfsFileType {
         }
     }
 
-    pub fn is_executable(self) -> bool {
+    #[must_use]
+    pub const fn is_executable(self) -> bool {
         matches!(
             self,
             Self::SecurityCore
@@ -258,7 +265,8 @@ pub enum HiiPackageType {
 }
 
 impl HiiPackageType {
-    pub fn from_u8(v: u8) -> Self {
+    #[must_use]
+    pub const fn from_u8(v: u8) -> Self {
         match v {
             0x00 => Self::All,
             0x01 => Self::Guid,
@@ -275,7 +283,8 @@ impl HiiPackageType {
         }
     }
 
-    pub fn is_user_visible(self) -> bool {
+    #[must_use]
+    pub const fn is_user_visible(self) -> bool {
         matches!(
             self,
             Self::Forms | Self::Strings | Self::Images | Self::SimpleFonts
@@ -292,7 +301,8 @@ pub struct HiiPackage {
 }
 
 impl HiiPackage {
-    pub fn new(pkg_type: HiiPackageType, data: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn new(pkg_type: HiiPackageType, data: Vec<u8>) -> Self {
         let size = data.len() as u32 + 4;
         Self {
             pkg_type,
@@ -316,6 +326,7 @@ pub struct EfiFvIntegrityResult {
 }
 
 impl EfiFvIntegrityResult {
+    #[must_use]
     pub fn verify_header(hdr_data: &[u8]) -> Self {
         if hdr_data.len() < 56 {
             return Self {
@@ -337,7 +348,8 @@ impl EfiFvIntegrityResult {
         }
     }
 
-    pub fn is_valid(&self) -> bool {
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
         self.header_checksum_valid && self.signature_present
     }
 }
@@ -354,7 +366,8 @@ pub struct EfiFfs {
 }
 
 impl EfiFfs {
-    pub fn new(guid: Guid, file_type: FfsFileType, size: u32) -> Self {
+    #[must_use]
+    pub const fn new(guid: Guid, file_type: FfsFileType, size: u32) -> Self {
         Self {
             guid,
             file_type,
@@ -365,15 +378,18 @@ impl EfiFfs {
         }
     }
 
+    #[must_use]
     pub fn guid_str(&self) -> String {
         format_guid(&self.guid)
     }
 
+    #[must_use]
     pub fn find_section(&self, sec_type: EfiSectionType) -> Option<&EfiSection> {
         self.sections.iter().find(|s| s.section_type == sec_type)
     }
 
     /// `true` if this file contains a PE/COFF image section.
+    #[must_use]
     pub fn has_pe(&self) -> bool {
         self.find_section(EfiSectionType::Pe32).is_some()
             || self.find_section(EfiSectionType::Te).is_some()
@@ -406,7 +422,7 @@ pub enum EfiSectionType {
 }
 
 impl EfiSectionType {
-    pub fn from_u8(v: u8) -> Result<Self, UefiError> {
+    pub const fn from_u8(v: u8) -> Result<Self, UefiError> {
         match v {
             0x00 => Ok(Self::All),
             0x01 => Ok(Self::Compression),
@@ -427,11 +443,13 @@ impl EfiSectionType {
         }
     }
 
-    pub fn is_executable(self) -> bool {
+    #[must_use]
+    pub const fn is_executable(self) -> bool {
         matches!(self, Self::Pe32 | Self::Te | Self::Pic)
     }
 
-    pub fn is_dependency(self) -> bool {
+    #[must_use]
+    pub const fn is_dependency(self) -> bool {
         matches!(self, Self::DxeDepex | Self::PeiDepex | Self::SmmDepex)
     }
 }
@@ -446,7 +464,8 @@ pub struct EfiSection {
 }
 
 impl EfiSection {
-    pub fn new(section_type: EfiSectionType, raw_data: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn new(section_type: EfiSectionType, raw_data: Vec<u8>) -> Self {
         let size = raw_data.len() as u32;
         Self {
             section_type,
@@ -534,11 +553,13 @@ impl EfiFirmwareVolume {
     }
 
     /// Find a file by GUID.
+    #[must_use]
     pub fn find_file(&self, guid: &Guid) -> Option<&EfiFfs> {
         self.files.iter().find(|f| &f.guid == guid)
     }
 
     /// All executable files.
+    #[must_use]
     pub fn executable_files(&self) -> Vec<&EfiFfs> {
         self.files
             .iter()
@@ -547,6 +568,7 @@ impl EfiFirmwareVolume {
     }
 
     /// All files with PE sections.
+    #[must_use]
     pub fn pe_files(&self) -> Vec<&EfiFfs> {
         self.files.iter().filter(|f| f.has_pe()).collect()
     }
@@ -582,6 +604,7 @@ pub struct EfiDepex {
 }
 
 impl EfiDepex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -623,6 +646,7 @@ impl EfiDepex {
     }
 
     /// All GUIDs referenced in PUSH operations.
+    #[must_use]
     pub fn referenced_guids(&self) -> Vec<&Guid> {
         self.tokens
             .iter()
@@ -637,6 +661,7 @@ impl EfiDepex {
     }
 
     /// `true` if the DEPEX always evaluates to true (single TRUE token).
+    #[must_use]
     pub fn is_always_true(&self) -> bool {
         self.tokens.iter().any(|t| matches!(t, DepexToken::True))
             && !self.tokens.iter().any(|t| {
@@ -647,10 +672,12 @@ impl EfiDepex {
             })
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.tokens.len()
     }
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
 }
@@ -669,23 +696,27 @@ pub struct EfiFvBlockMapEntry {
 }
 
 impl EfiFvBlockMapEntry {
-    pub fn new(num_blocks: u32, block_length: u32) -> Self {
+    #[must_use]
+    pub const fn new(num_blocks: u32, block_length: u32) -> Self {
         Self {
             num_blocks,
             block_length,
         }
     }
     /// Total bytes covered by this block map entry.
-    pub fn total_bytes(&self) -> u64 {
+    #[must_use]
+    pub const fn total_bytes(&self) -> u64 {
         self.num_blocks as u64 * self.block_length as u64
     }
     /// `true` if this is the terminating entry (all zeros).
-    pub fn is_terminator(&self) -> bool {
+    #[must_use]
+    pub const fn is_terminator(&self) -> bool {
         self.num_blocks == 0 && self.block_length == 0
     }
 }
 
 /// Parse a firmware volume block map from raw bytes.
+#[must_use]
 pub fn parse_fv_block_map(data: &[u8]) -> Vec<EfiFvBlockMapEntry> {
     let mut entries = Vec::new();
     let mut pos = 0;
@@ -730,7 +761,8 @@ impl PeiModule {
         }
     }
 
-    pub fn dependency_count(&self) -> usize {
+    #[must_use]
+    pub const fn dependency_count(&self) -> usize {
         self.depex_guids.len()
     }
 }
@@ -762,10 +794,12 @@ impl DxeDriver {
         }
     }
 
-    pub fn protocol_count(&self) -> usize {
+    #[must_use]
+    pub const fn protocol_count(&self) -> usize {
         self.protocol_guids.len()
     }
-    pub fn is_smm_driver(&self) -> bool {
+    #[must_use]
+    pub const fn is_smm_driver(&self) -> bool {
         self.is_smm
     }
 }
@@ -787,13 +821,16 @@ impl EfiVariableAttributes {
     pub const TIME_BASED_AUTH: u32 = 0x0000_0020;
     pub const APPEND_WRITE: u32 = 0x0000_0040;
 
-    pub fn is_non_volatile(self) -> bool {
+    #[must_use]
+    pub const fn is_non_volatile(self) -> bool {
         self.0 & Self::NON_VOLATILE != 0
     }
-    pub fn is_runtime(self) -> bool {
+    #[must_use]
+    pub const fn is_runtime(self) -> bool {
         self.0 & Self::RUNTIME_ACCESS != 0
     }
-    pub fn is_authenticated(self) -> bool {
+    #[must_use]
+    pub const fn is_authenticated(self) -> bool {
         self.0 & Self::TIME_BASED_AUTH != 0
     }
 }
@@ -817,9 +854,11 @@ impl EfiVariable {
         }
     }
 
-    pub fn data_size(&self) -> usize {
+    #[must_use]
+    pub const fn data_size(&self) -> usize {
         self.data.len()
     }
+    #[must_use]
     pub fn is_secure_boot_related(&self) -> bool {
         self.name.contains("Secure") || self.name.contains("PK") || self.name.contains("KEK")
     }
@@ -832,6 +871,7 @@ pub struct EfiVariableStore {
 }
 
 impl EfiVariableStore {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -839,10 +879,12 @@ impl EfiVariableStore {
         self.variables.push(v);
     }
 
+    #[must_use]
     pub fn find_by_name(&self, name: &str) -> Option<&EfiVariable> {
         self.variables.iter().find(|v| v.name == name)
     }
 
+    #[must_use]
     pub fn runtime_variables(&self) -> Vec<&EfiVariable> {
         self.variables
             .iter()
@@ -850,6 +892,7 @@ impl EfiVariableStore {
             .collect()
     }
 
+    #[must_use]
     pub fn secure_boot_variables(&self) -> Vec<&EfiVariable> {
         self.variables
             .iter()
@@ -875,6 +918,7 @@ pub struct UefiSecurityReport {
 
 impl UefiSecurityReport {
     /// Build from a `UefiAnalysis`.
+    #[must_use]
     pub fn build(analysis: &UefiAnalysis) -> Self {
         let smm_count = analysis.smm_drivers().len();
         let total_drivers = analysis.dxe_drivers.len();
@@ -900,7 +944,8 @@ impl UefiSecurityReport {
         }
     }
 
-    pub fn is_high_risk(&self) -> bool {
+    #[must_use]
+    pub const fn is_high_risk(&self) -> bool {
         self.smm_driver_count > 5
     }
 }
@@ -920,6 +965,7 @@ pub struct UefiAnalysis {
 }
 
 impl UefiAnalysis {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             guid_db: GuidDatabase::load_standard(),
@@ -942,26 +988,31 @@ impl UefiAnalysis {
     }
 
     /// Look up a GUID name in the database.
+    #[must_use]
     pub fn name_for_guid(&self, guid: &Guid) -> Option<&str> {
         self.guid_db.lookup(guid)
     }
 
     /// Total number of FFS files across all firmware volumes.
+    #[must_use]
     pub fn total_ffs_files(&self) -> usize {
         self.firmware_volumes.iter().map(|fv| fv.files.len()).sum()
     }
 
     /// All SMM drivers.
+    #[must_use]
     pub fn smm_drivers(&self) -> Vec<&DxeDriver> {
         self.dxe_drivers.iter().filter(|d| d.is_smm).collect()
     }
 
     /// Find a PEI module by GUID.
+    #[must_use]
     pub fn find_pei_module(&self, guid: &Guid) -> Option<&PeiModule> {
         self.pei_modules.iter().find(|m| &m.guid == guid)
     }
 
     /// Total PE/COFF files across all volumes.
+    #[must_use]
     pub fn total_pe_files(&self) -> usize {
         self.firmware_volumes
             .iter()
@@ -1395,9 +1446,11 @@ pub struct EfiFvSecurity {
 }
 
 impl EfiFvSecurity {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
+    #[must_use]
     pub fn risk_level(&self) -> u8 {
         let mut score = 0u8;
         if !self.has_secure_boot_db {
@@ -1411,6 +1464,7 @@ impl EfiFvSecurity {
         }
         score.min(100)
     }
+    #[must_use]
     pub fn is_secure(&self) -> bool {
         self.risk_level() < 40
     }
@@ -1430,7 +1484,8 @@ pub struct EfiMemoryDescriptor {
 }
 
 impl EfiMemoryDescriptor {
-    pub fn new(mem_type: u32, phys: u64, pages: u64) -> Self {
+    #[must_use]
+    pub const fn new(mem_type: u32, phys: u64, pages: u64) -> Self {
         Self {
             memory_type: mem_type,
             physical_start: phys,
@@ -1439,16 +1494,20 @@ impl EfiMemoryDescriptor {
             attribute: 0,
         }
     }
-    pub fn size_bytes(&self) -> u64 {
+    #[must_use]
+    pub const fn size_bytes(&self) -> u64 {
         self.number_of_pages * 4096
     }
+    #[must_use]
     pub fn end_address(&self) -> u64 {
         self.physical_start + self.size_bytes()
     }
-    pub fn is_conventional(&self) -> bool {
+    #[must_use]
+    pub const fn is_conventional(&self) -> bool {
         self.memory_type == 7
     }
-    pub fn is_runtime(&self) -> bool {
+    #[must_use]
+    pub const fn is_runtime(&self) -> bool {
         self.memory_type >= 1 && self.memory_type <= 4
     }
 }
@@ -1473,7 +1532,8 @@ pub enum HobType {
 }
 
 impl HobType {
-    pub fn from_u16(v: u16) -> Self {
+    #[must_use]
+    pub const fn from_u16(v: u16) -> Self {
         match v {
             0x0001 => Self::Handoff,
             0x0002 => Self::MemoryAllocation,
@@ -1499,6 +1559,7 @@ pub struct HobEntry {
 }
 
 impl HobEntry {
+    #[must_use]
     pub fn parse_header(data: &[u8]) -> Option<Self> {
         if data.len() < 8 {
             return None;
@@ -1515,6 +1576,7 @@ impl HobEntry {
             data: data[..len].to_vec(),
         })
     }
+    #[must_use]
     pub fn is_end(&self) -> bool {
         self.hob_type == HobType::EndOfHobList
     }
@@ -1546,6 +1608,7 @@ impl EfiGptHeader {
     pub const SIGNATURE: &'static [u8] = b"EFI PART";
     pub const SIZE: usize = 92;
 
+    #[must_use]
     pub fn parse(data: &[u8]) -> Option<Self> {
         if data.len() < Self::SIZE {
             return None;
@@ -1576,7 +1639,8 @@ impl EfiGptHeader {
         })
     }
 
-    pub fn usable_lba_count(&self) -> u64 {
+    #[must_use]
+    pub const fn usable_lba_count(&self) -> u64 {
         self.last_usable_lba.saturating_sub(self.first_usable_lba) + 1
     }
 }
@@ -1586,6 +1650,7 @@ impl EfiGptHeader {
 // ---------------------------------------------------------------------------
 
 /// Read a null-terminated UTF-8 string from a byte slice at `offset`.
+#[must_use]
 pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
     if offset >= data.len() {
         return None;
@@ -1601,7 +1666,8 @@ pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
 }
 
 /// Align a value up to `align` (power-of-two).
-pub fn align_up(val: u64, align: u64) -> u64 {
+#[must_use]
+pub const fn align_up(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
     }
@@ -1609,7 +1675,8 @@ pub fn align_up(val: u64, align: u64) -> u64 {
 }
 
 /// Align a value down to `align` (power-of-two).
-pub fn align_down(val: u64, align: u64) -> u64 {
+#[must_use]
+pub const fn align_down(val: u64, align: u64) -> u64 {
     if align == 0 {
         return val;
     }
@@ -1617,11 +1684,13 @@ pub fn align_down(val: u64, align: u64) -> u64 {
 }
 
 /// Check whether `val` is a power of two.
-pub fn is_power_of_two(val: u64) -> bool {
+#[must_use]
+pub const fn is_power_of_two(val: u64) -> bool {
     val != 0 && val.is_power_of_two()
 }
 
 /// Simple entropy estimate over a byte slice (0.0 = uniform, 1.0 = random).
+#[must_use]
 pub fn byte_entropy(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;
@@ -1647,6 +1716,7 @@ pub fn byte_entropy(data: &[u8]) -> f64 {
 
 /// Parse a little-endian u16.
 #[inline]
+#[must_use]
 pub fn le_u16(data: &[u8], off: usize) -> u16 {
     if off + 2 > data.len() {
         return 0;
@@ -1655,6 +1725,7 @@ pub fn le_u16(data: &[u8], off: usize) -> u16 {
 }
 /// Parse a little-endian u32.
 #[inline]
+#[must_use]
 pub fn le_u32(data: &[u8], off: usize) -> u32 {
     if off + 4 > data.len() {
         return 0;
@@ -1663,6 +1734,7 @@ pub fn le_u32(data: &[u8], off: usize) -> u32 {
 }
 /// Parse a little-endian u64.
 #[inline]
+#[must_use]
 pub fn le_u64(data: &[u8], off: usize) -> u64 {
     if off + 8 > data.len() {
         return 0;
@@ -1671,6 +1743,7 @@ pub fn le_u64(data: &[u8], off: usize) -> u64 {
 }
 /// Parse a big-endian u32.
 #[inline]
+#[must_use]
 pub fn be_u32(data: &[u8], off: usize) -> u32 {
     if off + 4 > data.len() {
         return 0;
@@ -1678,6 +1751,7 @@ pub fn be_u32(data: &[u8], off: usize) -> u32 {
     u32::from_be_bytes(data[off..off + 4].try_into().unwrap())
 }
 /// Verify a 32-bit Adler-32 checksum over `data`.
+#[must_use]
 pub fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
     for &byte in data {
@@ -1692,6 +1766,7 @@ pub fn adler32(data: &[u8]) -> u32 {
 // ---------------------------------------------------------------------------
 
 /// Search `haystack` for the first occurrence of `needle`.
+#[must_use]
 pub fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
@@ -1700,6 +1775,7 @@ pub fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 /// Count non-overlapping occurrences of `needle` in `haystack`.
+#[must_use]
 pub fn count_bytes(haystack: &[u8], needle: &[u8]) -> usize {
     if needle.is_empty() {
         return 0;
@@ -1717,17 +1793,19 @@ pub fn count_bytes(haystack: &[u8], needle: &[u8]) -> usize {
 }
 
 /// Extract a sub-slice at `offset` with `len`, returning `None` if out of bounds.
+#[must_use]
 pub fn try_slice(data: &[u8], offset: usize, len: usize) -> Option<&[u8]> {
     data.get(offset..offset + len)
 }
 
 // Last additions
 /// Check if a byte slice is all zeros.
+#[must_use]
 pub fn is_zeroed(data: &[u8]) -> bool {
     data.iter().all(|&b| b == 0)
 }
 /// Reverse bytes in-place.
-pub fn reverse_bytes(data: &mut [u8]) {
+pub const fn reverse_bytes(data: &mut [u8]) {
     data.reverse();
 }
 /// XOR all bytes with `key`.
@@ -1737,15 +1815,18 @@ pub fn xor_bytes(data: &mut [u8], key: u8) {
     }
 }
 /// Rotate `val` left by `n` bits (32-bit).
-pub fn rol32(val: u32, n: u32) -> u32 {
+#[must_use]
+pub const fn rol32(val: u32, n: u32) -> u32 {
     val.rotate_left(n)
 }
 /// Rotate `val` right by `n` bits (32-bit).
-pub fn ror32(val: u32, n: u32) -> u32 {
+#[must_use]
+pub const fn ror32(val: u32, n: u32) -> u32 {
     val.rotate_right(n)
 }
 
 /// CRC32 (IEEE polynomial) checksum.
+#[must_use]
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for &b in data {
@@ -1761,6 +1842,7 @@ pub fn crc32(data: &[u8]) -> u32 {
     !crc
 }
 /// FNV-1a 32-bit hash.
+#[must_use]
 pub fn fnv1a32(data: &[u8]) -> u32 {
     let mut h = 2166136261u32;
     for &b in data {
@@ -1777,6 +1859,7 @@ pub fn fnv1a32(data: &[u8]) -> u32 {
 /// identically and no value matched a hash produced by any other
 /// implementation. The `switch (len & 3)` block below is the reference tail
 /// from Austin Appleby's `MurmurHash3.cpp`.
+#[must_use]
 pub fn murmur3_32(data: &[u8], seed: u32) -> u32 {
     let mut h = seed;
     let mut chunks = data.chunks_exact(4);

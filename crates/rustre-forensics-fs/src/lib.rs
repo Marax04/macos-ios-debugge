@@ -103,7 +103,7 @@ impl MemFsNode {
 
     /// Returns `true` if this node is a file (eager or lazy).
     #[must_use]
-    pub fn is_file(&self) -> bool {
+    pub const fn is_file(&self) -> bool {
         !self.is_dir()
     }
 
@@ -213,7 +213,7 @@ impl MemFsNodeV2 {
 
     /// Returns `true` if this node is a file.
     #[must_use] 
-    pub fn is_file(&self) -> bool {
+    pub const fn is_file(&self) -> bool {
         !self.is_dir()
     }
 

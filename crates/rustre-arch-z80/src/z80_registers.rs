@@ -28,7 +28,8 @@ pub enum Z80Reg {
 impl Z80Reg {
     /// The 3-bit encoding used in most opcodes (0=B..6=(HL), 7=A).
     /// Returns None for registers not addressable via this encoding.
-    pub fn opcode_bits(self) -> Option<u8> {
+    #[must_use]
+    pub const fn opcode_bits(self) -> Option<u8> {
         match self {
             Z80Reg::B     => Some(0),
             Z80Reg::C     => Some(1),
@@ -42,7 +43,8 @@ impl Z80Reg {
         }
     }
 
-    /// Decode a 3-bit field from an opcode to a Z80Reg.
+    /// Decode a 3-bit field from an opcode to a `Z80Reg`.
+    #[must_use]
     pub fn from_bits(bits: u8) -> Z80Reg {
         match bits & 7 {
             0 => Z80Reg::B,
@@ -58,7 +60,8 @@ impl Z80Reg {
     }
 
     /// Assembler name.
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Z80Reg::B     => "B",
             Z80Reg::C     => "C",
@@ -79,7 +82,8 @@ impl Z80Reg {
     }
 
     /// True for the (HL) / (IX+d) / (IY+d) pseudo-registers.
-    pub fn is_memory_ref(self) -> bool { matches!(self, Z80Reg::MemHL) }
+    #[must_use]
+    pub const fn is_memory_ref(self) -> bool { matches!(self, Z80Reg::MemHL) }
 }
 
 impl core::fmt::Display for Z80Reg {
@@ -107,7 +111,8 @@ pub enum Z80RegPair16 {
 
 impl Z80RegPair16 {
     /// The 2-bit encoding used in most opcodes (0=BC, 1=DE, 2=HL, 3=SP).
-    pub fn opcode_bits(self) -> Option<u8> {
+    #[must_use]
+    pub const fn opcode_bits(self) -> Option<u8> {
         match self {
             Z80RegPair16::BC => Some(0),
             Z80RegPair16::DE => Some(1),
@@ -118,6 +123,7 @@ impl Z80RegPair16 {
     }
 
     /// Decode a 2-bit field.
+    #[must_use]
     pub fn from_bits(bits: u8) -> Z80RegPair16 {
         match bits & 3 {
             0 => Z80RegPair16::BC,
@@ -129,6 +135,7 @@ impl Z80RegPair16 {
     }
 
     /// Decode a 2-bit field from PUSH/POP encoding (3 → AF instead of SP).
+    #[must_use]
     pub fn from_push_bits(bits: u8) -> Z80RegPair16 {
         match bits & 3 {
             0 => Z80RegPair16::BC,
@@ -140,7 +147,8 @@ impl Z80RegPair16 {
     }
 
     /// Assembler name.
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Z80RegPair16::BC => "BC",
             Z80RegPair16::DE => "DE",
@@ -153,7 +161,8 @@ impl Z80RegPair16 {
     }
 
     /// High byte register.
-    pub fn high(self) -> Z80Reg {
+    #[must_use]
+    pub const fn high(self) -> Z80Reg {
         match self {
             Z80RegPair16::BC => Z80Reg::B,
             Z80RegPair16::DE => Z80Reg::D,
@@ -166,7 +175,8 @@ impl Z80RegPair16 {
     }
 
     /// Low byte register.
-    pub fn low(self) -> Z80Reg {
+    #[must_use]
+    pub const fn low(self) -> Z80Reg {
         match self {
             Z80RegPair16::BC => Z80Reg::C,
             Z80RegPair16::DE => Z80Reg::E,
@@ -197,7 +207,8 @@ pub enum Z80AltReg {
 }
 
 impl Z80AltReg {
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Z80AltReg::AltAF => "AF'",
             Z80AltReg::AltBC => "BC'",
@@ -239,14 +250,20 @@ pub mod flag_bits {
 pub struct Z80Flags(pub u8);
 
 impl Z80Flags {
-    #[inline] pub fn c(self)  -> bool { self.0 & flag_bits::C_MASK  != 0 }
-    #[inline] pub fn n(self)  -> bool { self.0 & flag_bits::N_MASK  != 0 }
-    #[inline] pub fn pv(self) -> bool { self.0 & flag_bits::PV_MASK != 0 }
-    #[inline] pub fn h(self)  -> bool { self.0 & flag_bits::H_MASK  != 0 }
-    #[inline] pub fn z(self)  -> bool { self.0 & flag_bits::Z_MASK  != 0 }
-    #[inline] pub fn s(self)  -> bool { self.0 & flag_bits::S_MASK  != 0 }
+    #[inline] #[must_use]
+    pub const fn c(self)  -> bool { self.0 & flag_bits::C_MASK  != 0 }
+    #[inline] #[must_use]
+    pub const fn n(self)  -> bool { self.0 & flag_bits::N_MASK  != 0 }
+    #[inline] #[must_use]
+    pub const fn pv(self) -> bool { self.0 & flag_bits::PV_MASK != 0 }
+    #[inline] #[must_use]
+    pub const fn h(self)  -> bool { self.0 & flag_bits::H_MASK  != 0 }
+    #[inline] #[must_use]
+    pub const fn z(self)  -> bool { self.0 & flag_bits::Z_MASK  != 0 }
+    #[inline] #[must_use]
+    pub const fn s(self)  -> bool { self.0 & flag_bits::S_MASK  != 0 }
 
-    fn set_bit(&mut self, bit: u8, v: bool) {
+    const fn set_bit(&mut self, bit: u8, v: bool) {
         if v { self.0 |= 1 << bit; } else { self.0 &= !(1 << bit); }
     }
 
@@ -309,6 +326,7 @@ impl Z80Flags {
 
     /// Condition code check (bits 3:0 of the condition encoding in an opcode).
     /// Returns true if this flags state satisfies the condition.
+    #[must_use]
     pub fn condition_met(self, cc: u8) -> bool {
         match cc & 7 {
             0 => !self.z(),   // NZ
@@ -324,7 +342,8 @@ impl Z80Flags {
     }
 
     /// Assembler name for a condition code.
-    pub fn condition_name(cc: u8) -> &'static str {
+    #[must_use]
+    pub const fn condition_name(cc: u8) -> &'static str {
         match cc & 7 {
             0 => "NZ", 1 => "Z",
             2 => "NC", 3 => "C",
@@ -334,6 +353,7 @@ impl Z80Flags {
         }
     }
 
+    #[must_use]
     pub fn display_string(self) -> [u8; 8] {
         let fs = [
             (flag_bits::S_MASK,  b'S', b's'),
@@ -353,7 +373,7 @@ impl Z80Flags {
     }
 }
 
-fn parity(mut v: u8) -> bool {
+const fn parity(mut v: u8) -> bool {
     v ^= v >> 4; v ^= v >> 2; v ^= v >> 1; (v & 1) == 0
 }
 
@@ -429,21 +449,27 @@ impl Default for Z80RegFile {
 }
 
 impl Z80RegFile {
+    #[must_use]
     pub fn new() -> Self { Self::default() }
 
     // ── 16-bit pair accessors ────────────────────────────────────────────────
 
+    #[must_use]
     pub fn bc(&self) -> u16 { u16::from(self.b) << 8 | u16::from(self.c) }
+    #[must_use]
     pub fn de(&self) -> u16 { u16::from(self.d) << 8 | u16::from(self.e) }
+    #[must_use]
     pub fn hl(&self) -> u16 { u16::from(self.h) << 8 | u16::from(self.l) }
+    #[must_use]
     pub fn af(&self) -> u16 { u16::from(self.a) << 8 | u16::from(self.f.0) }
 
-    pub fn set_bc(&mut self, v: u16) { self.b = (v >> 8) as u8; self.c = (v & 0xFF) as u8; }
-    pub fn set_de(&mut self, v: u16) { self.d = (v >> 8) as u8; self.e = (v & 0xFF) as u8; }
-    pub fn set_hl(&mut self, v: u16) { self.h = (v >> 8) as u8; self.l = (v & 0xFF) as u8; }
-    pub fn set_af(&mut self, v: u16) { self.a = (v >> 8) as u8; self.f.0 = (v & 0xFF) as u8; }
+    pub const fn set_bc(&mut self, v: u16) { self.b = (v >> 8) as u8; self.c = (v & 0xFF) as u8; }
+    pub const fn set_de(&mut self, v: u16) { self.d = (v >> 8) as u8; self.e = (v & 0xFF) as u8; }
+    pub const fn set_hl(&mut self, v: u16) { self.h = (v >> 8) as u8; self.l = (v & 0xFF) as u8; }
+    pub const fn set_af(&mut self, v: u16) { self.a = (v >> 8) as u8; self.f.0 = (v & 0xFF) as u8; }
 
     /// Read any 16-bit register pair.
+    #[must_use]
     pub fn read_pair(&self, pair: Z80RegPair16) -> u16 {
         match pair {
             Z80RegPair16::BC => self.bc(),
@@ -470,7 +496,8 @@ impl Z80RegFile {
     }
 
     /// Read an 8-bit register (excluding (HL) — that is a memory reference).
-    pub fn read8(&self, r: Z80Reg) -> u8 {
+    #[must_use]
+    pub const fn read8(&self, r: Z80Reg) -> u8 {
         match r {
             Z80Reg::A   => self.a,
             Z80Reg::B   => self.b,
@@ -514,13 +541,13 @@ impl Z80RegFile {
     // ── Exchange operations ──────────────────────────────────────────────────
 
     /// EX AF, AF' — exchange AF with alternate AF.
-    pub fn ex_af(&mut self) {
+    pub const fn ex_af(&mut self) {
         std::mem::swap(&mut self.a, &mut self.a_alt);
         std::mem::swap(&mut self.f, &mut self.f_alt);
     }
 
     /// EXX — exchange BC, DE, HL with alternates.
-    pub fn exx(&mut self) {
+    pub const fn exx(&mut self) {
         std::mem::swap(&mut self.b, &mut self.b_alt);
         std::mem::swap(&mut self.c, &mut self.c_alt);
         std::mem::swap(&mut self.d, &mut self.d_alt);
@@ -530,17 +557,18 @@ impl Z80RegFile {
     }
 
     /// EX DE, HL.
-    pub fn ex_de_hl(&mut self) {
+    pub const fn ex_de_hl(&mut self) {
         std::mem::swap(&mut self.d, &mut self.h);
         std::mem::swap(&mut self.e, &mut self.l);
     }
 
     /// Advance PC by `n` bytes.
-    pub fn advance_pc(&mut self, n: u16) {
+    pub const fn advance_pc(&mut self, n: u16) {
         self.pc = self.pc.wrapping_add(n);
     }
 
     /// Dump to a string.
+    #[must_use]
     pub fn dump(&self) -> String {
         format!(
             "AF={:04x} BC={:04x} DE={:04x} HL={:04x} IX={:04x} IY={:04x} SP={:04x} PC={:04x}\n\

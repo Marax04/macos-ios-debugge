@@ -186,7 +186,7 @@ enum Script {
     Other,
 }
 
-fn char_script(c: char) -> Script {
+const fn char_script(c: char) -> Script {
     let cp = c as u32;
     match cp {
         0x0041..=0x007A => Script::Latin,   // Basic Latin letters
@@ -202,7 +202,7 @@ fn char_script(c: char) -> Script {
     }
 }
 
-fn is_invisible_char(c: char) -> bool {
+const fn is_invisible_char(c: char) -> bool {
     matches!(c as u32,
         0x00AD |          // Soft hyphen
         0x034F |          // Combining grapheme joiner
@@ -219,7 +219,7 @@ fn is_invisible_char(c: char) -> bool {
     )
 }
 
-fn is_bidi_char(c: char) -> bool {
+const fn is_bidi_char(c: char) -> bool {
     matches!(c as u32,
         0x202A..=0x202E | // LRE, RLE, PDF, LRO, RLO
         0x2066..=0x2069 | // LRI, RLI, FSI, PDI

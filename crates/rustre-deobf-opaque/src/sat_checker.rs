@@ -832,13 +832,13 @@ fn mul_one_eq_self(e: &OpaqueExpr) -> Option<PredicateValue> {
         }
     None
 }
-fn sq_plus_one_pos(_e: &OpaqueExpr) -> Option<PredicateValue> {
+const fn sq_plus_one_pos(_e: &OpaqueExpr) -> Option<PredicateValue> {
     // REMOVED: x^2 + 1 > 0 is NOT always true under wrapping i64 arithmetic.
     // Square(x) uses wrapping_mul, so for some x values x*x wraps to a large
     // negative value and x*x + 1 can also be <= 0. False-positive removed.
     None
 }
-fn sq_plus_one_ne_zero(_e: &OpaqueExpr) -> Option<PredicateValue> {
+const fn sq_plus_one_ne_zero(_e: &OpaqueExpr) -> Option<PredicateValue> {
     // REMOVED: x^2 + 1 != 0 is NOT always true under wrapping i64 arithmetic.
     // Same reason as sq_plus_one_pos: wrapping overflow can make x*x + 1 == 0.
     None

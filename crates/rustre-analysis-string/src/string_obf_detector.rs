@@ -35,7 +35,7 @@ impl ObfType {
     #[must_use]
     pub fn name(&self) -> String {
         match self {
-            ObfType::XorSingleByte { key } => format!("xor_byte({:#04x})", key),
+            ObfType::XorSingleByte { key } => format!("xor_byte({key:#04x})"),
             ObfType::XorMultiByte { key } => format!("xor_multi({} bytes)", key.len()),
             ObfType::Base64 { variant } => match variant {
                 Base64Variant::Standard => "base64_std".to_owned(),
@@ -44,10 +44,10 @@ impl ObfType {
             },
             ObfType::HexEncoded => "hex_encoded".to_owned(),
             ObfType::StackString => "stack_string".to_owned(),
-            ObfType::RotN { n } => format!("rot{}", n),
+            ObfType::RotN { n } => format!("rot{n}"),
             ObfType::Reversed => "reversed".to_owned(),
             ObfType::NullPadded => "null_padded".to_owned(),
-            ObfType::Custom(s) => format!("custom({})", s),
+            ObfType::Custom(s) => format!("custom({s})"),
         }
     }
 }
@@ -268,7 +268,7 @@ fn alphabet_score(data: &[u8], alphabet: &[u8; 64]) -> f64 {
     matches as f64 / data.len() as f64
 }
 
-fn decode_char(c: u8) -> Option<u8> {
+const fn decode_char(c: u8) -> Option<u8> {
     match c {
         b'A'..=b'Z' => Some(c - b'A'),
         b'a'..=b'z' => Some(c - b'a' + 26),
@@ -307,7 +307,7 @@ impl HexObf {
     }
 }
 
-fn hex_nybble(b: u8) -> Option<u8> {
+const fn hex_nybble(b: u8) -> Option<u8> {
     match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
@@ -349,7 +349,7 @@ impl StackStringPattern {
 }
 
 /// Heuristic: detect sequences of immediate-to-stack-offset writes.
-/// `writes` = list of (stack_offset, byte_value, va) sorted by stack_offset.
+/// `writes` = list of (`stack_offset`, `byte_value`, va) sorted by `stack_offset`.
 #[must_use]
 pub fn detect_stack_string(
     writes: &[(i64, u8, u64)],
@@ -447,10 +447,12 @@ pub struct ObfDetector {
 }
 
 impl ObfDetector {
+    #[must_use]
     pub fn new(config: ObfDetectorConfig) -> Self {
         Self { config, stats: DetectorStats::default() }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ObfDetectorConfig::default())
     }
@@ -521,7 +523,7 @@ impl ObfDetector {
     }
 
     #[must_use]
-    pub fn stats(&self) -> &DetectorStats {
+    pub const fn stats(&self) -> &DetectorStats {
         &self.stats
     }
 }

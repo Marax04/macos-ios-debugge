@@ -108,7 +108,7 @@ impl StackRegion {
         std::str::from_utf8(&bytes[..end]).ok().map(std::borrow::ToOwned::to_owned)
     }
 
-    /// Virtual address span: (min_insn_addr, max_insn_addr).
+    /// Virtual address span: (`min_insn_addr`, `max_insn_addr`).
     #[must_use]
     pub fn insn_addr_range(&self) -> (u64, u64) {
         let min = self.stores.iter().map(|s| s.insn_addr).min().unwrap_or(0);
@@ -187,13 +187,13 @@ impl StackString {
 
     /// Length of the string value.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.value.len()
     }
 
     /// Returns `true` if the string value is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
 
@@ -265,13 +265,13 @@ impl Utf16String {
 
     /// Length of the decoded string.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.value.len()
     }
 
     /// Returns `true` if the decoded string is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
 }
@@ -340,7 +340,7 @@ impl StackStringRecon {
 
     /// Create a reconstructor with a custom configuration.
     #[must_use]
-    pub fn with_config(config: StackStringReconConfig) -> Self {
+    pub const fn with_config(config: StackStringReconConfig) -> Self {
         Self {
             config,
             stores: Vec::new(),
@@ -364,7 +364,7 @@ impl StackStringRecon {
 
     /// Number of registered stores.
     #[must_use]
-    pub fn store_count(&self) -> usize {
+    pub const fn store_count(&self) -> usize {
         self.stores.len()
     }
 
@@ -372,7 +372,7 @@ impl StackStringRecon {
 
     /// Group stores into contiguous stack regions.
     ///
-    /// Stores are keyed by (base_reg, rough_base_offset / gap_size).
+    /// Stores are keyed by (`base_reg`, `rough_base_offset` / `gap_size`).
     #[must_use]
     pub fn group_into_regions(&self) -> Vec<StackRegion> {
         if self.stores.is_empty() {
@@ -564,13 +564,13 @@ pub struct ReconResult {
 impl ReconResult {
     /// Total number of strings recovered (ASCII + UTF-16).
     #[must_use]
-    pub fn total_strings(&self) -> usize {
+    pub const fn total_strings(&self) -> usize {
         self.stack_strings.len() + self.utf16_strings.len()
     }
 
     /// Returns `true` if no strings were recovered.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.stack_strings.is_empty() && self.utf16_strings.is_empty()
     }
 

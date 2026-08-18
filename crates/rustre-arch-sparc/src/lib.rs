@@ -54,23 +54,23 @@ fn freg(r: u32) -> String {
 }
 
 // ── Format helpers ────────────────────────────────────────────────────────────
-fn simm13(instr: u32) -> i32 {
+const fn simm13(instr: u32) -> i32 {
     // Sign-extend the low 13 bits to a full i32.
     // Shift the 13-bit field to the top of an i32 (32-13=19 bits) and then
     // use an arithmetic right-shift to propagate the sign bit back down.
     ((instr & 0x1FFF) as i32) << 19 >> 19
 }
 
-fn rs1(instr: u32) -> u32 {
+const fn rs1(instr: u32) -> u32 {
     (instr >> 14) & 31
 }
-fn rs2(instr: u32) -> u32 {
+const fn rs2(instr: u32) -> u32 {
     instr & 31
 }
-fn rd(instr: u32) -> u32 {
+const fn rd(instr: u32) -> u32 {
     (instr >> 25) & 31
 }
-fn use_imm(instr: u32) -> bool {
+const fn use_imm(instr: u32) -> bool {
     (instr >> 13) & 1 != 0
 }
 
@@ -95,7 +95,7 @@ fn addr_str(instr: u32) -> String {
 }
 
 // ── Branch condition names ────────────────────────────────────────────────────
-fn icc_name(cond: u32) -> &'static str {
+const fn icc_name(cond: u32) -> &'static str {
     match cond & 0xF {
         0 => "N",
         1 => "E",
@@ -116,7 +116,7 @@ fn icc_name(cond: u32) -> &'static str {
     }
 }
 
-fn fcc_name(cond: u32) -> &'static str {
+const fn fcc_name(cond: u32) -> &'static str {
     match cond & 0xF {
         0 => "N",
         1 => "NE",
@@ -138,7 +138,7 @@ fn fcc_name(cond: u32) -> &'static str {
 }
 
 // ── ASI (address space identifier) ───────────────────────────────────────────
-fn ld_mn(op3: u32) -> &'static str {
+const fn ld_mn(op3: u32) -> &'static str {
     match op3 {
         0x00 => "LD",
         0x01 => "LDUB",
@@ -645,21 +645,21 @@ pub struct SparcArch {
 
 impl SparcArch {
     #[must_use]
-    pub fn new_v8() -> Self {
+    pub const fn new_v8() -> Self {
         Self {
             bits: 32,
             endian: Endian::Big,
         }
     }
     #[must_use]
-    pub fn new_v9() -> Self {
+    pub const fn new_v9() -> Self {
         Self {
             bits: 64,
             endian: Endian::Big,
         }
     }
     #[must_use]
-    pub fn new_le() -> Self {
+    pub const fn new_le() -> Self {
         Self {
             bits: 64,
             endian: Endian::Little,
@@ -829,7 +829,7 @@ pub struct SparcLinearDisassembler<'a> {
 
 impl<'a> SparcLinearDisassembler<'a> {
     #[must_use]
-    pub fn new(arch: &'a SparcArch, bytes: &'a [u8], base: Address) -> Self {
+    pub const fn new(arch: &'a SparcArch, bytes: &'a [u8], base: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -1380,7 +1380,7 @@ impl SparcInstrKind {
 
     /// Whether this kind represents a control-flow transfer.
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(
             self,
             Self::Branch | Self::CondBranch | Self::Call | Self::Return
@@ -1389,7 +1389,7 @@ impl SparcInstrKind {
 
     /// Whether this kind accesses memory.
     #[must_use]
-    pub fn is_memory(&self) -> bool {
+    pub const fn is_memory(&self) -> bool {
         matches!(self, Self::Load | Self::Store)
     }
 }
@@ -1497,13 +1497,13 @@ impl SparcBasicBlock {
 
     /// Number of instructions in this block.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.instructions.len()
     }
 
     /// Whether the block is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instructions.is_empty()
     }
 }
@@ -1526,7 +1526,7 @@ pub fn encode_call(disp: i32) -> u32 {
 
 /// Encode a SPARC Format 2 SETHI instruction.
 #[must_use]
-pub fn encode_sethi(rd: u32, imm22: u32) -> u32 {
+pub const fn encode_sethi(rd: u32, imm22: u32) -> u32 {
     ((rd & 31) << 25) | (0b100u32 << 22) | (imm22 & 0x003F_FFFF)
 }
 
@@ -1538,13 +1538,13 @@ pub fn encode_nop() -> u32 {
 
 /// Encode a SPARC Format 3 register-register ALU instruction.
 #[must_use]
-pub fn encode_alu_reg(op3: u32, rs1: u32, rs2: u32, rd: u32) -> u32 {
+pub const fn encode_alu_reg(op3: u32, rs1: u32, rs2: u32, rd: u32) -> u32 {
     (0b10u32 << 30) | ((rd & 31) << 25) | ((op3 & 63) << 19) | ((rs1 & 31) << 14) | (rs2 & 31)
 }
 
 /// Encode a SPARC Format 3 register-immediate ALU instruction.
 #[must_use]
-pub fn encode_alu_imm(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
+pub const fn encode_alu_imm(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
     (0b10u32 << 30)
         | ((rd & 31) << 25)
         | ((op3 & 63) << 19)
@@ -1555,7 +1555,7 @@ pub fn encode_alu_imm(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
 
 /// Encode a SPARC Format 3 Load instruction (register+immediate addressing).
 #[must_use]
-pub fn encode_load(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
+pub const fn encode_load(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
     (0b11u32 << 30)
         | ((rd & 31) << 25)
         | ((op3 & 63) << 19)
@@ -1636,6 +1636,7 @@ impl SparcCodeStats {
     ///
     /// Returns `CoreError` only on hard decode failure of the very first
     /// instruction; subsequent errors increment `self.errors`.
+    #[must_use]
     pub fn from_bytes(arch: &SparcArch, bytes: &[u8], base: Address) -> Self {
         let mut s = Self::default();
         let iter = SparcLinearDisassembler::new(arch, bytes, base);
@@ -2220,7 +2221,7 @@ pub struct SparcWindowState {
 impl SparcWindowState {
     /// Create a new register window state.
     #[must_use]
-    pub fn new(nwindows: u8) -> Self {
+    pub const fn new(nwindows: u8) -> Self {
         Self {
             cwp: 0,
             nwindows,
@@ -2232,7 +2233,7 @@ impl SparcWindowState {
     ///
     /// Returns `true` if a window overflow trap would occur.
     #[must_use]
-    pub fn save(&mut self) -> bool {
+    pub const fn save(&mut self) -> bool {
         let next = (self.cwp + self.nwindows - 1) % self.nwindows;
         let overflow = (self.wim >> next) & 1 != 0;
         if !overflow {
@@ -2245,7 +2246,7 @@ impl SparcWindowState {
     ///
     /// Returns `true` if a window underflow trap would occur.
     #[must_use]
-    pub fn restore(&mut self) -> bool {
+    pub const fn restore(&mut self) -> bool {
         let next = (self.cwp + 1) % self.nwindows;
         let underflow = (self.wim >> next) & 1 != 0;
         if !underflow {
@@ -2255,12 +2256,12 @@ impl SparcWindowState {
     }
 
     /// Set the WIM bit for a given window.
-    pub fn set_wim_bit(&mut self, window: u8) {
+    pub const fn set_wim_bit(&mut self, window: u8) {
         self.wim |= 1 << (window % self.nwindows);
     }
 
     /// Clear the WIM bit for a given window.
-    pub fn clear_wim_bit(&mut self, window: u8) {
+    pub const fn clear_wim_bit(&mut self, window: u8) {
         self.wim &= !(1 << (window % self.nwindows));
     }
 }
@@ -3712,7 +3713,7 @@ pub struct SparcRegSet {
 impl SparcRegSet {
     /// Create an empty set.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             int_mask: 0,
             fp_mask: 0,
@@ -3720,14 +3721,14 @@ impl SparcRegSet {
     }
 
     /// Add an integer register (0-63).
-    pub fn add_int(&mut self, reg: u32) {
+    pub const fn add_int(&mut self, reg: u32) {
         if reg < 64 {
             self.int_mask |= 1u64 << reg;
         }
     }
 
     /// Remove an integer register (0-63).
-    pub fn remove_int(&mut self, reg: u32) {
+    pub const fn remove_int(&mut self, reg: u32) {
         if reg < 64 {
             self.int_mask &= !(1u64 << reg);
         }
@@ -3735,12 +3736,12 @@ impl SparcRegSet {
 
     /// Test if an integer register is in the set.
     #[must_use]
-    pub fn contains_int(&self, reg: u32) -> bool {
+    pub const fn contains_int(&self, reg: u32) -> bool {
         reg < 64 && (self.int_mask >> reg) & 1 != 0
     }
 
     /// Add an FP register (0-63).
-    pub fn add_fp(&mut self, reg: u32) {
+    pub const fn add_fp(&mut self, reg: u32) {
         if reg < 64 {
             self.fp_mask |= 1u64 << reg;
         }
@@ -3748,13 +3749,13 @@ impl SparcRegSet {
 
     /// Test if an FP register is in the set.
     #[must_use]
-    pub fn contains_fp(&self, reg: u32) -> bool {
+    pub const fn contains_fp(&self, reg: u32) -> bool {
         reg < 64 && (self.fp_mask >> reg) & 1 != 0
     }
 
     /// Union of two sets.
     #[must_use]
-    pub fn union(&self, other: &Self) -> Self {
+    pub const fn union(&self, other: &Self) -> Self {
         Self {
             int_mask: self.int_mask | other.int_mask,
             fp_mask: self.fp_mask | other.fp_mask,
@@ -3763,7 +3764,7 @@ impl SparcRegSet {
 
     /// Intersection of two sets.
     #[must_use]
-    pub fn intersect(&self, other: &Self) -> Self {
+    pub const fn intersect(&self, other: &Self) -> Self {
         Self {
             int_mask: self.int_mask & other.int_mask,
             fp_mask: self.fp_mask & other.fp_mask,
@@ -3772,13 +3773,13 @@ impl SparcRegSet {
 
     /// Whether the set is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.int_mask == 0 && self.fp_mask == 0
     }
 
     /// Number of registers in the set.
     #[must_use]
-    pub fn count(&self) -> u32 {
+    pub const fn count(&self) -> u32 {
         self.int_mask.count_ones() + self.fp_mask.count_ones()
     }
 }
@@ -4285,7 +4286,7 @@ pub fn synth_set(val: u32, rd: u32) -> Vec<u32> {
 
 // ── SPARC Call Frame Information ──────────────────────────────────────────────
 
-/// SPARC stack layout constants for SysV ABI.
+/// SPARC stack layout constants for `SysV` ABI.
 #[derive(Debug, Clone)]
 pub struct SparcStackLayout {
     /// Frame size in bytes (must be multiple of 8, minimum 96).
@@ -4331,19 +4332,19 @@ impl SparcStackLayout {
 
     /// Offset from biased %sp to the save area base.
     #[must_use]
-    pub fn save_area_offset(&self) -> i32 {
+    pub const fn save_area_offset(&self) -> i32 {
         self.stack_bias
     }
 
     /// Offset from biased %sp to the local variable area.
     #[must_use]
-    pub fn locals_offset(&self) -> i32 {
+    pub const fn locals_offset(&self) -> i32 {
         self.stack_bias + 128 // After the 16-register save area (8 local + 8 in)
     }
 
     /// Byte offset from %fp (previous %sp) to the first outgoing argument slot.
     #[must_use]
-    pub fn outgoing_args_offset(&self) -> i32 {
+    pub const fn outgoing_args_offset(&self) -> i32 {
         // In V8: %sp + 68 is first outgoing arg slot
         // In V9: %sp + 2047 + 128 is first outgoing arg slot
         self.stack_bias + 128

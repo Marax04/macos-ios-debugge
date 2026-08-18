@@ -23,7 +23,7 @@ use rustre_arch_68k::{
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -112,7 +112,7 @@ fn exhaustive_opcode_sweep_short_extension_never_panics() {
 fn group_decoders_never_panic() {
     let exts: [&[u8]; 5] = [&[], &[0x00], &[0xFF, 0xFF], &[0x00, 0x01, 0x02, 0x03], &[0xFF; 8]];
     let mut w: u32 = 0;
-    while w <= u32::from(u16::MAX) {
+    while u16::try_from(w).is_ok() {
         for ext in exts {
             exercise_groups(w as u16, ext);
         }

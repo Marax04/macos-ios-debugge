@@ -38,7 +38,7 @@ pub enum CsrPrivilege {
 impl CsrPrivilege {
     /// Decode privilege from a CSR address.
     #[must_use]
-    pub fn from_csr_addr(addr: u16) -> Self {
+    pub const fn from_csr_addr(addr: u16) -> Self {
         match (addr >> 8) & 0x3 {
             0 => Self::User,
             1 => Self::Supervisor,
@@ -49,7 +49,7 @@ impl CsrPrivilege {
 
     /// Return a short privilege letter string.
     #[must_use]
-    pub fn letter(self) -> &'static str {
+    pub const fn letter(self) -> &'static str {
         match self {
             Self::User => "U",
             Self::Supervisor => "S",
@@ -84,7 +84,7 @@ pub enum CsrAccess {
 impl CsrAccess {
     /// Decode access type from a CSR address.
     #[must_use]
-    pub fn from_csr_addr(addr: u16) -> Self {
+    pub const fn from_csr_addr(addr: u16) -> Self {
         if (addr >> 10) & 0x3 == 0x3 {
             Self::ReadOnly
         } else {
@@ -423,7 +423,7 @@ pub fn csr_access(addr: u16) -> CsrAccess {
 ///
 /// Returns `(is_interrupt, code, description)`.
 #[must_use]
-pub fn mcause_decode(mcause: u64, xlen: u32) -> (bool, u64, &'static str) {
+pub const fn mcause_decode(mcause: u64, xlen: u32) -> (bool, u64, &'static str) {
     let is_interrupt = if xlen == 32 {
         (mcause >> 31) & 1 == 1
     } else {
@@ -511,7 +511,7 @@ pub struct MstatusFields {
 impl MstatusFields {
     /// Decode mstatus from a 64-bit value (RV64).
     #[must_use]
-    pub fn decode_rv64(val: u64) -> Self {
+    pub const fn decode_rv64(val: u64) -> Self {
         let mpp_raw = ((val >> 11) & 0x3) as u8;
         let mpp = match mpp_raw {
             0 => CsrPrivilege::User,

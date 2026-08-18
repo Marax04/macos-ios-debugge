@@ -1,6 +1,6 @@
 ﻿//! `rustre-loader-pdf`
 //!
-//! This crate is part of the RustRE Suite, a premium reverse engineering platform.
+//! This crate is part of the `RustRE` Suite, a premium reverse engineering platform.
 //!
 //! # Loader: PDF
 //! Loads PDF documents. Magic: `%PDF-`.
@@ -221,7 +221,7 @@ impl PdfDocument {
 
     /// Returns the number of xref entries.
     #[must_use]
-    pub fn obj_count(&self) -> usize {
+    pub const fn obj_count(&self) -> usize {
         self.xref.len()
     }
 }
@@ -806,7 +806,7 @@ pub struct PdfJsEntry {
 impl PdfJsExtractor {
     /// Create a new [`PdfJsExtractor`].
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -1391,11 +1391,11 @@ impl PdfDict {
         }
     }
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
@@ -1425,14 +1425,14 @@ impl PdfObject {
         }
     }
     #[must_use]
-    pub fn as_int(&self) -> Option<i64> {
+    pub const fn as_int(&self) -> Option<i64> {
         match self {
             Self::Integer(n) => Some(*n),
             _ => None,
         }
     }
     #[must_use]
-    pub fn as_dict(&self) -> Option<&PdfDict> {
+    pub const fn as_dict(&self) -> Option<&PdfDict> {
         match self {
             Self::Dict(d) => Some(d),
             Self::Stream { dict, .. } => Some(dict),
@@ -1440,7 +1440,7 @@ impl PdfObject {
         }
     }
     #[must_use]
-    pub fn is_null(&self) -> bool {
+    pub const fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }
 }
@@ -2401,7 +2401,7 @@ impl PdfParser {
 
 // â"€â"€ Private free functions used by PdfParser â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-fn hex_nibble_p(b: u8) -> u8 {
+const fn hex_nibble_p(b: u8) -> u8 {
     match b {
         b'0'..=b'9' => b - b'0',
         b'a'..=b'f' => b - b'a' + 10,
@@ -2471,7 +2471,7 @@ fn parser_png_predictor(
     Ok(out)
 }
 
-fn paeth_p(a: u8, b: u8, c: u8) -> u8 {
+const fn paeth_p(a: u8, b: u8, c: u8) -> u8 {
     let pa = (b as i16 - c as i16).abs();
     let pb = (a as i16 - c as i16).abs();
     let pc = (a as i16 + b as i16 - 2 * c as i16).abs();
@@ -2562,7 +2562,7 @@ pub enum ObfuscationLevel {
 }
 
 impl ObfuscationLevel {
-    fn score(&self) -> u8 {
+    const fn score(&self) -> u8 {
         match self {
             Self::None => 0,
             Self::Light => 5,
@@ -2673,6 +2673,7 @@ pub struct PdfMalwareReport {
 
 impl PdfMalwareReport {
     /// Run full analysis on a parsed PDF.
+    #[must_use]
     pub fn analyze(parser: &PdfParser) -> Self {
         let version = parser.version.clone();
         let encrypted = parser
@@ -2741,6 +2742,7 @@ impl PdfMalwareReport {
     }
 
     /// Analyse a JavaScript snippet.
+    #[must_use]
     pub fn analyze_javascript(js: &str) -> JsAnalysis {
         let heap_spray_likely = Self::detect_heap_spray(js);
         let shellcode_patterns = Self::detect_patterns(js);
@@ -2773,6 +2775,7 @@ impl PdfMalwareReport {
     }
 
     /// Detect heap-spray patterns.
+    #[must_use]
     pub fn detect_heap_spray(js: &str) -> bool {
         // NOP-sled repetition patterns (split across constants to avoid AV).
         let nop_parts: &[(&str, &str)] = &[
@@ -2805,6 +2808,7 @@ impl PdfMalwareReport {
     }
 
     /// Detect encoded payload patterns.
+    #[must_use]
     pub fn detect_patterns(js: &str) -> Vec<ShellcodeHit> {
         let mut hits = Vec::new();
         // Look for unescape with a long encoded payload.
@@ -2888,6 +2892,7 @@ impl PdfMalwareReport {
     }
 
     /// Detect CVE-specific indicators from raw PDF bytes.
+    #[must_use]
     pub fn detect_exploit_cves(parser: &PdfParser) -> Vec<ExploitIndicator> {
         let mut v = Vec::new();
         let data = &parser.data;
@@ -2981,6 +2986,7 @@ impl PdfMalwareReport {
     }
 
     /// Compute aggregate threat score 0-100.
+    #[must_use]
     pub fn calculate_threat_score(report: &PdfMalwareReport) -> u8 {
         let mut score: u32 = 0;
         if report.open_action && report.javascript_count > 0 {
@@ -3018,6 +3024,7 @@ impl PdfMalwareReport {
 // â"€â"€ JS utilities â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 /// Decode a percent-encoded string (handles %XX and %uXXXX).
+#[must_use]
 pub fn decode_percent_encoding(s: &str) -> Vec<u8> {
     let mut out = Vec::new();
     let bytes = s.as_bytes();
@@ -3089,6 +3096,7 @@ pub fn deobfuscate_js_simple(js: &str) -> String {
 }
 
 /// Extract HTTP/HTTPS URLs from JavaScript source.
+#[must_use]
 pub fn extract_urls_from_js(js: &str) -> Vec<String> {
     let mut urls = Vec::new();
     for scheme in &["http://", "https://", "ftp://"] {
@@ -3135,6 +3143,7 @@ impl PdfBinaryView {
         Ok(Self { parser, report })
     }
 
+    #[must_use]
     pub fn summary(&self) -> String {
         let r = &self.report;
         let enc = if r.encrypted {
@@ -3155,6 +3164,7 @@ impl PdfBinaryView {
         )
     }
 
+    #[must_use]
     pub fn extract_all_streams(&self) -> Vec<(String, Vec<u8>)> {
         let mut out = Vec::new();
         for (&id, &off) in &self.parser.xref {
@@ -3167,26 +3177,33 @@ impl PdfBinaryView {
         out
     }
 
+    #[must_use]
     pub fn get_js_streams(&self) -> Vec<(String, String)> {
         self.parser.find_all_js()
     }
 
-    pub fn threat_report(&self) -> &PdfMalwareReport {
+    #[must_use]
+    pub const fn threat_report(&self) -> &PdfMalwareReport {
         &self.report
     }
-    pub fn parser(&self) -> &PdfParser {
+    #[must_use]
+    pub const fn parser(&self) -> &PdfParser {
         &self.parser
     }
+    #[must_use]
     pub fn version(&self) -> &str {
         &self.parser.version
     }
+    #[must_use]
     pub fn object_count(&self) -> usize {
         self.parser.xref.len()
     }
-    pub fn is_suspicious(&self, threshold: u8) -> bool {
+    #[must_use]
+    pub const fn is_suspicious(&self, threshold: u8) -> bool {
         self.report.threat_score >= threshold
     }
 
+    #[must_use]
     pub fn format_threat_report(&self) -> String {
         let r = &self.report;
         let mut s = String::new();

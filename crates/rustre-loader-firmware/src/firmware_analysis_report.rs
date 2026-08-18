@@ -25,11 +25,11 @@ pub enum FirmwareReportError {
 pub enum EmbeddedOs {
     /// Full Linux distribution.
     Linux,
-    /// FreeRTOS real-time OS.
+    /// `FreeRTOS` real-time OS.
     FreeRtos,
-    /// VxWorks real-time OS.
+    /// `VxWorks` real-time OS.
     VxWorks,
-    /// ThreadX real-time OS.
+    /// `ThreadX` real-time OS.
     ThreadX,
     /// RTEMS real-time OS.
     Rtems,
@@ -37,13 +37,13 @@ pub enum EmbeddedOs {
     QnxNeutrino,
     /// Zephyr OS.
     Zephyr,
-    /// NuttX OS.
+    /// `NuttX` OS.
     NuttX,
     /// Bare-metal (no OS detected).
     BareMetal,
     /// uClinux (MMU-less Linux).
     UClinux,
-    /// OpenWrt distribution.
+    /// `OpenWrt` distribution.
     OpenWrt,
     /// Unknown / unrecognised OS.
     Unknown(String),
@@ -95,13 +95,13 @@ impl EmbeddedOs {
 
     /// Returns `true` if this is a Linux-derived OS.
     #[must_use]
-    pub fn is_linux_based(&self) -> bool {
+    pub const fn is_linux_based(&self) -> bool {
         matches!(self, Self::Linux | Self::UClinux | Self::OpenWrt)
     }
 
     /// Returns `true` if this is a real-time OS.
     #[must_use]
-    pub fn is_rtos(&self) -> bool {
+    pub const fn is_rtos(&self) -> bool {
         matches!(
             self,
             Self::FreeRtos
@@ -226,13 +226,13 @@ impl FsNode {
 
     /// Returns `true` if the file is world-writable.
     #[must_use]
-    pub fn is_world_writable(&self) -> bool {
+    pub const fn is_world_writable(&self) -> bool {
         self.permissions & 0o002 != 0
     }
 
     /// Returns `true` if this is a setuid executable.
     #[must_use]
-    pub fn is_setuid(&self) -> bool {
+    pub const fn is_setuid(&self) -> bool {
         self.permissions & 0o4000 != 0
     }
 }
@@ -394,7 +394,7 @@ impl CryptoKey {
 
     /// Returns `true` if this is a high-risk private key.
     #[must_use]
-    pub fn is_high_risk(&self) -> bool {
+    pub const fn is_high_risk(&self) -> bool {
         self.is_private
     }
 }

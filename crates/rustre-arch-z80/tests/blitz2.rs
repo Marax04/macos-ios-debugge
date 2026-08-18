@@ -5,10 +5,10 @@ use rustre_arch_z80::*;
 use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
-fn a() -> Z80Arch {
+const fn a() -> Z80Arch {
     Z80Arch
 }
-fn ad(v: u64) -> Address {
+const fn ad(v: u64) -> Address {
     Address::new(v)
 }
 
@@ -585,7 +585,7 @@ fn reg_ids_distinct() {
         REG_DE, REG_HL, REG_SP, REG_PC, REG_IX, REG_IY, REG_AF2, REG_BC2, REG_DE2, REG_HL2,
     ];
     let mut sorted = ids.to_vec();
-    sorted.sort();
+    sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), ids.len());
 }
@@ -595,7 +595,7 @@ fn reg_ids_distinct() {
 fn fuzz_long_program() {
     let mut g = lcg();
     let mut buf = vec![0u8; 4096];
-    for b in buf.iter_mut() {
+    for b in &mut buf {
         *b = (g() & 0xFF) as u8;
     }
     let r = analyze(ad(0x1000), &buf);

@@ -19,7 +19,7 @@ pub struct HypothesisId(pub u64);
 
 impl HypothesisId {
     /// Generate the next ID (monotonically increasing).
-    fn next(counter: &mut u64) -> Self {
+    const fn next(counter: &mut u64) -> Self {
         *counter += 1;
         Self(*counter)
     }
@@ -202,7 +202,7 @@ pub struct Hypothesis {
 
 impl Hypothesis {
     #[must_use]
-    pub fn new(id: HypothesisId, passes: Vec<DeobfPassSpec>) -> Self {
+    pub const fn new(id: HypothesisId, passes: Vec<DeobfPassSpec>) -> Self {
         Self {
             id,
             passes,
@@ -299,7 +299,7 @@ pub struct HypothesisManager {
 impl HypothesisManager {
     /// Create a new manager.
     #[must_use]
-    pub fn new(top_k: usize, min_score: f64) -> Self {
+    pub const fn new(top_k: usize, min_score: f64) -> Self {
         Self {
             top_k,
             min_score,
@@ -331,6 +331,7 @@ impl HypothesisManager {
     }
 
     /// Mark hypothesis as complete with the given output bytes.
+    #[must_use]
     pub fn complete(&self, id: HypothesisId, output: Vec<u8>) -> bool {
         if let Some(arc) = self.find_arc(id) {
             arc.lock().unwrap().complete(output);
@@ -496,10 +497,10 @@ impl HypothesisGenerator {
         // XOR single-byte hypotheses
         for &key in &self.xor_keys {
             let pass = DeobfPassSpec::new(
-                format!("XOR-single-0x{:02X}", key),
+                format!("XOR-single-0x{key:02X}"),
                 "xor",
             )
-            .with_param("key", format!("{}", key));
+            .with_param("key", format!("{key}"));
             ids.push(manager.create(vec![pass]));
         }
 
@@ -549,7 +550,10 @@ mod tests {
         assert!(!mgr.by_state(HypothesisState::Pending).is_empty());
 
         let output = b"Hello World!!!! some readable text here".to_vec();
-        mgr.complete(id, output);
+        // `complete` returns whether the id was found; ignoring it meant an
+        // unknown id silently did nothing and the failure surfaced later, on a
+        // count assertion, pointing at the wrong line.
+        assert!(mgr.complete(id, output), "the hypothesis id must be known");
         assert_eq!(mgr.by_state(HypothesisState::Completed).len(), 1);
     }
 
@@ -560,7 +564,7 @@ mod tests {
             let id = mgr.create(vec![DeobfPassSpec::new(format!("pass-{}", i), "xor")]);
             // Give each a different quality output
             let output = vec![b'A' + i as u8; 100 * (i + 1)];
-            mgr.complete(id, output);
+            assert!(mgr.complete(id, output), "hypothesis {i} must be known");
         }
         mgr.prune();
         let surviving = mgr.by_state(HypothesisState::Completed);

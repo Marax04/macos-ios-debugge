@@ -48,7 +48,8 @@ pub struct BasicBlock {
 
 impl BasicBlock {
     /// Create a new basic block.
-    pub fn new(start: Addr, end: Addr, term: TermKind) -> Self {
+    #[must_use]
+    pub const fn new(start: Addr, end: Addr, term: TermKind) -> Self {
         Self {
             start,
             end,
@@ -61,12 +62,14 @@ impl BasicBlock {
     }
 
     /// Return the length in bytes.
-    pub fn len(&self) -> u64 {
+    #[must_use]
+    pub const fn len(&self) -> u64 {
         self.end.saturating_sub(self.start)
     }
 
     /// True when the block has no predecessors (entry-like).
-    pub fn is_entry(&self) -> bool {
+    #[must_use]
+    pub const fn is_entry(&self) -> bool {
         self.preds.is_empty()
     }
 }
@@ -86,11 +89,13 @@ pub struct NaturalLoop {
 
 impl NaturalLoop {
     /// Check whether `addr` is in the loop body.
+    #[must_use]
     pub fn contains(&self, addr: Addr) -> bool {
         self.body.contains(&addr)
     }
 
     /// Number of blocks in the loop.
+    #[must_use]
     pub fn size(&self) -> usize {
         self.body.len()
     }
@@ -116,12 +121,14 @@ impl ControlFlowGraph {
     }
 
     /// Look up a block by start address.
+    #[must_use]
     pub fn block(&self, addr: Addr) -> Option<&BasicBlock> {
         self.blocks.get(&addr)
     }
 
     /// Return all back-edge pairs `(tail, header)` where `tail` → `header`
     /// and `header` dominates `tail`.
+    #[must_use]
     pub fn back_edges(&self) -> Vec<(Addr, Addr)> {
         let mut edges = Vec::new();
         for block in self.blocks.values() {
@@ -136,6 +143,7 @@ impl ControlFlowGraph {
 
     /// Return `true` when `a` dominates `b` (i.e., every path from the entry
     /// to `b` passes through `a`).
+    #[must_use]
     pub fn dominates(&self, a: Addr, b: Addr) -> bool {
         if a == b {
             return true;
@@ -152,16 +160,19 @@ impl ControlFlowGraph {
     }
 
     /// Return the number of basic blocks.
+    #[must_use]
     pub fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
     /// Compute the total number of CFG edges.
+    #[must_use]
     pub fn edge_count(&self) -> usize {
         self.blocks.values().map(|b| b.succs.len()).sum()
     }
 
     /// Return the reverse post-order traversal of the CFG.
+    #[must_use]
     pub fn reverse_post_order(&self) -> Vec<Addr> {
         let mut visited = HashSet::new();
         let mut post_order = Vec::new();
@@ -223,6 +234,7 @@ impl InsnScanner {
     ///
     /// This is intentionally conservative — it handles the common patterns seen
     /// in obfuscated code, not the full x86 encoding table.
+    #[must_use]
     pub fn estimate_len(data: &[u8], off: usize) -> usize {
         if off >= data.len() {
             return 1;
@@ -310,6 +322,7 @@ impl InsnScanner {
 
     /// Classify `data[off]` as a terminator and resolve its target if possible.
     /// `base` is the virtual address of `data[0]`.
+    #[must_use]
     pub fn classify_terminator(
         data: &[u8],
         off: usize,
@@ -387,8 +400,8 @@ impl InsnScanner {
     }
 }
 
-/// Extra bytes due to a ModRM displacement / SIB.
-fn modrm_extra(modrm: u8) -> usize {
+/// Extra bytes due to a `ModRM` displacement / SIB.
+const fn modrm_extra(modrm: u8) -> usize {
     let md = modrm >> 6;
     let rm = modrm & 0x07;
     match md {
@@ -411,7 +424,8 @@ pub struct CfgBuilder {
 
 impl CfgBuilder {
     /// Create a new builder with the given virtual base address.
-    pub fn new(base: Addr) -> Self {
+    #[must_use]
+    pub const fn new(base: Addr) -> Self {
         Self { base }
     }
 
@@ -421,6 +435,7 @@ impl CfgBuilder {
     /// 1. Identify leaders by linear scan.
     /// 2. Build basic blocks and edges.
     /// 3. Compute dominators and detect natural loops.
+    #[must_use]
     pub fn build(&self, data: &[u8], entry: Addr) -> ControlFlowGraph {
         let leaders = self.find_leaders(data, entry);
         let mut blocks = self.build_blocks(data, &leaders);
@@ -842,12 +857,13 @@ pub struct CfgStats {
     pub loop_count: usize,
     pub max_loop_depth: u32,
     pub back_edge_count: usize,
-    /// McCabe cyclomatic complexity M = E - N + 2.
+    /// `McCabe` cyclomatic complexity M = E - N + 2.
     pub cyclomatic_complexity: i64,
 }
 
 impl CfgStats {
     /// Compute statistics for a CFG.
+    #[must_use]
     pub fn compute(cfg: &ControlFlowGraph) -> Self {
         let n = cfg.block_count() as i64;
         let e = cfg.edge_count() as i64;

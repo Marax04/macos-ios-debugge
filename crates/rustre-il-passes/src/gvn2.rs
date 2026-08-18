@@ -356,7 +356,7 @@ fn keyed(t: &mut ValueTable, key: String, konst: Option<(u64, Size)>) -> ValueId
 }
 
 /// Best-effort operand size for a comparison.
-fn operand_size(a: &LlilExpr, b: &LlilExpr) -> Size {
+const fn operand_size(a: &LlilExpr, b: &LlilExpr) -> Size {
     let sa = a.result_size();
     let sb = b.result_size();
     if sa.bytes() >= sb.bytes() { sa } else { sb }

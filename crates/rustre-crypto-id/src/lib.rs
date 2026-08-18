@@ -3800,7 +3800,7 @@ pub fn scan_for_blowfish_sboxes(binary: &[u8]) -> Vec<BinaryCryptoHit> {
     hits
 }
 
-/// GOST 28147-89 default S-box (CryptoPro variant) — first 8 nibble pairs.
+/// GOST 28147-89 default S-box (`CryptoPro` variant) — first 8 nibble pairs.
 /// Row 0: 4,10,9,2,13,8,0,14,6,11,1,12,7,15,5,3
 /// Packed as bytes (each row stored as nibble pairs): first 4 bytes of row 0.
 pub const GOST_SBOX_HEAD: [u8; 8] = [0xA4, 0x92, 0xD8, 0xE6, 0xCB, 0x21, 0xF7, 0x35];

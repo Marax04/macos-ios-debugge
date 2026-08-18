@@ -5839,7 +5839,7 @@ impl Arm64Lifter {
 
     /// Build an [`IrExpr`] from a token that is either a register or a
     /// `#immediate` literal.
-    /// Sign-bit position for an AArch64 operand: `w` registers are 32-bit,
+    /// Sign-bit position for an `AArch64` operand: `w` registers are 32-bit,
     /// `x` registers (and everything else) 64-bit.
     ///
     /// The flag code hard-coded 63, so `cmp w0, w1` read the sign from bit 63
@@ -5861,7 +5861,7 @@ impl Arm64Lifter {
         })
     }
 
-    /// The access size of an AArch64 load/store, taken from the MNEMONIC and the
+    /// The access size of an `AArch64` load/store, taken from the MNEMONIC and the
     /// destination register — the only places that carry it.
     ///
     /// `parse_mem_addr` returns a hard-coded 8 for every form, so `LDRB` was
@@ -5873,7 +5873,7 @@ impl Arm64Lifter {
     /// arm I had already "fixed".
     ///
     /// For the unsuffixed `LDR`/`STR` the width lives in the register name:
-    /// `w0` is 4 bytes, `x0` is 8. AArch64 states it there and nowhere else.
+    /// `w0` is 4 bytes, `x0` is 8. `AArch64` states it there and nowhere else.
     fn access_size(mnem: &str, dst: &str) -> u8 {
         match mnem {
             m if m.ends_with('b') => 1,

@@ -316,7 +316,7 @@ pub struct HypothesisGenerator {
 impl HypothesisGenerator {
     /// Create a new generator with the given configuration.
     #[must_use]
-    pub fn new(config: HypothesisGeneratorConfig) -> Self {
+    pub const fn new(config: HypothesisGeneratorConfig) -> Self {
         Self { config, next_id: 0 }
     }
 
@@ -375,7 +375,7 @@ impl HypothesisGenerator {
 
     // ── Private generators ────────────────────────────────────────────────────
 
-    fn next_id(&mut self) -> u32 {
+    const fn next_id(&mut self) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
         id

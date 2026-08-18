@@ -1,4 +1,4 @@
-//! Byte-driven ("real") entry points for the LuaJIT bytecode loader.
+//! Byte-driven ("real") entry points for the `LuaJIT` bytecode loader.
 //!
 //! Counterpart of `rustre_loader_lua::lua_real_api`: every function here takes
 //! the actual dump bytes and reports only what was parsed out of them. A dump
@@ -7,7 +7,7 @@
 
 use crate::{LJ_MAGIC, LjBytecode, LjLoaderError, LjModule, LjProto, LjVersion, LuaJitLoader};
 
-/// LuaJIT bytecode versions whose prototype layout this crate implements.
+/// `LuaJIT` bytecode versions whose prototype layout this crate implements.
 pub const SUPPORTED_BC_VERSIONS: [u8; 2] = [1, 2];
 
 /// Validate the container of `data` and return the bytecode version it declares.
@@ -59,7 +59,7 @@ pub fn parse_all_protos_strict(data: &[u8]) -> Result<LjBytecode, LjLoaderError>
 }
 
 impl LjProto {
-    /// Parse the root prototype out of real LuaJIT dump bytes.
+    /// Parse the root prototype out of real `LuaJIT` dump bytes.
     ///
     /// Honest counterpart of [`LjProto::mock`]: every field comes from `data`.
     ///
@@ -70,7 +70,7 @@ impl LjProto {
     }
 }
 
-/// Collect the deduplicated string constants of a real LuaJIT dump.
+/// Collect the deduplicated string constants of a real `LuaJIT` dump.
 ///
 /// # Errors
 /// Propagates [`parse_all_protos_strict`].

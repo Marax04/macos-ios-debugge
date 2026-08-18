@@ -2994,9 +2994,9 @@ impl DyldInfoParser {
     /// process aborted rather than failing an assertion.
     /// The bound is the INPUT LENGTH, not a fixed constant: every trie node
     /// consumes at least one byte, so a well-formed trie over `n` bytes cannot
-    /// have more than `n` nodes. A flat 100_000 terminated the walk but left it
+    /// have more than `n` nodes. A flat `100_000` terminated the walk but left it
     /// ruinously slow — measured at **141 s** for this parser against ~0.5 s for
-    /// every other parser in the crate on the same corpus, because 100_000
+    /// every other parser in the crate on the same corpus, because `100_000`
     /// nodes of string building were still being done for an 8 KB input.
     fn trie_node_budget(data: &[u8]) -> u32 {
         u32::try_from(data.len()).unwrap_or(u32::MAX)

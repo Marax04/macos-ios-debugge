@@ -1,6 +1,6 @@
 //! `rustre-loader-firmware`
 //!
-//! This crate is part of the RustRE Suite, a premium reverse engineering platform.
+//! This crate is part of the `RustRE` Suite, a premium reverse engineering platform.
 //!
 //! # Loader: FIRMWARE
 //!
@@ -20,8 +20,8 @@
 //!   x86: `push ebp` / `push esp` sequences, RISC-V: `auipc` patterns).
 //! - **Binwalk-equivalent signature scanner**: gzip, squashfs, cramfs, jffs2,
 //!   ubifs, ext2, PE/MZ, ELF, zlib, lzma, XZ, bzip2, 7-zip, ZIP, U-Boot.
-//! - **RTOS detection**: FreeRTOS, VxWorks, ThreadX, RTEMS, QNX, Contiki,
-//!   Tizen RT, Zephyr, RIOT OS, NuttX, LynxOS, INTEGRITY.
+//! - **RTOS detection**: `FreeRTOS`, `VxWorks`, `ThreadX`, RTEMS, QNX, Contiki,
+//!   Tizen RT, Zephyr, RIOT OS, `NuttX`, `LynxOS`, INTEGRITY.
 //! - **Entropy analysis**: 256-bin byte-frequency histogram, Shannon entropy.
 //! - **String extraction** with category classification (URL, path, IP, version).
 //! - **Boot section identification**: Cortex-M vector table, U-Boot payload,
@@ -100,11 +100,11 @@ pub enum FirmwareKind {
     UBoot,
     /// U-Boot FIT image (device tree blob `0xD00DFEED`).
     UBootFit,
-    /// SquashFS compressed filesystem.
+    /// `SquashFS` compressed filesystem.
     SquashFs,
     /// JFFS2 flash filesystem.
     Jffs2,
-    /// CramFS compressed filesystem.
+    /// `CramFS` compressed filesystem.
     CramFs,
     /// ext2/3/4 filesystem.
     Ext2,
@@ -131,13 +131,13 @@ pub enum FirmwareKind {
 impl FirmwareKind {
     /// Return `true` if this kind is a compressed archive.
     #[must_use]
-    pub fn is_compressed(self) -> bool {
+    pub const fn is_compressed(self) -> bool {
         matches!(self, Self::TarGz | Self::Bzip2 | Self::Lzma | Self::Xz)
     }
 
     /// Return `true` if this kind is a filesystem image.
     #[must_use]
-    pub fn is_filesystem(self) -> bool {
+    pub const fn is_filesystem(self) -> bool {
         matches!(
             self,
             Self::SquashFs | Self::Jffs2 | Self::CramFs | Self::Ext2 | Self::Yaffs2
@@ -146,7 +146,7 @@ impl FirmwareKind {
 
     /// Return `true` if this kind is an ASCII text format.
     #[must_use]
-    pub fn is_text_format(self) -> bool {
+    pub const fn is_text_format(self) -> bool {
         matches!(self, Self::IntelHex | Self::Srec)
     }
 }
@@ -384,7 +384,7 @@ impl ByteHistogram {
         best_idx as u8
     }
 
-    /// Compute entropy of a sliding window (window_size bytes, step_size stride).
+    /// Compute entropy of a sliding window (`window_size` bytes, `step_size` stride).
     /// Returns vec of (offset, entropy) pairs.
     #[must_use]
     pub fn sliding_entropy(data: &[u8], window_size: usize, step_size: usize) -> Vec<(usize, f64)> {
@@ -443,15 +443,15 @@ impl fmt::Display for BinaryArch {
 /// Heuristically detect the target architecture of a raw binary image.
 ///
 /// Uses the following heuristics in order of confidence:
-/// 1. **ARM AArch32**: scan for unconditional branch encoding `0xEAxxxxxx`
+/// 1. **ARM `AArch32`**: scan for unconditional branch encoding `0xEAxxxxxx`
 ///    (big-endian) or `0xEA` at byte 3 (little-endian).
 /// 2. **ARM Thumb/Thumb-2**: common 16-bit push `0xB5xx` or function preamble.
 /// 3. **MIPS big-endian**: `lui` instruction `0x3Cxxxxxx` at 4-byte aligned offsets.
 /// 4. **MIPS little-endian**: `lui` instruction with `0x3C` at byte 3.
-/// 5. **x86/x86_64**: `push ebp; mov ebp, esp` (`0x55 0x89 0xE5`) or `ENDBR64`.
+/// 5. **`x86/x86_64`**: `push ebp; mov ebp, esp` (`0x55 0x89 0xE5`) or `ENDBR64`.
 /// 6. **RISC-V**: `auipc` pattern (`0x17` in low 7 bits of first byte).
 /// 7. **PowerPC BE**: `mflr r0` (`0x7C0802A6`) at aligned offsets.
-/// 8. **AArch64**: 32-bit instruction alignment + known encoding masks.
+/// 8. **`AArch64`**: 32-bit instruction alignment + known encoding masks.
 #[must_use]
 pub fn detect_binary_arch(data: &[u8]) -> BinaryArch {
     if data.len() < 16 {
@@ -593,7 +593,7 @@ pub fn detect_binary_arch(data: &[u8]) -> BinaryArch {
 ///
 /// Returns `Some(Endian::Big)`, `Some(Endian::Little)`, or `None` if unknown.
 #[must_use]
-pub fn detect_raw_endian(arch: BinaryArch) -> Option<Endian> {
+pub const fn detect_raw_endian(arch: BinaryArch) -> Option<Endian> {
     match arch {
         BinaryArch::ArmThumb
         | BinaryArch::ArmAarch32
@@ -999,7 +999,7 @@ impl UBootHeader {
 
     /// Return a human-readable architecture name from the `arch` field.
     #[must_use]
-    pub fn arch_str(&self) -> &'static str {
+    pub const fn arch_str(&self) -> &'static str {
         match self.arch {
             1 => "alpha",
             2 => "arm",
@@ -1028,7 +1028,7 @@ impl UBootHeader {
 
     /// Return OS type as a string.
     #[must_use]
-    pub fn os_str(&self) -> &'static str {
+    pub const fn os_str(&self) -> &'static str {
         match self.os_type {
             1 => "openbsd",
             2 => "netbsd",
@@ -1057,7 +1057,7 @@ impl UBootHeader {
 
     /// Return compression type as a string.
     #[must_use]
-    pub fn comp_str(&self) -> &'static str {
+    pub const fn comp_str(&self) -> &'static str {
         match self.comp_type {
             0 => "none",
             1 => "gzip",
@@ -1072,7 +1072,7 @@ impl UBootHeader {
 
     /// Return image type as a string.
     #[must_use]
-    pub fn image_type_str(&self) -> &'static str {
+    pub const fn image_type_str(&self) -> &'static str {
         match self.image_type {
             1 => "standalone",
             2 => "kernel",
@@ -1088,7 +1088,7 @@ impl UBootHeader {
 
     /// Return the entry point as a `u64`.
     #[must_use]
-    pub fn entry(&self) -> u64 {
+    pub const fn entry(&self) -> u64 {
         self.entry_point as u64
     }
 
@@ -1152,7 +1152,7 @@ pub enum IntelHexRecordType {
 
 impl IntelHexRecordType {
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0x00 => Self::Data,
             0x01 => Self::EndOfFile,
@@ -1616,7 +1616,7 @@ pub struct FirmwareArch {
 
 impl FirmwareArch {
     #[must_use]
-    pub fn new(arch_name: String) -> Self {
+    pub const fn new(arch_name: String) -> Self {
         Self {
             arch_name,
             ptr_size: 4,
@@ -1625,7 +1625,7 @@ impl FirmwareArch {
     }
 
     #[must_use]
-    pub fn with_params(arch_name: String, ptr_size: usize, endian: Endian) -> Self {
+    pub const fn with_params(arch_name: String, ptr_size: usize, endian: Endian) -> Self {
         Self {
             arch_name,
             ptr_size,
@@ -1693,7 +1693,7 @@ pub struct FirmwareLoader;
 
 impl FirmwareLoader {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -1773,7 +1773,7 @@ pub struct IntelHexLoader;
 
 impl IntelHexLoader {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -1836,7 +1836,7 @@ pub struct SrecLoader;
 
 impl SrecLoader {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -1899,7 +1899,7 @@ pub struct Uf2Loader;
 
 impl Uf2Loader {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }

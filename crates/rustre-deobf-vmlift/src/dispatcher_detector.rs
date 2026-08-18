@@ -12,7 +12,7 @@
 //! because they cover complementary pattern families.  They are intentionally
 //! **distinct layers** and should not be merged.
 //!
-//! Modern VM-based protectors (VMProtect, Themida, Code Virtualizer) implement
+//! Modern VM-based protectors (`VMProtect`, Themida, Code Virtualizer) implement
 //! an interpreter loop centred around a **dispatcher** — the control-flow hub
 //! that reads the next bytecode opcode and jumps to the corresponding handler.
 //!
@@ -42,7 +42,7 @@ pub struct VmRegister {
 impl VmRegister {
     /// Create a new VM register.
     #[must_use]
-    pub fn new(index: u8, width_bits: u8, role: RegisterRole) -> Self {
+    pub const fn new(index: u8, width_bits: u8, role: RegisterRole) -> Self {
         Self {
             index,
             width_bits,
@@ -192,7 +192,7 @@ pub struct DispatcherDetector {
 impl DispatcherDetector {
     /// Create a new detector with default settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             min_confidence: 50,
             deep_scan: false,
@@ -201,14 +201,14 @@ impl DispatcherDetector {
 
     /// Set the minimum confidence threshold.
     #[must_use]
-    pub fn with_min_confidence(mut self, min: u8) -> Self {
+    pub const fn with_min_confidence(mut self, min: u8) -> Self {
         self.min_confidence = min;
         self
     }
 
     /// Enable deep scan (looks for obfuscated dispatcher variants).
     #[must_use]
-    pub fn with_deep_scan(mut self) -> Self {
+    pub const fn with_deep_scan(mut self) -> Self {
         self.deep_scan = true;
         self
     }
@@ -283,8 +283,7 @@ impl DispatcherDetector {
                         handler_count: cmp_count,
                         flags: DispatcherFlags::default(),
                         description: format!(
-                            "switch-based dispatcher with {} cmp/jz pairs at 0x{:x}",
-                            cmp_count, offset
+                            "switch-based dispatcher with {cmp_count} cmp/jz pairs at 0x{offset:x}"
                         ),
                     });
                 }
@@ -324,7 +323,7 @@ impl DispatcherDetector {
                     ],
                     handler_count: 256, // unknown, use worst case
                     flags: DispatcherFlags::default(),
-                    description: format!("jump-table dispatcher at 0x{:x}", offset),
+                    description: format!("jump-table dispatcher at 0x{offset:x}"),
                 });
             }
 
@@ -339,7 +338,7 @@ impl DispatcherDetector {
                     registers: vec![VmRegister::new(0, 32, RegisterRole::VirtualIp)],
                     handler_count: 256,
                     flags: DispatcherFlags::default(),
-                    description: format!("jump-table (SIB) dispatcher at 0x{:x}", offset),
+                    description: format!("jump-table (SIB) dispatcher at 0x{offset:x}"),
                 });
             }
 
@@ -353,7 +352,7 @@ impl DispatcherDetector {
                     registers: vec![VmRegister::new(0, 64, RegisterRole::VirtualIp)],
                     handler_count: 256,
                     flags: DispatcherFlags::default(),
-                    description: format!("x64 jump-table dispatcher at 0x{:x}", offset),
+                    description: format!("x64 jump-table dispatcher at 0x{offset:x}"),
                 });
             }
         }
@@ -405,8 +404,7 @@ impl DispatcherDetector {
                 handler_count: thread_count,
                 flags: DispatcherFlags::default(),
                 description: format!(
-                    "threaded-code dispatcher: {} lodsX+jmp patterns",
-                    thread_count
+                    "threaded-code dispatcher: {thread_count} lodsX+jmp patterns"
                 ),
             });
         }
@@ -455,8 +453,7 @@ impl DispatcherDetector {
                         handler_count: 0, // unknown from this pattern alone
                         flags: DispatcherFlags::default(),
                         description: format!(
-                            "interpreter loop at 0x{:x}: opcode-fetch + backward branch",
-                            look_back
+                            "interpreter loop at 0x{look_back:x}: opcode-fetch + backward branch"
                         ),
                     });
                 }

@@ -37,7 +37,7 @@ pub enum AnnotationSource {
 impl fmt::Display for AnnotationSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AnnotationSource::SymbolFile(s) => write!(f, "sym:{}", s),
+            AnnotationSource::SymbolFile(s) => write!(f, "sym:{s}"),
             AnnotationSource::Yara => write!(f, "yara"),
             AnnotationSource::Disassembler => write!(f, "disasm"),
             AnnotationSource::DebugInfo => write!(f, "debug"),
@@ -45,7 +45,7 @@ impl fmt::Display for AnnotationSource {
             AnnotationSource::Taint => write!(f, "taint"),
             AnnotationSource::TypeInference => write!(f, "type"),
             AnnotationSource::ThreatIntel => write!(f, "ti"),
-            AnnotationSource::Heuristic(h) => write!(f, "heur:{}", h),
+            AnnotationSource::Heuristic(h) => write!(f, "heur:{h}"),
         }
     }
 }
@@ -61,7 +61,7 @@ pub enum AnnotationKind {
     FunctionBoundary { start: u64, end: u64, name: String },
     /// A YARA rule hit at this address range.
     YaraHit { rule: String, namespace: Option<String>, tags: Vec<String> },
-    /// Data type annotation (e.g. "UNICODE_STRING*").
+    /// Data type annotation (e.g. "`UNICODE_STRING`*").
     DataType { type_name: String, size_bytes: Option<u32> },
     /// Source file / line information.
     SourceLocation { file: String, line: u32, column: Option<u32> },
@@ -82,17 +82,17 @@ pub enum AnnotationKind {
 impl fmt::Display for AnnotationKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AnnotationKind::Symbol { name, .. } => write!(f, "sym:{}", name),
-            AnnotationKind::FunctionBoundary { name, .. } => write!(f, "fn:{}", name),
-            AnnotationKind::YaraHit { rule, .. } => write!(f, "yara:{}", rule),
-            AnnotationKind::DataType { type_name, .. } => write!(f, "type:{}", type_name),
-            AnnotationKind::SourceLocation { file, line, .. } => write!(f, "src:{}:{}", file, line),
-            AnnotationKind::TaintLabel { label, .. } => write!(f, "taint:{}", label),
-            AnnotationKind::ThreatTag { ioc_type, ioc_value, .. } => write!(f, "ti:{}:{}", ioc_type, ioc_value),
-            AnnotationKind::Comment(s) => write!(f, "comment:{}", s),
-            AnnotationKind::LibraryCall { library, function } => write!(f, "call:{}.{}", library, function),
+            AnnotationKind::Symbol { name, .. } => write!(f, "sym:{name}"),
+            AnnotationKind::FunctionBoundary { name, .. } => write!(f, "fn:{name}"),
+            AnnotationKind::YaraHit { rule, .. } => write!(f, "yara:{rule}"),
+            AnnotationKind::DataType { type_name, .. } => write!(f, "type:{type_name}"),
+            AnnotationKind::SourceLocation { file, line, .. } => write!(f, "src:{file}:{line}"),
+            AnnotationKind::TaintLabel { label, .. } => write!(f, "taint:{label}"),
+            AnnotationKind::ThreatTag { ioc_type, ioc_value, .. } => write!(f, "ti:{ioc_type}:{ioc_value}"),
+            AnnotationKind::Comment(s) => write!(f, "comment:{s}"),
+            AnnotationKind::LibraryCall { library, function } => write!(f, "call:{library}.{function}"),
             AnnotationKind::LoopHead { .. } => write!(f, "loop"),
-            AnnotationKind::Category(c) => write!(f, "cat:{}", c),
+            AnnotationKind::Category(c) => write!(f, "cat:{c}"),
         }
     }
 }
@@ -119,7 +119,8 @@ pub struct TraceAnnotation {
 }
 
 impl TraceAnnotation {
-    pub fn new(pc: u64, kind: AnnotationKind, source: AnnotationSource) -> Self {
+    #[must_use]
+    pub const fn new(pc: u64, kind: AnnotationKind, source: AnnotationSource) -> Self {
         TraceAnnotation {
             pc,
             pc_end: None,
@@ -131,7 +132,8 @@ impl TraceAnnotation {
         }
     }
 
-    pub fn with_confidence(mut self, c: f32) -> Self {
+    #[must_use]
+    pub const fn with_confidence(mut self, c: f32) -> Self {
         // `clamp` propagates NaN rather than sanitising it; a NaN confidence
         // loses every comparison it takes part in, so the annotation would drop
         // out of every ranking and threshold silently.
@@ -139,23 +141,27 @@ impl TraceAnnotation {
         self
     }
 
-    pub fn with_range(mut self, end: u64) -> Self {
+    #[must_use]
+    pub const fn with_range(mut self, end: u64) -> Self {
         self.pc_end = Some(end);
         self
     }
 
-    pub fn with_record_index(mut self, idx: u64) -> Self {
+    #[must_use]
+    pub const fn with_record_index(mut self, idx: u64) -> Self {
         self.record_index = Some(idx);
         self
     }
 
-    pub fn with_tid(mut self, tid: u32) -> Self {
+    #[must_use]
+    pub const fn with_tid(mut self, tid: u32) -> Self {
         self.tid = Some(tid);
         self
     }
 
     /// Returns true if this annotation covers `addr` (point or range).
-    pub fn covers(&self, addr: u64) -> bool {
+    #[must_use]
+    pub const fn covers(&self, addr: u64) -> bool {
         match self.pc_end {
             Some(end) => addr >= self.pc && addr < end,
             None => addr == self.pc,
@@ -175,6 +181,7 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
+    #[must_use]
     pub fn new() -> Self { SymbolTable::default() }
 
     pub fn insert(&mut self, addr: u64, name: impl Into<String>, demangled: Option<String>) {
@@ -183,15 +190,18 @@ impl SymbolTable {
         self.by_addr.insert(addr, (n, demangled));
     }
 
+    #[must_use]
     pub fn lookup_addr(&self, addr: u64) -> Option<(&str, Option<&str>)> {
         self.by_addr.get(&addr).map(|(n, d)| (n.as_str(), d.as_deref()))
     }
 
     /// Find the nearest symbol at or before `addr`.
+    #[must_use]
     pub fn nearest_before(&self, addr: u64) -> Option<(u64, &str)> {
         self.by_addr.range(..=addr).next_back().map(|(&a, (n, _))| (a, n.as_str()))
     }
 
+    #[must_use]
     pub fn lookup_name(&self, name: &str) -> Option<u64> {
         self.by_name.get(name).copied()
     }
@@ -213,7 +223,8 @@ impl FunctionBoundary {
         FunctionBoundary { start, end, name: name.into(), module: None }
     }
 
-    pub fn contains(&self, addr: u64) -> bool {
+    #[must_use]
+    pub const fn contains(&self, addr: u64) -> bool {
         addr >= self.start && addr < self.end
     }
 }
@@ -226,6 +237,7 @@ pub struct FunctionMap {
 }
 
 impl FunctionMap {
+    #[must_use]
     pub fn new() -> Self { FunctionMap::default() }
 
     pub fn insert(&mut self, fb: FunctionBoundary) {
@@ -233,6 +245,7 @@ impl FunctionMap {
         self.functions.insert(idx, fb);
     }
 
+    #[must_use]
     pub fn find(&self, addr: u64) -> Option<&FunctionBoundary> {
         let idx = self.functions.partition_point(|f| f.start <= addr);
         if idx == 0 { return None; }
@@ -240,8 +253,10 @@ impl FunctionMap {
         if fb.contains(addr) { Some(fb) } else { None }
     }
 
-    pub fn len(&self) -> usize { self.functions.len() }
-    pub fn is_empty(&self) -> bool { self.functions.is_empty() }
+    #[must_use]
+    pub const fn len(&self) -> usize { self.functions.len() }
+    #[must_use]
+    pub const fn is_empty(&self) -> bool { self.functions.is_empty() }
 }
 
 // ── YARA hit record ───────────────────────────────────────────────────────────
@@ -269,7 +284,8 @@ impl YaraHitRecord {
         }
     }
 
-    pub fn contains(&self, addr: u64) -> bool {
+    #[must_use]
+    pub const fn contains(&self, addr: u64) -> bool {
         addr >= self.start_addr && addr < self.end_addr
     }
 }
@@ -292,6 +308,7 @@ pub struct AnnotatedTrace {
 }
 
 impl AnnotatedTrace {
+    #[must_use]
     pub fn new() -> Self { AnnotatedTrace::default() }
 
     pub fn add(&mut self, ann: TraceAnnotation) {
@@ -307,16 +324,19 @@ impl AnnotatedTrace {
     }
 
     /// All annotations at exactly `pc`.
+    #[must_use]
     pub fn at_pc(&self, pc: u64) -> &[TraceAnnotation] {
         self.by_pc.get(&pc).map(|v| v.as_slice()).unwrap_or(&[])
     }
 
     /// All annotations that cover `addr` (including range annotations).
+    #[must_use]
     pub fn covering(&self, addr: u64) -> Vec<&TraceAnnotation> {
         self.annotations.iter().filter(|a| a.covers(addr)).collect()
     }
 
     /// Annotations for a specific record index.
+    #[must_use]
     pub fn for_record(&self, idx: u64) -> Vec<&TraceAnnotation> {
         match self.by_record.get(&idx) {
             Some(indices) => indices.iter().map(|&i| &self.annotations[i]).collect(),
@@ -325,21 +345,26 @@ impl AnnotatedTrace {
     }
 
     /// All annotations from a specific source.
+    #[must_use]
     pub fn from_source(&self, source: &AnnotationSource) -> Vec<&TraceAnnotation> {
         self.annotations.iter().filter(|a| &a.source == source).collect()
     }
 
     /// All symbol annotations.
+    #[must_use]
     pub fn symbols(&self) -> Vec<&TraceAnnotation> {
         self.annotations.iter().filter(|a| matches!(&a.kind, AnnotationKind::Symbol { .. })).collect()
     }
 
     /// All YARA hit annotations.
+    #[must_use]
     pub fn yara_hits(&self) -> Vec<&TraceAnnotation> {
         self.annotations.iter().filter(|a| matches!(&a.kind, AnnotationKind::YaraHit { .. })).collect()
     }
 
-    pub fn annotation_count(&self) -> usize { self.annotations.len() }
+    #[must_use]
+    pub const fn annotation_count(&self) -> usize { self.annotations.len() }
+    #[must_use]
     pub fn annotated_pc_count(&self) -> usize { self.by_pc.len() }
 }
 
@@ -384,7 +409,7 @@ pub struct TraceAnnotator {
     symbols: SymbolTable,
     functions: FunctionMap,
     yara_hits: Vec<YaraHitRecord>,
-    /// (pc, library, function_name)
+    /// (pc, library, `function_name`)
     iat_entries: Vec<(u64, String, String)>,
     /// Back edges: (from, to)
     known_back_edges: Vec<(u64, u64)>,
@@ -393,6 +418,7 @@ pub struct TraceAnnotator {
 }
 
 impl TraceAnnotator {
+    #[must_use]
     pub fn new() -> Self {
         TraceAnnotator {
             config: AnnotatorConfig::default(),
@@ -405,7 +431,8 @@ impl TraceAnnotator {
         }
     }
 
-    pub fn with_config(mut self, config: AnnotatorConfig) -> Self {
+    #[must_use]
+    pub const fn with_config(mut self, config: AnnotatorConfig) -> Self {
         self.config = config;
         self
     }
@@ -435,6 +462,7 @@ impl TraceAnnotator {
     }
 
     /// Process trace records and produce an `AnnotatedTrace`.
+    #[must_use]
     pub fn annotate(&self, records: &[TraceRecord]) -> AnnotatedTrace {
         let mut at = AnnotatedTrace::new();
         at.record_count = records.len() as u64;
@@ -588,11 +616,13 @@ pub struct AnnotationMerger {
 }
 
 impl AnnotationMerger {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         AnnotationMerger { sources: Vec::new(), deduplicate: true }
     }
 
-    pub fn without_deduplication(mut self) -> Self {
+    #[must_use]
+    pub const fn without_deduplication(mut self) -> Self {
         self.deduplicate = false;
         self
     }
@@ -602,6 +632,7 @@ impl AnnotationMerger {
     }
 
     /// Merge all sources into a single `AnnotatedTrace`.
+    #[must_use]
     pub fn merge(self) -> AnnotatedTrace {
         let mut result = AnnotatedTrace::new();
         // Key = (pc, kind_tag) for deduplication.
@@ -630,6 +661,7 @@ impl Default for AnnotationMerger {
 // ── Annotation serialization helpers ─────────────────────────────────────────
 
 /// Serialize an `AnnotatedTrace` summary to a human-readable report string.
+#[must_use]
 pub fn render_annotation_report(at: &AnnotatedTrace) -> String {
     let mut out = String::new();
     out.push_str(&format!(

@@ -58,7 +58,7 @@ pub enum ExceptionCode {
 impl ExceptionCode {
     /// Decode from a raw cause code.
     #[must_use]
-    pub fn from_raw(code: u64) -> Self {
+    pub const fn from_raw(code: u64) -> Self {
         match code {
             0  => Self::InstrAddrMisaligned,
             1  => Self::InstrAccessFault,
@@ -85,7 +85,7 @@ impl ExceptionCode {
 
     /// Short description of this exception.
     #[must_use]
-    pub fn description(self) -> &'static str {
+    pub const fn description(self) -> &'static str {
         match self {
             Self::InstrAddrMisaligned    => "Instruction address misaligned",
             Self::InstrAccessFault       => "Instruction access fault",
@@ -112,7 +112,7 @@ impl ExceptionCode {
 
     /// Returns `true` for exceptions that involve a memory address in `mtval`/`stval`.
     #[must_use]
-    pub fn has_tval_address(self) -> bool {
+    pub const fn has_tval_address(self) -> bool {
         matches!(
             self,
             Self::InstrAddrMisaligned
@@ -129,7 +129,7 @@ impl ExceptionCode {
 
     /// Returns `true` for system-call exceptions.
     #[must_use]
-    pub fn is_ecall(self) -> bool {
+    pub const fn is_ecall(self) -> bool {
         matches!(
             self,
             Self::EcallFromU | Self::EcallFromS | Self::EcallFromVS | Self::EcallFromM
@@ -165,7 +165,7 @@ pub enum InterruptCode {
 impl InterruptCode {
     /// Decode from a raw interrupt code.
     #[must_use]
-    pub fn from_raw(code: u64) -> Self {
+    pub const fn from_raw(code: u64) -> Self {
         match code {
             0  => Self::UserSoftware,
             1  => Self::SupervisorSoftware,
@@ -186,7 +186,7 @@ impl InterruptCode {
 
     /// Return the raw interrupt code value.
     #[must_use]
-    pub fn code(self) -> u64 {
+    pub const fn code(self) -> u64 {
         match self {
             Self::UserSoftware       => 0,
             Self::SupervisorSoftware => 1,
@@ -207,7 +207,7 @@ impl InterruptCode {
 
     /// Short description.
     #[must_use]
-    pub fn description(self) -> &'static str {
+    pub const fn description(self) -> &'static str {
         match self {
             Self::UserSoftware       => "User software interrupt",
             Self::SupervisorSoftware => "Supervisor software interrupt",
@@ -243,7 +243,7 @@ pub enum TrapCause {
 impl TrapCause {
     /// Kind of this trap.
     #[must_use]
-    pub fn kind(&self) -> TrapKind {
+    pub const fn kind(&self) -> TrapKind {
         match self {
             Self::Exception(_) => TrapKind::Exception,
             Self::Interrupt(_) => TrapKind::Interrupt,
@@ -299,7 +299,7 @@ pub enum TvecMode {
 impl TvecMode {
     /// Decode from the raw mtvec value.
     #[must_use]
-    pub fn from_mtvec(mtvec: u64) -> Self {
+    pub const fn from_mtvec(mtvec: u64) -> Self {
         match (mtvec & 0x3) as u8 {
             0 => Self::Direct,
             1 => Self::Vectored,
@@ -466,7 +466,7 @@ impl RiscvExceptionHandler {
     }
 
     /// Set the machine-mode scratch register.
-    pub fn set_mscratch(&mut self, val: u64) {
+    pub const fn set_mscratch(&mut self, val: u64) {
         self.machine.scratch = Some(val);
     }
 
@@ -477,7 +477,7 @@ impl RiscvExceptionHandler {
     /// detect the wrong-state condition.
     ///
     /// [`set_stvec`]: Self::set_stvec
-    pub fn set_sscratch(&mut self, val: u64) -> bool {
+    pub const fn set_sscratch(&mut self, val: u64) -> bool {
         if let Some(ref mut s) = self.supervisor {
             s.scratch = Some(val);
             true

@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
 /// Re-exported map type used by MIPS analysis tables.
-/// BTreeMap is used instead of HashMap to prevent hash-collision DoS when
+/// `BTreeMap` is used instead of `HashMap` to prevent hash-collision `DoS` when
 /// keys derive from attacker-controlled binary content (addresses, offsets).
 pub type MipsMap<K, V> = BTreeMap<K, V>;
 
@@ -52,7 +52,8 @@ impl fmt::Display for MipsAbi {
 
 impl MipsAbi {
     /// Number of integer argument registers.
-    pub fn arg_reg_count(self) -> u8 {
+    #[must_use]
+    pub const fn arg_reg_count(self) -> u8 {
         match self {
             Self::O32 | Self::EABI => 4,
             Self::N32 | Self::N64 => 8,
@@ -61,12 +62,14 @@ impl MipsAbi {
     }
 
     /// Starting register index for integer arguments.
-    pub fn first_arg_reg(self) -> u8 {
+    #[must_use]
+    pub const fn first_arg_reg(self) -> u8 {
         4
     } // $a0 = $4 in all MIPS ABIs
 
     /// Return-value registers.
-    pub fn return_regs(self) -> &'static [u8] {
+    #[must_use]
+    pub const fn return_regs(self) -> &'static [u8] {
         match self {
             Self::O32 | Self::EABI => &[2, 3], // $v0, $v1
             Self::N32 | Self::N64 => &[2, 3],
@@ -79,7 +82,8 @@ impl MipsAbi {
 // MIPS register helpers
 // ---------------------------------------------------------------------------
 
-pub fn mips_reg_name(reg: u8) -> &'static str {
+#[must_use]
+pub const fn mips_reg_name(reg: u8) -> &'static str {
     match reg {
         0 => "$zero",
         1 => "$at",
@@ -126,33 +130,42 @@ pub fn mips_reg_name(reg: u8) -> &'static str {
 pub struct MipsInsn(pub u32);
 
 impl MipsInsn {
-    pub fn op(self) -> u8 {
+    #[must_use]
+    pub const fn op(self) -> u8 {
         ((self.0 >> 26) & 0x3F) as u8
     }
-    pub fn rs(self) -> u8 {
+    #[must_use]
+    pub const fn rs(self) -> u8 {
         ((self.0 >> 21) & 0x1F) as u8
     }
-    pub fn rt(self) -> u8 {
+    #[must_use]
+    pub const fn rt(self) -> u8 {
         ((self.0 >> 16) & 0x1F) as u8
     }
-    pub fn rd(self) -> u8 {
+    #[must_use]
+    pub const fn rd(self) -> u8 {
         ((self.0 >> 11) & 0x1F) as u8
     }
-    pub fn sa(self) -> u8 {
+    #[must_use]
+    pub const fn sa(self) -> u8 {
         ((self.0 >> 6) & 0x1F) as u8
     }
-    pub fn funct(self) -> u8 {
+    #[must_use]
+    pub const fn funct(self) -> u8 {
         (self.0 & 0x3F) as u8
     }
-    pub fn imm16(self) -> i16 {
+    #[must_use]
+    pub const fn imm16(self) -> i16 {
         self.0 as i16
     }
-    pub fn instr_index(self) -> u32 {
+    #[must_use]
+    pub const fn instr_index(self) -> u32 {
         self.0 & 0x03FF_FFFF
     }
 
     /// True for branch instructions (BEQ/BNE/BLEZ/BGTZ/BLTZ/BGEZ and variants,
     /// plus COP1 FPU conditional branches BC1F/BC1T/BC1FL/BC1TL).
+    #[must_use]
     pub fn is_branch(self) -> bool {
         if matches!(self.op(), 0x01 | 0x04 | 0x05 | 0x06 | 0x07) {
             return true;
@@ -166,21 +179,25 @@ impl MipsInsn {
     }
 
     /// True for jump instructions (J/JAL).
+    #[must_use]
     pub fn is_jump(self) -> bool {
         matches!(self.op(), 0x02 | 0x03)
     }
 
     /// True for JR / JALR (SPECIAL funct 0x08 / 0x09).
+    #[must_use]
     pub fn is_jr_jalr(self) -> bool {
         self.op() == 0x00 && matches!(self.funct(), 0x08 | 0x09)
     }
 
     /// True for any control-transfer instruction (has a delay slot).
+    #[must_use]
     pub fn has_delay_slot(self) -> bool {
         self.is_branch() || self.is_jump() || self.is_jr_jalr()
     }
 
     /// True for GP-relative load/store (LW/SW/LH/SH/LB/SB with rs=$gp).
+    #[must_use]
     pub fn is_gp_relative(self) -> bool {
         matches!(
             self.op(),
@@ -189,27 +206,32 @@ impl MipsInsn {
     }
 
     /// True for SYSCALL.
+    #[must_use]
     pub fn is_syscall(self) -> bool {
         self.op() == 0x00 && self.funct() == 0x0C
     }
 
     /// True for MFC0/MTC0 (coprocessor 0 moves — used for TLB).
+    #[must_use]
     pub fn is_cop0(self) -> bool {
         self.op() == 0x10
     }
 
     /// True for TLBWI/TLBWR/TLBR/TLBP.
+    #[must_use]
     pub fn is_tlb_op(self) -> bool {
         self.op() == 0x10 && self.rs() == 0x10 && matches!(self.funct(), 0x01 | 0x02 | 0x06 | 0x08)
     }
 
     /// Branch target address (PC-relative, i-type).
+    #[must_use]
     pub fn branch_target(self, pc: u32) -> u32 {
         let offset = (self.imm16() as i32) * 4;
         (pc as i32 + 4 + offset) as u32
     }
 
     /// Jump target (j-type absolute in 256 MB page).
+    #[must_use]
     pub fn jump_target(self, pc: u32) -> u32 {
         (pc & 0xF000_0000) | (self.instr_index() << 2)
     }
@@ -258,10 +280,12 @@ pub struct MipsFunctionProfile {
 pub struct MipsFunctionProfiler;
 
 impl MipsFunctionProfiler {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
+    #[must_use]
     pub fn profile(&self, base: u32, bytes: &[u8], abi: MipsAbi) -> MipsFunctionProfile {
         let mut profile = MipsFunctionProfile {
             start_addr: base,
@@ -323,6 +347,7 @@ impl MipsFunctionProfiler {
 // ---------------------------------------------------------------------------
 
 /// Scans a MIPS binary for printable ASCII strings (min 4 chars).
+#[must_use]
 pub fn scan_mips_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<(u32, String)> {
     let mut result = Vec::new();
     let mut run_start: Option<usize> = None;
@@ -382,6 +407,7 @@ pub mod mips_n64 {
 }
 
 impl DelaySlotAnalyzer {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -422,11 +448,13 @@ impl DelaySlotAnalyzer {
     }
 
     /// Count branches with NOP in delay slot (wasted slot).
+    #[must_use]
     pub fn nop_slot_count(&self) -> usize {
         self.entries.iter().filter(|e| e.delay_slot_is_nop).count()
     }
 
     /// Count illegal delay slots (branch in delay slot).
+    #[must_use]
     pub fn illegal_slot_count(&self) -> usize {
         self.entries
             .iter()
@@ -455,11 +483,12 @@ pub struct GlobalPointerUsage {
 }
 
 impl GlobalPointerUsage {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn set_gp(&mut self, gp: u32) {
+    pub const fn set_gp(&mut self, gp: u32) {
         self.gp_value = Some(gp);
     }
 
@@ -486,11 +515,13 @@ impl GlobalPointerUsage {
     }
 
     /// Resolve a GP-relative offset to an absolute address.
+    #[must_use]
     pub fn resolve(&self, offset: i16) -> Option<u32> {
         self.gp_value.map(|gp| (gp as i64 + offset as i64) as u32)
     }
 
-    pub fn access_count(&self) -> usize {
+    #[must_use]
+    pub const fn access_count(&self) -> usize {
         self.accesses.len()
     }
 }
@@ -523,6 +554,7 @@ pub struct MipsExceptionHandler {
 }
 
 impl MipsExceptionHandler {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -560,7 +592,8 @@ impl MipsExceptionHandler {
         }
     }
 
-    pub fn handler_count(&self) -> usize {
+    #[must_use]
+    pub const fn handler_count(&self) -> usize {
         self.handlers.len()
     }
 }
@@ -591,6 +624,7 @@ pub struct MipsTlb {
 }
 
 impl MipsTlb {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -619,7 +653,8 @@ impl MipsTlb {
         }
     }
 
-    pub fn op_count(&self) -> usize {
+    #[must_use]
+    pub const fn op_count(&self) -> usize {
         self.ops.len()
     }
 }
@@ -637,6 +672,7 @@ pub struct MipsBranchTargetTable {
 }
 
 impl MipsBranchTargetTable {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -664,9 +700,11 @@ impl MipsBranchTargetTable {
         }
     }
 
+    #[must_use]
     pub fn target_count(&self) -> usize {
         self.targets.len()
     }
+    #[must_use]
     pub fn is_target(&self, addr: u32) -> bool {
         self.targets.contains(&addr)
     }
@@ -688,6 +726,7 @@ pub struct MipsAnalysis {
 }
 
 impl MipsAnalysis {
+    #[must_use]
     pub fn new(abi: MipsAbi) -> Self {
         Self {
             abi,

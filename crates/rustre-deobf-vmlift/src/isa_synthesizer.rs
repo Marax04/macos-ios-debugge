@@ -217,7 +217,7 @@ pub struct IsaSynthesizer {
 impl IsaSynthesizer {
     /// Create a synthesizer with default settings (opcodes start at 0, stride 1).
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             first_opcode: 0,
             opcode_stride: 1,
@@ -226,14 +226,14 @@ impl IsaSynthesizer {
 
     /// Set the starting opcode value.
     #[must_use]
-    pub fn with_first_opcode(mut self, opcode: u32) -> Self {
+    pub const fn with_first_opcode(mut self, opcode: u32) -> Self {
         self.first_opcode = opcode;
         self
     }
 
     /// Set the opcode stride.
     #[must_use]
-    pub fn with_opcode_stride(mut self, stride: u32) -> Self {
+    pub const fn with_opcode_stride(mut self, stride: u32) -> Self {
         self.opcode_stride = stride;
         self
     }
@@ -352,7 +352,7 @@ fn mnemonic_for_class(class: &HandlerClass, opcode: u32) -> String {
     format!("{base}_{opcode:02X}")
 }
 
-fn estimate_operand_count(sem: &HandlerSemantic) -> u8 {
+const fn estimate_operand_count(sem: &HandlerSemantic) -> u8 {
     match &sem.class {
         HandlerClass::Halt | HandlerClass::Ret => 0,
         HandlerClass::Push
@@ -366,7 +366,7 @@ fn estimate_operand_count(sem: &HandlerSemantic) -> u8 {
     }
 }
 
-fn estimate_operand_width(sem: &HandlerSemantic) -> u8 {
+const fn estimate_operand_width(sem: &HandlerSemantic) -> u8 {
     if sem.reads_memory || sem.writes_memory {
         4
     } else if sem.input_count > 0 || sem.output_count > 0 {

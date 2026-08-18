@@ -85,19 +85,19 @@ impl Default for RiscvArch {
 impl RiscvArch {
     /// RV32I base ISA.
     #[must_use]
-    pub fn rv32() -> Self {
+    pub const fn rv32() -> Self {
         Self { bits: 32 }
     }
 
     /// RV64I base ISA.
     #[must_use]
-    pub fn rv64() -> Self {
+    pub const fn rv64() -> Self {
         Self { bits: 64 }
     }
 
     /// RV128I base ISA (experimental).
     #[must_use]
-    pub fn rv128() -> Self {
+    pub const fn rv128() -> Self {
         Self { bits: 128 }
     }
 
@@ -1374,7 +1374,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
 // Compressed immediate helpers
 // ---------------------------------------------------------------------------
 
-fn c_addi4spn_imm(hw: u16) -> u32 {
+const fn c_addi4spn_imm(hw: u16) -> u32 {
     let b5_4 = ((hw >> 11) & 0x3) as u32;
     let b9_6 = ((hw >> 7) & 0xF) as u32;
     let b2 = ((hw >> 6) & 0x1) as u32;
@@ -1498,11 +1498,11 @@ fn c_fsdsp_imm(hw: u16) -> u32 {
 // Immediate field decoders
 // ---------------------------------------------------------------------------
 
-fn imm_i(word: u32) -> i32 {
+const fn imm_i(word: u32) -> i32 {
     (word as i32) >> 20
 }
 
-fn imm_s(word: u32) -> i32 {
+const fn imm_s(word: u32) -> i32 {
     let upper = (word >> 25) & 0x7F;
     let lower = (word >> 7) & 0x1F;
     let raw = (upper << 5) | lower;
@@ -1510,7 +1510,7 @@ fn imm_s(word: u32) -> i32 {
     ((raw << 20) as i32) >> 20
 }
 
-fn imm_b(word: u32) -> i32 {
+const fn imm_b(word: u32) -> i32 {
     let b12 = (word >> 31) & 1;
     let b11 = (word >> 7) & 1;
     let b10_5 = (word >> 25) & 0x3F;
@@ -1520,11 +1520,11 @@ fn imm_b(word: u32) -> i32 {
     ((raw << 19) as i32) >> 19
 }
 
-fn imm_u(word: u32) -> u32 {
+const fn imm_u(word: u32) -> u32 {
     word & 0xFFFF_F000
 }
 
-fn imm_j(word: u32) -> i32 {
+const fn imm_j(word: u32) -> i32 {
     let b20 = (word >> 31) & 1;
     let b10_1 = (word >> 21) & 0x3FF;
     let b11 = (word >> 20) & 1;
@@ -1544,14 +1544,14 @@ const XREG_NAMES: [&str; 32] = [
     "x28", "x29", "x30", "x31",
 ];
 
-fn xr(idx: usize) -> &'static str {
+const fn xr(idx: usize) -> &'static str {
     if idx < 32 { XREG_NAMES[idx] } else { "x?" }
 }
 fn fr(idx: usize) -> String {
     format!("f{idx}")
 }
 
-fn fp_fmt(fmt: u32) -> &'static str {
+const fn fp_fmt(fmt: u32) -> &'static str {
     match fmt {
         0 => "s",
         1 => "d",
@@ -2070,7 +2070,7 @@ pub struct RiscvLinearDisassembler<'a> {
 impl<'a> RiscvLinearDisassembler<'a> {
     /// Create a new [`RiscvLinearDisassembler`] that decodes base ISA only.
     #[must_use]
-    pub fn new(arch: &'a RiscvArch, bytes: &'a [u8], base_addr: Address) -> Self {
+    pub const fn new(arch: &'a RiscvArch, bytes: &'a [u8], base_addr: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -2082,7 +2082,7 @@ impl<'a> RiscvLinearDisassembler<'a> {
 
     /// Create a new disassembler with C-extension support enabled.
     #[must_use]
-    pub fn new_with_compressed(arch: &'a RiscvArch, bytes: &'a [u8], base_addr: Address) -> Self {
+    pub const fn new_with_compressed(arch: &'a RiscvArch, bytes: &'a [u8], base_addr: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -2094,19 +2094,19 @@ impl<'a> RiscvLinearDisassembler<'a> {
 
     /// Current byte offset.
     #[must_use]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
     }
 
     /// Current virtual address.
     #[must_use]
-    pub fn current_address(&self) -> Address {
+    pub const fn current_address(&self) -> Address {
         Address::new(self.base_addr.0.wrapping_add(self.offset as u64))
     }
 
     /// `true` when fewer than 2 bytes remain.
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         if self.compressed {
             self.offset + 2 > self.bytes.len()
         } else {
@@ -2178,7 +2178,7 @@ pub enum RiscvPrivLevel {
 impl RiscvPrivLevel {
     /// Short letter code for the level.
     #[must_use]
-    pub fn code(self) -> char {
+    pub const fn code(self) -> char {
         match self {
             Self::User => 'U',
             Self::Supervisor => 'S',
@@ -3776,7 +3776,7 @@ pub const fn rv_phys_addr(ppn: u64, page_offset: u64) -> u64 {
 // RISC-V known CPU / core table
 // ---------------------------------------------------------------------------
 
-/// A known RISC-V CPU / SoC entry.
+/// A known RISC-V CPU / `SoC` entry.
 #[derive(Debug, Clone, Copy)]
 pub struct RvCpu {
     /// Core name.
@@ -5925,7 +5925,7 @@ pub const fn rv_rev8_32(val: u32) -> u32 {
 
 /// Bit-reverse a 32-bit value (BREV8 on each byte).
 #[must_use]
-pub fn rv_brev8_32(val: u32) -> u32 {
+pub const fn rv_brev8_32(val: u32) -> u32 {
     let b0 = val.to_le_bytes()[0].reverse_bits();
     let b1 = val.to_le_bytes()[1].reverse_bits();
     let b2 = val.to_le_bytes()[2].reverse_bits();
@@ -6715,10 +6715,10 @@ mod more_tests {
 // RISC-V known implementations / SoC table
 // ---------------------------------------------------------------------------
 
-/// A known RISC-V SoC entry.
+/// A known RISC-V `SoC` entry.
 #[derive(Debug, Clone, Copy)]
 pub struct RvSoc {
-    /// SoC name.
+    /// `SoC` name.
     pub name: &'static str,
     /// Vendor.
     pub vendor: &'static str,
@@ -6730,7 +6730,7 @@ pub struct RvSoc {
     pub os_support: &'static str,
 }
 
-/// Known RISC-V SoCs and boards.
+/// Known RISC-V `SoCs` and boards.
 pub static RV_SOCS: &[RvSoc] = &[
     RvSoc {
         name: "HiFive1",
@@ -6839,7 +6839,7 @@ pub static RV_SOCS: &[RvSoc] = &[
     },
 ];
 
-/// Look up a SoC entry by name.
+/// Look up a `SoC` entry by name.
 #[must_use]
 pub fn rv_soc_lookup(name: &str) -> Option<&'static RvSoc> {
     RV_SOCS.iter().find(|s| s.name == name)
@@ -7528,7 +7528,7 @@ pub const fn rv_c_addi4spn_imm(hw: u16) -> u32 {
 ///
 /// Returns the mnemonic class string (e.g. `"c.addi"`, `"c.lw"`, …).
 #[must_use]
-pub fn rv_c_classify(hw: u16) -> &'static str {
+pub const fn rv_c_classify(hw: u16) -> &'static str {
     let (op, funct3) = rv_c_op_funct3(hw);
     match (op, funct3) {
         (0, 0) => "c.addi4spn",
@@ -7681,7 +7681,7 @@ pub struct RvHartState {
 impl RvHartState {
     /// Create a new hart state with everything zeroed (power-on reset state).
     #[must_use]
-    pub fn reset() -> Self {
+    pub const fn reset() -> Self {
         Self {
             priv_level: RvPrivLevel::Machine,
             pc: 0x0000_0000_0000_1000, // typical reset vector
@@ -7695,7 +7695,7 @@ impl RvHartState {
 
     /// Read integer register `n`. x0 always returns 0.
     #[must_use]
-    pub fn read_x(&self, n: u8) -> u64 {
+    pub const fn read_x(&self, n: u8) -> u64 {
         if n == 0 {
             0
         } else {
@@ -7704,7 +7704,7 @@ impl RvHartState {
     }
 
     /// Write integer register `n`. Writes to x0 are silently discarded.
-    pub fn write_x(&mut self, n: u8, val: u64) {
+    pub const fn write_x(&mut self, n: u8, val: u64) {
         if n != 0 {
             self.xregs[n as usize & 31] = val;
         }
@@ -7730,7 +7730,7 @@ impl RvHartState {
 
     /// Return the interrupt enable state for the current privilege mode.
     #[must_use]
-    pub fn interrupts_enabled(&self) -> bool {
+    pub const fn interrupts_enabled(&self) -> bool {
         match self.priv_level {
             RvPrivLevel::Machine => mstatus_mie(self.mstatus),
             RvPrivLevel::Supervisor => mstatus_sie(self.mstatus),
@@ -7740,7 +7740,7 @@ impl RvHartState {
 
     /// Returns `true` if a trap is pending (mcause != 0).
     #[must_use]
-    pub fn trap_pending(&self) -> bool {
+    pub const fn trap_pending(&self) -> bool {
         self.mcause != 0
     }
 }
@@ -8055,7 +8055,7 @@ fn vr(idx: usize) -> String {
 }
 
 /// Mask bit string from bit 25 of a vector instruction.
-fn vmask(m: u32) -> &'static str {
+const fn vmask(m: u32) -> &'static str {
     if m & 1 == 0 { ", v0.t" } else { "" }
 }
 
@@ -8427,9 +8427,9 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
 pub enum LlilOp {
     /// No-op.
     Nop,
-    /// Assign: dest_reg = expr.
+    /// Assign: `dest_reg` = expr.
     SetReg { reg: String, expr: Box<LlilExpr> },
-    /// Store: mem[addr_expr] = src_expr, size bytes.
+    /// Store: mem[`addr_expr`] = `src_expr`, size bytes.
     Store {
         addr: Box<LlilExpr>,
         src: Box<LlilExpr>,
@@ -8538,7 +8538,7 @@ pub enum LlilCmpOp {
 fn llil_reg(r: &str) -> LlilExpr {
     LlilExpr::Reg(r.to_string())
 }
-fn llil_const(v: i64) -> LlilExpr {
+const fn llil_const(v: i64) -> LlilExpr {
     LlilExpr::Const(v)
 }
 fn llil_add(a: LlilExpr, b: LlilExpr) -> LlilExpr {
@@ -9347,7 +9347,7 @@ impl RiscvArch {
 
 /// Rounding mode suffix from the rm field (bits [14:12]).
 #[must_use]
-pub fn rv_fp_rm_str(rm: u8) -> &'static str {
+pub const fn rv_fp_rm_str(rm: u8) -> &'static str {
     match rm {
         0 => "rne",
         1 => "rtz",
@@ -9361,7 +9361,7 @@ pub fn rv_fp_rm_str(rm: u8) -> &'static str {
 
 /// Classify an FP value class bit (from FCLASS output).
 #[must_use]
-pub fn rv_fclass_bit_name(bit: u8) -> &'static str {
+pub const fn rv_fclass_bit_name(bit: u8) -> &'static str {
     match bit {
         0 => "-Inf",
         1 => "-Normal",
@@ -10200,6 +10200,7 @@ mod rvv_tests {
 impl RiscvArch {
     /// Decode a full 32-bit instruction, including the RVV (0x57) opcode.
     /// This mirrors `decode_word` but adds vector support.
+    #[must_use]
     pub fn decode_word_full(&self, address: Address, word: u32, raw: &[u8]) -> Instruction {
         if (word & 0x7F) == 0x57 {
             return self.decode_vector(address, word, raw[..4].to_vec());
@@ -10209,7 +10210,7 @@ impl RiscvArch {
 
     /// Returns `true` if this arch configuration supports the V extension.
     #[must_use]
-    pub fn has_vector(&self) -> bool {
+    pub const fn has_vector(&self) -> bool {
         self.bits >= 32
     }
 }
@@ -10237,7 +10238,7 @@ pub enum RvAbiRole {
     CalleeSaved,
     /// Function argument / return value (a0-a7 / x10-x17).
     Argument,
-    /// Frame pointer (s0 / x8, same physical register as CalleeSaved).
+    /// Frame pointer (s0 / x8, same physical register as `CalleeSaved`).
     FramePointer,
 }
 
@@ -10767,7 +10768,7 @@ pub struct RvSpillEntry {
 /// patterns and return the detected frame size and spills.
 ///
 /// Looks for:
-/// - `ADDI sp, sp, -N` → frame_size = N
+/// - `ADDI sp, sp, -N` → `frame_size` = N
 /// - `SD rx, K(sp)` → spill of rx at sp+K
 /// - `SW rx, K(sp)` → 32-bit spill
 ///

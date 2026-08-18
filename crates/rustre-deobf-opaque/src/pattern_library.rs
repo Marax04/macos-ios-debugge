@@ -3,7 +3,7 @@
 //! Covers:
 //! * OLLVM standard patterns
 //! * Boolean algebra identities
-//! * Arithmetic invariants (wrapping_add overflow, modular arithmetic)
+//! * Arithmetic invariants (`wrapping_add` overflow, modular arithmetic)
 //! * Fermat's little theorem patterns
 //! * Detection without SMT for pattern-matched predicates
 
@@ -45,7 +45,7 @@ impl std::fmt::Display for PatternCategory {
             Self::DataStructure => "DataStructure",
             Self::Custom => "Custom",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -157,6 +157,7 @@ pub struct PatternLibrary {
 
 impl PatternLibrary {
     /// Build the default pattern library.
+    #[must_use]
     pub fn new() -> Self {
         let mut lib = Self {
             patterns: Vec::new(),
@@ -171,7 +172,8 @@ impl PatternLibrary {
         lib
     }
 
-    pub fn pattern_count(&self) -> usize {
+    #[must_use]
+    pub const fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
 
@@ -332,11 +334,11 @@ impl PatternLibrary {
         // Fermat patterns for small primes
         for &prime in &[2u32, 3, 5, 7, 11, 13] {
             self.add(PatternEntry {
-                id: format!("arith-fermat-p{}", prime),
-                description: format!("x^({}-1) % {} == 1 for x != 0 (Fermat's little theorem)", prime, prime),
+                id: format!("arith-fermat-p{prime}"),
+                description: format!("x^({prime}-1) % {prime} == 1 for x != 0 (Fermat's little theorem)"),
                 category: PatternCategory::Arithmetic,
                 predicate_value: PredicateValue::AlwaysTrue,
-                match_mode: MatchMode::Structural(format!("FermatLittleTheorem({})", prime)),
+                match_mode: MatchMode::Structural(format!("FermatLittleTheorem({prime})")),
                 base_confidence: 0.78,
                 example: format!("x^{} % {} == 1", prime - 1, prime),
                 variable_count: 1,
@@ -538,16 +540,19 @@ impl PatternLibrary {
     // ── Pattern lookup ────────────────────────────────────────────────────────
 
     /// Look up patterns by category.
+    #[must_use]
     pub fn by_category(&self, cat: PatternCategory) -> Vec<&PatternEntry> {
         self.patterns.iter().filter(|p| p.category == cat).collect()
     }
 
     /// Look up a pattern by its unique ID.
+    #[must_use]
     pub fn by_id(&self, id: &str) -> Option<&PatternEntry> {
         self.patterns.iter().find(|p| p.id == id)
     }
 
     /// Return all patterns that match the given `PredicateValue`.
+    #[must_use]
     pub fn by_value(&self, val: PredicateValue) -> Vec<&PatternEntry> {
         self.patterns.iter().filter(|p| p.predicate_value == val).collect()
     }
@@ -557,6 +562,7 @@ impl PatternLibrary {
     /// Attempt to match a predicate descriptor against the library.
     ///
     /// Returns the best-matching entry (highest confidence) if any match.
+    #[must_use]
     pub fn match_descriptor(&self, desc: &PredicateDesc) -> Option<(&PatternEntry, f32)> {
         let structural_name = descriptor_to_structural_name(desc);
 
@@ -583,7 +589,8 @@ impl PatternLibrary {
     }
 
     /// Check a predicate descriptor and return the [`PredicateValue`] without SMT.
-    pub fn classify_no_smt(&self, desc: &PredicateDesc) -> Option<(PredicateValue, f32)> {
+    #[must_use]
+    pub const fn classify_no_smt(&self, desc: &PredicateDesc) -> Option<(PredicateValue, f32)> {
         // Exhaustive truth-table for 1-variable patterns
         match desc {
             PredicateDesc::XMinusXEqZero
@@ -629,6 +636,7 @@ impl PatternLibrary {
     }
 
     /// Bulk-classify a list of descriptors.
+    #[must_use]
     pub fn classify_many(
         &self,
         descs: &[PredicateDesc],
@@ -640,6 +648,7 @@ impl PatternLibrary {
     }
 
     /// Return summary statistics about the library.
+    #[must_use]
     pub fn stats(&self) -> LibraryStats {
         let mut by_cat: HashMap<String, usize> = HashMap::new();
         let mut always_true = 0usize;
@@ -685,7 +694,7 @@ pub struct LibraryStats {
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn descriptor_to_structural_name(desc: &PredicateDesc) -> &'static str {
+const fn descriptor_to_structural_name(desc: &PredicateDesc) -> &'static str {
     match desc {
         PredicateDesc::XMinusXEqZero => "bool-x-minus-x",
         PredicateDesc::XXorXEqZero => "bool-x-xor-x",

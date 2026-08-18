@@ -1,5 +1,5 @@
 //! Analyze WebAssembly imports/exports: categorize imports by module
-//! (wasi_snapshot_preview1, env, emscripten), identify WASI syscall wrappers,
+//! (`wasi_snapshot_preview1`, env, emscripten), identify WASI syscall wrappers,
 //! detect Emscripten stdlib functions, find imported memory and table entries,
 //! compute import complexity score.
 
@@ -11,7 +11,7 @@ use std::fmt;
 /// Categorization of a known WebAssembly import module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportModule {
-    /// WASI snapshot_preview1 (`wasi_snapshot_preview1`).
+    /// WASI `snapshot_preview1` (`wasi_snapshot_preview1`).
     WasiSnapshotPreview1,
     /// WASI unstable (`wasi_unstable`).
     WasiUnstable,
@@ -49,7 +49,7 @@ impl ImportModule {
 
     /// Return the canonical module name string.
     #[must_use]
-    pub fn canonical_name(&self) -> &str {
+    pub const fn canonical_name(&self) -> &str {
         match self {
             Self::WasiSnapshotPreview1 => "wasi_snapshot_preview1",
             Self::WasiUnstable => "wasi_unstable",
@@ -64,7 +64,7 @@ impl ImportModule {
 
     /// Returns `true` for any WASI module variant.
     #[must_use]
-    pub fn is_wasi(&self) -> bool {
+    pub const fn is_wasi(&self) -> bool {
         matches!(
             self,
             Self::WasiSnapshotPreview1 | Self::WasiUnstable | Self::WasiIO
@@ -73,7 +73,7 @@ impl ImportModule {
 
     /// Returns `true` for Emscripten-related modules.
     #[must_use]
-    pub fn is_emscripten(&self) -> bool {
+    pub const fn is_emscripten(&self) -> bool {
         matches!(self, Self::Emscripten | Self::GotFunc | Self::GotMem)
     }
 }
@@ -190,7 +190,7 @@ pub enum ImportKind {
 impl ImportKind {
     /// Return the category name string.
     #[must_use]
-    pub fn kind_name(&self) -> &'static str {
+    pub const fn kind_name(&self) -> &'static str {
         match self {
             Self::Function { .. } => "function",
             Self::Table { .. } => "table",
@@ -261,13 +261,13 @@ impl WasmImport {
 
     /// Returns `true` when this is an `env.memory` import.
     #[must_use]
-    pub fn is_imported_memory(&self) -> bool {
+    pub const fn is_imported_memory(&self) -> bool {
         matches!(self.kind, ImportKind::Memory { .. })
     }
 
     /// Returns `true` when this is an `env.__table_base` or similar table import.
     #[must_use]
-    pub fn is_imported_table(&self) -> bool {
+    pub const fn is_imported_table(&self) -> bool {
         matches!(self.kind, ImportKind::Table { .. })
     }
 
@@ -467,7 +467,7 @@ impl ImportAnalysis {
 
     /// Return the total number of imports.
     #[must_use]
-    pub fn total_imports(&self) -> usize {
+    pub const fn total_imports(&self) -> usize {
         self.imports.len()
     }
 

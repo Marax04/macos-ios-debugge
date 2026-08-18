@@ -116,7 +116,8 @@ const GPR_NAMES: [&str; 32] = [
 
 /// Symbolic name for GPR index.
 #[inline]
-pub fn gpr(idx: usize) -> &'static str {
+#[must_use]
+pub const fn gpr(idx: usize) -> &'static str {
     if idx < 32 { GPR_NAMES[idx] } else { "$unk" }
 }
 
@@ -168,7 +169,7 @@ const COP0_NAMES: [&str; 32] = [
     "DESAVE",
 ];
 
-fn cop0_name(rd: usize) -> &'static str {
+const fn cop0_name(rd: usize) -> &'static str {
     if rd < 32 { COP0_NAMES[rd] } else { "COP0??" }
 }
 
@@ -204,7 +205,7 @@ impl Default for MipsArch {
 impl MipsArch {
     /// MIPS32 little-endian with O32 ABI.
     #[must_use]
-    pub fn mips32_le() -> Self {
+    pub const fn mips32_le() -> Self {
         Self {
             bits: 32,
             endian: MipsEndian::Little,
@@ -213,7 +214,7 @@ impl MipsArch {
     }
     /// MIPS32 big-endian with O32 ABI.
     #[must_use]
-    pub fn mips32_be() -> Self {
+    pub const fn mips32_be() -> Self {
         Self {
             bits: 32,
             endian: MipsEndian::Big,
@@ -222,7 +223,7 @@ impl MipsArch {
     }
     /// MIPS64 little-endian with N64 ABI.
     #[must_use]
-    pub fn mips64_le() -> Self {
+    pub const fn mips64_le() -> Self {
         Self {
             bits: 64,
             endian: MipsEndian::Little,
@@ -231,7 +232,7 @@ impl MipsArch {
     }
     /// MIPS64 big-endian with N64 ABI.
     #[must_use]
-    pub fn mips64_be() -> Self {
+    pub const fn mips64_be() -> Self {
         Self {
             bits: 64,
             endian: MipsEndian::Big,
@@ -240,7 +241,7 @@ impl MipsArch {
     }
     /// Custom configuration.
     #[must_use]
-    pub fn custom(bits: u32, endian: MipsEndian, abi: MipsAbi) -> Self {
+    pub const fn custom(bits: u32, endian: MipsEndian, abi: MipsAbi) -> Self {
         Self { bits, endian, abi }
     }
 
@@ -258,6 +259,7 @@ impl MipsArch {
     }
 
     /// Decode one instruction word into an [`Instruction`].
+    #[must_use]
     pub fn decode_word(&self, address: Address, word: u32, raw: &[u8]) -> Instruction {
         let opcode = (word >> 26) & 0x3F;
         let rs = ((word >> 21) & 0x1F) as usize;
@@ -564,7 +566,7 @@ impl MipsArch {
                     bytes,
                 )
             }
-            0x0F => rtype(address, "sync", format!("{}", shamt), bytes),
+            0x0F => rtype(address, "sync", format!("{shamt}"), bytes),
 
             // ── HI/LO transfers ──────────────────────────────────────────
             0x10 => rtype(address, "mfhi", gpr(rd).to_string(), bytes),
@@ -1433,14 +1435,14 @@ fn rs_uimm(rs: usize, imm16: u32) -> String {
 
 /// PC-relative target: (PC+4) + (simm16 << 2)
 #[must_use]
-pub fn branch_target_i(address: Address, simm16: i64) -> u64 {
+pub const fn branch_target_i(address: Address, simm16: i64) -> u64 {
     let pc4 = address.0.wrapping_add(4);
     pc4.wrapping_add((simm16 << 2) as u64)
 }
 
-/// J-type absolute target: { (PC+4)[63:28], instr_index, 2'b00 }
+/// J-type absolute target: { (PC+4)[63:28], `instr_index`, 2'b00 }
 #[must_use]
-pub fn branch_target_j(address: Address, target26: u32) -> u64 {
+pub const fn branch_target_j(address: Address, target26: u32) -> u64 {
     let pc4 = address.0.wrapping_add(4);
     let upper = pc4 & 0xFFFF_FFFF_F000_0000u64;
     upper | ((target26 as u64) << 2)
@@ -1693,7 +1695,7 @@ pub struct MipsLinearDisassembler<'a> {
 
 impl<'a> MipsLinearDisassembler<'a> {
     #[must_use]
-    pub fn new(arch: &'a MipsArch, bytes: &'a [u8], base_addr: Address) -> Self {
+    pub const fn new(arch: &'a MipsArch, bytes: &'a [u8], base_addr: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -1704,17 +1706,17 @@ impl<'a> MipsLinearDisassembler<'a> {
     }
 
     #[must_use]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
     }
 
     #[must_use]
-    pub fn current_address(&self) -> Address {
+    pub const fn current_address(&self) -> Address {
         Address::new(self.base_addr.0.wrapping_add(self.offset as u64))
     }
 
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         self.offset + 4 > self.bytes.len()
     }
 }
@@ -1862,7 +1864,7 @@ pub enum LlilOp {
 
 /// Lift one MIPS instruction to LLIL operations.
 /// Delay-slot semantics: the caller must interleave the delay-slot instruction
-/// BEFORE the branch/jump LlilOp.
+/// BEFORE the branch/jump `LlilOp`.
 #[must_use]
 pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
     let m = instr.mnemonic.as_str();
@@ -2324,11 +2326,11 @@ impl MipsBasicBlock {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.instructions.len()
     }
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instructions.is_empty()
     }
 }
@@ -2354,6 +2356,7 @@ pub struct MipsCodeStats {
 
 impl MipsCodeStats {
     /// Sweep `bytes` and categorise each instruction.
+    #[must_use]
     pub fn from_bytes(arch: &MipsArch, bytes: &[u8], base: Address) -> Self {
         let mut s = Self::default();
         for instr in MipsLinearDisassembler::new(arch, bytes, base).flatten() {
@@ -2436,7 +2439,7 @@ impl MipsCodeStats {
 
 /// Encode an R-type word (opcode = 0).
 #[must_use]
-pub fn encode_rtype(rs: u32, rt: u32, rd: u32, shamt: u32, funct: u32) -> u32 {
+pub const fn encode_rtype(rs: u32, rt: u32, rd: u32, shamt: u32, funct: u32) -> u32 {
     (rs << 21) | (rt << 16) | (rd << 11) | (shamt << 6) | funct
 }
 
@@ -2448,13 +2451,13 @@ pub fn encode_itype(opcode: u32, rs: u32, rt: u32, imm: u16) -> u32 {
 
 /// Encode a J-type word.
 #[must_use]
-pub fn encode_jtype(opcode: u32, target: u32) -> u32 {
+pub const fn encode_jtype(opcode: u32, target: u32) -> u32 {
     (opcode << 26) | (target & 0x03FF_FFFF)
 }
 
 /// NOP = SLL $zero, $zero, 0
 #[must_use]
-pub fn encode_nop() -> u32 {
+pub const fn encode_nop() -> u32 {
     0
 }
 /// ADDU rd, rs, rt
@@ -2569,7 +2572,7 @@ pub fn encode_bne(rs: u32, rt: u32, off: i16) -> u32 {
 }
 /// SYSCALL with code
 #[must_use]
-pub fn encode_syscall(code: u32) -> u32 {
+pub const fn encode_syscall(code: u32) -> u32 {
     (code & 0xFFFFF) << 6 | 0x0C
 }
 
@@ -3181,7 +3184,7 @@ pub struct MipsInstrEntry {
     pub isa: &'static str,
 }
 
-/// Complete MIPS instruction reference table (MIPS I through MIPS64r2).
+/// Complete MIPS instruction reference table (MIPS I through `MIPS64r2`).
 pub static MIPS_INSTR_TABLE: &[MipsInstrEntry] = &[
     // ── SPECIAL (opcode=0) ─────────────────────────────────────────────────
     MipsInstrEntry {
@@ -4633,7 +4636,7 @@ pub enum GprRole {
 
 /// Return the O32 ABI role for a given GPR number.
 #[must_use]
-pub fn gpr_role_o32(reg: usize) -> GprRole {
+pub const fn gpr_role_o32(reg: usize) -> GprRole {
     match reg {
         0 => GprRole::Zero,
         1 => GprRole::At,
@@ -4652,7 +4655,7 @@ pub fn gpr_role_o32(reg: usize) -> GprRole {
 
 /// Return the N64 ABI role for a given GPR number.
 #[must_use]
-pub fn gpr_role_n64(reg: usize) -> GprRole {
+pub const fn gpr_role_n64(reg: usize) -> GprRole {
     match reg {
         0 => GprRole::Zero,
         1 => GprRole::At,
@@ -4861,7 +4864,7 @@ pub fn detect_mips_epilogue(instrs: &[Instruction]) -> bool {
 // MIPS32r2 extension summary
 // ---------------------------------------------------------------------------
 
-/// Human-readable description of each MIPS32r2 addition.
+/// Human-readable description of each `MIPS32r2` addition.
 pub static MIPS32R2_EXTENSIONS: &[(&str, &str)] = &[
     ("seb", "Sign-Extend Byte: rd = sign_ext(rt[7:0])"),
     ("seh", "Sign-Extend Halfword: rd = sign_ext(rt[15:0])"),
@@ -6283,25 +6286,25 @@ pub struct LiveSet {
 
 impl LiveSet {
     /// Mark a register as live.
-    pub fn set_live(&mut self, reg: usize) {
+    pub const fn set_live(&mut self, reg: usize) {
         if reg < 32 {
             self.gpr_mask |= 1 << reg;
         }
     }
     /// Mark a register as dead (defined).
-    pub fn kill(&mut self, reg: usize) {
+    pub const fn kill(&mut self, reg: usize) {
         if reg < 32 {
             self.gpr_mask &= !(1 << reg);
         }
     }
     /// Is register live?
     #[must_use]
-    pub fn is_live(&self, reg: usize) -> bool {
+    pub const fn is_live(&self, reg: usize) -> bool {
         reg < 32 && (self.gpr_mask >> reg) & 1 != 0
     }
     /// Number of live registers.
     #[must_use]
-    pub fn count(&self) -> u32 {
+    pub const fn count(&self) -> u32 {
         self.gpr_mask.count_ones()
     }
 }
@@ -6315,7 +6318,7 @@ impl LiveSet {
 pub struct StackFrame {
     /// Total frame size in bytes.
     pub size: i64,
-    /// Offsets of saved registers: (reg_name, offset_from_sp).
+    /// Offsets of saved registers: (`reg_name`, `offset_from_sp`).
     pub saved: Vec<(String, i64)>,
     /// Offset of local variable area.
     pub locals_offset: i64,
@@ -6381,7 +6384,7 @@ pub struct InstrPattern {
 
 impl InstrPattern {
     #[must_use]
-    pub fn new(mnemonic_prefix: &'static str) -> Self {
+    pub const fn new(mnemonic_prefix: &'static str) -> Self {
         Self {
             mnemonic_prefix,
             operand_contains: None,
@@ -6389,7 +6392,7 @@ impl InstrPattern {
     }
 
     #[must_use]
-    pub fn with_operand(mut self, s: &'static str) -> Self {
+    pub const fn with_operand(mut self, s: &'static str) -> Self {
         self.operand_contains = Some(s);
         self
     }
@@ -7052,7 +7055,7 @@ impl MipsClass {
 
     /// Is this a memory access?
     #[must_use]
-    pub fn is_memory(self) -> bool {
+    pub const fn is_memory(self) -> bool {
         matches!(
             self,
             Self::Load | Self::Store | Self::FloatLoad | Self::FloatStore | Self::Atomic
@@ -7061,7 +7064,7 @@ impl MipsClass {
 
     /// Is this control flow?
     #[must_use]
-    pub fn is_control(self) -> bool {
+    pub const fn is_control(self) -> bool {
         matches!(self, Self::Branch | Self::Jump)
     }
 }
@@ -7079,7 +7082,7 @@ impl MipsClass {
 // The functions below implement this reordering for a sequence of lifted ops.
 
 /// Reorder a linear LLIL stream to respect MIPS delay-slot semantics.
-/// Input: (instr_index, llil_ops) pairs.
+/// Input: (`instr_index`, `llil_ops`) pairs.
 /// Output: reordered pairs with delay-slot ops swapped before their branch.
 #[must_use]
 pub fn reorder_for_delay_slots(
@@ -7245,7 +7248,7 @@ pub struct MipsFields {
 impl MipsFields {
     /// Decode all fields from a raw word.
     #[must_use]
-    pub fn decode(word: u32) -> Self {
+    pub const fn decode(word: u32) -> Self {
         let imm16 = word & 0xFFFF;
         Self {
             opcode: (word >> 26) & 0x3F,
@@ -7269,7 +7272,7 @@ impl MipsFields {
 #[derive(Debug, Clone, Default)]
 pub struct BranchPredictor {
     /// Branch history table: maps instruction address → predicted-taken count.
-    /// Uses BTreeMap rather than HashMap to prevent hash-collision DoS when
+    /// Uses `BTreeMap` rather than `HashMap` to prevent hash-collision `DoS` when
     /// keys come from attacker-controlled binary addresses.
     table: std::collections::BTreeMap<u64, u32>,
 }
@@ -8134,7 +8137,7 @@ pub static MIPS_DSP_INSTRS: &[DspInstrEntry] = &[
 // MIPS SmartMIPS ASE
 // ===========================================================================
 
-/// SmartMIPS ASE instruction entry.
+/// `SmartMIPS` ASE instruction entry.
 #[derive(Debug, Clone, Copy)]
 pub struct SmartMipsEntry {
     pub mnemonic: &'static str,
@@ -8713,25 +8716,25 @@ pub mod mips_segments {
 
     /// Convert KSEG0/1 virtual to physical address.
     #[must_use]
-    pub fn virt_to_phys(vaddr: u32) -> u32 {
+    pub const fn virt_to_phys(vaddr: u32) -> u32 {
         vaddr & 0x1FFF_FFFF
     }
 
     /// Convert physical address to KSEG0 virtual.
     #[must_use]
-    pub fn phys_to_kseg0(paddr: u32) -> u32 {
+    pub const fn phys_to_kseg0(paddr: u32) -> u32 {
         paddr | KSEG0_BASE
     }
 
     /// Convert physical address to KSEG1 virtual.
     #[must_use]
-    pub fn phys_to_kseg1(paddr: u32) -> u32 {
+    pub const fn phys_to_kseg1(paddr: u32) -> u32 {
         paddr | KSEG1_BASE
     }
 
     /// Determine which segment a virtual address is in.
     #[must_use]
-    pub fn segment_name(vaddr: u32) -> &'static str {
+    pub const fn segment_name(vaddr: u32) -> &'static str {
         match vaddr {
             0x0000_0000..=0x7FFF_FFFF => "KUSEG",
             0x8000_0000..=0x9FFF_FFFF => "KSEG0",
@@ -8764,7 +8767,7 @@ pub struct TlbEntry {
 impl TlbEntry {
     /// Create a 4KB direct-mapped TLB entry.
     #[must_use]
-    pub fn map_4k(vaddr: u32, paddr: u32, asid: u8) -> Self {
+    pub const fn map_4k(vaddr: u32, paddr: u32, asid: u8) -> Self {
         // Determine whether vaddr falls on the even or odd page of the TLB pair.
         // VPN2 covers two 4 KB pages; bit 12 of vaddr selects even (0) or odd (1).
         let odd = (vaddr >> 12) & 1 != 0;
@@ -8787,7 +8790,7 @@ impl TlbEntry {
     /// Translate a virtual address through this TLB entry.
     /// Returns `Some(paddr)` on hit, `None` on miss.
     #[must_use]
-    pub fn translate(&self, vaddr: u32, asid: u8) -> Option<u32> {
+    pub const fn translate(&self, vaddr: u32, asid: u8) -> Option<u32> {
         if !self.global && self.asid != asid {
             return None;
         }
@@ -8842,7 +8845,7 @@ pub mod cp0_status {
 
     /// Test a bit in a status register value.
     #[must_use]
-    pub fn test(status: u32, bit: u32) -> bool {
+    pub const fn test(status: u32, bit: u32) -> bool {
         (status >> bit) & 1 != 0
     }
 
@@ -8865,13 +8868,13 @@ pub mod cp0_cause {
 
     /// Extract the exception code.
     #[must_use]
-    pub fn exc_code(cause: u32) -> u32 {
+    pub const fn exc_code(cause: u32) -> u32 {
         (cause >> EXC_CODE_SHIFT) & EXC_CODE_MASK
     }
 
     /// Exception code names.
     #[must_use]
-    pub fn exc_name(code: u32) -> &'static str {
+    pub const fn exc_name(code: u32) -> &'static str {
         match code {
             0 => "Int",
             1 => "Mod",
@@ -8903,7 +8906,7 @@ pub mod cp0_cause {
     pub const BD_BIT: u32 = 31;
 
     #[must_use]
-    pub fn in_delay_slot(cause: u32) -> bool {
+    pub const fn in_delay_slot(cause: u32) -> bool {
         (cause >> BD_BIT) & 1 != 0
     }
 }
@@ -9030,7 +9033,7 @@ mod tests_system {
 /// Check whether a 32-bit word could be a valid MIPS32 instruction.
 /// This is a heuristic — it rules out clearly impossible encodings.
 #[must_use]
-pub fn is_valid_mips_word(word: u32) -> bool {
+pub const fn is_valid_mips_word(word: u32) -> bool {
     let opcode = (word >> 26) & 0x3F;
     let funct = word & 0x3F;
     match opcode {
@@ -9406,13 +9409,13 @@ mod tests_cfg {
 
 /// Swap a 32-bit word between big-endian and little-endian.
 #[must_use]
-pub fn swap32(word: u32) -> u32 {
+pub const fn swap32(word: u32) -> u32 {
     word.swap_bytes()
 }
 
 /// Swap a 16-bit halfword between big-endian and little-endian.
 #[must_use]
-pub fn swap16(hw: u16) -> u16 {
+pub const fn swap16(hw: u16) -> u16 {
     hw.swap_bytes()
 }
 
@@ -9655,6 +9658,7 @@ pub struct MipsHistogram {
 
 impl MipsHistogram {
     /// Build a histogram by disassembling `bytes`.
+    #[must_use]
     pub fn build(arch: &MipsArch, bytes: &[u8], base: Address) -> Self {
         let mut h = Self::default();
         for instr in MipsLinearDisassembler::new(arch, bytes, base).flatten() {
@@ -9813,7 +9817,7 @@ mod tests_histogram {
 // ===========================================================================
 
 /// Common MIPS function preamble patterns as byte sequences (big-endian).
-/// Each entry is (name, first_4_bytes_mask, first_4_bytes_value).
+/// Each entry is (name, `first_4_bytes_mask`, `first_4_bytes_value`).
 pub static MIPS_PREAMBLE_PATTERNS: &[(&str, u32, u32)] = &[
     // addiu $sp,$sp,-N  (any N)
     ("O32 frame alloc", 0xFFFF_0000, 0x27BD_0000),

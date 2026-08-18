@@ -111,7 +111,7 @@ pub enum PlatformKind {
     C64,
     /// Atari 2600 / VCS.
     Atari2600,
-    /// Apple II / II+ / IIe.
+    /// Apple II / II+ / `IIe`.
     AppleII,
     /// Atari 8-bit (400/800/XL/XE series).
     Atari8Bit,
@@ -270,13 +270,13 @@ impl Mos6502PlatformVectors {
 
     /// Return `true` if all three vectors point into ROM (`$8000`–`$FFFF`).
     #[must_use]
-    pub fn all_in_rom(&self) -> bool {
+    pub const fn all_in_rom(&self) -> bool {
         self.nmi.target_in_rom() && self.reset.target_in_rom() && self.irq.target_in_rom()
     }
 
     /// Return `true` if any vector is unset (target `$0000`).
     #[must_use]
-    pub fn has_unset_vector(&self) -> bool {
+    pub const fn has_unset_vector(&self) -> bool {
         self.nmi.is_unset() || self.reset.is_unset() || self.irq.is_unset()
     }
 
@@ -314,7 +314,7 @@ impl fmt::Display for Mos6502PlatformVectors {
 ///
 /// The heuristics used here are documented inline.
 #[must_use]
-pub fn platform_from_vectors(v: &Mos6502PlatformVectors) -> PlatformKind {
+pub const fn platform_from_vectors(v: &Mos6502PlatformVectors) -> PlatformKind {
     let reset = v.reset.target;
     let nmi = v.nmi.target;
     let irq = v.irq.target;

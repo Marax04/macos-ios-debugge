@@ -877,7 +877,7 @@ impl X86InstructionDatabase {
 
     /// Total number of database entries (including overloads).
     #[must_use]
-    pub fn entry_count(&self) -> usize {
+    pub const fn entry_count(&self) -> usize {
         DB_ENTRIES.len()
     }
 

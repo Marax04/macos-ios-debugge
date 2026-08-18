@@ -118,15 +118,15 @@ bitflags! {
 const REG8_NAMES: [&str; 8] = ["B", "C", "D", "E", "H", "L", "(HL)", "A"];
 const CC_NAMES: [&str; 8] = ["NZ", "Z", "NC", "C", "PO", "PE", "P", "M"];
 
-fn reg8(r: u8) -> &'static str {
+const fn reg8(r: u8) -> &'static str {
     REG8_NAMES[(r & 7) as usize]
 }
 
-fn cc_name(c: u8) -> &'static str {
+const fn cc_name(c: u8) -> &'static str {
     CC_NAMES[(c & 7) as usize]
 }
 
-fn rp(r: u8) -> &'static str {
+const fn rp(r: u8) -> &'static str {
     match r & 3 {
         0 => "BC",
         1 => "DE",
@@ -135,7 +135,7 @@ fn rp(r: u8) -> &'static str {
     }
 }
 
-fn rp2(r: u8) -> &'static str {
+const fn rp2(r: u8) -> &'static str {
     match r & 3 {
         0 => "BC",
         1 => "DE",
@@ -1138,7 +1138,7 @@ impl CycleInfo {
 
 /// Look up the approximate T-state count for a single-byte opcode.
 #[must_use]
-pub fn opcode_cycles(op: u8) -> CycleInfo {
+pub const fn opcode_cycles(op: u8) -> CycleInfo {
     match op {
         0x00 => CycleInfo::simple(4),                       // NOP
         0x01 | 0x11 | 0x21 | 0x31 => CycleInfo::simple(10), // LD rp,nn
@@ -1233,7 +1233,7 @@ impl InterruptMode {
 
     /// Return the IM instruction mnemonic operand.
     #[must_use]
-    pub fn operand(self) -> &'static str {
+    pub const fn operand(self) -> &'static str {
         match self {
             Self::Mode0 => "0",
             Self::Mode1 => "1",
@@ -1262,7 +1262,7 @@ pub struct OpcodeEntry {
 impl OpcodeEntry {
     /// Return the instruction flags.
     #[must_use]
-    pub fn flags(self) -> InstrFlags {
+    pub const fn flags(self) -> InstrFlags {
         InstrFlags::from_bits_retain(self.flags_bits)
     }
 }
@@ -1372,45 +1372,45 @@ pub fn find_opcode_entry(op: u8) -> Option<&'static OpcodeEntry> {
 
 /// Encode a NOP.
 #[must_use]
-pub fn encode_nop() -> [u8; 1] {
+pub const fn encode_nop() -> [u8; 1] {
     [0x00]
 }
 
 /// Encode a HALT.
 #[must_use]
-pub fn encode_halt() -> [u8; 1] {
+pub const fn encode_halt() -> [u8; 1] {
     [0x76]
 }
 
 /// Encode an unconditional RET.
 #[must_use]
-pub fn encode_ret() -> [u8; 1] {
+pub const fn encode_ret() -> [u8; 1] {
     [0xC9]
 }
 
 /// Encode an unconditional JP nn.
 #[must_use]
-pub fn encode_jp(target: u16) -> [u8; 3] {
+pub const fn encode_jp(target: u16) -> [u8; 3] {
     let t = target.to_le_bytes();
     [0xC3, t[0], t[1]]
 }
 
 /// Encode an unconditional CALL nn.
 #[must_use]
-pub fn encode_call(target: u16) -> [u8; 3] {
+pub const fn encode_call(target: u16) -> [u8; 3] {
     let t = target.to_le_bytes();
     [0xCD, t[0], t[1]]
 }
 
 /// Encode a JR e (8-bit signed displacement from PC+2).
 #[must_use]
-pub fn encode_jr(disp: i8) -> [u8; 2] {
+pub const fn encode_jr(disp: i8) -> [u8; 2] {
     [0x18, disp.to_ne_bytes()[0]]
 }
 
 /// Encode a DJNZ e.
 #[must_use]
-pub fn encode_djnz(disp: i8) -> [u8; 2] {
+pub const fn encode_djnz(disp: i8) -> [u8; 2] {
     [0x10, disp.to_ne_bytes()[0]]
 }
 
@@ -1426,28 +1426,28 @@ pub fn encode_ld_r_n(reg: u8, n: u8) -> [u8; 2] {
 
 /// Encode LD BC, nn.
 #[must_use]
-pub fn encode_ld_bc_nn(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_bc_nn(nn: u16) -> [u8; 3] {
     let b = nn.to_le_bytes();
     [0x01, b[0], b[1]]
 }
 
 /// Encode LD DE, nn.
 #[must_use]
-pub fn encode_ld_de_nn(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_de_nn(nn: u16) -> [u8; 3] {
     let b = nn.to_le_bytes();
     [0x11, b[0], b[1]]
 }
 
 /// Encode LD HL, nn.
 #[must_use]
-pub fn encode_ld_hl_nn(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_hl_nn(nn: u16) -> [u8; 3] {
     let b = nn.to_le_bytes();
     [0x21, b[0], b[1]]
 }
 
 /// Encode LD SP, nn.
 #[must_use]
-pub fn encode_ld_sp_nn(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_sp_nn(nn: u16) -> [u8; 3] {
     let b = nn.to_le_bytes();
     [0x31, b[0], b[1]]
 }
@@ -1484,13 +1484,13 @@ pub fn encode_rst(vector: u8) -> [u8; 1] {
 
 /// Encode EI (enable interrupts).
 #[must_use]
-pub fn encode_ei() -> [u8; 1] {
+pub const fn encode_ei() -> [u8; 1] {
     [0xFB]
 }
 
 /// Encode DI (disable interrupts).
 #[must_use]
-pub fn encode_di() -> [u8; 1] {
+pub const fn encode_di() -> [u8; 1] {
     [0xF3]
 }
 
@@ -1507,7 +1507,7 @@ pub struct Z80LinearDisassembler<'a> {
 impl<'a> Z80LinearDisassembler<'a> {
     /// Create a new linear disassembler.
     #[must_use]
-    pub fn new(arch: &'a Z80Arch, bytes: &'a [u8], base: Address) -> Self {
+    pub const fn new(arch: &'a Z80Arch, bytes: &'a [u8], base: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -1518,13 +1518,13 @@ impl<'a> Z80LinearDisassembler<'a> {
 
     /// Current byte offset.
     #[must_use]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
     }
 
     /// Whether the scan has finished.
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         self.offset >= self.bytes.len()
     }
 }
@@ -1568,13 +1568,13 @@ pub struct AnalysisResult {
 impl AnalysisResult {
     /// Total instruction count.
     #[must_use]
-    pub fn instr_count(&self) -> usize {
+    pub const fn instr_count(&self) -> usize {
         self.instructions.len()
     }
 
     /// Whether any calls were found.
     #[must_use]
-    pub fn has_calls(&self) -> bool {
+    pub const fn has_calls(&self) -> bool {
         !self.call_targets.is_empty()
     }
 }
@@ -1684,7 +1684,7 @@ impl InstrStats {
 
     /// Total instructions counted.
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.loads
             + self.alu
             + self.bit_ops
@@ -1906,7 +1906,7 @@ pub struct BasicBlock {
 impl BasicBlock {
     /// Size in bytes.
     #[must_use]
-    pub fn size(&self) -> u64 {
+    pub const fn size(&self) -> u64 {
         self.end.as_u64().saturating_sub(self.start.as_u64())
     }
 }
@@ -1993,7 +1993,7 @@ pub fn build_cfg(instrs: &[Instruction]) -> Vec<BasicBlock> {
 /// Useful for analysis passes that want to group branches by their semantic
 /// [`BranchKind`] without inspecting the individual factory variants.
 #[must_use]
-pub fn branch_category(branch: &BranchInfo) -> &'static str {
+pub const fn branch_category(branch: &BranchInfo) -> &'static str {
     match branch.kind {
         BranchKind::UnconditionalJump => "jump",
         BranchKind::ConditionalJump => "conditional-jump",
@@ -2650,25 +2650,25 @@ mod tests {
 ///
 /// Panics if `e` is outside −128..=127.
 #[must_use]
-pub fn encode_jr_nz(e: i8) -> [u8; 2] {
+pub const fn encode_jr_nz(e: i8) -> [u8; 2] {
     [0x20, e as u8]
 }
 
 /// Encode Z80 `JR Z, e` (jump relative if zero).
 #[must_use]
-pub fn encode_jr_z(e: i8) -> [u8; 2] {
+pub const fn encode_jr_z(e: i8) -> [u8; 2] {
     [0x28, e as u8]
 }
 
 /// Encode Z80 `JR NC, e` (jump relative if no carry).
 #[must_use]
-pub fn encode_jr_nc(e: i8) -> [u8; 2] {
+pub const fn encode_jr_nc(e: i8) -> [u8; 2] {
     [0x30, e as u8]
 }
 
 /// Encode Z80 `JR C, e` (jump relative if carry).
 #[must_use]
-pub fn encode_jr_c(e: i8) -> [u8; 2] {
+pub const fn encode_jr_c(e: i8) -> [u8; 2] {
     [0x38, e as u8]
 }
 
@@ -2783,13 +2783,13 @@ pub fn encode_ld_rp_nn(rp: u8, nn: u16) -> [u8; 3] {
 
 /// Encode Z80 `LD (nn), A` — store accumulator to memory.
 #[must_use]
-pub fn encode_ld_mem_nn_a(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_mem_nn_a(nn: u16) -> [u8; 3] {
     [0x32, (nn & 0xFF) as u8, (nn >> 8) as u8]
 }
 
 /// Encode Z80 `LD A, (nn)` — load accumulator from memory.
 #[must_use]
-pub fn encode_ld_a_mem_nn(nn: u16) -> [u8; 3] {
+pub const fn encode_ld_a_mem_nn(nn: u16) -> [u8; 3] {
     [0x3A, (nn & 0xFF) as u8, (nn >> 8) as u8]
 }
 
@@ -2840,7 +2840,7 @@ impl Z80Condition {
 
     /// Encode a conditional `JP cc,nn` instruction (3 bytes).
     #[must_use]
-    pub fn encode_jp_cc(self, nn: u16) -> [u8; 3] {
+    pub const fn encode_jp_cc(self, nn: u16) -> [u8; 3] {
         [
             0xC2 | ((self as u8) << 3),
             (nn & 0xFF) as u8,
@@ -2850,7 +2850,7 @@ impl Z80Condition {
 
     /// Encode a conditional `CALL cc,nn` instruction (3 bytes).
     #[must_use]
-    pub fn encode_call_cc(self, nn: u16) -> [u8; 3] {
+    pub const fn encode_call_cc(self, nn: u16) -> [u8; 3] {
         [
             0xC4 | ((self as u8) << 3),
             (nn & 0xFF) as u8,
@@ -2860,7 +2860,7 @@ impl Z80Condition {
 
     /// Encode a conditional `RET cc` instruction (1 byte).
     #[must_use]
-    pub fn encode_ret_cc(self) -> u8 {
+    pub const fn encode_ret_cc(self) -> u8 {
         0xC0 | ((self as u8) << 3)
     }
 }
@@ -2881,7 +2881,7 @@ pub enum Z80InterruptMode {
 impl Z80InterruptMode {
     /// Encode `IM n` instruction (2 bytes, ED-prefixed).
     #[must_use]
-    pub fn encode_im(self) -> [u8; 2] {
+    pub const fn encode_im(self) -> [u8; 2] {
         match self {
             Self::Mode0 => [0xED, 0x46],
             Self::Mode1 => [0xED, 0x56],
@@ -3279,7 +3279,7 @@ pub enum Z80ParamLoc {
 ///
 /// Capped to prevent `Vec::with_capacity` from exhausting memory on
 /// attacker-controlled input, and to keep `Stack` offsets in `u8` range
-/// (128 stack slots × 2 bytes = 256 > u8::MAX, so 125 stack params max).
+/// (128 stack slots × 2 bytes = 256 > `u8::MAX`, so 125 stack params max).
 pub const Z80_PARAM_MAX: usize = 128;
 
 /// Compute parameter locations under a simplified Z80 ABI.
@@ -3359,13 +3359,13 @@ impl Z80BasicBlock {
 
     /// Number of instructions.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.instructions.len()
     }
 
     /// Whether empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instructions.is_empty()
     }
 }
@@ -3909,7 +3909,7 @@ pub const fn encode_retn_ed() -> [u8; 2] {
 ///
 /// This is a simplified table for common cases only.
 #[must_use]
-pub fn z80_instr_byte_len(first: u8) -> Option<u8> {
+pub const fn z80_instr_byte_len(first: u8) -> Option<u8> {
     match first {
         0x00
         | 0x02
@@ -5360,7 +5360,7 @@ pub fn z80_rst_target(n: u8) -> Option<u16> {
 
 /// Returns the RST opcode byte for RST n (n in 0..=7).
 #[must_use]
-pub fn z80_rst_opcode(n: u8) -> Option<u8> {
+pub const fn z80_rst_opcode(n: u8) -> Option<u8> {
     if n <= 7 { Some(0xC7 | (n << 3)) } else { None }
 }
 
@@ -5412,19 +5412,19 @@ impl Z80RegPair {
 
 /// Encode an INC rp instruction: opcode = `0x03 | (rp << 4)`.
 #[must_use]
-pub fn encode_inc_rp(rp: Z80RegPair) -> [u8; 1] {
+pub const fn encode_inc_rp(rp: Z80RegPair) -> [u8; 1] {
     [0x03 | (rp.encoding() << 4)]
 }
 
 /// Encode a DEC rp instruction: opcode = `0x0B | (rp << 4)`.
 #[must_use]
-pub fn encode_dec_rp(rp: Z80RegPair) -> [u8; 1] {
+pub const fn encode_dec_rp(rp: Z80RegPair) -> [u8; 1] {
     [0x0B | (rp.encoding() << 4)]
 }
 
 /// Encode an ADD HL,rp instruction: opcode = `0x09 | (rp << 4)`.
 #[must_use]
-pub fn encode_add_hl_rp(rp: Z80RegPair) -> [u8; 1] {
+pub const fn encode_add_hl_rp(rp: Z80RegPair) -> [u8; 1] {
     [0x09 | (rp.encoding() << 4)]
 }
 

@@ -576,7 +576,7 @@ pub fn decrypt_string_blobs(
 ///
 /// Uses [`AHashMap`] because the key is the algorithm's display string, which
 /// for `DecryptionAlgorithm::Custom` contains attacker-controlled content.
-/// A standard `HashMap` with the default SipHash hasher also resists collision
+/// A standard `HashMap` with the default `SipHash` hasher also resists collision
 /// attacks, but `AHashMap` is faster and equally safe here
 /// (dos-hash-collision).
 #[must_use]

@@ -222,7 +222,7 @@ impl DelaySlot {
 
     /// Mark this delay slot as annulled (`,a` branch).
     #[must_use]
-    pub fn annulled(mut self) -> Self {
+    pub const fn annulled(mut self) -> Self {
         self.kind = DelaySlotKind::Annulled;
         self
     }

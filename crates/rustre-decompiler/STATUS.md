@@ -6373,4 +6373,260 @@ tredici.
 
 ---
 
+# Round 79 — 2026-08-18 — Il clamp STRETTO: −42,6% di incoerenza, e il costo residuo misurato
+
+## 79.1 Comportamento del clamp parziale: identico
+
+15 AGREE / 4 LINK_FAIL, **19 su 19 identiche**. Nessuna regressione — ma il
+campione di `behavior.py` non contiene le funzioni a cui il clamp ha tolto
+parametri, quindi **non le assolve**. Va detto invece di far passare il verde
+per una conferma.
+
+## 79.2 La causa del +533 su OVER, verificata
+
+Delle 42 funzioni che diventano over-call col clamp parziale, **39 sono
+esattamente quelle a cui il clamp ha accorciato la firma**. Ipotesi confermata.
+
+Ma il controllo con path A dice di piu':
+
+| | n |
+|---|---|
+| path A passa argomenti ⇒ **parametri VERI tolti** | **10** |
+| non chiamata in path A (nessun controllo) | 31 |
+| anche A passa zero ⇒ giustificato | 1 |
+
+Causa probabile: `arities_from_seeds` disassembla corpi TRONCATI
+(`CALLEE_SCAN_BYTES` = 4096, 2000 istruzioni), quindi un sito di chiamata oltre
+il taglio non entra nel massimo e la mappa sottostima.
+
+## 79.3 Modalita' STRETTA (`RUSTRE_HLIL_ARGC_CLAMP=2`)
+
+Si clampa SOLO quando l'evidenza e' **zero assoluto**: nessun chiamante prepara
+mai nemmeno `rcx`. Il clamp parziale (`4 -> 2`) dipende dal confronto fra due
+numeri entrambi incerti; lo zero e' il segnale forte.
+
+| | UNDER | OVER | totale incoerenze |
+|---|---|---|---|
+| spento | 6478 | 3424 | 9902 |
+| parziale (`=1`) | **2059** | 3957 (+533) | 6016 (−39,2%) |
+| **stretta (`=2`)** | 2233 | **3453 (+29)** | **5686 (−42,6%)** |
+
+**La stretta e' migliore su entrambi i fronti del totale**: tiene quasi tutto il
+guadagno su UNDER (−65,5%) e paga quasi nulla su OVER (+0,8% invece di +15,6%).
+
+Falsi positivi residui, stesso controllo: **7** funzioni con parametri veri tolti
+(contro 10), 7 senza controllo, 1 giustificata. 15 nuove OVER contro 42.
+
+## 79.4 Perche' il gate resta SPENTO
+
+Sette firme sbagliate in silenzio non sono zero, e la classe e' quella che
+CLAUDE.md documenta come capace di restare dentro per mesi. Il rimedio e'
+identificato ma non implementato: **registrare quanti siti di chiamata sono
+stati osservati** per bersaglio e non fidarsi di uno zero visto su uno o due
+siti soltanto — un corpo troncato puo' facilmente nascondere proprio quello
+informativo.
+
+Fino ad allora `RUSTRE_HLIL_ARGC_CLAMP` resta opt-in, con due modalita'
+documentate e misurate.
+
+## 79.5 Stato
+
+* `path A: 0 differenze` in entrambe le modalita';
+* test 1337 passati (corretti due test che costruivano la coppia invece della
+  tripla `ArityCache`);
+* la mappa `callsite_argc` e' cablata end-to-end e disponibile a chiunque altro
+  ne abbia bisogno — e' la prima evidenza nel repo che possa SMENTIRE un
+  parametro invece di crearne.
+
+---
+
+# Round 80 — 2026-08-18 — #6810/#6820: il clamp diventa PREDEFINITO. `UNDER` −62%, `OVER` +1
+
+## 80.1 Il rimedio identificato nel §79.4, implementato
+
+`callsite_argc_from_bodies` ora ritorna `(massimo argomenti, NUMERO DI SITI
+osservati)`. Il conteggio dei siti e' la soglia di evidenza: uno zero visto su un
+solo sito puo' venire da un corpo troncato che nascondeva proprio quello
+informativo; su cinque siti no.
+
+## 80.2 Spazzata della soglia, corpus intero
+
+Modalita' stretta (clamp solo su zero assoluto), contro il clamp spento
+(UNDER 6478, OVER 3424):
+
+| siti minimi | UNDER | OVER | nuove OVER | **falsi positivi** |
+|---|---|---|---|---|
+| 1 | **2233** | 3453 (+29) | 15 | **7** |
+| 2 | 2326 | 3435 (+11) | — | — |
+| 3 | 2385 | 3429 (+5) | 4 | **3** |
+| **5** | **2448** (−62,2%) | **3425 (+1)** | **2** | **1** |
+
+A cinque siti l'OVER torna praticamente alla base: **+1 occorrenza su 3424**.
+
+«Falso positivo» = funzione a cui il clamp ha tolto parametri che path A le
+passa davvero — controllo indipendente, non giudizio.
+
+## 80.3 L'unico falso positivo residuo, per nome
+
+`std__string___M_replace_aux_unsigned_long_long__unsigned_long_long__unsigned_long_long__char_`
+
+Il nome demangled **dichiara esso stesso i quattro parametri**, e path A lo
+emette con quattro. Il clamp lo azzera perche' nei corpi disassemblati nessuno
+dei suoi siti prepara registri argomento.
+
+Aggiunta comunque la guardia di principio #6820: **mai contraddire un prototipo
+pubblicato** (`ctx.published_arity`). Su questo caso non morde — quella funzione
+non e' nell'elenco — ma e' la rete giusta e costa zero.
+
+## 80.4 Predefinito
+
+`RUSTRE_HLIL_ARGC_CLAMP` ora vale **stretto + 5 siti** per difetto; `=0` lo
+spegne, `=1` riabilita il clamp parziale (misurato peggiore su entrambi i
+fronti). `RUSTRE_HLIL_ARGC_SITES` resta regolabile.
+
+| | UNDER | OVER | totale incoerenze |
+|---|---|---|---|
+| prima | 6478 | 3424 | 9902 |
+| **ora** | **2448** | **3425** | **5873 (−40,7%)** |
+
+Verifiche:
+* `diff -rq` predefinito contro gate espliciti: **0 differenze**;
+* `diff -rq` **path A: 0 differenze**;
+* comportamento: 15 AGREE / 4 LINK_FAIL, **19 su 19 identiche**;
+* test: 1337 passati.
+
+## 80.5 Dieci gate predefiniti
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`, **`ARGC_CLAMP`**.
+
+Cinque sono passate scritte in questa sessione, cinque erano capacita' gia'
+presenti e spente.
+
+## 80.6 Cosa resta aperto su questo fronte
+
+* **1 falso positivo noto** — chiudibile leggendo l'arieta' dal nome demangled,
+  che per il C++ e' verita' esterna gratuita;
+* la direzione OPPOSTA, mai toccata: i bersagli dove i chiamanti preparano PIU'
+  argomenti di quanti il corpo suggerisca (657 nel solo Go). Aggiungere
+  parametri e' l'operazione che CREA fantasmi e va misurata da sola;
+* la coerenza col riempimento degli argomenti, che usa ancora `callee_arities`.
+
+---
+
+# Round 81 — 2026-08-18 — La direzione opposta: misurata, e NON conviene
+
+## 81.1 Il massimo SMENTISCE, il minimo AFFERMA
+
+Prima stesura della modalita' bidirezionale (`=3`): alzare l'arieta' fino al
+**massimo** argomenti osservato. Risultato:
+
+| | OVER | UNDER |
+|---|---|---|
+| predefinito | 3425 | 2448 |
+| bidir. con MASSIMO | **1086** | **27958** |
+
+`UNDER` moltiplicato per **undici**. La causa e' un errore di statistica, mio:
+il massimo e' l'estremo giusto per SMENTIRE (se nessun sito prepara mai piu' di
+N, i parametri oltre l'N-esimo non li passa nessuno) e quello sbagliato per
+AFFERMARE — un solo sito con 4 argomenti alza la firma, e le altre centinaia di
+chiamate a zero diventano tutte incoerenti.
+
+Per affermare serve il **minimo**: se OGNI sito prepara almeno N registri,
+quegli N sono certamente passati. La mappa ora porta entrambi gli estremi piu'
+il conteggio dei siti — `(massimo, minimo, siti)` — e ciascuno serve alla
+direzione per cui e' valido.
+
+## 81.2 Con il minimo: onesta, ma in perdita
+
+| | OVER | UNDER | **totale** |
+|---|---|---|---|
+| spento | 3424 | 6478 | 9902 |
+| **predefinito** (sola smentita) | 3425 | **2448** | **5873** |
+| bidirezionale (`=3`) | **1963** (−42,7%) | 4046 (+65,3%) | 6009 |
+
+Scambia **−1462 OVER per +1598 UNDER**: leggermente in perdita sul totale.
+
+Non e' un pareggio da arrotondare a favore: le due classi sono entrambe
+difetti, e in mancanza di una ragione per pesarle diversamente il totale e'
+l'arbitro. **`=3` resta opt-in**, documentata con la sua misura.
+
+## 81.3 Il refactor e' neutro sul predefinito
+
+`(massimo, siti)` -> `(massimo, minimo, siti)` tocca `ArityCache`, il setter, il
+contesto e la sonda. Verificato: **`diff -rq` fra lo snapshot predefinito prima
+e dopo il refactor da' 0 differenze** su 11342 file, e `path A` resta a 0 anche
+in modalita' bidirezionale. Test: 1337 passati.
+
+## 81.4 Cosa lascio scritto per chi riprende
+
+* la direzione «alza» NON e' chiusa: e' misurata come non conveniente **con
+  questa evidenza**. Una evidenza migliore (per esempio il minimo calcolato solo
+  sui siti che passano almeno un argomento, escludendo i thunk e le tabelle di
+  stub che passano sempre zero) potrebbe ribaltarla;
+* l'unico falso positivo della smentita resta `std::string::_M_replace_aux`:
+  chiudibile leggendo l'arieta' dal nome demangled. `rustre-analysis-vtable`
+  espone `demangle_itanium`/`demangle_msvc` ma e' una dipendenza OPZIONALE
+  (feature `cpp`), quindi non e' disponibile nella build predefinita — va
+  valutato se promuoverla o se estrarre il solo conteggio dei parametri.
+
+---
+
+# Round 82 — 2026-08-18 — L'ipotesi del §81.4 e' FALSA: escludere i siti a zero peggiora
+
+## 82.1 L'ipotesi, e perche' sembrava buona
+
+Chiudendo il §81 avevo scritto che la direzione «alza» poteva essere ribaltata
+da «il minimo calcolato solo sui siti che passano almeno un argomento,
+escludendo i thunk e le tabelle di stub che passano sempre zero». Il ragionamento
+era che una sola tabella di stub (`runtime_callbackasm1_abi0`, 2000 siti che non
+preparano nulla) schiaccia il minimo a zero e impedisce all'alzata di scattare.
+
+Implementata come modalita' `=4`: la mappa porta ora anche
+`(minimo_non_nullo, siti_non_nulli)`.
+
+## 82.2 Misurata: sbagliata, e di parecchio
+
+| | OVER | UNDER | **totale** |
+|---|---|---|---|
+| spento | 3424 | 6478 | 9902 |
+| **predefinito** (sola smentita) | 3425 | **2448** | **5873** |
+| `=3` alza col minimo su TUTTI i siti | 1963 | 4046 | 6009 |
+| `=4` alza col minimo sui soli siti NON NULLI | **1629** | **17988** | **19617** |
+
+Escludere i siti a zero rende l'alzata piu' aggressiva: chiude piu' `OVER`
+(1629, il migliore misurato) e ne paga **quattro volte tanto** in `UNDER`.
+
+Il motivo, in una riga: **quei siti a zero sono chiamate VERE.** Ignorarli per
+calcolare la firma non li fa sparire dal progetto — li trasforma in incoerenze.
+La distorsione che volevo togliere era informazione.
+
+Tre statistiche provate per la direzione «alza» — massimo (`UNDER` x11), minimo
+su tutti (x1,7), minimo sui non nulli (x7,3) — e nessuna paga. **La sola
+smentita resta la configurazione migliore**, ed e' quella predefinita.
+
+## 82.3 Un difetto della mia stessa misura, colto da un numero troppo tondo
+
+La prima esecuzione di `=4` ha restituito **esattamente** la base (3424 / 6478).
+Un risultato identico alla base non e' un esito: e' il sintomo che la modalita'
+non e' entrata in funzione. Infatti avevo aggiunto `"4"` alla logica interna e
+dimenticato di aggiungerla alla condizione ESTERNA che apre il blocco.
+
+E' lo stesso errore del §65 (`has_goto_or_label` che faceva rinunciare 43
+funzioni su 43) e la stessa lezione: **un numero identico al riferimento va
+trattato come un difetto della misura finche' non si prova il contrario.**
+
+## 82.4 Stato
+
+* predefinito verificato **invariato** dopo la correzione (0 differenze);
+* `path A`: 0 differenze in tutte le modalita';
+* test: 1337 passati;
+* `RUSTRE_HLIL_ARGC_CLAMP` ha ora quattro modalita' documentate, ognuna con la
+  sua misura sul corpus intero: `0` spento, **default** sola smentita stretta,
+  `1` smentita parziale, `3` bidirezionale col minimo, `4` bidirezionale col
+  minimo non nullo. Le ultime tre sono misurate PEGGIORI e restano disponibili
+  per non dover rifare l'esperimento.
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->

@@ -67,7 +67,7 @@ pub enum SrecType {
 impl SrecType {
     /// Map a digit byte ('0'–'9') to [`SrecType`].
     #[must_use]
-    pub fn from_char(c: u8) -> Self {
+    pub const fn from_char(c: u8) -> Self {
         match c {
             b'0' => Self::S0,
             b'1' => Self::S1,
@@ -85,7 +85,7 @@ impl SrecType {
 
     /// Return the digit character for this record type.
     #[must_use]
-    pub fn to_char(self) -> u8 {
+    pub const fn to_char(self) -> u8 {
         match self {
             Self::S0 => b'0',
             Self::S1 => b'1',
@@ -103,7 +103,7 @@ impl SrecType {
 
     /// Number of address bytes for this record type.
     #[must_use]
-    pub fn addr_bytes(self) -> usize {
+    pub const fn addr_bytes(self) -> usize {
         match self {
             Self::S0 | Self::S1 | Self::S5 | Self::S9 => 2,
             Self::S2 | Self::S6 | Self::S8 => 3,
@@ -114,19 +114,19 @@ impl SrecType {
 
     /// Return `true` if this is a data-bearing record (S1/S2/S3).
     #[must_use]
-    pub fn is_data(self) -> bool {
+    pub const fn is_data(self) -> bool {
         matches!(self, Self::S1 | Self::S2 | Self::S3)
     }
 
     /// Return `true` if this is a termination / start-address record.
     #[must_use]
-    pub fn is_terminator(self) -> bool {
+    pub const fn is_terminator(self) -> bool {
         matches!(self, Self::S7 | Self::S8 | Self::S9)
     }
 
     /// Human-readable name.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::S0 => "S0-header",
             Self::S1 => "S1-data16",
@@ -328,12 +328,12 @@ pub struct SrecRegion {
 
 impl SrecRegion {
     #[must_use]
-    pub fn end_addr(&self) -> u64 {
+    pub const fn end_addr(&self) -> u64 {
         self.start_addr + self.data.len() as u64
     }
 
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         self.data.len()
     }
 
@@ -591,7 +591,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             sum += b as u32;
         }
         let cs = (!(sum & 0xFF)) as u8;
-        out.push_str(&format!("S0{:02X}0000", byte_count));
+        out.push_str(&format!("S0{byte_count:02X}0000"));
         for b in hdr_data {
             out.push_str(&format!("{b:02X}"));
         }
@@ -617,7 +617,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             sum += b as u32;
         }
         let cs = (!(sum & 0xFF)) as u8;
-        out.push_str(&format!("S3{:02X}", byte_count));
+        out.push_str(&format!("S3{byte_count:02X}"));
         for b in &addr_be {
             out.push_str(&format!("{b:02X}"));
         }
@@ -637,8 +637,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
         sum += rc_hi as u32 + rc_lo as u32;
         let cs = (!(sum & 0xFF)) as u8;
         out.push_str(&format!(
-            "S5{:02X}{:04X}{:02X}\r\n",
-            byte_count, record_count, cs
+            "S5{byte_count:02X}{record_count:04X}{cs:02X}\r\n"
         ));
     }
 
@@ -656,7 +655,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             sum += b as u32;
         }
         let cs = (!(sum & 0xFF)) as u8;
-        out.push_str(&format!("S7{:02X}", byte_count));
+        out.push_str(&format!("S7{byte_count:02X}"));
         for b in &ep_be {
             out.push_str(&format!("{b:02X}"));
         }

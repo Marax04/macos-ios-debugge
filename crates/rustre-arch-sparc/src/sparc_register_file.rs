@@ -81,7 +81,7 @@ pub struct RegisterWindow {
 impl RegisterWindow {
     /// Create a zeroed register window.
     #[must_use]
-    pub fn new(window_id: usize) -> Self {
+    pub const fn new(window_id: usize) -> Self {
         Self {
             window_id,
             globals: [0u64; NUM_GLOBALS],
@@ -100,7 +100,7 @@ impl RegisterWindow {
     ///
     /// %g0 always returns 0.
     #[must_use]
-    pub fn read(&self, reg: usize) -> u64 {
+    pub const fn read(&self, reg: usize) -> u64 {
         match reg {
             0 => 0, // %g0 is always zero
             1..=7 => self.globals[reg],
@@ -114,7 +114,7 @@ impl RegisterWindow {
     /// Write a value to a register by its numeric index.
     ///
     /// Writes to %g0 are silently dropped.
-    pub fn write(&mut self, reg: usize, value: u64) {
+    pub const fn write(&mut self, reg: usize, value: u64) {
         match reg {
             0 => {} // writes to %g0 are discarded
             1..=7 => self.globals[reg] = value,
@@ -127,7 +127,7 @@ impl RegisterWindow {
 
     /// Return the canonical register name for index `reg`.
     #[must_use]
-    pub fn reg_name(reg: usize) -> &'static str {
+    pub const fn reg_name(reg: usize) -> &'static str {
         match reg {
             0 => "%g0", 1 => "%g1", 2 => "%g2", 3 => "%g3",
             4 => "%g4", 5 => "%g5", 6 => "%g6", 7 => "%g7",
@@ -205,7 +205,7 @@ pub struct SparcRegisterFile {
     windows: Vec<RegisterWindow>,
     /// Single-precision FP registers (%f0–%f63 for V9, %f0–%f31 for V8).
     pub fp_regs: Vec<f32>,
-    /// Double-precision FP registers (derived from pairs of f_regs).
+    /// Double-precision FP registers (derived from pairs of `f_regs`).
     pub fp_double: Vec<f64>,
     /// Program counter.
     pub pc: u64,
@@ -302,7 +302,7 @@ impl SparcRegisterFile {
 
     /// Return the number of physical integer registers (globals + windowed).
     #[must_use]
-    pub fn physical_reg_count(&self) -> usize {
+    pub const fn physical_reg_count(&self) -> usize {
         NUM_GLOBALS + self.nwindows * REGS_PER_GROUP * 2
     }
 
@@ -436,14 +436,14 @@ impl WindowManager {
     /// Handle a window overflow trap: rotate WIM and return the new WIM value.
     ///
     /// The SPARC ABI convention is to rotate WIM right by 1 position.
-    pub fn handle_overflow(&mut self) -> u32 {
+    pub const fn handle_overflow(&mut self) -> u32 {
         let mask = (1u32 << self.nwindows) - 1;
         self.wim = (self.wim >> 1 | self.wim << (self.nwindows - 1)) & mask;
         self.wim
     }
 
     /// Handle a window underflow trap: rotate WIM left by 1 position.
-    pub fn handle_underflow(&mut self) -> u32 {
+    pub const fn handle_underflow(&mut self) -> u32 {
         let mask = (1u32 << self.nwindows) - 1;
         self.wim = (self.wim << 1 | self.wim >> (self.nwindows - 1)) & mask;
         self.wim
@@ -451,25 +451,25 @@ impl WindowManager {
 
     /// Return whether window `w` is valid (not flagged in WIM).
     #[must_use]
-    pub fn is_valid_window(&self, w: usize) -> bool {
+    pub const fn is_valid_window(&self, w: usize) -> bool {
         self.wim & (1u32 << w) == 0
     }
 
     /// Return the previous (caller's) window index.
     #[must_use]
-    pub fn prev_window(&self) -> usize {
+    pub const fn prev_window(&self) -> usize {
         (self.cwp + 1) % self.nwindows
     }
 
     /// Return the next (callee's) window index.
     #[must_use]
-    pub fn next_window(&self) -> usize {
+    pub const fn next_window(&self) -> usize {
         (self.cwp + self.nwindows - 1) % self.nwindows
     }
 
     /// Return the call depth estimate (number of nested SAVEs).
     #[must_use]
-    pub fn call_depth(&self) -> usize {
+    pub const fn call_depth(&self) -> usize {
         self.saves.saturating_sub(self.restores) as usize
     }
 
@@ -530,7 +530,7 @@ impl FpRegisterState {
 
     /// Return the number of single-precision registers.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.single.len()
     }
 }

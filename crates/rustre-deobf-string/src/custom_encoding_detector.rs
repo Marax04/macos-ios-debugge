@@ -227,7 +227,7 @@ pub struct CustomEncodingDetector {
 impl CustomEncodingDetector {
     /// Create a detector with default settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             try_rot_n: true,
             custom_alphabets: Vec::new(),
@@ -377,7 +377,7 @@ pub fn detect_encoding(data: &[u8]) -> Vec<EncodingPattern> {
     CustomEncodingDetector::new().detect_encoding(data)
 }
 
-fn rot_byte(b: u8, n: u8) -> u8 {
+const fn rot_byte(b: u8, n: u8) -> u8 {
     match b {
         b'A'..=b'Z' => b'A' + (b - b'A' + n) % 26,
         b'a'..=b'z' => b'a' + (b - b'a' + n) % 26,
@@ -385,7 +385,7 @@ fn rot_byte(b: u8, n: u8) -> u8 {
     }
 }
 
-fn hex_nibble(c: u8) -> Option<u8> {
+const fn hex_nibble(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
         b'a'..=b'f' => Some(c - b'a' + 10),

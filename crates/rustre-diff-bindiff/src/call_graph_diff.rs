@@ -34,7 +34,7 @@ pub struct FunctionNode {
     pub name_hash: Option<u64>,
     /// Human-readable name, if available.
     pub name: Option<String>,
-    /// Structural features: (block_count, insn_count, call_out).
+    /// Structural features: (`block_count`, `insn_count`, `call_out`).
     pub features: (u32, u32, u32),
 }
 
@@ -91,6 +91,7 @@ pub struct CallGraph {
 
 impl CallGraph {
     /// Build a `CallGraph` from a list of functions and edges.
+    #[must_use]
     pub fn new(functions: Vec<FunctionNode>, edges: Vec<CallEdge>) -> Self {
         let n = functions.len();
         let mut callees = vec![HashSet::new(); n];
@@ -105,12 +106,14 @@ impl CallGraph {
     }
 
     /// Number of functions in this graph.
-    pub fn len(&self) -> usize { self.functions.len() }
+    #[must_use]
+    pub const fn len(&self) -> usize { self.functions.len() }
 
     /// Returns true if the graph has no functions.
-    pub fn is_empty(&self) -> bool { self.functions.is_empty() }
+    #[must_use]
+    pub const fn is_empty(&self) -> bool { self.functions.is_empty() }
 
-    /// Iterator over all (caller_idx, callee_idx) pairs.
+    /// Iterator over all (`caller_idx`, `callee_idx`) pairs.
     pub fn edge_pairs(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         self.edges.iter().map(|e| (e.caller, e.callee))
     }
@@ -174,15 +177,15 @@ pub struct UnmatchedCallGraphFn {
 
 /// Core neighbourhood voting propagation engine.
 ///
-/// For each candidate pair (a_i, b_j) that is not yet matched, counts how many
-/// of a_i's neighbours are already matched to b_j's neighbours.  A pair is
+/// For each candidate pair (`a_i`, `b_j`) that is not yet matched, counts how many
+/// of `a_i`'s neighbours are already matched to `b_j`'s neighbours.  A pair is
 /// promoted to a match when votes ≥ `vote_threshold`.
 struct NeighbourhoodVoter<'a> {
     cg_a: &'a CallGraph,
     cg_b: &'a CallGraph,
-    /// Current confirmed matches: a_idx → b_idx.
+    /// Current confirmed matches: `a_idx` → `b_idx`.
     matches_a_to_b: HashMap<usize, usize>,
-    /// Reverse: b_idx → a_idx.
+    /// Reverse: `b_idx` → `a_idx`.
     matches_b_to_a: HashMap<usize, usize>,
     vote_threshold: u32,
     sim_threshold: f64,
@@ -324,7 +327,8 @@ pub struct CallGraphDiffResult {
 
 impl CallGraphDiffResult {
     /// Number of functions matched.
-    pub fn matched_count(&self) -> usize { self.matches.len() }
+    #[must_use]
+    pub const fn matched_count(&self) -> usize { self.matches.len() }
 
     /// Functions added to B.
     pub fn added(&self) -> impl Iterator<Item = &UnmatchedCallGraphFn> {
@@ -347,6 +351,7 @@ impl CallGraphDiffResult {
     }
 
     /// Pretty-print a summary.
+    #[must_use]
     pub fn summary(&self) -> String {
         let added = self.added().count();
         let removed = self.removed().count();
@@ -371,16 +376,19 @@ pub struct CallGraphDiffer {
 
 impl CallGraphDiffer {
     /// Create a differ with the given config.
-    pub fn new(config: CallGraphDiffConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: CallGraphDiffConfig) -> Self {
         Self { config }
     }
 
     /// Create with default config.
+    #[must_use]
     pub fn default_config() -> Self {
         Self { config: CallGraphDiffConfig::default() }
     }
 
     /// Diff two call graphs and return the full result.
+    #[must_use]
     pub fn diff(&self, cg_a: &CallGraph, cg_b: &CallGraph) -> CallGraphDiffResult {
         // Phase 1: exact seeds.
         let (mut a_to_b, mut seeded_matches) = self.seed_exact(cg_a, cg_b);
@@ -655,6 +663,7 @@ impl CallGraphDiffer {
 ///
 /// `functions`: list of `(cfg_hash, name_hash, block_count, insn_count, call_out)`.
 /// `edges`: list of `(caller_idx, callee_idx)`.
+#[must_use]
 pub fn build_call_graph(
     functions: &[(u64, Option<u64>, u32, u32, u32)],
     edges: &[(usize, usize)],
@@ -681,6 +690,7 @@ pub fn build_call_graph(
 // FNV-1a helper
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn fnv1a_str(s: &str) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for &b in s.as_bytes() {

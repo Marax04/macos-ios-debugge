@@ -25,7 +25,7 @@ pub enum EncryptionAlgorithm {
 impl EncryptionAlgorithm {
     /// Derive from the `/V` integer.
     #[must_use]
-    pub fn from_v(v: i64) -> Self {
+    pub const fn from_v(v: i64) -> Self {
         match v {
             1 => Self::Rc4_40,
             2 => Self::Rc4Variable,
@@ -166,13 +166,13 @@ pub struct TrailerInfo {
 impl TrailerInfo {
     /// Returns `true` if the document is encrypted.
     #[must_use]
-    pub fn is_encrypted(&self) -> bool {
+    pub const fn is_encrypted(&self) -> bool {
         self.encryption.is_some()
     }
 
     /// Returns `true` if the document has multiple revisions (incremental updates).
     #[must_use]
-    pub fn has_incremental_updates(&self) -> bool {
+    pub const fn has_incremental_updates(&self) -> bool {
         self.incremental_update_count > 0
     }
 
@@ -211,7 +211,7 @@ pub struct PdfTrailerAnalyzer<'a> {
 impl<'a> PdfTrailerAnalyzer<'a> {
     /// Create a new analyzer.
     #[must_use]
-    pub fn new(data: &'a [u8]) -> Self {
+    pub const fn new(data: &'a [u8]) -> Self {
         Self { data }
     }
 

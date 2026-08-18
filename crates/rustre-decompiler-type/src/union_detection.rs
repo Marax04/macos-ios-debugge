@@ -102,7 +102,7 @@ pub struct UnionDetector {
 
 impl UnionDetector {
     #[must_use]
-    pub fn new(config: UnionDetectorConfig) -> Self {
+    pub const fn new(config: UnionDetectorConfig) -> Self {
         Self {
             config,
             accesses: Vec::new(),

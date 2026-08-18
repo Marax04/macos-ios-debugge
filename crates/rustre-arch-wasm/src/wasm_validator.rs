@@ -1,5 +1,5 @@
 // rustre-arch-wasm/src/wasm_validator.rs
-//! WasmValidator — validate WASM module structure, types, and instructions.
+//! `WasmValidator` — validate WASM module structure, types, and instructions.
 
 pub use std::collections::HashMap;
 
@@ -43,14 +43,16 @@ pub enum ValidationError {
 }
 
 impl ValidationError {
-    pub fn is_fatal(&self) -> bool {
+    #[must_use]
+    pub const fn is_fatal(&self) -> bool {
         matches!(
             self,
             Self::InvalidMagic | Self::MalformedSection { .. } | Self::InvalidOpcode { .. }
         )
     }
 
-    pub fn category(&self) -> &'static str {
+    #[must_use]
+    pub const fn category(&self) -> &'static str {
         match self {
             Self::MalformedSection { .. } => "structure",
             Self::InvalidOpcode { .. } => "opcode",
@@ -121,6 +123,7 @@ pub struct WasmValueStack {
 }
 
 impl WasmValueStack {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -164,7 +167,8 @@ impl WasmValueStack {
         }
     }
 
-    pub fn depth(&self) -> usize {
+    #[must_use]
+    pub const fn depth(&self) -> usize {
         self.stack.len()
     }
 
@@ -173,11 +177,12 @@ impl WasmValueStack {
         self.stack.clear();
     }
 
-    pub fn is_unreachable(&self) -> bool {
+    #[must_use]
+    pub const fn is_unreachable(&self) -> bool {
         self.unreachable
     }
 
-    pub fn reset_to_reachable(&mut self) {
+    pub const fn reset_to_reachable(&mut self) {
         self.unreachable = false;
     }
 }
@@ -196,6 +201,7 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
+    #[must_use]
     pub fn new(func_index: u32, locals: Vec<WasmValueType>) -> Self {
         Self {
             stack: WasmValueStack::new(),
@@ -269,11 +275,13 @@ impl TypeChecker {
         self.stack.mark_unreachable();
     }
 
+    #[must_use]
     pub fn stack_depth(&self) -> usize {
         self.stack.depth()
     }
 
-    pub fn has_errors(&self) -> bool {
+    #[must_use]
+    pub const fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 }
@@ -290,7 +298,8 @@ pub struct FunctionValidator {
 }
 
 impl FunctionValidator {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         func_index: u32,
         known_func_count: u32,
         known_type_count: u32,
@@ -508,21 +517,25 @@ impl Default for ModuleValidator {
 }
 
 impl ModuleValidator {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_memory_limit(mut self, pages: u32) -> Self {
+    #[must_use]
+    pub const fn with_memory_limit(mut self, pages: u32) -> Self {
         self.memory_limit_pages = pages;
         self
     }
 
+    #[must_use]
     pub fn with_resolved_import(mut self, module: &str, name: &str) -> Self {
         self.resolved_imports.insert(format!("{module}::{name}"));
         self
     }
 
     /// Validate `wasm_bytes` and return a `ValidationReport`.
+    #[must_use]
     pub fn validate(&self, wasm_bytes: &[u8]) -> ValidationReport {
         let mut report = ValidationReport::new();
 
@@ -763,7 +776,8 @@ pub struct ValidationReport {
 }
 
 impl ValidationReport {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             errors: Vec::new(),
             warnings: Vec::new(),
@@ -782,21 +796,25 @@ impl ValidationReport {
     }
 
     /// True when no errors were found.
-    pub fn is_valid(&self) -> bool {
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
         self.errors.is_empty()
     }
 
     /// Number of errors.
-    pub fn error_count(&self) -> usize {
+    #[must_use]
+    pub const fn error_count(&self) -> usize {
         self.errors.len()
     }
 
     /// Number of warnings.
-    pub fn warning_count(&self) -> usize {
+    #[must_use]
+    pub const fn warning_count(&self) -> usize {
         self.warnings.len()
     }
 
     /// Errors belonging to a particular category.
+    #[must_use]
     pub fn errors_of_category(&self, category: &str) -> Vec<&ValidationError> {
         self.errors
             .iter()
@@ -805,6 +823,7 @@ impl ValidationReport {
     }
 
     /// Whether any fatal error was found.
+    #[must_use]
     pub fn has_fatal(&self) -> bool {
         self.errors.iter().any(|e| e.is_fatal())
     }

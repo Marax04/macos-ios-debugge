@@ -531,7 +531,7 @@ fn opcode_table_p4(b: u8) -> Option<OpcodeEntry> {
     })
 }
 
-fn opcode_table_p5(b: u8) -> Option<OpcodeEntry> {
+const fn opcode_table_p5(b: u8) -> Option<OpcodeEntry> {
     Some(match b {
         // ── BCC/BCS/BEQ/BMI/BNE/BPL/BVC/BVS ─────────────────────────────────
         0x90 => branch_entry("BCC"),
@@ -587,7 +587,7 @@ fn opcode_table_p5(b: u8) -> Option<OpcodeEntry> {
     })
 }
 
-fn opcode_table_p6(b: u8) -> Option<OpcodeEntry> {
+const fn opcode_table_p6(b: u8) -> Option<OpcodeEntry> {
     Some(match b {
         0xB0 => branch_entry("BCS"),
         0xB8 => OpcodeEntry::base("CLV", AddrMode::Implied, InstrFlags::NONE, 2),

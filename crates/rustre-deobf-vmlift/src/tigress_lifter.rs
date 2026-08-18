@@ -43,7 +43,7 @@ impl std::fmt::Display for TigressDispatchMode {
             Self::NestedSwitch => "NestedSwitch",
             Self::Unknown => "Unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -79,9 +79,10 @@ pub struct TigressRegisterFile {
 
 impl TigressRegisterFile {
     /// Create a default 8-register 64-bit file layout.
+    #[must_use]
     pub fn default_x64() -> Self {
         let slot_names: HashMap<u8, String> = (0..8u8)
-            .map(|i| (i, format!("vr{}", i)))
+            .map(|i| (i, format!("vr{i}")))
             .collect();
         Self {
             num_registers: 8,
@@ -166,10 +167,12 @@ impl LlilExpr {
         Self::Reg(name.into())
     }
 
-    pub fn constant(v: u64) -> Self {
+    #[must_use]
+    pub const fn constant(v: u64) -> Self {
         Self::Const(v)
     }
 
+    #[must_use]
     pub fn add(lhs: LlilExpr, rhs: LlilExpr) -> Self {
         Self::BinOp {
             op: "ADD".into(),
@@ -178,6 +181,7 @@ impl LlilExpr {
         }
     }
 
+    #[must_use]
     pub fn sub(lhs: LlilExpr, rhs: LlilExpr) -> Self {
         Self::BinOp {
             op: "SUB".into(),
@@ -186,6 +190,7 @@ impl LlilExpr {
         }
     }
 
+    #[must_use]
     pub fn xor(lhs: LlilExpr, rhs: LlilExpr) -> Self {
         Self::BinOp {
             op: "XOR".into(),
@@ -194,6 +199,7 @@ impl LlilExpr {
         }
     }
 
+    #[must_use]
     pub fn load(inner: LlilExpr, width: u8) -> Self {
         Self::Load { inner: Box::new(inner), width }
     }
@@ -244,6 +250,7 @@ impl Default for TigressLifter {
 }
 
 impl TigressLifter {
+    #[must_use]
     pub fn new() -> Self {
         let mut s = Self {
             min_confidence: 0.55,
@@ -255,7 +262,8 @@ impl TigressLifter {
         s
     }
 
-    pub fn with_min_confidence(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, t: f32) -> Self {
         self.min_confidence = t;
         self
     }
@@ -375,6 +383,7 @@ impl TigressLifter {
     // ── Dispatch mode detection ───────────────────────────────────────────────
 
     /// Detect the Tigress dispatch mode in a code region.
+    #[must_use]
     pub fn detect_dispatch_mode(&self, bytes: &[u8]) -> (TigressDispatchMode, f32) {
         let mut scores: HashMap<TigressDispatchMode, f32> = HashMap::new();
 
@@ -431,6 +440,7 @@ impl TigressLifter {
     // ── Handler table location ────────────────────────────────────────────────
 
     /// Find the handler dispatch table base address.
+    #[must_use]
     pub fn locate_handler_table(&self, bytes: &[u8], base_address: u64) -> Option<u64> {
         // Strategy: find the dispatcher loop, then follow the table pointer
         for (i, window) in bytes.windows(6).enumerate() {
@@ -461,6 +471,7 @@ impl TigressLifter {
     // ── Register file inference ───────────────────────────────────────────────
 
     /// Infer the register file layout from handler bodies.
+    #[must_use]
     pub fn infer_register_file(&self, handlers: &[TigressHandler]) -> TigressRegisterFile {
         if handlers.is_empty() {
             return TigressRegisterFile::default_x64();
@@ -508,7 +519,7 @@ impl TigressLifter {
                 base_reg: base_reg.clone(),
                 index: 0,
             },
-            slot_names: (0..num_regs).map(|i| (i, format!("vr{}", i))).collect(),
+            slot_names: (0..num_regs).map(|i| (i, format!("vr{i}"))).collect(),
             confidence: 0.65,
         }
     }
@@ -516,6 +527,7 @@ impl TigressLifter {
     // ── Handler identification ────────────────────────────────────────────────
 
     /// Identify the semantic of a handler body.
+    #[must_use]
     pub fn identify_handler_semantic(&self, body: &[u8]) -> Option<(String, f32)> {
         for (name, patterns) in &self.semantic_patterns {
             for pattern in patterns {
@@ -548,6 +560,7 @@ impl TigressLifter {
     /// `base_address` — virtual address of `table_bytes[0]`
     /// `binary`       — the full binary (for reading handler bodies)
     /// `binary_base`  — virtual address of `binary[0]`
+    #[must_use]
     pub fn extract_handlers(
         &self,
         table_bytes: &[u8],
@@ -604,6 +617,7 @@ impl TigressLifter {
     // ── Lifting to LLIL ───────────────────────────────────────────────────────
 
     /// Lift a sequence of Tigress handlers to LLIL blocks.
+    #[must_use]
     pub fn lift_to_llil(
         &self,
         handlers: &[TigressHandler],
@@ -692,7 +706,7 @@ impl TigressLifter {
             ],
             "NOP" => vec![LlilInsn::Nop],
             _ => vec![LlilInsn::Unlifted {
-                reason: format!("unrecognized semantic: {}", semantic),
+                reason: format!("unrecognized semantic: {semantic}"),
             }],
         };
 
@@ -708,6 +722,7 @@ impl TigressLifter {
     /// Run the full Tigress lifting pipeline on a binary region.
     ///
     /// Returns (`LiftedFunction`, `dispatch_mode`, `register_file`).
+    #[must_use]
     pub fn lift(
         &self,
         binary: &[u8],
@@ -756,7 +771,7 @@ fn rm_to_reg64(rm: u8) -> String {
         5 => "rbp".into(),
         6 => "rsi".into(),
         7 => "rdi".into(),
-        _ => format!("r{}", rm),
+        _ => format!("r{rm}"),
     }
 }
 

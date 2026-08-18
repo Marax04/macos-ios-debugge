@@ -34,7 +34,8 @@ pub enum TraceEventKind {
 }
 
 impl TraceEventKind {
-    pub fn from_u8(v: u8) -> Self {
+    #[must_use]
+    pub const fn from_u8(v: u8) -> Self {
         match v {
             0x01 => Self::Instruction, 0x02 => Self::MemRead, 0x03 => Self::MemWrite,
             0x04 => Self::Call, 0x05 => Self::Return, 0x06 => Self::Branch,
@@ -44,7 +45,8 @@ impl TraceEventKind {
         }
     }
 
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::Instruction => "insn", Self::MemRead => "mem_read", Self::MemWrite => "mem_write",
             Self::Call => "call", Self::Return => "ret", Self::Branch => "branch",
@@ -79,22 +81,26 @@ pub struct TraceRecord {
 }
 
 impl TraceRecord {
-    pub fn new_insn(seq: u64, tid: u32, pc: u64) -> Self {
+    #[must_use]
+    pub const fn new_insn(seq: u64, tid: u32, pc: u64) -> Self {
         TraceRecord { seq, tid, pc, event: TraceEventKind::Instruction,
             aux: 0, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
-    pub fn new_call(seq: u64, tid: u32, pc: u64, target: u64) -> Self {
+    #[must_use]
+    pub const fn new_call(seq: u64, tid: u32, pc: u64, target: u64) -> Self {
         TraceRecord { seq, tid, pc, event: TraceEventKind::Call,
             aux: target, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
-    pub fn new_bb(seq: u64, tid: u32, pc: u64, size: u32) -> Self {
+    #[must_use]
+    pub const fn new_bb(seq: u64, tid: u32, pc: u64, size: u32) -> Self {
         TraceRecord { seq, tid, pc, event: TraceEventKind::BasicBlock,
             aux: size as u64, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
-    pub fn new_mem(seq: u64, tid: u32, pc: u64, is_write: bool, addr: u64, size: u8) -> Self {
+    #[must_use]
+    pub const fn new_mem(seq: u64, tid: u32, pc: u64, is_write: bool, addr: u64, size: u8) -> Self {
         let event = if is_write { TraceEventKind::MemWrite } else { TraceEventKind::MemRead };
         TraceRecord { seq, tid, pc, event, aux: 0, mem_addr: addr, mem_size: size, insn_bytes: vec![] }
     }
@@ -116,7 +122,7 @@ impl fmt::Display for TraceFormatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TraceFormatError::Io(e) => write!(f, "IO error: {e}"),
-            TraceFormatError::BadMagic(m) => write!(f, "Bad magic: {:02X?}", m),
+            TraceFormatError::BadMagic(m) => write!(f, "Bad magic: {m:02X?}"),
             TraceFormatError::UnsupportedVersion(v) => write!(f, "Unsupported version: {v}"),
             TraceFormatError::Truncated => write!(f, "Truncated trace"),
             TraceFormatError::ParseError(s) => write!(f, "Parse error: {s}"),
@@ -143,7 +149,7 @@ pub struct NativeTraceHeader {
     pub flags: u32,
     pub record_count: u64,
     pub pid: u32,
-    /// Target architecture (0=x86, 1=x86_64, 2=arm, 3=arm64)
+    /// Target architecture (0=x86, `1=x86_64`, 2=arm, 3=arm64)
     pub arch: u8,
     pub _padding: [u8; 3],
     pub start_timestamp_ns: u64,
@@ -152,7 +158,8 @@ pub struct NativeTraceHeader {
 impl NativeTraceHeader {
     pub const SIZE: usize = 40;
 
-    pub fn new(record_count: u64, pid: u32, arch: u8) -> Self {
+    #[must_use]
+    pub const fn new(record_count: u64, pid: u32, arch: u8) -> Self {
         NativeTraceHeader {
             magic: NATIVE_MAGIC,
             version: NATIVE_VERSION,
@@ -165,6 +172,7 @@ impl NativeTraceHeader {
         }
     }
 
+    #[must_use]
     pub fn serialize(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(Self::SIZE);
         v.extend_from_slice(&self.magic);
@@ -201,7 +209,7 @@ impl NativeTraceHeader {
     }
 }
 
-/// Serialize a single TraceRecord into native binary (24 bytes fixed)
+/// Serialize a single `TraceRecord` into native binary (24 bytes fixed)
 pub fn serialize_record(rec: &TraceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&rec.seq.to_le_bytes());
     out.extend_from_slice(&rec.pc.to_le_bytes());
@@ -220,7 +228,8 @@ pub fn serialize_record(rec: &TraceRecord, out: &mut Vec<u8>) {
     for _ in (insn_len as usize)..max_insn { out.push(0); }
 }
 
-/// Deserialize one TraceRecord from 51 bytes of native format
+/// Deserialize one `TraceRecord` from 51 bytes of native format
+#[must_use]
 pub fn deserialize_record(data: &[u8], offset: usize) -> Option<TraceRecord> {
     const REC_SIZE: usize = 51;
     if offset + REC_SIZE > data.len() { return None; }
@@ -294,8 +303,10 @@ pub struct DrcovModule {
 }
 
 impl DrcovModule {
-    pub fn contains_rva(&self, rva: u64) -> bool { rva >= self.base && rva < self.end }
-    pub fn size(&self) -> u64 { self.end.saturating_sub(self.base) }
+    #[must_use]
+    pub const fn contains_rva(&self, rva: u64) -> bool { rva >= self.base && rva < self.end }
+    #[must_use]
+    pub const fn size(&self) -> u64 { self.end.saturating_sub(self.base) }
 }
 
 /// Parse a drcov log (text header + binary bb table)
@@ -362,7 +373,8 @@ fn parse_drcov_module_line(line: &str) -> Option<DrcovModule> {
     Some(DrcovModule { id, base, end, entry, path })
 }
 
-/// Convert drcov records to normalized TraceRecords (as BasicBlock events)
+/// Convert drcov records to normalized `TraceRecords` (as `BasicBlock` events)
+#[must_use]
 pub fn drcov_to_trace_records(modules: &[DrcovModule], bbs: &[DrcovBbEntry]) -> Vec<TraceRecord> {
     bbs.iter().enumerate().map(|(i, bb)| {
         let base = modules.get(bb.mod_id as usize).map(|m| m.base).unwrap_or(0);
@@ -375,7 +387,7 @@ pub fn drcov_to_trace_records(modules: &[DrcovModule], bbs: &[DrcovBbEntry]) -> 
 // FRIDA JSON FORMAT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Minimal Frida GumStalker event structure parsed from JSON
+/// Minimal Frida `GumStalker` event structure parsed from JSON
 #[derive(Debug, Clone)]
 pub struct FridaTraceEvent {
     pub kind: String,
@@ -429,7 +441,8 @@ fn parse_hex_or_dec(s: &str) -> u64 {
     }
 }
 
-/// Convert Frida events to normalized TraceRecords
+/// Convert Frida events to normalized `TraceRecords`
+#[must_use]
 pub fn frida_to_trace_records(events: &[FridaTraceEvent]) -> Vec<TraceRecord> {
     events.iter().enumerate().map(|(i, ev)| {
         let event = match ev.kind.as_str() {
@@ -546,6 +559,7 @@ pub struct PtPacket {
 }
 
 /// Scan a raw Intel PT packet stream and emit packets
+#[must_use]
 pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
     let mut packets = Vec::new();
     let mut i = 0usize;
@@ -624,7 +638,8 @@ fn decode_pt_ip(data: &[u8], offset: usize, last_ip: u64, mode: u8) -> (u64, usi
     }
 }
 
-/// Convert decoded PT packets into normalized TraceRecords
+/// Convert decoded PT packets into normalized `TraceRecords`
+#[must_use]
 pub fn pt_to_trace_records(packets: &[PtPacket]) -> Vec<TraceRecord> {
     let mut records = Vec::new();
     let mut seq = 0u64;
@@ -675,6 +690,7 @@ pub enum TraceFormat {
 }
 
 /// Detect the format of a trace file from its first bytes
+#[must_use]
 pub fn detect_format(data: &[u8]) -> TraceFormat {
     if data.len() >= 4 && &data[..4] == b"RTRC" {
         return TraceFormat::NativeBinary;

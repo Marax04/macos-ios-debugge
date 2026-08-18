@@ -732,6 +732,7 @@ impl AttrValue {
     /// successfully and contributed nothing. These accessors are the reading
     /// side; `signed`/`flag` exist so a caller can ask for the form it needs
     /// without matching on the enum.
+    #[must_use]
     pub fn unsigned(&self) -> Option<u64> {
         match *self {
             Self::Addr(v) | Self::Uint(v) | Self::StrOffset(v) => Some(v),
@@ -742,6 +743,7 @@ impl AttrValue {
     }
 
     /// The value as a signed integer.
+    #[must_use]
     pub fn signed(&self) -> Option<i64> {
         match *self {
             Self::Int(v) => Some(v),
@@ -753,7 +755,8 @@ impl AttrValue {
 
     /// The value as a DWARF flag. Any non-zero integer form is true, matching
     /// how `DW_FORM_flag` and `DW_FORM_flag_present` are defined.
-    pub fn flag(&self) -> Option<bool> {
+    #[must_use]
+    pub const fn flag(&self) -> Option<bool> {
         match *self {
             Self::Flag(b) => Some(b),
             Self::Addr(v) | Self::Uint(v) | Self::StrOffset(v) => Some(v != 0),

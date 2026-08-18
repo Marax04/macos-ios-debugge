@@ -58,6 +58,7 @@ use iced_x86::{Instruction, Mnemonic, OpKind, Register};
 /// memory jumps where the memory cell **contains** the destination IP.  The
 /// caller decides which semantics are wanted by calling this helper or not.
 #[inline]
+#[must_use]
 pub fn peel_deref(e: IrExpr) -> IrExpr {
     match e {
         IrExpr::Deref(inner, _) => *inner,

@@ -103,7 +103,7 @@ pub struct Prefix {
 }
 
 impl Prefix {
-    fn new(
+    const fn new(
         byte: u8,
         group: PrefixGroup,
         name: &'static str,
@@ -169,7 +169,7 @@ pub struct PrefixSet {
 
 impl PrefixSet {
     #[must_use]
-    pub fn is_vex_encoded(&self) -> bool {
+    pub const fn is_vex_encoded(&self) -> bool {
         matches!(
             self.escape,
             Some(EscapeEncoding::Vex2(_) | EscapeEncoding::Vex3(_, _))
@@ -177,17 +177,17 @@ impl PrefixSet {
     }
 
     #[must_use]
-    pub fn is_evex_encoded(&self) -> bool {
+    pub const fn is_evex_encoded(&self) -> bool {
         matches!(self.escape, Some(EscapeEncoding::Evex(_, _, _)))
     }
 
     #[must_use]
-    pub fn is_xop_encoded(&self) -> bool {
+    pub const fn is_xop_encoded(&self) -> bool {
         matches!(self.escape, Some(EscapeEncoding::Xop(_, _)))
     }
 
     #[must_use]
-    pub fn effective_operand_size_override(&self) -> bool {
+    pub const fn effective_operand_size_override(&self) -> bool {
         self.operand_size_override || self.rex_w
     }
 }
@@ -274,7 +274,7 @@ impl X86PrefixAnalyzer {
     }
 
     #[must_use]
-    pub fn bitness(&self) -> u32 {
+    pub const fn bitness(&self) -> u32 {
         self.bitness
     }
 

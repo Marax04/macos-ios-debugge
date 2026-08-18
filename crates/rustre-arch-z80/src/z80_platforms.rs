@@ -24,7 +24,7 @@ pub enum SpectrumBorder {
 
 impl SpectrumBorder {
     #[must_use]
-    pub fn from_bits(v: u8) -> Self {
+    pub const fn from_bits(v: u8) -> Self {
         match v & 7 {
             0 => Self::Black,
             1 => Self::Blue,
@@ -37,7 +37,7 @@ impl SpectrumBorder {
         }
     }
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Black   => "BLACK",
             Self::Blue    => "BLUE",
@@ -63,12 +63,12 @@ impl UlaOutput {
     }
     /// Bit 3 — MIC socket output (tape save).
     #[must_use]
-    pub fn mic(self) -> bool {
+    pub const fn mic(self) -> bool {
         (self.0 >> 3) & 1 != 0
     }
     /// Bit 4 — EAR socket output (beeper).
     #[must_use]
-    pub fn ear(self) -> bool {
+    pub const fn ear(self) -> bool {
         (self.0 >> 4) & 1 != 0
     }
 }
@@ -80,12 +80,12 @@ pub struct UlaInput(pub u8);
 impl UlaInput {
     /// Bits 4:0 — keyboard row (active-low).
     #[must_use]
-    pub fn keyboard(self) -> u8 {
+    pub const fn keyboard(self) -> u8 {
         self.0 & 0x1F
     }
     /// Bit 6 — EAR input (tape load).
     #[must_use]
-    pub fn ear(self) -> bool {
+    pub const fn ear(self) -> bool {
         (self.0 >> 6) & 1 != 0
     }
 }
@@ -113,22 +113,22 @@ pub struct Spectrum128Page(pub u8);
 impl Spectrum128Page {
     /// Bits 2:0 — which RAM bank (0-7) is paged into 0xC000.
     #[must_use]
-    pub fn ram_bank(self) -> u8 {
+    pub const fn ram_bank(self) -> u8 {
         self.0 & 7
     }
     /// Bit 3 — screen: 0 = normal (bank 5), 1 = shadow (bank 7).
     #[must_use]
-    pub fn shadow_screen(self) -> bool {
+    pub const fn shadow_screen(self) -> bool {
         (self.0 >> 3) & 1 != 0
     }
     /// Bit 4 — ROM: 0 = 128k editor ROM, 1 = 48k BASIC ROM.
     #[must_use]
-    pub fn rom_select(self) -> u8 {
+    pub const fn rom_select(self) -> u8 {
         (self.0 >> 4) & 1
     }
     /// Bit 5 — paging lock: once set, further paging is disabled until reset.
     #[must_use]
-    pub fn paging_locked(self) -> bool {
+    pub const fn paging_locked(self) -> bool {
         (self.0 >> 5) & 1 != 0
     }
 }
@@ -153,7 +153,7 @@ pub enum SpectrumRegion {
 impl SpectrumRegion {
     /// Classify an address into its Spectrum region.
     #[must_use]
-    pub fn from_address(addr: u16) -> Self {
+    pub const fn from_address(addr: u16) -> Self {
         match addr {
             0x0000..=0x3FFF => Self::Rom,
             0x4000..=0x57FF => Self::DisplayFile,
@@ -164,7 +164,7 @@ impl SpectrumRegion {
         }
     }
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Rom           => "ROM",
             Self::DisplayFile   => "DISPLAY_FILE",
@@ -226,7 +226,7 @@ pub struct MsxSlotSelect(pub u8);
 impl MsxSlotSelect {
     /// Return the primary slot for the given page (0-3).
     #[must_use]
-    pub fn slot_for_page(self, page: u8) -> u8 {
+    pub const fn slot_for_page(self, page: u8) -> u8 {
         (self.0 >> (page * 2)) & 3
     }
 }
@@ -460,10 +460,10 @@ impl GbFlags {
     pub const HALF_CARRY: u8 = 0x20;
     pub const CARRY:      u8 = 0x10;
 
-    #[must_use] pub fn zero(self)       -> bool { self.0 & Self::ZERO       != 0 }
-    #[must_use] pub fn subtract(self)   -> bool { self.0 & Self::SUBTRACT   != 0 }
-    #[must_use] pub fn half_carry(self) -> bool { self.0 & Self::HALF_CARRY != 0 }
-    #[must_use] pub fn carry(self)      -> bool { self.0 & Self::CARRY      != 0 }
+    #[must_use] pub const fn zero(self)       -> bool { self.0 & Self::ZERO       != 0 }
+    #[must_use] pub const fn subtract(self)   -> bool { self.0 & Self::SUBTRACT   != 0 }
+    #[must_use] pub const fn half_carry(self) -> bool { self.0 & Self::HALF_CARRY != 0 }
+    #[must_use] pub const fn carry(self)      -> bool { self.0 & Self::CARRY      != 0 }
 }
 
 /// Decode a GB-Z80 CB-prefixed instruction (SWAP/bit ops).
@@ -672,7 +672,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
     }
 }
 
-fn gb_alu_mnemonic(y: u8) -> &'static str {
+const fn gb_alu_mnemonic(y: u8) -> &'static str {
     match y {
         0 => "ADD", 1 => "ADC", 2 => "SUB", 3 => "SBC",
         4 => "AND", 5 => "XOR", 6 => "OR",  _ => "CP",
@@ -714,7 +714,7 @@ pub enum GbRegion {
 
 impl GbRegion {
     #[must_use]
-    pub fn from_address(addr: u16) -> Self {
+    pub const fn from_address(addr: u16) -> Self {
         match addr {
             0x0000..=0x00FF => Self::BootOrVectors,
             0x0100..=0x014F => Self::CartHeader,
@@ -733,7 +733,7 @@ impl GbRegion {
         }
     }
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::BootOrVectors => "BOOT/VECTORS",
             Self::CartHeader    => "CART_HEADER",
@@ -833,7 +833,7 @@ pub enum Z80Platform {
 
 impl Z80Platform {
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::ZxSpectrum48k  => "ZX Spectrum 48K",
             Self::ZxSpectrum128k => "ZX Spectrum 128K",

@@ -1,5 +1,5 @@
-//! WebAssembly type system: ValType, FuncType, ResultType, RefType, TableType,
-//! MemType, GlobalType; type compatibility checking; LEB128 encoding; type
+//! WebAssembly type system: `ValType`, `FuncType`, `ResultType`, `RefType`, `TableType`,
+//! `MemType`, `GlobalType`; type compatibility checking; LEB128 encoding; type
 //! canonicalization; function type deduplication.
 
 use std::collections::HashMap;
@@ -195,19 +195,19 @@ impl ResultType {
 
     /// Create a result type from a vector of value types.
     #[must_use]
-    pub fn from_vec(types: Vec<WasmValType>) -> Self {
+    pub const fn from_vec(types: Vec<WasmValType>) -> Self {
         Self { types }
     }
 
     /// Return the number of types.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.types.len()
     }
 
     /// Return `true` when the result type is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
 
@@ -222,6 +222,7 @@ impl ResultType {
     /// Decode a result type from `bytes` at `pos`.
     ///
     /// Returns `(result_type, bytes_consumed)` on success.
+    #[must_use]
     pub fn decode(bytes: &[u8], pos: usize) -> Option<(Self, usize)> {
         let (count, n) = decode_uleb128(bytes, pos)?;
         let count = count as usize;
@@ -346,7 +347,7 @@ pub struct WasmTableType {
 impl WasmTableType {
     /// Create a new table type with no maximum.
     #[must_use]
-    pub fn new(element_type: WasmRefType, min: u32) -> Self {
+    pub const fn new(element_type: WasmRefType, min: u32) -> Self {
         Self {
             element_type,
             min,
@@ -356,7 +357,7 @@ impl WasmTableType {
 
     /// Create a new table type with both min and max.
     #[must_use]
-    pub fn bounded(element_type: WasmRefType, min: u32, max: u32) -> Self {
+    pub const fn bounded(element_type: WasmRefType, min: u32, max: u32) -> Self {
         Self {
             element_type,
             min,
@@ -433,13 +434,13 @@ pub struct WasmMemType {
 impl WasmMemType {
     /// Create a new memory type with no maximum.
     #[must_use]
-    pub fn new(min: u32) -> Self {
+    pub const fn new(min: u32) -> Self {
         Self { min, max: None }
     }
 
     /// Create a new memory type with both min and max.
     #[must_use]
-    pub fn bounded(min: u32, max: u32) -> Self {
+    pub const fn bounded(min: u32, max: u32) -> Self {
         Self {
             min,
             max: Some(max),
@@ -448,7 +449,7 @@ impl WasmMemType {
 
     /// Minimum size in bytes.
     #[must_use]
-    pub fn min_bytes(&self) -> u64 {
+    pub const fn min_bytes(&self) -> u64 {
         self.min as u64 * 65536
     }
 
@@ -561,7 +562,7 @@ pub struct WasmGlobalType {
 impl WasmGlobalType {
     /// Create a new global type.
     #[must_use]
-    pub fn new(val_type: WasmValType, mutability: WasmMutability) -> Self {
+    pub const fn new(val_type: WasmValType, mutability: WasmMutability) -> Self {
         Self { val_type, mutability }
     }
 
@@ -655,19 +656,20 @@ impl TypeRegistry {
 
     /// Number of unique types in the registry.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.types.len()
     }
 
     /// Returns `true` when the registry is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
 
     /// Encode the entire type section (without section header) to binary.
     ///
     /// Format: `uleb128(count)` then each functype encoded as `0x60 params results`.
+    #[must_use]
     pub fn encode_type_section(&self) -> Vec<u8> {
         let mut out = Vec::new();
         encode_uleb128(self.types.len() as u64, &mut out);
@@ -678,6 +680,7 @@ impl TypeRegistry {
     }
 
     /// Decode a type section (without section header) from `bytes`.
+    #[must_use]
     pub fn decode_type_section(bytes: &[u8]) -> Option<Self> {
         let (count, n) = decode_uleb128(bytes, 0)?;
         let count = count as usize;

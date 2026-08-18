@@ -44,7 +44,7 @@ pub enum FieldType {
 impl FieldType {
     /// Returns the byte size of this field type.
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         match self {
             FieldType::U8 | FieldType::I8 => 1,
             FieldType::U16 | FieldType::I16 => 2,
@@ -56,7 +56,7 @@ impl FieldType {
 
     /// Infer a field type from byte length (defaults to Bytes for ambiguous lengths).
     #[must_use]
-    pub fn from_size(size: usize) -> Self {
+    pub const fn from_size(size: usize) -> Self {
         match size {
             1 => FieldType::U8,
             2 => FieldType::U16,
@@ -87,7 +87,7 @@ pub enum FieldValue {
 impl FieldValue {
     /// Attempt to interpret the value as a u64 (for integer types).
     #[must_use]
-    pub fn as_u64(&self) -> Option<u64> {
+    pub const fn as_u64(&self) -> Option<u64> {
         match self {
             FieldValue::U8(v) => Some(*v as u64),
             FieldValue::U16(v) => Some(*v as u64),
@@ -103,7 +103,7 @@ impl FieldValue {
 
     /// Attempt to interpret the value as an i64.
     #[must_use]
-    pub fn as_i64(&self) -> Option<i64> {
+    pub const fn as_i64(&self) -> Option<i64> {
         match self {
             FieldValue::I8(v) => Some(*v as i64),
             FieldValue::I16(v) => Some(*v as i64),
@@ -323,7 +323,7 @@ pub struct StructExtractor;
 impl StructExtractor {
     /// Create a new extractor.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -487,6 +487,7 @@ impl StructExtractor {
 
 /// Extract multiple struct instances by scanning `buf` for the pattern defined by
 /// `raw_fields_list` (already found via template search) and applying `schema`.
+#[must_use]
 pub fn extract_all_matches(
     schema: &StructSchema,
     raw_fields_list: &[(usize, HashMap<String, Vec<u8>>)],

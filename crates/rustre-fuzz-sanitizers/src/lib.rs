@@ -4104,7 +4104,7 @@ impl AsanShadow {
     /// enough to run off the end of the tracked window would keep the loop
     /// stepping one granule at a time across the whole address space, doing
     /// nothing on every iteration.
-    fn tracked_end(&self) -> u64 {
+    const fn tracked_end(&self) -> u64 {
         self.offset
             .saturating_add((self.shadow.len() as u64).saturating_mul(ASAN_SHADOW_GRANULARITY))
     }

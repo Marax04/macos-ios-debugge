@@ -88,7 +88,7 @@ impl VmOperand {
 
     /// Total encoded bytes this operand occupies in the stream.
     #[must_use]
-    pub fn encoded_bytes(&self) -> usize {
+    pub const fn encoded_bytes(&self) -> usize {
         self.width.bytes()
     }
 }
@@ -114,7 +114,7 @@ pub enum InsnCategory {
 impl InsnCategory {
     /// Short label string.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Stack       => "stack",
             Self::Arithmetic  => "arith",
@@ -253,7 +253,7 @@ pub struct VmBasicBlock {
 impl VmBasicBlock {
     /// Create an empty block with the given ID and start offset.
     #[must_use]
-    pub fn new(id: u32, start_offset: usize) -> Self {
+    pub const fn new(id: u32, start_offset: usize) -> Self {
         Self {
             id,
             start_offset,
@@ -273,19 +273,19 @@ impl VmBasicBlock {
 
     /// Number of instructions in this block.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.instructions.len()
     }
 
     /// `true` if the block has no instructions.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instructions.is_empty()
     }
 
     /// Size of the block in bytecode bytes.
     #[must_use]
-    pub fn byte_size(&self) -> usize {
+    pub const fn byte_size(&self) -> usize {
         self.end_offset.saturating_sub(self.start_offset)
     }
 }
@@ -312,7 +312,7 @@ pub struct VmCfg {
     /// Each node weight is the block ID it represents.
     #[serde(skip)]
     graph: DiGraph<u32, ()>,
-    /// Map from block ID → petgraph NodeIndex, kept in sync with `graph`.
+    /// Map from block ID → petgraph `NodeIndex`, kept in sync with `graph`.
     #[serde(skip)]
     node_index: HashMap<u32, NodeIndex>,
 }
@@ -406,7 +406,7 @@ impl VmCfg {
     /// Expose a reference to the underlying petgraph [`DiGraph`] for callers
     /// that want to run graph algorithms (e.g. dominator tree computation).
     #[must_use]
-    pub fn digraph(&self) -> &DiGraph<u32, ()> {
+    pub const fn digraph(&self) -> &DiGraph<u32, ()> {
         &self.graph
     }
 }
@@ -467,13 +467,13 @@ impl VmFunctionList {
 
     /// Number of functions.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.functions.len()
     }
 
     /// `true` if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.functions.is_empty()
     }
 

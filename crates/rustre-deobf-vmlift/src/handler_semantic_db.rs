@@ -240,13 +240,13 @@ impl HandlerDb {
 
     /// Total handlers registered.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.handlers.len()
     }
 
     /// Return `true` if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.handlers.is_empty()
     }
 
@@ -1702,7 +1702,7 @@ pub struct HandlerMatcher<'db> {
 impl<'db> HandlerMatcher<'db> {
     /// Create a matcher for the given database.
     #[must_use]
-    pub fn new(db: &'db HandlerDb) -> Self {
+    pub const fn new(db: &'db HandlerDb) -> Self {
         Self { db }
     }
 

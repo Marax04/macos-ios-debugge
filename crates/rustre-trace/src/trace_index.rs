@@ -24,6 +24,7 @@ pub struct IndexEntry {
 }
 
 impl IndexEntry {
+    #[must_use]
     pub const fn new(seq: u64, record_idx: usize, timestamp_ns: u64) -> Self {
         Self { seq, record_idx, timestamp_ns }
     }
@@ -34,13 +35,14 @@ impl IndexEntry {
 /// Index from instruction address → sorted list of index entries.
 #[derive(Debug, Clone, Default)]
 pub struct AddressIndex {
-    /// address → Vec<(seq, record_idx)>
+    /// address → Vec<(seq, `record_idx`)>
     inner: HashMap<u64, Vec<IndexEntry>>,
     /// Total number of indexed entries.
     pub total: usize,
 }
 
 impl AddressIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -57,6 +59,7 @@ impl AddressIndex {
     }
 
     /// Return all addresses in the index.
+    #[must_use]
     pub fn all_addresses(&self) -> Vec<u64> {
         let mut addrs: Vec<u64> = self.inner.keys().copied().collect();
         addrs.sort_unstable();
@@ -64,6 +67,7 @@ impl AddressIndex {
     }
 
     /// Return how many unique addresses are indexed.
+    #[must_use]
     pub fn unique_address_count(&self) -> usize {
         self.inner.len()
     }
@@ -74,6 +78,7 @@ impl AddressIndex {
     }
 
     /// Return the top-N hottest addresses by hit count.
+    #[must_use]
     pub fn top_n_hot(&self, n: usize) -> Vec<(u64, usize)> {
         let mut pairs: Vec<(u64, usize)> = self
             .inner
@@ -89,6 +94,7 @@ impl AddressIndex {
     }
 
     /// Addresses within `[start, end)` that were executed, sorted.
+    #[must_use]
     pub fn in_range(&self, start: u64, end: u64) -> Vec<u64> {
         let mut addrs: Vec<u64> = self
             .inner
@@ -101,6 +107,7 @@ impl AddressIndex {
     }
 
     /// Build from a session (instruction events only).
+    #[must_use]
     pub fn from_session(session: &TraceSession) -> Self {
         let mut idx = Self::new();
         for (i, rec) in session.records.iter().enumerate() {
@@ -117,7 +124,7 @@ impl AddressIndex {
 /// Tracks function call/return pairs to identify per-function execution ranges.
 #[derive(Debug, Clone, Default)]
 pub struct FunctionIndex {
-    /// function_entry_addr → list of (call_seq, return_seq) pairs.
+    /// `function_entry_addr` → list of (`call_seq`, `return_seq`) pairs.
     calls: HashMap<u64, Vec<CallSpan>>,
 }
 
@@ -131,11 +138,13 @@ pub struct CallSpan {
 }
 
 impl FunctionIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Build from a session by matching Call and Return events.
+    #[must_use]
     pub fn from_session(session: &TraceSession) -> Self {
         let mut idx = Self::new();
         let mut stack: Vec<(u64, u64, u32)> = Vec::new(); // (callee, call_seq, tid)
@@ -183,6 +192,7 @@ impl FunctionIndex {
     }
 
     /// Return all unique function entry addresses seen.
+    #[must_use]
     pub fn all_functions(&self) -> Vec<u64> {
         let mut addrs: Vec<u64> = self.calls.keys().copied().collect();
         addrs.sort_unstable();
@@ -190,6 +200,7 @@ impl FunctionIndex {
     }
 
     /// Return the top-N most-called functions.
+    #[must_use]
     pub fn top_called(&self, n: usize) -> Vec<(u64, usize)> {
         let mut pairs: Vec<(u64, usize)> = self
             .calls
@@ -205,6 +216,7 @@ impl FunctionIndex {
     }
 
     /// All open (unreturned) spans.
+    #[must_use]
     pub fn open_spans(&self) -> Vec<&CallSpan> {
         self.calls
             .values()
@@ -216,13 +228,14 @@ impl FunctionIndex {
 
 // ─── TimeIndex ────────────────────────────────────────────────────────────────
 
-/// Index by time: BTreeMap<timestamp_ns → seq> for range queries.
+/// Index by time: `BTreeMap`<`timestamp_ns` → seq> for range queries.
 #[derive(Debug, Clone, Default)]
 pub struct TimeIndex {
     inner: BTreeMap<u64, u64>,
 }
 
 impl TimeIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -232,6 +245,7 @@ impl TimeIndex {
     }
 
     /// Return all sequence numbers in the time range `[start_ns, end_ns]`.
+    #[must_use]
     pub fn seqs_in_range(&self, start_ns: u64, end_ns: u64) -> Vec<u64> {
         self.inner
             .range(start_ns..=end_ns)
@@ -240,16 +254,19 @@ impl TimeIndex {
     }
 
     /// The earliest timestamp in the index.
+    #[must_use]
     pub fn min_time(&self) -> Option<u64> {
         self.inner.keys().next().copied()
     }
 
     /// The latest timestamp in the index.
+    #[must_use]
     pub fn max_time(&self) -> Option<u64> {
         self.inner.keys().next_back().copied()
     }
 
     /// Duration covered by the index.
+    #[must_use]
     pub fn duration_ns(&self) -> u64 {
         match (self.min_time(), self.max_time()) {
             (Some(a), Some(b)) => b.saturating_sub(a),
@@ -257,6 +274,7 @@ impl TimeIndex {
         }
     }
 
+    #[must_use]
     pub fn from_session(session: &TraceSession) -> Self {
         let mut idx = Self::new();
         for rec in &session.records {
@@ -271,11 +289,12 @@ impl TimeIndex {
 /// Index that supports fast lookup by sequence number range using a sorted vec.
 #[derive(Debug, Clone, Default)]
 pub struct SequenceRangeIndex {
-    /// Sorted (seq, record_idx) pairs.
+    /// Sorted (seq, `record_idx`) pairs.
     entries: Vec<(u64, usize)>,
 }
 
 impl SequenceRangeIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -285,6 +304,7 @@ impl SequenceRangeIndex {
         self.entries.insert(pos, (seq, record_idx));
     }
 
+    #[must_use]
     pub fn from_session(session: &TraceSession) -> Self {
         let mut idx = Self::new();
         for (i, rec) in session.records.iter().enumerate() {
@@ -294,17 +314,20 @@ impl SequenceRangeIndex {
     }
 
     /// Return record indices for sequences in `[start, end]`.
+    #[must_use]
     pub fn indices_in_range(&self, start: u64, end: u64) -> Vec<usize> {
         let lo = self.entries.partition_point(|(s, _)| *s < start);
         let hi = self.entries.partition_point(|(s, _)| *s <= end);
         self.entries[lo..hi].iter().map(|(_, idx)| *idx).collect()
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }
@@ -325,6 +348,7 @@ pub struct FullTraceIndex {
 
 impl FullTraceIndex {
     /// Build a complete index from a session.
+    #[must_use]
     pub fn build(session: &TraceSession) -> Self {
         let address = AddressIndex::from_session(session);
         let function = FunctionIndex::from_session(session);
@@ -361,11 +385,13 @@ impl FullTraceIndex {
     }
 
     /// Return record indices for a seq range, using the sequence index.
+    #[must_use]
     pub fn records_in_seq_range(&self, start: u64, end: u64) -> Vec<usize> {
         self.sequence.indices_in_range(start, end)
     }
 
     /// Summary statistics about the index.
+    #[must_use]
     pub fn stats(&self) -> IndexStats {
         IndexStats {
             unique_addresses: self.address.unique_address_count(),
@@ -389,7 +415,7 @@ pub struct IndexStats {
     pub thread_count: usize,
 }
 
-fn event_type_name(event: &TraceEvent) -> &'static str {
+const fn event_type_name(event: &TraceEvent) -> &'static str {
     match event {
         TraceEvent::Instruction { .. } => "Instruction",
         TraceEvent::MemRead { .. } => "MemRead",

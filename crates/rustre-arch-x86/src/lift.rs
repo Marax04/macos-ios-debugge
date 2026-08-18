@@ -558,7 +558,7 @@ fn widen_gpr32_write(instr: LlilInstruction) -> LlilInstruction {
 /// saturating to `Size::OWord` (128-bit) as before. Anything wider than
 /// 512 bits still saturates to `Size::ZWord`.
 #[must_use]
-pub fn size_from_bytes(bytes: usize) -> Size {
+pub const fn size_from_bytes(bytes: usize) -> Size {
     match bytes {
         0 | 1 => Size::Byte,
         2 => Size::Word,
@@ -596,7 +596,7 @@ pub struct X86Lifter {
 impl X86Lifter {
     /// Create a lifter for the given bitness (16, 32, or 64).
     #[must_use]
-    pub fn new(bits: u32) -> Self {
+    pub const fn new(bits: u32) -> Self {
         Self {
             bits,
             temp_counter: 0,
@@ -616,7 +616,7 @@ impl X86Lifter {
     /// Filando `base` fra un'istruzione e la successiva (con [`Self::temp_count`]) i
     /// temporanei restano unici sull'intera funzione.
     #[must_use]
-    pub fn with_temp_base(bits: u32, base: u32) -> Self {
+    pub const fn with_temp_base(bits: u32, base: u32) -> Self {
         Self {
             bits,
             temp_counter: base,
@@ -643,13 +643,13 @@ impl X86Lifter {
 
     /// The configured bitness.
     #[must_use]
-    pub fn bits(&self) -> u32 {
+    pub const fn bits(&self) -> u32 {
         self.bits
     }
 
     /// The pointer / native operand width as an LLIL [`Size`].
     #[must_use]
-    pub fn ptr_size(&self) -> Size {
+    pub const fn ptr_size(&self) -> Size {
         match self.bits {
             16 => Size::Word,
             32 => Size::DWord,
@@ -659,7 +659,7 @@ impl X86Lifter {
 
     /// Pointer width in bytes.
     #[must_use]
-    pub fn ptr_bytes(&self) -> u64 {
+    pub const fn ptr_bytes(&self) -> u64 {
         match self.bits {
             16 => 2,
             32 => 4,
@@ -669,7 +669,7 @@ impl X86Lifter {
 
     /// The architectural stack-pointer register name for this bitness.
     #[must_use]
-    pub fn sp_name(&self) -> &'static str {
+    pub const fn sp_name(&self) -> &'static str {
         match self.bits {
             16 => "sp",
             32 => "esp",
@@ -679,7 +679,7 @@ impl X86Lifter {
 
     /// The architectural instruction-pointer register name for this bitness.
     #[must_use]
-    pub fn ip_name(&self) -> &'static str {
+    pub const fn ip_name(&self) -> &'static str {
         match self.bits {
             16 => "ip",
             32 => "eip",
@@ -688,7 +688,7 @@ impl X86Lifter {
     }
 
     /// Allocate a fresh temporary register.
-    fn new_temp(&mut self) -> LlilRegister {
+    const fn new_temp(&mut self) -> LlilRegister {
         let id = self.temp_counter;
         self.temp_counter = self.temp_counter.wrapping_add(1);
         LlilRegister::Temporary(id)
@@ -696,7 +696,7 @@ impl X86Lifter {
 
     /// Number of temporaries allocated so far.
     #[must_use]
-    pub fn temp_count(&self) -> u32 {
+    pub const fn temp_count(&self) -> u32 {
         self.temp_counter
     }
 
@@ -3738,7 +3738,7 @@ impl EmitCtx<'_> {
 
     /// Address of the instruction immediately following the current one
     /// (the natural fall-through).
-    fn fall_through(&self) -> Address {
+    const fn fall_through(&self) -> Address {
         Address::new(self.address.0.wrapping_add(self.size as u64))
     }
 }
@@ -3796,7 +3796,7 @@ pub fn iced_bytes(iced: &IcedInstruction) -> Vec<u8> {
 /// Returns `true` if the instruction carries a REP/REPE/REPNE prefix or is a
 /// genuine string operation (used to disambiguate `movsd`/`cmpsd` between the
 /// string form and the SSE scalar-double form).
-fn is_string_op(iced: &IcedInstruction) -> bool {
+const fn is_string_op(iced: &IcedInstruction) -> bool {
     matches!(
         iced.code(),
         Code::Movsb_m8_m8
@@ -4111,7 +4111,7 @@ impl X86Lifter {
 
     /// Pure segment/width -> intrinsic mapping, with no gate: exhaustively
     /// testable, and `None` for every non-segment register.
-    fn segment_intrinsic_name(seg: Register, size: Size) -> Option<&'static str> {
+    const fn segment_intrinsic_name(seg: Register, size: Size) -> Option<&'static str> {
         let gs = match seg {
             Register::GS => true,
             Register::FS => false,
@@ -4244,7 +4244,7 @@ fn is_negative(value: LlilExpr, size: Size) -> LlilExpr {
 }
 
 /// Largest unsigned value representable in `size` (all bits set).
-fn size_max_unsigned(size: Size) -> u64 {
+const fn size_max_unsigned(size: Size) -> u64 {
     let bits = size.bits();
     if bits >= 64 {
         u64::MAX
@@ -5584,8 +5584,8 @@ impl X86Lifter {
     /// between 0 and 31. When the destination is 64 bits wide, the processor
     /// masks the upper two bits of the count, providing a count in the range
     /// of 0 to 63." SHLX/SHRX/SARX state the same rule ("When the operand
-    /// size is 32, bits [31:5] of shft_cnt are ignored; when the operand size
-    /// is 64, bits [63:6] of shft_cnt are ignored").
+    /// size is 32, bits [31:5] of `shft_cnt` are ignored; when the operand size
+    /// is 64, bits [63:6] of `shft_cnt` are ignored").
     ///
     /// The mask is 5 bits for ALL sub-64-bit operand widths — an 8-bit shift
     /// by cl=0x21 really shifts by 1, and by cl=12 shifts everything out; it
@@ -7128,8 +7128,8 @@ impl X86Lifter {
     /// `writes_cf` therefore selects PVALIDATE's extra output.
     ///
     /// The status code and the flags derived from it are modelled as
-    /// intrinsics: the manual specifies the *return codes* (SUCCESS/FAIL_INPUT/
-    /// FAIL_PERMISSION/…) but not a bit-level formula mapping a code onto each
+    /// intrinsics: the manual specifies the *return codes* (`SUCCESS/FAIL_INPUT`/
+    /// `FAIL_PERMISSION`/…) but not a bit-level formula mapping a code onto each
     /// flag, so inventing e.g. `ZF = (rc == 0)` would be a guess. Instead each
     /// flag reads a `<name>_<flag>` intrinsic, matching the `lift_rdrand`
     /// precedent (`CF = rdrand_ok`) — the dependency is recorded honestly
@@ -7413,7 +7413,7 @@ impl X86Lifter {
     }
 
     /// Effect-only intrinsic that nevertheless writes registers the ISA
-    /// defines implicitly: the VIA PadLock bulk-crypto family (`XCRYPT*`,
+    /// defines implicitly: the VIA `PadLock` bulk-crypto family (`XCRYPT*`,
     /// `XSHA*`, `XSTORE`, `CCS_*`, `MONTMUL`) consumes ECX and advances
     /// ESI/EDI, `CMPXCHG8B` loads EDX:EAX on failure, `ENCLV` returns in
     /// EAX/EBX/ECX/EDX, `FRSTOR` restores the whole x87/MMX file, and the wide

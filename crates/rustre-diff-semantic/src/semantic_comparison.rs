@@ -48,6 +48,7 @@ impl NormalizedILFunction {
     }
 
     /// Semantic hash: FNV-1a over all statement tokens.
+    #[must_use]
     pub fn semantic_hash(&self) -> u64 {
         let mut h = 0xcbf2_9ce4_8422_2325_u64;
         for stmt in &self.statements {
@@ -62,7 +63,8 @@ impl NormalizedILFunction {
     }
 
     /// Number of statements.
-    pub fn stmt_count(&self) -> usize {
+    #[must_use]
+    pub const fn stmt_count(&self) -> usize {
         self.statements.len()
     }
 }
@@ -97,7 +99,8 @@ pub enum StmtKind {
 }
 
 impl StmtKind {
-    pub fn as_str(&self) -> &str {
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
         match self {
             Self::Assign => "ASSIGN",
             Self::Call => "CALL",
@@ -130,6 +133,7 @@ pub struct SemanticDistance {
 
 impl SemanticDistance {
     /// Compute the full distance between two normalized functions.
+    #[must_use]
     pub fn compute(a: &NormalizedILFunction, b: &NormalizedILFunction) -> Self {
         let edit = normalized_edit_distance(&a.statements, &b.statements);
         let jaccard = jaccard_stmt_distance(&a.statements, &b.statements);
@@ -150,11 +154,13 @@ impl SemanticDistance {
     }
 
     /// Returns the similarity (1.0 − combined distance).
+    #[must_use]
     pub fn similarity(&self) -> f64 {
         (1.0 - self.combined).clamp(0.0, 1.0)
     }
 
     /// Returns `true` if the functions are semantically close (combined < threshold).
+    #[must_use]
     pub fn is_close(&self, threshold: f64) -> bool {
         self.combined <= threshold
     }
@@ -188,7 +194,8 @@ pub struct EquivalenceCheck {
 
 impl EquivalenceCheck {
     /// Default settings.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             max_edit_fraction: 0.0,
             use_hash_fast_path: true,
@@ -196,7 +203,8 @@ impl EquivalenceCheck {
     }
 
     /// Builder: set max edit fraction for `ConstantDifferent` detection.
-    pub fn with_max_edit_fraction(mut self, f: f64) -> Self {
+    #[must_use]
+    pub const fn with_max_edit_fraction(mut self, f: f64) -> Self {
         // `clamp` propagates NaN; a NaN bound makes every comparison against it
         // false, so no difference would ever be classified.
         self.max_edit_fraction = if f.is_nan() { 0.0 } else { f.clamp(0.0, 1.0) };
@@ -204,6 +212,7 @@ impl EquivalenceCheck {
     }
 
     /// Check equivalence between two normalized functions.
+    #[must_use]
     pub fn check(&self, a: &NormalizedILFunction, b: &NormalizedILFunction) -> EquivalenceResult {
         // Fast path: hash equality
         if self.use_hash_fast_path && a.semantic_hash() == b.semantic_hash() {
@@ -261,6 +270,7 @@ pub struct SemanticReport {
 
 impl SemanticReport {
     /// Compute the full report.
+    #[must_use]
     pub fn compute(
         a: &NormalizedILFunction,
         b: &NormalizedILFunction,
@@ -290,7 +300,8 @@ impl SemanticReport {
     }
 
     /// Returns `true` if the functions are considered equivalent.
-    pub fn is_equivalent(&self) -> bool {
+    #[must_use]
+    pub const fn is_equivalent(&self) -> bool {
         matches!(
             self.equivalence,
             EquivalenceResult::Equivalent | EquivalenceResult::ConstantDifferent
@@ -298,11 +309,13 @@ impl SemanticReport {
     }
 
     /// Similarity in [0, 1].
+    #[must_use]
     pub fn similarity(&self) -> f64 {
         self.distance.similarity()
     }
 
     /// Change summary: `"X added, Y removed, Z shared"`.
+    #[must_use]
     pub fn change_summary(&self) -> String {
         format!(
             "{} added, {} removed, {} shared",
@@ -324,6 +337,7 @@ pub struct SemanticComparison {
 
 impl SemanticComparison {
     /// Create with default settings.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             checker: EquivalenceCheck::new(),
@@ -332,25 +346,29 @@ impl SemanticComparison {
     }
 
     /// Builder: configure the equivalence checker.
-    pub fn with_checker(mut self, checker: EquivalenceCheck) -> Self {
+    #[must_use]
+    pub const fn with_checker(mut self, checker: EquivalenceCheck) -> Self {
         self.checker = checker;
         self
     }
 
     /// Builder: set minimum similarity for bulk results.
-    pub fn with_min_similarity(mut self, s: f64) -> Self {
+    #[must_use]
+    pub const fn with_min_similarity(mut self, s: f64) -> Self {
         // `clamp` propagates NaN; a NaN threshold rejects every result silently.
         self.min_similarity = if s.is_nan() { 0.0 } else { s.clamp(0.0, 1.0) };
         self
     }
 
     /// Compare a single pair of functions.
+    #[must_use]
     pub fn compare(&self, a: &NormalizedILFunction, b: &NormalizedILFunction) -> SemanticReport {
         SemanticReport::compute(a, b, &self.checker)
     }
 
     /// Bulk compare: for each function in `old_funcs`, find the best semantic
     /// match in `new_funcs` and return all reports above `min_similarity`.
+    #[must_use]
     pub fn compare_bulk(
         &self,
         old_funcs: &[NormalizedILFunction],

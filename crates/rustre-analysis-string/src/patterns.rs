@@ -289,7 +289,7 @@ impl PatternMatcher {
 
     /// Return the number of patterns registered.
     #[must_use]
-    pub fn pattern_count(&self) -> usize {
+    pub const fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
 
@@ -352,7 +352,7 @@ impl InterestingString {
 
     /// Return `true` if this string matched at least one pattern.
     #[must_use]
-    pub fn has_matches(&self) -> bool {
+    pub const fn has_matches(&self) -> bool {
         !self.matches.is_empty()
     }
 

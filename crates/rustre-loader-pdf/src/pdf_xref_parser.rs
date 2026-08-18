@@ -101,13 +101,13 @@ pub struct XrefSubsection {
 impl XrefSubsection {
     /// Create a new subsection.
     #[must_use]
-    pub fn new(first_object: u32) -> Self {
+    pub const fn new(first_object: u32) -> Self {
         Self { first_object, entries: Vec::new() }
     }
 
     /// Number of entries.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.entries.len()
     }
 }
@@ -209,7 +209,7 @@ pub struct PdfXrefParser<'a> {
 impl<'a> PdfXrefParser<'a> {
     /// Create a new parser for `data`.
     #[must_use]
-    pub fn new(data: &'a [u8]) -> Self {
+    pub const fn new(data: &'a [u8]) -> Self {
         Self { data }
     }
 

@@ -118,7 +118,7 @@ impl CcRegister {
 
     /// Construct from individual flag values.
     #[must_use]
-    pub fn from_flags(c: bool, v: bool, z: bool, n: bool, x: bool) -> Self {
+    pub const fn from_flags(c: bool, v: bool, z: bool, n: bool, x: bool) -> Self {
         let mut raw: u8 = 0;
         if c { raw |= FlagBit::C.mask(); }
         if v { raw |= FlagBit::V.mask(); }
@@ -151,7 +151,7 @@ impl CcRegister {
     pub const fn x(self) -> bool { self.flag(FlagBit::X) }
 
     /// Set or clear a flag.
-    pub fn set_flag(&mut self, bit: FlagBit, value: bool) {
+    pub const fn set_flag(&mut self, bit: FlagBit, value: bool) {
         if value {
             self.raw |= bit.mask();
         } else {
@@ -220,7 +220,7 @@ impl fmt::Display for CcRegister {
 // M68kConditionCode
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The 16 M68K condition codes used by Bcc, DBcc, and Scc instructions.
+/// The 16 M68K condition codes used by Bcc, `DBcc`, and Scc instructions.
 ///
 /// Encoding follows the M68000 Programmer's Reference Manual table 3-19.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -263,7 +263,7 @@ pub enum M68kConditionCode {
 impl M68kConditionCode {
     /// Parse from the 4-bit condition field value (0x0–0xF).
     #[must_use]
-    pub fn from_encoding(enc: u8) -> Option<Self> {
+    pub const fn from_encoding(enc: u8) -> Option<Self> {
         Some(match enc & 0xF {
             0x0 => Self::T,
             0x1 => Self::F,
@@ -339,7 +339,7 @@ impl M68kConditionCode {
 
     /// The flags that this condition tests (informational).
     #[must_use]
-    pub fn flags_tested(self) -> &'static [FlagBit] {
+    pub const fn flags_tested(self) -> &'static [FlagBit] {
         match self {
             Self::T | Self::F => &[],
             Self::Hi | Self::Ls => &[FlagBit::C, FlagBit::Z],
@@ -398,7 +398,7 @@ impl fmt::Display for M68kConditionCode {
 
 /// Evaluate a condition code against the given CCR snapshot.
 ///
-/// This is the core function used by all Bcc, DBcc, and Scc emulation.
+/// This is the core function used by all Bcc, `DBcc`, and Scc emulation.
 ///
 /// ```
 /// use rustre_arch_68k::m68k_condition_codes::{
@@ -411,7 +411,7 @@ impl fmt::Display for M68kConditionCode {
 /// assert!(!evaluate_cc(M68kConditionCode::Ne, ccr));
 /// ```
 #[must_use]
-pub fn evaluate_cc(cc: M68kConditionCode, ccr: CcRegister) -> bool {
+pub const fn evaluate_cc(cc: M68kConditionCode, ccr: CcRegister) -> bool {
     let c = ccr.c();
     let v = ccr.v();
     let z = ccr.z();

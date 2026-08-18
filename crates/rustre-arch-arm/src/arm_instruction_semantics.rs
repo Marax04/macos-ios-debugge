@@ -57,6 +57,7 @@ pub enum ConditionCode {
 
 impl ConditionCode {
     /// Decode from the 4-bit encoding in an instruction word.
+    #[must_use]
     pub fn from_bits(bits: u8) -> Option<Self> {
         match bits & 0xF {
             0b0000 => Some(Self::EQ),
@@ -80,12 +81,14 @@ impl ConditionCode {
     }
 
     /// The bit-encoding value.
-    pub fn encoding(self) -> u8 {
+    #[must_use]
+    pub const fn encoding(self) -> u8 {
         self as u8
     }
 
     /// Human-readable suffix used in mnemonics.
-    pub fn mnemonic(self) -> &'static str {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::EQ => "eq",
             Self::NE => "ne",
@@ -107,6 +110,7 @@ impl ConditionCode {
     }
 
     /// Evaluate the condition against a [`CpsrFlags`] snapshot.
+    #[must_use]
     pub fn evaluate(self, flags: CpsrFlags) -> bool {
         let n = flags.n();
         let z = flags.z();
@@ -132,6 +136,7 @@ impl ConditionCode {
     }
 
     /// Returns the inverse/opposite condition (swap last bit).
+    #[must_use]
     pub fn invert(self) -> Self {
         Self::from_bits(self.encoding() ^ 1).unwrap()
     }
@@ -179,12 +184,14 @@ pub struct CpsrFlags {
 
 impl CpsrFlags {
     /// Construct from raw CPSR value.
-    pub fn from_raw(raw: u32) -> Self {
+    #[must_use]
+    pub const fn from_raw(raw: u32) -> Self {
         Self { raw }
     }
 
     /// Construct from individual flag values.
-    pub fn from_flags(n: bool, z: bool, c: bool, v: bool) -> Self {
+    #[must_use]
+    pub const fn from_flags(n: bool, z: bool, c: bool, v: bool) -> Self {
         let mut raw = 0u32;
         if n { raw |= 1 << cpsr_bits::N; }
         if z { raw |= 1 << cpsr_bits::Z; }
@@ -193,26 +200,36 @@ impl CpsrFlags {
         Self { raw }
     }
 
-    pub fn raw(self) -> u32 { self.raw }
-    pub fn n(self) -> bool { (self.raw >> cpsr_bits::N) & 1 != 0 }
-    pub fn z(self) -> bool { (self.raw >> cpsr_bits::Z) & 1 != 0 }
-    pub fn c(self) -> bool { (self.raw >> cpsr_bits::C) & 1 != 0 }
-    pub fn v(self) -> bool { (self.raw >> cpsr_bits::V) & 1 != 0 }
-    pub fn q(self) -> bool { (self.raw >> cpsr_bits::Q) & 1 != 0 }
-    pub fn t(self) -> bool { (self.raw >> cpsr_bits::T) & 1 != 0 }
+    #[must_use]
+    pub const fn raw(self) -> u32 { self.raw }
+    #[must_use]
+    pub const fn n(self) -> bool { (self.raw >> cpsr_bits::N) & 1 != 0 }
+    #[must_use]
+    pub const fn z(self) -> bool { (self.raw >> cpsr_bits::Z) & 1 != 0 }
+    #[must_use]
+    pub const fn c(self) -> bool { (self.raw >> cpsr_bits::C) & 1 != 0 }
+    #[must_use]
+    pub const fn v(self) -> bool { (self.raw >> cpsr_bits::V) & 1 != 0 }
+    #[must_use]
+    pub const fn q(self) -> bool { (self.raw >> cpsr_bits::Q) & 1 != 0 }
+    #[must_use]
+    pub const fn t(self) -> bool { (self.raw >> cpsr_bits::T) & 1 != 0 }
 
     /// Processor mode field (bits [4:0]).
+    #[must_use]
     pub fn mode(self) -> ProcessorMode {
         ProcessorMode::from_bits((self.raw & cpsr_bits::MODE_MASK) as u8)
     }
 
     /// GE flags (bits [19:16]).
-    pub fn ge(self) -> u8 {
+    #[must_use]
+    pub const fn ge(self) -> u8 {
         ((self.raw & cpsr_bits::GE_MASK) >> cpsr_bits::GE_LO) as u8
     }
 
     /// Update only the NZCV bits in this flags snapshot.
-    pub fn with_nzcv(self, n: bool, z: bool, c: bool, v: bool) -> Self {
+    #[must_use]
+    pub const fn with_nzcv(self, n: bool, z: bool, c: bool, v: bool) -> Self {
         let mut raw = self.raw & !cpsr_bits::NZCV_MASK;
         if n { raw |= 1 << cpsr_bits::N; }
         if z { raw |= 1 << cpsr_bits::Z; }
@@ -222,7 +239,8 @@ impl CpsrFlags {
     }
 
     /// Set or clear the Thumb bit (T).
-    pub fn with_thumb(self, thumb: bool) -> Self {
+    #[must_use]
+    pub const fn with_thumb(self, thumb: bool) -> Self {
         if thumb {
             Self { raw: self.raw | (1 << cpsr_bits::T) }
         } else {
@@ -231,13 +249,15 @@ impl CpsrFlags {
     }
 
     /// Set the processor mode.
+    #[must_use]
     pub fn with_mode(self, mode: ProcessorMode) -> Self {
         let raw = (self.raw & !cpsr_bits::MODE_MASK) | (mode.encoding() as u32);
         Self { raw }
     }
 
     /// Mask to disable IRQ (set I bit).
-    pub fn with_irq_disabled(self, disable: bool) -> Self {
+    #[must_use]
+    pub const fn with_irq_disabled(self, disable: bool) -> Self {
         if disable {
             Self { raw: self.raw | (1 << cpsr_bits::I) }
         } else {
@@ -277,7 +297,8 @@ pub enum ProcessorMode {
 }
 
 impl ProcessorMode {
-    pub fn from_bits(bits: u8) -> Self {
+    #[must_use]
+    pub const fn from_bits(bits: u8) -> Self {
         match bits & 0x1F {
             0b10000 => Self::User,
             0b10001 => Self::Fiq,
@@ -292,13 +313,16 @@ impl ProcessorMode {
         }
     }
 
-    pub fn encoding(self) -> u8 { self as u8 }
+    #[must_use]
+    pub const fn encoding(self) -> u8 { self as u8 }
 
-    pub fn is_privileged(self) -> bool {
+    #[must_use]
+    pub const fn is_privileged(self) -> bool {
         !matches!(self, Self::User)
     }
 
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Self::User => "usr",
             Self::Fiq => "fiq",
@@ -313,7 +337,8 @@ impl ProcessorMode {
     }
 
     /// Whether this mode has its own banked SPSR.
-    pub fn has_spsr(self) -> bool {
+    #[must_use]
+    pub const fn has_spsr(self) -> bool {
         !matches!(self, Self::User | Self::System)
     }
 }
@@ -337,6 +362,7 @@ pub enum ShiftType {
 }
 
 impl ShiftType {
+    #[must_use]
     pub fn from_bits(bits: u8) -> Self {
         match bits & 3 {
             0 => Self::LSL,
@@ -347,7 +373,8 @@ impl ShiftType {
         }
     }
 
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Self::LSL => "lsl",
             Self::LSR => "lsr",
@@ -369,6 +396,7 @@ pub struct BarrelShifter;
 
 impl BarrelShifter {
     /// Apply `shift_type` with immediate `amount` to `value`, given current C flag.
+    #[must_use]
     pub fn shift_immediate(
         value: u32,
         shift_type: ShiftType,
@@ -393,7 +421,8 @@ impl BarrelShifter {
     }
 
     /// Logical shift left.
-    pub fn lsl(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
+    #[must_use]
+    pub const fn lsl(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
         if amount == 0 {
             return ShifterResult { value, carry_out: carry_in };
         }
@@ -406,7 +435,8 @@ impl BarrelShifter {
     }
 
     /// Logical shift right.
-    pub fn lsr(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
+    #[must_use]
+    pub const fn lsr(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
         if amount == 0 {
             return ShifterResult { value, carry_out: carry_in };
         }
@@ -419,7 +449,8 @@ impl BarrelShifter {
     }
 
     /// Arithmetic shift right.
-    pub fn asr(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
+    #[must_use]
+    pub const fn asr(value: u32, amount: u32, carry_in: bool) -> ShifterResult {
         if amount == 0 {
             return ShifterResult { value, carry_out: carry_in };
         }
@@ -434,7 +465,8 @@ impl BarrelShifter {
     }
 
     /// Rotate right.
-    pub fn ror(value: u32, amount: u32) -> ShifterResult {
+    #[must_use]
+    pub const fn ror(value: u32, amount: u32) -> ShifterResult {
         let amount = amount & 31;
         if amount == 0 {
             let carry_out = (value >> 31) != 0;
@@ -446,7 +478,8 @@ impl BarrelShifter {
     }
 
     /// Rotate right extended (RRX) — 33-bit rotate through carry.
-    pub fn rrx(value: u32, carry_in: bool) -> ShifterResult {
+    #[must_use]
+    pub const fn rrx(value: u32, carry_in: bool) -> ShifterResult {
         let carry_out = (value & 1) != 0;
         let result = (value >> 1) | ((carry_in as u32) << 31);
         ShifterResult { value: result, carry_out }
@@ -468,6 +501,7 @@ pub struct AluResult {
 }
 
 impl AluResult {
+    #[must_use]
     pub fn to_flags(self) -> CpsrFlags {
         CpsrFlags::from_flags(self.n, self.z, self.c, self.v)
     }
@@ -477,11 +511,12 @@ impl AluResult {
 pub struct AluOps;
 
 impl AluOps {
-    fn nz(value: u32) -> (bool, bool) {
+    const fn nz(value: u32) -> (bool, bool) {
         ((value >> 31) != 0, value == 0)
     }
 
     /// ADD — a + b, updates NZCV.
+    #[must_use]
     pub fn add(a: u32, b: u32) -> AluResult {
         let result64 = (a as u64).wrapping_add(b as u64);
         let value = result64 as u32;
@@ -492,6 +527,7 @@ impl AluOps {
     }
 
     /// ADD with carry.
+    #[must_use]
     pub fn adc(a: u32, b: u32, carry_in: bool) -> AluResult {
         let result64 = (a as u64).wrapping_add(b as u64).wrapping_add(carry_in as u64);
         let value = result64 as u32;
@@ -502,21 +538,25 @@ impl AluOps {
     }
 
     /// SUB — a - b, updates NZCV.
+    #[must_use]
     pub fn sub(a: u32, b: u32) -> AluResult {
         Self::add(a, (!b).wrapping_add(1))
     }
 
     /// SUB with borrow (SBC).
+    #[must_use]
     pub fn sbc(a: u32, b: u32, carry_in: bool) -> AluResult {
         Self::adc(a, !b, carry_in)
     }
 
     /// RSB — b - a (reverse subtract).
+    #[must_use]
     pub fn rsb(a: u32, b: u32) -> AluResult {
         Self::sub(b, a)
     }
 
     /// AND — bitwise, updates NZ, C from shifter, V unchanged.
+    #[must_use]
     pub fn and(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
         let (n, z) = Self::nz(value);
@@ -524,6 +564,7 @@ impl AluOps {
     }
 
     /// ORR — bitwise OR.
+    #[must_use]
     pub fn orr(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a | b;
         let (n, z) = Self::nz(value);
@@ -531,6 +572,7 @@ impl AluOps {
     }
 
     /// EOR — exclusive OR.
+    #[must_use]
     pub fn eor(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
         let (n, z) = Self::nz(value);
@@ -538,6 +580,7 @@ impl AluOps {
     }
 
     /// BIC — bit clear (a AND NOT b).
+    #[must_use]
     pub fn bic(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & !b;
         let (n, z) = Self::nz(value);
@@ -545,28 +588,33 @@ impl AluOps {
     }
 
     /// MOV — move (sets NZ, C from shifter).
+    #[must_use]
     pub fn mov(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let (n, z) = Self::nz(b);
         AluResult { value: b, n, z, c: shifter_carry, v: old_v }
     }
 
     /// MVN — move NOT.
+    #[must_use]
     pub fn mvn(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         Self::mov(!b, shifter_carry, old_v)
     }
 
     /// CMP — compare (same as SUB but result discarded).
+    #[must_use]
     pub fn cmp(a: u32, b: u32) -> AluResult {
         Self::sub(a, b)
     }
 
     /// CMN — compare negative (same as ADD but result discarded).
+    #[must_use]
     pub fn cmn(a: u32, b: u32) -> AluResult {
         Self::add(a, b)
     }
 
     /// TST — test (same as AND but result discarded).
     /// V flag is unchanged per the ARM Architecture Reference Manual.
+    #[must_use]
     pub fn tst(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
         let (n, z) = Self::nz(value);
@@ -575,6 +623,7 @@ impl AluOps {
 
     /// TEQ — test equivalence (same as EOR but result discarded).
     /// V flag is unchanged per the ARM Architecture Reference Manual.
+    #[must_use]
     pub fn teq(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
         let (n, z) = Self::nz(value);
@@ -582,6 +631,7 @@ impl AluOps {
     }
 
     /// MUL — 32-bit multiply (result is low 32 bits); N and Z updated, C and V unpredictable.
+    #[must_use]
     pub fn mul(a: u32, b: u32, old_c: bool, old_v: bool) -> AluResult {
         let value = a.wrapping_mul(b);
         let (n, z) = Self::nz(value);
@@ -589,13 +639,15 @@ impl AluOps {
     }
 
     /// UMULL — unsigned 64-bit multiply.
-    pub fn umull(a: u32, b: u32) -> (u32, u32) {
+    #[must_use]
+    pub const fn umull(a: u32, b: u32) -> (u32, u32) {
         let result = (a as u64).wrapping_mul(b as u64);
         (result as u32, (result >> 32) as u32)
     }
 
     /// SMULL — signed 64-bit multiply.
-    pub fn smull(a: u32, b: u32) -> (u32, u32) {
+    #[must_use]
+    pub const fn smull(a: u32, b: u32) -> (u32, u32) {
         let result = ((a as i32) as i64).wrapping_mul((b as i32) as i64) as u64;
         (result as u32, (result >> 32) as u32)
     }
@@ -612,7 +664,7 @@ pub enum BarrierOption {
     Sy     = 0b1111,
     /// Stores only to full system (ST)
     St     = 0b1110,
-    /// Load-load, load-store to full system (LD) — ARMv8+
+    /// Load-load, load-store to full system (LD) — `ARMv8`+
     Ld     = 0b1101,
     /// Inner shareable (ISH)
     Ish    = 0b1011,
@@ -635,7 +687,8 @@ pub enum BarrierOption {
 }
 
 impl BarrierOption {
-    pub fn from_bits(bits: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_bits(bits: u8) -> Option<Self> {
         match bits & 0xF {
             0b1111 => Some(Self::Sy),
             0b1110 => Some(Self::St),
@@ -653,7 +706,8 @@ impl BarrierOption {
         }
     }
 
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Sy => "sy",
             Self::St => "st",
@@ -683,7 +737,8 @@ pub enum BarrierKind {
 }
 
 impl BarrierKind {
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Dmb => "dmb",
             Self::Dsb => "dsb",
@@ -692,7 +747,8 @@ impl BarrierKind {
     }
 
     /// ISB only takes SY option.
-    pub fn accepts_option(self) -> bool {
+    #[must_use]
+    pub const fn accepts_option(self) -> bool {
         matches!(self, Self::Dmb | Self::Dsb)
     }
 }
@@ -705,12 +761,16 @@ pub struct MemBarrier {
 }
 
 impl MemBarrier {
-    pub fn new(kind: BarrierKind, option: BarrierOption) -> Self {
+    #[must_use]
+    pub const fn new(kind: BarrierKind, option: BarrierOption) -> Self {
         Self { kind, option }
     }
 
+    #[must_use]
     pub fn dmb_sy() -> Self { Self::new(BarrierKind::Dmb, BarrierOption::Sy) }
+    #[must_use]
     pub fn dsb_sy() -> Self { Self::new(BarrierKind::Dsb, BarrierOption::Sy) }
+    #[must_use]
     pub fn isb_sy() -> Self { Self::new(BarrierKind::Isb, BarrierOption::Sy) }
 }
 
@@ -734,14 +794,15 @@ pub struct ExclusiveMonitor {
 }
 
 impl ExclusiveMonitor {
+    #[must_use]
     pub fn new(granule: u32) -> Self {
         assert!(granule > 0 && granule.is_power_of_two(),
-            "ExclusiveMonitor granule must be a non-zero power of two, got {}", granule);
+            "ExclusiveMonitor granule must be a non-zero power of two, got {granule}");
         Self { tagged_address: None, granule }
     }
 
     /// Mark an address as exclusively reserved (LDREX/LDREXB/LDREXH/LDREXD).
-    pub fn mark_exclusive(&mut self, address: u32) {
+    pub const fn mark_exclusive(&mut self, address: u32) {
         let aligned = address & !(self.granule - 1);
         self.tagged_address = Some(aligned);
     }
@@ -760,15 +821,17 @@ impl ExclusiveMonitor {
     }
 
     /// Clear the monitor (e.g., on context switch, exception entry).
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.tagged_address = None;
     }
 
-    pub fn is_tagged(&self) -> bool {
+    #[must_use]
+    pub const fn is_tagged(&self) -> bool {
         self.tagged_address.is_some()
     }
 
-    pub fn tagged_address(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn tagged_address(&self) -> Option<u32> {
         self.tagged_address
     }
 }
@@ -835,6 +898,7 @@ pub struct ArmInstructionSemantics {
 
 impl ArmInstructionSemantics {
     /// Create a new semantics context in User mode, all flags clear.
+    #[must_use]
     pub fn new() -> Self {
         let mut spsr = HashMap::new();
         for mode in &[
@@ -856,16 +920,18 @@ impl ArmInstructionSemantics {
     }
 
     /// Current CPSR.
-    pub fn cpsr(&self) -> CpsrFlags { self.cpsr }
+    #[must_use]
+    pub const fn cpsr(&self) -> CpsrFlags { self.cpsr }
 
     /// Read the SPSR for the current mode (returns None in User/System).
+    #[must_use]
     pub fn spsr(&self) -> Option<CpsrFlags> {
         let mode = self.cpsr.mode();
         self.spsr.get(&mode).copied()
     }
 
     /// Write CPSR with mode change support.
-    pub fn write_cpsr(&mut self, value: CpsrFlags) {
+    pub const fn write_cpsr(&mut self, value: CpsrFlags) {
         self.cpsr = value;
     }
 
@@ -878,11 +944,13 @@ impl ArmInstructionSemantics {
     }
 
     /// Evaluate whether the given condition is true in the current CPSR.
+    #[must_use]
     pub fn condition_passes(&self, cond: ConditionCode) -> bool {
         cond.evaluate(self.cpsr)
     }
 
     /// Execute a barrel shift and optionally update the carry flag.
+    #[must_use]
     pub fn barrel_shift(
         &self,
         value: u32,
@@ -941,6 +1009,7 @@ impl ArmInstructionSemantics {
     }
 
     /// Decode a memory barrier instruction.
+    #[must_use]
     pub fn decode_barrier(&self, encoding: u32) -> Option<MemBarrier> {
         // A32 barrier encodings (F57FF0XX / F57FF4XX / F57FF5XX / F57FF6XX):
         //   bits [7:4] — sub-opcode distinguishing DSB/DMB/ISB (0x4/0x5/0x6)
@@ -957,24 +1026,28 @@ impl ArmInstructionSemantics {
     }
 
     /// Check whether a given instruction encoding is unconditional.
-    pub fn is_unconditional(encoding: u32) -> bool {
+    #[must_use]
+    pub const fn is_unconditional(encoding: u32) -> bool {
         let cond = (encoding >> 28) & 0xF;
         cond == 0xE || cond == 0xF
     }
 
     /// Extract the condition code from an A32 encoding.
+    #[must_use]
     pub fn extract_condition(encoding: u32) -> ConditionCode {
         ConditionCode::from_bits(((encoding >> 28) & 0xF) as u8)
             .unwrap_or(ConditionCode::AL)
     }
 
     /// Extract the S bit from an A32 data-processing encoding.
-    pub fn extract_s_bit(encoding: u32) -> bool {
+    #[must_use]
+    pub const fn extract_s_bit(encoding: u32) -> bool {
         (encoding >> 20) & 1 != 0
     }
 
     /// Returns true if the given PC offset is Thumb-interworked (bit 0 == 1).
-    pub fn is_thumb_target(address: u32) -> bool {
+    #[must_use]
+    pub const fn is_thumb_target(address: u32) -> bool {
         address & 1 != 0
     }
 }

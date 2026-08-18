@@ -217,7 +217,7 @@ impl SyscallEntry {
 
     /// Whether this syscall is dangerous from a sandbox perspective.
     #[must_use] 
-    pub fn is_dangerous(&self) -> bool {
+    pub const fn is_dangerous(&self) -> bool {
         self.is_sensitive || self.spawns_process || self.loads_code
     }
 }
@@ -241,13 +241,13 @@ pub enum HandlerResult {
 
 impl HandlerResult {
     #[must_use] 
-    pub fn allow() -> Self { HandlerResult::Allow { return_value: None } }
+    pub const fn allow() -> Self { HandlerResult::Allow { return_value: None } }
     #[must_use] 
-    pub fn allow_with(ret: i64) -> Self { HandlerResult::Allow { return_value: Some(ret) } }
+    pub const fn allow_with(ret: i64) -> Self { HandlerResult::Allow { return_value: Some(ret) } }
     #[must_use] 
-    pub fn block(errno: i32) -> Self { HandlerResult::Block { errno } }
+    pub const fn block(errno: i32) -> Self { HandlerResult::Block { errno } }
     #[must_use] 
-    pub fn terminate() -> Self { HandlerResult::Terminate }
+    pub const fn terminate() -> Self { HandlerResult::Terminate }
 }
 
 /// Context passed to a syscall handler.
@@ -265,7 +265,7 @@ pub struct SyscallContext {
 
 impl SyscallContext {
     #[must_use] 
-    pub fn new(number: u64, args: [u64; 6]) -> Self {
+    pub const fn new(number: u64, args: [u64; 6]) -> Self {
         SyscallContext { number, args, tid: None, pid: None }
     }
 }

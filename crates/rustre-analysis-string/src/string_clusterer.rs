@@ -38,6 +38,7 @@ pub struct StringCluster {
 }
 
 impl StringCluster {
+    #[must_use]
     pub fn average_similarity(&self) -> f64 {
         if self.similarity_scores.is_empty() { return 0.0; }
         self.similarity_scores.iter().sum::<f64>() / self.similarity_scores.len() as f64
@@ -71,6 +72,7 @@ pub struct ClusterReport {
 }
 
 impl ClusterReport {
+    #[must_use]
     pub fn build(clusters: Vec<StringCluster>, noise: Vec<StringRef>, total_strings: usize) -> Self {
         let total_clusters = clusters.len();
         let avg_cluster_size = if total_clusters == 0 {
@@ -97,18 +99,22 @@ pub struct StringClusterer {
     similarity_threshold: f64,
     /// n for n-gram similarity (default 3 = trigrams).
     ngram_n: usize,
-    /// Maximum k for k-means (used only with TfIdf algorithm).
+    /// Maximum k for k-means (used only with `TfIdf` algorithm).
     max_k: usize,
 }
 
 impl StringClusterer {
-    pub fn new(algorithm: ClusterAlgorithm, similarity_threshold: f64) -> Self {
+    #[must_use]
+    pub const fn new(algorithm: ClusterAlgorithm, similarity_threshold: f64) -> Self {
         Self { algorithm, similarity_threshold, ngram_n: 3, max_k: 16 }
     }
 
-    pub fn with_ngram_n(mut self, n: usize) -> Self { self.ngram_n = n; self }
-    pub fn with_max_k(mut self, k: usize) -> Self { self.max_k = k; self }
+    #[must_use]
+    pub const fn with_ngram_n(mut self, n: usize) -> Self { self.ngram_n = n; self }
+    #[must_use]
+    pub const fn with_max_k(mut self, k: usize) -> Self { self.max_k = k; self }
 
+    #[must_use]
     pub fn cluster(&self, strings: Vec<StringRef>) -> ClusterReport {
         match &self.algorithm {
             ClusterAlgorithm::EditDistance => self.cluster_edit_distance(strings),
@@ -281,6 +287,7 @@ const DP_LENGTH_CAP: usize = 4096;
 ///
 /// Returns `usize::MAX` as a sentinel when either input exceeds
 /// [`DP_LENGTH_CAP`] to prevent O(n·m) memory exhaustion on untrusted input.
+#[must_use]
 pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();
@@ -311,7 +318,8 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     prev[n]
 }
 
-/// Normalised edit similarity: 1.0 - dist / max_len. Returns 1.0 for two empty strings.
+/// Normalised edit similarity: 1.0 - dist / `max_len`. Returns 1.0 for two empty strings.
+#[must_use]
 pub fn normalized_edit_similarity(a: &str, b: &str) -> f64 {
     let max_len = a.chars().count().max(b.chars().count());
     if max_len == 0 { return 1.0; }
@@ -326,6 +334,7 @@ pub fn normalized_edit_similarity(a: &str, b: &str) -> f64 {
 // ─── Trigram / N-gram ─────────────────────────────────────────────────────────
 
 /// Character n-grams of `s` as a sorted vector of owned strings.
+#[must_use]
 pub fn char_ngrams(s: &str, n: usize) -> Vec<String> {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() < n { return Vec::new(); }
@@ -333,11 +342,13 @@ pub fn char_ngrams(s: &str, n: usize) -> Vec<String> {
 }
 
 /// Trigram Jaccard similarity between two strings.
+#[must_use]
 pub fn trigram_similarity(a: &str, b: &str) -> f64 {
     ngram_jaccard_similarity(a, b, 3)
 }
 
 /// Jaccard similarity of n-gram sets of two strings.
+#[must_use]
 pub fn ngram_jaccard_similarity(a: &str, b: &str, n: usize) -> f64 {
     // Use AHashSet to prevent hash-collision DoS on attacker-controlled n-gram strings.
     let set_a: AHashSet<String> = char_ngrams(a, n).into_iter().collect();
@@ -354,6 +365,7 @@ pub fn ngram_jaccard_similarity(a: &str, b: &str, n: usize) -> f64 {
 const STOP_WORDS: &[&str] = &["the", "a", "an", "of", "and", "or", "in", "is", "to", "it"];
 
 /// Sort words, remove stop words, lowercase, join — used as a cluster key.
+#[must_use]
 pub fn compute_fingerprint(s: &str) -> String {
     let mut words: Vec<String> = s.split_whitespace()
         .map(|w| w.to_lowercase())
@@ -373,6 +385,7 @@ pub struct TfIdfVectorizer {
 
 impl TfIdfVectorizer {
     /// Build vocabulary and IDF weights from a corpus.
+    #[must_use]
     pub fn fit(docs: &[&str]) -> Self {
         let n = docs.len() as f64;
         // Keyed on tokens extracted from user-controlled strings; use AHashMap
@@ -400,6 +413,7 @@ impl TfIdfVectorizer {
     }
 
     /// Transform a document into a TF-IDF vector (length = |vocab|).
+    #[must_use]
     pub fn transform(&self, doc: &str) -> Vec<f64> {
         let tokens = tokenize(doc);
         let n = tokens.len() as f64;
@@ -430,6 +444,7 @@ fn tokenize(s: &str) -> Vec<String> {
 /// Vectors whose length differs from `vectors[0]` contribute nothing to
 /// centroid updates (and cosine similarity treats them as 0), instead of
 /// panicking on a mismatched index.
+#[must_use]
 pub fn kmeans_cluster(vectors: &[Vec<f64>], k: usize, max_iter: usize) -> Vec<usize> {
     let n = vectors.len();
     if n == 0 || k == 0 { return Vec::new(); }
@@ -480,6 +495,7 @@ pub fn kmeans_cluster(vectors: &[Vec<f64>], k: usize, max_iter: usize) -> Vec<us
 
 /// Single-linkage agglomerative clustering.
 /// Returns cluster labels for each input string.
+#[must_use]
 pub fn hierarchical_cluster(strings: &[String], threshold: f64) -> Vec<usize> {
     let n = strings.len();
     if n == 0 { return Vec::new(); }

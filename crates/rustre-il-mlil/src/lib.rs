@@ -431,6 +431,7 @@ impl MlilInstruction {
     /// size` after a pop load), so distinct stack slots get distinct `sp`
     /// SSA versions instead of all aliasing a bare `StackPointer` address.
     /// Prefer this entry point when lifting whole instruction streams.
+    #[must_use]
     pub fn lift_llil_multi(instr: LlilInstruction) -> Vec<Self> {
         let sp_var = || SsaVar::initial("sp");
         let sp = || MlilExpr::Var {

@@ -83,7 +83,7 @@ pub(crate) fn read_sleb128(bytes: &[u8], offset: usize) -> Result<(i64, usize), 
 }
 
 /// Read a valtype byte for block type encoding.
-fn valtype_str(vt: i64) -> &'static str {
+const fn valtype_str(vt: i64) -> &'static str {
     match vt {
         -1 => "i32",
         -2 => "i64",
@@ -683,7 +683,7 @@ pub struct WasmArch;
 
 impl WasmArch {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -1238,7 +1238,7 @@ pub enum WasmValueType {
 impl WasmValueType {
     /// Decode a value type from a byte (Wasm encoding).
     #[must_use]
-    pub fn from_byte(b: u8) -> Option<Self> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         Some(match b {
             0x7F => Self::I32,
             0x7E => Self::I64,
@@ -1253,7 +1253,7 @@ impl WasmValueType {
 
     /// Return the text name of this value type.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::I32 => "i32",
             Self::I64 => "i64",
@@ -1267,7 +1267,7 @@ impl WasmValueType {
 
     /// Return the binary encoding byte.
     #[must_use]
-    pub fn byte(self) -> u8 {
+    pub const fn byte(self) -> u8 {
         match self {
             Self::I32 => 0x7F,
             Self::I64 => 0x7E,
@@ -1281,13 +1281,13 @@ impl WasmValueType {
 
     /// Returns `true` when the type is a numeric type.
     #[must_use]
-    pub fn is_numeric(self) -> bool {
+    pub const fn is_numeric(self) -> bool {
         matches!(self, Self::I32 | Self::I64 | Self::F32 | Self::F64)
     }
 
     /// Returns `true` for reference types.
     #[must_use]
-    pub fn is_reference(self) -> bool {
+    pub const fn is_reference(self) -> bool {
         matches!(self, Self::FuncRef | Self::ExternRef)
     }
 }
@@ -1313,7 +1313,7 @@ pub enum WasmSectionId {
 impl WasmSectionId {
     /// Decode a section ID byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Option<Self> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         Some(match b {
             0 => Self::Custom,
             1 => Self::Type,
@@ -1334,7 +1334,7 @@ impl WasmSectionId {
 
     /// Return the name of the section.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Custom => "custom",
             Self::Type => "type",
@@ -1365,7 +1365,7 @@ pub enum WasmExternalKind {
 impl WasmExternalKind {
     /// Decode from a byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Option<Self> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         Some(match b {
             0 => Self::Function,
             1 => Self::Table,
@@ -1377,7 +1377,7 @@ impl WasmExternalKind {
 
     /// Return the name of this external kind.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Function => "func",
             Self::Table => "table",
@@ -1397,7 +1397,7 @@ pub enum WasmMutability {
 impl WasmMutability {
     /// Decode from a byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Option<Self> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         match b {
             0 => Some(Self::Const),
             1 => Some(Self::Mutable),
@@ -1526,7 +1526,7 @@ impl WasmFuncType {
 
     /// Return the arity (number of params and results).
     #[must_use]
-    pub fn arity(&self) -> (usize, usize) {
+    pub const fn arity(&self) -> (usize, usize) {
         (self.params.len(), self.results.len())
     }
 }
@@ -3432,7 +3432,7 @@ pub struct WasmLinearDisassembler<'a> {
 impl<'a> WasmLinearDisassembler<'a> {
     /// Create a new disassembler starting at `base_address`.
     #[must_use]
-    pub fn new(arch: &'a WasmArch, bytes: &'a [u8], base_address: Address) -> Self {
+    pub const fn new(arch: &'a WasmArch, bytes: &'a [u8], base_address: Address) -> Self {
         Self {
             arch,
             bytes,
@@ -3443,7 +3443,7 @@ impl<'a> WasmLinearDisassembler<'a> {
 
     /// Return the current byte offset.
     #[must_use]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
     }
 }
@@ -3475,9 +3475,9 @@ impl Iterator for WasmLinearDisassembler<'_> {
 pub struct WasmFunctionStats {
     /// Total instructions decoded.
     pub instruction_count: usize,
-    /// Number of call/call_indirect instructions.
+    /// Number of `call/call_indirect` instructions.
     pub call_count: usize,
-    /// Number of branch instructions (br, br_if, br_table).
+    /// Number of branch instructions (br, `br_if`, `br_table`).
     pub branch_count: usize,
     /// Number of memory load instructions.
     pub load_count: usize,
@@ -3543,7 +3543,7 @@ pub enum NameSubsectionType {
 impl NameSubsectionType {
     /// Decode from a byte.
     #[must_use]
-    pub fn from_byte(b: u8) -> Option<Self> {
+    pub const fn from_byte(b: u8) -> Option<Self> {
         Some(match b {
             0 => Self::ModuleName,
             1 => Self::FunctionName,
@@ -3561,7 +3561,7 @@ impl NameSubsectionType {
 
     /// Return the name of this subsection type.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::ModuleName => "module",
             Self::FunctionName => "function",
@@ -3597,7 +3597,7 @@ pub enum WasmValue {
 impl WasmValue {
     /// Return the `WasmValueType` tag for this value.
     #[must_use]
-    pub fn value_type(&self) -> WasmValueType {
+    pub const fn value_type(&self) -> WasmValueType {
         match self {
             Self::I32(_) => WasmValueType::I32,
             Self::I64(_) => WasmValueType::I64,
@@ -3609,7 +3609,7 @@ impl WasmValue {
 
     /// Attempt to unwrap as `i32`. Returns `None` if the variant does not match.
     #[must_use]
-    pub fn as_i32(&self) -> Option<i32> {
+    pub const fn as_i32(&self) -> Option<i32> {
         if let Self::I32(v) = self {
             Some(*v)
         } else {
@@ -3619,7 +3619,7 @@ impl WasmValue {
 
     /// Attempt to unwrap as `i64`.
     #[must_use]
-    pub fn as_i64(&self) -> Option<i64> {
+    pub const fn as_i64(&self) -> Option<i64> {
         if let Self::I64(v) = self {
             Some(*v)
         } else {
@@ -3629,7 +3629,7 @@ impl WasmValue {
 
     /// Attempt to unwrap as `f32`.
     #[must_use]
-    pub fn as_f32(&self) -> Option<f32> {
+    pub const fn as_f32(&self) -> Option<f32> {
         if let Self::F32(v) = self {
             Some(*v)
         } else {
@@ -3639,7 +3639,7 @@ impl WasmValue {
 
     /// Attempt to unwrap as `f64`.
     #[must_use]
-    pub fn as_f64(&self) -> Option<f64> {
+    pub const fn as_f64(&self) -> Option<f64> {
         if let Self::F64(v) = self {
             Some(*v)
         } else {
@@ -3649,7 +3649,7 @@ impl WasmValue {
 
     /// Attempt to unwrap as a 16-byte V128 vector.
     #[must_use]
-    pub fn as_v128(&self) -> Option<&[u8; 16]> {
+    pub const fn as_v128(&self) -> Option<&[u8; 16]> {
         if let Self::V128(v) = self {
             Some(v)
         } else {
@@ -3669,7 +3669,7 @@ pub struct WasmStack {
 impl WasmStack {
     /// Construct an empty stack.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { inner: Vec::new() }
     }
 
@@ -3702,13 +3702,13 @@ impl WasmStack {
 
     /// Return the current depth of the stack.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.inner.len()
     }
 
     /// Return `true` when the stack holds no values.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
@@ -4096,7 +4096,7 @@ pub struct FuncType {
 ///
 /// Returns `None` for unknown bytes.
 #[must_use]
-pub fn decode_type(byte: u8) -> Option<WasmValType> {
+pub const fn decode_type(byte: u8) -> Option<WasmValType> {
     Some(match byte {
         0x7F => WasmValType::I32,
         0x7E => WasmValType::I64,

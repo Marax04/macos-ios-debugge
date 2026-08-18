@@ -189,13 +189,13 @@ pub enum PatternElement {
 impl PatternElement {
     /// True if this element always matches at least some byte without caring about the value.
     #[must_use]
-    pub fn is_wildcard(&self) -> bool {
+    pub const fn is_wildcard(&self) -> bool {
         matches!(self, PatternElement::Wild | PatternElement::Field { .. })
     }
 
     /// Returns the concrete byte if this element has exactly one possible value.
     #[must_use]
-    pub fn concrete_byte(&self) -> Option<u8> {
+    pub const fn concrete_byte(&self) -> Option<u8> {
         match self {
             PatternElement::Byte(b) => Some(*b),
             _ => None,
@@ -230,13 +230,13 @@ pub struct CompiledTemplate {
 impl CompiledTemplate {
     /// Total length (in bytes) of the pattern.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.elements.len()
     }
 
     /// True if the pattern has zero bytes.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
 
@@ -323,7 +323,7 @@ pub struct TemplateCompiler;
 impl TemplateCompiler {
     /// Create a new compiler.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 

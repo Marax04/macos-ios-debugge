@@ -44,7 +44,7 @@ pub struct DispatchSite {
     pub call_va: u64,
     /// The object register (e.g., register index 1 = RCX on Windows x64).
     pub object_reg: u8,
-    /// Byte offset into the vtable (slot index × pointer_size).
+    /// Byte offset into the vtable (slot index × `pointer_size`).
     pub vtable_offset: u32,
     /// Inferred vtable virtual address, if resolved.
     pub resolved_vtable_va: Option<u64>,
@@ -52,7 +52,7 @@ pub struct DispatchSite {
     pub resolved_callee_va: Option<u64>,
     /// Class name of the receiver, if inferred.
     pub receiver_class: Option<String>,
-    /// Slot index (vtable_offset / pointer_size).
+    /// Slot index (`vtable_offset` / `pointer_size`).
     pub slot_index: u32,
     /// Kind of dispatch.
     pub kind: DispatchKind,
@@ -83,7 +83,7 @@ impl DispatchSite {
     }
 
     /// Mark the dispatch site as resolved with the given vtable and callee.
-    pub fn resolve(&mut self, vtable_va: u64, callee_va: u64) {
+    pub const fn resolve(&mut self, vtable_va: u64, callee_va: u64) {
         self.resolved_vtable_va = Some(vtable_va);
         self.resolved_callee_va = Some(callee_va);
         self.resolved = true;
@@ -491,7 +491,7 @@ impl Default for DispatchAnalyzerConfig {
 #[derive(Debug, Default)]
 pub struct VirtualDispatchAnalyzer {
     pub config: DispatchAnalyzerConfig,
-    /// Known vtables: vtable_va → ordered list of function pointer VAs.
+    /// Known vtables: `vtable_va` → ordered list of function pointer VAs.
     vtables: HashMap<u64, Vec<u64>>,
     /// Map from class name to vtable VA.
     class_to_vtable: HashMap<String, u64>,

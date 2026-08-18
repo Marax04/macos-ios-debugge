@@ -73,7 +73,7 @@ impl CallTarget {
 
     /// Returns the symbol name if available.
     #[must_use]
-    pub fn name(&self) -> Option<&str> {
+    pub const fn name(&self) -> Option<&str> {
         match self {
             Self::Import(n) | Self::Named { name: n, .. } => Some(n.as_str()),
             Self::Direct(_) | Self::Indirect => None,

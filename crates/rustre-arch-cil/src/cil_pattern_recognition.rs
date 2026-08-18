@@ -43,7 +43,7 @@ impl fmt::Display for Pattern {
             Pattern::ThreadCreation      => write!(f, "ThreadCreation"),
             Pattern::ProcessSpawn        => write!(f, "ProcessSpawn"),
             Pattern::DllInjection        => write!(f, "DllInjection"),
-            Pattern::PInvoke(dll)        => write!(f, "PInvoke({})", dll),
+            Pattern::PInvoke(dll)        => write!(f, "PInvoke({dll})"),
             Pattern::UnsafePointerArith  => write!(f, "UnsafePointerArith"),
         }
     }
@@ -65,7 +65,8 @@ pub struct PatternMatch {
 }
 
 impl PatternMatch {
-    pub fn new(pattern: Pattern, offset: u32, confidence: f64, evidence: Vec<String>) -> Self {
+    #[must_use]
+    pub const fn new(pattern: Pattern, offset: u32, confidence: f64, evidence: Vec<String>) -> Self {
         Self { pattern, offset, confidence, evidence }
     }
 }
@@ -81,7 +82,8 @@ pub struct CilPatternRecognizer {
 }
 
 impl CilPatternRecognizer {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             include_low_confidence: false,
             min_confidence: 0.4,
@@ -89,6 +91,7 @@ impl CilPatternRecognizer {
     }
 
     /// Scan a raw CIL method body and return all detected patterns.
+    #[must_use]
     pub fn scan_method(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         matches.extend(self.detect_string_encryption(code));
@@ -116,6 +119,7 @@ impl CilPatternRecognizer {
     /// Detect string encryption: ldc.i4 + xor + stelem loop.
     ///
     /// Signature: a loop containing ldc.i4 (key byte), xor, stelem.
+    #[must_use]
     pub fn detect_string_encryption(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -160,6 +164,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect reflection: ldstr + call GetType/GetMethod/Invoke.
+    #[must_use]
     pub fn detect_reflection(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -186,6 +191,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect dynamic code: ldstr + newobj System.Reflection.Emit patterns.
+    #[must_use]
     pub fn detect_dynamic_code(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -220,7 +226,8 @@ impl CilPatternRecognizer {
         matches
     }
 
-    /// Detect anti-debug: call Debugger::IsAttached / DebuggerPresent patterns.
+    /// Detect anti-debug: call `Debugger::IsAttached` / `DebuggerPresent` patterns.
+    #[must_use]
     pub fn detect_anti_debug(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -260,7 +267,8 @@ impl CilPatternRecognizer {
         matches
     }
 
-    /// Detect P/Invoke: DllImport attribute usage in method body (ldstr → call pattern).
+    /// Detect P/Invoke: `DllImport` attribute usage in method body (ldstr → call pattern).
+    #[must_use]
     pub fn detect_pinvoke(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         // In CIL, P/Invoke methods are identified by their metadata flags.
@@ -302,6 +310,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect unsafe pointer arithmetic: conv.u / add / ldind variants.
+    #[must_use]
     pub fn detect_unsafe_pointer_arith(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -344,6 +353,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect network operations: call WebClient/HttpClient patterns.
+    #[must_use]
     pub fn detect_network_ops(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         // Look for newobj (0x73) + callvirt (0x6F) + callvirt — WebClient.DownloadString style
@@ -367,6 +377,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect file system operations: ldstr + call File/FileStream.
+    #[must_use]
     pub fn detect_file_ops(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -385,7 +396,8 @@ impl CilPatternRecognizer {
         matches
     }
 
-    /// Detect registry access: call OpenSubKey / GetValue patterns.
+    /// Detect registry access: call `OpenSubKey` / `GetValue` patterns.
+    #[must_use]
     pub fn detect_registry_ops(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -408,6 +420,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect thread creation: newobj Thread + callvirt Start.
+    #[must_use]
     pub fn detect_thread_creation(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -429,6 +442,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect process spawning: call Process.Start patterns.
+    #[must_use]
     pub fn detect_process_spawn(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -451,6 +465,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect resource extraction: call Assembly.GetManifestResourceStream.
+    #[must_use]
     pub fn detect_resource_extract(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;
@@ -470,6 +485,7 @@ impl CilPatternRecognizer {
     }
 
     /// Detect SQL query construction: ldstr + string.Concat/Format + call.
+    #[must_use]
     pub fn detect_sql_query(&self, code: &[u8]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         let mut i = 0usize;

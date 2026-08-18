@@ -161,7 +161,8 @@ impl BasicBlock {
     }
 
     /// Number of instructions.
-    pub fn insn_count(&self) -> usize { self.instructions.len() }
+    #[must_use]
+    pub const fn insn_count(&self) -> usize { self.instructions.len() }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,10 +188,12 @@ pub enum ChangeKind {
 
 impl ChangeKind {
     /// Returns true if this change is not `Unchanged`.
-    pub fn is_changed(&self) -> bool { !matches!(self, Self::Unchanged) }
+    #[must_use]
+    pub const fn is_changed(&self) -> bool { !matches!(self, Self::Unchanged) }
 
     /// Is this a security-relevant change?  Heuristic: size checks on immediates.
-    pub fn is_security_relevant(&self) -> bool {
+    #[must_use]
+    pub const fn is_security_relevant(&self) -> bool {
         matches!(self, Self::ConstantChange { .. } | Self::Inserted | Self::Deleted)
     }
 }
@@ -220,6 +223,7 @@ pub struct InsnDiffer;
 
 impl InsnDiffer {
     /// Diff `block_a` against `block_b`.  Returns the edit-distance sequence.
+    #[must_use]
     pub fn diff(block_a: &[Instruction], block_b: &[Instruction]) -> Vec<InsnDiffEntry> {
         let m = block_a.len();
         let n = block_b.len();
@@ -327,6 +331,7 @@ impl InsnDiffer {
     }
 
     /// Edit distance score (0.0 = identical, 1.0 = completely different).
+    #[must_use]
     pub fn edit_distance_score(block_a: &[Instruction], block_b: &[Instruction]) -> f64 {
         let entries = Self::diff(block_a, block_b);
         if entries.is_empty() { return 0.0; }
@@ -353,31 +358,37 @@ pub struct BlockMatch {
 
 impl BlockMatch {
     /// Returns true if the block pair has any changed instructions.
+    #[must_use]
     pub fn has_changes(&self) -> bool {
         self.insn_diff.iter().any(|e| e.kind.is_changed())
     }
 
     /// Number of inserted instructions.
+    #[must_use]
     pub fn inserted_count(&self) -> usize {
         self.insn_diff.iter().filter(|e| e.kind == ChangeKind::Inserted).count()
     }
 
     /// Number of deleted instructions.
+    #[must_use]
     pub fn deleted_count(&self) -> usize {
         self.insn_diff.iter().filter(|e| e.kind == ChangeKind::Deleted).count()
     }
 
     /// Number of structurally changed instructions.
+    #[must_use]
     pub fn structural_count(&self) -> usize {
         self.insn_diff.iter().filter(|e| e.kind == ChangeKind::Structural).count()
     }
 
     /// Number of constant-only changes.
+    #[must_use]
     pub fn constant_change_count(&self) -> usize {
         self.insn_diff.iter().filter(|e| matches!(e.kind, ChangeKind::ConstantChange { .. })).count()
     }
 
     /// Is this block likely a security-relevant change?
+    #[must_use]
     pub fn is_security_relevant(&self) -> bool {
         self.insn_diff.iter().any(|e| e.kind.is_security_relevant())
     }
@@ -406,6 +417,7 @@ pub struct FunctionDiff {
 
 impl FunctionDiff {
     /// Returns true if the function has any changes.
+    #[must_use]
     pub fn has_changes(&self) -> bool {
         !self.blocks_removed.is_empty()
             || !self.blocks_added.is_empty()
@@ -413,6 +425,7 @@ impl FunctionDiff {
     }
 
     /// Aggregated change statistics.
+    #[must_use]
     pub fn stats(&self) -> DiffStats {
         let mut stats = DiffStats::default();
         stats.blocks_added    = self.blocks_added.len();
@@ -427,6 +440,7 @@ impl FunctionDiff {
     }
 
     /// True if any block change looks security-relevant.
+    #[must_use]
     pub fn is_security_relevant(&self) -> bool {
         self.block_matches.iter().any(|bm| bm.is_security_relevant())
     }
@@ -445,7 +459,8 @@ pub struct DiffStats {
 
 impl DiffStats {
     /// Total changed instructions.
-    pub fn total_changes(&self) -> usize {
+    #[must_use]
+    pub const fn total_changes(&self) -> usize {
         self.insns_inserted + self.insns_deleted + self.insns_structural + self.insns_constant
     }
 }
@@ -481,7 +496,8 @@ impl Default for BasicBlockDiffer {
 
 impl BasicBlockDiffer {
     /// Create with custom threshold.
-    pub fn new(min_block_similarity: f64) -> Self {
+    #[must_use]
+    pub const fn new(min_block_similarity: f64) -> Self {
         Self { min_block_similarity: min_block_similarity.clamp(0.0, 1.0) }
     }
 
@@ -494,6 +510,7 @@ impl BasicBlockDiffer {
     /// capped to prevent dos-memory-exhaustion from crafted inputs.
     pub const MAX_BLOCKS_PER_FUNCTION: usize = 4_096;
 
+    #[must_use]
     pub fn diff_functions(
         &self,
         func_idx_a: usize,
@@ -594,6 +611,7 @@ impl BasicBlockDiffer {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Build a simple `BasicBlock` from a list of `(mnemonic, operands)` pairs.
+#[must_use]
 pub fn make_block(idx: usize, insns: &[(&str, &[Operand])]) -> BasicBlock {
     BasicBlock {
         idx,

@@ -85,6 +85,7 @@ pub struct RewriterBlock {
 }
 
 impl RewriterBlock {
+    #[must_use]
     pub fn new(address: Address) -> Self {
         Self {
             address,
@@ -99,6 +100,7 @@ impl RewriterBlock {
     }
 
     /// Return all successor addresses.
+    #[must_use]
     pub fn successors(&self) -> Vec<Address> {
         let mut s = Vec::new();
         if let Some(t) = self.taken { s.push(t); }
@@ -107,6 +109,7 @@ impl RewriterBlock {
     }
 
     /// Whether this block has exactly two outgoing edges.
+    #[must_use]
     pub fn is_conditional(&self) -> bool {
         !self.unconditional
             && self.taken.is_some()
@@ -173,7 +176,8 @@ pub struct RewriteResult {
 }
 
 impl RewriteResult {
-    pub fn empty() -> Self {
+    #[must_use]
+    pub const fn empty() -> Self {
         Self {
             rewrites: Vec::new(),
             dead_blocks: Vec::new(),
@@ -183,11 +187,13 @@ impl RewriteResult {
         }
     }
 
-    pub fn rewrite_count(&self) -> usize {
+    #[must_use]
+    pub const fn rewrite_count(&self) -> usize {
         self.rewrites.len()
     }
 
-    pub fn dead_block_count(&self) -> usize {
+    #[must_use]
+    pub const fn dead_block_count(&self) -> usize {
         self.dead_blocks.len()
     }
 }
@@ -238,16 +244,19 @@ impl Default for OpaqueRewriter {
 }
 
 impl OpaqueRewriter {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_min_confidence(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, t: f32) -> Self {
         self.min_confidence = t;
         self
     }
 
-    pub fn with_max_dce_passes(mut self, n: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_dce_passes(mut self, n: u32) -> Self {
         self.max_dce_passes = n;
         self
     }
@@ -442,6 +451,7 @@ impl OpaqueRewriter {
     // ── Reporting ─────────────────────────────────────────────────────────────
 
     /// Build a human-readable report of all rewrites.
+    #[must_use]
     pub fn build_report(&self, result: &RewriteResult) -> String {
         let mut lines = Vec::new();
         lines.push(format!(

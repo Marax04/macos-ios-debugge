@@ -51,17 +51,17 @@ impl fmt::Display for Mos6502Operand {
         match self {
             Mos6502Operand::Implied => Ok(()),
             Mos6502Operand::Accumulator => write!(f, "A"),
-            Mos6502Operand::Immediate(v) => write!(f, "#${:02X}", v),
-            Mos6502Operand::ZeroPage(a) => write!(f, "${:02X}", a),
-            Mos6502Operand::ZeroPageX(a) => write!(f, "${:02X},X", a),
-            Mos6502Operand::ZeroPageY(a) => write!(f, "${:02X},Y", a),
-            Mos6502Operand::Absolute(a) => write!(f, "${:04X}", a),
-            Mos6502Operand::AbsoluteX(a) => write!(f, "${:04X},X", a),
-            Mos6502Operand::AbsoluteY(a) => write!(f, "${:04X},Y", a),
-            Mos6502Operand::Indirect(a) => write!(f, "(${:04X})", a),
-            Mos6502Operand::IndirectX(a) => write!(f, "(${:02X},X)", a),
-            Mos6502Operand::IndirectY(a) => write!(f, "(${:02X}),Y", a),
-            Mos6502Operand::Relative(off) => write!(f, "{:+}", off),
+            Mos6502Operand::Immediate(v) => write!(f, "#${v:02X}"),
+            Mos6502Operand::ZeroPage(a) => write!(f, "${a:02X}"),
+            Mos6502Operand::ZeroPageX(a) => write!(f, "${a:02X},X"),
+            Mos6502Operand::ZeroPageY(a) => write!(f, "${a:02X},Y"),
+            Mos6502Operand::Absolute(a) => write!(f, "${a:04X}"),
+            Mos6502Operand::AbsoluteX(a) => write!(f, "${a:04X},X"),
+            Mos6502Operand::AbsoluteY(a) => write!(f, "${a:04X},Y"),
+            Mos6502Operand::Indirect(a) => write!(f, "(${a:04X})"),
+            Mos6502Operand::IndirectX(a) => write!(f, "(${a:02X},X)"),
+            Mos6502Operand::IndirectY(a) => write!(f, "(${a:02X}),Y"),
+            Mos6502Operand::Relative(off) => write!(f, "{off:+}"),
         }
     }
 }
@@ -89,11 +89,13 @@ pub struct Mos6502Insn {
 
 impl Mos6502Insn {
     /// Number of bytes this instruction occupies.
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Human-readable disassembly, e.g. `"LDA #$FF"`.
+    #[must_use]
     pub fn format_insn(&self) -> String {
         let op_str = self.operand.to_string();
         if op_str.is_empty() {
@@ -104,11 +106,13 @@ impl Mos6502Insn {
     }
 
     /// Address of the next instruction.
+    #[must_use]
     pub fn next_addr(&self) -> u16 {
         self.addr.wrapping_add(self.len() as u16)
     }
 
     /// Resolve the absolute branch target (for `Relative` operands).
+    #[must_use]
     pub fn branch_target(&self) -> Option<u16> {
         if let Mos6502Operand::Relative(off) = self.operand {
             let next = self.next_addr();
@@ -153,7 +157,7 @@ enum AddrMode {
 }
 
 impl AddrMode {
-    fn byte_count(self) -> usize {
+    const fn byte_count(self) -> usize {
         match self {
             AddrMode::Imp | AddrMode::Acc | AddrMode::Kil => 1,
             AddrMode::Imm
@@ -443,11 +447,13 @@ static OPCODE_TABLE: [OpcodeEntry; 256] = [
 pub struct Mos6502Disassembler;
 
 impl Mos6502Disassembler {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
-    /// Decode one instruction at `pc` from `data` (data is addressed from base_addr).
+    /// Decode one instruction at `pc` from `data` (data is addressed from `base_addr`).
+    #[must_use]
     pub fn decode_one(&self, data: &[u8], base_addr: u16, offset: usize) -> Option<Mos6502Insn> {
         if offset >= data.len() {
             return None;
@@ -504,6 +510,7 @@ impl Mos6502Disassembler {
     }
 
     /// Decode a complete buffer into instructions, starting from `base_addr`.
+    #[must_use]
     pub fn decode(&self, data: &[u8], base_addr: u16) -> Vec<Mos6502Insn> {
         // Average 6502 instruction is ~2 bytes; over-allocate slightly.
         let mut result = Vec::with_capacity(data.len() / 2 + 1);
@@ -522,6 +529,7 @@ impl Mos6502Disassembler {
 
     /// Detect BCD (Binary Coded Decimal) mode usage in the instruction stream.
     /// Returns offsets where `SED` (Set Decimal) is encountered.
+    #[must_use]
     pub fn detect_bcd_mode(&self, insns: &[Mos6502Insn]) -> Vec<u16> {
         insns.iter()
             .filter(|i| i.mnemonic == "SED")
@@ -531,6 +539,7 @@ impl Mos6502Disassembler {
 
     /// Read the 6502 interrupt vectors from the last 6 bytes of a ROM image.
     /// Standard layout: NMI at $FFFA/$FFFB, RESET at $FFFC/$FFFD, IRQ/BRK at $FFFE/$FFFF.
+    #[must_use]
     pub fn detect_irq_vectors(&self, data: &[u8]) -> Option<InterruptVectors> {
         if data.len() < 6 {
             return None;
@@ -543,6 +552,7 @@ impl Mos6502Disassembler {
     }
 
     /// Format a range of instructions as a listing string.
+    #[must_use]
     pub fn format_listing(&self, insns: &[Mos6502Insn]) -> String {
         use std::fmt::Write as _;
         // Reserve ~20 chars per instruction as a rough lower bound.
@@ -552,7 +562,7 @@ impl Mos6502Disassembler {
             // per instruction.
             let mut bytes_hex = String::with_capacity(insn.bytes.len() * 3);
             for b in &insn.bytes {
-                let _ = write!(bytes_hex, "{:02X} ", b);
+                let _ = write!(bytes_hex, "{b:02X} ");
             }
             let bytes_hex = bytes_hex.trim_end();
             let ill = if insn.illegal { '*' } else { ' ' };
@@ -569,11 +579,13 @@ impl Mos6502Disassembler {
     }
 
     /// Count cycles for a linear block (ignoring branches/page-crosses).
+    #[must_use]
     pub fn count_cycles(&self, insns: &[Mos6502Insn]) -> u32 {
         insns.iter().map(|i| i.cycles as u32).sum()
     }
 
     /// Find all JSR targets in the instruction stream.
+    #[must_use]
     pub fn find_jsr_targets(&self, insns: &[Mos6502Insn]) -> Vec<u16> {
         insns.iter()
             .filter_map(|i| {
@@ -587,6 +599,7 @@ impl Mos6502Disassembler {
     }
 
     /// Find all unconditional JMP targets.
+    #[must_use]
     pub fn find_jmp_targets(&self, insns: &[Mos6502Insn]) -> Vec<u16> {
         insns.iter()
             .filter_map(|i| {
@@ -600,11 +613,13 @@ impl Mos6502Disassembler {
     }
 
     /// Collect all illegal opcodes in a decoded stream.
+    #[must_use]
     pub fn find_illegal_opcodes<'a>(&self, insns: &'a [Mos6502Insn]) -> Vec<&'a Mos6502Insn> {
         insns.iter().filter(|i| i.illegal).collect()
     }
 
     /// Return the opcode entry for a raw byte.
+    #[must_use]
     pub fn opcode_info(opcode: u8) -> (&'static str, bool) {
         let e = OPCODE_TABLE[opcode as usize];
         (e.mnemonic, e.illegal)

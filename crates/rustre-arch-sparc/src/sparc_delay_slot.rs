@@ -24,7 +24,7 @@ pub enum AnnulBit {
 impl AnnulBit {
     /// Decode from the `a` bit of a SPARC instruction word.
     #[must_use]
-    pub fn from_word(word: u32) -> Self {
+    pub const fn from_word(word: u32) -> Self {
         // In format-2 (op=00) branches the annul bit is bit 29.
         if (word >> 29) & 1 == 1 { Self::Set } else { Self::NotSet }
     }
@@ -64,7 +64,7 @@ pub enum BranchCondition {
 impl BranchCondition {
     /// Decode from bits [28:25] (cond field) of a format-2 SPARC branch.
     #[must_use]
-    pub fn from_cond_bits(bits: u8) -> Self {
+    pub const fn from_cond_bits(bits: u8) -> Self {
         match bits & 0xF {
             0b0000 => Self::Never,
             0b0001 => Self::Equal,
@@ -87,7 +87,7 @@ impl BranchCondition {
 
     /// Return the mnemonic suffix (e.g. `"ne"`, `"ge"`, `"a"`).
     #[must_use]
-    pub fn mnemonic(self) -> &'static str {
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Never => "n",
             Self::Equal => "e",
@@ -110,13 +110,13 @@ impl BranchCondition {
 
     /// Returns `true` if the condition is unconditional (`Always`) or `Never`.
     #[must_use]
-    pub fn is_unconditional(self) -> bool {
+    pub const fn is_unconditional(self) -> bool {
         matches!(self, Self::Always | Self::Never)
     }
 
     /// Returns the logical negation.
     #[must_use]
-    pub fn negate(self) -> Self {
+    pub const fn negate(self) -> Self {
         match self {
             Self::Equal => Self::NotEqual,
             Self::NotEqual => Self::Equal,
@@ -179,7 +179,7 @@ pub enum DelayEffect {
 impl DelayEffect {
     /// Compute the effect for a given annul bit and whether the branch is taken.
     #[must_use]
-    pub fn evaluate(annul: AnnulBit, taken: bool) -> bool {
+    pub const fn evaluate(annul: AnnulBit, taken: bool) -> bool {
         match annul {
             AnnulBit::NotSet => true,          // always executes
             AnnulBit::Set => taken,            // squashed if not taken
@@ -198,7 +198,7 @@ pub struct SparcDelaySlot {
     pub branch_pc: u32,
     /// PC of the delay-slot instruction (always `branch_pc + 4`).
     pub delay_pc: u32,
-    /// PC of the branch target (relative + branch_pc, computed).
+    /// PC of the branch target (relative + `branch_pc`, computed).
     pub target_pc: u32,
     /// The branch kind.
     pub kind: BranchKind,
@@ -238,7 +238,7 @@ impl SparcDelaySlot {
 
     /// Whether the delay slot is useful (not NOP, actually does work).
     #[must_use]
-    pub fn is_useful_delay(&self) -> bool {
+    pub const fn is_useful_delay(&self) -> bool {
         !self.delay_is_nop
     }
 
@@ -339,7 +339,7 @@ pub fn analyze_branch(pc: u32, branch_word: u32, delay_word: u32) -> Option<Spar
 
 /// Returns `true` if the word is a SPARC NOP (`sethi %g0, 0` = `0x01000000`).
 #[must_use]
-pub fn is_nop(word: u32) -> bool {
+pub const fn is_nop(word: u32) -> bool {
     word == 0x0100_0000
 }
 
@@ -392,7 +392,7 @@ pub struct DelaySlotScanner {
 impl DelaySlotScanner {
     /// Create a new scanner with all reporting enabled.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { report_nop_delays: true, report_annulled: true }
     }
 

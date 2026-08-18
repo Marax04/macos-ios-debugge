@@ -76,7 +76,7 @@ impl StringContext {
     }
 
     #[must_use]
-    pub fn api_count(&self) -> usize {
+    pub const fn api_count(&self) -> usize {
         self.nearby_apis.len()
     }
 
@@ -100,7 +100,7 @@ pub struct StringFunction {
 
 impl StringFunction {
     #[must_use]
-    pub fn string_count(&self) -> usize {
+    pub const fn string_count(&self) -> usize {
         self.contexts.len()
     }
 
@@ -159,7 +159,7 @@ pub struct StringGroup {
 
 impl StringGroup {
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         self.strings.len()
     }
 }
@@ -202,13 +202,14 @@ pub struct ExtractorStats {
 pub struct ContextExtractor {
     config: ExtractorConfig,
     stats: ExtractorStats,
-    /// function_va -> StringFunction
+    /// `function_va` -> `StringFunction`
     functions: HashMap<Va, StringFunction>,
     /// All API-near-string pairs
     api_pairs: Vec<ApiNearString>,
 }
 
 impl ContextExtractor {
+    #[must_use]
     pub fn new(config: ExtractorConfig) -> Self {
         Self {
             config,
@@ -218,14 +219,15 @@ impl ContextExtractor {
         }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ExtractorConfig::default())
     }
 
     /// Ingest a function's instruction-level data.
     ///
-    /// `string_loads` = (insn_offset, string_value, load_va)
-    /// `call_sites` = (insn_offset, callee_name, callee_va, call_va)
+    /// `string_loads` = (`insn_offset`, `string_value`, `load_va`)
+    /// `call_sites` = (`insn_offset`, `callee_name`, `callee_va`, `call_va`)
     pub fn ingest_function(
         &mut self,
         function_va: Va,
@@ -341,6 +343,7 @@ impl ContextExtractor {
     }
 
     /// Group strings by shared API proximity.
+    #[must_use]
     pub fn group_by_api(&self) -> Vec<StringGroup> {
         // Build: api_name -> set of (string, function_va)
         let mut api_to_strings: HashMap<String, Vec<(String, Va)>> = HashMap::new();
@@ -398,6 +401,7 @@ impl ContextExtractor {
     }
 
     /// Find all strings with a given semantic tag.
+    #[must_use]
     pub fn strings_by_tag(&self, tag: &str) -> Vec<&str> {
         // Deterministic output order: walk contexts in sorted-VA order.
         self.all_contexts()
@@ -408,6 +412,7 @@ impl ContextExtractor {
     }
 
     /// Return all functions that reference a given string value.
+    #[must_use]
     pub fn functions_with_string(&self, s: &str) -> Vec<Va> {
         let mut out: Vec<Va> = self.functions.values()
             .filter(|f| f.contexts.iter().any(|c| c.string_ref.string == s))
@@ -418,7 +423,7 @@ impl ContextExtractor {
     }
 
     #[must_use]
-    pub fn stats(&self) -> &ExtractorStats {
+    pub const fn stats(&self) -> &ExtractorStats {
         &self.stats
     }
 

@@ -80,7 +80,7 @@ impl SparcReg {
 
     /// The within-class sub-index (0–7).
     #[must_use]
-    pub fn sub_index(self) -> u8 {
+    pub const fn sub_index(self) -> u8 {
         self.index % 8
     }
 
@@ -292,7 +292,7 @@ impl SparcCondCode {
     }
 
     /// Update condition codes from an integer result.
-    pub fn update_from_result(&mut self, result: i64, prev_a: i64, prev_b: i64, width: u8) {
+    pub const fn update_from_result(&mut self, result: i64, prev_a: i64, prev_b: i64, width: u8) {
         let mask: i64 = match width {
             8 => 0xFF,
             16 => 0xFFFF,
@@ -328,11 +328,11 @@ impl SparcCondCode {
         };
     }
 
-    /// Evaluate a branch condition (Bicc / BPcc).
+    /// Evaluate a branch condition (Bicc / `BPcc`).
     ///
     /// Condition codes follow SPARC v9 Table 3-2.
     #[must_use]
-    pub fn evaluate(&self, cond: u8) -> bool {
+    pub const fn evaluate(&self, cond: u8) -> bool {
         match cond & 0xF {
             0x0 => false,                          // BN  (never)
             0x1 => self.z,                         // BE
@@ -365,7 +365,7 @@ impl SparcCondCode {
 
     /// Unpack from the 4-bit icc field.
     #[must_use]
-    pub fn unpack_icc(bits: u8) -> Self {
+    pub const fn unpack_icc(bits: u8) -> Self {
         Self {
             n: (bits >> 3) & 1 != 0,
             z: (bits >> 2) & 1 != 0,
@@ -578,13 +578,13 @@ impl RegWindowState {
     }
 
     /// Flush all windows to memory (conceptually — here we just reset WIM).
-    pub fn flush_windows(&mut self) {
+    pub const fn flush_windows(&mut self) {
         self.wim = 1 << ((self.cwp + 1) % self.nwindows);
     }
 
     /// Read a single-precision floating-point register.
     #[must_use]
-    pub fn read_fp_single(&self, index: u8) -> f32 {
+    pub const fn read_fp_single(&self, index: u8) -> f32 {
         (self.fp_regs[(index & 63) as usize]) as f32
     }
 
@@ -595,23 +595,23 @@ impl RegWindowState {
 
     /// Read a double-precision floating-point register.
     #[must_use]
-    pub fn read_fp_double(&self, index: u8) -> f64 {
+    pub const fn read_fp_double(&self, index: u8) -> f64 {
         self.fp_regs[(index & 63) as usize]
     }
 
     /// Write a double-precision floating-point register.
-    pub fn write_fp_double(&mut self, index: u8, value: f64) {
+    pub const fn write_fp_double(&mut self, index: u8, value: f64) {
         self.fp_regs[(index & 63) as usize] = value;
     }
 
     /// Advance the program counter (step to next instruction).
-    pub fn advance_pc(&mut self) {
+    pub const fn advance_pc(&mut self) {
         self.pc = self.npc;
         self.npc = self.npc.wrapping_add(4);
     }
 
     /// Perform a branch: set NPC to `target`.
-    pub fn branch_to(&mut self, target: u64) {
+    pub const fn branch_to(&mut self, target: u64) {
         self.pc = self.npc;
         self.npc = target;
     }

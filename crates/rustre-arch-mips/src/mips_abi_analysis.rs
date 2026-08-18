@@ -103,37 +103,37 @@ impl O32Abi {
 
     /// Stack pointer name.
     #[must_use]
-    pub fn stack_pointer() -> &'static str {
+    pub const fn stack_pointer() -> &'static str {
         "sp"
     }
 
     /// Return address register.
     #[must_use]
-    pub fn return_address() -> &'static str {
+    pub const fn return_address() -> &'static str {
         "ra"
     }
 
     /// Global pointer register.
     #[must_use]
-    pub fn global_pointer() -> &'static str {
+    pub const fn global_pointer() -> &'static str {
         "gp"
     }
 
     /// Frame pointer register.
     #[must_use]
-    pub fn frame_pointer() -> &'static str {
+    pub const fn frame_pointer() -> &'static str {
         "fp"
     }
 
     /// Stack alignment in bytes.
     #[must_use]
-    pub fn stack_alignment() -> usize {
+    pub const fn stack_alignment() -> usize {
         8
     }
 
     /// Minimum stack frame size (back-chain + saved-ra area in O32).
     #[must_use]
-    pub fn min_frame_size() -> usize {
+    pub const fn min_frame_size() -> usize {
         32
     }
 }
@@ -197,13 +197,13 @@ impl N64Abi {
 
     /// Maximum integer args in registers.
     #[must_use]
-    pub fn max_int_args_in_regs(&self) -> usize {
+    pub const fn max_int_args_in_regs(&self) -> usize {
         self.int_args.len()
     }
 
     /// Stack alignment for N64 (16 bytes).
     #[must_use]
-    pub fn stack_alignment() -> usize {
+    pub const fn stack_alignment() -> usize {
         16
     }
 
@@ -258,7 +258,7 @@ impl MipsEabi {
 
     /// Stack alignment for EABI.
     #[must_use]
-    pub fn stack_alignment(&self) -> usize {
+    pub const fn stack_alignment(&self) -> usize {
         if self.is_32bit { 8 } else { 16 }
     }
 
@@ -361,7 +361,7 @@ impl ArgPassingRules {
     }
 
     /// Reset for a new function call.
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.next_int = 0;
         self.next_fp = 0;
         self.stack_offset = 0;
@@ -369,7 +369,7 @@ impl ArgPassingRules {
 
     /// Number of arguments that fit in registers.
     #[must_use]
-    pub fn regs_used(&self) -> usize {
+    pub const fn regs_used(&self) -> usize {
         self.next_int + self.next_fp
     }
 }
@@ -412,7 +412,7 @@ impl GlobalPointerUsage {
     }
 
     /// Set the GP base value.
-    pub fn set_gp(&mut self, value: u64) {
+    pub const fn set_gp(&mut self, value: u64) {
         self.gp_value = value;
         self.gp_initialized = true;
     }
@@ -505,7 +505,7 @@ pub struct MipsGot {
     /// All entries.
     pub entries: Vec<GotEntry>,
     /// Map from offset to entry index.
-    /// Uses BTreeMap rather than HashMap to prevent hash-collision DoS when
+    /// Uses `BTreeMap` rather than `HashMap` to prevent hash-collision `DoS` when
     /// keys come from attacker-controlled GOT offsets in binary input.
     offset_to_idx: BTreeMap<usize, usize>,
 }
@@ -547,13 +547,13 @@ impl MipsGot {
 
     /// Number of entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether the GOT is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
@@ -665,7 +665,7 @@ impl MipsAbiAnalysis {
     }
 
     /// Record an instruction at an address.
-    pub fn record_instruction(&mut self, _mnemonic: &str, _address: u64) {
+    pub const fn record_instruction(&mut self, _mnemonic: &str, _address: u64) {
         self.total_instructions += 1;
     }
 

@@ -195,6 +195,7 @@ impl VkCell {
     /// # Panics
     ///
     /// Panics if an internal invariant is violated.
+    #[must_use]
     pub fn parse_data(&self, hbin_data: &[u8]) -> RegValue {
         let raw: Vec<u8> = if self.data_inline {
             // Inline: low 4 bytes of data_offset field hold the value

@@ -18,11 +18,11 @@ pub struct PdfCatalog {
     pub outlines_ref: Option<u32>,
     /// Object number of the XMP metadata stream.
     pub metadata_ref: Option<u32>,
-    /// Whether an AcroForm dictionary is present.
+    /// Whether an `AcroForm` dictionary is present.
     pub acroform: bool,
     /// Count of JavaScript action dictionaries found.
     pub javascript_count: usize,
-    /// Whether an /OpenAction is present in the catalog.
+    /// Whether an /`OpenAction` is present in the catalog.
     pub openaction: bool,
 }
 

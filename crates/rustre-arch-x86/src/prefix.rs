@@ -55,7 +55,7 @@ impl RexPrefix {
     ///
     /// Returns the extended (4-bit) register index.
     #[must_use]
-    pub fn extend_reg(&self, reg3: u8) -> u8 {
+    pub const fn extend_reg(&self, reg3: u8) -> u8 {
         reg3 | (if self.r { 8 } else { 0 })
     }
 
@@ -63,7 +63,7 @@ impl RexPrefix {
     ///
     /// Returns the extended (4-bit) register index.
     #[must_use]
-    pub fn extend_rm(&self, rm3: u8) -> u8 {
+    pub const fn extend_rm(&self, rm3: u8) -> u8 {
         rm3 | (if self.b { 8 } else { 0 })
     }
 
@@ -71,7 +71,7 @@ impl RexPrefix {
     ///
     /// Returns the extended (4-bit) register index.
     #[must_use]
-    pub fn extend_index(&self, idx3: u8) -> u8 {
+    pub const fn extend_index(&self, idx3: u8) -> u8 {
         idx3 | (if self.x { 8 } else { 0 })
     }
 
@@ -79,7 +79,7 @@ impl RexPrefix {
     ///
     /// Returns the extended (4-bit) register index.
     #[must_use]
-    pub fn extend_base(&self, base3: u8) -> u8 {
+    pub const fn extend_base(&self, base3: u8) -> u8 {
         base3 | (if self.b { 8 } else { 0 })
     }
 }
@@ -103,7 +103,7 @@ pub enum VexMap {
 }
 
 impl VexMap {
-    fn from_u8(v: u8) -> Self {
+    const fn from_u8(v: u8) -> Self {
         match v {
             1 => Self::Map0F,
             2 => Self::Map0F38,
@@ -200,31 +200,31 @@ impl VexPrefix {
 
     /// Extend a 3-bit ModRM.reg with VEX.R.
     #[must_use]
-    pub fn extend_reg(&self, reg3: u8) -> u8 {
+    pub const fn extend_reg(&self, reg3: u8) -> u8 {
         reg3 | (if self.r { 8 } else { 0 })
     }
 
     /// Extend a 3-bit ModRM.r/m or SIB.base with VEX.B.
     #[must_use]
-    pub fn extend_rm(&self, rm3: u8) -> u8 {
+    pub const fn extend_rm(&self, rm3: u8) -> u8 {
         rm3 | (if self.b { 8 } else { 0 })
     }
 
     /// Extend a 3-bit SIB.index with VEX.X.
     #[must_use]
-    pub fn extend_index(&self, idx3: u8) -> u8 {
+    pub const fn extend_index(&self, idx3: u8) -> u8 {
         idx3 | (if self.x { 8 } else { 0 })
     }
 
     /// The decoded vvvv register index (0–15).
     #[must_use]
-    pub fn vvvv_reg(&self) -> u8 {
+    pub const fn vvvv_reg(&self) -> u8 {
         self.vvvv
     }
 
     /// Whether this is a 256-bit (YMM) operation.
     #[must_use]
-    pub fn is_256(&self) -> bool {
+    pub const fn is_256(&self) -> bool {
         self.l
     }
 }
@@ -292,25 +292,25 @@ impl EvexPrefix {
 
     /// Reconstruct the full (5-bit) NDS register index from vvvv and V'.
     #[must_use]
-    pub fn nds_reg(&self) -> u8 {
+    pub const fn nds_reg(&self) -> u8 {
         self.vvvv | (if self.v_prime { 0 } else { 16 })
     }
 
     /// Whether this is a 512-bit (ZMM) vector operation.
     #[must_use]
-    pub fn is_zmm(&self) -> bool {
+    pub const fn is_zmm(&self) -> bool {
         self.ll == 2
     }
 
     /// Whether this is a 256-bit (YMM) vector operation.
     #[must_use]
-    pub fn is_ymm(&self) -> bool {
+    pub const fn is_ymm(&self) -> bool {
         self.ll == 1
     }
 
     /// Whether this is a 128-bit (XMM) vector operation.
     #[must_use]
-    pub fn is_xmm(&self) -> bool {
+    pub const fn is_xmm(&self) -> bool {
         self.ll == 0
     }
 
@@ -318,20 +318,20 @@ impl EvexPrefix {
     ///
     /// Returns a 5-bit index (0–31).
     #[must_use]
-    pub fn extend_reg(&self, reg3: u8) -> u8 {
+    pub const fn extend_reg(&self, reg3: u8) -> u8 {
         let r4 = reg3 | (if self.r { 8 } else { 0 });
         r4 | (if self.r_prime { 16 } else { 0 })
     }
 
     /// Extend a 3-bit ModRM.r/m or SIB.base with B.
     #[must_use]
-    pub fn extend_rm(&self, rm3: u8) -> u8 {
+    pub const fn extend_rm(&self, rm3: u8) -> u8 {
         rm3 | (if self.b { 8 } else { 0 })
     }
 
     /// Extend a 3-bit SIB.index with X.
     #[must_use]
-    pub fn extend_index(&self, idx3: u8) -> u8 {
+    pub const fn extend_index(&self, idx3: u8) -> u8 {
         idx3 | (if self.x { 8 } else { 0 })
     }
 }
@@ -374,7 +374,7 @@ pub enum LegacyPrefix {
 
 /// Classify a byte as a legacy prefix, returning `None` if not a prefix.
 #[must_use]
-pub fn classify_legacy_prefix(byte: u8) -> Option<LegacyPrefix> {
+pub const fn classify_legacy_prefix(byte: u8) -> Option<LegacyPrefix> {
     match byte {
         0xF0 => Some(LegacyPrefix::Lock),
         0xF2 => Some(LegacyPrefix::RepNe),

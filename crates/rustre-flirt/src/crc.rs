@@ -11,7 +11,7 @@
 //! validate.
 //!
 //! Every CRC in this stack must come from here. Each variant is named after its
-//! catalogue entry (per the Rocksoft model / CRC RevEng catalogue) rather than
+//! catalogue entry (per the Rocksoft model / CRC `RevEng` catalogue) rather than
 //! after where it happened to be used, so that "which one is the FLIRT one?" is
 //! answered in exactly one place: [`flirt_tail`].
 //!

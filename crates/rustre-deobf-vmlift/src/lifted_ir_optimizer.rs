@@ -33,11 +33,13 @@ pub enum IrVal {
 }
 
 impl IrVal {
-    pub fn is_const(&self) -> bool {
+    #[must_use]
+    pub const fn is_const(&self) -> bool {
         matches!(self, IrVal::Const(_))
     }
 
-    pub fn as_const(&self) -> Option<Const> {
+    #[must_use]
+    pub const fn as_const(&self) -> Option<Const> {
         if let IrVal::Const(v) = self {
             Some(*v)
         } else {
@@ -57,6 +59,7 @@ pub enum IrBinOp {
 
 impl IrBinOp {
     /// Evaluate this operation on two constants.
+    #[must_use]
     pub fn eval(self, lhs: u64, rhs: u64) -> u64 {
         match self {
             Self::Add  => lhs.wrapping_add(rhs),
@@ -84,7 +87,8 @@ impl IrBinOp {
     }
 
     /// Return the identity element for this operation, if any.
-    pub fn identity(self) -> Option<u64> {
+    #[must_use]
+    pub const fn identity(self) -> Option<u64> {
         match self {
             Self::Add | Self::Or | Self::Xor => Some(0),
             Self::Sub => Some(0),   // x - 0 = x
@@ -96,7 +100,8 @@ impl IrBinOp {
     }
 
     /// Return the absorbing element for this operation, if any.
-    pub fn absorbing(self) -> Option<u64> {
+    #[must_use]
+    pub const fn absorbing(self) -> Option<u64> {
         match self {
             Self::And | Self::Mul => Some(0),
             Self::Or => Some(u64::MAX),
@@ -112,7 +117,8 @@ pub enum IrUnaryOp {
 }
 
 impl IrUnaryOp {
-    pub fn eval(self, v: u64) -> u64 {
+    #[must_use]
+    pub const fn eval(self, v: u64) -> u64 {
         match self {
             Self::Not    => !v,
             Self::Neg    => v.wrapping_neg(),
@@ -157,7 +163,8 @@ pub enum IrInsn {
 
 impl IrInsn {
     /// Return the destination register of this instruction, if any.
-    pub fn dst(&self) -> Option<VReg> {
+    #[must_use]
+    pub const fn dst(&self) -> Option<VReg> {
         match self {
             IrInsn::Assign { dst, .. }
             | IrInsn::BinOp { dst, .. }
@@ -168,6 +175,7 @@ impl IrInsn {
     }
 
     /// Return all source registers used by this instruction.
+    #[must_use]
     pub fn uses(&self) -> Vec<VReg> {
         let mut regs = Vec::with_capacity(2);
         match self {
@@ -210,7 +218,8 @@ pub struct IrBlock {
 }
 
 impl IrBlock {
-    pub fn new(id: u32, address: u64) -> Self {
+    #[must_use]
+    pub const fn new(id: u32, address: u64) -> Self {
         Self {
             id,
             address,
@@ -220,6 +229,7 @@ impl IrBlock {
         }
     }
 
+    #[must_use]
     pub fn live_defs(&self) -> HashSet<VReg> {
         self.insns.iter().filter_map(|i| i.dst()).collect()
     }
@@ -234,6 +244,7 @@ pub struct IrFunction {
 }
 
 impl IrFunction {
+    #[must_use]
     pub fn new(entry: u32) -> Self {
         Self {
             entry_block: entry,
@@ -242,12 +253,13 @@ impl IrFunction {
         }
     }
 
-    pub fn fresh_vreg(&mut self) -> VReg {
+    pub const fn fresh_vreg(&mut self) -> VReg {
         let r = self.next_vreg;
         self.next_vreg += 1;
         r
     }
 
+    #[must_use]
     pub fn block_order(&self) -> Vec<u32> {
         // BFS from entry
         let cap = self.blocks.len();
@@ -500,7 +512,7 @@ impl RedundantMemOpElimination {
             for (idx, insn) in block.insns.iter_mut().enumerate() {
                 match insn.clone() {
                     IrInsn::Load { dst, addr, offset, width } => {
-                        let key = (format!("{:?}", addr), offset, width);
+                        let key = (format!("{addr:?}"), offset, width);
                         if let Some(&prev_dst) = last_load.get(&key) {
                             // Replace with register copy
                             *insn = IrInsn::Assign { dst, val: IrVal::Reg(prev_dst) };
@@ -519,7 +531,7 @@ impl RedundantMemOpElimination {
                     // optimisation with a different correctness argument — it
                     // is not folded in here silently.)
                     IrInsn::Store { addr, offset, val: _, width } => {
-                        let key = (format!("{:?}", addr), offset, width);
+                        let key = (format!("{addr:?}"), offset, width);
                         // Invalidate any cached load for this address
                         last_load.remove(&key);
 
@@ -823,13 +835,15 @@ impl Default for LiftedIrOptimizer {
 }
 
 impl LiftedIrOptimizer {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: OptimizerConfig::default(),
         }
     }
 
-    pub fn with_config(config: OptimizerConfig) -> Self {
+    #[must_use]
+    pub const fn with_config(config: OptimizerConfig) -> Self {
         Self { config }
     }
 

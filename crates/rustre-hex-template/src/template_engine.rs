@@ -420,7 +420,7 @@ impl TemplateResult {
     }
 
     #[must_use]
-    pub fn total_size(&self) -> u64 {
+    pub const fn total_size(&self) -> u64 {
         self.bytes_consumed
     }
 }
@@ -697,7 +697,7 @@ pub struct TemplateEngine {
 
 impl TemplateEngine {
     #[must_use]
-    pub fn new(data: Vec<u8>) -> Self {
+    pub const fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
 

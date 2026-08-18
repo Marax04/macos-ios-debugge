@@ -65,7 +65,7 @@ impl fmt::Display for DispatchPattern {
 impl DispatchPattern {
     /// Returns `true` if this pattern uses a jump table.
     #[must_use]
-    pub fn uses_jump_table(&self) -> bool {
+    pub const fn uses_jump_table(&self) -> bool {
         matches!(
             self,
             Self::ScaledIndexJmp | Self::ScaledIndexJmp32 | Self::TableCall | Self::ComputedJmp
@@ -74,7 +74,7 @@ impl DispatchPattern {
 
     /// Heuristic estimate of the maximum number of handlers this pattern supports.
     #[must_use]
-    pub fn max_handlers(&self) -> usize {
+    pub const fn max_handlers(&self) -> usize {
         match self {
             Self::ScaledIndexJmp | Self::ScaledIndexJmp32 | Self::TableCall => 256,
             Self::ComputedJmp => 256,
@@ -111,7 +111,7 @@ pub struct DispatchTable {
 impl DispatchTable {
     /// Create a new dispatch table descriptor.
     #[must_use]
-    pub fn new(offset: usize, virtual_address: u64, pattern: DispatchPattern, confidence: u8) -> Self {
+    pub const fn new(offset: usize, virtual_address: u64, pattern: DispatchPattern, confidence: u8) -> Self {
         Self {
             offset,
             virtual_address,
@@ -130,7 +130,7 @@ impl DispatchTable {
     }
 
     /// Set the estimated handler count directly (when addresses are unavailable).
-    pub fn set_handler_count(&mut self, n: usize) {
+    pub const fn set_handler_count(&mut self, n: usize) {
         self.handler_count = n;
     }
 
@@ -141,7 +141,7 @@ impl DispatchTable {
 
     /// Returns `true` if this site meets the given confidence threshold.
     #[must_use]
-    pub fn is_confident(&self, min: u8) -> bool {
+    pub const fn is_confident(&self, min: u8) -> bool {
         self.confidence >= min
     }
 }
@@ -167,7 +167,7 @@ struct ByteScanner<'a> {
 }
 
 impl<'a> ByteScanner<'a> {
-    fn new(data: &'a [u8], base: u64) -> Self {
+    const fn new(data: &'a [u8], base: u64) -> Self {
         Self { data, base }
     }
 
@@ -196,7 +196,7 @@ impl<'a> ByteScanner<'a> {
     }
 
     /// Address at offset `i`.
-    fn addr_of(&self, offset: usize) -> u64 {
+    const fn addr_of(&self, offset: usize) -> u64 {
         self.base + offset as u64
     }
 }
@@ -252,13 +252,15 @@ impl VmDispatcherFinder {
     }
 
     /// Set the virtual base address of the buffer.
-    pub fn with_base(mut self, base: u64) -> Self {
+    #[must_use]
+    pub const fn with_base(mut self, base: u64) -> Self {
         self.base = base;
         self
     }
 
     /// Override the minimum confidence threshold.
-    pub fn with_min_confidence(mut self, c: u8) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, c: u8) -> Self {
         self.min_confidence = c;
         self
     }
@@ -308,7 +310,7 @@ impl VmDispatcherFinder {
         map
     }
 
-    /// Summarise dispatch table stats: (pattern, count, avg_confidence).
+    /// Summarise dispatch table stats: (pattern, count, `avg_confidence`).
     #[must_use]
     pub fn summarize(tables: &[DispatchTable]) -> Vec<(DispatchPattern, usize, u8)> {
         let mut map: HashMap<String, (DispatchPattern, Vec<u8>)> = HashMap::new();
@@ -354,7 +356,7 @@ impl VmDispatcherFinder {
                     for e in entries {
                         dt.add_entry(e);
                     }
-                    dt.add_note(format!("FF 24 CD dispatch; table_va={:#x}", table_va));
+                    dt.add_note(format!("FF 24 CD dispatch; table_va={table_va:#x}"));
                     Some(dt)
                 },
             },
@@ -374,7 +376,7 @@ impl VmDispatcherFinder {
                         80,
                     );
                     dt.set_handler_count(256);
-                    dt.add_note(format!("FF 24 85 dispatch; table_va={:#x}", disp));
+                    dt.add_note(format!("FF 24 85 dispatch; table_va={disp:#x}"));
                     Some(dt)
                 },
             },
@@ -491,7 +493,7 @@ impl VmDispatcherFinder {
                         conf,
                     );
                     dt.set_handler_count(count);
-                    dt.add_note(format!("linear CMP/JE chain of {} handlers", count));
+                    dt.add_note(format!("linear CMP/JE chain of {count} handlers"));
                     Some(dt)
                 },
             },
@@ -530,7 +532,7 @@ impl VmDispatcherFinder {
                         conf,
                     );
                     dt.set_handler_count(count);
-                    dt.add_note(format!("switch-tree CMP r/m8 chain; {} nodes", count));
+                    dt.add_note(format!("switch-tree CMP r/m8 chain; {count} nodes"));
                     Some(dt)
                 },
             },
@@ -607,7 +609,7 @@ pub struct DispatchSite {
 impl DispatchSite {
     /// Wrap a dispatch table in a site descriptor.
     #[must_use]
-    pub fn from_table(table: DispatchTable, is_primary: bool) -> Self {
+    pub const fn from_table(table: DispatchTable, is_primary: bool) -> Self {
         let bits = match table.handler_count {
             0..=15   => 4,
             16..=255 => 8,

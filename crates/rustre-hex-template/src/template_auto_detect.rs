@@ -108,6 +108,7 @@ pub struct TemplateDescriptor {
 impl TemplateDescriptor {
     /// Compute a detection score for `data` with optional `file_extension`.
     /// Returns `None` if the descriptor definitively does not match.
+    #[must_use]
     pub fn score(&self, data: &[u8], file_extension: Option<&str>) -> Option<f32> {
         if data.len() < self.min_size {
             return None;
@@ -310,6 +311,7 @@ impl AutoDetector {
     }
 
     /// Detect all plausible templates (sorted by score).
+    #[must_use]
     pub fn detect_all(&self, data: &[u8], filename: Option<&str>) -> Vec<DetectionResult> {
         let ext = filename
             .and_then(|f| Path::new(f).extension())
@@ -334,7 +336,7 @@ impl AutoDetector {
 
     /// Number of registered descriptors.
     #[must_use]
-    pub fn descriptor_count(&self) -> usize {
+    pub const fn descriptor_count(&self) -> usize {
         self.descriptors.len()
     }
 

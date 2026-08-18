@@ -6,7 +6,7 @@
 //! URL percent-encoding, Unicode `\uXXXX`, ROT-13, ROT-47, hex strings, and
 //! single-byte alphabet substitution detected by frequency).
 //!
-//! For **non-standard / custom** encodings (Base32, RotN for N≠13, full
+//! For **non-standard / custom** encodings (Base32, `RotN` for N≠13, full
 //! 256-byte substitution tables, reversed strings, custom-alphabet Base64/32)
 //! see [`crate::custom_encoding_detector`].
 
@@ -94,7 +94,7 @@ impl DecodedString {
 
     /// Returns `true` if the decoded bytes form valid UTF-8.
     #[must_use]
-    pub fn is_valid_utf8(&self) -> bool {
+    pub const fn is_valid_utf8(&self) -> bool {
         self.decoded_str.is_some()
     }
 
@@ -140,7 +140,7 @@ pub struct EncodingResult {
 impl EncodingResult {
     /// Create an empty result.
     #[must_use]
-    pub fn new(input: String) -> Self {
+    pub const fn new(input: String) -> Self {
         Self {
             input,
             candidates: Vec::new(),
@@ -164,7 +164,7 @@ impl EncodingResult {
 
     /// Returns `true` if any encoding was detected.
     #[must_use]
-    pub fn any_detected(&self) -> bool {
+    pub const fn any_detected(&self) -> bool {
         self.best.is_some()
     }
 }
@@ -296,7 +296,7 @@ pub struct HexStringDetector;
 impl HexStringDetector {
     /// Create a new detector.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -744,7 +744,7 @@ fn decode_base64(s: &str, url_safe: bool) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn b64_val_std(c: u8) -> Option<u8> {
+const fn b64_val_std(c: u8) -> Option<u8> {
     match c {
         b'A'..=b'Z' => Some(c - b'A'),
         b'a'..=b'z' => Some(c - b'a' + 26),
@@ -763,11 +763,11 @@ fn b64_val_url(c: u8) -> Option<u8> {
     }
 }
 
-fn is_b64_char(b: u8) -> bool {
+const fn is_b64_char(b: u8) -> bool {
     matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/' | b'-' | b'_')
 }
 
-fn hex_nibble(c: u8) -> Option<u8> {
+const fn hex_nibble(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
         b'a'..=b'f' => Some(c - b'a' + 10),

@@ -77,7 +77,7 @@ pub struct X86Edge {
 
 impl X86Edge {
     #[must_use]
-    pub fn new(from: u64, to: u64, kind: EdgeKind) -> Self {
+    pub const fn new(from: u64, to: u64, kind: EdgeKind) -> Self {
         Self { from_block: from, to_block: to, kind }
     }
 }
@@ -113,7 +113,7 @@ pub struct X86Insn {
 
 impl X86Insn {
     #[must_use]
-    pub fn is_terminator(&self) -> bool {
+    pub const fn is_terminator(&self) -> bool {
         !matches!(self.flow, FlowControl::Next)
     }
 }
@@ -151,7 +151,7 @@ impl X86Block {
     /// Used by CFG builders to seed a fresh basic block before instructions
     /// are appended.
     #[must_use]
-    pub fn new(start: u64) -> Self {
+    pub const fn new(start: u64) -> Self {
         Self {
             start,
             end: start,
@@ -164,12 +164,12 @@ impl X86Block {
     }
 
     #[must_use]
-    pub fn len_bytes(&self) -> u64 {
+    pub const fn len_bytes(&self) -> u64 {
         self.end.saturating_sub(self.start)
     }
 
     #[must_use]
-    pub fn insn_count(&self) -> usize {
+    pub const fn insn_count(&self) -> usize {
         self.insns.len()
     }
 
@@ -238,13 +238,13 @@ impl X86ControlFlowGraph {
     }
 
     #[must_use]
-    pub fn entry(&self) -> Option<u64> {
+    pub const fn entry(&self) -> Option<u64> {
         self.entry
     }
 
     /// Machine bitness (16, 32, or 64) this CFG was constructed for.
     #[must_use]
-    pub fn bitness(&self) -> u32 {
+    pub const fn bitness(&self) -> u32 {
         self.bitness
     }
 
@@ -254,7 +254,7 @@ impl X86ControlFlowGraph {
     }
 
     #[must_use]
-    pub fn edge_count(&self) -> usize {
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 

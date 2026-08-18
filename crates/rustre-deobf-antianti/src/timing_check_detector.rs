@@ -314,7 +314,7 @@ impl TimingCheckDetector {
 
     /// Create a detector with custom parameters.
     #[must_use]
-    pub fn with_params(sleep_threshold_ms: u64, rdtsc_window: usize) -> Self {
+    pub const fn with_params(sleep_threshold_ms: u64, rdtsc_window: usize) -> Self {
         Self {
             sleep_threshold_ms,
             rdtsc_window,
@@ -626,13 +626,13 @@ impl TimingReport {
 
     /// Return the total number of timing checks found.
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.checks.len()
     }
 
     /// Return `true` if no timing checks were detected.
     #[must_use]
-    pub fn is_clean(&self) -> bool {
+    pub const fn is_clean(&self) -> bool {
         self.checks.is_empty()
     }
 

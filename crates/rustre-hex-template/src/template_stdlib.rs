@@ -92,7 +92,8 @@ pub struct IntValue {
 
 impl IntValue {
     /// Interpret raw bits as a signed i64.
-    pub fn as_signed(&self) -> i64 {
+    #[must_use]
+    pub const fn as_signed(&self) -> i64 {
         match self.width {
             1 => self.raw as i8 as i64,
             2 => self.raw as i16 as i64,
@@ -124,6 +125,7 @@ pub struct ReadInt {
 }
 
 impl ReadInt {
+    #[must_use]
     pub const fn u8() -> Self {
         Self {
             width: 1,
@@ -131,6 +133,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u16_le() -> Self {
         Self {
             width: 2,
@@ -138,6 +141,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u16_be() -> Self {
         Self {
             width: 2,
@@ -145,6 +149,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u32_le() -> Self {
         Self {
             width: 4,
@@ -152,6 +157,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u32_be() -> Self {
         Self {
             width: 4,
@@ -159,6 +165,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u64_le() -> Self {
         Self {
             width: 8,
@@ -166,6 +173,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn u64_be() -> Self {
         Self {
             width: 8,
@@ -173,6 +181,7 @@ impl ReadInt {
             signed: false,
         }
     }
+    #[must_use]
     pub const fn i8() -> Self {
         Self {
             width: 1,
@@ -180,6 +189,7 @@ impl ReadInt {
             signed: true,
         }
     }
+    #[must_use]
     pub const fn i16_le() -> Self {
         Self {
             width: 2,
@@ -187,6 +197,7 @@ impl ReadInt {
             signed: true,
         }
     }
+    #[must_use]
     pub const fn i32_le() -> Self {
         Self {
             width: 4,
@@ -194,6 +205,7 @@ impl ReadInt {
             signed: true,
         }
     }
+    #[must_use]
     pub const fn i64_le() -> Self {
         Self {
             width: 8,
@@ -266,6 +278,7 @@ pub struct ReadStr {
 }
 
 impl ReadStr {
+    #[must_use]
     pub const fn null_terminated() -> Self {
         Self {
             mode: StringMode::NullTerminated,
@@ -274,6 +287,7 @@ impl ReadStr {
         }
     }
 
+    #[must_use]
     pub const fn fixed(n: usize) -> Self {
         Self {
             mode: StringMode::FixedLength(n),
@@ -282,6 +296,7 @@ impl ReadStr {
         }
     }
 
+    #[must_use]
     pub const fn length_prefixed_1() -> Self {
         Self {
             mode: StringMode::LengthPrefixed1,
@@ -290,6 +305,7 @@ impl ReadStr {
         }
     }
 
+    #[must_use]
     pub const fn length_prefixed_2le() -> Self {
         Self {
             mode: StringMode::LengthPrefixed2Le,
@@ -437,19 +453,22 @@ pub struct ReadBytes {
 }
 
 impl ReadBytes {
+    #[must_use]
     pub const fn exact(n: usize) -> Self {
         Self {
             count: ByteCount::Exact(n),
         }
     }
 
+    #[must_use]
     pub const fn remaining() -> Self {
         Self {
             count: ByteCount::Remaining,
         }
     }
 
-    pub fn dynamic(n: usize) -> Self {
+    #[must_use]
+    pub const fn dynamic(n: usize) -> Self {
         Self {
             count: ByteCount::Dynamic(n),
         }
@@ -531,7 +550,8 @@ pub struct ArrayOf {
 }
 
 impl ArrayOf {
-    pub fn new(count: usize, reader: ElementReader) -> Self {
+    #[must_use]
+    pub const fn new(count: usize, reader: ElementReader) -> Self {
         Self { count, reader }
     }
 
@@ -579,6 +599,7 @@ pub enum Predicate {
 
 impl Predicate {
     /// Evaluate the predicate. `ctx_value` is the "current context integer".
+    #[must_use]
     pub fn eval(&self, ctx_value: Option<u64>, buf_remaining: usize) -> bool {
         match self {
             Self::IntEquals { value } => ctx_value == Some(*value),
@@ -598,7 +619,8 @@ pub struct ConditionalRead {
 }
 
 impl ConditionalRead {
-    pub fn new(predicate: Predicate, reader: ElementReader) -> Self {
+    #[must_use]
+    pub const fn new(predicate: Predicate, reader: ElementReader) -> Self {
         Self { predicate, reader }
     }
 
@@ -763,6 +785,7 @@ pub struct TemplateStdlib {
 
 impl TemplateStdlib {
     /// Construct with the default set of built-in readers.
+    #[must_use]
     pub fn with_builtins() -> Self {
         let mut s = Self::default();
         s.register_builtin(
@@ -881,6 +904,7 @@ impl TemplateStdlib {
     }
 
     /// All registered function names.
+    #[must_use]
     pub fn function_names(&self) -> Vec<&str> {
         let mut names: Vec<&str> = self.functions.keys().map(|s| s.as_str()).collect();
         names.sort_unstable();
@@ -888,11 +912,13 @@ impl TemplateStdlib {
     }
 
     /// Number of registered functions.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.functions.len()
     }
 
     /// True if no functions are registered.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty()
     }

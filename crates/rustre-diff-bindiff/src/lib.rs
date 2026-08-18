@@ -1,6 +1,6 @@
 //! `rustre-diff-bindiff`
 //!
-//! BinDiff-style binary diffing engine for the RustRE Suite.
+//! BinDiff-style binary diffing engine for the `RustRE` Suite.
 //!
 //! Compares two stripped binaries by computing structural features for each
 //! function (CFG topology hash, block/instruction counts, call targets, etc.),
@@ -43,14 +43,16 @@ impl CfgHasher {
     /// Compute a structural hash of a CFG.
     ///
     /// `adjacency` is a list of `(block_id, successor_ids)` pairs.  The hash
-    /// is insensitive to the concrete block_id values and to node ordering —
+    /// is insensitive to the concrete `block_id` values and to node ordering —
     /// only the topology matters.
+    #[must_use]
     pub fn hash_cfg(adjacency: &[(u32, Vec<u32>)]) -> u64 {
         // Delegate to the Weisfeiler-Lehman hash with 3 iterations.
         Self::wl_hash(adjacency, 3)
     }
 
     /// Hash for a simple linear chain of `block_count` basic blocks.
+    #[must_use]
     pub fn hash_linear(block_count: u32) -> u64 {
         // A linear chain is fully described by its length.
         let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a basis
@@ -67,6 +69,7 @@ impl CfgHasher {
     /// iteration a node's label is updated to `hash(sorted neighbour labels)`.
     /// After `iterations` rounds the final hash is the sorted, combined hash
     /// of all node labels — making it invariant to node numbering.
+    #[must_use]
     pub fn wl_hash(adjacency: &[(u32, Vec<u32>)], iterations: u32) -> u64 {
         if adjacency.is_empty() {
             return 0;
@@ -131,7 +134,7 @@ pub struct FunctionFeatures {
     pub call_count: u32,
     /// Number of back-edges (loop headers).
     pub loop_count: u32,
-    /// McCabe cyclomatic complexity: E − N + 2.
+    /// `McCabe` cyclomatic complexity: E − N + 2.
     pub cyclomatic_complexity: u32,
     pub strongly_connected_components: u32,
     /// FNV hash of the bytes of the first basic block.
@@ -152,7 +155,8 @@ pub struct FunctionFeatures {
 
 impl FunctionFeatures {
     /// Create a zeroed-out `FunctionFeatures` for `address`.
-    pub fn new(address: Address) -> Self {
+    #[must_use]
+    pub const fn new(address: Address) -> Self {
         Self {
             address,
             name: None,
@@ -176,12 +180,13 @@ impl FunctionFeatures {
     /// Compute a similarity score in [0.0, 1.0] with another function.
     ///
     /// Weights:
-    /// - cfg_hash match           = 0.40
-    /// - basic_block_count prox   = 0.20
-    /// - instruction_count prox   = 0.15
-    /// - edge_count proximity     = 0.10
-    /// - loop_count match         = 0.10
-    /// - string_refs overlap      = 0.05
+    /// - `cfg_hash` match           = 0.40
+    /// - `basic_block_count` prox   = 0.20
+    /// - `instruction_count` prox   = 0.15
+    /// - `edge_count` proximity     = 0.10
+    /// - `loop_count` match         = 0.10
+    /// - `string_refs` overlap      = 0.05
+    #[must_use]
     pub fn similarity(&self, other: &Self) -> f32 {
         // cfg_hash: exact match → full weight
         let cfg_score = if self.cfg_hash != 0 && self.cfg_hash == other.cfg_hash {
@@ -213,6 +218,7 @@ impl FunctionFeatures {
     /// Quick pre-filter: returns `false` if the two functions are obviously too
     /// different to be worth comparing (block count or instruction count differ
     /// by more than 5×).
+    #[must_use]
     pub fn can_match(&self, other: &Self) -> bool {
         !exceeds_ratio(self.basic_block_count, other.basic_block_count, 5)
             && !exceeds_ratio(self.instruction_count, other.instruction_count, 5)
@@ -275,21 +281,25 @@ impl BinarySnapshot {
     }
 
     /// Number of functions in this snapshot.
+    #[must_use]
     pub fn function_count(&self) -> usize {
         self.functions.len()
     }
 
     /// Number of call edges in the call graph.
+    #[must_use]
     pub fn call_edge_count(&self) -> usize {
         self.call_graph.edge_count()
     }
 
     /// Look up features for the function at `addr`.
+    #[must_use]
     pub fn function_at(&self, addr: u64) -> Option<&FunctionFeatures> {
         self.functions.get(&addr)
     }
 
     /// Return the addresses of functions that `addr` calls (outgoing edges).
+    #[must_use]
     pub fn call_targets(&self, addr: u64) -> Vec<u64> {
         let Some(&node) = self.cg_node_map.get(&addr) else {
             return Vec::new();
@@ -301,6 +311,7 @@ impl BinarySnapshot {
     }
 
     /// Return the addresses of functions that call `addr` (incoming edges).
+    #[must_use]
     pub fn callers_of(&self, addr: u64) -> Vec<u64> {
         let Some(&node) = self.cg_node_map.get(&addr) else {
             return Vec::new();
@@ -354,12 +365,14 @@ impl fmt::Display for MatchKind {
 impl MatchKind {
     /// Returns `true` for high-confidence match kinds that rarely produce
     /// false positives.
-    pub fn is_reliable(self) -> bool {
+    #[must_use]
+    pub const fn is_reliable(self) -> bool {
         matches!(self, MatchKind::ExactHash | MatchKind::NameMatch)
     }
 
     /// Priority value: higher means it is attempted first.
-    pub fn priority(self) -> u8 {
+    #[must_use]
+    pub const fn priority(self) -> u8 {
         match self {
             MatchKind::ExactHash => 10,
             MatchKind::NameMatch => 9,
@@ -396,6 +409,7 @@ pub struct FunctionMatch {
 impl FunctionMatch {
     /// Create a new match with default similarity/confidence of 1.0 for
     /// reliable kinds and 0.0 otherwise.
+    #[must_use]
     pub fn new(a: Address, b: Address, kind: MatchKind) -> Self {
         let default_score = if kind.is_reliable() { 1.0 } else { 0.0 };
         Self {
@@ -411,7 +425,8 @@ impl FunctionMatch {
     }
 
     /// Builder-style setter for the similarity score (also caps to [0,1]).
-    pub fn with_similarity(mut self, s: f32) -> Self {
+    #[must_use]
+    pub const fn with_similarity(mut self, s: f32) -> Self {
         // `clamp` propagates NaN, so the documented cap to [0,1] would not hold;
         // a NaN similarity then loses every ranking comparison it takes part in.
         self.similarity = if s.is_nan() { 0.0 } else { s.clamp(0.0, 1.0) };
@@ -420,16 +435,19 @@ impl FunctionMatch {
 
     /// Returns `true` when the functions are effectively byte-identical
     /// (similarity ≥ 0.99).
+    #[must_use]
     pub fn is_identical(&self) -> bool {
         self.similarity >= 0.99
     }
 
     /// Returns `true` when both similarity and confidence are ≥ 0.75.
+    #[must_use]
     pub fn is_good_match(&self) -> bool {
         self.similarity >= 0.75 && self.confidence >= 0.75
     }
 
     /// Human-readable quality label.
+    #[must_use]
     pub fn quality_label(&self) -> &'static str {
         if self.is_identical() {
             "Identical"
@@ -546,6 +564,7 @@ pub struct DiffResult {
 
 impl DiffResult {
     /// Find the match whose A-side address equals `addr`.
+    #[must_use]
     pub fn match_for_a(&self, addr: u64) -> Option<&FunctionMatch> {
         self.function_matches
             .iter()
@@ -553,6 +572,7 @@ impl DiffResult {
     }
 
     /// Find the match whose B-side address equals `addr`.
+    #[must_use]
     pub fn match_for_b(&self, addr: u64) -> Option<&FunctionMatch> {
         self.function_matches
             .iter()
@@ -570,6 +590,7 @@ impl DiffResult {
     }
 
     /// Return up to `n` matches sorted by descending similarity.
+    #[must_use]
     pub fn top_matches_by_similarity(&self, n: usize) -> Vec<&FunctionMatch> {
         let mut sorted: Vec<&FunctionMatch> = self.function_matches.iter().collect();
         sorted.sort_by(|a, b| {
@@ -582,6 +603,7 @@ impl DiffResult {
     }
 
     /// Return a multi-line human-readable summary of the diff.
+    #[must_use]
     pub fn print_summary(&self) -> String {
         let s = &self.stats;
         format!(
@@ -633,7 +655,8 @@ impl Default for BinDiffer {
 
 impl BinDiffer {
     /// Create a `BinDiffer` with default settings.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             min_similarity: 0.5,
             enable_propagation: true,
@@ -642,14 +665,16 @@ impl BinDiffer {
     }
 
     /// Override the minimum similarity threshold.
-    pub fn with_min_similarity(mut self, s: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_similarity(mut self, s: f32) -> Self {
         // `clamp` propagates NaN; a NaN threshold rejects every match silently.
         self.min_similarity = if s.is_nan() { 0.0 } else { s.clamp(0.0, 1.0) };
         self
     }
 
     /// Disable call-graph propagation.
-    pub fn without_propagation(mut self) -> Self {
+    #[must_use]
+    pub const fn without_propagation(mut self) -> Self {
         self.enable_propagation = false;
         self
     }
@@ -657,6 +682,7 @@ impl BinDiffer {
     // ── Phase 1 ──────────────────────────────────────────────────────────────
 
     /// Match functions with identical raw bytes (`byte_hash` equality).
+    #[must_use]
     pub fn match_by_exact_hash(
         &self,
         a: &BinarySnapshot,
@@ -713,6 +739,7 @@ impl BinDiffer {
     // ── Phase 2 ──────────────────────────────────────────────────────────────
 
     /// Match functions with the same structural CFG hash.
+    #[must_use]
     pub fn match_by_cfg_hash(
         &self,
         a: &BinarySnapshot,
@@ -763,6 +790,7 @@ impl BinDiffer {
     // ── Phase 3 ──────────────────────────────────────────────────────────────
 
     /// Match functions that share the same name (debug info / exports).
+    #[must_use]
     pub fn match_by_name(
         &self,
         a: &BinarySnapshot,
@@ -906,6 +934,7 @@ impl BinDiffer {
     // ── Phase 5 ──────────────────────────────────────────────────────────────
 
     /// Match remaining (unmatched) functions by heuristic similarity scoring.
+    #[must_use]
     pub fn match_by_similarity(
         &self,
         a: &BinarySnapshot,
@@ -965,6 +994,7 @@ impl BinDiffer {
 
     /// Find the top-`top_n` candidate B functions for `feat_a`, excluding
     /// addresses listed in `excluded`.
+    #[must_use]
     pub fn find_candidates(
         &self,
         feat_a: &FunctionFeatures,
@@ -987,6 +1017,7 @@ impl BinDiffer {
     ///
     /// Adds a bonus when the byte hash matches and a small penalty for
     /// cyclomatic-complexity divergence on top of the base feature similarity.
+    #[must_use]
     pub fn detailed_similarity(&self, a: &FunctionFeatures, b: &FunctionFeatures) -> f32 {
         let base = a.similarity(b);
 
@@ -1012,6 +1043,7 @@ impl BinDiffer {
     // ── Main entry point ─────────────────────────────────────────────────────
 
     /// Run all diff phases and return a `DiffResult`.
+    #[must_use]
     pub fn diff(&self, a: BinarySnapshot, b: BinarySnapshot) -> DiffResult {
         let mut all_matches: Vec<FunctionMatch> = Vec::new();
 
@@ -1100,16 +1132,19 @@ pub struct DiffReport {
 }
 
 impl DiffReport {
-    pub fn new(result: DiffResult) -> Self {
+    #[must_use]
+    pub const fn new(result: DiffResult) -> Self {
         Self { result }
     }
 
     /// Multi-line text summary.
+    #[must_use]
     pub fn summary(&self) -> String {
         self.result.print_summary()
     }
 
     /// CSV output: `addr_a,addr_b,similarity,kind,name_a,name_b`
+    #[must_use]
     pub fn csv(&self) -> String {
         let mut out = String::from("addr_a,addr_b,similarity,kind,name_a,name_b\n");
         for m in &self.result.function_matches {
@@ -1128,6 +1163,7 @@ impl DiffReport {
 
     /// Minimal HTML report with a sortable table (uses only inline styles —
     /// no external dependencies).
+    #[must_use]
     pub fn html(&self) -> String {
         let mut rows = String::new();
         for m in &self.result.function_matches {
@@ -1177,6 +1213,7 @@ impl DiffReport {
     }
 
     /// JSON array of match objects.
+    #[must_use]
     pub fn json(&self) -> String {
         let mut items: Vec<String> = Vec::new();
         for m in &self.result.function_matches {
@@ -1196,6 +1233,7 @@ impl DiffReport {
     }
 
     /// Return a per-function diff text for the function at `addr_a` in binary A.
+    #[must_use]
     pub fn diff_for_function(&self, addr_a: u64) -> Option<String> {
         let m = self.result.match_for_a(addr_a)?;
         let feat_a = self.result.snapshot_a.function_at(addr_a)?;
@@ -1261,7 +1299,8 @@ pub struct FunctionInfo {
 
 impl FunctionInfo {
     /// Create a `FunctionInfo` with all numeric fields zeroed.
-    pub fn new(address: u64) -> Self {
+    #[must_use]
+    pub const fn new(address: u64) -> Self {
         Self {
             address,
             name: None,
@@ -1299,7 +1338,7 @@ impl From<&FunctionFeatures> for FunctionInfo {
 
 /// Compute a prime-product MD-index from `FunctionFeatures`.
 ///
-/// The MD-index is a structural fingerprint used by BinDiff that encodes
+/// The MD-index is a structural fingerprint used by `BinDiff` that encodes
 /// the topology of the call graph neighbourhood.  Here we approximate it
 /// with a deterministic prime-product hash over the function's degree and
 /// block counts so that two structurally similar functions yield close values.
@@ -1346,6 +1385,7 @@ fn md_index_from_features(f: &FunctionFeatures) -> u64 {
 /// | bytes_hash      | 0.30   |
 /// | cfg_topology    | 0.20   |
 /// | md_index        | 0.10   |
+#[must_use]
 pub fn similarity_score(a: &FunctionInfo, b: &FunctionInfo) -> f64 {
     // ── 1. Name match ─────────────────────────────────────────────────────────
     let name_score = match (&a.name, &b.name) {
@@ -1446,7 +1486,7 @@ fn md_index_similarity(a: u64, b: u64) -> f64 {
 pub struct HungarianSolver {
     /// `n × n` cost matrix; may be padded if the original problem is not square.
     cost: Vec<Vec<f64>>,
-    /// Problem size after padding (max(original_rows, original_cols)).
+    /// Problem size after padding (`max(original_rows`, `original_cols`)).
     n: usize,
     /// Original number of columns (before padding).
     m: usize,
@@ -1468,6 +1508,7 @@ impl HungarianSolver {
     /// # Panics
     /// Panics if the matrix is empty or if any row has a different length from
     /// the others.
+    #[must_use]
     pub fn new(cost_matrix: Vec<Vec<f64>>) -> Self {
         let rows = cost_matrix.len();
         assert!(rows > 0, "HungarianSolver: cost matrix must not be empty");
@@ -1498,7 +1539,8 @@ impl HungarianSolver {
     }
 
     /// Return the original number of rows (before padding).
-    pub fn original_rows(&self) -> usize {
+    #[must_use]
+    pub const fn original_rows(&self) -> usize {
         // Must be the pre-padding row count, not `n`: with more columns than
         // rows the two differ, and a caller filtering the assignment with
         // `i < original_rows()` would accept synthetic padding rows as real
@@ -1508,7 +1550,8 @@ impl HungarianSolver {
     }
 
     /// Return the original number of columns (before padding).
-    pub fn original_cols(&self) -> usize {
+    #[must_use]
+    pub const fn original_cols(&self) -> usize {
         self.m
     }
 
@@ -1714,6 +1757,7 @@ impl HungarianSolver {
 ///
 /// # Returns
 /// A `Vec<FunctionMatch>` sorted by descending similarity.
+#[must_use]
 pub fn match_functions_hungarian(
     funcs_a: &[FunctionInfo],
     funcs_b: &[FunctionInfo],
@@ -1804,6 +1848,7 @@ impl Default for BinDiff {
 
 impl BinDiff {
     /// Create a `BinDiff` engine with default settings.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             differ: BinDiffer::new(),
@@ -1811,7 +1856,8 @@ impl BinDiff {
     }
 
     /// Override the underlying `BinDiffer` (e.g. to tune thresholds).
-    pub fn with_differ(differ: BinDiffer) -> Self {
+    #[must_use]
+    pub const fn with_differ(differ: BinDiffer) -> Self {
         Self { differ }
     }
 
@@ -1960,6 +2006,7 @@ impl BinDiff {
 /// The formula is: `matched / (blocks_a + blocks_b - matched)`.
 /// Returns 1.0 when both block counts are zero (trivially equal).
 #[inline]
+#[must_use]
 pub fn jaccard_bb_score(matched: u32, blocks_a: u32, blocks_b: u32) -> f32 {
     // intersection = min(matched, blocks_a, blocks_b) — cannot exceed either side.
     // Use saturating arithmetic to guard against large block counts.
@@ -1974,11 +2021,11 @@ pub fn jaccard_bb_score(matched: u32, blocks_a: u32, blocks_b: u32) -> f32 {
 /// Summary report returned by [`BindiffEngine::compare`].
 ///
 /// Breaks matched pairs into:
-/// - **exact_matches** — byte-for-byte identical functions (similarity ≥ 0.99).
-/// - **similar_matches** — near-identical functions with similarity > 0.7
+/// - **`exact_matches`** — byte-for-byte identical functions (similarity ≥ 0.99).
+/// - **`similar_matches`** — near-identical functions with similarity > 0.7
 ///   (includes CFG-hash matches and heuristic matches above the threshold).
-/// - **unmatched_in_a** — count of functions in A that found no match in B.
-/// - **unmatched_in_b** — count of functions in B that were not matched to anything in A.
+/// - **`unmatched_in_a`** — count of functions in A that found no match in B.
+/// - **`unmatched_in_b`** — count of functions in B that were not matched to anything in A.
 ///
 /// All matched pairs (regardless of category) are stored in `all_matches`
 /// sorted by descending similarity.
@@ -2041,7 +2088,7 @@ impl std::fmt::Display for BindiffReport {
 /// println!("{report}");
 /// ```
 pub struct BindiffEngine {
-    /// Underlying BinDiff engine (exposes all five phases + Hungarian).
+    /// Underlying `BinDiff` engine (exposes all five phases + Hungarian).
     inner: BinDiff,
     /// Minimum Jaccard BB score to count a non-exact match as "similar".
     pub similar_threshold: f32,
@@ -2060,7 +2107,7 @@ impl BindiffEngine {
     /// Override the similarity threshold below which matches are not
     /// included in `similar_matches`.
     #[must_use]
-    pub fn with_similar_threshold(mut self, t: f32) -> Self {
+    pub const fn with_similar_threshold(mut self, t: f32) -> Self {
         // `clamp` propagates NaN; a NaN threshold rejects every match silently.
         self.similar_threshold = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
         self
@@ -2068,7 +2115,7 @@ impl BindiffEngine {
 
     /// Compare two binary snapshots and return a [`BindiffReport`].
     ///
-    /// Internally runs all five BinDiff phases (exact hash, CFG hash, name,
+    /// Internally runs all five `BinDiff` phases (exact hash, CFG hash, name,
     /// call-graph propagation, Hungarian/greedy Phase 5).  Each match is then
     /// annotated with a Jaccard BB score:
     ///
@@ -2231,7 +2278,7 @@ fn proximity_score(a: u32, b: u32) -> f32 {
 /// Returns `true` when the larger of `a` and `b` is more than `ratio` times
 /// the smaller.
 #[inline]
-fn exceeds_ratio(a: u32, b: u32, ratio: u32) -> bool {
+const fn exceeds_ratio(a: u32, b: u32, ratio: u32) -> bool {
     if a == 0 && b == 0 {
         return false;
     }
@@ -2268,7 +2315,7 @@ fn csv_escape(s: &str) -> String {
     if s.contains([',', '"', '\n', '\r']) {
         // RFC 4180: wrap in double-quotes and escape embedded double-quotes.
         let escaped = s.replace('"', "\"\"");
-        format!("\"{}\"", escaped)
+        format!("\"{escaped}\"")
     } else {
         s.to_owned()
     }
@@ -2280,7 +2327,7 @@ fn json_str(s: Option<&str>) -> String {
         None => "null".to_owned(),
         Some(v) => {
             let escaped = v.replace('\\', "\\\\").replace('"', "\\\"");
-            format!("\"{}\"", escaped)
+            format!("\"{escaped}\"")
         }
     }
 }
@@ -2293,11 +2340,12 @@ fn json_str(s: Option<&str>) -> String {
 ///
 /// This is a thin public wrapper around the internal `cfg_topology_similarity`
 /// function that is referenced in the `similarity_score` documentation.  It
-/// scores the (in_edges, out_edges, bb_count) triple of each function using
+/// scores the (`in_edges`, `out_edges`, `bb_count`) triple of each function using
 /// per-dimension ratio proximity and averages the three scores.
 ///
 /// # Returns
 /// A value in [0.0, 1.0]; 1.0 means the three counts are identical.
+#[must_use]
 pub fn cfg_similarity(a: &FunctionInfo, b: &FunctionInfo) -> f64 {
     cfg_topology_similarity(
         (a.in_edges, a.out_edges, a.bb_count),
@@ -2319,6 +2367,7 @@ impl HungarianSolver {
     /// # Returns
     /// Sum of `cost[row][col]` for every pair, using the *original* (pre-
     /// reduction) cost matrix stored internally.
+    #[must_use]
     pub fn assignment_cost(&self, assignment: &[(usize, usize)]) -> f64 {
         assignment
             .iter()
@@ -2362,6 +2411,7 @@ impl HungarianSolver {
     ///
     /// # Panics
     /// Panics if `similarity_matrix` is empty.
+    #[must_use]
     pub fn from_similarity(similarity_matrix: Vec<Vec<f64>>) -> Self {
         let cost: Vec<Vec<f64>> = similarity_matrix
             .into_iter()
@@ -2381,6 +2431,7 @@ impl HungarianSolver {
     /// * `original_cols` — number of columns in the original (unpadded) matrix.
     /// * `min_similarity` — minimum similarity threshold (pairs below this are
     ///   excluded from the result).
+    #[must_use]
     pub fn solve_with_scores(
         &self,
         original_rows: usize,
@@ -2424,7 +2475,8 @@ pub struct MatchMatrix<'a> {
 impl<'a> MatchMatrix<'a> {
     /// Build the full similarity matrix.
     ///
-    /// Time complexity: O(n × m) where n = |funcs_a| and m = |funcs_b|.
+    /// Time complexity: O(n × m) where n = |`funcs_a`| and m = |`funcs_b`|.
+    #[must_use]
     pub fn build(funcs_a: &'a [FunctionInfo], funcs_b: &'a [FunctionInfo]) -> Self {
         let matrix: Vec<Vec<f64>> = funcs_a
             .iter()
@@ -2438,16 +2490,19 @@ impl<'a> MatchMatrix<'a> {
     }
 
     /// Return the number of rows (functions from A).
-    pub fn rows(&self) -> usize {
+    #[must_use]
+    pub const fn rows(&self) -> usize {
         self.funcs_a.len()
     }
 
     /// Return the number of columns (functions from B).
-    pub fn cols(&self) -> usize {
+    #[must_use]
+    pub const fn cols(&self) -> usize {
         self.funcs_b.len()
     }
 
     /// Access the similarity score for a specific (row, col) pair.
+    #[must_use]
     pub fn score(&self, row: usize, col: usize) -> f64 {
         self.matrix[row][col]
     }
@@ -2455,6 +2510,7 @@ impl<'a> MatchMatrix<'a> {
     /// Find the pair with the highest similarity in the entire matrix.
     ///
     /// Returns `None` if the matrix is empty.
+    #[must_use]
     pub fn best_pair(&self) -> Option<(usize, usize, f64)> {
         let mut best: Option<(usize, usize, f64)> = None;
         for (i, row) in self.matrix.iter().enumerate() {
@@ -2471,6 +2527,7 @@ impl<'a> MatchMatrix<'a> {
 
     /// Return all (row, col, similarity) triples where similarity ≥ `threshold`,
     /// sorted by descending similarity.
+    #[must_use]
     pub fn above_threshold(&self, threshold: f64) -> Vec<(usize, usize, f64)> {
         let mut result: Vec<(usize, usize, f64)> = self
             .matrix
@@ -2488,6 +2545,7 @@ impl<'a> MatchMatrix<'a> {
     }
 
     /// Convert this matrix into a `HungarianSolver` (cost = 1 − similarity).
+    #[must_use]
     pub fn into_solver(self) -> HungarianSolver {
         let cost: Vec<Vec<f64>> = self
             .matrix
@@ -2505,6 +2563,7 @@ impl<'a> MatchMatrix<'a> {
     /// large matrices where Hungarian is too slow.
     ///
     /// Returns `(row, col, similarity)` triples sorted by descending similarity.
+    #[must_use]
     pub fn greedy_assign(&self, threshold: f64) -> Vec<(usize, usize, f64)> {
         // Collect all above-threshold pairs.
         let mut candidates: Vec<(usize, usize, f64)> = self
@@ -2542,26 +2601,31 @@ impl<'a> MatchMatrix<'a> {
 
 impl FunctionInfo {
     /// Return `true` if this record has a known byte hash (non-zero CRC32).
-    pub fn has_byte_hash(&self) -> bool {
+    #[must_use]
+    pub const fn has_byte_hash(&self) -> bool {
         self.bytes_crc32 != 0
     }
 
     /// Return `true` if this record has a known MD-index value.
-    pub fn has_md_index(&self) -> bool {
+    #[must_use]
+    pub const fn has_md_index(&self) -> bool {
         self.md_index != 0
     }
 
     /// Return `true` if this record has a name.
-    pub fn has_name(&self) -> bool {
+    #[must_use]
+    pub const fn has_name(&self) -> bool {
         self.name.is_some()
     }
 
     /// Return the name as a string slice, or `"<unnamed>"` if absent.
+    #[must_use]
     pub fn name_or_unnamed(&self) -> &str {
         self.name.as_deref().unwrap_or("<unnamed>")
     }
 
     /// Compute a compact debug string for logging.
+    #[must_use]
     pub fn debug_label(&self) -> String {
         format!(
             "FunctionInfo {{ addr=0x{:X}, name={}, bb={}, in={}, out={} }}",
@@ -2574,8 +2638,9 @@ impl FunctionInfo {
     }
 
     /// Quick pre-filter: returns `false` if this function is obviously too
-    /// different from `other` to be a plausible match (bb_count ratio > 5×).
-    pub fn can_match(&self, other: &Self) -> bool {
+    /// different from `other` to be a plausible match (`bb_count` ratio > 5×).
+    #[must_use]
+    pub const fn can_match(&self, other: &Self) -> bool {
         if self.bb_count == 0 && other.bb_count == 0 {
             return true;
         }
@@ -2609,6 +2674,7 @@ impl FunctionInfo {
 ///
 /// # Returns
 /// A `Vec<FunctionMatch>` sorted by descending similarity.
+#[must_use]
 pub fn match_functions_greedy(
     funcs_a: &[FunctionInfo],
     funcs_b: &[FunctionInfo],
@@ -2673,6 +2739,7 @@ pub struct AssignmentStats {
 
 impl AssignmentStats {
     /// Compute statistics from an assignment and the input function lists.
+    #[must_use]
     pub fn compute(
         assignment: &[(usize, usize)],
         funcs_a: &[FunctionInfo],
@@ -3943,7 +4010,7 @@ pub struct FuncFeatures {
     pub in_degree: u32,
     /// Number of outgoing call edges (callees).
     pub out_degree: u32,
-    /// McCabe cyclomatic complexity: `E − N + 2`.
+    /// `McCabe` cyclomatic complexity: `E − N + 2`.
     pub cyclomatic_complexity: u32,
     /// FNV-1a hash of the raw function bytes.  Two functions with the same
     /// `bytes_hash` are byte-for-byte identical.
@@ -3972,14 +4039,15 @@ impl FuncFeatures {
     ///
     /// | Component             | Weight |
     /// |-----------------------|--------|
-    /// | bytes_hash equal      |  0.40  |
-    /// | mnemonic_hash equal   |  0.25  |
-    /// | topology_hash equal   |  0.15  |
-    /// | bb_count within 10%   |  0.10  |
-    /// | edge_count within 10% |  0.05  |
-    /// | prime_product similar |  0.05  |
+    /// | `bytes_hash` equal      |  0.40  |
+    /// | `mnemonic_hash` equal   |  0.25  |
+    /// | `topology_hash` equal   |  0.15  |
+    /// | `bb_count` within 10%   |  0.10  |
+    /// | `edge_count` within 10% |  0.05  |
+    /// | `prime_product` similar |  0.05  |
     ///
     /// Total: 0.0–1.0.
+    #[must_use]
     pub fn similarity(&self, other: &FuncFeatures) -> f64 {
         let bytes_score = if self.bytes_hash != 0 && self.bytes_hash == other.bytes_hash {
             0.40_f64
@@ -4023,8 +4091,9 @@ impl FuncFeatures {
 
     /// Compute `topology_hash` from the four topology counts using FNV-1a.
     ///
-    /// The hash is deterministic and captures the (bb_count, edge_count,
-    /// in_degree, out_degree) tuple.
+    /// The hash is deterministic and captures the (`bb_count`, `edge_count`,
+    /// `in_degree`, `out_degree`) tuple.
+    #[must_use]
     pub fn compute_topology_hash(bb_count: u32, edge_count: u32, in_deg: u32, out_deg: u32) -> u64 {
         let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV-1a basis
         h = fnv1a_mix(h, u64::from(bb_count));
@@ -4042,6 +4111,7 @@ impl FuncFeatures {
     /// per unique mnemonic) is returned modulo 2⁶⁴.
     ///
     /// An empty slice returns 1 (the multiplicative identity).
+    #[must_use]
     pub fn compute_prime_product(mnemonics: &[&str]) -> u64 {
         if mnemonics.is_empty() {
             return 1;
@@ -4057,7 +4127,8 @@ impl FuncFeatures {
     /// Construct a `FuncFeatures` with all hash fields set to zero.
     ///
     /// Useful for building test fixtures where only a few fields matter.
-    pub fn zeroed(id: u64, addr: u64) -> Self {
+    #[must_use]
+    pub const fn zeroed(id: u64, addr: u64) -> Self {
         Self {
             id,
             addr,
@@ -4090,19 +4161,22 @@ impl FuncFeatures {
     /// Return `true` when both functions have the same `bytes_hash` and neither
     /// hash is zero (which would indicate "unknown").
     #[inline]
-    pub fn is_byte_identical(&self, other: &FuncFeatures) -> bool {
+    #[must_use]
+    pub const fn is_byte_identical(&self, other: &FuncFeatures) -> bool {
         self.bytes_hash != 0 && self.bytes_hash == other.bytes_hash
     }
 
     /// Return `true` when both functions share the same mnemonic sequence.
     #[inline]
-    pub fn same_mnemonic_sequence(&self, other: &FuncFeatures) -> bool {
+    #[must_use]
+    pub const fn same_mnemonic_sequence(&self, other: &FuncFeatures) -> bool {
         self.mnemonic_hash != 0 && self.mnemonic_hash == other.mnemonic_hash
     }
 
     /// Return `true` when both functions have the same CFG topology.
     #[inline]
-    pub fn same_topology(&self, other: &FuncFeatures) -> bool {
+    #[must_use]
+    pub const fn same_topology(&self, other: &FuncFeatures) -> bool {
         self.topology_hash != 0 && self.topology_hash == other.topology_hash
     }
 }
@@ -4156,6 +4230,7 @@ impl HungarianMunkres {
     ///
     /// # Panics
     /// Panics if the matrix is empty or if rows have inconsistent lengths.
+    #[must_use]
     pub fn new(cost_matrix: Vec<Vec<f64>>) -> Self {
         let orig_rows = cost_matrix.len();
         assert!(orig_rows > 0, "HungarianMunkres: matrix must not be empty");
@@ -4461,17 +4536,20 @@ impl HungarianMunkres {
     }
 
     /// Return the original number of rows.
-    pub fn original_rows(&self) -> usize {
+    #[must_use]
+    pub const fn original_rows(&self) -> usize {
         self.orig_rows
     }
 
     /// Return the original number of columns.
-    pub fn original_cols(&self) -> usize {
+    #[must_use]
+    pub const fn original_cols(&self) -> usize {
         self.orig_cols
     }
 
     /// Return the original cost of the cell `(row, col)`.
     /// Returns `None` for padded cells.
+    #[must_use]
     pub fn original_cost_at(&self, row: usize, col: usize) -> Option<f64> {
         if row < self.orig_rows && col < self.orig_cols {
             Some(self.original_cost[row][col])
@@ -4481,11 +4559,13 @@ impl HungarianMunkres {
     }
 
     /// Total cost of the given assignment (uses original, pre-padding costs).
+    #[must_use]
     pub fn total_cost(&self, assignment: &[(usize, usize, f64)]) -> f64 {
         assignment.iter().map(|&(_, _, c)| c).sum()
     }
 
     /// Convenience: build from a *similarity* matrix (cost = 1 − similarity).
+    #[must_use]
     pub fn from_similarity_matrix(sim: Vec<Vec<f64>>) -> Self {
         let cost: Vec<Vec<f64>> = sim
             .into_iter()
@@ -4499,6 +4579,7 @@ impl HungarianMunkres {
     /// Useful when the solver was constructed via `from_similarity_matrix`:
     /// the returned `(row, col, similarity)` triples are filtered to
     /// `similarity >= min_similarity` and sorted by descending similarity.
+    #[must_use]
     pub fn solve_as_similarities(&self, min_similarity: f64) -> Vec<(usize, usize, f64)> {
         let raw = self.solve();
         let mut result: Vec<(usize, usize, f64)> = raw
@@ -4571,7 +4652,8 @@ impl FuncMatch {
         }
     }
 
-    pub fn name_only(addr_a: u64, addr_b: u64) -> Self {
+    #[must_use]
+    pub const fn name_only(addr_a: u64, addr_b: u64) -> Self {
         Self {
             addr_a,
             addr_b,
@@ -4611,6 +4693,7 @@ impl MatchResult {
     }
 
     /// Count of `Identical` matches.
+    #[must_use]
     pub fn identical_count(&self) -> usize {
         self.matches
             .iter()
@@ -4619,6 +4702,7 @@ impl MatchResult {
     }
 
     /// Count of `Similar` matches.
+    #[must_use]
     pub fn similar_count(&self) -> usize {
         self.matches
             .iter()
@@ -4627,6 +4711,7 @@ impl MatchResult {
     }
 
     /// Count of `Changed` matches.
+    #[must_use]
     pub fn changed_count(&self) -> usize {
         self.matches
             .iter()
@@ -4635,6 +4720,7 @@ impl MatchResult {
     }
 
     /// Count of `NameOnly` matches.
+    #[must_use]
     pub fn name_only_count(&self) -> usize {
         self.matches
             .iter()
@@ -4643,6 +4729,7 @@ impl MatchResult {
     }
 
     /// Mean similarity across all matches (0.0 if none).
+    #[must_use]
     pub fn mean_similarity(&self) -> f64 {
         if self.matches.is_empty() {
             0.0
@@ -4687,7 +4774,8 @@ impl Default for BinDiffPipeline {
 impl BinDiffPipeline {
     /// Create a pipeline with default settings:
     /// `threshold = 0.5`, `batch_size = 500`, `max_propagation_iters = 10`.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             threshold: 0.5,
             batch_size: 500,
@@ -4696,13 +4784,15 @@ impl BinDiffPipeline {
     }
 
     /// Override the similarity threshold.
-    pub fn with_threshold(mut self, t: f64) -> Self {
+    #[must_use]
+    pub const fn with_threshold(mut self, t: f64) -> Self {
         // `clamp` propagates NaN; a NaN threshold rejects every match silently.
         self.threshold = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
         self
     }
 
     /// Override the batch size used for the Munkres solver.
+    #[must_use]
     pub fn with_batch_size(mut self, s: usize) -> Self {
         self.batch_size = s.max(1);
         self
@@ -4713,6 +4803,7 @@ impl BinDiffPipeline {
     /// # Arguments
     /// * `funcs_a` — feature records from binary A.
     /// * `funcs_b` — feature records from binary B.
+    #[must_use]
     pub fn match_functions(
         &self,
         funcs_a: &[FuncFeatures],
@@ -4980,6 +5071,7 @@ impl BinDiffPipeline {
 /// │  Mean similarity     │    0.912                 │
 /// └──────────────────────┴──────────────────────────┘
 /// ```
+#[must_use]
 pub fn render_diff_summary(result: &MatchResult) -> String {
     let identical = result.identical_count();
     let similar = result.similar_count();
@@ -5022,11 +5114,7 @@ pub fn render_diff_summary(result: &MatchResult) -> String {
 
     let row = |cat: &str, val: &str| -> String {
         format!(
-            "│ {:<w_cat$} │ {:>w_val$} │",
-            cat,
-            val,
-            w_cat = w_cat,
-            w_val = w_val
+            "│ {cat:<w_cat$} │ {val:>w_val$} │"
         )
     };
 

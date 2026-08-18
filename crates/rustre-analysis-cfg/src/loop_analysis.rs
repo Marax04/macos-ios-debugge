@@ -1197,7 +1197,7 @@ impl DominanceFrontier {
 /// like `0 -> 1, 1 -> {2, 3}, 2 <-> 3, 2 -> 1` — whose outer SCC {1,2,3} has
 /// the single entry 1, but which contains the irreducible sub-loop {2,3}
 /// entered at both 2 and 3 — was misreported as reducible (found by
-/// soundness_fuzz::reducibility_implementations_agree_fuzz, which
+/// `soundness_fuzz::reducibility_implementations_agree_fuzz`, which
 /// cross-checks this function against the T1/T2 structural reduction).
 #[must_use]
 pub fn has_irreducible_control_flow(cfg: &Cfg) -> bool {

@@ -2365,7 +2365,7 @@ impl SearchHighlight {
 
     /// Returns `true` if `offset` is within this highlight.
     #[must_use]
-    pub fn contains(&self, offset: usize) -> bool {
+    pub const fn contains(&self, offset: usize) -> bool {
         offset >= self.start && offset < self.end()
     }
 }
@@ -3365,7 +3365,7 @@ impl Default for HexRenderOptions {
 impl HexRenderOptions {
     /// Number of visual columns in a hex row (hex digits + separators).
     #[must_use]
-    pub fn hex_columns(&self) -> usize {
+    pub const fn hex_columns(&self) -> usize {
         let _ = self.uppercase;
         let per_byte = 2;
         let groups = self.bytes_per_row.div_ceil(self.group_size.bytes());

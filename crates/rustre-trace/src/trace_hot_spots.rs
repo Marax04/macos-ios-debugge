@@ -21,6 +21,7 @@ pub struct FrequencyTable<K: std::hash::Hash + Eq + Clone + Serialize> {
 }
 
 impl<K: std::hash::Hash + Eq + Clone + Serialize + for<'de> serde::Deserialize<'de>> FrequencyTable<K> {
+    #[must_use]
     pub fn new() -> Self {
         Self { counts: HashMap::new() }
     }
@@ -37,14 +38,17 @@ impl<K: std::hash::Hash + Eq + Clone + Serialize + for<'de> serde::Deserialize<'
         self.counts.get(key).copied().unwrap_or(0)
     }
 
+    #[must_use]
     pub fn total(&self) -> u64 {
         self.counts.values().sum()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.counts.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.counts.is_empty()
     }
@@ -54,6 +58,7 @@ impl<K: std::hash::Hash + Eq + Clone + Serialize + for<'de> serde::Deserialize<'
     }
 
     /// Return all entries sorted by count descending.
+    #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(&K, u64)>
     where
         K: Ord,
@@ -99,6 +104,7 @@ pub struct HotSpot {
 }
 
 impl HotSpot {
+    #[must_use]
     pub fn new(address: u64, execution_count: u64, total_instructions: u64) -> Self {
         let fraction = if total_instructions == 0 {
             0.0
@@ -119,6 +125,7 @@ impl HotSpot {
         self
     }
 
+    #[must_use]
     pub fn display_name(&self) -> String {
         self.name
             .clone()
@@ -139,7 +146,8 @@ pub struct BasicBlockCoverage {
 }
 
 impl BasicBlockCoverage {
-    pub fn new(start: u64, end: u64) -> Self {
+    #[must_use]
+    pub const fn new(start: u64, end: u64) -> Self {
         Self {
             start_addr: start,
             end_addr: end,
@@ -149,10 +157,12 @@ impl BasicBlockCoverage {
         }
     }
 
-    pub fn was_hit(&self) -> bool {
+    #[must_use]
+    pub const fn was_hit(&self) -> bool {
         self.hit_count > 0
     }
 
+    #[must_use]
     pub fn taken_ratio(&self) -> f64 {
         let total = self.taken_count + self.not_taken_count;
         if total == 0 { 0.0 } else { self.taken_count as f64 / total as f64 }
@@ -168,6 +178,7 @@ pub struct BasicBlockCoverageMap {
 }
 
 impl BasicBlockCoverageMap {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -185,23 +196,28 @@ impl BasicBlockCoverageMap {
         }
     }
 
+    #[must_use]
     pub fn coverage_ratio(&self, known_block_count: usize) -> f64 {
         if known_block_count == 0 { return 0.0; }
         self.blocks.values().filter(|b| b.was_hit()).count() as f64 / known_block_count as f64
     }
 
+    #[must_use]
     pub fn hit_count(&self) -> usize {
         self.blocks.values().filter(|b| b.was_hit()).count()
     }
 
+    #[must_use]
     pub fn total_blocks(&self) -> usize {
         self.blocks.len()
     }
 
+    #[must_use]
     pub fn hottest_block(&self) -> Option<&BasicBlockCoverage> {
         self.blocks.values().max_by_key(|b| b.hit_count)
     }
 
+    #[must_use]
     pub fn build_from_session(session: &TraceSession) -> Self {
         let mut map = Self::new();
         let mut last_instr_addr: Option<u64> = None;
@@ -242,6 +258,7 @@ pub struct TraceHotSpots {
 }
 
 impl TraceHotSpots {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             instruction_freq: FrequencyTable::new(),
@@ -254,6 +271,7 @@ impl TraceHotSpots {
     }
 
     /// Build hot-spot data from a session.
+    #[must_use]
     pub fn build(session: &TraceSession) -> Self {
         let mut hs = Self::new();
         let mut last_instr: Option<u64> = None;
@@ -285,6 +303,7 @@ impl TraceHotSpots {
     }
 
     /// Return the top-N hottest instruction addresses.
+    #[must_use]
     pub fn top_hot_addresses(&self, n: usize) -> Vec<HotSpot> {
         let total = self.total_instructions;
         self.instruction_freq
@@ -295,6 +314,7 @@ impl TraceHotSpots {
     }
 
     /// Return the top-N most-called (caller, callee) pairs.
+    #[must_use]
     pub fn top_call_edges(&self, n: usize) -> Vec<((u64, u64), u64)> {
         self.call_freq
             .top_n(n)
@@ -304,6 +324,7 @@ impl TraceHotSpots {
     }
 
     /// Return the top-N most common syscalls.
+    #[must_use]
     pub fn top_syscalls(&self, n: usize) -> Vec<(u64, u64)> {
         self.syscall_freq
             .top_n(n)
@@ -313,11 +334,13 @@ impl TraceHotSpots {
     }
 
     /// How many unique addresses were executed.
+    #[must_use]
     pub fn unique_addresses(&self) -> usize {
         self.instruction_freq.len()
     }
 
     /// Coverage percentage over a known total.
+    #[must_use]
     pub fn coverage_percent(&self, known_total: usize) -> f64 {
         if known_total == 0 { return 100.0; }
         self.unique_addresses() as f64 / known_total as f64 * 100.0
@@ -333,6 +356,7 @@ impl TraceHotSpots {
     }
 
     /// Build a summary suitable for display.
+    #[must_use]
     pub fn summary_text(&self, top_n: usize) -> String {
         let mut lines = vec![
             format!("=== Trace Hot-Spot Analysis ==="),
@@ -349,9 +373,9 @@ impl TraceHotSpots {
             ));
         }
         lines.push(String::new());
-        lines.push(format!("Top-{} call edges:", top_n));
+        lines.push(format!("Top-{top_n} call edges:"));
         for ((from, to), count) in self.top_call_edges(top_n) {
-            lines.push(format!("  0x{:x} → 0x{:x}  {}", from, to, count));
+            lines.push(format!("  0x{from:x} → 0x{to:x}  {count}"));
         }
         lines.join("\n")
     }

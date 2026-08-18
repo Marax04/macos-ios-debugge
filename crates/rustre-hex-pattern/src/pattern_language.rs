@@ -61,7 +61,7 @@ pub enum BuiltinType {
 impl BuiltinType {
     /// Size in bytes.
     #[must_use]
-    pub fn size(self) -> usize {
+    pub const fn size(self) -> usize {
         match self {
             Self::U8 | Self::I8 | Self::Bool | Self::Char => 1,
             Self::U16 | Self::I16 => 2,
@@ -72,7 +72,7 @@ impl BuiltinType {
 
     /// True when this is a signed integer or float.
     #[must_use]
-    pub fn is_signed(self) -> bool {
+    pub const fn is_signed(self) -> bool {
         matches!(
             self,
             Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::F32 | Self::F64
@@ -81,13 +81,13 @@ impl BuiltinType {
 
     /// True when this is a floating-point type.
     #[must_use]
-    pub fn is_float(self) -> bool {
+    pub const fn is_float(self) -> bool {
         matches!(self, Self::F32 | Self::F64)
     }
 
     /// String representation used in pattern source.
     #[must_use]
-    pub fn keyword(self) -> &'static str {
+    pub const fn keyword(self) -> &'static str {
         match self {
             Self::U8 => "u8",
             Self::U16 => "u16",
@@ -105,6 +105,7 @@ impl BuiltinType {
     }
 
     /// Parse from keyword string.
+    #[must_use]
     pub fn from_keyword(s: &str) -> Option<Self> {
         match s {
             "u8" => Some(Self::U8),
@@ -146,10 +147,10 @@ pub enum TypeRef {
 impl fmt::Display for TypeRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Builtin(b) => write!(f, "{}", b),
-            Self::Named(n) => write!(f, "{}", n),
-            Self::Array { element, count } => write!(f, "{}[{}]", element, count),
-            Self::Pointer { pointee } => write!(f, "*{}", pointee),
+            Self::Builtin(b) => write!(f, "{b}"),
+            Self::Named(n) => write!(f, "{n}"),
+            Self::Array { element, count } => write!(f, "{element}[{count}]"),
+            Self::Pointer { pointee } => write!(f, "*{pointee}"),
         }
     }
 }
@@ -407,7 +408,7 @@ impl ExprEval {
                 .env
                 .get(name)
                 .copied()
-                .ok_or_else(|| PatternLangError::Eval(format!("undefined variable: {}", name))),
+                .ok_or_else(|| PatternLangError::Eval(format!("undefined variable: {name}"))),
             Expr::BinOp { op, lhs, rhs } => {
                 let l = self.eval_int(lhs)?;
                 let r = self.eval_int(rhs)?;
@@ -471,10 +472,10 @@ impl ExprEval {
             TypeRef::Array { element, count } => {
                 let elem_size = self.eval_sizeof(element)?;
                 let count_i64 = i64::try_from(*count).map_err(|_| {
-                    PatternLangError::Eval(format!("array count {} overflows i64", count))
+                    PatternLangError::Eval(format!("array count {count} overflows i64"))
                 })?;
                 elem_size.checked_mul(count_i64).ok_or_else(|| {
-                    PatternLangError::Eval(format!("sizeof array overflow: {} * {}", elem_size, count_i64))
+                    PatternLangError::Eval(format!("sizeof array overflow: {elem_size} * {count_i64}"))
                 })
             }
             TypeRef::Named(_) => Err(PatternLangError::Unsupported(
@@ -551,13 +552,13 @@ impl ProgramAst {
 
     /// Number of statements.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.statements.len()
     }
 
     /// True when empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.statements.is_empty()
     }
 }
@@ -684,12 +685,12 @@ fn field_size(ty: &TypeRef, env: &HashMap<String, usize>) -> PatternResult<usize
             let count_usize = usize::try_from(*count).map_err(|_| {
                 PatternLangError::Layout {
                     ty: "<array>".to_string(),
-                    msg: format!("array count {} overflows usize", count),
+                    msg: format!("array count {count} overflows usize"),
                 }
             })?;
             elem.checked_mul(count_usize).ok_or_else(|| PatternLangError::Layout {
                 ty: "<array>".to_string(),
-                msg: format!("array size overflow: {} * {}", elem, count_usize),
+                msg: format!("array size overflow: {elem} * {count_usize}"),
             })
         }
         TypeRef::Named(n) => env

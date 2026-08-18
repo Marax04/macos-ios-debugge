@@ -71,13 +71,13 @@ impl EntropyClass {
 
     /// Return `true` if this class is likely compressed or encrypted.
     #[must_use]
-    pub fn is_high(self) -> bool {
+    pub const fn is_high(self) -> bool {
         matches!(self, Self::Compressed | Self::Encrypted | Self::High)
     }
 
     /// Return a short label string.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Sparse => "sparse",
             Self::Low => "low",
@@ -90,7 +90,7 @@ impl EntropyClass {
 
     /// Typical entropy midpoint for this class (useful for thresholding).
     #[must_use]
-    pub fn typical_entropy(self) -> f64 {
+    pub const fn typical_entropy(self) -> f64 {
         match self {
             Self::Sparse => 0.5,
             Self::Low => 2.0,
@@ -132,7 +132,7 @@ pub struct EntropyRegion {
 impl EntropyRegion {
     /// Byte offset of the first byte past this region.
     #[must_use]
-    pub fn end_offset(&self) -> usize {
+    pub const fn end_offset(&self) -> usize {
         self.offset + self.size
     }
 
@@ -280,7 +280,7 @@ impl Default for EntropyAnalyzer {
 impl EntropyAnalyzer {
     /// Create with custom parameters.
     #[must_use]
-    pub fn new(window_size: usize, step_size: usize, min_region_bytes: usize) -> Self {
+    pub const fn new(window_size: usize, step_size: usize, min_region_bytes: usize) -> Self {
         Self {
             window_size,
             step_size,

@@ -30,7 +30,7 @@ pub enum WasmValue {
 impl WasmValue {
     /// Return the `WasmValType` corresponding to this runtime value.
     #[must_use]
-    pub fn val_type(&self) -> WasmValType {
+    pub const fn val_type(&self) -> WasmValType {
         match self {
             Self::I32(_) => WasmValType::I32,
             Self::I64(_) => WasmValType::I64,
@@ -44,7 +44,7 @@ impl WasmValue {
 
     /// Return the default (zero/null) value for a `WasmValType`.
     #[must_use]
-    pub fn default_for(vt: WasmValType) -> Self {
+    pub const fn default_for(vt: WasmValType) -> Self {
         match vt {
             WasmValType::I32 => Self::I32(0),
             WasmValType::I64 => Self::I64(0),
@@ -58,31 +58,31 @@ impl WasmValue {
 
     /// Try to unwrap as an i32.
     #[must_use]
-    pub fn as_i32(&self) -> Option<i32> {
+    pub const fn as_i32(&self) -> Option<i32> {
         if let Self::I32(v) = self { Some(*v) } else { None }
     }
 
     /// Try to unwrap as an i64.
     #[must_use]
-    pub fn as_i64(&self) -> Option<i64> {
+    pub const fn as_i64(&self) -> Option<i64> {
         if let Self::I64(v) = self { Some(*v) } else { None }
     }
 
     /// Try to unwrap as an f32.
     #[must_use]
-    pub fn as_f32(&self) -> Option<f32> {
+    pub const fn as_f32(&self) -> Option<f32> {
         if let Self::F32(v) = self { Some(*v) } else { None }
     }
 
     /// Try to unwrap as an f64.
     #[must_use]
-    pub fn as_f64(&self) -> Option<f64> {
+    pub const fn as_f64(&self) -> Option<f64> {
         if let Self::F64(v) = self { Some(*v) } else { None }
     }
 
     /// Return `true` if this is a null reference.
     #[must_use]
-    pub fn is_null_ref(&self) -> bool {
+    pub const fn is_null_ref(&self) -> bool {
         matches!(self, Self::FuncRef(None) | Self::ExternRef(None))
     }
 }
@@ -210,19 +210,19 @@ impl ExecStack {
 
     /// Current stack depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.values.len()
     }
 
     /// Maximum depth ever reached.
     #[must_use]
-    pub fn max_depth(&self) -> usize {
+    pub const fn max_depth(&self) -> usize {
         self.max_depth
     }
 
     /// Return `true` when the stack is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
@@ -277,7 +277,7 @@ pub struct Label {
 impl Label {
     /// Create a new label.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         kind: LabelKind,
         stack_depth: usize,
         result_arity: usize,
@@ -342,13 +342,13 @@ impl LabelStack {
 
     /// Current nesting depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.labels.len()
     }
 
     /// Returns `true` when no labels are open.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.labels.is_empty()
     }
 
@@ -386,7 +386,7 @@ pub struct CallFrame {
 impl CallFrame {
     /// Create a new call frame.
     #[must_use]
-    pub fn new(func_index: u32, locals: Vec<WasmValue>, return_arity: usize) -> Self {
+    pub const fn new(func_index: u32, locals: Vec<WasmValue>, return_arity: usize) -> Self {
         Self {
             func_index,
             locals,
@@ -418,7 +418,7 @@ impl CallFrame {
 
     /// Number of locals in this frame.
     #[must_use]
-    pub fn local_count(&self) -> usize {
+    pub const fn local_count(&self) -> usize {
         self.locals.len()
     }
 }
@@ -472,19 +472,19 @@ impl FrameStack {
 
     /// Current nesting depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.frames.len()
     }
 
     /// Maximum depth ever reached.
     #[must_use]
-    pub fn max_depth(&self) -> usize {
+    pub const fn max_depth(&self) -> usize {
         self.max_depth
     }
 
     /// Returns `true` when no frames are active.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.frames.is_empty()
     }
 }
@@ -619,7 +619,7 @@ impl WasmExecutor {
 
     /// Returns `true` when a trap has been set.
     #[must_use]
-    pub fn has_trap(&self) -> bool {
+    pub const fn has_trap(&self) -> bool {
         self.trap.is_some()
     }
 
@@ -677,7 +677,7 @@ impl WasmExecutor {
     }
 
     /// Increment the instruction counter.
-    pub fn tick(&mut self) {
+    pub const fn tick(&mut self) {
         self.instr_count += 1;
     }
 
@@ -707,7 +707,7 @@ pub struct BranchDepthResolver<'a> {
 impl<'a> BranchDepthResolver<'a> {
     /// Create a resolver backed by the given label stack.
     #[must_use]
-    pub fn new(labels: &'a LabelStack) -> Self {
+    pub const fn new(labels: &'a LabelStack) -> Self {
         Self { labels }
     }
 

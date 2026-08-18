@@ -75,7 +75,7 @@ impl std::fmt::Display for BinOpKind {
             Self::Rol => "ROL", Self::Ror => "ROR",
             Self::Cmp => "CMP", Self::Test => "TEST",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -113,6 +113,7 @@ pub struct EmulationTrace {
 }
 
 impl EmulationTrace {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -123,11 +124,13 @@ impl EmulationTrace {
     }
 
     /// Count how many times a given opcode kind appears.
+    #[must_use]
     pub fn count_op_kind(&self, kind: &str) -> usize {
         self.ops.iter().filter(|op| op_kind_name(op) == kind).count()
     }
 
     /// Return the sequence of net stack deltas (useful for stack-depth analysis).
+    #[must_use]
     pub fn stack_deltas(&self) -> Vec<i32> {
         self.ops
             .iter()
@@ -139,7 +142,8 @@ impl EmulationTrace {
             .collect()
     }
 
-    /// Identify the dominant operation (most frequent BinOp kind).
+    /// Identify the dominant operation (most frequent `BinOp` kind).
+    #[must_use]
     pub fn dominant_binop(&self) -> Option<BinOpKind> {
         let mut counts: HashMap<BinOpKind, usize> = HashMap::with_capacity(15);
         for op in &self.ops {
@@ -151,7 +155,7 @@ impl EmulationTrace {
     }
 }
 
-fn op_kind_name(op: &SemanticOp) -> &'static str {
+const fn op_kind_name(op: &SemanticOp) -> &'static str {
     match op {
         SemanticOp::Push { .. } => "Push",
         SemanticOp::Pop { .. } => "Pop",
@@ -198,6 +202,7 @@ pub struct HandlerSummary {
 
 impl HandlerSummary {
     /// Derive a summary from an emulation trace.
+    #[must_use]
     pub fn from_trace(address: u64, trace: &EmulationTrace) -> Self {
         let push_count = trace.count_op_kind("Push") as i32;
         let pop_count = trace.count_op_kind("Pop") as i32;
@@ -255,7 +260,7 @@ fn infer_semantic(
         return ("STORE".into(), 0.72);
     }
     if let Some(binop) = dominant_binop {
-        let name = format!("{}", binop);
+        let name = format!("{binop}");
         let conf = match binop {
             BinOpKind::Add | BinOpKind::Sub | BinOpKind::Xor
             | BinOpKind::And | BinOpKind::Or => 0.78,
@@ -331,6 +336,7 @@ pub struct VmIsaConfig {
 
 impl VmIsaConfig {
     /// Create a new ISA config.
+    #[must_use]
     pub fn new(opcode_width: u8) -> Self {
         Self {
             handlers: HashMap::new(),
@@ -364,6 +370,7 @@ pub struct DetectedLoop {
 }
 
 /// Detect loops in a trace by looking for repeated jump targets.
+#[must_use]
 pub fn detect_loops(trace: &EmulationTrace) -> Vec<DetectedLoop> {
     let mut jump_history: HashMap<u64, Vec<usize>> = HashMap::new();
     let mut results = Vec::new();
@@ -417,6 +424,7 @@ pub struct VmEmulator {
 
 impl VmEmulator {
     /// Create a new emulator with the given ISA.
+    #[must_use]
     pub fn new(isa: VmIsaConfig) -> Self {
         Self {
             isa,
@@ -429,12 +437,14 @@ impl VmEmulator {
         }
     }
 
-    pub fn with_max_cycles(mut self, n: u64) -> Self {
+    #[must_use]
+    pub const fn with_max_cycles(mut self, n: u64) -> Self {
         self.max_cycles = n;
         self
     }
 
-    pub fn with_max_loop_iterations(mut self, n: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_loop_iterations(mut self, n: u32) -> Self {
         self.max_loop_iterations = n;
         self
     }
@@ -487,7 +497,7 @@ impl VmEmulator {
         self.trace.push(SemanticOp::MemWrite { address, value, width });
     }
 
-    fn apply_binop(op: BinOpKind, lhs: u64, rhs: u64) -> u64 {
+    const fn apply_binop(op: BinOpKind, lhs: u64, rhs: u64) -> u64 {
         match op {
             BinOpKind::Add => lhs.wrapping_add(rhs),
             BinOpKind::Sub => lhs.wrapping_sub(rhs),
@@ -513,7 +523,7 @@ impl VmEmulator {
         }
     }
 
-    fn apply_unary(op: UnaryOpKind, operand: u64) -> u64 {
+    const fn apply_unary(op: UnaryOpKind, operand: u64) -> u64 {
         match op {
             UnaryOpKind::Not => !operand,
             UnaryOpKind::Neg => operand.wrapping_neg(),
@@ -696,16 +706,19 @@ impl VmEmulator {
     }
 
     /// Return a reference to the current trace.
-    pub fn trace(&self) -> &EmulationTrace {
+    #[must_use]
+    pub const fn trace(&self) -> &EmulationTrace {
         &self.trace
     }
 
     /// Detect loops in the last emulation trace.
+    #[must_use]
     pub fn detected_loops(&self) -> Vec<DetectedLoop> {
         detect_loops(&self.trace)
     }
 
     /// Count repeated handler sequences (patterns that appear 3+ times).
+    #[must_use]
     pub fn repeated_patterns(&self) -> Vec<(Vec<String>, usize)> {
         find_repeated_subsequences(&self.trace.ops, 3, 8)
     }

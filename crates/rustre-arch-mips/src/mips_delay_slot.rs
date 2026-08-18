@@ -219,7 +219,7 @@ pub struct BranchWithDelay {
     pub opcode: MipsJumpOpcode,
     /// The static branch target address, if known (None for JR/JALR).
     pub target: Option<u64>,
-    /// The fall-through address (branch_address + 8, skipping the delay slot).
+    /// The fall-through address (`branch_address` + 8, skipping the delay slot).
     pub fallthrough: u64,
     /// The delay-slot instruction.
     pub delay_slot: DelaySlotInsn,
@@ -232,7 +232,7 @@ pub struct BranchWithDelay {
 impl BranchWithDelay {
     /// Construct a new `BranchWithDelay`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         branch_address: u64,
         branch_encoding: u32,
         opcode: MipsJumpOpcode,
@@ -256,7 +256,7 @@ impl BranchWithDelay {
 
     /// Returns `true` if the delay slot instruction is a NOP.
     #[must_use]
-    pub fn delay_is_nop(&self) -> bool {
+    pub const fn delay_is_nop(&self) -> bool {
         self.delay_slot.is_nop
     }
 
@@ -278,7 +278,7 @@ impl BranchWithDelay {
 
     /// Returns the address of the delay-slot instruction.
     #[must_use]
-    pub fn delay_slot_address(&self) -> u64 {
+    pub const fn delay_slot_address(&self) -> u64 {
         self.branch_address.wrapping_add(4)
     }
 }
@@ -328,7 +328,7 @@ impl fmt::Display for AnnulDecision {
 /// branches, the delay slot is annulled (skipped) when the branch is **not**
 /// taken.
 #[must_use]
-pub fn annul_check(branch: &BranchWithDelay, branch_taken: bool) -> AnnulDecision {
+pub const fn annul_check(branch: &BranchWithDelay, branch_taken: bool) -> AnnulDecision {
     match branch.kind {
         DelaySlotKind::Annulled => {
             if branch_taken {
@@ -408,7 +408,7 @@ pub struct MipsDelaySlot {
 impl MipsDelaySlot {
     /// Create an analyser with the given configuration.
     #[must_use]
-    pub fn new(config: DelaySlotConfig) -> Self {
+    pub const fn new(config: DelaySlotConfig) -> Self {
         Self { config }
     }
 
@@ -526,7 +526,7 @@ impl DelaySlotReport {
 
     /// Optimisation opportunity count: branches with NOP delay slots.
     #[must_use]
-    pub fn optimizable_count(&self) -> usize {
+    pub const fn optimizable_count(&self) -> usize {
         self.nop_delay_slots
     }
 }
@@ -576,7 +576,7 @@ pub enum LiftedBranchSemantics {
 /// This helper is used by the MIPS lifter to emit correct IL for both
 /// annulled and standard delay slots.
 #[must_use]
-pub fn lifting_semantics(branch: &BranchWithDelay, taken: bool) -> LiftedBranchSemantics {
+pub const fn lifting_semantics(branch: &BranchWithDelay, taken: bool) -> LiftedBranchSemantics {
     match (branch.kind, taken) {
         (DelaySlotKind::None, true) => LiftedBranchSemantics::BranchOnly { target: branch.target },
         (DelaySlotKind::None, false) => LiftedBranchSemantics::FallthroughOnly {
@@ -605,7 +605,7 @@ pub struct FunctionDelaySlotStats {
     /// Branches that have annulled delay slots.
     pub annulled_count: usize,
     /// Map from branch address to whether the delay slot has a write hazard.
-    /// Uses BTreeMap rather than HashMap to prevent hash-collision DoS when
+    /// Uses `BTreeMap` rather than `HashMap` to prevent hash-collision `DoS` when
     /// keys come from attacker-controlled binary addresses.
     pub hazards: BTreeMap<u64, bool>,
 }

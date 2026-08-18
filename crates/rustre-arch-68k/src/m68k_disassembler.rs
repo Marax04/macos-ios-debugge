@@ -27,10 +27,12 @@ pub struct BranchTarget {
 }
 
 impl BranchTarget {
-    pub fn new(address: u32, label: Option<String>, is_call: bool, is_conditional: bool) -> Self {
+    #[must_use]
+    pub const fn new(address: u32, label: Option<String>, is_call: bool, is_conditional: bool) -> Self {
         BranchTarget { address, label, is_call, is_conditional }
     }
 
+    #[must_use]
     pub fn label_or_addr(&self) -> String {
         match &self.label {
             Some(l) => l.clone(),
@@ -114,7 +116,8 @@ pub struct DisasmLine {
 }
 
 impl DisasmLine {
-    pub fn end_address(&self) -> u32 {
+    #[must_use]
+    pub const fn end_address(&self) -> u32 {
         self.address.wrapping_add(self.bytes.len() as u32)
     }
 }
@@ -122,7 +125,7 @@ impl DisasmLine {
 impl fmt::Display for DisasmLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(lbl) = &self.label {
-            writeln!(f, "{}:", lbl)?;
+            writeln!(f, "{lbl}:")?;
         }
         write!(f, "{}", self.text)
     }
@@ -137,7 +140,7 @@ impl fmt::Display for DisasmLine {
 pub struct EaFormatter<'a> {
     /// Labels table: address → name.
     pub labels: &'a HashMap<u32, String>,
-    /// Current instruction PC (for DispPc resolution).
+    /// Current instruction PC (for `DispPc` resolution).
     pub instr_pc: u32,
     /// Whether to use uppercase.
     pub uppercase: bool,
@@ -146,22 +149,24 @@ pub struct EaFormatter<'a> {
 }
 
 impl<'a> EaFormatter<'a> {
-    pub fn new(labels: &'a HashMap<u32, String>, instr_pc: u32) -> Self {
+    #[must_use]
+    pub const fn new(labels: &'a HashMap<u32, String>, instr_pc: u32) -> Self {
         EaFormatter { labels, instr_pc, uppercase: true, resolve_pcrel: true }
     }
 
     /// Format an effective address to a string.
+    #[must_use]
     pub fn format(&self, ea: &M68kEa, sz: M68kSize) -> String {
         match ea {
-            M68kEa::DataReg(n) => self.case(format!("D{}", n)),
-            M68kEa::AddrReg(n) => self.case(format!("A{}", n)),
-            M68kEa::AddrInd(n) => format!("({})", self.case(format!("A{}", n))),
-            M68kEa::PostInc(n) => format!("({})+", self.case(format!("A{}", n))),
-            M68kEa::PreDec(n)  => format!("-({})", self.case(format!("A{}", n))),
-            M68kEa::DispAn(an, d) => format!("({},{})", d, self.case(format!("A{}", an))),
+            M68kEa::DataReg(n) => self.case(format!("D{n}")),
+            M68kEa::AddrReg(n) => self.case(format!("A{n}")),
+            M68kEa::AddrInd(n) => format!("({})", self.case(format!("A{n}"))),
+            M68kEa::PostInc(n) => format!("({})+", self.case(format!("A{n}"))),
+            M68kEa::PreDec(n)  => format!("-({})", self.case(format!("A{n}"))),
+            M68kEa::DispAn(an, d) => format!("({},{})", d, self.case(format!("A{an}"))),
             M68kEa::IdxAn { an, xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { self.case(format!("A{}", xn)) } else { self.case(format!("D{}", xn)) };
-                format!("({},{},{}.{})", disp, self.case(format!("A{}", an)), xreg,
+                let xreg = if *xn_is_addr { self.case(format!("A{xn}")) } else { self.case(format!("D{xn}")) };
+                format!("({},{},{}.{})", disp, self.case(format!("A{an}")), xreg,
                     if self.uppercase { xn_size.suffix().to_uppercase().trim_start_matches('.').to_string() }
                     else { xn_size.suffix().trim_start_matches('.').to_string() })
             }
@@ -173,11 +178,11 @@ impl<'a> EaFormatter<'a> {
                     let target = (self.instr_pc as i64 + 2 + *d as i64) as u32;
                     self.format_addr(target, "")
                 } else {
-                    format!("({},PC)", d)
+                    format!("({d},PC)")
                 }
             }
             M68kEa::IdxPc { xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { self.case(format!("A{}", xn)) } else { self.case(format!("D{}", xn)) };
+                let xreg = if *xn_is_addr { self.case(format!("A{xn}")) } else { self.case(format!("D{xn}")) };
                 if self.resolve_pcrel {
                     let base = (self.instr_pc as i64 + 2 + *disp as i64) as u32;
                     format!("({},{},PC)", self.format_addr(base, ""), xreg)
@@ -203,9 +208,9 @@ impl<'a> EaFormatter<'a> {
             return lbl.clone();
         }
         if suffix.is_empty() {
-            format!("${:X}", addr)
+            format!("${addr:X}")
         } else {
-            format!("${:X}{}", addr, suffix)
+            format!("${addr:X}{suffix}")
         }
     }
 
@@ -213,8 +218,8 @@ impl<'a> EaFormatter<'a> {
         match sz {
             M68kSize::Byte => format!("#${:02X}", v & 0xFF),
             M68kSize::Word => format!("#${:04X}", v & 0xFFFF),
-            M68kSize::Long => format!("#${:08X}", v),
-            _              => format!("#${:X}", v),
+            M68kSize::Long => format!("#${v:08X}"),
+            _              => format!("#${v:X}"),
         }
     }
 
@@ -222,12 +227,12 @@ impl<'a> EaFormatter<'a> {
         let mut parts = Vec::with_capacity(mask.count_ones() as usize);
         for i in 0..8u8 {
             if (mask >> i) & 1 == 1 {
-                parts.push(format!("D{}", i));
+                parts.push(format!("D{i}"));
             }
         }
         for i in 0..8u8 {
             if (mask >> (i + 8)) & 1 == 1 {
-                parts.push(format!("A{}", i));
+                parts.push(format!("A{i}"));
             }
         }
         let joined = parts.join("/");
@@ -251,6 +256,7 @@ pub struct M68kDisassembler {
 }
 
 impl M68kDisassembler {
+    #[must_use]
     pub fn new(config: M68kDisasmConfig) -> Self {
         M68kDisassembler {
             config,
@@ -259,6 +265,7 @@ impl M68kDisassembler {
         }
     }
 
+    #[must_use]
     pub fn with_default_config() -> Self {
         Self::new(M68kDisasmConfig::default())
     }
@@ -274,6 +281,7 @@ impl M68kDisassembler {
     }
 
     /// Disassemble a single instruction.
+    #[must_use]
     pub fn disassemble_one(&self, data: &[u8], address: u32) -> DisasmLine {
         let instr_result = self.decoder.decode(data, address);
         match instr_result {
@@ -353,7 +361,7 @@ impl M68kDisassembler {
                     if let Some(lbl) = self.labels.get(&target) {
                         return lbl.clone();
                     }
-                    return format!("${:X}", target);
+                    return format!("${target:X}");
                 }
                 fmt.format(dst, instr.size)
             }
@@ -363,7 +371,7 @@ impl M68kDisassembler {
                     if let Some(lbl) = self.labels.get(&target) {
                         return lbl.clone();
                     }
-                    return format!("${:X}", target);
+                    return format!("${target:X}");
                 }
                 String::new()
             }
@@ -380,7 +388,7 @@ impl M68kDisassembler {
             let mut hex_bytes = String::with_capacity(self.config.max_bytes_shown * 3);
             for (i, b) in bytes.iter().take(self.config.max_bytes_shown).enumerate() {
                 if i > 0 { hex_bytes.push(' '); }
-                let _ = std::fmt::Write::write_fmt(&mut hex_bytes, format_args!("{:02X}", b));
+                let _ = std::fmt::Write::write_fmt(&mut hex_bytes, format_args!("{b:02X}"));
             }
             s.push_str(&format!("{:<width$}  ", hex_bytes, width = self.config.bytes_width));
         }
@@ -394,6 +402,7 @@ impl M68kDisassembler {
     }
 
     /// Disassemble a block of bytes.
+    #[must_use]
     pub fn disassemble(&self, data: &[u8], base_address: u32) -> Vec<DisasmLine> {
         let mut lines = Vec::new();
         let mut off = 0usize;
@@ -408,6 +417,7 @@ impl M68kDisassembler {
     }
 
     /// Disassemble until a terminator is reached (or limit is hit).
+    #[must_use]
     pub fn disassemble_flow(&self, data: &[u8], base_address: u32, max_instrs: usize) -> Vec<DisasmLine> {
         let mut lines = Vec::new();
         let mut off = 0usize;
@@ -424,6 +434,7 @@ impl M68kDisassembler {
     }
 
     /// Format a full disassembly listing as a string.
+    #[must_use]
     pub fn listing(&self, data: &[u8], base_address: u32) -> String {
         let lines = self.disassemble(data, base_address);
         let mut out = String::new();
@@ -454,7 +465,7 @@ impl M68kDisassembler {
         for (addr, is_call) in targets {
             if !self.labels.contains_key(&addr) {
                 let prefix = if is_call { "sub" } else { "loc" };
-                self.labels.insert(addr, format!("{}_{:08X}", prefix, addr));
+                self.labels.insert(addr, format!("{prefix}_{addr:08X}"));
                 count += 1;
             }
         }
@@ -462,9 +473,10 @@ impl M68kDisassembler {
     }
 
     /// Get config reference.
-    pub fn config(&self) -> &M68kDisasmConfig { &self.config }
+    #[must_use]
+    pub const fn config(&self) -> &M68kDisasmConfig { &self.config }
     /// Get mutable config reference.
-    pub fn config_mut(&mut self) -> &mut M68kDisasmConfig { &mut self.config }
+    pub const fn config_mut(&mut self) -> &mut M68kDisasmConfig { &mut self.config }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

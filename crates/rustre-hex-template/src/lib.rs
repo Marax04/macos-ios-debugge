@@ -188,7 +188,7 @@ impl FieldDef {
     }
 
     #[must_use]
-    pub fn with_offset(mut self, offset: usize) -> Self {
+    pub const fn with_offset(mut self, offset: usize) -> Self {
         self.offset = Some(offset);
         self
     }
@@ -287,7 +287,7 @@ impl ParsedStruct {
     }
 }
 
-fn typed_value_to_u64(v: &TypedValue) -> Option<u64> {
+const fn typed_value_to_u64(v: &TypedValue) -> Option<u64> {
     match v {
         TypedValue::U8(x) => Some(*x as u64),
         TypedValue::U16(x) => Some(*x as u64),
@@ -316,7 +316,7 @@ pub struct TemplateApplier<'a> {
 impl<'a> TemplateApplier<'a> {
     /// Create a new applier for the given buffer.
     #[must_use]
-    pub fn new(buf: &'a HexBuffer) -> Self {
+    pub const fn new(buf: &'a HexBuffer) -> Self {
         Self { buf }
     }
 
@@ -633,7 +633,7 @@ pub fn builtin_templates() -> HashMap<String, Template> {
     map
 }
 
-fn p(dt: DataType) -> TemplateType {
+const fn p(dt: DataType) -> TemplateType {
     TemplateType::Primitive(dt)
 }
 
@@ -660,6 +660,7 @@ fn bytes_field(name: &str, n: usize) -> FieldDef {
 // ── MZ/DOS header ─────────────────────────────────────────────────────────────
 
 /// Public accessor for the built-in MZ/DOS template (used by wire wrappers as a default).
+#[must_use]
 pub fn template_mz_pub() -> Template {
     template_mz()
 }
@@ -1197,7 +1198,7 @@ impl BitfieldDef {
 
     /// Extract this field's value from `raw`.
     #[must_use]
-    pub fn extract(&self, raw: u64) -> u64 {
+    pub const fn extract(&self, raw: u64) -> u64 {
         let mask = if self.bit_count >= 64 {
             u64::MAX
         } else {
@@ -1740,7 +1741,7 @@ pub struct TemplateValidator {
 impl TemplateValidator {
     /// Create a validator with no rules.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { rules: Vec::new() }
     }
 
@@ -2258,7 +2259,7 @@ impl TemplateField {
 
     /// Attach a depth.
     #[must_use]
-    pub fn with_depth(mut self, depth: usize) -> Self {
+    pub const fn with_depth(mut self, depth: usize) -> Self {
         self.depth = depth;
         self
     }
@@ -2369,7 +2370,7 @@ impl DiffEntry {
 
     /// Whether the diff is a value change (both sides present).
     #[must_use]
-    pub fn is_change(&self) -> bool {
+    pub const fn is_change(&self) -> bool {
         matches!(self, DiffEntry::Changed { .. })
     }
 }
@@ -2949,7 +2950,7 @@ pub struct TemplateLayer {
 impl TemplateLayer {
     /// Create a layer without a namespace.
     #[must_use]
-    pub fn new(template: Template, offset: usize) -> Self {
+    pub const fn new(template: Template, offset: usize) -> Self {
         Self {
             template,
             offset,
@@ -3002,7 +3003,7 @@ pub struct TemplateComposer<'buf> {
 impl<'buf> TemplateComposer<'buf> {
     /// Create a new composer.
     #[must_use]
-    pub fn new(buffer: &'buf HexBuffer) -> Self {
+    pub const fn new(buffer: &'buf HexBuffer) -> Self {
         Self { buffer }
     }
 
@@ -3132,13 +3133,13 @@ impl AnnotationSet {
 
     /// Number of annotations.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether the set is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
@@ -3187,7 +3188,7 @@ pub struct TemplateHistory {
 impl TemplateHistory {
     /// Create a new history with the given capacity.
     #[must_use]
-    pub fn new(capacity: usize) -> Self {
+    pub const fn new(capacity: usize) -> Self {
         Self {
             entries: Vec::new(),
             capacity,
@@ -3216,13 +3217,13 @@ impl TemplateHistory {
 
     /// Number of entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether the history is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }
@@ -4378,13 +4379,13 @@ impl TemplateFieldSearchIndex {
 
     /// Number of indexed entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }

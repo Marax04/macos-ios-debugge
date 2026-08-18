@@ -2837,7 +2837,7 @@ fn decode_sig_trie_inner(
 ///   [35..37] `AltCtypeCrc`  u16 LE
 ///   [37..41] `NumFunctions` u32 LE (v6+)
 ///   [41..43] `PatternSize`  u16 LE (v8+)
-///   [43..]   `LibraryName`  (LibraryNameLen bytes)
+///   [43..]   `LibraryName`  (`LibraryNameLen` bytes)
 ///
 /// The header is **variable length**: it ends at `43 + LibraryNameLen`. A
 /// `SIG_V9_HEADER_SIZE = 104` constant used to live here and encode the old,

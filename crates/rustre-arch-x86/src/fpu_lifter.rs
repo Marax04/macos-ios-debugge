@@ -57,7 +57,7 @@ pub enum FpuFlag {
 impl FpuFlag {
     /// The virtual register name used in IL for this flag.
     #[must_use]
-    pub fn reg_name(self) -> &'static str {
+    pub const fn reg_name(self) -> &'static str {
         match self {
             Self::C0 => "fpu_c0",
             Self::C1 => "fpu_c1",
@@ -85,7 +85,7 @@ pub struct FpuFlags {
 impl FpuFlags {
     /// All four flags set.
     #[must_use]
-    pub fn all() -> Self {
+    pub const fn all() -> Self {
         Self {
             c0: true,
             c1: true,
@@ -102,7 +102,7 @@ impl FpuFlags {
 
     /// C0 and C3 only (used by FCOM/FUCOM).
     #[must_use]
-    pub fn compare() -> Self {
+    pub const fn compare() -> Self {
         Self {
             c0: true,
             c1: false,
@@ -113,7 +113,7 @@ impl FpuFlags {
 
     /// Only C1 (stack fault).
     #[must_use]
-    pub fn c1_only() -> Self {
+    pub const fn c1_only() -> Self {
         Self {
             c0: false,
             c1: true,
@@ -143,7 +143,7 @@ pub struct FpuStack {
 impl FpuStack {
     /// Create an empty FPU stack (all tags empty, TOP = 0).
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             top: 0,
             live: [false; 8],
@@ -152,13 +152,13 @@ impl FpuStack {
 
     /// Returns the current stack-top index.
     #[must_use]
-    pub fn top(&self) -> u8 {
+    pub const fn top(&self) -> u8 {
         self.top
     }
 
     /// Physical register index for ST(n).
     #[must_use]
-    pub fn phys_idx(&self, st_n: u8) -> u8 {
+    pub const fn phys_idx(&self, st_n: u8) -> u8 {
         (self.top + st_n) & 7
     }
 
@@ -295,7 +295,7 @@ impl FpuLifter {
 
     /// Access the current stack state.
     #[must_use]
-    pub fn stack(&self) -> &FpuStack {
+    pub const fn stack(&self) -> &FpuStack {
         &self.stack
     }
 

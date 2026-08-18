@@ -37,7 +37,8 @@ pub enum CsrAccess {
 
 impl CsrAccess {
     /// Return `true` if this CSR is writable.
-    pub fn is_writable(self) -> bool {
+    #[must_use]
+    pub const fn is_writable(self) -> bool {
         !matches!(
             self,
             Self::ReadOnly | Self::ReadOnlySupervisor | Self::ReadOnlyMachine
@@ -45,7 +46,8 @@ impl CsrAccess {
     }
 
     /// Minimum privilege level (U=0, S=1, H=2, M=3).
-    pub fn min_privilege(self) -> u8 {
+    #[must_use]
+    pub const fn min_privilege(self) -> u8 {
         match self {
             Self::ReadWriteUser | Self::ReadOnly => 0,
             Self::ReadWriteSupervisor | Self::ReadOnlySupervisor => 1,
@@ -66,7 +68,8 @@ pub struct CsrId(pub u16);
 
 impl CsrId {
     /// Create a CSR ID, returning `None` if `addr > 0xFFF`.
-    pub fn new(addr: u16) -> Option<Self> {
+    #[must_use]
+    pub const fn new(addr: u16) -> Option<Self> {
         if addr <= 0xFFF {
             Some(Self(addr))
         } else {
@@ -75,17 +78,20 @@ impl CsrId {
     }
 
     /// Raw 12-bit address.
-    pub fn addr(self) -> u16 {
+    #[must_use]
+    pub const fn addr(self) -> u16 {
         self.0
     }
 
     /// `true` if the CSR is read-only (top 2 bits = 11).
-    pub fn is_read_only_by_encoding(self) -> bool {
+    #[must_use]
+    pub const fn is_read_only_by_encoding(self) -> bool {
         (self.0 >> 10) == 0b11
     }
 
     /// Privilege level encoded in bits [9:8].
-    pub fn privilege_from_encoding(self) -> u8 {
+    #[must_use]
+    pub const fn privilege_from_encoding(self) -> u8 {
         ((self.0 >> 8) & 0x3) as u8
     }
 }
@@ -713,6 +719,7 @@ impl std::fmt::Debug for RiscVCsr {
 
 impl RiscVCsr {
     /// Create a new zero-initialised CSR file.
+    #[must_use]
     pub fn new() -> Self {
         let mut lookup = HashMap::with_capacity(KNOWN_CSRS.len());
         for (i, desc) in KNOWN_CSRS.iter().enumerate() {
@@ -727,7 +734,8 @@ impl RiscVCsr {
     /// Read the current value of a CSR by address.
     ///
     /// Returns `None` if `addr > 0xFFF`.
-    pub fn read(&self, addr: u16) -> Option<u64> {
+    #[must_use]
+    pub const fn read(&self, addr: u16) -> Option<u64> {
         if addr > 0xFFF {
             return None;
         }
@@ -760,11 +768,13 @@ impl RiscVCsr {
     }
 
     /// Look up the descriptor for a CSR address.
+    #[must_use]
     pub fn descriptor(&self, addr: u16) -> Option<&'static CsrDescriptor> {
         self.lookup.get(&addr).map(|&i| &KNOWN_CSRS[i])
     }
 
     /// Return the name of a CSR, or a hex string if unknown.
+    #[must_use]
     pub fn name(&self, addr: u16) -> String {
         match self.descriptor(addr) {
             Some(d) => d.name.to_string(),
@@ -872,7 +882,8 @@ pub struct McauseDecoder;
 
 impl McauseDecoder {
     /// Decode a 64-bit mcause value.
-    pub fn decode_64(value: u64) -> McauseDecode {
+    #[must_use]
+    pub const fn decode_64(value: u64) -> McauseDecode {
         let is_interrupt = (value >> 63) & 1 == 1;
         let code = value & 0x7FFF_FFFF_FFFF_FFFF;
         if is_interrupt {
@@ -915,11 +926,13 @@ impl McauseDecoder {
     }
 
     /// `true` if this is an interrupt.
-    pub fn is_interrupt(value: u64) -> bool {
+    #[must_use]
+    pub const fn is_interrupt(value: u64) -> bool {
         (value >> 63) & 1 == 1
     }
 
     /// `true` if this is an exception.
+    #[must_use]
     pub fn is_exception(value: u64) -> bool {
         !Self::is_interrupt(value)
     }
@@ -973,7 +986,8 @@ pub struct MstatusDecoder;
 
 impl MstatusDecoder {
     /// Decode a 64-bit mstatus value.
-    pub fn decode(v: u64) -> MstatusDecode {
+    #[must_use]
+    pub const fn decode(v: u64) -> MstatusDecode {
         MstatusDecode {
             uie: v & 1 == 1,
             sie: (v >> 1) & 1 == 1,
@@ -996,7 +1010,8 @@ impl MstatusDecoder {
     }
 
     /// Encode an `MstatusDecode` back to a u64.
-    pub fn encode(s: &MstatusDecode) -> u64 {
+    #[must_use]
+    pub const fn encode(s: &MstatusDecode) -> u64 {
         let mut v = 0u64;
         v |= s.uie as u64;
         v |= (s.sie as u64) << 1;
@@ -1039,7 +1054,8 @@ pub struct Mtvec;
 
 impl Mtvec {
     /// Decode mode and base from a raw mtvec value.
-    pub fn decode(value: u64) -> (MtvecMode, u64) {
+    #[must_use]
+    pub const fn decode(value: u64) -> (MtvecMode, u64) {
         let mode = (value & 0x3) as u8;
         let base = value & !0x3;
         let mode = match mode {
@@ -1051,7 +1067,8 @@ impl Mtvec {
     }
 
     /// Build a mtvec value from mode and base.
-    pub fn encode(mode: MtvecMode, base: u64) -> u64 {
+    #[must_use]
+    pub const fn encode(mode: MtvecMode, base: u64) -> u64 {
         let mode_bits = match mode {
             MtvecMode::Direct => 0u64,
             MtvecMode::Vectored => 1,
@@ -1061,6 +1078,7 @@ impl Mtvec {
     }
 
     /// Compute the handler address for the given cause.
+    #[must_use]
     pub fn handler_address(mtvec: u64, cause: u64, is_interrupt: bool) -> u64 {
         let (mode, base) = Self::decode(mtvec);
         match mode {

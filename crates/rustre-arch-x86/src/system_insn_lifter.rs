@@ -74,7 +74,7 @@ pub struct SystemInsnLifter {
 impl SystemInsnLifter {
     /// Create a 64-bit lifter with the default syscall model.
     #[must_use]
-    pub fn new_64() -> Self {
+    pub const fn new_64() -> Self {
         Self {
             addr_bits: 64,
             syscall_model: Some(SystemCallModel::SyscallEffect),
@@ -83,7 +83,7 @@ impl SystemInsnLifter {
 
     /// Create a 32-bit lifter.
     #[must_use]
-    pub fn new_32() -> Self {
+    pub const fn new_32() -> Self {
         Self {
             addr_bits: 32,
             syscall_model: Some(SystemCallModel::SyscallEffect),
@@ -429,7 +429,7 @@ impl SystemInsnLifter {
         }
     }
 
-    fn accumulator_reg(&self) -> &'static str {
+    const fn accumulator_reg(&self) -> &'static str {
         match self.addr_bits {
             64 => "rax",
             32 => "eax",
@@ -437,7 +437,7 @@ impl SystemInsnLifter {
         }
     }
 
-    fn rsp_reg(&self) -> &'static str {
+    const fn rsp_reg(&self) -> &'static str {
         match self.addr_bits {
             64 => "rsp",
             32 => "esp",
@@ -445,14 +445,14 @@ impl SystemInsnLifter {
         }
     }
 
-    fn rflags_reg(&self) -> &'static str {
+    const fn rflags_reg(&self) -> &'static str {
         match self.addr_bits {
             64 => "rflags",
             _ => "eflags",
         }
     }
 
-    fn flags_size(&self) -> u8 {
+    const fn flags_size(&self) -> u8 {
         match self.addr_bits {
             64 => 8,
             32 => 4,

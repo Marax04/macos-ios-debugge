@@ -150,12 +150,12 @@ impl CodeSignature {
             .any(|c| c.subject.contains("iPhone Distribution"))
     }
 
-    /// Return `true` if the CodeDirectory carries `CS_ADHOC`.
+    /// Return `true` if the `CodeDirectory` carries `CS_ADHOC`.
     ///
     /// This used to be `cert_chain.is_empty()`, which conflated "ad-hoc signed"
     /// with "this build has no X.509 decoder, so no certificates were
     /// recovered" — two very different statements that happen to look
-    /// identical. `CS_ADHOC` is a real bit in the CodeDirectory read by
+    /// identical. `CS_ADHOC` is a real bit in the `CodeDirectory` read by
     /// [`codesign_flags_from_macho`].
     #[must_use]
     pub const fn is_adhoc(&self) -> bool {
@@ -229,7 +229,7 @@ impl CertInfo {
     }
 }
 
-/// `CS_ADHOC` — the CodeDirectory bit set for an ad-hoc signature.
+/// `CS_ADHOC` — the `CodeDirectory` bit set for an ad-hoc signature.
 pub const CS_ADHOC: u32 = 0x0000_0002;
 
 /// Why a certificate question could not be answered from the available bytes.
@@ -263,10 +263,10 @@ pub enum CodeSignReadError {
     NoCodeDirectory,
 }
 
-/// Read the CodeDirectory `flags` word out of a Mach-O `LC_CODE_SIGNATURE`.
+/// Read the `CodeDirectory` `flags` word out of a Mach-O `LC_CODE_SIGNATURE`.
 ///
 /// Walks the load commands for `LC_CODE_SIGNATURE` (`0x1D`), then the
-/// big-endian `CSMAGIC_EMBEDDED_SIGNATURE` SuperBlob at `dataoff` for the
+/// big-endian `CSMAGIC_EMBEDDED_SIGNATURE` `SuperBlob` at `dataoff` for the
 /// `CSSLOT_CODEDIRECTORY` (index type 0) blob, and returns its `flags` field.
 ///
 /// # Errors
@@ -1023,8 +1023,8 @@ impl IpaPackage {
     }
 
     /// Assemble an arm64 Mach-O that carries a real `LC_CODE_SIGNATURE`
-    /// pointing at a real `CSMAGIC_EMBEDDED_SIGNATURE` SuperBlob whose
-    /// CodeDirectory has the given `flags`.
+    /// pointing at a real `CSMAGIC_EMBEDDED_SIGNATURE` `SuperBlob` whose
+    /// `CodeDirectory` has the given `flags`.
     #[must_use]
     pub fn reference_macho_bytes(flags: u32) -> Vec<u8> {
         // header(32) + LC_CODE_SIGNATURE(16), then padding so the binary is

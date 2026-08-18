@@ -1,4 +1,4 @@
-//! `vmprotect_handler` — VMProtect 3.x handler identification and analysis.
+//! `vmprotect_handler` — `VMProtect` 3.x handler identification and analysis.
 //!
 //! Covers:
 //! * Protection mode identification: `VirtualProtect`, `VirtualMachine`, `Mutation`
@@ -6,7 +6,7 @@
 //! * VM entry/exit stub detection
 //! * Register mapping recovery (x64 host → guest slot)
 //! * Stack-based vs register-based VM distinction
-//! * Anti-debug check removal (RDTSC, IsDebuggerPresent, NtQueryInformationProcess)
+//! * Anti-debug check removal (RDTSC, `IsDebuggerPresent`, `NtQueryInformationProcess`)
 
 
 use std::collections::HashMap;
@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 // Protection mode
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// VMProtect 3.x code-protection mode applied to a given code region.
+/// `VMProtect` 3.x code-protection mode applied to a given code region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Vmp3Mode {
     /// Original code is preserved; only obfuscation and packing applied.
     VirtualProtect,
-    /// Code is translated to VMProtect's proprietary bytecode VM.
+    /// Code is translated to `VMProtect`'s proprietary bytecode VM.
     VirtualMachine,
     /// Code is mutated (multiple equivalent instruction sequences).
     Mutation,
@@ -51,9 +51,9 @@ impl std::fmt::Display for Vmp3Mode {
 /// Whether the VM uses a stack or a register-file for intermediate values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VmpVmArch {
-    /// Classic VMProtect 2/3: stack-based, RSP/RBP point into the VM stack.
+    /// Classic `VMProtect` 2/3: stack-based, RSP/RBP point into the VM stack.
     StackBased,
-    /// VMProtect 3 "enhanced" mode: explicit register file in a context block.
+    /// `VMProtect` 3 "enhanced" mode: explicit register file in a context block.
     RegisterBased,
     /// Could not determine.
     Unknown,
@@ -63,7 +63,7 @@ pub enum VmpVmArch {
 // Register mapping
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Maps a VMProtect guest register slot to the x64 host register used to hold it
+/// Maps a `VMProtect` guest register slot to the x64 host register used to hold it
 /// during handler execution.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VmpRegisterMapping {
@@ -108,7 +108,7 @@ impl VmpRegisterMapping {
 // Dispatcher pattern
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Variant of the encrypted dispatch stub seen in VMProtect handlers.
+/// Variant of the encrypted dispatch stub seen in `VMProtect` handlers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VmpDispatchPattern {
     /// `jmp [reg]` — indirect jump through a handler-table entry.
@@ -144,7 +144,8 @@ pub struct VmpDispatcher {
 
 impl VmpDispatcher {
     /// Create a new dispatcher with minimal information.
-    pub fn new(address: u64, pattern: VmpDispatchPattern, confidence: f32) -> Self {
+    #[must_use]
+    pub const fn new(address: u64, pattern: VmpDispatchPattern, confidence: f32) -> Self {
         Self {
             address,
             pattern,
@@ -207,7 +208,7 @@ pub enum VmpAntiDebugKind {
     PebNtGlobalFlag,
     /// Exception-based timing check (`SetUnhandledExceptionFilter` trick).
     ExceptionTiming,
-    /// Heap flags in PEB (ForceFlags).
+    /// Heap flags in PEB (`ForceFlags`).
     HeapFlags,
     /// Parent process name check.
     ParentProcessCheck,
@@ -234,7 +235,8 @@ pub struct VmpAntiDebugCheck {
 
 impl VmpAntiDebugCheck {
     /// Return whether this check can be removed by simple NOP patching.
-    pub fn is_noppable(&self) -> bool {
+    #[must_use]
+    pub const fn is_noppable(&self) -> bool {
         !self.patch_bytes.is_empty()
     }
 }
@@ -243,7 +245,7 @@ impl VmpAntiDebugCheck {
 // Handler identification result
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Classification of a single VMProtect handler body.
+/// Classification of a single `VMProtect` handler body.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VmpHandlerInfo {
     /// Virtual address of the handler.
@@ -266,7 +268,7 @@ pub struct VmpHandlerInfo {
 // VmpAnalysisResult — top-level output
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Complete VMProtect 3.x analysis result for a single protected region.
+/// Complete `VMProtect` 3.x analysis result for a single protected region.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VmpAnalysisResult {
     /// Base address of the protected region.
@@ -285,13 +287,14 @@ pub struct VmpAnalysisResult {
     pub register_map: Vec<VmpRegisterMapping>,
     /// Anti-debug checks found.
     pub anti_debug_checks: Vec<VmpAntiDebugCheck>,
-    /// Overall confidence that this region is VMProtect 3.x.
+    /// Overall confidence that this region is `VMProtect` 3.x.
     pub overall_confidence: f32,
 }
 
 impl VmpAnalysisResult {
     /// Create an empty result for the given region.
-    pub fn new(region_base: u64) -> Self {
+    #[must_use]
+    pub const fn new(region_base: u64) -> Self {
         Self {
             region_base,
             mode: Vmp3Mode::Unknown,
@@ -306,11 +309,13 @@ impl VmpAnalysisResult {
     }
 
     /// Number of handlers that were successfully classified.
+    #[must_use]
     pub fn classified_handler_count(&self) -> usize {
         self.handlers.iter().filter(|h| h.confidence >= 0.6).count()
     }
 
     /// Return all anti-debug checks that can be NOP-patched.
+    #[must_use]
     pub fn noppable_checks(&self) -> Vec<&VmpAntiDebugCheck> {
         self.anti_debug_checks
             .iter()
@@ -323,14 +328,14 @@ impl VmpAnalysisResult {
 // VmpHandlerIdentifier
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Core analyzer: identifies VMProtect 3.x handlers, stubs, dispatchers,
+/// Core analyzer: identifies `VMProtect` 3.x handlers, stubs, dispatchers,
 /// register mappings, and anti-debug checks.
 pub struct VmpHandlerIdentifier {
     /// Minimum confidence threshold to accept a finding.
     pub min_confidence: f32,
     /// Whether to include low-confidence speculative findings.
     pub speculative: bool,
-    /// Known VMProtect 3.x handler byte signatures (opcode → patterns).
+    /// Known `VMProtect` 3.x handler byte signatures (opcode → patterns).
     handler_signatures: HashMap<String, Vec<Vec<u8>>>,
     /// Known anti-debug byte patterns.
     antidebug_patterns: Vec<(VmpAntiDebugKind, Vec<u8>)>,
@@ -344,6 +349,7 @@ impl Default for VmpHandlerIdentifier {
 
 impl VmpHandlerIdentifier {
     /// Create with default settings and built-in signatures.
+    #[must_use]
     pub fn new() -> Self {
         let mut id = Self {
             min_confidence: 0.55,
@@ -357,13 +363,15 @@ impl VmpHandlerIdentifier {
     }
 
     /// Set confidence threshold.
-    pub fn with_min_confidence(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, t: f32) -> Self {
         self.min_confidence = t;
         self
     }
 
     /// Enable speculative (low-confidence) findings.
-    pub fn with_speculative(mut self, s: bool) -> Self {
+    #[must_use]
+    pub const fn with_speculative(mut self, s: bool) -> Self {
         self.speculative = s;
         self
     }
@@ -533,8 +541,9 @@ impl VmpHandlerIdentifier {
 
     // ── Protection-mode detection ─────────────────────────────────────────────
 
-    /// Detect the VMProtect mode applied to `bytes` (a code region).
+    /// Detect the `VMProtect` mode applied to `bytes` (a code region).
     /// Returns [`Vmp3Mode`] and a confidence score.
+    #[must_use]
     pub fn detect_mode(&self, bytes: &[u8]) -> (Vmp3Mode, f32) {
         if bytes.len() < 16 {
             return (Vmp3Mode::Unknown, 0.0);
@@ -629,6 +638,7 @@ impl VmpHandlerIdentifier {
     // ── Dispatcher identification ─────────────────────────────────────────────
 
     /// Find all VM dispatchers in `bytes` (starting at `base_address`).
+    #[must_use]
     pub fn find_dispatchers(&self, bytes: &[u8], base_address: u64) -> Vec<VmpDispatcher> {
         let mut result = Vec::new();
 
@@ -684,6 +694,7 @@ impl VmpHandlerIdentifier {
     // ── Entry/exit stub detection ─────────────────────────────────────────────
 
     /// Detect VM entry and exit stubs in `bytes`.
+    #[must_use]
     pub fn find_stubs(&self, bytes: &[u8], base_address: u64) -> Vec<VmpStub> {
         let mut result = Vec::new();
 
@@ -724,11 +735,12 @@ impl VmpHandlerIdentifier {
 
     /// Recover register mappings from handler bodies.
     ///
-    /// VMProtect 3 x64 (stack-based) conventionally uses:
+    /// `VMProtect` 3 x64 (stack-based) conventionally uses:
     /// * `rbp` — virtual stack pointer (vSP)
     /// * `rsi` — virtual instruction pointer (vIP)
     /// * `rdi` — handler table pointer
     /// Other registers rotate through guest operand slots.
+    #[must_use]
     pub fn recover_register_mappings(&self, stubs: &[VmpStub]) -> Vec<VmpRegisterMapping> {
         let mut mappings = Vec::new();
 
@@ -749,7 +761,7 @@ impl VmpHandlerIdentifier {
         for slot in 3..=10u8 {
             mappings.push(VmpRegisterMapping {
                 guest_slot: slot,
-                host_reg: format!("<unknown-gp{}>", slot),
+                host_reg: format!("<unknown-gp{slot}>"),
                 context_offset: Some((slot as i32 - 3) * 8),
                 confidence: 0.35,
             });
@@ -761,6 +773,7 @@ impl VmpHandlerIdentifier {
     // ── VM architecture classification ────────────────────────────────────────
 
     /// Classify whether the VM is stack-based or register-based.
+    #[must_use]
     pub fn classify_vm_arch(&self, bytes: &[u8]) -> VmpVmArch {
         // Stack-based VMs heavily use RSP/RBP relative addressing
         let rsp_refs = count_rsp_relative(bytes);
@@ -780,7 +793,8 @@ impl VmpHandlerIdentifier {
 
     // ── Handler identification ────────────────────────────────────────────────
 
-    /// Match known VMProtect 3 handler byte sequences in `body`.
+    /// Match known `VMProtect` 3 handler byte sequences in `body`.
+    #[must_use]
     pub fn identify_handler(&self, address: u64, body: &[u8]) -> Option<VmpHandlerInfo> {
         if body.len() < 3 {
             return None;
@@ -812,6 +826,7 @@ impl VmpHandlerIdentifier {
     // ── Anti-debug removal ────────────────────────────────────────────────────
 
     /// Find all anti-debug checks in `bytes`.
+    #[must_use]
     pub fn find_anti_debug_checks(&self, bytes: &[u8], base_address: u64) -> Vec<VmpAntiDebugCheck> {
         let mut result = Vec::new();
 
@@ -848,7 +863,8 @@ impl VmpHandlerIdentifier {
 
     // ── Full analysis ─────────────────────────────────────────────────────────
 
-    /// Run the full VMProtect 3 analysis pipeline on a code region.
+    /// Run the full `VMProtect` 3 analysis pipeline on a code region.
+    #[must_use]
     pub fn analyze(&self, bytes: &[u8], base_address: u64) -> VmpAnalysisResult {
         let mut result = VmpAnalysisResult::new(base_address);
 

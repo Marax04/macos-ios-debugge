@@ -58,56 +58,56 @@ pub enum HlilType {
 
 impl HlilType {
     #[must_use]
-    pub fn i8() -> Self {
+    pub const fn i8() -> Self {
         Self::Int {
             signed: true,
             bits: 8,
         }
     }
     #[must_use]
-    pub fn i16() -> Self {
+    pub const fn i16() -> Self {
         Self::Int {
             signed: true,
             bits: 16,
         }
     }
     #[must_use]
-    pub fn i32() -> Self {
+    pub const fn i32() -> Self {
         Self::Int {
             signed: true,
             bits: 32,
         }
     }
     #[must_use]
-    pub fn i64() -> Self {
+    pub const fn i64() -> Self {
         Self::Int {
             signed: true,
             bits: 64,
         }
     }
     #[must_use]
-    pub fn u8() -> Self {
+    pub const fn u8() -> Self {
         Self::Int {
             signed: false,
             bits: 8,
         }
     }
     #[must_use]
-    pub fn u16() -> Self {
+    pub const fn u16() -> Self {
         Self::Int {
             signed: false,
             bits: 16,
         }
     }
     #[must_use]
-    pub fn u32() -> Self {
+    pub const fn u32() -> Self {
         Self::Int {
             signed: false,
             bits: 32,
         }
     }
     #[must_use]
-    pub fn u64() -> Self {
+    pub const fn u64() -> Self {
         Self::Int {
             signed: false,
             bits: 64,
@@ -124,12 +124,12 @@ impl HlilType {
     }
 
     #[must_use]
-    pub fn is_pointer(&self) -> bool {
+    pub const fn is_pointer(&self) -> bool {
         matches!(self, Self::Pointer { .. })
     }
 
     #[must_use]
-    pub fn is_integer(&self) -> bool {
+    pub const fn is_integer(&self) -> bool {
         matches!(self, Self::Int { .. })
     }
 
@@ -571,7 +571,7 @@ impl HlilExpr {
 
     /// If this is a `Const`, return the integer value.
     #[must_use]
-    pub fn is_const(&self) -> Option<i64> {
+    pub const fn is_const(&self) -> Option<i64> {
         match self {
             Self::Const { value, .. } => Some(*value),
             _ => None,
@@ -941,7 +941,7 @@ pub enum HlilStatement {
 impl HlilStatement {
     /// Returns `true` when execution cannot fall through this statement.
     #[must_use]
-    pub fn is_terminator(&self) -> bool {
+    pub const fn is_terminator(&self) -> bool {
         matches!(
             self,
             Self::Return(..)
@@ -1858,7 +1858,7 @@ impl CCodePrinter {
 
 /// Convert a [`Size`] to a float bit-width (`u32`) without truncation warnings.
 /// All `Size` variants map to values that fit comfortably in a `u32`.
-fn size_to_float_bits(s: Size) -> u32 {
+const fn size_to_float_bits(s: Size) -> u32 {
     match s {
         Size::Byte => 8,
         Size::Word => 16,
@@ -1872,7 +1872,7 @@ fn size_to_float_bits(s: Size) -> u32 {
 
 /// Reinterpret a raw constant `u64` as a signed `i64` (bit-identical, wrapping).
 /// This is intentional: MLIL constants are stored unsigned; HLIL uses signed.
-fn const_u64_to_i64(v: u64) -> i64 {
+const fn const_u64_to_i64(v: u64) -> i64 {
     i64::from_ne_bytes(v.to_ne_bytes())
 }
 
@@ -3395,13 +3395,13 @@ impl HlilExpr {
 
     /// Returns `true` when the expression is a single named variable reference.
     #[must_use]
-    pub fn is_var(&self) -> bool {
+    pub const fn is_var(&self) -> bool {
         matches!(self, Self::Var { .. })
     }
 
     /// If this is a `Var`, return the underlying [`HlilVar`].
     #[must_use]
-    pub fn as_var(&self) -> Option<&HlilVar> {
+    pub const fn as_var(&self) -> Option<&HlilVar> {
         match self {
             Self::Var { var } => Some(var),
             _ => None,
@@ -3575,7 +3575,7 @@ impl HlilFunction {
 
     /// Returns `true` when the function body is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.body.is_empty()
     }
 
@@ -4904,7 +4904,7 @@ pub fn rename_variables(func: &mut HlilFunction, strategy: RenameStrategy) {
     func.body = rename_body(body, &rename_map);
 }
 
-fn type_prefix(ty: &HlilType) -> &'static str {
+const fn type_prefix(ty: &HlilType) -> &'static str {
     match ty {
         HlilType::Int {
             signed: true,
@@ -6024,13 +6024,13 @@ pub struct HlilExprBuilder {
 impl HlilExprBuilder {
     /// Wrap an existing expression.
     #[must_use]
-    pub fn new(expr: HlilExpr) -> Self {
+    pub const fn new(expr: HlilExpr) -> Self {
         Self { inner: expr }
     }
 
     /// A constant integer value.
     #[must_use]
-    pub fn const_val(value: i64, ty: HlilType) -> Self {
+    pub const fn const_val(value: i64, ty: HlilType) -> Self {
         Self {
             inner: HlilExpr::Const { value, ty },
         }
@@ -6038,7 +6038,7 @@ impl HlilExprBuilder {
 
     /// A variable reference.
     #[must_use]
-    pub fn var(v: HlilVar) -> Self {
+    pub const fn var(v: HlilVar) -> Self {
         Self {
             inner: HlilExpr::Var { var: v },
         }
@@ -8067,7 +8067,7 @@ pub mod structuring {
     impl CfgBlock {
         /// Construct a block with a `Goto` terminator.
         #[must_use]
-        pub fn linear(id: u32, address: Address, body: Vec<HlilStatement>, next: u32) -> Self {
+        pub const fn linear(id: u32, address: Address, body: Vec<HlilStatement>, next: u32) -> Self {
             Self {
                 id,
                 address,
@@ -8089,7 +8089,7 @@ pub mod structuring {
     impl StructuringCfg {
         /// Create an empty CFG with the given entry id.
         #[must_use]
-        pub fn new(entry: u32) -> Self {
+        pub const fn new(entry: u32) -> Self {
             Self {
                 blocks: BTreeMap::new(),
                 entry,
@@ -8190,6 +8190,7 @@ pub mod structuring {
         )
     }
 
+    #[must_use]
     pub fn tarjan_scc(cfg: &StructuringCfg) -> Vec<Vec<u32>> {
         struct State<'a> {
             cfg: &'a StructuringCfg,

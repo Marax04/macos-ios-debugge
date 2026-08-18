@@ -22,7 +22,7 @@ pub struct ModRm {
 
 impl ModRm {
     /// Decode a `ModRM` byte.
-    pub fn decode(byte: u8) -> Self {
+    pub const fn decode(byte: u8) -> Self {
         Self {
             mode: (byte >> 6) & 0x3,
             reg: (byte >> 3) & 0x7,
@@ -32,20 +32,20 @@ impl ModRm {
 
     /// Returns `true` if this `ModRM` refers to a register operand (mod == 3).
     #[must_use]
-    pub fn is_reg(&self) -> bool {
+    pub const fn is_reg(&self) -> bool {
         self.mode == 3
     }
 
     /// Returns `true` if a SIB byte follows (mod != 3 and r/m == 4).
     #[must_use]
-    pub fn has_sib(&self) -> bool {
+    pub const fn has_sib(&self) -> bool {
         self.mode != 3 && self.rm == 4
     }
 
     /// Returns `true` if a disp32 follows without a base register
     /// (mod == 0 and r/m == 5, or in 64-bit mode: RIP-relative).
     #[must_use]
-    pub fn is_disp32_only(&self) -> bool {
+    pub const fn is_disp32_only(&self) -> bool {
         self.mode == 0 && self.rm == 5
     }
 
@@ -56,7 +56,7 @@ impl ModRm {
     /// - mod 2         → 4
     /// - mod 3         → 0
     #[must_use]
-    pub fn disp_size(&self) -> usize {
+    pub const fn disp_size(&self) -> usize {
         match self.mode {
             0 if self.rm == 5 => 4,
             0 => 0,
@@ -99,7 +99,7 @@ pub struct Sib {
 
 impl Sib {
     /// Decode a SIB byte.
-    pub fn decode(byte: u8) -> Self {
+    pub const fn decode(byte: u8) -> Self {
         Self {
             scale: (byte >> 6) & 0x3,
             index: (byte >> 3) & 0x7,
@@ -109,7 +109,7 @@ impl Sib {
 
     /// The actual scale multiplier (1, 2, 4, or 8).
     #[must_use]
-    pub fn scale_factor(&self) -> u8 {
+    pub const fn scale_factor(&self) -> u8 {
         1u8 << self.scale
     }
 
@@ -117,14 +117,14 @@ impl Sib {
     /// without REX.X, or index == 4 with REX.X — but index==4 always
     /// means no index regardless of REX.X).
     #[must_use]
-    pub fn has_no_index(&self) -> bool {
+    pub const fn has_no_index(&self) -> bool {
         self.index == 4
     }
 
     /// Returns `true` if the base field may encode a displaced-only addressing
     /// (base == 5 and mod == 0 → no base register, disp32 only).
     #[must_use]
-    pub fn base_is_disp_only(&self, modrm_mode: u8) -> bool {
+    pub const fn base_is_disp_only(&self, modrm_mode: u8) -> bool {
         self.base == 5 && modrm_mode == 0
     }
 
@@ -225,7 +225,7 @@ impl EffectiveAddr {
 
     /// Returns the base register index, if any.
     #[must_use]
-    pub fn base_reg(&self) -> Option<u8> {
+    pub const fn base_reg(&self) -> Option<u8> {
         match self {
             Self::Register(r) => Some(*r),
             Self::BaseDisp { base, .. } | Self::Full { base, .. } => Some(*base),
@@ -235,7 +235,7 @@ impl EffectiveAddr {
 
     /// Returns `true` if this is a memory (non-register) operand.
     #[must_use]
-    pub fn is_memory(&self) -> bool {
+    pub const fn is_memory(&self) -> bool {
         !matches!(self, Self::Register(_))
     }
 }

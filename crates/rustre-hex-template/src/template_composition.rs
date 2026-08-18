@@ -530,16 +530,19 @@ impl TemplateBuilder {
         self
     }
 
-    pub fn version(mut self, v: u32) -> Self {
+    #[must_use]
+    pub const fn version(mut self, v: u32) -> Self {
         self.def.version = v;
         self
     }
 
+    #[must_use]
     pub fn add_struct(mut self, st: RawStruct) -> Self {
         self.def.structs.push(st);
         self
     }
 
+    #[must_use]
     pub fn override_field(mut self, ov: FieldOverride) -> Self {
         self.def.overrides.push(ov);
         self
@@ -554,6 +557,7 @@ impl TemplateBuilder {
         self
     }
 
+    #[must_use]
     pub fn build(self) -> TemplateDefinition {
         self.def
     }
@@ -624,6 +628,7 @@ impl StructBuilder {
         self
     }
 
+    #[must_use]
     pub fn build(self) -> RawStruct {
         self.st
     }

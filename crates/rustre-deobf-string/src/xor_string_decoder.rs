@@ -51,13 +51,13 @@ impl XorKey {
 
     /// Key length in bytes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns `true` when the key has zero length (degenerate).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
@@ -144,7 +144,7 @@ struct TextStats {
 
 impl TextStats {
     #[inline]
-    fn tally(&mut self, b: u8) {
+    const fn tally(&mut self, b: u8) {
         if b.is_ascii_graphic() || b == b' ' || b == b'\n' || b == b'\t' {
             self.printable += 1;
         }
@@ -283,7 +283,7 @@ fn solve_multi_byte(data: &[u8], key_len: usize) -> Option<XorKey> {
     Some(XorKey::multi(key_bytes))
 }
 
-/// Score a column XORed with `k` without allocating a decoded buffer.
+/// Score a column `XORed` with `k` without allocating a decoded buffer.
 ///
 /// Identical to `score_plaintext(&column.iter().map(|c| c ^ k).collect())`, but
 /// it decodes into the tally instead of into a `Vec`. The judgement itself is
@@ -358,7 +358,7 @@ impl XorStringDecoder {
 
     /// Create with a custom configuration.
     #[must_use]
-    pub fn with_config(config: XorDecodeConfig) -> Self {
+    pub const fn with_config(config: XorDecodeConfig) -> Self {
         Self { config, candidates: Vec::new() }
     }
 

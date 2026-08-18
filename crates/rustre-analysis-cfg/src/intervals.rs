@@ -39,13 +39,13 @@ impl Interval {
 
     /// Number of nodes in the interval.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.nodes.len()
     }
 
     /// Whether the interval contains only its header.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
 }

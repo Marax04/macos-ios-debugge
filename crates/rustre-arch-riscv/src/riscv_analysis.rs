@@ -38,7 +38,7 @@ pub enum RiscVAbi {
 impl RiscVAbi {
     /// Pointer size in bytes for this ABI.
     #[must_use]
-    pub fn pointer_size(self) -> usize {
+    pub const fn pointer_size(self) -> usize {
         match self {
             Self::Ilp32 | Self::Ilp32f | Self::Ilp32d => 4,
             Self::Lp64 | Self::Lp64f | Self::Lp64d => 8,
@@ -48,7 +48,7 @@ impl RiscVAbi {
 
     /// Whether this ABI uses hardware floating-point registers.
     #[must_use]
-    pub fn has_fp_regs(self) -> bool {
+    pub const fn has_fp_regs(self) -> bool {
         matches!(
             self,
             Self::Ilp32f | Self::Ilp32d | Self::Lp64f | Self::Lp64d
@@ -57,13 +57,13 @@ impl RiscVAbi {
 
     /// Whether this ABI supports double-precision hardware float.
     #[must_use]
-    pub fn has_double_fp(self) -> bool {
+    pub const fn has_double_fp(self) -> bool {
         matches!(self, Self::Ilp32d | Self::Lp64d)
     }
 
-    /// Return the EF_RISCV_FLOAT_ABI ELF flag value for this ABI.
+    /// Return the `EF_RISCV_FLOAT_ABI` ELF flag value for this ABI.
     #[must_use]
-    pub fn elf_float_flag(self) -> u32 {
+    pub const fn elf_float_flag(self) -> u32 {
         match self {
             Self::Ilp32 | Self::Lp64 | Self::Unknown => 0x0000,
             Self::Ilp32f | Self::Lp64f => 0x0002,
@@ -71,9 +71,9 @@ impl RiscVAbi {
         }
     }
 
-    /// Attempt to detect the ABI from an ELF e_flags value.
+    /// Attempt to detect the ABI from an ELF `e_flags` value.
     #[must_use]
-    pub fn from_elf_flags(flags: u32, bits: u32) -> Self {
+    pub const fn from_elf_flags(flags: u32, bits: u32) -> Self {
         let float_flag = flags & 0x0006;
         match (bits, float_flag) {
             (32, 0x0000) => Self::Ilp32,
@@ -166,7 +166,7 @@ impl RiscVCallingConv {
 
     /// Maximum number of integer arguments passed in registers.
     #[must_use]
-    pub fn max_int_args_in_regs(&self) -> usize {
+    pub const fn max_int_args_in_regs(&self) -> usize {
         self.int_args.len()
     }
 }
@@ -544,7 +544,7 @@ impl SoftFloat {
 
     /// Classify the float ABI from detected symbols.
     #[must_use]
-    pub fn infer_abi(&self) -> RiscVAbi {
+    pub const fn infer_abi(&self) -> RiscVAbi {
         if !self.detected {
             RiscVAbi::Unknown
         } else {
@@ -742,7 +742,7 @@ impl RiscVAnalysis {
     }
 
     /// Record a 32-bit instruction.
-    pub fn record_uncompressed(&mut self) {
+    pub const fn record_uncompressed(&mut self) {
         self.uncompressed_count += 1;
     }
 
@@ -773,7 +773,7 @@ impl RiscVAnalysis {
 
     /// Whether the code uses the C extension (>0 compressed instructions).
     #[must_use]
-    pub fn uses_compressed(&self) -> bool {
+    pub const fn uses_compressed(&self) -> bool {
         self.compressed_count > 0
     }
 

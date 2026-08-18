@@ -31,6 +31,7 @@ pub enum CilValue {
 }
 
 impl CilValue {
+    #[must_use]
     pub fn is_zero(&self) -> bool {
         match self {
             CilValue::I32(v)       => *v == 0,
@@ -44,7 +45,8 @@ impl CilValue {
     }
 
     /// Coerce to i64 for comparison / branch operations.
-    pub fn to_i64(&self) -> Option<i64> {
+    #[must_use]
+    pub const fn to_i64(&self) -> Option<i64> {
         match self {
             CilValue::I32(v)       => Some(*v as i64),
             CilValue::I64(v)       => Some(*v),
@@ -56,7 +58,8 @@ impl CilValue {
     }
 
     /// Coerce to f64 for floating-point operations.
-    pub fn to_f64(&self) -> Option<f64> {
+    #[must_use]
+    pub const fn to_f64(&self) -> Option<f64> {
         match self {
             CilValue::F64(v)  => Some(*v),
             CilValue::I32(v)  => Some(*v as f64),
@@ -66,7 +69,8 @@ impl CilValue {
     }
 
     /// True if this is an Unknown or indeterminate value.
-    pub fn is_unknown(&self) -> bool {
+    #[must_use]
+    pub const fn is_unknown(&self) -> bool {
         matches!(self, CilValue::Unknown)
     }
 }
@@ -79,6 +83,7 @@ pub struct EvalStack {
 }
 
 impl EvalStack {
+    #[must_use]
     pub fn new() -> Self {
         Self { stack: Vec::with_capacity(32) }
     }
@@ -91,11 +96,13 @@ impl EvalStack {
         self.stack.pop().unwrap_or(CilValue::Unknown)
     }
 
+    #[must_use]
     pub fn peek(&self) -> Option<&CilValue> {
         self.stack.last()
     }
 
-    pub fn depth(&self) -> usize {
+    #[must_use]
+    pub const fn depth(&self) -> usize {
         self.stack.len()
     }
 
@@ -122,10 +129,12 @@ pub struct LocalVars {
 }
 
 impl LocalVars {
+    #[must_use]
     pub fn new(count: usize) -> Self {
         Self { vars: vec![CilValue::I32(0); count] }
     }
 
+    #[must_use]
     pub fn load(&self, idx: usize) -> CilValue {
         self.vars.get(idx).cloned().unwrap_or(CilValue::Unknown)
     }
@@ -150,10 +159,12 @@ pub struct Arguments {
 }
 
 impl Arguments {
-    pub fn new(args: Vec<CilValue>) -> Self {
+    #[must_use]
+    pub const fn new(args: Vec<CilValue>) -> Self {
         Self { args }
     }
 
+    #[must_use]
     pub fn load(&self, idx: usize) -> CilValue {
         self.args.get(idx).cloned().unwrap_or(CilValue::Unknown)
     }
@@ -189,11 +200,13 @@ pub struct CilExecutionEngine {
 }
 
 impl CilExecutionEngine {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { max_steps: 100_000 }
     }
 
-    pub fn with_max_steps(max_steps: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_steps(max_steps: usize) -> Self {
         Self { max_steps }
     }
 
@@ -567,6 +580,7 @@ impl CilExecutionEngine {
 
     /// Execute the method with the specified argument indices marked as tainted.
     /// Returns addresses (Ptr/Obj values) that are reachable from tainted data.
+    #[must_use]
     pub fn track_taint(
         &self,
         opcodes: &[u8],

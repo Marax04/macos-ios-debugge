@@ -137,7 +137,7 @@ impl Fat32Bpb {
     }
 
     #[must_use] 
-    pub fn data_start_byte(&self) -> u64 {
+    pub const fn data_start_byte(&self) -> u64 {
         let _fat_end = self.fat_byte_offset(0)
             + (self.num_fats) as u64
                 * (self.sectors_per_fat) as u64

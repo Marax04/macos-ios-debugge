@@ -81,16 +81,19 @@ pub struct JsAction {
 
 impl JsAction {
     /// Return the script trimmed of leading/trailing whitespace.
+    #[must_use]
     pub fn script_trimmed(&self) -> &str {
         self.script.trim()
     }
 
     /// Approximate byte size of the script.
-    pub fn script_len(&self) -> usize {
+    #[must_use]
+    pub const fn script_len(&self) -> usize {
         self.script.len()
     }
 
     /// Return `true` if the script appears to be empty or whitespace-only.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.script.trim().is_empty()
     }
@@ -101,9 +104,9 @@ impl JsAction {
 pub struct ScriptEntry {
     /// Unique identifier within this extraction run.
     pub id: u64,
-    /// Human-readable label (e.g., "OpenAction", "Page3/MouseUp").
+    /// Human-readable label (e.g., "`OpenAction`", "Page3/MouseUp").
     pub label: String,
-    /// All JsActions that make up this script entry.
+    /// All `JsActions` that make up this script entry.
     pub actions: Vec<JsAction>,
     /// Combined source text of all chained actions.
     pub combined_script: String,
@@ -136,7 +139,8 @@ impl ScriptEntry {
     }
 
     /// Total combined script length in bytes.
-    pub fn combined_len(&self) -> usize {
+    #[must_use]
+    pub const fn combined_len(&self) -> usize {
         self.combined_script.len()
     }
 }
@@ -346,7 +350,7 @@ fn decode_hex_escapes(s: &str) -> String {
                     let h1 = chars.next();
                     let h2 = chars.next();
                     if let (Some(a), Some(b)) = (h1, h2) {
-                        let hex = format!("{}{}", a, b);
+                        let hex = format!("{a}{b}");
                         if let Ok(byte) = u8::from_str_radix(&hex, 16) {
                             result.push(byte as char);
                             continue;
@@ -402,7 +406,7 @@ fn analyze_script(script: &str) -> MaliciousnessReport {
     if eval_count >= 2 {
         score += 0.3 * eval_count as f32;
         labels.push("eval-chain".into());
-        indicators.push(format!("{} nested eval() calls", eval_count));
+        indicators.push(format!("{eval_count} nested eval() calls"));
     }
 
     // Active content download.
@@ -410,7 +414,7 @@ fn analyze_script(script: &str) -> MaliciousnessReport {
         if script.contains(keyword) {
             score += 0.35;
             labels.push("active-download".into());
-            indicators.push(format!("uses {}", keyword));
+            indicators.push(format!("uses {keyword}"));
         }
     }
 
@@ -426,7 +430,7 @@ fn analyze_script(script: &str) -> MaliciousnessReport {
         if script.contains(pattern) {
             score += 0.2;
             labels.push("pdf-exploit-api".into());
-            indicators.push(format!("uses potentially exploitable API: {}", pattern));
+            indicators.push(format!("uses potentially exploitable API: {pattern}"));
             break;
         }
     }
@@ -465,6 +469,7 @@ struct ExtractionStats {
 
 impl PdfJavaScriptExtractor {
     /// Construct with default configuration.
+    #[must_use]
     pub fn new() -> Self {
         PdfJavaScriptExtractor {
             config: ExtractorConfig::default(),
@@ -474,6 +479,7 @@ impl PdfJavaScriptExtractor {
     }
 
     /// Construct with a custom configuration.
+    #[must_use]
     pub fn with_config(config: ExtractorConfig) -> Self {
         PdfJavaScriptExtractor { config, next_id: 0, stats: ExtractionStats::default() }
     }
@@ -518,6 +524,7 @@ impl PdfJavaScriptExtractor {
     }
 
     /// Summarize a list of extracted entries.
+    #[must_use]
     pub fn summarize(entries: &[ScriptEntry]) -> ExtractionSummary {
         let total_scripts = entries.len();
         let malicious_scripts = entries.iter().filter(|e| e.any_malicious).count();
@@ -556,11 +563,13 @@ impl PdfJavaScriptExtractor {
     }
 
     /// Filter entries that contain malicious scripts.
+    #[must_use]
     pub fn malicious_entries(entries: &[ScriptEntry]) -> Vec<&ScriptEntry> {
         entries.iter().filter(|e| e.any_malicious).collect()
     }
 
     /// Filter entries by heuristic label.
+    #[must_use]
     pub fn entries_with_label<'a>(entries: &'a [ScriptEntry], label: &str) -> Vec<&'a ScriptEntry> {
         entries.iter()
             .filter(|e| e.all_labels.iter().any(|l| l == label))
@@ -676,8 +685,8 @@ impl PdfJavaScriptExtractor {
                 JsTrigger::OpenAction => "OpenAction".to_string(),
                 JsTrigger::PageOpen   => format!("Page{}/Open", action.page_number.unwrap_or(0)),
                 JsTrigger::PageClose  => format!("Page{}/Close", action.page_number.unwrap_or(0)),
-                JsTrigger::FormField { field_name, .. } => format!("Field/{}", field_name),
-                JsTrigger::Named(n)   => format!("Named/{}", n),
+                JsTrigger::FormField { field_name, .. } => format!("Field/{field_name}"),
+                JsTrigger::Named(n)   => format!("Named/{n}"),
                 _                     => format!("Action/{}", action.action_obj_num),
             };
             map.entry(key).or_default().push(action);

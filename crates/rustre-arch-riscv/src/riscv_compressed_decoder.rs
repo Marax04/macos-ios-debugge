@@ -12,14 +12,14 @@ use std::fmt;
 /// Map a 3-bit "compressed" register specifier to the real GPR number.
 /// CL/CS/CA/CB formats encode registers s0–a5 (x8–x15) in 3 bits.
 #[inline]
-fn creg(r3: u32) -> u32 {
+const fn creg(r3: u32) -> u32 {
     r3 + 8
 }
 
 // ── Immediate helpers ──────────────────────────────────────────────────────────
 
 /// Sign-extend `bits`-wide value in `val` to i32.
-fn sign_extend(val: u32, bits: u32) -> i32 {
+const fn sign_extend(val: u32, bits: u32) -> i32 {
     let shift = 32 - bits;
     ((val << shift) as i32) >> shift
 }
@@ -204,7 +204,7 @@ pub struct RiscvCompressedDecoder {
 impl RiscvCompressedDecoder {
     /// Create a new decoder for the given XLEN.
     #[must_use]
-    pub fn new(rv64: bool) -> Self {
+    pub const fn new(rv64: bool) -> Self {
         Self { rv64 }
     }
 
@@ -949,6 +949,7 @@ pub fn expand_compressed(
 /// Batch-decode a byte stream, auto-detecting 16- vs 32-bit instructions.
 ///
 /// Returns a `Vec` of `(offset, result)` pairs.
+#[must_use]
 pub fn decode_stream(bytes: &[u8], rv64: bool) -> Vec<(usize, Result<CompressedInsn, CompressedDecodeError>)> {
     let dec = RiscvCompressedDecoder::new(rv64);
     let mut out = Vec::new();

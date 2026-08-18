@@ -136,7 +136,7 @@ impl HandlerSemantics {
     }
 
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(
             self.kind,
             HandlerSemanticsKind::Branch
@@ -408,7 +408,7 @@ impl VmIsaRecovery {
 
     /// Create with custom config.
     #[must_use]
-    pub fn with_config(config: IsaRecoveryConfig) -> Self {
+    pub const fn with_config(config: IsaRecoveryConfig) -> Self {
         Self { config }
     }
 

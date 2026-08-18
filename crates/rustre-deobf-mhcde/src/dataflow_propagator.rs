@@ -27,7 +27,8 @@ impl VarId {
         Self::Reg(name.into())
     }
 
-    pub fn stack(off: i64) -> Self {
+    #[must_use]
+    pub const fn stack(off: i64) -> Self {
         Self::Stack(off)
     }
 }
@@ -56,7 +57,8 @@ pub enum Lattice {
 
 impl Lattice {
     /// Lattice meet: Bottom ⊓ x = x; Const(a) ⊓ Const(b) = Const(a) if a==b else Top.
-    pub fn meet(self, other: Self) -> Self {
+    #[must_use]
+    pub const fn meet(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bottom, x) | (x, Self::Bottom) => x,
             (Self::Const(a), Self::Const(b)) if a == b => Self::Const(a),
@@ -64,11 +66,13 @@ impl Lattice {
         }
     }
 
-    pub fn is_const(self) -> bool {
+    #[must_use]
+    pub const fn is_const(self) -> bool {
         matches!(self, Self::Const(_))
     }
 
-    pub fn const_val(self) -> Option<u64> {
+    #[must_use]
+    pub const fn const_val(self) -> Option<u64> {
         if let Self::Const(v) = self { Some(v) } else { None }
     }
 }
@@ -105,21 +109,25 @@ pub struct DefUseChain {
 }
 
 impl DefUseChain {
-    pub fn new(var: VarId) -> Self {
+    #[must_use]
+    pub const fn new(var: VarId) -> Self {
         Self { var, defs: Vec::new(), uses: Vec::new() }
     }
 
     /// True if the variable has exactly one definition (SSA-like).
-    pub fn is_single_def(&self) -> bool {
+    #[must_use]
+    pub const fn is_single_def(&self) -> bool {
         self.defs.len() == 1
     }
 
     /// True if the variable has no uses (dead variable).
-    pub fn is_dead(&self) -> bool {
+    #[must_use]
+    pub const fn is_dead(&self) -> bool {
         self.uses.is_empty()
     }
 
     /// Return the constant value when all definitions agree on the same constant.
+    #[must_use]
     pub fn constant_value(&self) -> Option<u64> {
         if self.defs.is_empty() {
             return None;
@@ -190,6 +198,7 @@ pub struct ReachingDefsAnalysis {
 impl ReachingDefsAnalysis {
     /// Run the analysis on `cfg`.  `block_defs` maps block start → list of
     /// `(var, optional_const)` pairs for definitions generated in that block.
+    #[must_use]
     pub fn analyze(
         cfg: &ControlFlowGraph,
         block_defs: &HashMap<Addr, Vec<(VarId, Option<u64>)>>,
@@ -257,6 +266,7 @@ impl ReachingDefsAnalysis {
     }
 
     /// Return all definitions of `var` that reach the entry of `block`.
+    #[must_use]
     pub fn reaching_defs_at(&self, block: Addr, var: &VarId) -> BTreeSet<Addr> {
         self.block_data
             .get(&block)
@@ -289,17 +299,20 @@ impl Expr {
         Self { lhs, op: op.into(), rhs: None, folded: None }
     }
 
-    pub fn with_folded(mut self, val: u64) -> Self {
+    #[must_use]
+    pub const fn with_folded(mut self, val: u64) -> Self {
         self.folded = Some(val);
         self
     }
 
     /// True if this expression is trivially constant-foldable.
-    pub fn is_constant(&self) -> bool {
+    #[must_use]
+    pub const fn is_constant(&self) -> bool {
         self.folded.is_some()
     }
 
     /// Return the variables referenced by this expression.
+    #[must_use]
     pub fn vars(&self) -> Vec<&VarId> {
         let mut v = vec![&self.lhs];
         if let Some(r) = &self.rhs {
@@ -323,7 +336,7 @@ pub struct AvailExprs {
 }
 
 impl AvailExprs {
-    /// Compute out_set = gen ∪ (in_set − killed).
+    /// Compute `out_set` = gen ∪ (`in_set` − killed).
     pub fn compute_out(&mut self) {
         self.out_set = self.generator.clone();
         for expr in &self.in_set {
@@ -343,6 +356,7 @@ pub struct AvailExprsAnalysis {
 impl AvailExprsAnalysis {
     /// Run the analysis.  `block_exprs` maps block → list of expressions computed
     /// in that block; `block_kills` maps block → vars redefined in that block.
+    #[must_use]
     pub fn analyze(
         cfg: &ControlFlowGraph,
         block_exprs: &HashMap<Addr, Vec<Expr>>,
@@ -419,6 +433,7 @@ impl AvailExprsAnalysis {
         Self { block_data: data }
     }
 
+    #[must_use]
     pub fn available_at(&self, block: Addr) -> &HashSet<Expr> {
         self.block_data
             .get(&block)
@@ -441,6 +456,7 @@ pub struct ConstantPropState {
 
 impl ConstantPropState {
     /// Meet two states together (pairwise meet over all vars).
+    #[must_use]
     pub fn meet(&self, other: &Self) -> Self {
         // At a control-flow join, a variable only carries a useful lattice
         // value if BOTH predecessors agree on it. If a var is defined on one
@@ -466,6 +482,7 @@ impl ConstantPropState {
         self.values.insert(var, val);
     }
 
+    #[must_use]
     pub fn get(&self, var: &VarId) -> Lattice {
         self.values.get(var).copied().unwrap_or(Lattice::Bottom)
     }
@@ -500,6 +517,7 @@ pub struct ConstantPropagation {
 impl ConstantPropagation {
     /// Run sparse conditional constant propagation.
     /// `assignments` maps block → list of `(insn_off, dest_var, src_var_or_none, const_or_none)`.
+    #[must_use]
     pub fn run(
         cfg: &ControlFlowGraph,
         assignments: &HashMap<Addr, Vec<(usize, VarId, Option<VarId>, Option<u64>)>>,
@@ -577,6 +595,7 @@ impl ConstantPropagation {
     }
 
     /// Return all variables with constant values at the entry of `block`.
+    #[must_use]
     pub fn constants_at_entry(&self, block: Addr) -> Vec<(VarId, u64)> {
         self.entry_states
             .get(&block)
@@ -606,7 +625,7 @@ pub struct LivenessData {
 }
 
 impl LivenessData {
-    /// Compute live_in = ue_var ∪ (live_out − var_kill).
+    /// Compute `live_in` = `ue_var` ∪ (`live_out` − `var_kill`).
     pub fn compute_live_in(&mut self) {
         self.live_in = self.ue_var.clone();
         for v in &self.live_out {
@@ -626,6 +645,7 @@ pub struct LivenessAnalysis {
 impl LivenessAnalysis {
     /// Run backward liveness analysis.
     /// `block_info` maps block → `(uses_before_def, defs)`.
+    #[must_use]
     pub fn analyze(
         cfg: &ControlFlowGraph,
         block_info: &HashMap<Addr, (Vec<VarId>, Vec<VarId>)>,
@@ -684,6 +704,7 @@ impl LivenessAnalysis {
     }
 
     /// Return variables live at block `addr` entry.
+    #[must_use]
     pub fn live_in(&self, addr: Addr) -> BTreeSet<VarId> {
         self.block_data
             .get(&addr)
@@ -692,6 +713,7 @@ impl LivenessAnalysis {
     }
 
     /// Return dead variable defs (defined but never used after this block).
+    #[must_use]
     pub fn dead_defs_in(&self, addr: Addr) -> Vec<VarId> {
         self.block_data
             .get(&addr)
@@ -728,9 +750,10 @@ impl DataflowPropagator {
     ///
     /// # Arguments
     /// * `cfg`         — control flow graph
-    /// * `block_defs`  — per-block variable definitions (var, optional_const)
+    /// * `block_defs`  — per-block variable definitions (var, `optional_const`)
     /// * `block_uses`  — per-block (upward-exposed uses, killed vars) for liveness
     /// * `block_exprs` — per-block expressions for available-expressions analysis
+    #[must_use]
     pub fn run(
         cfg: &ControlFlowGraph,
         block_defs: &HashMap<Addr, Vec<(VarId, Option<u64>)>>,
@@ -788,6 +811,7 @@ pub struct DefUseBuilder;
 impl DefUseBuilder {
     /// Build def-use chains for all variables mentioned in `block_defs` and
     /// `block_uses`.
+    #[must_use]
     pub fn build(
         _cfg: &ControlFlowGraph,
         block_defs: &HashMap<Addr, Vec<(VarId, Option<u64>)>>,
@@ -826,6 +850,7 @@ impl DefUseBuilder {
     }
 
     /// Return variables that are defined but never used.
+    #[must_use]
     pub fn dead_variables(chains: &HashMap<VarId, DefUseChain>) -> Vec<&VarId> {
         chains
             .values()
@@ -835,6 +860,7 @@ impl DefUseBuilder {
     }
 
     /// Return variables with a single constant definition.
+    #[must_use]
     pub fn single_const_defs(chains: &HashMap<VarId, DefUseChain>) -> Vec<(&VarId, u64)> {
         chains
             .values()

@@ -27,7 +27,8 @@ pub enum M68kSize {
 
 impl M68kSize {
     /// Return byte width (or 0 for Unsized/Packed/Extended).
-    pub fn bytes(self) -> usize {
+    #[must_use]
+    pub const fn bytes(self) -> usize {
         match self {
             M68kSize::Byte     => 1,
             M68kSize::Word     => 2,
@@ -41,7 +42,8 @@ impl M68kSize {
     }
 
     /// Parse from the 2-bit sz field in most instructions.
-    pub fn from_sz2(sz: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_sz2(sz: u8) -> Option<Self> {
         match sz {
             0 => Some(M68kSize::Byte),
             1 => Some(M68kSize::Word),
@@ -51,7 +53,8 @@ impl M68kSize {
     }
 
     /// Parse from the alternative 2-bit sz encoding used in MOVE.
-    pub fn from_move_sz(sz: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_move_sz(sz: u8) -> Option<Self> {
         match sz {
             1 => Some(M68kSize::Byte),
             3 => Some(M68kSize::Word),
@@ -60,7 +63,8 @@ impl M68kSize {
         }
     }
 
-    pub fn suffix(self) -> &'static str {
+    #[must_use]
+    pub const fn suffix(self) -> &'static str {
         match self {
             M68kSize::Byte     => ".b",
             M68kSize::Word     => ".w",
@@ -123,7 +127,8 @@ pub enum M68kEa {
 
 impl M68kEa {
     /// Number of extension words needed to encode this EA (not counting imm).
-    pub fn extension_words(&self, sz: M68kSize) -> usize {
+    #[must_use]
+    pub const fn extension_words(&self, sz: M68kSize) -> usize {
         match self {
             M68kEa::DataReg(_) | M68kEa::AddrReg(_) | M68kEa::AddrInd(_)
             | M68kEa::PostInc(_) | M68kEa::PreDec(_) => 0,
@@ -144,12 +149,14 @@ impl M68kEa {
     }
 
     /// True if this EA can be used as a source (all except pre-dec which is only dst).
-    pub fn is_valid_src(&self) -> bool {
+    #[must_use]
+    pub const fn is_valid_src(&self) -> bool {
         !matches!(self, M68kEa::PreDec(_))
     }
 
     /// True if this EA is a memory reference (can be used with memory instructions).
-    pub fn is_memory(&self) -> bool {
+    #[must_use]
+    pub const fn is_memory(&self) -> bool {
         matches!(self,
             M68kEa::AddrInd(_) | M68kEa::PostInc(_) | M68kEa::PreDec(_)
             | M68kEa::DispAn(..) | M68kEa::IdxAn { .. }
@@ -159,30 +166,31 @@ impl M68kEa {
     }
 
     /// Motorola syntax string representation.
+    #[must_use]
     pub fn to_motorola(&self) -> String {
         match self {
-            M68kEa::DataReg(n)       => format!("D{}", n),
-            M68kEa::AddrReg(n)       => format!("A{}", n),
-            M68kEa::AddrInd(n)       => format!("(A{})", n),
-            M68kEa::PostInc(n)       => format!("(A{})+", n),
-            M68kEa::PreDec(n)        => format!("-(A{})", n),
-            M68kEa::DispAn(an, d)    => format!("({},A{})", d, an),
+            M68kEa::DataReg(n)       => format!("D{n}"),
+            M68kEa::AddrReg(n)       => format!("A{n}"),
+            M68kEa::AddrInd(n)       => format!("(A{n})"),
+            M68kEa::PostInc(n)       => format!("(A{n})+"),
+            M68kEa::PreDec(n)        => format!("-(A{n})"),
+            M68kEa::DispAn(an, d)    => format!("({d},A{an})"),
             M68kEa::IdxAn { an, xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { format!("A{}", xn) } else { format!("D{}", xn) };
+                let xreg = if *xn_is_addr { format!("A{xn}") } else { format!("D{xn}") };
                 format!("({},{},{}.{})", disp, an, xreg, xn_size.suffix().trim_start_matches('.'))
             }
-            M68kEa::AbsShort(a)      => format!("${:04X}.W", a),
-            M68kEa::AbsLong(a)       => format!("${:08X}.L", a),
-            M68kEa::DispPc(d)        => format!("({},PC)", d),
+            M68kEa::AbsShort(a)      => format!("${a:04X}.W"),
+            M68kEa::AbsLong(a)       => format!("${a:08X}.L"),
+            M68kEa::DispPc(d)        => format!("({d},PC)"),
             M68kEa::IdxPc { xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { format!("A{}", xn) } else { format!("D{}", xn) };
+                let xreg = if *xn_is_addr { format!("A{xn}") } else { format!("D{xn}") };
                 format!("({},PC,{}.{})", disp, xreg, xn_size.suffix().trim_start_matches('.'))
             }
-            M68kEa::Imm(v)           => format!("#${:X}", v),
+            M68kEa::Imm(v)           => format!("#${v:X}"),
             M68kEa::Ccr              => "CCR".to_string(),
             M68kEa::Sr               => "SR".to_string(),
             M68kEa::Usp              => "USP".to_string(),
-            M68kEa::RegList(mask)    => format!("{{reglist:{:016b}}}", mask),
+            M68kEa::RegList(mask)    => format!("{{reglist:{mask:016b}}}"),
         }
     }
 }
@@ -219,7 +227,8 @@ pub enum M68kGroup {
 }
 
 impl M68kGroup {
-    pub fn from_opcode(word: u16) -> Self {
+    #[must_use]
+    pub const fn from_opcode(word: u16) -> Self {
         match word >> 12 {
             0x0 => M68kGroup::Group0,
             0x1 => M68kGroup::Group1,
@@ -240,10 +249,14 @@ impl M68kGroup {
         }
     }
 
+    #[must_use]
     pub fn is_aline(self) -> bool { self == M68kGroup::GroupA }
+    #[must_use]
     pub fn is_fline(self) -> bool { self == M68kGroup::GroupF }
+    #[must_use]
     pub fn is_branch(self) -> bool { self == M68kGroup::Group6 }
-    pub fn is_move(self) -> bool {
+    #[must_use]
+    pub const fn is_move(self) -> bool {
         matches!(self, M68kGroup::Group1 | M68kGroup::Group2 | M68kGroup::Group3)
     }
 }
@@ -263,7 +276,8 @@ pub enum M68kCond {
 }
 
 impl M68kCond {
-    pub fn from_u8(v: u8) -> Self {
+    #[must_use]
+    pub const fn from_u8(v: u8) -> Self {
         match v & 0xf {
             0 => M68kCond::T,  1 => M68kCond::Ra, 2 => M68kCond::HI,
             3 => M68kCond::LS, 4 => M68kCond::CC, 5 => M68kCond::CS,
@@ -274,7 +288,8 @@ impl M68kCond {
         }
     }
 
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             M68kCond::T  => "T",  M68kCond::Ra => "F",  M68kCond::HI => "HI",
             M68kCond::LS => "LS", M68kCond::CC => "CC", M68kCond::CS => "CS",
@@ -323,6 +338,7 @@ pub struct M68kInstr {
 
 impl M68kInstr {
     /// Placeholder "illegal/undefined" instruction.
+    #[must_use]
     pub fn illegal(address: u32, opcode: u16) -> Self {
         M68kInstr {
             address, length: 2, group: M68kGroup::from_opcode(opcode),
@@ -332,7 +348,8 @@ impl M68kInstr {
         }
     }
 
-    pub fn end_address(&self) -> u32 {
+    #[must_use]
+    pub const fn end_address(&self) -> u32 {
         self.address.wrapping_add(self.length as u32)
     }
 }
@@ -341,12 +358,12 @@ impl fmt::Display for M68kInstr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:08X}  {}{}", self.address, self.mnemonic, self.size)?;
         if let Some(src) = &self.src {
-            write!(f, " {}", src)?;
+            write!(f, " {src}")?;
             if let Some(dst) = &self.dst {
-                write!(f, ",{}", dst)?;
+                write!(f, ",{dst}")?;
             }
         } else if let Some(dst) = &self.dst {
-            write!(f, " {}", dst)?;
+            write!(f, " {dst}")?;
         }
         Ok(())
     }
@@ -377,7 +394,8 @@ impl fmt::Display for DecodeError {
 pub struct M68kDecoder;
 
 impl M68kDecoder {
-    pub fn new() -> Self { M68kDecoder }
+    #[must_use]
+    pub const fn new() -> Self { M68kDecoder }
 
     /// Decode a single instruction.
     ///
@@ -420,7 +438,7 @@ impl M68kDecoder {
         data.get(off..off+4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
-    /// Parse an EA and return (ea, bytes_consumed).
+    /// Parse an EA and return (ea, `bytes_consumed`).
     fn parse_ea(&self, data: &[u8], base_off: usize, mode: u8, reg: u8, sz: M68kSize) -> Option<(M68kEa, usize)> {
         let mut extra = 0usize;
         let ea = match mode {
@@ -972,6 +990,7 @@ impl M68kDecoder {
     }
 
     /// Linear sweep decode of a byte slice.
+    #[must_use]
     pub fn decode_all(&self, data: &[u8], base_address: u32) -> Vec<M68kInstr> {
         let mut out = Vec::with_capacity(data.len() / 2);
         let mut off = 0;

@@ -163,7 +163,7 @@ impl CfgBlock {
 
     /// Create a return block with no successors.
     #[must_use]
-    pub fn ret(id: u32) -> Self {
+    pub const fn ret(id: u32) -> Self {
         Self {
             id,
             successors: vec![],
@@ -778,6 +778,7 @@ pub fn cfg_from_hlil_level(body: &[crate::HlilStatement]) -> (Vec<CfgBlock>, u32
     (blocchi, idx[&ENTRY], nodi)
 }
 
+#[must_use]
 pub fn recover_loops(blocks: &[CfgBlock], entry: u32) -> Vec<RecoveredLoop> {
     // Build predecessor lists.
     let mut blocks_with_preds: Vec<CfgBlock> = blocks.to_vec();

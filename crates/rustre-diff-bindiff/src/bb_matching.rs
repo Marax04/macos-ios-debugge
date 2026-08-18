@@ -23,7 +23,7 @@ pub struct BlockFeature {
     pub pred_count: u32,
     /// Cyclomatic-style call count (calls inside the block).
     pub call_count: u32,
-    /// Mnemonic prime-product hash (from prime_product_hash).
+    /// Mnemonic prime-product hash (from `prime_product_hash`).
     pub mnemonic_hash: u64,
     /// Simple checksum of all constant operand values.
     pub const_checksum: u64,
@@ -37,7 +37,8 @@ pub struct BlockFeature {
 
 impl BlockFeature {
     /// Create a minimal feature vector.
-    pub fn new(insn_count: u32, byte_size: u32) -> Self {
+    #[must_use]
+    pub const fn new(insn_count: u32, byte_size: u32) -> Self {
         Self {
             insn_count,
             succ_count: 0,
@@ -52,13 +53,15 @@ impl BlockFeature {
     }
 
     /// Structural equality ignoring hashes (used for coarse matching).
-    pub fn structurally_equal(&self, other: &Self) -> bool {
+    #[must_use]
+    pub const fn structurally_equal(&self, other: &Self) -> bool {
         self.insn_count == other.insn_count
             && self.succ_count == other.succ_count
             && self.pred_count == other.pred_count
     }
 
     /// Full equality including content hashes.
+    #[must_use]
     pub fn content_equal(&self, other: &Self) -> bool {
         self.structurally_equal(other)
             && self.mnemonic_hash == other.mnemonic_hash
@@ -85,6 +88,7 @@ pub struct BlockSimilarity {
 
 impl BlockSimilarity {
     /// Compute from two feature vectors using fixed weights.
+    #[must_use]
     pub fn compute(old_idx: usize, new_idx: usize, a: &BlockFeature, b: &BlockFeature) -> Self {
         let structural = Self::structural_sim(a, b);
         let content = Self::content_sim(a, b);
@@ -134,7 +138,7 @@ pub enum MatchingStrategy {
     ExactOnly,
     /// Accept structural matches first, then fill with similarity.
     StructuralFirst,
-    /// Full greedy similarity matching on the NxM matrix.
+    /// Full greedy similarity matching on the `NxM` matrix.
     GreedySimilarity,
     /// Hungarian algorithm for global optimum (O(n³)).
     Hungarian,
@@ -161,6 +165,7 @@ pub struct ConfidenceScore {
 
 impl ConfidenceScore {
     /// Construct from a similarity value.
+    #[must_use]
     pub fn from_similarity(sim: f64) -> Self {
         Self {
             score: sim,
@@ -170,11 +175,13 @@ impl ConfidenceScore {
     }
 
     /// Returns `true` if this match is considered high-confidence.
+    #[must_use]
     pub fn is_high(&self) -> bool {
         self.score >= 0.75
     }
 
     /// Returns `true` if this is a low-confidence / tentative match.
+    #[must_use]
     pub fn is_low(&self) -> bool {
         self.score < 0.4
     }
@@ -189,7 +196,7 @@ pub struct BlockMatchReport {
     pub old_block_count: usize,
     /// Number of blocks in the new function.
     pub new_block_count: usize,
-    /// Matched pairs: (old_idx, new_idx, confidence).
+    /// Matched pairs: (`old_idx`, `new_idx`, confidence).
     pub matched: Vec<(usize, usize, ConfidenceScore)>,
     /// Old block indices with no match.
     pub unmatched_old: Vec<usize>,
@@ -203,6 +210,7 @@ pub struct BlockMatchReport {
 
 impl BlockMatchReport {
     /// Fraction of old blocks that were matched.
+    #[must_use]
     pub fn old_coverage(&self) -> f64 {
         if self.old_block_count == 0 {
             return 1.0;
@@ -211,6 +219,7 @@ impl BlockMatchReport {
     }
 
     /// Fraction of new blocks that were matched.
+    #[must_use]
     pub fn new_coverage(&self) -> f64 {
         if self.new_block_count == 0 {
             return 1.0;
@@ -224,6 +233,7 @@ impl BlockMatchReport {
     }
 
     /// Number of exact matches.
+    #[must_use]
     pub fn exact_match_count(&self) -> usize {
         self.matched.iter().filter(|(_, _, c)| c.is_exact).count()
     }
@@ -240,6 +250,7 @@ pub struct BbMatching {
 
 impl BbMatching {
     /// Create a new matcher with default settings.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             strategy: MatchingStrategy::default(),
@@ -248,13 +259,15 @@ impl BbMatching {
     }
 
     /// Set the matching strategy.
-    pub fn with_strategy(mut self, s: MatchingStrategy) -> Self {
+    #[must_use]
+    pub const fn with_strategy(mut self, s: MatchingStrategy) -> Self {
         self.strategy = s;
         self
     }
 
     /// Set the minimum similarity threshold.
-    pub fn with_min_similarity(mut self, t: f64) -> Self {
+    #[must_use]
+    pub const fn with_min_similarity(mut self, t: f64) -> Self {
         // `clamp` propagates NaN; a NaN threshold rejects every block pair in
         // silence, because all comparisons against NaN are false.
         self.min_similarity = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
@@ -264,6 +277,7 @@ impl BbMatching {
     /// Run the matcher on two sets of block features.
     ///
     /// Returns a `BlockMatchReport` describing all matches and unmatched blocks.
+    #[must_use]
     pub fn run(
         &self,
         old_blocks: &[BlockFeature],
@@ -539,7 +553,8 @@ fn hungarian_algorithm(cost: &[Vec<f64>], n: usize) -> Vec<usize> {
 
 // ── Similarity matrix helper ──────────────────────────────────────────────────
 
-/// Build the full NxM similarity matrix for two feature sets.
+/// Build the full `NxM` similarity matrix for two feature sets.
+#[must_use]
 pub fn build_similarity_matrix(
     old_blocks: &[BlockFeature],
     new_blocks: &[BlockFeature],

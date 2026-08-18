@@ -19,7 +19,7 @@ pub enum VlenConfig {
 
 impl VlenConfig {
     #[must_use]
-    pub fn bits(self) -> usize {
+    pub const fn bits(self) -> usize {
         match self {
             Self::Vlen128 => 128,
             Self::Vlen256 => 256,
@@ -45,7 +45,7 @@ pub enum Sew {
 
 impl Sew {
     #[must_use]
-    pub fn bits(self) -> usize {
+    pub const fn bits(self) -> usize {
         match self {
             Self::E8 => 8,
             Self::E16 => 16,
@@ -54,7 +54,7 @@ impl Sew {
         }
     }
     #[must_use]
-    pub fn from_vsew(vsew: u8) -> Option<Self> {
+    pub const fn from_vsew(vsew: u8) -> Option<Self> {
         Some(match vsew & 7 {
             0 => Self::E8,
             1 => Self::E16,
@@ -86,7 +86,7 @@ pub enum Lmul {
 
 impl Lmul {
     #[must_use]
-    pub fn from_vlmul(vlmul: u8) -> Option<Self> {
+    pub const fn from_vlmul(vlmul: u8) -> Option<Self> {
         Some(match vlmul & 7 {
             0 => Self::M1,
             1 => Self::M2,
@@ -99,7 +99,7 @@ impl Lmul {
         })
     }
     #[must_use]
-    pub fn multiplier_x8(self) -> u32 {
+    pub const fn multiplier_x8(self) -> u32 {
         match self {
             Self::MF8 => 1,
             Self::MF4 => 2,
@@ -139,11 +139,13 @@ pub struct VType {
 }
 
 impl VType {
-    pub fn new(sew: Sew, lmul: Lmul, ta: bool, ma: bool) -> Self {
+    #[must_use]
+    pub const fn new(sew: Sew, lmul: Lmul, ta: bool, ma: bool) -> Self {
         Self { sew, lmul, ta, ma }
     }
 
     /// Decode from the VTYPE CSR value.
+    #[must_use]
     pub fn from_csr(v: u64) -> Option<Self> {
         let vlmul = (v & 7) as u8;
         let vsew = ((v >> 3) & 7) as u8;
@@ -158,7 +160,8 @@ impl VType {
     }
 
     /// Encode back to CSR value.
-    pub fn to_csr(&self) -> u64 {
+    #[must_use]
+    pub const fn to_csr(&self) -> u64 {
         let vlmul = match self.lmul {
             Lmul::M1 => 0,
             Lmul::M2 => 1,
@@ -195,13 +198,16 @@ impl fmt::Display for VType {
 pub struct VReg(pub u8);
 
 impl VReg {
-    pub fn new(n: u8) -> Self {
+    #[must_use]
+    pub const fn new(n: u8) -> Self {
         Self(n & 31)
     }
+    #[must_use]
     pub fn name(self) -> String {
         format!("v{}", self.0)
     }
-    pub fn is_mask(self) -> bool {
+    #[must_use]
+    pub const fn is_mask(self) -> bool {
         self.0 == 0
     }
 }
@@ -366,7 +372,8 @@ pub enum VecOp {
 }
 
 impl VecOp {
-    pub fn mnemonic(self) -> &'static str {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Vadd => "vadd",
             Self::Vsub => "vsub",
@@ -516,6 +523,7 @@ pub struct VectorInsn {
 }
 
 impl VectorInsn {
+    #[must_use]
     pub fn new_vvv(op: VecOp, vd: u8, vs2: u8, vs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
@@ -529,6 +537,7 @@ impl VectorInsn {
             encoding: enc,
         }
     }
+    #[must_use]
     pub fn new_vvx(op: VecOp, vd: u8, vs2: u8, rs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
@@ -542,6 +551,7 @@ impl VectorInsn {
             encoding: enc,
         }
     }
+    #[must_use]
     pub fn new_load(op: VecOp, vd: u8, rs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
@@ -556,6 +566,7 @@ impl VectorInsn {
         }
     }
 
+    #[must_use]
     pub fn disassemble(&self) -> String {
         let mnem = self.op.mnemonic();
         let mask = if self.vm { ", v0.t" } else { "" };
@@ -586,11 +597,13 @@ pub struct VectorDecoder {
 }
 
 impl VectorDecoder {
-    pub fn new(vlen: VlenConfig) -> Self {
+    #[must_use]
+    pub const fn new(vlen: VlenConfig) -> Self {
         Self { vlen }
     }
 
     /// Attempt to decode `word` as a vector instruction.
+    #[must_use]
     pub fn decode(&self, word: u32) -> Option<VectorInsn> {
         let opcode = word & 0x7F;
         let vd = ((word >> 7) & 31) as u8;
@@ -702,7 +715,7 @@ impl VectorDecoder {
         Some(insn)
     }
 
-    fn decode_opivv(f6: u32) -> Option<VecOp> {
+    const fn decode_opivv(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vadd,
             0x02 => VecOp::Vsub,
@@ -730,7 +743,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opivx(f6: u32) -> Option<VecOp> {
+    const fn decode_opivx(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vadd,
             0x02 => VecOp::Vsub,
@@ -758,7 +771,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opivi(f6: u32) -> Option<VecOp> {
+    const fn decode_opivi(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vadd,
             0x03 => VecOp::Vrsub,
@@ -774,7 +787,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opfvv(f6: u32) -> Option<VecOp> {
+    const fn decode_opfvv(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vfadd,
             0x02 => VecOp::Vfsub,
@@ -791,7 +804,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opfvf(f6: u32) -> Option<VecOp> {
+    const fn decode_opfvf(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vfadd,
             0x02 => VecOp::Vfsub,
@@ -803,7 +816,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opmvv(f6: u32) -> Option<VecOp> {
+    const fn decode_opmvv(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x00 => VecOp::Vredsum,
             0x01 => VecOp::Vredand,
@@ -833,7 +846,7 @@ impl VectorDecoder {
         })
     }
 
-    fn decode_opmvx(f6: u32) -> Option<VecOp> {
+    const fn decode_opmvx(f6: u32) -> Option<VecOp> {
         Some(match f6 {
             0x0E => VecOp::Vslide1up,
             0x0F => VecOp::Vslide1down,
@@ -857,6 +870,7 @@ impl VectorDecoder {
     /// Build a mnemonic → [`VecOp`] lookup map for every opcode this decoder
     /// understands. Useful for assemblers and disassembler test harnesses that
     /// need to round-trip mnemonics back to enum variants.
+    #[must_use]
     pub fn mnemonic_index() -> HashMap<&'static str, VecOp> {
         use VecOp::*;
         let all = [
@@ -1010,6 +1024,7 @@ pub struct VectorRegFile {
 }
 
 impl VectorRegFile {
+    #[must_use]
     pub fn new(vlen: VlenConfig) -> Self {
         let bytes = vlen.bytes();
         Self {
@@ -1020,6 +1035,7 @@ impl VectorRegFile {
         }
     }
 
+    #[must_use]
     pub fn get(&self, reg: VReg) -> &[u8] {
         &self.regs[reg.0 as usize]
     }
@@ -1027,10 +1043,10 @@ impl VectorRegFile {
         &mut self.regs[reg.0 as usize]
     }
 
-    pub fn set_vl(&mut self, vl: usize) {
+    pub const fn set_vl(&mut self, vl: usize) {
         self.vl = vl;
     }
-    pub fn set_vtype(&mut self, vt: VType) {
+    pub const fn set_vtype(&mut self, vt: VType) {
         self.vtype = Some(vt);
     }
 }

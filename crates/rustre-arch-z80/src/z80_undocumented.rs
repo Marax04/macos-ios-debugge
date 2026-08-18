@@ -49,7 +49,8 @@ pub enum Z80Reg {
 }
 
 impl Z80Reg {
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Self::A => "A",
             Self::B => "B",
@@ -130,94 +131,104 @@ pub struct Z80State {
 
 impl Z80State {
     /// IXH = high byte of IX.
-    pub fn ixh(&self) -> u8 {
+    #[must_use]
+    pub const fn ixh(&self) -> u8 {
         (self.ix >> 8) as u8
     }
     /// IXL = low byte of IX.
-    pub fn ixl(&self) -> u8 {
+    #[must_use]
+    pub const fn ixl(&self) -> u8 {
         self.ix as u8
     }
     /// IYH = high byte of IY.
-    pub fn iyh(&self) -> u8 {
+    #[must_use]
+    pub const fn iyh(&self) -> u8 {
         (self.iy >> 8) as u8
     }
     /// IYL = low byte of IY.
-    pub fn iyl(&self) -> u8 {
+    #[must_use]
+    pub const fn iyl(&self) -> u8 {
         self.iy as u8
     }
     /// Set IXH.
-    pub fn set_ixh(&mut self, v: u8) {
+    pub const fn set_ixh(&mut self, v: u8) {
         self.ix = (self.ix & 0x00FF) | ((v as u16) << 8);
     }
     /// Set IXL.
-    pub fn set_ixl(&mut self, v: u8) {
+    pub const fn set_ixl(&mut self, v: u8) {
         self.ix = (self.ix & 0xFF00) | v as u16;
     }
     /// Set IYH.
-    pub fn set_iyh(&mut self, v: u8) {
+    pub const fn set_iyh(&mut self, v: u8) {
         self.iy = (self.iy & 0x00FF) | ((v as u16) << 8);
     }
     /// Set IYL.
-    pub fn set_iyl(&mut self, v: u8) {
+    pub const fn set_iyl(&mut self, v: u8) {
         self.iy = (self.iy & 0xFF00) | v as u16;
     }
 
     // Flag helpers
-    pub fn flag_c(&self) -> bool {
+    #[must_use]
+    pub const fn flag_c(&self) -> bool {
         self.f & 0x01 != 0
     }
-    pub fn flag_n(&self) -> bool {
+    #[must_use]
+    pub const fn flag_n(&self) -> bool {
         self.f & 0x02 != 0
     }
-    pub fn flag_pv(&self) -> bool {
+    #[must_use]
+    pub const fn flag_pv(&self) -> bool {
         self.f & 0x04 != 0
     }
-    pub fn flag_h(&self) -> bool {
+    #[must_use]
+    pub const fn flag_h(&self) -> bool {
         self.f & 0x10 != 0
     }
-    pub fn flag_z(&self) -> bool {
+    #[must_use]
+    pub const fn flag_z(&self) -> bool {
         self.f & 0x40 != 0
     }
-    pub fn flag_s(&self) -> bool {
+    #[must_use]
+    pub const fn flag_s(&self) -> bool {
         self.f & 0x80 != 0
     }
 
-    pub fn set_flag_c(&mut self, v: bool) {
+    pub const fn set_flag_c(&mut self, v: bool) {
         if v {
             self.f |= 0x01;
         } else {
             self.f &= !0x01;
         }
     }
-    pub fn set_flag_z(&mut self, v: bool) {
+    pub const fn set_flag_z(&mut self, v: bool) {
         if v {
             self.f |= 0x40;
         } else {
             self.f &= !0x40;
         }
     }
-    pub fn set_flag_s(&mut self, v: bool) {
+    pub const fn set_flag_s(&mut self, v: bool) {
         if v {
             self.f |= 0x80;
         } else {
             self.f &= !0x80;
         }
     }
-    pub fn set_flag_n(&mut self, v: bool) {
+    pub const fn set_flag_n(&mut self, v: bool) {
         if v {
             self.f |= 0x02;
         } else {
             self.f &= !0x02;
         }
     }
-    pub fn set_flag_h(&mut self, v: bool) {
+    pub const fn set_flag_h(&mut self, v: bool) {
         if v {
             self.f |= 0x10;
         } else {
             self.f &= !0x10;
         }
     }
-    pub fn set_flag_pv(&mut self, v: bool) {
+    pub const fn set_flag_pv(&mut self, v: bool) {
         if v {
             self.f |= 0x04;
         } else {
@@ -334,6 +345,7 @@ pub enum UndocInsn {
 }
 
 impl UndocInsn {
+    #[must_use]
     pub fn mnemonic(&self) -> String {
         match self {
             Self::LdIXHImm(n) => format!("LD IXH,${n:02X}"),
@@ -420,7 +432,8 @@ impl UndocInsn {
     }
 
     /// Number of bytes this undocumented instruction occupies.
-    pub fn byte_count(&self) -> usize {
+    #[must_use]
+    pub const fn byte_count(&self) -> usize {
         match self {
             Self::LdIXHImm(_) | Self::LdIXLImm(_) | Self::LdIYHImm(_) | Self::LdIYLImm(_) => 3,
             Self::DdcbRlcReg { .. }
@@ -456,7 +469,7 @@ impl fmt::Display for UndocInsn {
 
 // ── Helper: decode register from 3-bit field ──────────────────────────────────
 
-fn reg_from_bits(b: u8) -> Option<Z80Reg> {
+const fn reg_from_bits(b: u8) -> Option<Z80Reg> {
     Some(match b & 7 {
         0 => Z80Reg::B,
         1 => Z80Reg::C,
@@ -475,6 +488,7 @@ fn reg_from_bits(b: u8) -> Option<Z80Reg> {
 ///
 /// Returns `Some((UndocInsn, bytes_consumed))` or `None` for official or
 /// unrecognised encodings.
+#[must_use]
 pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
     if bytes.is_empty() {
         return None;
@@ -715,6 +729,7 @@ pub enum Z80DecodedInsn {
 }
 
 impl Z80DecodedInsn {
+    #[must_use]
     pub fn byte_count(&self) -> usize {
         match self {
             Self::Undoc(u) => u.byte_count(),
@@ -740,12 +755,14 @@ pub struct Z80FullDecoder {
 }
 
 impl Z80FullDecoder {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             include_undocumented: true,
         }
     }
-    pub fn official_only() -> Self {
+    #[must_use]
+    pub const fn official_only() -> Self {
         Self {
             include_undocumented: false,
         }
@@ -753,6 +770,7 @@ impl Z80FullDecoder {
 
     /// Decode one instruction from `bytes`.
     /// Returns `(decoded, bytes_consumed)`.
+    #[must_use]
     pub fn decode_one(&self, bytes: &[u8]) -> (Z80DecodedInsn, usize) {
         if bytes.is_empty() {
             return (Z80DecodedInsn::Unknown(0), 0);
@@ -777,6 +795,7 @@ impl Z80FullDecoder {
     }
 
     /// Disassemble a slice of bytes, returning one decoded instruction per step.
+    #[must_use]
     pub fn disassemble_all(&self, bytes: &[u8]) -> Vec<(u16, Z80DecodedInsn)> {
         let mut result = Vec::with_capacity(bytes.len() / 2);
         let mut offset = 0u16;

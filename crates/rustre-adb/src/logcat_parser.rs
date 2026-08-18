@@ -164,7 +164,7 @@ impl LogcatParser {
         // Derive the rest of the line starting after prio_str using pointer offset.
         let prio_end = prio_str.as_ptr() as usize + prio_str.len() - line.as_ptr() as usize;
         let rest = line[prio_end..].trim_start();
-        let timestamp = format!("{} {}", date, time);
+        let timestamp = format!("{date} {time}");
         let pid: u32 = pid_str.parse().ok()?;
         let tid: u32 = tid_str.parse().ok()?;
         let priority = LogPriority::from_char(prio_str.chars().next()?);

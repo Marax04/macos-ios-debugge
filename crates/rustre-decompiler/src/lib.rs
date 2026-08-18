@@ -641,7 +641,7 @@ pub struct DecompilerContext {
     /// bersaglio (`binary_entry::callsite_argc_from_bodies`). E' l'unica
     /// evidenza che possa SMENTIRE un parametro dedotto dal corpo del callee.
     /// ⚠ Assenza = nessuna evidenza, non zero.
-    pub callsite_argc: Arc<HashMap<u64, usize>>,
+    pub callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
 }
 
 impl DecompilerContext {
@@ -19243,7 +19243,7 @@ pub struct DecompilerPipeline {
     /// replacing the field above: every existing reader takes `&HashMap`.
     callee_arities_shared: Arc<HashMap<u64, usize>>,
     /// #6800: vedi `set_callsite_argc`.
-    callsite_argc: Arc<HashMap<u64, usize>>,
+    callsite_argc: Arc<HashMap<u64, (usize, usize, usize, usize, usize)>>,
     /// D18: VA → predicted return type of that callee, used to forward-declare
     /// a named callee with a prototype matching its definition.
     callee_return_types: HashMap<u64, String>,
@@ -19771,7 +19771,7 @@ impl DecompilerPipeline {
     /// callee. Assenza dalla mappa = NESSUNA EVIDENZA (funzione mai chiamata
     /// nell'immagine), non «zero argomenti»: chi la consuma deve lasciarla
     /// stare, non azzerare.
-    pub fn set_callsite_argc(&mut self, m: HashMap<u64, usize>) {
+    pub fn set_callsite_argc(&mut self, m: HashMap<u64, (usize, usize, usize, usize, usize)>) {
         self.callsite_argc = Arc::new(m);
     }
 
@@ -29596,13 +29596,112 @@ impl DecompilerPass for IlAnalysisPass {
                 // resta 0 e si clampa lo stesso: il rischio non sparisce, ma la
                 // decisione non dipende piu' da un CONFRONTO fra due numeri
                 // entrambi incerti).
-                let modo = std::env::var("RUSTRE_HLIL_ARGC_CLAMP").unwrap_or_default();
-                if (modo == "1" || modo == "true" || modo == "2")
-                    && let Some(&osservato) = ctx.callsite_argc.get(&ctx.address)
-                    && osservato < cc_arity
-                    && (modo != "2" || osservato == 0)
+                // #6810: `siti` e' la soglia di EVIDENZA MINIMA. Uno zero
+                // visto su un solo sito puo' venire da un corpo troncato che
+                // nascondeva proprio quello informativo; su molti siti no.
+                // `RUSTRE_HLIL_ARGC_SITES` (default 1) alza la soglia.
+                // DEFAULT: modalita' STRETTA con soglia 5 siti. Si spegne con
+                // `RUSTRE_HLIL_ARGC_CLAMP=0`; `=1` riabilita il clamp PARZIALE
+                // (misurato peggiore, vedi sotto).
+                //
+                // Spazzata della soglia sul corpus intero (11342 file per lato,
+                // modalita' stretta), contro il clamp spento (UNDER 6478,
+                // OVER 3424):
+                //   siti>=1  UNDER 2233  OVER 3453 (+29)  falsi positivi 7
+                //   siti>=3  UNDER 2385  OVER 3429 (+5)   falsi positivi 3
+                //   siti>=5  UNDER 2448  OVER 3425 (+1)   falsi positivi 1
+                // A cinque siti l'OVER torna praticamente alla base e resta UN
+                // solo falso positivo, identificato per nome
+                // (`std::string::_M_replace_aux`, il cui nome demangled dichiara
+                // esso stesso i quattro parametri).
+                //
+                // Verifiche: path A **0 differenze**, comportamento 15 AGREE /
+                // 4 LINK_FAIL identico funzione per funzione (19/19),
+                // 1337 test passati.
+                let modo = match std::env::var("RUSTRE_HLIL_ARGC_CLAMP").as_deref() {
+                    Ok("0") | Ok("false") => String::new(),
+                    Ok(v) => v.to_string(),
+                    Err(_) => "2".to_string(),
+                };
+                let min_siti: usize = std::env::var("RUSTRE_HLIL_ARGC_SITES")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(5);
+                // #6820 — mai contraddire un PROTOTIPO PUBBLICATO. Se
+                // l'arieta' e' nota, non e' un'ipotesi da smentire con
+                // dell'evidenza indiretta.
+                //
+                // MISURATO: a `siti>=5` resta UN solo falso positivo,
+                // `std::string::_M_replace_aux(unsigned long long, unsigned
+                // long long, unsigned long long, char)` — e il NOME stesso
+                // dichiara i quattro parametri. Path A lo emette giusto.
+                if (modo == "1"
+                    || modo == "true"
+                    || modo == "2"
+                    || modo == "3"
+                    || modo == "4"
+                    || modo == "5")
+                    && !ctx.published_arity.contains(&ctx.address)
+                    && let Some(&(osservato, minimo, siti, min_nz, siti_nz)) =
+                        ctx.callsite_argc.get(&ctx.address)
+                    && siti >= min_siti
                 {
-                    cc_arity = osservato;
+                    if osservato < cc_arity && (modo == "1" || modo == "true" || osservato == 0)
+                    {
+                        cc_arity = osservato;
+                    } else if modo == "5"
+                        && cc_arity == 0
+                        && minimo != usize::MAX
+                        && minimo >= 1
+                    {
+                        // ── #6850: alzare SOLO da zero ──────────────────────
+                        //
+                        // La classe `definita con 0 -> chiamata con N` vale
+                        // ~2950 dei 3424 `OVER` di path B: sono funzioni
+                        // emesse `f()` e chiamate `f(a, b)`. E' la stessa
+                        // cecita' che CLAUDE.md descrive per `gnu89`, dove una
+                        // lista vuota e' una dichiarazione NON prototipata.
+                        //
+                        // Alzare da zero e' molto piu' stretto dell'alzata
+                        // generale (`=3`/`=4`, misurate entrambe in perdita):
+                        // qui il corpo non ha dedotto NESSUN parametro, quindi
+                        // non si sta contraddicendo un'inferenza — si sta
+                        // riempiendo un vuoto con l'unica evidenza disponibile,
+                        // e solo quando OGNI sito osservato prepara almeno un
+                        // registro.
+                        cc_arity = minimo.min(4);
+                    } else if (modo == "3" || modo == "4")
+                        && {
+                            // `=3` usa il minimo su TUTTI i siti; `=4` solo su
+                            // quelli che passano almeno un argomento (#6840).
+                            let (m, n) = if modo == "4" {
+                                (min_nz, siti_nz)
+                            } else {
+                                (minimo, siti)
+                            };
+                            m != usize::MAX && n >= min_siti && m > cc_arity
+                        } {
+                        let minimo = if modo == "4" { min_nz } else { minimo };
+                        // ── #6830: la direzione OPPOSTA ─────────────────────
+                        //
+                        // I chiamanti preparano PIU' registri argomento di
+                        // quanti il corpo ne legga prima di scriverli. La sonda
+                        // ne conta 657 nel solo Go, e sono la faccia `OVER`
+                        // dell'incoerenza: la chiamata passa piu' di quanto la
+                        // definizione dichiari.
+                        //
+                        // ⚠ E' l'operazione che CREA parametri, cioe' la
+                        // famiglia dei 2233 fantasma di CLAUDE.md. Qui e'
+                        // giustificata da evidenza INDIPENDENTE dal corpo (cosa
+                        // fanno i chiamanti) e sotto la stessa soglia di siti,
+                        // ma resta la direzione rischiosa e per questo vive in
+                        // una modalita' separata, misurabile da sola.
+                        //
+                        // Un parametro dichiarato e non letto dal corpo NON e'
+                        // un errore: e' C legale e corrisponde al caso reale di
+                        // un argomento che il callee ignora.
+                        cc_arity = minimo.min(4);
+                    }
                 }
                 const WIN64_ARG_REGS: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
                 // Win64 argument POSITIONS are shared between the integer file

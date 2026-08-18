@@ -5,8 +5,8 @@
 //! a real filesystem driver or FUSE mount.
 //!
 //! # Supported formats
-//! - [`SquashfsExtractor`]: SquashFS v4 (little-endian and big-endian).
-//! - [`CramfsExtractor`]:   CramFS (little-endian and big-endian).
+//! - [`SquashfsExtractor`]: `SquashFS` v4 (little-endian and big-endian).
+//! - [`CramfsExtractor`]:   `CramFS` (little-endian and big-endian).
 //! - [`Jffs2Extractor`]:    JFFS2 (little-endian; NAND-oriented).
 //! - [`Ext2Extractor`]:     Ext2/3/4 (basic superblock and group descriptor scan).
 //! - [`FatExtractor`]:      FAT12/16/32 (boot sector detection and directory scan).
@@ -16,14 +16,14 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/// SquashFS v4 little-endian magic.
+/// `SquashFS` v4 little-endian magic.
 pub const SQUASHFS_MAGIC_LE: u32 = 0x73717368;
-/// SquashFS v4 big-endian magic.
+/// `SquashFS` v4 big-endian magic.
 pub const SQUASHFS_MAGIC_BE: u32 = 0x68737173;
 
-/// CramFS little-endian magic.
+/// `CramFS` little-endian magic.
 pub const CRAMFS_MAGIC_LE: u32 = 0x28CD3D45;
-/// CramFS big-endian magic.
+/// `CramFS` big-endian magic.
 pub const CRAMFS_MAGIC_BE: u32 = 0x453DCD28;
 
 /// JFFS2 old (LE) node magic.
@@ -65,7 +65,7 @@ pub enum FilesystemType {
 
 impl FilesystemType {
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Squashfs => "squashfs",
             Self::Cramfs   => "cramfs",
@@ -202,10 +202,10 @@ impl Default for FilesystemType {
 // SquashfsExtractor
 // ---------------------------------------------------------------------------
 
-/// Metadata from a SquashFS v4 superblock.
+/// Metadata from a `SquashFS` v4 superblock.
 #[derive(Debug, Clone)]
 pub struct SquashfsSuperblock {
-    /// SquashFS version (should be 4).
+    /// `SquashFS` version (should be 4).
     pub version: u16,
     /// Number of inodes.
     pub inode_count: u32,
@@ -232,7 +232,7 @@ pub struct SquashfsSuperblock {
 impl SquashfsSuperblock {
     /// Compression algorithm name.
     #[must_use]
-    pub fn compression_name(&self) -> &'static str {
+    pub const fn compression_name(&self) -> &'static str {
         match self.compression {
             1 => "gzip",
             2 => "lzma",
@@ -245,12 +245,12 @@ impl SquashfsSuperblock {
     }
 }
 
-/// Extracts metadata (and a virtual node list) from SquashFS images.
+/// Extracts metadata (and a virtual node list) from `SquashFS` images.
 #[derive(Debug, Default)]
 pub struct SquashfsExtractor;
 
 impl SquashfsExtractor {
-    /// Attempt to detect and parse a SquashFS superblock at `offset` in `data`.
+    /// Attempt to detect and parse a `SquashFS` superblock at `offset` in `data`.
     #[must_use]
     pub fn detect(data: &[u8], offset: usize) -> Option<SquashfsSuperblock> {
         if offset + 96 > data.len() {
@@ -329,7 +329,7 @@ impl SquashfsExtractor {
         })
     }
 
-    /// Extract a virtual node list from a SquashFS image.
+    /// Extract a virtual node list from a `SquashFS` image.
     ///
     /// Because decompressing the actual metadata tables requires a full decompressor,
     /// this implementation generates synthetic nodes from the superblock metadata.
@@ -368,7 +368,7 @@ impl SquashfsExtractor {
         fs
     }
 
-    /// Scan the entire `data` buffer for SquashFS images at every 512-byte aligned offset.
+    /// Scan the entire `data` buffer for `SquashFS` images at every 512-byte aligned offset.
     #[must_use]
     pub fn scan(data: &[u8]) -> Vec<usize> {
         let mut offsets = Vec::new();
@@ -391,7 +391,7 @@ impl SquashfsExtractor {
 // CramfsExtractor
 // ---------------------------------------------------------------------------
 
-/// CramFS superblock metadata.
+/// `CramFS` superblock metadata.
 #[derive(Debug, Clone)]
 pub struct CramfsSuperblock {
     /// Total filesystem size in bytes.
@@ -416,12 +416,12 @@ pub struct CramfsSuperblock {
     pub big_endian: bool,
 }
 
-/// Extracts metadata from CramFS filesystem images.
+/// Extracts metadata from `CramFS` filesystem images.
 #[derive(Debug, Default)]
 pub struct CramfsExtractor;
 
 impl CramfsExtractor {
-    /// Detect a CramFS superblock at `offset` in `data`.
+    /// Detect a `CramFS` superblock at `offset` in `data`.
     #[must_use]
     pub fn detect(data: &[u8], offset: usize) -> Option<CramfsSuperblock> {
         if offset + 76 > data.len() {
@@ -457,7 +457,7 @@ impl CramfsExtractor {
         Some(CramfsSuperblock { size, flags, future, signature, fsid_crc, fsid_edition, fsid_blocks, fsid_files, name, big_endian })
     }
 
-    /// Extract a virtual FS from a CramFS image.
+    /// Extract a virtual FS from a `CramFS` image.
     #[must_use]
     pub fn extract(data: &[u8], offset: usize) -> ExtractedFilesystem {
         let mut fs = ExtractedFilesystem {
@@ -637,7 +637,7 @@ pub struct Ext2Superblock {
     pub block_count: u32,
     /// First data block.
     pub first_data_block: u32,
-    /// Block size (1024 << log_block_size).
+    /// Block size (1024 << `log_block_size`).
     pub block_size: u32,
     /// Fragments per group.
     pub frags_per_group: u32,

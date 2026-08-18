@@ -93,7 +93,7 @@ pub enum InstrFormat {
 impl InstrFormat {
     /// `true` if the format involves a `ModRM` byte.
     #[must_use]
-    pub fn has_modrm(self) -> bool {
+    pub const fn has_modrm(self) -> bool {
         matches!(
             self,
             Self::MR
@@ -116,7 +116,7 @@ impl InstrFormat {
 
     /// Minimum additional bytes after opcode (excluding ModRM/SIB/disp).
     #[must_use]
-    pub fn min_imm_bytes(self) -> usize {
+    pub const fn min_imm_bytes(self) -> usize {
         match self {
             Self::MI8 | Self::RMI8 | Self::I8 | Self::D8 | Self::M1S => 1,
             Self::MI16 | Self::RMI16 | Self::I16 => 2,
@@ -2922,13 +2922,13 @@ impl X86DecodeTable {
 
     /// Total number of entries in the primary table.
     #[must_use]
-    pub fn primary_count(&self) -> usize {
+    pub const fn primary_count(&self) -> usize {
         self.primary.len()
     }
 
     /// Total entries across all sub-tables.
     #[must_use]
-    pub fn total_count(&self) -> usize {
+    pub const fn total_count(&self) -> usize {
         self.primary.len()
             + self.escape_0f.0.len()
             + self.escape_0f38.0.len()

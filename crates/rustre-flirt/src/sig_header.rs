@@ -169,7 +169,7 @@ impl SigFileHeader {
     /// a fixed 104 meant the trie was read from the wrong offset for every
     /// library whose name was not exactly 61 bytes long.
     #[must_use]
-    pub fn len_bytes(&self) -> usize {
+    pub const fn len_bytes(&self) -> usize {
         OFF_NAME + self.lib_name.len()
     }
 

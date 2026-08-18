@@ -20,7 +20,7 @@ impl Confidence {
     /// documented range is [0.0, 1.0] — and a NaN confidence silently loses
     /// every comparison it takes part in.
     #[must_use]
-    pub fn new(v: f64) -> Self {
+    pub const fn new(v: f64) -> Self {
         if v.is_nan() {
             return Self(0.0);
         }
@@ -239,7 +239,7 @@ pub struct ClassificationResult {
 impl ClassificationResult {
     /// Create an empty classification result.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             techniques: Vec::new(),
             overall_score: 0.0,
@@ -359,7 +359,7 @@ pub struct FunctionMetrics {
 impl FunctionMetrics {
     /// Create minimal metrics for testing.
     #[must_use]
-    pub fn new(addr: u64) -> Self {
+    pub const fn new(addr: u64) -> Self {
         Self {
             addr,
             block_count: 1,
@@ -420,7 +420,7 @@ pub struct BinaryStats {
 impl BinaryStats {
     /// Create minimal stats.
     #[must_use]
-    pub fn new(function_count: u32, binary_size: u64) -> Self {
+    pub const fn new(function_count: u32, binary_size: u64) -> Self {
         Self {
             function_count,
             binary_size,
@@ -498,7 +498,7 @@ impl ObfuscationClassifier {
 
     /// Create a classifier with explicit settings.
     #[must_use]
-    pub fn with_config(config: ClassifierConfig) -> Self {
+    pub const fn with_config(config: ClassifierConfig) -> Self {
         Self { config }
     }
 

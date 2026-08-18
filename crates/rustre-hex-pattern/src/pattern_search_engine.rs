@@ -87,7 +87,7 @@ impl SearchPattern {
 
     /// Stop after the first match is found.
     #[must_use]
-    pub fn with_stop_after_first(mut self) -> Self {
+    pub const fn with_stop_after_first(mut self) -> Self {
         self.stop_after_first = true;
         self
     }
@@ -101,13 +101,13 @@ impl SearchPattern {
 
     /// Pattern length in bytes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.compiled.len
     }
 
     /// Returns `true` if the pattern is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.compiled.len == 0
     }
 
@@ -266,7 +266,7 @@ impl PatternSearchEngine {
 
     /// Number of registered patterns.
     #[must_use]
-    pub fn pattern_count(&self) -> usize {
+    pub const fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
 
@@ -285,7 +285,7 @@ impl PatternSearchEngine {
 
     /// Search `data` against all registered patterns and return every match.
     ///
-    /// Results are sorted by (offset, pattern_index).
+    /// Results are sorted by (offset, `pattern_index`).
     #[must_use]
     pub fn find_all(&mut self, data: &[u8]) -> Vec<SearchResult> {
         let mut results: Vec<SearchResult> = Vec::new();

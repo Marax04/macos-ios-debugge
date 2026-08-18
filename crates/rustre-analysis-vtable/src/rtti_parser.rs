@@ -56,14 +56,14 @@ pub struct MemRegion {
 impl MemRegion {
     /// Create a new region.
     #[must_use]
-    pub fn new(base_va: u64, data: Vec<u8>) -> Self {
+    pub const fn new(base_va: u64, data: Vec<u8>) -> Self {
         Self { base_va, data }
     }
 
     /// Return the exclusive end address (saturating at `u64::MAX` for
     /// adversarial `base_va` values near the top of the address space).
     #[must_use]
-    pub fn end_va(&self) -> u64 {
+    pub const fn end_va(&self) -> u64 {
         self.base_va.saturating_add(self.data.len() as u64)
     }
 
@@ -248,7 +248,7 @@ impl MsvcRtti {
 
     /// Number of direct + indirect base classes.
     #[must_use]
-    pub fn base_count(&self) -> usize {
+    pub const fn base_count(&self) -> usize {
         self.hierarchy.base_classes.len()
     }
 }
@@ -312,7 +312,7 @@ pub struct GccRtti {
 impl GccRtti {
     /// Return `true` if there are no recorded base classes.
     #[must_use]
-    pub fn is_root(&self) -> bool {
+    pub const fn is_root(&self) -> bool {
         self.bases.is_empty()
     }
 
@@ -324,7 +324,7 @@ impl GccRtti {
 
     /// Number of direct base classes.
     #[must_use]
-    pub fn base_count(&self) -> usize {
+    pub const fn base_count(&self) -> usize {
         self.bases.len()
     }
 }

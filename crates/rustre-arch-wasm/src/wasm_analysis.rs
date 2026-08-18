@@ -21,10 +21,10 @@ pub enum WasmAnalysisError {
 impl fmt::Display for WasmAnalysisError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WasmAnalysisError::FunctionNotFound(id) => write!(f, "function not found: {}", id),
-            WasmAnalysisError::InvalidTableIndex(i) => write!(f, "invalid table index: {}", i),
-            WasmAnalysisError::MalformedModule(msg) => write!(f, "malformed module: {}", msg),
-            WasmAnalysisError::InsufficientData(msg) => write!(f, "insufficient data: {}", msg),
+            WasmAnalysisError::FunctionNotFound(id) => write!(f, "function not found: {id}"),
+            WasmAnalysisError::InvalidTableIndex(i) => write!(f, "invalid table index: {i}"),
+            WasmAnalysisError::MalformedModule(msg) => write!(f, "malformed module: {msg}"),
+            WasmAnalysisError::InsufficientData(msg) => write!(f, "insufficient data: {msg}"),
         }
     }
 }
@@ -41,13 +41,15 @@ pub struct WasmFunctionRef {
 }
 
 impl WasmFunctionRef {
-    pub fn func(index: u32) -> Self {
+    #[must_use]
+    pub const fn func(index: u32) -> Self {
         Self {
             index,
             is_import: false,
         }
     }
-    pub fn import(index: u32) -> Self {
+    #[must_use]
+    pub const fn import(index: u32) -> Self {
         Self {
             index,
             is_import: true,
@@ -69,6 +71,7 @@ pub struct FunctionCallGraph {
 }
 
 impl FunctionCallGraph {
+    #[must_use]
     pub fn new(function_count: u32) -> Self {
         Self {
             calls: HashMap::new(),
@@ -82,6 +85,7 @@ impl FunctionCallGraph {
         self.callers.entry(callee).or_default().insert(caller);
     }
 
+    #[must_use]
     pub fn callees_of(&self, fn_idx: u32) -> &HashSet<u32> {
         static EMPTY: std::sync::OnceLock<HashSet<u32>> = std::sync::OnceLock::new();
         self.calls
@@ -89,6 +93,7 @@ impl FunctionCallGraph {
             .unwrap_or_else(|| EMPTY.get_or_init(HashSet::new))
     }
 
+    #[must_use]
     pub fn callers_of(&self, fn_idx: u32) -> &HashSet<u32> {
         static EMPTY: std::sync::OnceLock<HashSet<u32>> = std::sync::OnceLock::new();
         self.callers
@@ -97,6 +102,7 @@ impl FunctionCallGraph {
     }
 
     /// BFS reachability from a function.
+    #[must_use]
     pub fn reachable_from(&self, fn_idx: u32) -> HashSet<u32> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
@@ -115,6 +121,7 @@ impl FunctionCallGraph {
     }
 
     /// Root functions (never called).
+    #[must_use]
     pub fn roots(&self) -> Vec<u32> {
         (0..self.function_count)
             .filter(|&i| self.callers_of(i).is_empty())
@@ -122,6 +129,7 @@ impl FunctionCallGraph {
     }
 
     /// Leaf functions (no callees).
+    #[must_use]
     pub fn leaves(&self) -> Vec<u32> {
         (0..self.function_count)
             .filter(|&i| self.callees_of(i).is_empty())
@@ -129,12 +137,14 @@ impl FunctionCallGraph {
     }
 
     /// Recursive functions (call themselves directly or indirectly).
+    #[must_use]
     pub fn recursive_functions(&self) -> Vec<u32> {
         (0..self.function_count)
             .filter(|&i| self.callees_of(i).contains(&i))
             .collect()
     }
 
+    #[must_use]
     pub fn edge_count(&self) -> usize {
         self.calls.values().map(|s| s.len()).sum()
     }
@@ -145,13 +155,14 @@ impl FunctionCallGraph {
 /// The WebAssembly element section: function pointers in the table.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct IndirectCallTable {
-    /// Table index (usually 0) → list of (slot_index, function_index).
+    /// Table index (usually 0) → list of (`slot_index`, `function_index`).
     pub entries: Vec<(u32, u32)>,
     pub table_size: u32,
 }
 
 impl IndirectCallTable {
-    pub fn new(table_size: u32) -> Self {
+    #[must_use]
+    pub const fn new(table_size: u32) -> Self {
         Self {
             entries: Vec::new(),
             table_size,
@@ -162,7 +173,8 @@ impl IndirectCallTable {
         self.entries.push((slot, fn_idx));
     }
 
-    /// Resolve a call_indirect at table slot `idx`.
+    /// Resolve a `call_indirect` at table slot `idx`.
+    #[must_use]
     pub fn resolve(&self, slot: u32) -> Option<u32> {
         self.entries
             .iter()
@@ -171,11 +183,13 @@ impl IndirectCallTable {
     }
 
     /// All unique function indices in the table.
+    #[must_use]
     pub fn function_indices(&self) -> HashSet<u32> {
         self.entries.iter().map(|(_, f)| *f).collect()
     }
 
-    pub fn entry_count(&self) -> usize {
+    #[must_use]
+    pub const fn entry_count(&self) -> usize {
         self.entries.len()
     }
 }
@@ -229,6 +243,7 @@ impl DataFlowState {
         self.local_types.insert(idx, ty);
     }
 
+    #[must_use]
     pub fn get_local(&self, idx: u32) -> WasmValType {
         self.local_types
             .get(&idx)
@@ -244,6 +259,7 @@ pub struct DataFlowAnalysis {
 }
 
 impl DataFlowAnalysis {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -253,6 +269,7 @@ impl DataFlowAnalysis {
         self.states.insert(offset, state);
     }
 
+    #[must_use]
     pub fn get(&self, offset: u32) -> Option<&DataFlowState> {
         self.states.get(&offset)
     }
@@ -277,6 +294,7 @@ pub struct LoopDetector;
 impl LoopDetector {
     /// Detect loops from a list of (offset, opcode) pairs.
     /// Wasm `loop` opcode = 0x03.
+    #[must_use]
     pub fn detect(opcodes: &[(u32, u8)]) -> Vec<WasmLoop> {
         let mut loops = Vec::new();
         let mut stack: Vec<(u32, u8)> = Vec::new();
@@ -330,6 +348,7 @@ pub struct WasmTailCall {
 pub struct TailCallAnalyzer;
 
 impl TailCallAnalyzer {
+    #[must_use]
     pub fn detect(opcodes: &[(u32, u8, Option<u32>)]) -> Vec<WasmTailCall> {
         let mut tail_calls = Vec::new();
         for &(offset, opcode, fn_idx_opt) in opcodes {
@@ -376,6 +395,7 @@ pub struct MemoryAccessPattern {
 }
 
 impl MemoryAccessPattern {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -384,15 +404,18 @@ impl MemoryAccessPattern {
         self.accesses.push(access);
     }
 
+    #[must_use]
     pub fn load_count(&self) -> usize {
         self.accesses.iter().filter(|a| !a.is_store).count()
     }
 
+    #[must_use]
     pub fn store_count(&self) -> usize {
         self.accesses.iter().filter(|a| a.is_store).count()
     }
 
     /// Accesses with a static known offset (linear memory address).
+    #[must_use]
     pub fn static_offsets(&self) -> Vec<u32> {
         self.accesses.iter().map(|a| a.offset).collect()
     }
@@ -400,6 +423,7 @@ impl MemoryAccessPattern {
     /// Detect potential out-of-bounds accesses (offset + size > assumed memory size,
     /// or static offset within the near-u32-max danger zone where wasm dynamic-offset
     /// addition would wrap into the high address range).
+    #[must_use]
     pub fn potential_oob(&self, memory_size_bytes: u64) -> Vec<&MemoryAccess> {
         // Heuristic: any static offset within the top 256 bytes of the u32 address
         // space is treated as a potential OOB even if it nominally fits, since any
@@ -430,11 +454,12 @@ pub struct WasmImport {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ImportGraph {
     pub imports: Vec<WasmImport>,
-    /// import fn_index → set of callers.
+    /// import `fn_index` → set of callers.
     pub callers: HashMap<u32, HashSet<u32>>,
 }
 
 impl ImportGraph {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -447,17 +472,20 @@ impl ImportGraph {
         self.callers.entry(import_fn).or_default().insert(caller);
     }
 
+    #[must_use]
     pub fn import_by_name(&self, module: &str, name: &str) -> Option<&WasmImport> {
         self.imports
             .iter()
             .find(|i| i.module == module && i.name == name)
     }
 
-    pub fn import_count(&self) -> usize {
+    #[must_use]
+    pub const fn import_count(&self) -> usize {
         self.imports.len()
     }
 
     /// Imports grouped by module.
+    #[must_use]
     pub fn by_module(&self) -> HashMap<&str, Vec<&WasmImport>> {
         let mut map: HashMap<&str, Vec<&WasmImport>> = HashMap::new();
         for imp in &self.imports {
@@ -481,6 +509,7 @@ pub struct WasmAnalyzer {
 }
 
 impl WasmAnalyzer {
+    #[must_use]
     pub fn new(function_count: u32, table_size: u32) -> Self {
         Self {
             call_graph: FunctionCallGraph::new(function_count),
@@ -493,6 +522,7 @@ impl WasmAnalyzer {
         }
     }
 
+    #[must_use]
     pub fn stats(&self) -> WasmStats {
         WasmStats {
             function_count: self.call_graph.function_count,

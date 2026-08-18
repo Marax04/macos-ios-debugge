@@ -88,7 +88,7 @@ pub enum SimpleExpr {
 impl SimpleExpr {
     /// Returns the constant value if this is a `Const` variant.
     #[must_use]
-    pub fn const_val(&self) -> Option<i64> {
+    pub const fn const_val(&self) -> Option<i64> {
         if let Self::Const(v) = self { Some(*v) } else { None }
     }
 
@@ -200,7 +200,7 @@ pub struct NormalizationResult {
 impl NormalizationResult {
     /// Returns `true` if the complexity was actually reduced.
     #[must_use]
-    pub fn reduced(&self) -> bool {
+    pub const fn reduced(&self) -> bool {
         self.after_complexity < self.before_complexity
     }
 }

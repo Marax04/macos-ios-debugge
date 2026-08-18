@@ -1,7 +1,7 @@
 //! `protector_patterns` — Known commercial VM-protector signature database.
 //!
 //! Maintains a catalogue of byte-level signatures for popular commercial
-//! protectors: VMProtect 2/3, Themida 1/2, Code Virtualizer 1/2, Enigma,
+//! protectors: `VMProtect` 2/3, Themida 1/2, Code Virtualizer 1/2, Enigma,
 //! and Obsidium.  Each protector is represented as a set of
 //! [`PatternSignature`] entries covering the dispatcher, VM-entry, and
 //! handler-dispatch recognition points.
@@ -17,13 +17,13 @@ use std::fmt;
 /// Commercial software protectors with known VM implementations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ProtectorPattern {
-    /// VMProtect 2.x (x86/x64 stack-based VM).
+    /// `VMProtect` 2.x (x86/x64 stack-based VM).
     VMProtect2,
-    /// VMProtect 3.x (improved mutation, x64 only).
+    /// `VMProtect` 3.x (improved mutation, x64 only).
     VMProtect3,
-    /// Themida 1.x (32-bit CodeReplace engine).
+    /// Themida 1.x (32-bit `CodeReplace` engine).
     Themida1,
-    /// Themida 2.x / WinLicense 2.x (64-bit engine).
+    /// Themida 2.x / `WinLicense` 2.x (64-bit engine).
     Themida2,
     /// Code Virtualizer 1.x (entry-point VM).
     CodeVirtualizer1,
@@ -38,7 +38,7 @@ pub enum ProtectorPattern {
 impl ProtectorPattern {
     /// Human-readable name.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::VMProtect2 => "VMProtect 2",
             Self::VMProtect3 => "VMProtect 3",
@@ -53,7 +53,7 @@ impl ProtectorPattern {
 
     /// Expected minimum confidence for a positive identification.
     #[must_use]
-    pub fn min_confidence(self) -> u8 {
+    pub const fn min_confidence(self) -> u8 {
         match self {
             Self::VMProtect2 | Self::VMProtect3 => 70,
             Self::Themida1 | Self::Themida2 => 65,
@@ -127,13 +127,13 @@ impl BytePattern {
 
     /// Pattern length (in bytes).
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Return `true` if the pattern is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -307,13 +307,13 @@ impl PatternDb {
 
     /// Number of signatures.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.signatures.len()
     }
 
     /// Return `true` if no signatures are registered.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.signatures.is_empty()
     }
 
@@ -740,7 +740,7 @@ impl ProtectorDetector {
 
     /// Create a detector with a custom database.
     #[must_use]
-    pub fn with_db(db: PatternDb) -> Self {
+    pub const fn with_db(db: PatternDb) -> Self {
         Self { db }
     }
 

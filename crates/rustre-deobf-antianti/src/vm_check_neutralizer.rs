@@ -115,7 +115,7 @@ pub struct IoPortCheck {
 impl IoPortCheck {
     /// Return `true` if this matches the VMware backdoor port (0x5658).
     #[must_use]
-    pub fn is_vmware_backdoor(&self) -> bool {
+    pub const fn is_vmware_backdoor(&self) -> bool {
         self.port == 0x5658
     }
 }
@@ -210,7 +210,7 @@ impl NeutralizationPatch {
 
     /// Return the number of bytes changed.
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         self.replacement.len()
     }
 }
@@ -284,7 +284,7 @@ impl VmCheckNeutralizer {
 
     /// Set minimum confidence and return self.
     #[must_use]
-    pub fn with_min_confidence(mut self, threshold: u8) -> Self {
+    pub const fn with_min_confidence(mut self, threshold: u8) -> Self {
         self.min_confidence = threshold;
         self
     }
@@ -514,7 +514,7 @@ impl VmCheckNeutralizer {
     }
 }
 
-fn classify_cpuid_leaf(leaf: Option<u32>) -> (u8, VmCheck) {
+const fn classify_cpuid_leaf(leaf: Option<u32>) -> (u8, VmCheck) {
     match leaf {
         Some(0x4000_0000) => (92, VmCheck::CpuidHypervisorBit),
         Some(0x4000_0001) => (88, VmCheck::CpuidHypervisorBit),
@@ -546,13 +546,13 @@ pub struct VmNeutralizationReport {
 impl VmNeutralizationReport {
     /// Return the total number of detected checks (excluding pure artefacts).
     #[must_use]
-    pub fn total_checks(&self) -> usize {
+    pub const fn total_checks(&self) -> usize {
         self.cpuid_checks.len() + self.io_port_checks.len()
     }
 
     /// Return `true` if no VM checks were detected.
     #[must_use]
-    pub fn is_clean(&self) -> bool {
+    pub const fn is_clean(&self) -> bool {
         self.cpuid_checks.is_empty()
             && self.io_port_checks.is_empty()
             && self.artefacts.is_empty()

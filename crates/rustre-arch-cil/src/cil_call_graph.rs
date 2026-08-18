@@ -25,7 +25,7 @@ pub enum CallGraphError {
 pub struct MethodSig {
     /// Declaring type (e.g. "System.Console").
     pub declaring_type: String,
-    /// Method name (e.g. "WriteLine").
+    /// Method name (e.g. "`WriteLine`").
     pub name: String,
     /// Return type as a string (e.g. "void", "int32").
     pub return_type: String,
@@ -56,6 +56,7 @@ impl MethodSig {
     }
 
     /// Display as `DeclaringType::Name(params) -> ReturnType`.
+    #[must_use]
     pub fn display(&self) -> String {
         let params = self.param_types.join(", ");
         format!(
@@ -105,7 +106,7 @@ pub struct CallGraphNode {
     pub id: usize,
     /// Method signature for this node.
     pub sig: MethodSig,
-    /// Metadata token for this method (MethodDef).
+    /// Metadata token for this method (`MethodDef`).
     pub token: u32,
     /// All call sites within this method's body.
     pub call_sites: Vec<CallSite>,
@@ -122,6 +123,7 @@ pub struct CallGraphNode {
 }
 
 impl CallGraphNode {
+    #[must_use]
     pub fn new(id: usize, sig: MethodSig, token: u32) -> Self {
         Self {
             id,
@@ -136,15 +138,18 @@ impl CallGraphNode {
         }
     }
 
+    #[must_use]
     pub fn callee_count(&self) -> usize {
         self.callees.len()
     }
 
+    #[must_use]
     pub fn caller_count(&self) -> usize {
         self.callers.len()
     }
 
     /// All call sites targeting a specific node ID.
+    #[must_use]
     pub fn call_sites_to(&self, target_id: usize) -> Vec<&CallSite> {
         self.call_sites
             .iter()
@@ -177,6 +182,7 @@ pub struct CilCallGraph {
 }
 
 impl CilCallGraph {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             nodes: vec![],
@@ -187,23 +193,28 @@ impl CilCallGraph {
         }
     }
 
-    pub fn node_count(&self) -> usize {
+    #[must_use]
+    pub const fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
+    #[must_use]
     pub fn edge_count(&self) -> usize {
         self.nodes.iter().map(|n| n.callees.len()).sum()
     }
 
+    #[must_use]
     pub fn root_nodes(&self) -> Vec<&CallGraphNode> {
         self.nodes.iter().filter(|n| n.is_root).collect()
     }
 
+    #[must_use]
     pub fn leaf_nodes(&self) -> Vec<&CallGraphNode> {
         self.nodes.iter().filter(|n| n.is_leaf).collect()
     }
 
     /// Nodes that are both root and leaf (isolated).
+    #[must_use]
     pub fn isolated_nodes(&self) -> Vec<&CallGraphNode> {
         self.nodes
             .iter()
@@ -211,15 +222,18 @@ impl CilCallGraph {
             .collect()
     }
 
+    #[must_use]
     pub fn node_by_token(&self, token: u32) -> Option<&CallGraphNode> {
         self.token_to_node.get(&token).and_then(|&i| self.nodes.get(i))
     }
 
+    #[must_use]
     pub fn node_by_sig(&self, sig: &str) -> Option<&CallGraphNode> {
         self.sig_to_node.get(sig).and_then(|&i| self.nodes.get(i))
     }
 
     /// BFS reachability: all nodes reachable from `start_id` (inclusive).
+    #[must_use]
     pub fn reachable_from(&self, start_id: usize) -> HashSet<usize> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
@@ -235,6 +249,7 @@ impl CilCallGraph {
     }
 
     /// Reverse reachability: all nodes from which `target_id` is reachable.
+    #[must_use]
     pub fn can_reach(&self, target_id: usize) -> HashSet<usize> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
@@ -250,6 +265,7 @@ impl CilCallGraph {
     }
 
     /// Depth-first post-order traversal from entry nodes.
+    #[must_use]
     pub fn post_order(&self) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
@@ -276,6 +292,7 @@ impl CilCallGraph {
     }
 
     /// Detect strongly connected components (Tarjan's SCC).
+    #[must_use]
     pub fn sccs(&self) -> Vec<Vec<usize>> {
         let n = self.nodes.len();
         let mut st = TarjanState {
@@ -296,6 +313,7 @@ impl CilCallGraph {
     }
 
     /// Returns only SCCs with more than one node (i.e., mutually recursive groups).
+    #[must_use]
     pub fn recursive_groups(&self) -> Vec<Vec<usize>> {
         self.sccs().into_iter().filter(|scc| scc.len() > 1).collect()
     }
@@ -318,6 +336,7 @@ impl CilCallGraph {
     }
 
     /// Maximum call depth observed (after `compute_depths`).
+    #[must_use]
     pub fn max_depth(&self) -> Option<u32> {
         self.nodes.iter().filter_map(|n| n.depth_from_root).max()
     }
@@ -588,6 +607,7 @@ pub struct CallGraphStats {
 }
 
 impl CallGraphStats {
+    #[must_use]
     pub fn from(cg: &CilCallGraph) -> Self {
         Self {
             node_count: cg.node_count(),

@@ -102,25 +102,25 @@ impl Default for X86Arch {
 impl X86Arch {
     /// Create a 16-bit (real-mode / 8086) architecture descriptor.
     #[must_use]
-    pub fn new_16bit() -> Self {
+    pub const fn new_16bit() -> Self {
         Self { bits: 16 }
     }
 
     /// Create a 32-bit (IA-32 / i386) architecture descriptor.
     #[must_use]
-    pub fn new_32bit() -> Self {
+    pub const fn new_32bit() -> Self {
         Self { bits: 32 }
     }
 
     /// Create a 64-bit (AMD64 / x86-64) architecture descriptor.
     #[must_use]
-    pub fn new_64bit() -> Self {
+    pub const fn new_64bit() -> Self {
         Self { bits: 64 }
     }
 
     /// The bitness value (16, 32, or 64).
     #[must_use]
-    pub fn bits(&self) -> u32 {
+    pub const fn bits(&self) -> u32 {
         self.bits
     }
 
@@ -509,13 +509,13 @@ pub struct X86LiftAdapter {
 impl X86LiftAdapter {
     /// Create an adapter for the given bitness (16, 32, or 64).
     #[must_use]
-    pub fn new(bits: u32) -> Self {
+    pub const fn new(bits: u32) -> Self {
         Self { bits }
     }
 
     /// The bitness (16, 32, or 64) this adapter was constructed for.
     #[must_use]
-    pub fn bits(&self) -> u32 {
+    pub const fn bits(&self) -> u32 {
         self.bits
     }
 
@@ -541,7 +541,7 @@ impl X86LiftAdapter {
     /// Returns [`u32::MAX`] for registers not covered by the scheme (segment
     /// registers, FPU stack, MMX, ZMM, debug and control registers).
     #[must_use]
-    pub fn reg_id(reg: iced_x86::Register) -> u32 {
+    pub const fn reg_id(reg: iced_x86::Register) -> u32 {
         use iced_x86::Register as R;
         match reg {
             // ── RAX family ──────────────────────────────────────────────────
@@ -1318,19 +1318,19 @@ impl<'a> LinearDisassembler<'a> {
 
     /// Return the current byte offset within the provided slice.
     #[must_use]
-    pub fn offset(&self) -> usize {
+    pub const fn offset(&self) -> usize {
         self.offset
     }
 
     /// Return the current virtual address (base + offset).
     #[must_use]
-    pub fn current_address(&self) -> Address {
+    pub const fn current_address(&self) -> Address {
         Address::new(self.base_addr.0.wrapping_add(self.offset as u64))
     }
 
     /// Return `true` if there are no more bytes to decode.
     #[must_use]
-    pub fn is_done(&self) -> bool {
+    pub const fn is_done(&self) -> bool {
         self.offset >= self.bytes.len()
     }
 }
@@ -1425,7 +1425,7 @@ pub struct ArchX86Lifter {
 impl ArchX86Lifter {
     /// Create a new lifter for the given bitness (16, 32, or 64).
     #[must_use]
-    pub fn new(bits: u8) -> Self {
+    pub const fn new(bits: u8) -> Self {
         Self { bits }
     }
 
@@ -1440,7 +1440,7 @@ impl ArchX86Lifter {
 
     /// Returns the canonical architecture name for the configured bitness.
     #[must_use]
-    pub fn arch_name(&self) -> &str {
+    pub const fn arch_name(&self) -> &str {
         match self.bits {
             64 => "x86_64",
             32 => "x86",

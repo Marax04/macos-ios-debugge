@@ -1353,7 +1353,7 @@ impl CppClassHierarchy {
     /// Iterative BFS with a visited set: the previous recursive version
     /// (a) overflowed the stack on inheritance cycles (corrupt/adversarial
     /// RTTI can claim `A : B` and `B : A`), (b) blew up exponentially on
-    /// diamond hierarchies, and (c) returned names in HashMap iteration
+    /// diamond hierarchies, and (c) returned names in `HashMap` iteration
     /// order, which is randomized per run and leaked into `devirtualise`.
     #[must_use]
     pub fn all_subclasses(&self, base_name: &str) -> Vec<String> {

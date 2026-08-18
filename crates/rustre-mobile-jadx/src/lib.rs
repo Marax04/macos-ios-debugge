@@ -200,7 +200,7 @@ impl DecompiledProject {
     /// [`crate::dex_project::project_from_path`] or
     /// [`crate::dex_project::project_from_bytes`] to decode a real one.
     #[must_use]
-    pub fn mock() -> Self {
+    pub const fn mock() -> Self {
         Self {
             classes: Vec::new(),
             total: 0,

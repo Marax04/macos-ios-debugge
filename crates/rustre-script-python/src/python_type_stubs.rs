@@ -281,7 +281,7 @@ impl FunctionSignature {
 
     /// Mark as async.
     #[must_use]
-    pub fn async_def(mut self) -> Self {
+    pub const fn async_def(mut self) -> Self {
         self.flags.is_async = true;
         self
     }

@@ -31,7 +31,7 @@ pub struct VmBytecode {
 impl VmBytecode {
     /// Create a new bytecode object.
     #[must_use]
-    pub fn new(bytes: Vec<u8>, base_address: u64) -> Self {
+    pub const fn new(bytes: Vec<u8>, base_address: u64) -> Self {
         Self {
             bytes,
             base_address,
@@ -48,13 +48,13 @@ impl VmBytecode {
 
     /// Length of the bytecode in bytes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns `true` when the bytecode is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 }
@@ -92,20 +92,20 @@ pub enum LiftedOperand {
 impl fmt::Display for LiftedOperand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Immediate(v) => write!(f, "{:#x}", v),
-            Self::VirtualReg(r) => write!(f, "vr{}", r),
+            Self::Immediate(v) => write!(f, "{v:#x}"),
+            Self::VirtualReg(r) => write!(f, "vr{r}"),
             Self::Offset(o) => {
                 if *o >= 0 {
-                    write!(f, "+{:#x}", o)
+                    write!(f, "+{o:#x}")
                 } else {
                     write!(f, "-{:#x}", o.unsigned_abs())
                 }
             }
             Self::MemRef { base_reg, disp } => {
                 if *disp == 0 {
-                    write!(f, "[vr{}]", base_reg)
+                    write!(f, "[vr{base_reg}]")
                 } else if *disp > 0 {
-                    write!(f, "[vr{}+{:#x}]", base_reg, disp)
+                    write!(f, "[vr{base_reg}+{disp:#x}]")
                 } else {
                     write!(f, "[vr{}-{:#x}]", base_reg, disp.unsigned_abs())
                 }
@@ -158,8 +158,8 @@ impl fmt::Display for LiftedOp {
         match self {
             Self::Push => write!(f, "PUSH"),
             Self::Pop => write!(f, "POP"),
-            Self::BinOp(op) => write!(f, "{}", op),
-            Self::UnaryOp(op) => write!(f, "{}", op),
+            Self::BinOp(op) => write!(f, "{op}"),
+            Self::UnaryOp(op) => write!(f, "{op}"),
             Self::Load { width } => write!(f, "LOAD{}", width * 8),
             Self::Store { width } => write!(f, "STORE{}", width * 8),
             Self::BranchIfTrue => write!(f, "BT"),
@@ -170,7 +170,7 @@ impl fmt::Display for LiftedOp {
             Self::Compare => write!(f, "CMP"),
             Self::Nop => write!(f, "NOP"),
             Self::Halt => write!(f, "HALT"),
-            Self::Unknown(b) => write!(f, "UNK_{:02X}", b),
+            Self::Unknown(b) => write!(f, "UNK_{b:02X}"),
         }
     }
 }
@@ -235,7 +235,7 @@ pub struct LiftedInsn {
 impl LiftedInsn {
     /// Create a new lifted instruction.
     #[must_use]
-    pub fn new(offset: usize, raw_opcode: u8, op: LiftedOp, operands: Vec<LiftedOperand>, encoded_width: usize) -> Self {
+    pub const fn new(offset: usize, raw_opcode: u8, op: LiftedOp, operands: Vec<LiftedOperand>, encoded_width: usize) -> Self {
         Self {
             offset,
             raw_opcode,
@@ -253,7 +253,7 @@ impl LiftedInsn {
 
     /// Returns `true` when this instruction alters control flow.
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(
             self.op,
             LiftedOp::Jump | LiftedOp::BranchIfTrue | LiftedOp::BranchIfFalse
@@ -263,7 +263,7 @@ impl LiftedInsn {
 
     /// Returns `true` when this instruction accesses memory.
     #[must_use]
-    pub fn accesses_memory(&self) -> bool {
+    pub const fn accesses_memory(&self) -> bool {
         matches!(self.op, LiftedOp::Load { .. } | LiftedOp::Store { .. })
     }
 }
@@ -273,13 +273,13 @@ impl fmt::Display for LiftedInsn {
         write!(f, "{:#06x}  {:8}", self.offset, self.op.to_string())?;
         for (i, op) in self.operands.iter().enumerate() {
             if i == 0 {
-                write!(f, " {}", op)?;
+                write!(f, " {op}")?;
             } else {
-                write!(f, ", {}", op)?;
+                write!(f, ", {op}")?;
             }
         }
         if let Some(ann) = &self.annotation {
-            write!(f, "  ; {}", ann)?;
+            write!(f, "  ; {ann}")?;
         }
         Ok(())
     }
@@ -362,10 +362,10 @@ impl fmt::Display for LiftError {
         match self {
             Self::EmptyBytecode => write!(f, "bytecode buffer is empty"),
             Self::TruncatedOperand { offset, expected, got } => {
-                write!(f, "truncated operand at {:#x}: need {} bytes, got {}", offset, expected, got)
+                write!(f, "truncated operand at {offset:#x}: need {expected} bytes, got {got}")
             }
             Self::UnknownOpcode { offset, opcode } => {
-                write!(f, "unknown opcode {:#04x} at offset {:#x}", opcode, offset)
+                write!(f, "unknown opcode {opcode:#04x} at offset {offset:#x}")
             }
         }
     }
@@ -407,12 +407,13 @@ impl VmBytecodeLifter {
 
     /// Create a lifter with a custom opcode table.
     #[must_use]
-    pub fn with_table(table: OpcodeTable) -> Self {
+    pub const fn with_table(table: OpcodeTable) -> Self {
         Self { table, strict: false }
     }
 
     /// Enable strict mode: halt on the first unknown opcode.
-    pub fn strict(mut self) -> Self {
+    #[must_use]
+    pub const fn strict(mut self) -> Self {
         self.strict = true;
         self
     }

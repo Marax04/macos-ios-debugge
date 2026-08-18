@@ -2265,7 +2265,7 @@ impl TtdRecordSession {
     /// # Errors
     /// Returns `TtdRecordError` if attachment or file I/O fails, or if the
     /// platform is not Linux.
-    pub fn start_real(&mut self) -> Result<(), TtdRecordError> {
+    pub const fn start_real(&mut self) -> Result<(), TtdRecordError> {
         #[cfg(target_os = "linux")]
         {
             self.config
@@ -4176,7 +4176,7 @@ impl InstructionCounter {
     /// # Errors
     /// Returns an `std::io::Error` on Linux if `perf_event_open` fails
     /// (e.g. `perf_event_paranoid` is too restrictive).
-    pub fn new(pid: i32) -> Result<Self, std::io::Error> {
+    pub const fn new(pid: i32) -> Result<Self, std::io::Error> {
         #[cfg(target_os = "linux")]
         {
             let fd = crate::open_instruction_counter(pid)?;
@@ -4200,7 +4200,7 @@ impl InstructionCounter {
 
     /// Read the current counter value minus the baseline (post-reset delta).
     #[must_use]
-    pub fn read(&self) -> u64 {
+    pub const fn read(&self) -> u64 {
         #[cfg(target_os = "linux")]
         {
             crate::read_perf_counter(self.fd)
@@ -4214,7 +4214,7 @@ impl InstructionCounter {
     }
 
     /// Reset the counter: the next call to `read` will return 0.
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_RESET = 0x2403
@@ -4225,7 +4225,7 @@ impl InstructionCounter {
     }
 
     /// Enable the counter (start counting instructions).
-    pub fn enable(&self) {
+    pub const fn enable(&self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_ENABLE = 0x2400
@@ -4234,7 +4234,7 @@ impl InstructionCounter {
     }
 
     /// Disable the counter (stop counting instructions without resetting).
-    pub fn disable(&self) {
+    pub const fn disable(&self) {
         #[cfg(target_os = "linux")]
         {
             // PERF_EVENT_IOC_DISABLE = 0x2401

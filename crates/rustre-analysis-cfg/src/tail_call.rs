@@ -5,7 +5,7 @@
 //!
 //! 1. Explicit [`LlilInstruction::TailCall`] terminators emitted by lifters.
 //! 2. Unconditional jumps whose constant target lies *outside* the address
-//!    range of the current function ("jmp other_func").
+//!    range of the current function ("jmp `other_func`").
 //! 3. Indirect jumps in exit blocks (no CFG successors) — likely tail calls
 //!    through a register or import thunk (`jmp [rip+…]`), reported with lower
 //!    confidence.
@@ -127,7 +127,7 @@ pub fn detect_tail_calls(
 /// Extract a constant jump target from an expression, looking through the
 /// `Load(Const)` pattern used for import thunks (`jmp [imp_addr]`) — the
 /// *pointer slot* address is not the callee, so only a bare `Const` counts.
-fn const_target(e: &LlilExpr) -> Option<Address> {
+const fn const_target(e: &LlilExpr) -> Option<Address> {
     match e {
         LlilExpr::Const { value, .. } => Some(Address::new(*value)),
         _ => None,

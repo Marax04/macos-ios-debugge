@@ -25,6 +25,7 @@ struct ByteStore {
     value: u8,
 }
 
+#[must_use]
 pub fn detect_stack_strings(instrs: &[(u64, String, String)]) -> Vec<StackStringHit> {
     let mut stores: Vec<ByteStore> = Vec::new();
     for (addr, mnem, operands) in instrs {

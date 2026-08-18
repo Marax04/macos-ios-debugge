@@ -42,7 +42,7 @@ pub enum RegWidth {
 impl RegWidth {
     /// Width in bytes.
     #[must_use]
-    pub fn bytes(self) -> usize {
+    pub const fn bytes(self) -> usize {
         match self {
             Self::Xmm => 16,
             Self::Ymm => 32,
@@ -58,7 +58,7 @@ impl RegWidth {
 
     /// Name prefix used in register names ("xmm" / "ymm" / "zmm").
     #[must_use]
-    pub fn prefix(self) -> &'static str {
+    pub const fn prefix(self) -> &'static str {
         match self {
             Self::Xmm => "xmm",
             Self::Ymm => "ymm",
@@ -86,7 +86,7 @@ pub struct VRegister {
 impl VRegister {
     /// Construct a new `VRegister`.
     #[must_use]
-    pub fn new(index: u8, width: RegWidth) -> Self {
+    pub const fn new(index: u8, width: RegWidth) -> Self {
         Self { index, width }
     }
 
@@ -143,7 +143,7 @@ pub enum LaneWidth {
 impl LaneWidth {
     /// Size in bytes.
     #[must_use]
-    pub fn bytes(self) -> usize {
+    pub const fn bytes(self) -> usize {
         match self {
             Self::Byte => 1,
             Self::Word => 2,
@@ -308,7 +308,7 @@ impl MaskingOp {
 
     /// Returns the k-register index if masking is active.
     #[must_use]
-    pub fn k_reg(&self) -> Option<u8> {
+    pub const fn k_reg(&self) -> Option<u8> {
         match self {
             Self::Zero { k_reg } | Self::Merge { k_reg } => Some(*k_reg),
             Self::None => None,
@@ -366,7 +366,7 @@ pub struct SimdLiftContext {
 impl SimdLiftContext {
     /// Create a new context targeting the given ISA level.
     #[must_use]
-    pub fn new(isa_level: SimdIsaLevel) -> Self {
+    pub const fn new(isa_level: SimdIsaLevel) -> Self {
         Self {
             isa_level,
             lifted_count: 0,
@@ -432,7 +432,7 @@ pub struct SimdILEmitter<'a> {
 
 impl<'a> SimdILEmitter<'a> {
     /// Create a new emitter backed by `ctx`.
-    pub fn new(ctx: &'a mut SimdLiftContext) -> Self {
+    pub const fn new(ctx: &'a mut SimdLiftContext) -> Self {
         Self { ctx }
     }
 
@@ -795,7 +795,7 @@ fn lane_suffix(op: &LaneOp) -> String {
     }
 }
 
-fn ty_char(ty: &LaneType) -> char {
+const fn ty_char(ty: &LaneType) -> char {
     match ty {
         LaneType::Uint => 'u',
         LaneType::Sint => 'i',

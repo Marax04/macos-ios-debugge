@@ -42,7 +42,7 @@ impl StateVariable {
     }
 
     #[must_use]
-    pub fn with_frame_offset(mut self, off: i32) -> Self {
+    pub const fn with_frame_offset(mut self, off: i32) -> Self {
         self.frame_offset = Some(off);
         self
     }
@@ -165,7 +165,7 @@ impl StateMachine {
 
     /// Return the number of transitions.
     #[must_use]
-    pub fn transition_count(&self) -> usize {
+    pub const fn transition_count(&self) -> usize {
         self.transitions.len()
     }
 
@@ -246,6 +246,7 @@ pub struct TransitionMap {
 
 impl TransitionMap {
     /// Build from a [`StateMachine`].
+    #[must_use]
     pub fn from_machine(sm: &StateMachine) -> Self {
         let mut map = TransitionMap::default();
         for t in &sm.transitions {
@@ -255,6 +256,7 @@ impl TransitionMap {
     }
 
     /// Get the outgoing transitions from a state.
+    #[must_use]
     pub fn get(&self, state_id: u64) -> &[Transition] {
         self.inner
             .get(&state_id)
@@ -268,10 +270,12 @@ impl TransitionMap {
     }
 
     /// Total transition count.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.inner.values().map(|v| v.len()).sum()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -333,6 +337,7 @@ pub struct StateElimination;
 
 impl StateElimination {
     /// Compute which states are eliminatable (single in, single out).
+    #[must_use]
     pub fn eliminatable_states(sm: &StateMachine) -> HashSet<u64> {
         let tmap = TransitionMap::from_machine(sm);
         let mut result = HashSet::new();
@@ -398,6 +403,7 @@ pub struct StateGraphExport;
 
 impl StateGraphExport {
     /// Generate a DOT representation of the state machine.
+    #[must_use]
     pub fn to_dot(sm: &StateMachine) -> String {
         let mut out = String::from("digraph state_machine {\n");
         out += "  rankdir=TB;\n";
@@ -418,8 +424,8 @@ impl StateGraphExport {
         for t in &sm.transitions {
             let label = match &t.condition {
                 TransitionCondition::Always => String::new(),
-                TransitionCondition::Conditional(c) => format!(" [label=\"{}\"]", c),
-                TransitionCondition::SwitchCase(v) => format!(" [label=\"case {}\"]", v),
+                TransitionCondition::Conditional(c) => format!(" [label=\"{c}\"]"),
+                TransitionCondition::SwitchCase(v) => format!(" [label=\"case {v}\"]"),
             };
             out += &format!("  s{} -> s{}{};\n", t.from, t.to, label);
         }
@@ -428,6 +434,7 @@ impl StateGraphExport {
     }
 
     /// Generate a JSON representation.
+    #[must_use]
     pub fn to_json(sm: &StateMachine) -> String {
         let states: Vec<_> = sm
             .states
@@ -452,17 +459,18 @@ impl StateGraphExport {
     }
 
     /// Generate a simple Mermaid stateDiagram.
+    #[must_use]
     pub fn to_mermaid(sm: &StateMachine) -> String {
         let mut out = String::from("stateDiagram-v2\n");
         if let Some(entry) = sm.entry_state {
-            out += &format!("  [*] --> s{}\n", entry);
+            out += &format!("  [*] --> s{entry}\n");
         }
         for t in &sm.transitions {
             out += &format!("  s{} --> s{}\n", t.from, t.to);
         }
         for (&id, state) in &sm.states {
             if state.is_terminal {
-                out += &format!("  s{} --> [*]\n", id);
+                out += &format!("  s{id} --> [*]\n");
             }
         }
         out
@@ -492,12 +500,14 @@ impl Default for StateMachineRecovery {
 }
 
 impl StateMachineRecovery {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Recover a state machine from a list of `(state_value, successor_values)`
     /// pairs (simplified IR-level input).
+    #[must_use]
     pub fn recover_from_pairs(
         &self,
         pairs: &[(u64, Vec<u64>)],
@@ -551,6 +561,7 @@ impl StateMachineRecovery {
     }
 
     /// Annotate states with high-level structure based on successor count.
+    #[must_use]
     pub fn annotate(&self, sm: &StateMachine) -> Vec<StructuredState> {
         let mut result = Vec::with_capacity(sm.states.len());
         for (&id, state) in &sm.states {
@@ -577,6 +588,7 @@ impl StateMachineRecovery {
     }
 
     /// BFS reachability from the entry state.
+    #[must_use]
     pub fn reachable_states(&self, sm: &StateMachine) -> HashSet<u64> {
         let entry = match sm.entry_state {
             Some(e) => e,

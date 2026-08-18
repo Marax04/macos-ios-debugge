@@ -17,7 +17,7 @@
 //!         ...
 //!   4. Recognise the Itanium (GCC/Clang) layout:
 //!         [offset-to-top]
-//!         [ptr to std::type_info]
+//!         [ptr to `std::type_info`]
 //!         [ptr to fn0]
 //!         ...
 
@@ -36,10 +36,12 @@ pub enum Bitness {
 }
 
 impl Bitness {
-    pub fn ptr_size(self) -> usize {
+    #[must_use]
+    pub const fn ptr_size(self) -> usize {
         match self { Self::B32 => 4, Self::B64 => 8 }
     }
 
+    #[must_use]
     pub fn read_addr(self, data: &[u8], off: usize) -> Option<Addr> {
         match self {
             Self::B32 => {
@@ -69,9 +71,11 @@ pub struct SectionInfo {
 }
 
 impl SectionInfo {
-    pub fn contains(&self, addr: Addr) -> bool {
+    #[must_use]
+    pub const fn contains(&self, addr: Addr) -> bool {
         addr >= self.va_start && addr < self.va_end
     }
+    #[must_use]
     pub fn file_offset_of(&self, addr: Addr) -> Option<usize> {
         if self.contains(addr) {
             self.file_offset.checked_add((addr - self.va_start) as usize)
@@ -91,15 +95,18 @@ pub struct BinaryImage<'a> {
 }
 
 impl<'a> BinaryImage<'a> {
-    pub fn new(data: &'a [u8], image_base: Addr, sections: Vec<SectionInfo>, bitness: Bitness) -> Self {
+    #[must_use]
+    pub const fn new(data: &'a [u8], image_base: Addr, sections: Vec<SectionInfo>, bitness: Bitness) -> Self {
         Self { data, image_base, sections, bitness }
     }
 
+    #[must_use]
     pub fn read_addr_at_va(&self, va: Addr) -> Option<Addr> {
         let off = self.va_to_file_offset(va)?;
         self.bitness.read_addr(self.data, off)
     }
 
+    #[must_use]
     pub fn va_to_file_offset(&self, va: Addr) -> Option<usize> {
         for sec in &self.sections {
             if let Some(off) = sec.file_offset_of(va) {
@@ -109,18 +116,22 @@ impl<'a> BinaryImage<'a> {
         None
     }
 
+    #[must_use]
     pub fn is_code_pointer(&self, addr: Addr) -> bool {
         self.sections.iter().any(|s| s.executable && s.contains(addr))
     }
 
+    #[must_use]
     pub fn is_data_pointer(&self, addr: Addr) -> bool {
         self.sections.iter().any(|s| s.readable && !s.executable && s.contains(addr))
     }
 
+    #[must_use]
     pub fn is_valid_pointer(&self, addr: Addr) -> bool {
         self.is_code_pointer(addr) || self.is_data_pointer(addr)
     }
 
+    #[must_use]
     pub fn read_bytes_at_va(&self, va: Addr, len: usize) -> Option<&[u8]> {
         let off = self.va_to_file_offset(va)?;
         let end = off.checked_add(len)?;
@@ -141,17 +152,18 @@ pub const COL_SIG_64: u32 = 1;
 /// `signature` field at offset 0 must be [`COL_SIG_32`] on 32-bit binaries and
 /// [`COL_SIG_64`] on 64-bit ones.
 #[must_use]
-pub fn expected_col_signature(bits: u32) -> u32 {
+pub const fn expected_col_signature(bits: u32) -> u32 {
     if bits >= 64 { COL_SIG_64 } else { COL_SIG_32 }
 }
 
 /// True if `sig` is a recognised MSVC Complete Object Locator signature.
 #[must_use]
-pub fn is_valid_col_signature(sig: u32) -> bool {
+pub const fn is_valid_col_signature(sig: u32) -> bool {
     sig == COL_SIG_32 || sig == COL_SIG_64
 }
 
 /// Try to read an MSVC type descriptor at `va`.  Returns the mangled name if found.
+#[must_use]
 pub fn try_read_msvc_type_descriptor(img: &BinaryImage<'_>, va: Addr) -> Option<String> {
     // TypeDescriptor layout:
     //   pVFTable  : ptr   (points to type_info vtable)
@@ -173,6 +185,7 @@ pub fn try_read_msvc_type_descriptor(img: &BinaryImage<'_>, va: Addr) -> Option<
 }
 
 /// Try to read an Itanium `std::type_info` at `va`.  Returns the mangled name.
+#[must_use]
 pub fn try_read_itanium_typeinfo(img: &BinaryImage<'_>, va: Addr) -> Option<String> {
     // std::type_info layout (Itanium ABI):
     //   vptr       : ptr    (points to type_info vtable in libstdc++)
@@ -221,6 +234,7 @@ pub struct VtableCandidate {
 }
 
 impl VtableCandidate {
+    #[must_use]
     pub fn is_abstract(&self) -> bool {
         // A vtable with all slots pointing to the same location is likely pure-virtual.
         if self.slots.len() < 2 { return false; }
@@ -265,11 +279,13 @@ pub struct VtableFinder<'a> {
 }
 
 impl<'a> VtableFinder<'a> {
-    pub fn new(img: &'a BinaryImage<'a>, config: FinderConfig) -> Self {
+    #[must_use]
+    pub const fn new(img: &'a BinaryImage<'a>, config: FinderConfig) -> Self {
         Self { img, config }
     }
 
     /// Scan every readable, writable (data) section for vtable patterns.
+    #[must_use]
     pub fn find_all(&self) -> Vec<VtableCandidate> {
         let mut results = Vec::new();
         let ptr_sz = self.img.bitness.ptr_size();
@@ -307,6 +323,7 @@ impl<'a> VtableFinder<'a> {
     }
 
     /// Try to interpret the virtual address `va` as the start of a vtable.
+    #[must_use]
     pub fn try_vtable_at(&self, va: Addr) -> Option<VtableCandidate> {
         let ptr_sz = self.img.bitness.ptr_size() as Addr;
 
@@ -394,6 +411,7 @@ pub struct MultiImageScanner {
 }
 
 impl MultiImageScanner {
+    #[must_use]
     pub fn new() -> Self {
         Self { results: HashMap::new() }
     }
@@ -404,6 +422,7 @@ impl MultiImageScanner {
         self.results.insert(name.to_string(), candidates);
     }
 
+    #[must_use]
     pub fn total_candidates(&self) -> usize {
         self.results.values().map(|v| v.len()).sum()
     }
@@ -411,8 +430,8 @@ impl MultiImageScanner {
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
-/// Build a synthetic 64-bit image with `n` vtable slots starting at va 0x1000_0000,
-/// function pointers targeting 0x0040_0000 + i*0x10.
+/// Build a synthetic 64-bit image with `n` vtable slots starting at va `0x1000_0000`,
+/// function pointers targeting `0x0040_0000` + i*0x10.
 ///
 /// Returns `(owned_data, sections, image_base)`.  The caller must hold `owned_data`
 /// alive for the duration of the `BinaryImage` constructed from it, e.g.:
@@ -424,6 +443,7 @@ impl MultiImageScanner {
 /// Previously this function returned a `BinaryImage<'static>` backed by
 /// `Box::leak`, which permanently leaked heap memory on every call.  The owned
 /// `Vec<u8>` return avoids the leak while keeping the API useful.
+#[must_use]
 pub fn make_test_image_64(slot_count: usize) -> (Vec<u8>, Vec<SectionInfo>, Addr) {
     // We'll use two sections:
     //   .text  : 0x0040_0000  len 0x10000  (executable)

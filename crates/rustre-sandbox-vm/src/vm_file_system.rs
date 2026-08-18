@@ -285,7 +285,7 @@ impl InterceptRule {
     #[must_use]
     pub fn for_ops(mut self, ops: Vec<FileOp>) -> Self { self.ops = ops; self }
     #[must_use]
-    pub fn with_priority(mut self, p: i32) -> Self { self.priority = p; self }
+    pub const fn with_priority(mut self, p: i32) -> Self { self.priority = p; self }
     #[must_use]
     pub fn redirect_to(mut self, path: impl Into<PathBuf>) -> Self {
         self.action = InterceptAction::Redirect;
@@ -314,7 +314,7 @@ pub struct FileInterceptor {
 
 impl FileInterceptor {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { rules: Vec::new(), log: Vec::new() }
     }
 
@@ -411,7 +411,7 @@ impl VmFileSystem {
 
     /// Set the writable / read-only flag. `&mut self` so callers can flip
     /// the mode at construction time without going through a `RwLock`.
-    pub fn set_read_only(&mut self, ro: bool) {
+    pub const fn set_read_only(&mut self, ro: bool) {
         self.read_only = ro;
     }
 

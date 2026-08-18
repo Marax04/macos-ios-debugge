@@ -20,6 +20,7 @@ impl Confidence {
     pub const MEDIUM: Self = Self(0.6);
     pub const LOW: Self = Self(0.3);
 
+    #[must_use]
     pub fn is_reliable(self) -> bool {
         self.0 >= 0.6
     }
@@ -101,6 +102,7 @@ impl PassResult {
         self.findings.push(s.into());
     }
 
+    #[must_use]
     pub fn total_bytes(&self) -> usize {
         self.transforms.iter().map(|t| t.length).sum()
     }
@@ -125,6 +127,7 @@ pub struct MixedModePass;
 
 impl MixedModePass {
     /// Scan `data` and return a [`PassResult`].
+    #[must_use]
     pub fn run(&self, data: &[u8]) -> PassResult {
         let mut result = PassResult::new("mixed-mode-obfuscation");
         let mut i = 0;
@@ -256,7 +259,7 @@ impl MixedModePass {
     }
 }
 
-fn modrm_disp_len(modrm: u8) -> usize {
+const fn modrm_disp_len(modrm: u8) -> usize {
     let md = modrm >> 6;
     let rm = modrm & 7;
     match md {
@@ -318,6 +321,7 @@ pub struct HandlerCfgPass;
 impl HandlerCfgPass {
     /// Analyse `data` (binary image at virtual base `base`) and reconstruct
     /// the handler-based CFG if present.
+    #[must_use]
     pub fn run(&self, data: &[u8], base: Addr) -> Option<HandlerCfgResult> {
         // Step 1: find indirect JMP.
         let dispatcher_addr = self.find_dispatcher(data, base)?;
@@ -478,7 +482,7 @@ pub struct UnflattenResult {
     pub dispatcher_addr: Addr,
     pub state_var: VarId,
     pub blocks: Vec<UnflattenedBlock>,
-    /// Patch list: (offset, JMP_bytes) to redirect each real block to its successor.
+    /// Patch list: (offset, `JMP_bytes`) to redirect each real block to its successor.
     pub patches: Vec<(usize, Vec<u8>)>,
     /// True when the unflattening appears complete (all successors resolved).
     pub complete: bool,
@@ -490,6 +494,7 @@ pub struct ControlFlowUnflattener;
 
 impl ControlFlowUnflattener {
     /// Attempt to unflatten a flattened CFG in `data` (base virtual address `base`).
+    #[must_use]
     pub fn run(&self, data: &[u8], base: Addr) -> Option<UnflattenResult> {
         // Build CFG.
         let builder = CfgBuilder::new(base);
@@ -695,6 +700,7 @@ pub struct OpaqueConstantEliminationPass;
 impl OpaqueConstantEliminationPass {
     /// Run constant propagation over a CFG and return patches for branches
     /// whose condition is a compile-time constant.
+    #[must_use]
     pub fn run(
         &self,
         data: &[u8],
@@ -775,6 +781,7 @@ impl MhcdePipelineResult {
 }
 
 /// Drive all MHCDE deobfuscation passes over `data`.
+#[must_use]
 pub fn run_mhcde_pipeline(
     data: &[u8],
     base: Addr,

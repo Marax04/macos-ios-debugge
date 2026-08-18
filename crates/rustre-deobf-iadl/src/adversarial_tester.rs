@@ -37,7 +37,8 @@ pub struct TestCase {
 
 impl TestCase {
     /// Create a seed test case (generation 0).
-    pub fn seed(id: u64, input: Vec<u8>, expected_output: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn seed(id: u64, input: Vec<u8>, expected_output: Vec<u8>) -> Self {
         Self {
             id,
             input,
@@ -49,7 +50,8 @@ impl TestCase {
     }
 
     /// Create a derived test case by applying a mutation.
-    pub fn derived(
+    #[must_use]
+    pub const fn derived(
         id: u64,
         input: Vec<u8>,
         expected_output: Vec<u8>,
@@ -66,7 +68,8 @@ impl TestCase {
     }
 
     /// Length of the input.
-    pub fn input_len(&self) -> usize {
+    #[must_use]
+    pub const fn input_len(&self) -> usize {
         self.input.len()
     }
 }
@@ -92,7 +95,8 @@ pub struct Equivalence {
 
 impl Equivalence {
     /// Construct a successful (matched) equivalence verdict.
-    pub fn pass(test_case_id: u64, output: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn pass(test_case_id: u64, output: Vec<u8>) -> Self {
         Self {
             test_case_id,
             matched: true,
@@ -103,6 +107,7 @@ impl Equivalence {
     }
 
     /// Construct a failing equivalence verdict with Hamming distance.
+    #[must_use]
     pub fn fail(test_case_id: u64, expected: &[u8], actual: Vec<u8>) -> Self {
         let dist = Self::hamming(expected, &actual);
         Self {
@@ -158,6 +163,7 @@ pub enum MutationOp {
 
 impl MutationOp {
     /// Apply this mutation to `input`, returning the mutated bytes.
+    #[must_use]
     pub fn apply(&self, input: &[u8]) -> Vec<u8> {
         let mut out = input.to_vec();
         match self {
@@ -228,6 +234,7 @@ pub struct AdversarialScore {
 
 impl AdversarialScore {
     /// Compute from a slice of equivalence verdicts.
+    #[must_use]
     pub fn from_verdicts(verdicts: &[Equivalence]) -> Self {
         if verdicts.is_empty() {
             return Self {
@@ -261,6 +268,7 @@ impl AdversarialScore {
     }
 
     /// Summary string.
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "AdversarialScore: {}/{} passed ({:.1}%), score={:.4}, mean_hamming={:.1}",
@@ -271,6 +279,7 @@ impl AdversarialScore {
 }
 
 /// Convenience function: compute adversarial score from verdicts.
+#[must_use]
 pub fn adversarial_score(verdicts: &[Equivalence]) -> f64 {
     AdversarialScore::from_verdicts(verdicts).adversarial_score
 }
@@ -329,7 +338,8 @@ pub struct AdversarialTester {
 
 impl AdversarialTester {
     /// Create a new tester with the given configuration.
-    pub fn new(config: TesterConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: TesterConfig) -> Self {
         Self {
             config,
             corpus: VecDeque::new(),
@@ -412,11 +422,13 @@ impl AdversarialTester {
     }
 
     /// Current corpus size.
+    #[must_use]
     pub fn corpus_size(&self) -> usize {
         self.corpus.len()
     }
 
     /// All round scores recorded so far.
+    #[must_use]
     pub fn history(&self) -> &[AdversarialScore] {
         &self.history
     }

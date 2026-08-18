@@ -35,7 +35,8 @@ pub enum TraceFormat {
 }
 
 impl TraceFormat {
-    pub fn format_byte(&self) -> u8 {
+    #[must_use]
+    pub const fn format_byte(&self) -> u8 {
         match self {
             Self::Raw => 0x00,
             Self::Rle => 0x01,
@@ -44,7 +45,8 @@ impl TraceFormat {
         }
     }
 
-    pub fn from_byte(b: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_byte(b: u8) -> Option<Self> {
         match b {
             0x00 => Some(Self::Raw),
             0x01 => Some(Self::Rle),
@@ -71,7 +73,7 @@ enum EventTag {
     RegisterChange = 0x0A,
 }
 
-fn event_tag(event: &TraceEvent) -> u8 {
+const fn event_tag(event: &TraceEvent) -> u8 {
     match event {
         TraceEvent::Instruction { .. }   => EventTag::Instruction as u8,
         TraceEvent::MemRead { .. }       => EventTag::MemRead as u8,
@@ -309,7 +311,7 @@ fn decode_event(data: &[u8], pos: &mut usize) -> io::Result<TraceEvent> {
         }
         other => Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("unknown event tag: 0x{:02x}", other),
+            format!("unknown event tag: 0x{other:02x}"),
         )),
     }
 }
@@ -322,19 +324,23 @@ pub struct TraceSerializer {
 }
 
 impl TraceSerializer {
-    pub fn new(format: TraceFormat) -> Self {
+    #[must_use]
+    pub const fn new(format: TraceFormat) -> Self {
         Self { format }
     }
 
+    #[must_use]
     pub fn raw() -> Self {
         Self::new(TraceFormat::Raw)
     }
 
+    #[must_use]
     pub fn rle() -> Self {
         Self::new(TraceFormat::Rle)
     }
 
     /// Serialize a session to bytes.
+    #[must_use]
     pub fn serialize(&self, session: &TraceSession) -> Vec<u8> {
         match self.format {
             TraceFormat::Json => self.serialize_json(session),
@@ -480,6 +486,7 @@ impl TraceSerializer {
     }
 
     /// Estimate compression ratio for RLE vs raw.
+    #[must_use]
     pub fn rle_compression_ratio(session: &TraceSession) -> f64 {
         let rle_ser = Self::rle();
         let raw_ser = Self::raw();
@@ -516,7 +523,7 @@ impl<W: Write> TraceWriter<W> {
         Ok(bytes.len())
     }
 
-    pub fn records_written(&self) -> u64 {
+    pub const fn records_written(&self) -> u64 {
         self.records_written
     }
 

@@ -21,7 +21,8 @@ pub struct HierarchyAnalyser<'a> {
 }
 
 impl<'a> HierarchyAnalyser<'a> {
-    pub fn new(hierarchy: &'a ReconstructedHierarchy) -> Self {
+    #[must_use]
+    pub const fn new(hierarchy: &'a ReconstructedHierarchy) -> Self {
         Self { hierarchy }
     }
 
@@ -70,6 +71,7 @@ impl<'a> HierarchyAnalyser<'a> {
 
     // ─── Classification ──────────────────────────────────────────────────
 
+    #[must_use]
     pub fn classify_class(&self, id: usize) -> ClassKind {
         let class = match self.hierarchy.classes.get(id) {
             Some(c) => c,
@@ -92,6 +94,7 @@ impl<'a> HierarchyAnalyser<'a> {
         }
     }
 
+    #[must_use]
     pub fn classify_all(&self) -> HashMap<usize, ClassKind> {
         (0..self.hierarchy.class_count())
             .map(|id| (id, self.classify_class(id)))
@@ -102,19 +105,22 @@ impl<'a> HierarchyAnalyser<'a> {
 
     /// A class is treated as "interface-like" if it is abstract, has no base,
     /// and every slot is the same address (pure-virtual stub).
+    #[must_use]
     pub fn is_interface(&self, id: usize) -> bool {
         let c = match self.hierarchy.classes.get(id) { Some(c) => c, None => return false };
         c.is_abstract && c.bases.is_empty()
     }
 
+    #[must_use]
     pub fn interface_ids(&self) -> Vec<usize> {
         (0..self.hierarchy.class_count()).filter(|&id| self.is_interface(id)).collect()
     }
 
     // ─── Method dispatch graph ────────────────────────────────────────────
 
-    /// For each (class_id, slot_index) → final implementation address.
+    /// For each (`class_id`, `slot_index`) → final implementation address.
     /// Walks the MRO (most-derived takes priority).
+    #[must_use]
     pub fn build_dispatch_table(&self, id: usize) -> Vec<DispatchEntry> {
         let class = match self.hierarchy.classes.get(id) { Some(c) => c, None => return vec![] };
         let slot_count = class.slot_count();
@@ -143,6 +149,7 @@ impl<'a> HierarchyAnalyser<'a> {
 
     // ─── Reachability ────────────────────────────────────────────────────
 
+    #[must_use]
     pub fn reachable_from_roots(&self) -> HashSet<usize> {
         let mut visited = HashSet::new();
         let mut stack: Vec<usize> = self.hierarchy.root_ids.clone();
@@ -157,6 +164,7 @@ impl<'a> HierarchyAnalyser<'a> {
 
     /// IDs of classes that are not reachable from any root (possibly
     /// orphaned due to detection errors or stripped RTTI).
+    #[must_use]
     pub fn orphaned_classes(&self) -> Vec<usize> {
         let reachable = self.reachable_from_roots();
         (0..self.hierarchy.class_count())
@@ -166,6 +174,7 @@ impl<'a> HierarchyAnalyser<'a> {
 
     // ─── Statistics ──────────────────────────────────────────────────────
 
+    #[must_use]
     pub fn statistics(&self) -> HierarchyStats {
         let kinds = self.classify_all();
         let abstract_count = kinds.values().filter(|k| matches!(k, ClassKind::AbstractBase | ClassKind::AbstractLeaf)).count();
@@ -257,10 +266,12 @@ pub struct DotExporter<'a> {
 }
 
 impl<'a> DotExporter<'a> {
-    pub fn new(hierarchy: &'a ReconstructedHierarchy) -> Self {
+    #[must_use]
+    pub const fn new(hierarchy: &'a ReconstructedHierarchy) -> Self {
         Self { hierarchy, label_slots: false, color_by_kind: true, show_vtable_addr: false }
     }
 
+    #[must_use]
     pub fn export(&self) -> String {
         let analyser = HierarchyAnalyser::new(self.hierarchy);
         let kinds = analyser.classify_all();
@@ -367,6 +378,7 @@ pub struct JsonRelation {
     pub new_slots: usize,
 }
 
+#[must_use]
 pub fn to_json_hierarchy(hierarchy: &ReconstructedHierarchy) -> JsonHierarchy {
     let analyser = HierarchyAnalyser::new(hierarchy);
     let stats = analyser.statistics();
@@ -410,13 +422,14 @@ pub fn to_json_hierarchy(hierarchy: &ReconstructedHierarchy) -> JsonHierarchy {
 /// A flat view of all final implementations across the whole hierarchy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MethodDispatchGraph {
-    /// Map: fn_addr → list of (class_id, slot_index) where that function is called.
-    /// BTreeMap so serialized output (JSON) is deterministic across runs.
+    /// Map: `fn_addr` → list of (`class_id`, `slot_index`) where that function is called.
+    /// `BTreeMap` so serialized output (JSON) is deterministic across runs.
     pub fn_to_callers: std::collections::BTreeMap<String, Vec<(usize, usize)>>,
-    /// Map: class_id → vec of fn_addr (final dispatch).
+    /// Map: `class_id` → vec of `fn_addr` (final dispatch).
     pub class_dispatch: std::collections::BTreeMap<usize, Vec<String>>,
 }
 
+#[must_use]
 pub fn build_method_dispatch_graph(hierarchy: &ReconstructedHierarchy) -> MethodDispatchGraph {
     let analyser = HierarchyAnalyser::new(hierarchy);
     let mut fn_to_callers: std::collections::BTreeMap<String, Vec<(usize, usize)>> = Default::default();
@@ -440,6 +453,7 @@ pub fn build_method_dispatch_graph(hierarchy: &ReconstructedHierarchy) -> Method
 // ─── Linear inheritance chain ─────────────────────────────────────────────────
 
 /// Returns a human-readable MRO-style list for a class.
+#[must_use]
 pub fn mro_string(hierarchy: &ReconstructedHierarchy, id: usize) -> String {
     let mut chain = vec![id];
     let mut seen: HashSet<usize> = HashSet::new();

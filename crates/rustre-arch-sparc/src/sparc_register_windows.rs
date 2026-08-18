@@ -21,7 +21,8 @@ pub const NWINDOWS_DEFAULT: u8 = 8;
 pub const WINDOW_REGS: usize = 16; // 8 local + 8 output = 8 input of the next
 
 /// Total physical registers = NWINDOWS × 16 + 8 (global).
-pub fn total_physical_regs(nwindows: u8) -> usize {
+#[must_use]
+pub const fn total_physical_regs(nwindows: u8) -> usize {
     (nwindows as usize) * WINDOW_REGS + 8
 }
 
@@ -45,7 +46,7 @@ pub enum RegisterClass {
 impl RegisterClass {
     /// Return the architectural prefix (`%g`, `%o`, `%l`, `%i`).
     #[must_use]
-    pub fn prefix(self) -> &'static str {
+    pub const fn prefix(self) -> &'static str {
         match self {
             Self::Global => "%g",
             Self::Out => "%o",
@@ -154,7 +155,7 @@ pub struct WindowEntry {
 impl WindowEntry {
     /// Create an empty (all-unknown) window entry.
     #[must_use]
-    pub fn empty(cwp: u8, entry_pc: u32) -> Self {
+    pub const fn empty(cwp: u8, entry_pc: u32) -> Self {
         Self {
             cwp,
             entry_pc,
@@ -170,7 +171,7 @@ impl WindowEntry {
 
     /// Return `%i7` (the link register storing PC−8 of the call site).
     #[must_use]
-    pub fn link_register(&self) -> Option<u32> {
+    pub const fn link_register(&self) -> Option<u32> {
         self.inputs[7]
     }
 
@@ -232,7 +233,7 @@ pub struct SparcRegisterWindow {
 impl SparcRegisterWindow {
     /// Create a new register-window model for an NWINDOWS-window implementation.
     #[must_use]
-    pub fn new(nwindows: u8) -> Self {
+    pub const fn new(nwindows: u8) -> Self {
         let wim = 1u32; // initially window 0 is invalid (trap-handler convention)
         Self {
             nwindows,
@@ -293,13 +294,13 @@ impl SparcRegisterWindow {
 
     /// Return the nesting depth (number of `SAVE`s without matching `RESTORE`).
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.call_stack.len()
     }
 
     /// Return `true` if the given window is currently valid.
     #[must_use]
-    pub fn is_window_valid(&self, cwp: u8) -> bool {
+    pub const fn is_window_valid(&self, cwp: u8) -> bool {
         (self.wim >> (cwp % self.nwindows)) & 1 == 0
     }
 
@@ -311,7 +312,7 @@ impl SparcRegisterWindow {
 
     /// Number of overflows observed.
     #[must_use]
-    pub fn overflow_count(&self) -> usize {
+    pub const fn overflow_count(&self) -> usize {
         self.overflows.len()
     }
 }
@@ -421,7 +422,7 @@ pub fn classify_window_instrs(words: &[u32]) -> Vec<WindowInstr> {
 ///
 /// SAVE rd,rs1,rs2|imm: op=10, op3=0b111100 (0x3C)
 #[must_use]
-pub fn is_save(word: u32) -> bool {
+pub const fn is_save(word: u32) -> bool {
     let op = (word >> 30) & 0x3;
     let op3 = (word >> 19) & 0x3F;
     op == 0b10 && op3 == 0b111100
@@ -431,7 +432,7 @@ pub fn is_save(word: u32) -> bool {
 ///
 /// RESTORE rd,rs1,rs2|imm: op=10, op3=0b111101 (0x3D)
 #[must_use]
-pub fn is_restore(word: u32) -> bool {
+pub const fn is_restore(word: u32) -> bool {
     let op = (word >> 30) & 0x3;
     let op3 = (word >> 19) & 0x3F;
     op == 0b10 && op3 == 0b111101

@@ -149,7 +149,7 @@ pub struct LiftedInsn {
 }
 
 impl LiftedInsn {
-    fn new(insn: SparcInsn, ops: Vec<LlilOp>) -> Self {
+    const fn new(insn: SparcInsn, ops: Vec<LlilOp>) -> Self {
         Self {
             insn,
             ops,
@@ -186,6 +186,7 @@ pub struct RegisterBank {
 }
 
 impl RegisterBank {
+    #[must_use]
     pub fn new(nwindows: u8) -> Self {
         Self {
             cwp: 0,
@@ -200,6 +201,7 @@ impl RegisterBank {
     }
 
     /// Read a SPARC register (0 = %g0, …, 31 = %i7).
+    #[must_use]
     pub fn read(&self, reg: u8) -> u64 {
         let r = reg & 0x1F;
         if r == 0 {
@@ -230,34 +232,38 @@ impl RegisterBank {
     }
 
     /// Perform a SAVE: rotate window inward (CWP = CWP - 1 mod NWINDOWS).
-    pub fn save_window(&mut self) {
+    pub const fn save_window(&mut self) {
         self.cwp = (self.cwp + self.nwindows - 1) % self.nwindows;
     }
 
     /// Perform a RESTORE: rotate window outward (CWP = CWP + 1 mod NWINDOWS).
-    pub fn restore_window(&mut self) {
+    pub const fn restore_window(&mut self) {
         self.cwp = (self.cwp + 1) % self.nwindows;
     }
 
     /// PSR N flag.
-    pub fn n_flag(&self) -> bool {
+    #[must_use]
+    pub const fn n_flag(&self) -> bool {
         (self.psr >> 23) & 1 != 0
     }
     /// PSR Z flag.
-    pub fn z_flag(&self) -> bool {
+    #[must_use]
+    pub const fn z_flag(&self) -> bool {
         (self.psr >> 22) & 1 != 0
     }
     /// PSR V flag.
-    pub fn v_flag(&self) -> bool {
+    #[must_use]
+    pub const fn v_flag(&self) -> bool {
         (self.psr >> 21) & 1 != 0
     }
     /// PSR C flag.
-    pub fn c_flag(&self) -> bool {
+    #[must_use]
+    pub const fn c_flag(&self) -> bool {
         (self.psr >> 20) & 1 != 0
     }
 
     /// Set the integer condition codes in PSR from a result value.
-    pub fn set_icc(&mut self, result: i64, carry: bool, overflow: bool) {
+    pub const fn set_icc(&mut self, result: i64, carry: bool, overflow: bool) {
         let n = result < 0;
         let z = result == 0;
         let mut psr = self.psr & !0x00F00000;
@@ -277,6 +283,7 @@ impl RegisterBank {
     }
 
     /// Evaluate a branch condition against current PSR.
+    #[must_use]
     pub fn eval_condition(&self, cond: Cond) -> bool {
         let n = self.n_flag();
         let z = self.z_flag();
@@ -312,6 +319,7 @@ pub struct DelaySlotBuffer {
 }
 
 impl DelaySlotBuffer {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -320,11 +328,12 @@ impl DelaySlotBuffer {
         self.pending = Some(lifted);
     }
 
-    pub fn take(&mut self) -> Option<LiftedInsn> {
+    pub const fn take(&mut self) -> Option<LiftedInsn> {
         self.pending.take()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.pending.is_none()
     }
 }
@@ -338,6 +347,7 @@ pub struct SparcLifter {
 }
 
 impl SparcLifter {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             decoder: SparcDecoder::new(),
@@ -345,6 +355,7 @@ impl SparcLifter {
         }
     }
 
+    #[must_use]
     pub fn new_v9() -> Self {
         Self {
             decoder: SparcDecoder::new_v9(),
@@ -634,12 +645,12 @@ impl SparcLifter {
 
     /// Borrow the delay-slot buffer used when lifting a stream of instructions.
     #[must_use]
-    pub fn delay_slot_buffer(&self) -> &DelaySlotBuffer {
+    pub const fn delay_slot_buffer(&self) -> &DelaySlotBuffer {
         &self.delay_buf
     }
 
     /// Mutable view of the delay-slot buffer (callers driving a lift loop).
-    pub fn delay_slot_buffer_mut(&mut self) -> &mut DelaySlotBuffer {
+    pub const fn delay_slot_buffer_mut(&mut self) -> &mut DelaySlotBuffer {
         &mut self.delay_buf
     }
 
@@ -984,18 +995,21 @@ pub struct LlilPrinter {
 }
 
 impl LlilPrinter {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             indent: 0,
             show_raw: false,
         }
     }
 
-    pub fn with_raw(mut self) -> Self {
+    #[must_use]
+    pub const fn with_raw(mut self) -> Self {
         self.show_raw = true;
         self
     }
 
+    #[must_use]
     pub fn print_lifted(&self, lifted: &LiftedInsn) -> Vec<String> {
         let mut lines = Vec::new();
         let prefix = " ".repeat(self.indent);
@@ -1014,6 +1028,7 @@ impl LlilPrinter {
         lines
     }
 
+    #[must_use]
     pub fn print_all(&self, lifted_insns: &[LiftedInsn]) -> String {
         lifted_insns
             .iter()
@@ -1038,6 +1053,7 @@ pub struct RegisterWindowSimulator {
 }
 
 impl RegisterWindowSimulator {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             bank: RegisterBank::new(8),
@@ -1062,9 +1078,11 @@ impl RegisterWindowSimulator {
         result
     }
 
+    #[must_use]
     pub fn current_sp(&self) -> u64 {
         self.bank.read(14)
     }
+    #[must_use]
     pub fn current_fp(&self) -> u64 {
         self.bank.read(30)
     }

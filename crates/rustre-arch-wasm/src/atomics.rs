@@ -40,7 +40,7 @@ pub enum MemoryOrder {
 impl MemoryOrder {
     /// Return the text name of this ordering.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::SeqCst => "seq_cst",
         }
@@ -77,7 +77,7 @@ pub enum AtomicOp {
 impl AtomicOp {
     /// Return the instruction suffix for this operation.
     #[must_use]
-    pub fn suffix(self) -> &'static str {
+    pub const fn suffix(self) -> &'static str {
         match self {
             Self::Add => "add",
             Self::Sub => "sub",

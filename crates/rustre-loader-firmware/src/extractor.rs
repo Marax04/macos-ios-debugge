@@ -149,7 +149,7 @@ fn size_from_uboot(data: &[u8], offset: usize) -> Option<usize> {
     Some(64 + payload_size)
 }
 
-/// Read SquashFS total size from the LE or BE superblock.
+/// Read `SquashFS` total size from the LE or BE superblock.
 fn size_from_squashfs(data: &[u8], offset: usize) -> Option<usize> {
     if offset + 40 > data.len() {
         return None;
@@ -544,8 +544,8 @@ impl FirmwareExtractor {
         all
     }
 
-    /// Summarize extraction results: returns (total_regions, compressed_count,
-    /// filesystem_count, executable_count, highest_entropy).
+    /// Summarize extraction results: returns (`total_regions`, `compressed_count`,
+    /// `filesystem_count`, `executable_count`, `highest_entropy`).
     #[must_use]
     pub fn summarize(results: &[ExtractionResult]) -> ExtractionSummary {
         let total = results.len();

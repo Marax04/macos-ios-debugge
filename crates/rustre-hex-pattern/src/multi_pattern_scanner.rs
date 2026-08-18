@@ -27,7 +27,7 @@ pub struct PatternMatch {
 impl PatternMatch {
     /// Create a new match record.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         pattern_index: usize,
         pattern_name: Option<String>,
         offset: usize,
@@ -137,12 +137,12 @@ struct AcNode {
     children: [u32; 256],
     /// Failure link.
     fail: u32,
-    /// Output: (pattern_index, pattern_length, name) for any patterns that end here.
+    /// Output: (`pattern_index`, `pattern_length`, name) for any patterns that end here.
     output: Vec<(usize, usize, Option<String>)>,
 }
 
 impl AcNode {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             children: [u32::MAX; 256],
             fail: 0,
@@ -294,7 +294,7 @@ pub struct MultiPatternScanner {
 impl MultiPatternScanner {
     /// Create an empty scanner.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             patterns: Vec::new(),
             exact_indices: Vec::new(),
@@ -337,7 +337,7 @@ impl MultiPatternScanner {
 
     /// Return the number of registered patterns.
     #[must_use]
-    pub fn pattern_count(&self) -> usize {
+    pub const fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
 

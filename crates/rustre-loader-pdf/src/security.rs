@@ -13,25 +13,25 @@ pub enum PdfThreat {
     LaunchAction,
     /// /URI action (external URL).
     UriAction,
-    /// /GoToR action (GoTo Remote).
+    /// /`GoToR` action (`GoTo` Remote).
     GoToRemote,
-    /// /SubmitForm action.
+    /// /`SubmitForm` action.
     SubmitForm,
     /// /Hide annotation action.
     HideAnnotation,
-    /// /OpenAction at document open.
+    /// /`OpenAction` at document open.
     OpenAction,
     /// XFA form (dynamic XML forms).
     XfaForm,
     /// Obfuscated object structure.
     ObfuscatedObject,
-    /// /ASCIIHexDecode filter.
+    /// /`ASCIIHexDecode` filter.
     AsciiHexFilter,
-    /// /ASCII85Decode filter.
+    /// /`ASCII85Decode` filter.
     Ascii85Filter,
-    /// /JBIG2Decode filter (CVE-2009-0658 class).
+    /// /`JBIG2Decode` filter (CVE-2009-0658 class).
     Jbig2Filter,
-    /// /RichMedia annotation.
+    /// /`RichMedia` annotation.
     RichmediaAnnot,
     /// 3D annotation (/3D).
     File3dAnnot,
@@ -39,14 +39,14 @@ pub enum PdfThreat {
     SoundAction,
     /// /Movie action.
     MovieAction,
-    /// /ResetForm action.
+    /// /`ResetForm` action.
     ResetFormAction,
 }
 
 impl PdfThreat {
     /// Human-readable name.
     #[must_use]
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::JavaScript => "JavaScript",
             Self::EmbeddedFile => "EmbeddedFile",
@@ -88,7 +88,7 @@ pub enum ThreatLevel {
 impl ThreatLevel {
     /// Numeric weight used in risk score calculation.
     #[must_use]
-    pub fn weight(self) -> u8 {
+    pub const fn weight(self) -> u8 {
         match self {
             Self::Low => 2,
             Self::Medium => 8,
@@ -122,7 +122,7 @@ pub struct SecurityReport {
     pub threats: Vec<ThreatEntry>,
     /// Overall risk score 0–100.
     pub risk_score: u8,
-    /// Whether this file is likely malicious (risk_score ≥ 50).
+    /// Whether this file is likely malicious (`risk_score` ≥ 50).
     pub is_likely_malicious: bool,
     /// One-line executive summary.
     pub summary: String,

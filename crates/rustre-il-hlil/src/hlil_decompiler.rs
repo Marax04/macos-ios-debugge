@@ -161,18 +161,18 @@ impl IndentLevel {
     }
 
     /// Increase indentation by one level.
-    pub fn push(&mut self) {
+    pub const fn push(&mut self) {
         self.depth += 1;
     }
 
     /// Decrease indentation by one level (saturating).
-    pub fn pop(&mut self) {
+    pub const fn pop(&mut self) {
         self.depth = self.depth.saturating_sub(1);
     }
 
     /// Current depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.depth
     }
 
@@ -204,13 +204,13 @@ pub struct TypePrinter {
 impl TypePrinter {
     /// Create a [`TypePrinter`] that emits `uint32_t`-style names.
     #[must_use]
-    pub fn stdint() -> Self {
+    pub const fn stdint() -> Self {
         Self { use_stdint: true }
     }
 
     /// Create a [`TypePrinter`] that emits `unsigned int`-style names.
     #[must_use]
-    pub fn traditional() -> Self {
+    pub const fn traditional() -> Self {
         Self { use_stdint: false }
     }
 
@@ -280,7 +280,7 @@ pub struct ExprPrinter {
 impl ExprPrinter {
     /// Create an [`ExprPrinter`] with the given type printer.
     #[must_use]
-    pub fn new(type_printer: TypePrinter) -> Self {
+    pub const fn new(type_printer: TypePrinter) -> Self {
         Self { type_printer }
     }
 
@@ -680,7 +680,7 @@ impl HlilDecompiler {
 
     /// Create a decompiler with custom configuration.
     #[must_use]
-    pub fn with_config(config: DecompilerConfig) -> Self {
+    pub const fn with_config(config: DecompilerConfig) -> Self {
         Self { config }
     }
 
@@ -792,7 +792,7 @@ impl DecompilerPipeline {
 
     /// Total number of decompiled functions.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.outputs.len()
     }
 
@@ -1064,7 +1064,7 @@ impl StatementCounter {
 
     /// Total counted statements.
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.assignments + self.conditionals + self.loops + self.returns + self.calls + self.gotos
     }
 }
@@ -1080,6 +1080,7 @@ pub struct DecompilerCache {
 }
 
 impl DecompilerCache {
+    #[must_use]
     pub fn get(&self, addr: u64) -> Option<&PseudocodeOutput> {
         self.cache.get(&addr)
     }

@@ -84,7 +84,8 @@ impl fmt::Display for TemplateCategory {
 
 impl TemplateCategory {
     /// Return all category variants in definition order.
-    pub fn all() -> &'static [TemplateCategory] {
+    #[must_use]
+    pub const fn all() -> &'static [TemplateCategory] {
         use TemplateCategory::*;
         &[
             Executable, Archive, Image, Document, Crypto, Network, Firmware, Database, Font,
@@ -163,18 +164,21 @@ impl TemplateEntry {
     }
 
     /// Builder: set file extensions (comma-separated or individual calls).
+    #[must_use]
     pub fn with_extensions(mut self, exts: &[&str]) -> Self {
         self.extensions = exts.iter().map(|s| s.to_lowercase()).collect();
         self
     }
 
     /// Builder: set magic signatures.
+    #[must_use]
     pub fn with_magic(mut self, magic: &[&str]) -> Self {
         self.magic = magic.iter().map(|s| s.to_string()).collect();
         self
     }
 
     /// Builder: set tags.
+    #[must_use]
     pub fn with_tags(mut self, tags: &[&str]) -> Self {
         self.tags = tags.iter().map(|s| s.to_lowercase()).collect();
         self
@@ -194,7 +198,7 @@ impl TemplateEntry {
 
     /// True when `self.body` is non-empty.
     #[must_use]
-    pub fn has_body(&self) -> bool {
+    pub const fn has_body(&self) -> bool {
         !self.body.is_empty()
     }
 
@@ -253,7 +257,8 @@ impl TemplateSearch {
     }
 
     /// Set the category filter.
-    pub fn with_category(mut self, cat: TemplateCategory) -> Self {
+    #[must_use]
+    pub const fn with_category(mut self, cat: TemplateCategory) -> Self {
         self.category = Some(cat);
         self
     }
@@ -337,7 +342,7 @@ pub struct TemplateExport {
 impl TemplateExport {
     /// Create an exporter with the given format.
     #[must_use]
-    pub fn new(format: ExportFormat) -> Self {
+    pub const fn new(format: ExportFormat) -> Self {
         Self { format }
     }
 
@@ -463,13 +468,13 @@ impl TemplateLibrary {
 
     /// Number of stored templates.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// True when empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 

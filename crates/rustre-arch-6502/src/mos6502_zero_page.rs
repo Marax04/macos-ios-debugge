@@ -95,7 +95,7 @@ pub struct ZeroPageEntry {
 }
 
 impl ZeroPageEntry {
-    fn new(address: u8) -> Self {
+    const fn new(address: u8) -> Self {
         Self {
             address,
             read_count: 0,
@@ -109,25 +109,25 @@ impl ZeroPageEntry {
 
     /// Total number of accesses to this address.
     #[must_use]
-    pub fn total_accesses(&self) -> u32 {
+    pub const fn total_accesses(&self) -> u32 {
         self.read_count + self.write_count + self.rmw_count + self.indirect_count
     }
 
     /// Return `true` if this address is only ever written to (never read).
     #[must_use]
-    pub fn is_write_only(&self) -> bool {
+    pub const fn is_write_only(&self) -> bool {
         self.read_count == 0 && self.rmw_count == 0 && self.indirect_count == 0
     }
 
     /// Return `true` if this address is only ever read (never written).
     #[must_use]
-    pub fn is_read_only(&self) -> bool {
+    pub const fn is_read_only(&self) -> bool {
         self.write_count == 0 && self.rmw_count == 0
     }
 
     /// Return `true` if this address is used as an indirect pointer.
     #[must_use]
-    pub fn is_pointer(&self) -> bool {
+    pub const fn is_pointer(&self) -> bool {
         self.indirect_count > 0
     }
 

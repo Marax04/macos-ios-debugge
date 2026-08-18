@@ -79,7 +79,7 @@ impl WindowRegisters {
     }
 
     /// Write a register by hardware register number.
-    pub fn write(&mut self, reg: u32, val: u64) {
+    pub const fn write(&mut self, reg: u32, val: u64) {
         match reg {
             1..=7 => self.globals[reg as usize] = val,
             8..=15 => self.out[(reg - 8) as usize] = val,
@@ -197,7 +197,7 @@ impl WindowStack {
 pub enum SparcAbi {
     /// 32-bit SPARC-V8 System V ABI.
     SysV32,
-    /// 64-bit SPARC-V9 / UltraSPARC `LP64` ABI.
+    /// 64-bit SPARC-V9 / `UltraSPARC` `LP64` ABI.
     SysV64,
     /// Solaris 2.x 32-bit ABI (minor differences from `SysV32`).
     Solaris32,

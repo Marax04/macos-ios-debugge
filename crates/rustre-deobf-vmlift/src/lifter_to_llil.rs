@@ -95,7 +95,7 @@ pub struct VirtualInstruction {
 impl VirtualInstruction {
     /// Create a new instruction.
     #[must_use]
-    pub fn new(opcode: u16, address: u64, size: usize, kind: HandlerSemanticsKind) -> Self {
+    pub const fn new(opcode: u16, address: u64, size: usize, kind: HandlerSemanticsKind) -> Self {
         Self {
             opcode,
             address,
@@ -206,7 +206,7 @@ pub enum LlilExpr {
 impl LlilExpr {
     /// Returns the operand byte width of this LLIL expression.
     #[must_use]
-    pub fn size(&self) -> u8 {
+    pub const fn size(&self) -> u8 {
         match self {
             Self::Const { size, .. } | Self::Reg { size, .. } | Self::Load { size, .. } => *size,
             Self::Add { size, .. } | Self::Sub { size, .. } | Self::Mul { size, .. } => *size,
@@ -296,7 +296,7 @@ pub struct LiftedBlock {
 
 impl LiftedBlock {
     #[must_use]
-    pub fn new(start: u64) -> Self {
+    pub const fn new(start: u64) -> Self {
         Self {
             start_address: start,
             end_address: start,
@@ -380,7 +380,7 @@ pub struct VmToLlilLifter {
 impl VmToLlilLifter {
     /// Create a lifter for the given ISA table.
     #[must_use]
-    pub fn new(isa: IsaTable) -> Self {
+    pub const fn new(isa: IsaTable) -> Self {
         let vm_type = if isa.is_stack_based {
             VmType::StackBased
         } else {
@@ -397,12 +397,12 @@ impl VmToLlilLifter {
     }
 
     /// Set the maximum number of instructions to lift.
-    pub fn set_max_instructions(&mut self, max: usize) {
+    pub const fn set_max_instructions(&mut self, max: usize) {
         self.max_instructions = max;
     }
 
     /// Set default operand size in bytes.
-    pub fn set_operand_size(&mut self, size: u8) {
+    pub const fn set_operand_size(&mut self, size: u8) {
         self.operand_size = size;
     }
 
@@ -618,7 +618,7 @@ impl VmToLlilLifter {
 
     /// Return the underlying ISA table.
     #[must_use]
-    pub fn isa(&self) -> &IsaTable {
+    pub const fn isa(&self) -> &IsaTable {
         &self.isa
     }
 }

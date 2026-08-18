@@ -50,7 +50,8 @@ pub struct CffBlock {
 }
 
 impl CffBlock {
-    pub fn new(address: Address, end_address: Address) -> Self {
+    #[must_use]
+    pub const fn new(address: Address, end_address: Address) -> Self {
         Self {
             address,
             end_address,
@@ -64,11 +65,13 @@ impl CffBlock {
         }
     }
 
-    pub fn size(&self) -> u64 {
+    #[must_use]
+    pub const fn size(&self) -> u64 {
         self.end_address.0.saturating_sub(self.address.0)
     }
 
     /// Whether this block is a purely routing block with no real work.
+    #[must_use]
     pub fn is_routing_only(&self) -> bool {
         self.is_dispatcher && !self.is_real_block && self.size() < 64
     }
@@ -100,9 +103,9 @@ pub struct StateTransition {
 /// Maps each state value to the real application block it represents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateMapping {
-    /// state_value → real block address
+    /// `state_value` → real block address
     pub state_to_block: HashMap<StateValue, Address>,
-    /// real block address → state_value
+    /// real block address → `state_value`
     pub block_to_state: HashMap<Address, StateValue>,
     /// All identified real block addresses (non-dispatcher blocks).
     pub real_blocks: Vec<Address>,
@@ -111,6 +114,7 @@ pub struct StateMapping {
 }
 
 impl StateMapping {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state_to_block: HashMap::new(),
@@ -130,6 +134,7 @@ impl StateMapping {
     }
 
     /// Coverage: fraction of states that have been mapped to real blocks.
+    #[must_use]
     pub fn coverage(&self, total_states: usize) -> f32 {
         if total_states == 0 {
             return 0.0;
@@ -170,6 +175,7 @@ pub struct StateVariableRecoveryResult {
 }
 
 impl StateVariableRecoveryResult {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state_var: StateVariable::Unknown,
@@ -184,6 +190,7 @@ impl StateVariableRecoveryResult {
     }
 
     /// Number of legitimate (non-obfuscated) transitions.
+    #[must_use]
     pub fn legitimate_transition_count(&self) -> usize {
         self.transitions.iter().filter(|t| t.confidence >= 0.6).count()
     }
@@ -213,14 +220,16 @@ impl Default for StateVariableRecoverer {
 }
 
 impl StateVariableRecoverer {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             min_confidence: 0.50,
             dispatcher_min_successors: 4,
         }
     }
 
-    pub fn with_min_confidence(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, t: f32) -> Self {
         self.min_confidence = t;
         self
     }
@@ -229,6 +238,7 @@ impl StateVariableRecoverer {
 
     /// Identify the main dispatcher block: the one with the most successors
     /// that reads the state variable.
+    #[must_use]
     pub fn identify_dispatcher<'a>(&self, blocks: &'a [CffBlock]) -> Option<&'a CffBlock> {
         blocks
             .iter()
@@ -246,13 +256,14 @@ impl StateVariableRecoverer {
     /// Strategy: a register or stack slot that is:
     /// * Written in every predecessor of the dispatcher, and
     /// * Read by the dispatcher (switch condition).
+    #[must_use]
     pub fn identify_state_var(&self, blocks: &[CffBlock]) -> StateVariable {
         // Count how often each named variable is written across all assignment blocks
         let mut write_counts: HashMap<String, usize> = HashMap::new();
 
         for block in blocks {
             for &sv in &block.assigned_state_values {
-                let key = format!("state_val_{}", sv);
+                let key = format!("state_val_{sv}");
                 *write_counts.entry(key).or_insert(0) += 1;
             }
         }
@@ -288,6 +299,7 @@ impl StateVariableRecoverer {
     // ── State value extraction ────────────────────────────────────────────────
 
     /// Extract all distinct state values from a CFG.
+    #[must_use]
     pub fn extract_state_values(&self, blocks: &[CffBlock]) -> Vec<StateValue> {
         let mut values: HashSet<StateValue> = HashSet::new();
         for block in blocks {
@@ -303,6 +315,7 @@ impl StateVariableRecoverer {
     // ── Transition analysis ───────────────────────────────────────────────────
 
     /// Build the transition graph from state-value assignments.
+    #[must_use]
     pub fn build_transitions(&self, blocks: &[CffBlock]) -> Vec<StateTransition> {
         let mut transitions = Vec::new();
 
@@ -357,6 +370,7 @@ impl StateVariableRecoverer {
     // ── Predecessor analysis ──────────────────────────────────────────────────
 
     /// For each state value, compute the set of predecessor states.
+    #[must_use]
     pub fn compute_predecessors(
         &self,
         transitions: &[StateTransition],
@@ -386,6 +400,7 @@ impl StateVariableRecoverer {
     /// Real blocks are those that:
     /// * Are successors of the dispatcher, and
     /// * Are **not** dispatcher/routing blocks themselves.
+    #[must_use]
     pub fn build_state_mapping(
         &self,
         state_values: &[StateValue],
@@ -432,6 +447,7 @@ impl StateVariableRecoverer {
     /// An obfuscated transition is one where:
     /// * The source state is never reachable from any real predecessor, OR
     /// * The transition goes to a routing-only block with no real successors.
+    #[must_use]
     pub fn filter_obfuscated_transitions<'a>(
         &self,
         transitions: &'a [StateTransition],
@@ -453,6 +469,7 @@ impl StateVariableRecoverer {
     // ── Full recovery ─────────────────────────────────────────────────────────
 
     /// Run the full state variable recovery pipeline.
+    #[must_use]
     pub fn recover(&self, blocks: &[CffBlock]) -> StateVariableRecoveryResult {
         let mut result = StateVariableRecoveryResult::new();
 

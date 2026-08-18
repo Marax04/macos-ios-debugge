@@ -75,7 +75,7 @@ pub struct XorLoop {
 impl XorLoop {
     /// Create a new `XorLoop` record.
     #[must_use]
-    pub fn new(loop_addr: u64) -> Self {
+    pub const fn new(loop_addr: u64) -> Self {
         Self {
             loop_addr,
             body_insn_count: 0,
@@ -102,7 +102,7 @@ impl XorLoop {
 
     /// Returns `true` if this loop is likely a string decode loop.
     #[must_use]
-    pub fn is_likely_decode_loop(&self) -> bool {
+    pub const fn is_likely_decode_loop(&self) -> bool {
         self.has_xor && (self.has_mem_load || self.has_mem_store)
     }
 }
@@ -207,7 +207,7 @@ pub struct DecryptedString {
 impl DecryptedString {
     /// Create a new `DecryptedString` record.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         addr: u64,
         ciphertext: Vec<u8>,
         plaintext: String,
@@ -227,13 +227,13 @@ impl DecryptedString {
 
     /// Length of the plaintext string.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.plaintext.len()
     }
 
     /// Returns `true` if the plaintext is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.plaintext.is_empty()
     }
 
@@ -387,7 +387,7 @@ impl XorDecryptor {
         results
     }
 
-    /// Try rolling XOR: each byte is XORed with `initial ^ (i & 0xff)`.
+    /// Try rolling XOR: each byte is `XORed` with `initial ^ (i & 0xff)`.
     #[must_use]
     pub fn try_rolling_key(&self, ciphertext: &[u8], addr: u64) -> Vec<DecryptedString> {
         if !self.config.try_rolling {

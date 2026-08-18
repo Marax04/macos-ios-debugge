@@ -24,7 +24,8 @@ pub struct MipsFpuState {
 
 impl MipsFpuState {
     /// Create a zeroed FPU state.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             fpr: [0.0f64; 32],
             fcsr: 0,
@@ -35,28 +36,28 @@ impl MipsFpuState {
 
     /// Read a single-precision float from register `f`.
     #[must_use]
-    pub fn get_single(&self, f: usize) -> f32 {
+    pub const fn get_single(&self, f: usize) -> f32 {
         self.fpr[f & 31] as f32
     }
 
     /// Read a double-precision float from register `f`.
     #[must_use]
-    pub fn get_double(&self, f: usize) -> f64 {
+    pub const fn get_double(&self, f: usize) -> f64 {
         self.fpr[f & 31]
     }
 
     /// Write a single-precision float to register `f`.
-    pub fn set_single(&mut self, f: usize, v: f32) {
+    pub const fn set_single(&mut self, f: usize, v: f32) {
         self.fpr[f & 31] = v as f64;
     }
 
     /// Write a double-precision float to register `f`.
-    pub fn set_double(&mut self, f: usize, v: f64) {
+    pub const fn set_double(&mut self, f: usize, v: f64) {
         self.fpr[f & 31] = v;
     }
 
     /// Set the FCC (condition code) bit `cc` in FCSR.
-    pub fn set_fcc(&mut self, cc: u8, val: bool) {
+    pub const fn set_fcc(&mut self, cc: u8, val: bool) {
         // MIPS FCSR has FCC0 at bit 23 and FCC1-7 at bits 25-31.
         // cc must be in 0..=7; clamp to avoid a panic on shift >= 32.
         let cc = cc & 7;
@@ -70,14 +71,14 @@ impl MipsFpuState {
 
     /// Get the FCC bit `cc`.
     #[must_use]
-    pub fn get_fcc(&self, cc: u8) -> bool {
+    pub const fn get_fcc(&self, cc: u8) -> bool {
         let cc = cc & 7;
         let shift = if cc == 0 { 23u32 } else { 24 + cc as u32 };
         self.fcsr & (1 << shift) != 0
     }
 
     /// Clear all condition codes.
-    pub fn clear_fcc(&mut self) {
+    pub const fn clear_fcc(&mut self) {
         // FCC0 = bit 23, FCC1-7 = bits 25-31.
         self.fcsr &= !(0xFF80_0000u32);
     }
@@ -111,7 +112,8 @@ pub struct FCSRFlags {
 }
 
 impl FCSRFlags {
-    pub fn from_fcsr(fcsr: u32) -> Self {
+    #[must_use]
+    pub const fn from_fcsr(fcsr: u32) -> Self {
         Self {
             inexact: fcsr & (1 << 2) != 0,
             underflow: fcsr & (1 << 3) != 0,
@@ -123,7 +125,8 @@ impl FCSRFlags {
         }
     }
 
-    pub fn to_fcsr(&self) -> u32 {
+    #[must_use]
+    pub const fn to_fcsr(&self) -> u32 {
         let mut v = self.rounding as u32;
         if self.inexact {
             v |= 1 << 2;
@@ -148,7 +151,7 @@ impl FCSRFlags {
 
     /// Return the rounding mode name.
     #[must_use]
-    pub fn rounding_name(&self) -> &'static str {
+    pub const fn rounding_name(&self) -> &'static str {
         match self.rounding {
             0 => "round-nearest-even",
             1 => "round-toward-zero",
@@ -223,7 +226,7 @@ impl FpuCondition {
 
     /// Mnemonic suffix.
     #[must_use]
-    pub fn suffix(&self) -> &'static str {
+    pub const fn suffix(&self) -> &'static str {
         match self {
             Self::F => "f",
             Self::Un => "un",
@@ -946,14 +949,16 @@ impl fmt::Display for FpuIlNode {
     }
 }
 
-/// Lifts MIPS FPU instructions to FpuIlNode trees.
+/// Lifts MIPS FPU instructions to `FpuIlNode` trees.
 pub struct MipsFpuLifter;
 
 impl MipsFpuLifter {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
+    #[must_use]
     pub fn lift(&self, insn: &MipsFpuInsn) -> FpuIlNode {
         match *insn {
             MipsFpuInsn::AddS { fd, fs, ft } => FpuIlNode::Assign {

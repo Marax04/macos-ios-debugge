@@ -84,13 +84,13 @@ impl VarType {
 
     /// Return `true` if this is a pointer type.
     #[must_use]
-    pub fn is_pointer(&self) -> bool {
+    pub const fn is_pointer(&self) -> bool {
         matches!(self, Self::Pointer(_))
     }
 
     /// Return `true` if this is an integer type.
     #[must_use]
-    pub fn is_integer(&self) -> bool {
+    pub const fn is_integer(&self) -> bool {
         matches!(
             self,
             Self::Int8

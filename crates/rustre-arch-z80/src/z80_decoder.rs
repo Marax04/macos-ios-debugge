@@ -23,7 +23,8 @@ pub enum Z80Prefix {
 }
 
 impl Z80Prefix {
-    pub fn name(self) -> &'static str {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
         match self {
             Z80Prefix::None  => "",
             Z80Prefix::Cb    => "CB",
@@ -102,13 +103,13 @@ pub enum Z80Operand {
 }
 
 impl Z80Operand {
-    fn reg8_name(r: u8) -> &'static str {
+    const fn reg8_name(r: u8) -> &'static str {
         match r { 0=>"B",1=>"C",2=>"D",3=>"E",4=>"H",5=>"L",6=>"(HL)",7=>"A",_=>"?" }
     }
-    fn reg16_name(r: u8) -> &'static str {
+    const fn reg16_name(r: u8) -> &'static str {
         match r { 0=>"BC",1=>"DE",2=>"HL",3=>"SP",_=>"?" }
     }
-    fn cond_name(c: u8) -> &'static str {
+    const fn cond_name(c: u8) -> &'static str {
         match c { 0=>"NZ",1=>"Z",2=>"NC",3=>"C",4=>"PO",5=>"PE",6=>"P",7=>"M",_=>"?" }
     }
 }
@@ -126,21 +127,21 @@ impl core::fmt::Display for Z80Operand {
             Z80Operand::MemBC       => f.write_str("(BC)"),
             Z80Operand::MemDE       => f.write_str("(DE)"),
             Z80Operand::MemSP       => f.write_str("(SP)"),
-            Z80Operand::MemIXd(d)   => write!(f, "(IX{:+})", d),
-            Z80Operand::MemIYd(d)   => write!(f, "(IY{:+})", d),
-            Z80Operand::MemNN(n)    => write!(f, "(0x{:04x})", n),
-            Z80Operand::Imm8(v)     => write!(f, "0x{:02x}", v),
-            Z80Operand::Imm16(v)    => write!(f, "0x{:04x}", v),
-            Z80Operand::Rel8(d)     => write!(f, "{:+}", d),
-            Z80Operand::Abs16(a)    => write!(f, "0x{:04x}", a),
+            Z80Operand::MemIXd(d)   => write!(f, "(IX{d:+})"),
+            Z80Operand::MemIYd(d)   => write!(f, "(IY{d:+})"),
+            Z80Operand::MemNN(n)    => write!(f, "(0x{n:04x})"),
+            Z80Operand::Imm8(v)     => write!(f, "0x{v:02x}"),
+            Z80Operand::Imm16(v)    => write!(f, "0x{v:04x}"),
+            Z80Operand::Rel8(d)     => write!(f, "{d:+}"),
+            Z80Operand::Abs16(a)    => write!(f, "0x{a:04x}"),
             Z80Operand::Cond(c)     => f.write_str(Self::cond_name(*c)),
-            Z80Operand::RstTarget(t)=> write!(f, "0x{:02x}", t),
+            Z80Operand::RstTarget(t)=> write!(f, "0x{t:02x}"),
             Z80Operand::PortC       => f.write_str("(C)"),
-            Z80Operand::PortImm(p)  => write!(f, "(0x{:02x})", p),
+            Z80Operand::PortImm(p)  => write!(f, "(0x{p:02x})"),
             Z80Operand::RegC        => f.write_str("C"),
-            Z80Operand::BitNum(b)   => write!(f, "{}", b),
-            Z80Operand::IntMode(m)  => write!(f, "{}", m),
-            Z80Operand::SpDisp(d)   => write!(f, "SP{:+}", d),
+            Z80Operand::BitNum(b)   => write!(f, "{b}"),
+            Z80Operand::IntMode(m)  => write!(f, "{m}"),
+            Z80Operand::SpDisp(d)   => write!(f, "SP{d:+}"),
             Z80Operand::RegAF       => f.write_str("AF"),
             Z80Operand::RegAF2      => f.write_str("AF'"),
             Z80Operand::RegI        => f.write_str("I"),
@@ -179,7 +180,7 @@ pub struct Z80Instr {
 }
 
 impl Z80Instr {
-    fn new(prefix: Z80Prefix, mnemonic: &'static str, len: u8) -> Self {
+    const fn new(prefix: Z80Prefix, mnemonic: &'static str, len: u8) -> Self {
         Z80Instr {
             bytes: [0u8; 4],
             len,
@@ -195,14 +196,14 @@ impl Z80Instr {
         }
     }
 
-    fn op0(mut self, op: Z80Operand) -> Self { self.operands[0] = Some(op); self }
-    fn op1(mut self, op: Z80Operand) -> Self { self.operands[1] = Some(op); self }
-    fn branch(mut self) -> Self { self.is_branch = true; self }
-    fn cond(mut self) -> Self   { self.is_conditional = true; self }
-    fn call(mut self) -> Self   { self.is_call = true; self.is_branch = true; self }
-    fn ret(mut self) -> Self    { self.is_ret = true; self.is_branch = true; self }
-    fn halt(mut self) -> Self   { self.is_halt = true; self }
-    fn target(mut self, t: u16) -> Self { self.branch_target = Some(t); self }
+    const fn op0(mut self, op: Z80Operand) -> Self { self.operands[0] = Some(op); self }
+    const fn op1(mut self, op: Z80Operand) -> Self { self.operands[1] = Some(op); self }
+    const fn branch(mut self) -> Self { self.is_branch = true; self }
+    const fn cond(mut self) -> Self   { self.is_conditional = true; self }
+    const fn call(mut self) -> Self   { self.is_call = true; self.is_branch = true; self }
+    const fn ret(mut self) -> Self    { self.is_ret = true; self.is_branch = true; self }
+    const fn halt(mut self) -> Self   { self.is_halt = true; self }
+    const fn target(mut self, t: u16) -> Self { self.branch_target = Some(t); self }
     fn raw(mut self, raw: &[u8]) -> Self {
         for (i, &b) in raw.iter().enumerate().take(4) { self.bytes[i] = b; }
         self
@@ -213,9 +214,9 @@ impl core::fmt::Display for Z80Instr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.mnemonic)?;
         if let Some(op) = &self.operands[0] {
-            write!(f, " {}", op)?;
+            write!(f, " {op}")?;
             if let Some(op2) = &self.operands[1] {
-                write!(f, ",{}", op2)?;
+                write!(f, ",{op2}")?;
             }
         }
         Ok(())
@@ -231,10 +232,12 @@ pub struct Z80Decoder {
 }
 
 impl Z80Decoder {
-    pub fn new() -> Self { Z80Decoder { undocumented: true } }
+    #[must_use]
+    pub const fn new() -> Self { Z80Decoder { undocumented: true } }
 
     /// Decode one instruction from `bytes` at virtual address `pc`.
     /// Returns `None` if bytes is empty or truncated.
+    #[must_use]
     pub fn decode(&self, pc: u16, bytes: &[u8]) -> Option<Z80Instr> {
         if bytes.is_empty() { return None; }
         match bytes[0] {
@@ -688,7 +691,7 @@ impl Default for Z80Decoder {
     fn default() -> Self { Z80Decoder::new() }
 }
 
-fn alu_mnemonic(op: u8) -> &'static str {
+const fn alu_mnemonic(op: u8) -> &'static str {
     match op & 7 {
         0 => "ADD", 1 => "ADC", 2 => "SUB", 3 => "SBC",
         4 => "AND", 5 => "XOR", 6 => "OR",  7 => "CP",
@@ -696,7 +699,7 @@ fn alu_mnemonic(op: u8) -> &'static str {
     }
 }
 
-fn rot_mnemonic(op: u8) -> &'static str {
+const fn rot_mnemonic(op: u8) -> &'static str {
     match op & 7 {
         0 => "RLC", 1 => "RRC", 2 => "RL", 3 => "RR",
         4 => "SLA", 5 => "SRA", 6 => "SLL",7 => "SRL",
@@ -715,12 +718,15 @@ pub struct Z80DecoderIter<'a> {
 }
 
 impl<'a> Z80DecoderIter<'a> {
+    #[must_use]
     pub fn new(bytes: &'a [u8], start_pc: u16) -> Self {
         Z80DecoderIter { decoder: Z80Decoder::new(), bytes, offset: 0, pc: start_pc }
     }
 
-    pub fn current_pc(&self) -> u16 { self.pc }
-    pub fn offset(&self) -> usize { self.offset }
+    #[must_use]
+    pub const fn current_pc(&self) -> u16 { self.pc }
+    #[must_use]
+    pub const fn offset(&self) -> usize { self.offset }
 }
 
 impl<'a> Iterator for Z80DecoderIter<'a> {

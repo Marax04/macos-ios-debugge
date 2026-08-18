@@ -45,7 +45,7 @@ pub struct HlilVarType {
 impl HlilVarType {
     /// Construct with just a type, no name.
     #[must_use]
-    pub fn new(ty: HlilType) -> Self {
+    pub const fn new(ty: HlilType) -> Self {
         Self {
             ty,
             name: None,
@@ -67,14 +67,14 @@ impl HlilVarType {
 
     /// Mark as const.
     #[must_use]
-    pub fn with_const(mut self) -> Self {
+    pub const fn with_const(mut self) -> Self {
         self.is_const = true;
         self
     }
 
     /// Mark as volatile.
     #[must_use]
-    pub fn with_volatile(mut self) -> Self {
+    pub const fn with_volatile(mut self) -> Self {
         self.is_volatile = true;
         self
     }
@@ -287,27 +287,27 @@ impl HlilFunctionType {
 
     /// Mark as variadic and return `self`.
     #[must_use]
-    pub fn variadic(mut self) -> Self {
+    pub const fn variadic(mut self) -> Self {
         self.is_variadic = true;
         self
     }
 
     /// Mark as no-return and return `self`.
     #[must_use]
-    pub fn no_return(mut self) -> Self {
+    pub const fn no_return(mut self) -> Self {
         self.no_return = true;
         self
     }
 
     /// Returns `true` when the parameter count (excluding variadic slot) equals `n`.
     #[must_use]
-    pub fn arity(&self) -> usize {
+    pub const fn arity(&self) -> usize {
         self.params.len()
     }
 
     /// Check if a call with `arg_count` arguments is compatible.
     #[must_use]
-    pub fn call_compat(&self, arg_count: usize) -> bool {
+    pub const fn call_compat(&self, arg_count: usize) -> bool {
         if self.is_variadic {
             arg_count >= self.params.len()
         } else {
@@ -786,7 +786,7 @@ impl TypeConsistencyChecker {
 
     /// `true` when no errors were found in the last `check` call.
     #[must_use]
-    pub fn is_consistent(&self) -> bool {
+    pub const fn is_consistent(&self) -> bool {
         self.errors.is_empty()
     }
 }

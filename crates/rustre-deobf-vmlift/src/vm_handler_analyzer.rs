@@ -78,19 +78,19 @@ impl fmt::Display for HandlerKind {
 impl HandlerKind {
     /// Returns `true` if this kind alters control flow.
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(self, Self::Branch | Self::Jump | Self::Call | Self::Return)
     }
 
     /// Returns `true` if this kind accesses memory.
     #[must_use]
-    pub fn accesses_memory(&self) -> bool {
+    pub const fn accesses_memory(&self) -> bool {
         matches!(self, Self::MemLoad | Self::MemStore | Self::PopMemory)
     }
 
     /// Suggest a short mnemonic string for this kind.
     #[must_use]
-    pub fn mnemonic(&self) -> &'static str {
+    pub const fn mnemonic(&self) -> &'static str {
         match self {
             Self::PushImmediate => "VPUSHI",
             Self::PushRegister => "VPUSHR",
@@ -138,7 +138,7 @@ pub struct VmHandler {
 impl VmHandler {
     /// Create a new handler with default confidence and no notes.
     #[must_use]
-    pub fn new(opcode: u8, offset: usize, size: usize, kind: HandlerKind) -> Self {
+    pub const fn new(opcode: u8, offset: usize, size: usize, kind: HandlerKind) -> Self {
         Self {
             opcode,
             offset,
@@ -151,13 +151,15 @@ impl VmHandler {
     }
 
     /// Set the confidence level.
-    pub fn with_confidence(mut self, confidence: u8) -> Self {
+    #[must_use]
+    pub const fn with_confidence(mut self, confidence: u8) -> Self {
         self.confidence = confidence;
         self
     }
 
     /// Set the expected operand width.
-    pub fn with_operand_bytes(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_operand_bytes(mut self, n: usize) -> Self {
         self.operand_bytes = n;
         self
     }
@@ -169,7 +171,7 @@ impl VmHandler {
 
     /// Returns `true` when the handler is classified with at least `min` confidence.
     #[must_use]
-    pub fn is_confident(&self, min: u8) -> bool {
+    pub const fn is_confident(&self, min: u8) -> bool {
         self.confidence >= min
     }
 }
@@ -212,7 +214,7 @@ pub struct PatternSignature {
 impl PatternSignature {
     /// Create a new signature.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         name: &'static str,
         kind: HandlerKind,
         pattern: Vec<Option<u8>>,
@@ -311,19 +313,22 @@ impl VmHandlerAnalyzer {
     }
 
     /// Override the minimum handler body size.
-    pub fn with_min_size(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_min_size(mut self, n: usize) -> Self {
         self.min_handler_size = n;
         self
     }
 
     /// Override the maximum handler body size.
-    pub fn with_max_size(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_size(mut self, n: usize) -> Self {
         self.max_handler_size = n;
         self
     }
 
     /// Override the minimum confidence threshold.
-    pub fn with_min_confidence(mut self, c: u8) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, c: u8) -> Self {
         self.min_confidence = c;
         self
     }
@@ -624,7 +629,7 @@ impl HandlerTable {
 
     /// Create a table from a pre-analyzed list.
     #[must_use]
-    pub fn from_handlers(handlers: Vec<VmHandler>) -> Self {
+    pub const fn from_handlers(handlers: Vec<VmHandler>) -> Self {
         Self { handlers }
     }
 
@@ -649,13 +654,13 @@ impl HandlerTable {
 
     /// Number of entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.handlers.len()
     }
 
     /// Returns `true` when the table is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.handlers.is_empty()
     }
 

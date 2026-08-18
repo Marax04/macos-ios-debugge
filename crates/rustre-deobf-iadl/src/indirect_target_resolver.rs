@@ -26,7 +26,7 @@ pub struct ValueSet {
 impl ValueSet {
     /// Create an empty (bottom) value set.
     #[must_use]
-    pub fn bottom() -> Self {
+    pub const fn bottom() -> Self {
         Self {
             values: BTreeSet::new(),
             is_top: false,
@@ -38,7 +38,7 @@ impl ValueSet {
 
     /// Create a top (all possible values) value set.
     #[must_use]
-    pub fn top() -> Self {
+    pub const fn top() -> Self {
         Self {
             values: BTreeSet::new(),
             is_top: true,
@@ -290,7 +290,7 @@ pub struct VtableCandidate {
 impl VtableCandidate {
     /// Create a new vtable candidate.
     #[must_use]
-    pub fn new(vtable_addr: u64, slot_index: u32, target_addr: u64) -> Self {
+    pub const fn new(vtable_addr: u64, slot_index: u32, target_addr: u64) -> Self {
         Self {
             vtable_addr,
             slot_index,
@@ -317,7 +317,7 @@ impl VtableCandidate {
 
     /// Set the confidence.
     #[must_use]
-    pub fn with_confidence(mut self, c: f64) -> Self {
+    pub const fn with_confidence(mut self, c: f64) -> Self {
         // `f64::clamp` propagates NaN; a NaN confidence would silently lose
         // every comparison it takes part in.
         self.confidence = if c.is_nan() { 0.0 } else { c.clamp(0.0, 1.0) };
@@ -398,7 +398,7 @@ pub struct IndirectTarget {
 impl IndirectTarget {
     /// Return the call/jump site as a typed [`rustre_core::address::Address`].
     #[must_use]
-    pub fn site_address(&self) -> Address {
+    pub const fn site_address(&self) -> Address {
         Address(self.site_addr)
     }
 
@@ -410,7 +410,7 @@ impl IndirectTarget {
 
     /// Create a new unresolved indirect target.
     #[must_use]
-    pub fn new(site_addr: u64, is_call: bool) -> Self {
+    pub const fn new(site_addr: u64, is_call: bool) -> Self {
         Self {
             site_addr,
             is_call,
@@ -438,13 +438,13 @@ impl IndirectTarget {
 
     /// Return `true` if there is exactly one resolved target.
     #[must_use]
-    pub fn is_monomorphic(&self) -> bool {
+    pub const fn is_monomorphic(&self) -> bool {
         self.targets.len() == 1
     }
 
     /// Return `true` if there are multiple resolved targets (polymorphic dispatch).
     #[must_use]
-    pub fn is_polymorphic(&self) -> bool {
+    pub const fn is_polymorphic(&self) -> bool {
         self.targets.len() > 1
     }
 }
@@ -528,7 +528,7 @@ pub struct RopChainAnalysis {
 impl RopChainAnalysis {
     /// Create a new empty ROP chain analysis.
     #[must_use]
-    pub fn new(chain_start: u64) -> Self {
+    pub const fn new(chain_start: u64) -> Self {
         Self {
             chain_start,
             gadgets: Vec::new(),
@@ -541,7 +541,7 @@ impl RopChainAnalysis {
 
     /// Return `true` if any gadget was found.
     #[must_use]
-    pub fn has_gadgets(&self) -> bool {
+    pub const fn has_gadgets(&self) -> bool {
         !self.gadgets.is_empty()
     }
 }
@@ -996,7 +996,7 @@ impl IndirectTargetResolver {
 
     /// Return all resolved targets.
     #[must_use]
-    pub fn results(&self) -> &HashMap<u64, IndirectTarget> {
+    pub const fn results(&self) -> &HashMap<u64, IndirectTarget> {
         &self.results
     }
 

@@ -480,7 +480,7 @@ impl VirtualScrollView {
 
     /// Total rows needed to display all data.
     #[must_use]
-    pub fn total_rows(&self) -> u64 {
+    pub const fn total_rows(&self) -> u64 {
         self.state.total_rows()
     }
 

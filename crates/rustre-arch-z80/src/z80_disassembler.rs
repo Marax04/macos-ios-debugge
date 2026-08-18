@@ -53,11 +53,16 @@ impl Default for Z80DisasmConfig {
 }
 
 impl Z80DisasmConfig {
+    #[must_use]
     pub fn new() -> Self { Self::default() }
-    pub fn with_syntax(mut self, s: Z80Syntax) -> Self { self.syntax = s; self }
-    pub fn with_bytes(mut self, b: bool) -> Self { self.show_bytes = b; self }
-    pub fn with_address(mut self, a: bool) -> Self { self.show_address = a; self }
-    pub fn with_cycles(mut self, c: bool) -> Self { self.show_cycles = c; self }
+    #[must_use]
+    pub const fn with_syntax(mut self, s: Z80Syntax) -> Self { self.syntax = s; self }
+    #[must_use]
+    pub const fn with_bytes(mut self, b: bool) -> Self { self.show_bytes = b; self }
+    #[must_use]
+    pub const fn with_address(mut self, a: bool) -> Self { self.show_address = a; self }
+    #[must_use]
+    pub const fn with_cycles(mut self, c: bool) -> Self { self.show_cycles = c; self }
 }
 
 // ── Listing line ──────────────────────────────────────────────────────────────
@@ -85,10 +90,12 @@ pub struct DisasmLine {
 
 impl DisasmLine {
     /// Render to a single-line string using the embedded `text` field.
+    #[must_use]
     pub fn as_str(&self) -> &str { &self.text }
 
     /// True if this instruction ends control flow without a fallthrough.
-    pub fn is_unconditional_branch(&self) -> bool {
+    #[must_use]
+    pub const fn is_unconditional_branch(&self) -> bool {
         self.is_terminator
     }
 }
@@ -113,7 +120,7 @@ pub struct ListingLine {
 impl core::fmt::Display for ListingLine {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if let Some(lbl) = &self.label {
-            writeln!(f, "{}:", lbl)?;
+            writeln!(f, "{lbl}:")?;
         }
         write!(f, "{}", self.line)
     }
@@ -128,20 +135,24 @@ pub struct Z80Disassembler {
 }
 
 impl Z80Disassembler {
+    #[must_use]
     pub fn new(config: Z80DisasmConfig) -> Self {
         Z80Disassembler { decoder: Z80Decoder::new(), config }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self { Self::new(Z80DisasmConfig::default()) }
 
     /// Disassemble a single instruction at virtual address `pc`.
     /// Returns `None` if bytes is empty or truncated.
+    #[must_use]
     pub fn disasm_one(&self, pc: u16, bytes: &[u8]) -> Option<DisasmLine> {
         let instr = self.decoder.decode(pc, bytes)?;
         Some(self.format_instr(pc, &instr, bytes))
     }
 
     /// Disassemble `max_instrs` instructions starting at `pc`.
+    #[must_use]
     pub fn disasm_n(&self, pc: u16, bytes: &[u8], max_instrs: usize) -> Vec<DisasmLine> {
         let cap = max_instrs.min(bytes.len() + 1);
         let mut out = Vec::with_capacity(cap);
@@ -166,11 +177,13 @@ impl Z80Disassembler {
     }
 
     /// Disassemble all bytes until end of slice.
+    #[must_use]
     pub fn disasm_all(&self, pc: u16, bytes: &[u8]) -> Vec<DisasmLine> {
         self.disasm_n(pc, bytes, usize::MAX)
     }
 
     /// Build a listing with optional auto-labels for branch targets.
+    #[must_use]
     pub fn listing(&self, pc: u16, bytes: &[u8]) -> Vec<ListingLine> {
         let lines = self.disasm_all(pc, bytes);
         // Collect all targets to create labels
@@ -260,16 +273,16 @@ impl Z80Disassembler {
             }
             _ => match self.config.syntax {
                 Z80Syntax::Intel => format_op_intel(op),
-                _ => format!("{}", op),
+                _ => format!("{op}"),
             }
         }
     }
 
     fn format_addr(&self, addr: u16) -> String {
         match self.config.syntax {
-            Z80Syntax::Intel => format!("{:04X}H", addr),
-            Z80Syntax::Gas   => format!("0x{:04x}", addr),
-            Z80Syntax::Zilog => format!("0x{:04x}", addr),
+            Z80Syntax::Intel => format!("{addr:04X}H"),
+            Z80Syntax::Gas   => format!("0x{addr:04x}"),
+            Z80Syntax::Zilog => format!("0x{addr:04x}"),
         }
     }
 
@@ -282,7 +295,7 @@ impl Z80Disassembler {
         }
 
         if self.config.show_bytes {
-            let hex: String = raw.iter().map(|b| format!("{:02x} ", b)).collect();
+            let hex: String = raw.iter().map(|b| format!("{b:02x} ")).collect();
             let hex = format!("{:<width$}", hex, width = self.config.hex_column_width);
             s.push_str(&hex);
         }
@@ -296,7 +309,7 @@ impl Z80Disassembler {
         }
 
         if self.config.show_cycles && cycles > 0 {
-            s.push_str(&format!("  ; {}T", cycles));
+            s.push_str(&format!("  ; {cycles}T"));
         }
 
         s
@@ -305,7 +318,7 @@ impl Z80Disassembler {
     fn make_invalid(&self, pc: u16, byte: u8) -> DisasmLine {
         let raw = vec![byte];
         let mnemonic = self.format_mnemonic("DB");
-        let operands = format!("0x{:02x}", byte);
+        let operands = format!("0x{byte:02x}");
         let text = self.build_text(pc, &raw, &mnemonic, &operands, None, 0);
         DisasmLine {
             address: pc,
@@ -324,13 +337,13 @@ impl Z80Disassembler {
 
 fn format_op_intel(op: &Z80Operand) -> String {
     match op {
-        Z80Operand::Imm8(v)    => format!("{:02X}H", v),
-        Z80Operand::Imm16(v)   => format!("{:04X}H", v),
-        Z80Operand::MemNN(n)   => format!("({:04X}H)", n),
-        Z80Operand::PortImm(p) => format!("({:02X}H)", p),
-        Z80Operand::MemIXd(d)  => format!("(IX{:+02X}H)", d),
-        Z80Operand::MemIYd(d)  => format!("(IY{:+02X}H)", d),
-        _ => format!("{}", op),
+        Z80Operand::Imm8(v)    => format!("{v:02X}H"),
+        Z80Operand::Imm16(v)   => format!("{v:04X}H"),
+        Z80Operand::MemNN(n)   => format!("({n:04X}H)"),
+        Z80Operand::PortImm(p) => format!("({p:02X}H)"),
+        Z80Operand::MemIXd(d)  => format!("(IX{d:+02X}H)"),
+        Z80Operand::MemIYd(d)  => format!("(IY{d:+02X}H)"),
+        _ => format!("{op}"),
     }
 }
 

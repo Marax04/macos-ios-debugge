@@ -198,7 +198,7 @@ pub struct PatchEntry {
 impl PatchEntry {
     /// Create a new `PatchEntry`.
     #[must_use]
-    pub fn new(
+    pub const fn new(
         offset: usize,
         original: Vec<u8>,
         patch: PatchBytes,
@@ -236,7 +236,7 @@ impl PatchEntry {
 
     /// Return the number of bytes changed by this patch.
     #[must_use]
-    pub fn byte_count(&self) -> usize {
+    pub const fn byte_count(&self) -> usize {
         self.patch.bytes.len()
     }
 }
@@ -414,7 +414,7 @@ impl AntiDebugPatcher {
 
     /// Set minimum confidence threshold for patches.
     #[must_use]
-    pub fn with_min_confidence(mut self, threshold: u8) -> Self {
+    pub const fn with_min_confidence(mut self, threshold: u8) -> Self {
         self.min_confidence = threshold;
         self
     }
@@ -529,7 +529,7 @@ impl AntiDebugPatcher {
 
     /// Return the number of registered patterns.
     #[must_use]
-    pub fn pattern_count(&self) -> usize {
+    pub const fn pattern_count(&self) -> usize {
         self.patterns.len()
     }
 

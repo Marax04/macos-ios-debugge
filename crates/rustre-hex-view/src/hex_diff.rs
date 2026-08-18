@@ -290,7 +290,7 @@ impl HexDiff {
 
     /// Return `true` if the two buffers are identical.
     #[must_use]
-    pub fn is_identical(&self) -> bool {
+    pub const fn is_identical(&self) -> bool {
         self.summary.is_identical()
     }
 

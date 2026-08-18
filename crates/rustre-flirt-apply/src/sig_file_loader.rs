@@ -99,7 +99,7 @@ impl SigHeader {
     /// Total header length in bytes, i.e. the offset at which the pattern trie
     /// starts: the fixed fields plus the library name.
     #[must_use]
-    pub fn header_len(&self) -> usize {
+    pub const fn header_len(&self) -> usize {
         Self::OFF_NAME + self.lib_name.len()
     }
 

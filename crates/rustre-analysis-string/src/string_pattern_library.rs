@@ -99,9 +99,11 @@ impl PatternStats {
 pub struct StringPatternLibrary;
 
 impl StringPatternLibrary {
-    pub fn new() -> Self { Self }
+    #[must_use]
+    pub const fn new() -> Self { Self }
 
     /// Classify a single string and return all matching [`PatternMatch`]es.
+    #[must_use]
     pub fn classify_string(&self, s: &str) -> Vec<PatternMatch> {
         let mut results = Vec::new();
         self.find_urls(s, &mut results);
@@ -128,6 +130,7 @@ impl StringPatternLibrary {
     }
 
     /// Classify all strings and collect [`PatternStats`].
+    #[must_use]
     pub fn classify_all(&self, strings: &[&str]) -> (Vec<Vec<PatternMatch>>, PatternStats) {
         let mut stats = PatternStats { total_strings: strings.len(), ..Default::default() };
         let results: Vec<Vec<PatternMatch>> = strings.iter().map(|s| {

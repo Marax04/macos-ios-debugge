@@ -22,25 +22,31 @@ use crate::vtable_finder::{Addr, VtableCandidate};
 pub struct SlotSignature(Vec<Addr>);
 
 impl SlotSignature {
-    pub fn new(slots: Vec<Addr>) -> Self {
+    #[must_use]
+    pub const fn new(slots: Vec<Addr>) -> Self {
         Self(slots)
     }
 
-    pub fn len(&self) -> usize { self.0.len() }
-    pub fn is_empty(&self) -> bool { self.0.is_empty() }
+    #[must_use]
+    pub const fn len(&self) -> usize { self.0.len() }
+    #[must_use]
+    pub const fn is_empty(&self) -> bool { self.0.is_empty() }
+    #[must_use]
     pub fn slots(&self) -> &[Addr] { &self.0 }
 
     /// Longest common prefix length, ignoring overrides (treats any differing
     /// address at the same index as an *override* rather than unrelated).
+    #[must_use]
     pub fn lcp_with_overrides(&self, other: &Self) -> usize {
         self.0.iter().zip(other.0.iter()).count() // all shared indices are "related"
     }
 
     /// Returns true if `self` is likely a base class of `other`:
     ///   * `other` has at least as many slots.
-    ///   * For every slot index i < self.len(), either other[i] == self[i]
+    ///   * For every slot index i < `self.len()`, either other[i] == self[i]
     ///     (exact match) or other[i] is a plausible override (different address
     ///     in the same code region — we accept any non-zero address here).
+    #[must_use]
     pub fn is_possible_base_of(&self, other: &Self) -> bool {
         if self.len() == 0 || other.len() < self.len() { return false; }
         if self.len() == other.len() && self == other { return false; } // identical → same class
@@ -53,6 +59,7 @@ impl SlotSignature {
     }
 
     /// Count slots that differ between two signatures of the same length.
+    #[must_use]
     pub fn override_count(&self, other: &Self) -> usize {
         self.0.iter().zip(other.0.iter()).filter(|(a, b)| a != b).count()
     }
@@ -99,10 +106,14 @@ pub struct ClassNode {
 }
 
 impl ClassNode {
-    pub fn slot_count(&self) -> usize { self.slots.len() }
+    #[must_use]
+    pub const fn slot_count(&self) -> usize { self.slots.len() }
+    #[must_use]
     pub fn override_count(&self) -> usize { self.slots.iter().filter(|s| s.is_override).count() }
-    pub fn is_leaf(&self) -> bool { self.derived.is_empty() }
-    pub fn is_root(&self) -> bool { self.bases.is_empty() }
+    #[must_use]
+    pub const fn is_leaf(&self) -> bool { self.derived.is_empty() }
+    #[must_use]
+    pub const fn is_root(&self) -> bool { self.bases.is_empty() }
 }
 
 // ─── Class relation ───────────────────────────────────────────────────────────
@@ -128,13 +139,17 @@ pub struct ReconstructedHierarchy {
 }
 
 impl ReconstructedHierarchy {
-    pub fn class_count(&self) -> usize { self.classes.len() }
-    pub fn relation_count(&self) -> usize { self.relations.len() }
+    #[must_use]
+    pub const fn class_count(&self) -> usize { self.classes.len() }
+    #[must_use]
+    pub const fn relation_count(&self) -> usize { self.relations.len() }
 
+    #[must_use]
     pub fn get_class(&self, id: usize) -> Option<&ClassNode> {
         self.classes.get(id)
     }
 
+    #[must_use]
     pub fn depth_of(&self, id: usize) -> usize {
         let mut memo: HashMap<usize, usize> = HashMap::new();
         self.depth_of_memo(id, &mut memo)
@@ -146,7 +161,7 @@ impl ReconstructedHierarchy {
     /// depth limit. That bound stops runaway recursion on a cycle but does
     /// nothing about *branching*: a diamond hierarchy (each class deriving from
     /// its two predecessors) re-explored every shared base, costing O(2^k).
-    /// Adversarial RTTI is untrusted input, so that was a cheap DoS. Memoizing
+    /// Adversarial RTTI is untrusted input, so that was a cheap `DoS`. Memoizing
     /// makes it O(V+E); `on_stack` handles cycles without recursing into them.
     fn depth_of_memo(&self, start: usize, memo: &mut HashMap<usize, usize>) -> usize {
         enum Frame {
@@ -194,6 +209,7 @@ impl ReconstructedHierarchy {
         memo.get(&start).copied().unwrap_or(0)
     }
 
+    #[must_use]
     pub fn max_depth(&self) -> usize {
         // Share one memo table across all starts: O(V+E) for the whole graph
         // instead of O(V) independent walks.
@@ -205,6 +221,7 @@ impl ReconstructedHierarchy {
     }
 
     /// Collect all descendant IDs (BFS).
+    #[must_use]
     pub fn descendants_of(&self, id: usize) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut queue = std::collections::VecDeque::new();
@@ -223,6 +240,7 @@ impl ReconstructedHierarchy {
     }
 
     /// Collect all ancestor IDs (BFS upward).
+    #[must_use]
     pub fn ancestors_of(&self, id: usize) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut queue = std::collections::VecDeque::new();
@@ -270,15 +288,18 @@ pub struct VtableReconstructor {
 }
 
 impl VtableReconstructor {
-    pub fn new(config: ReconstructorConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: ReconstructorConfig) -> Self {
         Self { config }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ReconstructorConfig::default())
     }
 
     /// Reconstruct the class hierarchy from a list of vtable candidates.
+    #[must_use]
     pub fn reconstruct(&self, candidates: &[VtableCandidate]) -> ReconstructedHierarchy {
         // Build class nodes from candidates.
         let mut classes: Vec<ClassNode> = candidates.iter().enumerate().map(|(id, c)| {
@@ -392,6 +413,7 @@ impl VtableReconstructor {
 // ─── Merge vtable sets across multiple binaries ───────────────────────────────
 
 /// Merge hierarchies from two binaries, keying on class name where available.
+#[must_use]
 pub fn merge_hierarchies(
     a: &ReconstructedHierarchy,
     b: &ReconstructedHierarchy,

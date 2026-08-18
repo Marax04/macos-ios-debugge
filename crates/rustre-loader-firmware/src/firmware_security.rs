@@ -71,7 +71,7 @@ impl FirmwareFinding {
 
     /// Attach a byte offset.
     #[must_use]
-    pub fn with_offset(mut self, offset: u64) -> Self {
+    pub const fn with_offset(mut self, offset: u64) -> Self {
         self.offset = Some(offset);
         self
     }
@@ -164,7 +164,7 @@ impl HardcodedCredentials {
                     self.findings.push(
                         FirmwareFinding::new(
                             "hardcoded_credentials",
-                            format!("hardcoded {} found", kind),
+                            format!("hardcoded {kind} found"),
                             *risk,
                         )
                         .with_offset(abs as u64)
@@ -186,7 +186,7 @@ impl HardcodedCredentials {
 
     /// Return `true` if any credential was found.
     #[must_use]
-    pub fn has_credentials(&self) -> bool {
+    pub const fn has_credentials(&self) -> bool {
         !self.matches.is_empty()
     }
 
@@ -393,7 +393,7 @@ impl DebugInterface {
                     self.findings.push(
                         FirmwareFinding::new(
                             "debug_interface",
-                            format!("debug interface exposed: {}", iface_type),
+                            format!("debug interface exposed: {iface_type}"),
                             *risk,
                         )
                         .with_offset(abs as u64),
@@ -695,13 +695,13 @@ pub struct FirmwareStringExtractor {
 impl FirmwareStringExtractor {
     /// Create an extractor with a minimum length of 4.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { min_length: 4 }
     }
 
     /// Set the minimum string length.
     #[must_use]
-    pub fn with_min_length(mut self, len: usize) -> Self {
+    pub const fn with_min_length(mut self, len: usize) -> Self {
         self.min_length = len;
         self
     }

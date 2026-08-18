@@ -458,18 +458,34 @@ impl VmliftRunPassTool {
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "vmlift_run_pass".to_string(),
-            description: "Execute the VMLIFT deobfuscation pass smoke test.".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            description: "Lift VM bytecode and return the pseudo-IL it produces."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "bytes":     {"type": "array", "items": {"type": "integer"}, "description": "VM bytecode to lift"},
+                    "bytes_hex": {"type": "string", "description": "Same, as a hex string"}
+                }
+            }),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for VmliftRunPassTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        rustre_deobf_vmlift::run_pass();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // ⚠ This declared no arguments, called `run_pass()` on a hardcoded
+        // `vec![0x07]`, DISCARDED the pseudo-IL it produced, and answered
+        // `{"ok": true}` — success reported for an analysis it never did on
+        // input it never received. The discard only became visible when a
+        // `#[must_use]` turned it into a compile error.
+        let bytes = crate::args_to_bytes_named(&args, "bytes")
+            .or_else(|_| crate::args_to_bytes_named(&args, "bytes_hex"))?;
+        let pseudo_il = rustre_deobf_vmlift::run_pass(&bytes);
         Ok(ToolResult::text(json!({
-            "ok": true,
+            "input_len": bytes.len(),
+            "line_count": pseudo_il.len(),
+            "pseudo_il": pseudo_il,
             "source": "rustre_deobf_vmlift::run_pass",
         }).to_string()))
     }

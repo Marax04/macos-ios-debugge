@@ -167,7 +167,7 @@ impl MemoryArena {
 
     /// Compute statistics.
     #[must_use]
-    pub fn stats(&self) -> ArenaStats {
+    pub const fn stats(&self) -> ArenaStats {
         ArenaStats {
             capacity: self.capacity(),
             used: self.cursor,

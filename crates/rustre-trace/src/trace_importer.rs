@@ -1,4 +1,4 @@
-//! Import traces produced by PIN, DynamoRIO, QEMU, and other dynamic
+//! Import traces produced by PIN, `DynamoRIO`, QEMU, and other dynamic
 //! instrumentation frameworks into a unified [`TraceSession`].
 //!
 //! Provides [`TraceImporter`], [`TraceFormat`], and [`ImportResult`].
@@ -49,15 +49,15 @@ pub enum TraceFormat {
     PinText,
     /// PIN's `itrace` binary format: little-endian `u64` addresses.
     PinBinary,
-    /// DynamoRIO's `drcov` text format used for coverage.
+    /// `DynamoRIO`'s `drcov` text format used for coverage.
     DrcovText,
-    /// DynamoRIO's `memtrace` format: `"<type> <addr> <size>"` per line.
+    /// `DynamoRIO`'s `memtrace` format: `"<type> <addr> <size>"` per line.
     DrMemtraceText,
     /// QEMU execution log (`-d in_asm`): lines starting with `"0x<addr>:"`.
     QemuInAsm,
     /// Intel PT (Processor Trace) sideband text as exported by `perf script`.
     IntelPtText,
-    /// RustRE's own JSON trace format.
+    /// `RustRE`'s own JSON trace format.
     RustreJson,
     /// A simple CSV format: `"<seq>,<addr>,<size>,<tid>,<ts_ns>"`.
     SimpleCsv,
@@ -237,7 +237,7 @@ pub struct ImportResult {
 impl ImportResult {
     /// Return the number of successfully imported events.
     #[must_use]
-    pub fn event_count(&self) -> usize {
+    pub const fn event_count(&self) -> usize {
         self.session.record_count()
     }
 
@@ -593,7 +593,7 @@ impl TraceImporter {
 
     // ── DynamoRIO drcov ───────────────────────────────────────────────────────
 
-    /// Import DynamoRIO `drcov` text format.
+    /// Import `DynamoRIO` `drcov` text format.
     ///
     /// The format has a header section followed by `"BB Table: <n> bbs"` and
     /// then one `"module[<idx>]: <start> <size>:<id>"` line per basic block.
@@ -711,7 +711,7 @@ impl TraceImporter {
 
     // ── DynamoRIO memtrace ────────────────────────────────────────────────────
 
-    /// Import DynamoRIO memtrace text: `"<type> <addr> <size>"`.
+    /// Import `DynamoRIO` memtrace text: `"<type> <addr> <size>"`.
     fn import_dr_memtrace(
         data: &[u8],
         source_path: &Path,
@@ -872,7 +872,7 @@ impl TraceImporter {
 
     // ── RustRE JSON ───────────────────────────────────────────────────────────
 
-    /// Import a RustRE JSON-serialized [`crate::Trace`].
+    /// Import a `RustRE` JSON-serialized [`crate::Trace`].
     fn import_rustre_json(
         data: &[u8],
         source_path: &Path,

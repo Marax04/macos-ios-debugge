@@ -82,7 +82,7 @@ pub fn find_runtime_function(table: &[RuntimeFunction], rva: u32) -> Option<&Run
 pub struct ParsedUnwindInfo {
     /// The decoded header/flags view.
     pub info: UnwindInfo,
-    /// UNWIND_INFO version (low 3 bits of the first byte; 1 or 2).
+    /// `UNWIND_INFO` version (low 3 bits of the first byte; 1 or 2).
     pub version: u8,
     /// Frame register number (0 = none).
     pub frame_register: u8,

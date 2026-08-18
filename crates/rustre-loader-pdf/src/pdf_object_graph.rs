@@ -126,7 +126,7 @@ pub struct GraphNode {
 impl GraphNode {
     /// Create a new graph node.
     #[must_use]
-    pub fn new(obj_ref: ObjectRef, obj_type: ObjectType, file_offset: u64) -> Self {
+    pub const fn new(obj_ref: ObjectRef, obj_type: ObjectType, file_offset: u64) -> Self {
         Self {
             obj_ref,
             obj_type,
@@ -240,7 +240,7 @@ impl XRefTable {
         self.entries.iter().filter(|e| e.from_incremental).collect()
     }
 
-    /// Count duplicate entries (same obj_num appearing more than once).
+    /// Count duplicate entries (same `obj_num` appearing more than once).
     #[must_use]
     pub fn duplicate_count(&self) -> usize {
         let mut seen: HashMap<u32, usize> = HashMap::new();
@@ -271,7 +271,7 @@ pub struct IncrementalUpdate {
 impl IncrementalUpdate {
     /// Create a new incremental update record.
     #[must_use]
-    pub fn new(index: u32, xref_offset: u64, modified_objects: Vec<u32>) -> Self {
+    pub const fn new(index: u32, xref_offset: u64, modified_objects: Vec<u32>) -> Self {
         Self {
             index,
             xref_offset,
@@ -322,7 +322,7 @@ pub struct GraphAnalysis {
 impl GraphAnalysis {
     /// Returns true if the document contains suspicious elements.
     #[must_use]
-    pub fn is_suspicious(&self) -> bool {
+    pub const fn is_suspicious(&self) -> bool {
         self.risk_score >= 30 || !self.xref_anomalies.is_empty()
     }
 }
@@ -704,7 +704,7 @@ pub struct PdfObjectGraphBuilder;
 impl PdfObjectGraphBuilder {
     /// Create a new builder.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 

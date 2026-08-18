@@ -28,12 +28,14 @@ impl Insn {
         }
     }
 
+    #[must_use]
     pub fn with_operands(mut self, ops: Vec<Operand>) -> Self {
         self.operands = ops;
         self
     }
 
-    pub fn with_size(mut self, size: u8) -> Self {
+    #[must_use]
+    pub const fn with_size(mut self, size: u8) -> Self {
         self.size = size;
         self
     }
@@ -76,7 +78,7 @@ impl fmt::Display for Operand {
                 scale,
                 disp,
             } => {
-                write!(f, "[{:?}+{:?}*{disp}+{scale}]", base, index)
+                write!(f, "[{base:?}+{index:?}*{disp}+{scale}]")
             }
             Self::Label(l) => f.write_str(l),
             Self::Wildcard => f.write_str("_"),
@@ -99,6 +101,7 @@ pub struct InstructionNormalizer {
 }
 
 impl InstructionNormalizer {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             abstract_immediates: true,
@@ -214,6 +217,7 @@ const PRIMES: &[u64] = &[
 ];
 
 impl PrimeHashInsn {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             mnemonic_primes: HashMap::new(),
@@ -270,6 +274,7 @@ pub struct WildcardMatcher;
 
 impl WildcardMatcher {
     /// Match a pattern instruction against a concrete instruction.
+    #[must_use]
     pub fn match_insn(pattern: &Insn, concrete: &Insn) -> bool {
         // Mnemonic match: "_" is a wildcard that matches any mnemonic
         let mnem_ok =
@@ -325,6 +330,7 @@ impl WildcardMatcher {
     }
 
     /// Match a sequence of pattern instructions against a window of concrete instructions.
+    #[must_use]
     pub fn match_sequence(pattern: &[Insn], concrete: &[Insn]) -> Option<usize> {
         if pattern.len() > concrete.len() {
             return None;
@@ -364,6 +370,7 @@ pub enum InsnEdit {
 }
 
 impl InsnEdit {
+    #[must_use]
     pub fn cost(&self) -> u32 {
         match self {
             Self::Insert { .. } => 1,
@@ -379,16 +386,20 @@ impl InsnEdit {
         }
     }
 
-    pub fn is_insert(&self) -> bool {
+    #[must_use]
+    pub const fn is_insert(&self) -> bool {
         matches!(self, Self::Insert { .. })
     }
-    pub fn is_delete(&self) -> bool {
+    #[must_use]
+    pub const fn is_delete(&self) -> bool {
         matches!(self, Self::Delete { .. })
     }
-    pub fn is_replace(&self) -> bool {
+    #[must_use]
+    pub const fn is_replace(&self) -> bool {
         matches!(self, Self::Replace { .. })
     }
-    pub fn is_move(&self) -> bool {
+    #[must_use]
+    pub const fn is_move(&self) -> bool {
         matches!(self, Self::Move { .. })
     }
 }
@@ -400,6 +411,7 @@ pub struct InsnSimilarity;
 
 impl InsnSimilarity {
     /// Mnemonic-only similarity (1.0 if identical, 0.0 if entirely different).
+    #[must_use]
     pub fn mnemonic_similarity(a: &Insn, b: &Insn) -> f64 {
         if a.mnemonic.eq_ignore_ascii_case(&b.mnemonic) {
             1.0
@@ -409,6 +421,7 @@ impl InsnSimilarity {
     }
 
     /// Full structural similarity including operands (0.0–1.0).
+    #[must_use]
     pub fn structural_similarity(a: &Insn, b: &Insn) -> f64 {
         let mnem = if a.mnemonic.eq_ignore_ascii_case(&b.mnemonic) {
             1.0
@@ -434,6 +447,7 @@ impl InsnSimilarity {
     }
 
     /// Levenshtein edit distance between two instruction sequences.
+    #[must_use]
     pub fn edit_distance(a: &[Insn], b: &[Insn]) -> usize {
         let m = a.len();
         let n = b.len();
@@ -459,7 +473,8 @@ impl InsnSimilarity {
         dp[m][n]
     }
 
-    /// Sequence similarity as 1 - (edit_distance / max_len).
+    /// Sequence similarity as 1 - (`edit_distance` / `max_len`).
+    #[must_use]
     pub fn sequence_similarity(a: &[Insn], b: &[Insn]) -> f64 {
         let max_len = a.len().max(b.len());
         if max_len == 0 {
@@ -491,6 +506,7 @@ pub struct AlignedPair {
 
 impl DiffAlignment {
     /// Compute instruction-level alignment between two sequences.
+    #[must_use]
     pub fn compute(old: &[Insn], new: &[Insn]) -> Self {
         let ed = InsnSimilarity::edit_distance(old, new);
         let sim = InsnSimilarity::sequence_similarity(old, new);
@@ -574,15 +590,18 @@ impl DiffAlignment {
         }
     }
 
+    #[must_use]
     pub fn changed_count(&self) -> usize {
         self.aligned_pairs.iter().filter(|p| !p.is_match).count()
     }
 
+    #[must_use]
     pub fn matched_count(&self) -> usize {
         self.aligned_pairs.iter().filter(|p| p.is_match).count()
     }
 
     /// Generate simple edit script from alignment.
+    #[must_use]
     pub fn to_edit_script(&self) -> Vec<InsnEdit> {
         let mut edits = Vec::new();
         for pair in &self.aligned_pairs {
@@ -648,14 +667,17 @@ impl InstructionDiff {
         }
     }
 
-    pub fn similarity(&self) -> f64 {
+    #[must_use]
+    pub const fn similarity(&self) -> f64 {
         self.alignment.similarity
     }
 
-    pub fn is_identical(&self) -> bool {
+    #[must_use]
+    pub const fn is_identical(&self) -> bool {
         self.hash_match
     }
 
+    #[must_use]
     pub fn edit_script(&self) -> Vec<InsnEdit> {
         self.alignment.to_edit_script()
     }

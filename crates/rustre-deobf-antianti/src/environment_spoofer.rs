@@ -46,7 +46,7 @@ pub enum SpoofTarget {
 impl SpoofTarget {
     /// Human-readable name.
     #[must_use]
-    pub fn display_name(self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
             Self::PebBeingDebugged => "PEB.BeingDebugged",
             Self::NtGlobalFlag => "PEB.NtGlobalFlag",
@@ -156,7 +156,7 @@ pub struct EnvironmentSpoofer {
 
 impl EnvironmentSpoofer {
     #[must_use]
-    pub fn new(config: SpooferConfig) -> Self {
+    pub const fn new(config: SpooferConfig) -> Self {
         Self { config }
     }
 

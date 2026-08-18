@@ -55,7 +55,7 @@ pub struct BiosCallRecord {
 /// Each entry is a 3-byte JMP instruction. Function 0 = BOOT, 1 = WBOOT, —¦
 ///
 /// The BIOS base is typically at `BIOS_BASE = CCP_BASE + 0x800`.
-/// A JP (BIOS_BASE + function * 3) is the standard call pattern.
+/// A JP (`BIOS_BASE` + function * 3) is the standard call pattern.
 #[derive(Debug, Clone)]
 pub struct CpMBiosCall {
     /// BIOS base address (default 0xE400 for standard 64K CP/M).
@@ -91,7 +91,7 @@ impl CpMBiosCall {
 
     /// Check whether `target` is a BIOS entry point jump.
     #[must_use]
-    pub fn is_bios_jump(&self, target: u64) -> Option<u8> {
+    pub const fn is_bios_jump(&self, target: u64) -> Option<u8> {
         if target < self.bios_base {
             return None;
         }
@@ -131,7 +131,7 @@ impl CpMBiosCall {
 
     /// Whether the program uses any BIOS calls.
     #[must_use]
-    pub fn has_bios_calls(&self) -> bool {
+    pub const fn has_bios_calls(&self) -> bool {
         !self.calls.is_empty()
     }
 
@@ -265,7 +265,7 @@ impl Z80BdosCall {
 
     /// Total BDOS call count.
     #[must_use]
-    pub fn total_calls(&self) -> usize {
+    pub const fn total_calls(&self) -> usize {
         self.calls.len()
     }
 }
@@ -366,7 +366,7 @@ pub enum SpectrumPort {
 
 impl SpectrumPort {
     #[must_use]
-    pub fn from_port(port: u8) -> Self {
+    pub const fn from_port(port: u8) -> Self {
         match port {
             0xFE => Self::Ula,
             0x1F => Self::Kempston,
@@ -378,9 +378,9 @@ impl SpectrumPort {
 /// ZX Spectrum pattern detector.
 #[derive(Debug, Clone, Default)]
 pub struct ZxSpectrumPatterns {
-    /// ROM calls detected: (address, rom_entry_address).
+    /// ROM calls detected: (address, `rom_entry_address`).
     pub rom_calls: Vec<(u64, u16)>,
-    /// I/O port accesses: (address, port, is_write).
+    /// I/O port accesses: (address, port, `is_write`).
     pub io_accesses: Vec<(u64, SpectrumPort, bool)>,
     /// ULA port read count.
     pub ula_reads: usize,
@@ -423,13 +423,13 @@ impl ZxSpectrumPatterns {
 
     /// Whether any ROM calls were detected.
     #[must_use]
-    pub fn has_rom_calls(&self) -> bool {
+    pub const fn has_rom_calls(&self) -> bool {
         !self.rom_calls.is_empty()
     }
 
     /// Whether ULA port is accessed (border/beeper/keyboard).
     #[must_use]
-    pub fn uses_ula(&self) -> bool {
+    pub const fn uses_ula(&self) -> bool {
         self.ula_reads > 0 || self.ula_writes > 0
     }
 
@@ -608,7 +608,7 @@ impl Z80SelfModifying {
 
     /// Whether any self-modification was detected.
     #[must_use]
-    pub fn has_self_mod(&self) -> bool {
+    pub const fn has_self_mod(&self) -> bool {
         !self.sites.is_empty()
     }
 

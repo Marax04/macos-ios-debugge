@@ -145,7 +145,7 @@ impl EvalResult {
 
     /// Return the type name string for error messages.
     #[must_use]
-    pub fn type_name(&self) -> &'static str {
+    pub const fn type_name(&self) -> &'static str {
         match self {
             Self::UInt(_) => "uint",
             Self::SInt(_) => "sint",
@@ -366,7 +366,7 @@ pub struct TemplateExprEval<'a> {
 impl<'a> TemplateExprEval<'a> {
     /// Create a new evaluator tied to `ctx`.
     #[must_use]
-    pub fn new(ctx: &'a EvalContext) -> Self {
+    pub const fn new(ctx: &'a EvalContext) -> Self {
         Self { ctx }
     }
 

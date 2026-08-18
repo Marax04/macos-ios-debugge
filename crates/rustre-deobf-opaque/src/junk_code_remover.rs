@@ -84,7 +84,7 @@ pub struct BasicBlock {
 impl BasicBlock {
     /// Create a new block.
     #[must_use]
-    pub fn new(start: u64) -> Self {
+    pub const fn new(start: u64) -> Self {
         Self {
             start,
             instructions: Vec::new(),
@@ -138,7 +138,7 @@ pub struct RemoveResult {
 impl RemoveResult {
     /// Returns `true` when no dead code was found.
     #[must_use]
-    pub fn is_clean(&self) -> bool {
+    pub const fn is_clean(&self) -> bool {
         self.dead_instructions.is_empty()
     }
 

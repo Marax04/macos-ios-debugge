@@ -52,7 +52,7 @@ impl Default for ValidationCriteria {
 impl ValidationCriteria {
     /// Lenient criteria — used when the input is very short or obscure.
     #[must_use]
-    pub fn lenient() -> Self {
+    pub const fn lenient() -> Self {
         Self {
             min_naturalness: 0.15,
             max_entropy: 7.9,
@@ -66,7 +66,7 @@ impl ValidationCriteria {
 
     /// Strict criteria — used when high confidence is required.
     #[must_use]
-    pub fn strict() -> Self {
+    pub const fn strict() -> Self {
         Self {
             min_naturalness: 0.60,
             max_entropy: 7.0,
@@ -236,7 +236,7 @@ pub struct HypothesisValidator {
 impl HypothesisValidator {
     /// Create a validator with the given criteria.
     #[must_use]
-    pub fn new(criteria: ValidationCriteria) -> Self {
+    pub const fn new(criteria: ValidationCriteria) -> Self {
         Self { criteria }
     }
 
@@ -514,7 +514,7 @@ impl BatchValidator {
 
     /// Create with given criteria.
     #[must_use]
-    pub fn with_criteria(criteria: ValidationCriteria) -> Self {
+    pub const fn with_criteria(criteria: ValidationCriteria) -> Self {
         Self { criteria }
     }
 

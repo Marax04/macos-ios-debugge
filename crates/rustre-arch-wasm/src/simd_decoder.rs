@@ -553,7 +553,7 @@ pub struct V128Constant {
 impl V128Constant {
     /// Decode from 16 raw bytes.
     #[must_use]
-    pub fn from_bytes(bytes: [u8; 16]) -> Self {
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self { bytes }
     }
 

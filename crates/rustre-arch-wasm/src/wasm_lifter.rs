@@ -301,7 +301,7 @@ pub enum LlilOp {
     Branch { label: u64 },
     /// Conditional branch to `label` if `condition`.
     BranchIf { condition: LlilExpr, label: u64 },
-    /// Indirect branch (br_table).
+    /// Indirect branch (`br_table`).
     BranchTable {
         index: LlilExpr,
         labels: Vec<u64>,
@@ -427,7 +427,7 @@ pub struct WasmLifter {
 impl WasmLifter {
     /// Create a new lifter with `opts`.
     #[must_use]
-    pub fn new(opts: LiftOptions) -> Self {
+    pub const fn new(opts: LiftOptions) -> Self {
         Self {
             opts,
             stack: Vec::new(),
@@ -484,7 +484,7 @@ impl WasmLifter {
         }
     }
 
-    fn alloc_label(&mut self) -> u64 {
+    const fn alloc_label(&mut self) -> u64 {
         let l = self.label_counter;
         self.label_counter += 1;
         l

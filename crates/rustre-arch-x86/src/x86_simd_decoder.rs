@@ -132,7 +132,7 @@ impl fmt::Display for VectorWidth {
 }
 
 /// Derive vector width from an iced-x86 [`Register`].
-fn vector_width_from_reg(reg: Register) -> VectorWidth {
+const fn vector_width_from_reg(reg: Register) -> VectorWidth {
     use iced_x86::Register as R;
     let r = reg as u32;
     if r >= R::XMM0 as u32 && r <= R::XMM31 as u32 {

@@ -71,7 +71,7 @@ pub enum RegData {
 impl RegData {
     /// Return the corresponding [`RegValueKind`] for this data.
     #[must_use]
-    pub fn kind(&self) -> RegValueKind {
+    pub const fn kind(&self) -> RegValueKind {
         match self {
             Self::None              => RegValueKind::None,
             Self::String(_)         => RegValueKind::Sz,
@@ -96,13 +96,13 @@ impl RegData {
 
     /// Return the u32 content if this is `REG_DWORD`.
     #[must_use]
-    pub fn as_dword(&self) -> Option<u32> {
+    pub const fn as_dword(&self) -> Option<u32> {
         match self { Self::DWord(v) | Self::DWordBigEndian(v) => Some(*v), _ => None }
     }
 
     /// Return the u64 content if this is `REG_QWORD`.
     #[must_use]
-    pub fn as_qword(&self) -> Option<u64> {
+    pub const fn as_qword(&self) -> Option<u64> {
         match self { Self::QWord(v) => Some(*v), _ => None }
     }
 
@@ -352,7 +352,7 @@ pub struct RegistryInterceptor {
 
 impl RegistryInterceptor {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { rules: Vec::new(), log: Vec::new() }
     }
 
@@ -712,7 +712,7 @@ pub struct RegistryDiff {
 
 impl RegistryDiff {
     #[must_use] 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.added.is_empty()
             && self.deleted.is_empty()
             && self.modified_keys.is_empty()

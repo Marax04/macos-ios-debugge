@@ -43,7 +43,8 @@ pub enum TrapType {
 }
 
 impl TrapType {
-    pub fn tt(self) -> u8 {
+    #[must_use]
+    pub const fn tt(self) -> u8 {
         match self {
             Self::Reset => 0x00,
             Self::InstructionAccess => 0x01,
@@ -85,7 +86,7 @@ impl std::fmt::Display for SparcError {
                 if *write { "write" } else { "read" }
             ),
             Self::Unimplemented(op) => write!(f, "unimplemented opcode 0x{op:08x}"),
-            Self::Trap(t) => write!(f, "trap {:?}", t),
+            Self::Trap(t) => write!(f, "trap {t:?}"),
         }
     }
 }
@@ -94,13 +95,13 @@ pub type SparcResult<T> = Result<T, SparcError>;
 
 // ── Memory ────────────────────────────────────────────────────────────────────
 
-/// Maximum number of mapped pages (prevents DoS via unbounded memory allocation
+/// Maximum number of mapped pages (prevents `DoS` via unbounded memory allocation
 /// when loading attacker-controlled binary data).
 pub const MAX_MAPPED_PAGES: usize = 4096; // 4096 × 4 KiB = 16 MiB
 
 /// Simple byte-addressed big-endian memory.
 ///
-/// Uses `ahash`-backed storage to resist hash-collision DoS attacks where the
+/// Uses `ahash`-backed storage to resist hash-collision `DoS` attacks where the
 /// adversary controls the addresses (and therefore the page-table keys).
 #[derive(Debug, Default)]
 pub struct SparcMemory {
@@ -108,14 +109,15 @@ pub struct SparcMemory {
 }
 
 impl SparcMemory {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    fn page_key(addr: u32) -> u32 {
+    const fn page_key(addr: u32) -> u32 {
         addr & !0xFFF
     }
-    fn page_off(addr: u32) -> usize {
+    const fn page_off(addr: u32) -> usize {
         (addr & 0xFFF) as usize
     }
 
@@ -140,6 +142,7 @@ impl SparcMemory {
         }
     }
 
+    #[must_use]
     pub fn read_byte(&self, addr: u32) -> Option<u8> {
         let page = self.pages.get(&Self::page_key(addr))?;
         Some(page[Self::page_off(addr)])
@@ -155,6 +158,7 @@ impl SparcMemory {
         }
     }
 
+    #[must_use]
     pub fn read_u32(&self, addr: u32) -> Option<u32> {
         let b0 = self.read_byte(addr)?;
         let b1 = self.read_byte(addr.wrapping_add(1))?;
@@ -220,6 +224,7 @@ impl Default for SparcState {
 
 impl SparcState {
     /// Create a reset CPU state (PSR.S=1, PSR.ET=0, CWP=0).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             globals: [0u32; GLOBAL_REGS],
@@ -242,6 +247,7 @@ impl SparcState {
     /// r0 = %g0 (always 0), r1..r7 = %g1..%g7,
     /// r8..r15 = %o0..%o7 (CWP window), r16..r23 = %l0..%l7,
     /// r24..r31 = %i0..%i7.
+    #[must_use]
     pub fn rget(&self, rn: u32) -> u32 {
         match rn {
             0 => 0,
@@ -267,20 +273,24 @@ impl SparcState {
 
     // ── PSR condition codes ───────────────────────────────────────────────────
 
-    pub fn icc_n(&self) -> bool {
+    #[must_use]
+    pub const fn icc_n(&self) -> bool {
         self.psr & PSR_ICC_N != 0
     }
-    pub fn icc_z(&self) -> bool {
+    #[must_use]
+    pub const fn icc_z(&self) -> bool {
         self.psr & PSR_ICC_Z != 0
     }
-    pub fn icc_v(&self) -> bool {
+    #[must_use]
+    pub const fn icc_v(&self) -> bool {
         self.psr & PSR_ICC_V != 0
     }
-    pub fn icc_c(&self) -> bool {
+    #[must_use]
+    pub const fn icc_c(&self) -> bool {
         self.psr & PSR_ICC_C != 0
     }
 
-    fn set_icc(&mut self, n: bool, z: bool, v: bool, c: bool) {
+    const fn set_icc(&mut self, n: bool, z: bool, v: bool, c: bool) {
         self.psr &= !(PSR_ICC_N | PSR_ICC_Z | PSR_ICC_V | PSR_ICC_C);
         if n {
             self.psr |= PSR_ICC_N;
@@ -315,7 +325,7 @@ impl SparcState {
     // ── Window management ─────────────────────────────────────────────────────
 
     /// SAVE: decrement CWP (mod NWINDOWS), check WIM.
-    pub fn do_save(&mut self) -> SparcResult<()> {
+    pub const fn do_save(&mut self) -> SparcResult<()> {
         let new_cwp = (self.cwp + NWINDOWS - 1) % NWINDOWS;
         if self.wim & (1 << new_cwp) != 0 {
             self.pending_trap = Some(TrapType::WindowOverflow);
@@ -329,7 +339,7 @@ impl SparcState {
     }
 
     /// RESTORE: increment CWP (mod NWINDOWS), check WIM.
-    pub fn do_restore(&mut self) -> SparcResult<()> {
+    pub const fn do_restore(&mut self) -> SparcResult<()> {
         let new_cwp = (self.cwp + 1) % NWINDOWS;
         if self.wim & (1 << new_cwp) != 0 {
             self.pending_trap = Some(TrapType::WindowUnderflow);

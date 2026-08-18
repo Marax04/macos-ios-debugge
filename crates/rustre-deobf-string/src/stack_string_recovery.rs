@@ -198,7 +198,7 @@ pub struct StackStringScanner {
 
 impl StackStringScanner {
     #[must_use]
-    pub fn new(config: StackScanConfig) -> Self {
+    pub const fn new(config: StackScanConfig) -> Self {
         Self { config }
     }
 
@@ -376,7 +376,7 @@ pub struct PseudocodeRewriter {
 
 impl PseudocodeRewriter {
     #[must_use]
-    pub fn new(patterns: Vec<StackStringPattern>) -> Self {
+    pub const fn new(patterns: Vec<StackStringPattern>) -> Self {
         Self { patterns }
     }
 

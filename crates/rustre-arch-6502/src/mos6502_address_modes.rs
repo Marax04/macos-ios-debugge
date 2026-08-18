@@ -274,7 +274,7 @@ impl EffectiveAddress {
 /// `pc` is the address of the *opcode* byte. For branch instructions the target
 /// is computed as `pc + instr_len + offset`, which matches real 6502 behaviour.
 ///
-/// Memory indirection (Indirect / IndirectX / IndirectY) cannot be resolved
+/// Memory indirection (Indirect / `IndirectX` / `IndirectY`) cannot be resolved
 /// without reading actual memory; those modes return [`EffectiveAddress::Memory`]
 /// with the *pointer address*, not the final target.  Callers that need the
 /// dereferenced value must read from the memory model themselves.

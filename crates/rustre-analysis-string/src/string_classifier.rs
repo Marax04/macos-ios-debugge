@@ -33,7 +33,7 @@ pub enum StringCategory {
 
 impl StringCategory {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             StringCategory::Url => "url",
             StringCategory::FilePath => "file_path",
@@ -429,6 +429,7 @@ impl StringClassifier {
         }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(ClassifierConfig::default())
     }
@@ -524,6 +525,7 @@ impl StringClassifier {
     }
 
     /// Return all results for a specific category.
+    #[must_use]
     pub fn filter_by_category<'a>(
         results: &'a [ClassifierResult],
         cat: StringCategory,
@@ -532,7 +534,7 @@ impl StringClassifier {
     }
 
     #[must_use]
-    pub fn stats(&self) -> &ClassifierStats {
+    pub const fn stats(&self) -> &ClassifierStats {
         &self.stats
     }
 }

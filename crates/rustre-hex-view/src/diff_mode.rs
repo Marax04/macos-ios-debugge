@@ -323,7 +323,7 @@ impl HexDiff {
 
     /// Returns `true` if both regions are identical.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.stats.is_identical()
     }
 }

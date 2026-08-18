@@ -278,7 +278,7 @@ pub fn run_pipeline_anyhow(
     if result.plaintext.is_none() {
         if let Some(failed) = result.trace.iter().find(|r| r.error.is_some()) {
             let msg = failed.error.as_deref().unwrap_or("unknown stage error");
-            return Err(anyhow::anyhow!("{}", msg))
+            return Err(anyhow::anyhow!("{msg}"))
                 .with_context(|| format!("pipeline stage '{}' failed", failed.stage_name));
         }
     }
@@ -644,6 +644,7 @@ fn decoding_improved(before: &[u8], after: &[u8]) -> bool {
         > crate::xor_string_decoder::score_plaintext(before)
 }
 
+#[must_use]
 pub fn auto_build_pipeline(data: &[u8], max_depth: usize) -> DeobfPipeline {
     let mut builder = PipelineBuilder::new();
     let mut current = data.to_vec();

@@ -73,13 +73,13 @@ pub struct NormalisedInstruction {
 impl NormalisedInstruction {
     /// Returns `true` if this is a call instruction (0xE8, 0xFF /2).
     #[must_use]
-    pub fn is_call(&self) -> bool {
+    pub const fn is_call(&self) -> bool {
         self.opcode == 0xE8 || (self.opcode == 0xFF && self.opcode2 == 0x02)
     }
 
     /// Returns `true` if this is an unconditional jump.
     #[must_use]
-    pub fn is_unconditional_jump(&self) -> bool {
+    pub const fn is_unconditional_jump(&self) -> bool {
         self.opcode == 0xEB || self.opcode == 0xE9 || (self.opcode == 0xFF && self.opcode2 == 0x04)
     }
 
@@ -92,7 +92,7 @@ impl NormalisedInstruction {
 
     /// Returns `true` for terminator instructions (RET, RETF, INT3, UD2).
     #[must_use]
-    pub fn is_terminator(&self) -> bool {
+    pub const fn is_terminator(&self) -> bool {
         matches!(self.opcode, 0xC3 | 0xCB | 0xCC | 0xCD | 0xCF)
             || (self.opcode == 0x0F && self.opcode2 == 0x0B)
     }
@@ -114,7 +114,7 @@ pub struct NormalisedBlock {
 impl NormalisedBlock {
     /// Returns the number of instructions.
     #[must_use]
-    pub fn instruction_count(&self) -> usize {
+    pub const fn instruction_count(&self) -> usize {
         self.instructions.len()
     }
 
@@ -169,7 +169,7 @@ impl BlockHash {
 
     /// Loose match: same mnemonic hash AND same instruction count.
     #[must_use]
-    pub fn loose_matches(&self, other: &Self) -> bool {
+    pub const fn loose_matches(&self, other: &Self) -> bool {
         self.mnemonic_hash == other.mnemonic_hash && self.instruction_count == other.instruction_count
     }
 }
@@ -194,7 +194,7 @@ impl Default for BasicBlockHasher {
 impl BasicBlockHasher {
     /// Create with default settings (Normalised, include terminators).
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { granularity: HashGranularity::Normalised, exclude_terminators: false }
     }
 
@@ -391,7 +391,7 @@ fn decode_linear(bytes: &[u8]) -> Vec<NormalisedInstruction> {
     out
 }
 
-/// Estimate bytes consumed by a ModRM byte + optional SIB + displacement.
+/// Estimate bytes consumed by a `ModRM` byte + optional SIB + displacement.
 fn modrm_size(bytes: &[u8], pos: usize) -> usize {
     if pos >= bytes.len() {
         return 0;
@@ -450,7 +450,7 @@ fn encode_and_hash(instrs: &[NormalisedInstruction], gran: HashGranularity) -> u
     h
 }
 
-fn fnv1a_update(h: &mut u64, byte: u8) {
+const fn fnv1a_update(h: &mut u64, byte: u8) {
     *h ^= byte as u64;
     *h = h.wrapping_mul(0x00000100000001B3);
 }

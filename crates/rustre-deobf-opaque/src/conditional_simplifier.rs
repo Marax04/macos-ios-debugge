@@ -67,13 +67,13 @@ pub enum SimplifyResult {
 impl SimplifyResult {
     /// Returns `true` if the branch was simplified.
     #[must_use]
-    pub fn is_simplified(&self) -> bool {
+    pub const fn is_simplified(&self) -> bool {
         matches!(self, Self::AlwaysTaken { .. } | Self::NeverTaken { .. })
     }
 
     /// Return the live branch target, if determined.
     #[must_use]
-    pub fn live_branch(&self) -> Option<u64> {
+    pub const fn live_branch(&self) -> Option<u64> {
         match self {
             Self::AlwaysTaken { dead_branch, .. } => Some(dead_branch.live_target),
             Self::NeverTaken { dead_branch, .. } => Some(dead_branch.live_target),
@@ -83,7 +83,7 @@ impl SimplifyResult {
 
     /// Return the dead branch target, if determined.
     #[must_use]
-    pub fn dead_target(&self) -> Option<u64> {
+    pub const fn dead_target(&self) -> Option<u64> {
         match self {
             Self::AlwaysTaken { dead_branch, .. } | Self::NeverTaken { dead_branch, .. } => {
                 Some(dead_branch.dead_target)
@@ -283,7 +283,7 @@ impl Default for ConditionalSimplifier {
 /// assert_eq!(live_branch(&b), Some(0x1100));
 /// ```
 #[must_use]
-pub fn live_branch(branch: &ConditionalBranch) -> Option<u64> {
+pub const fn live_branch(branch: &ConditionalBranch) -> Option<u64> {
     match branch.predicate {
         PredicateResult::AlwaysTrue => Some(branch.true_target),
         PredicateResult::AlwaysFalse => Some(branch.false_target),

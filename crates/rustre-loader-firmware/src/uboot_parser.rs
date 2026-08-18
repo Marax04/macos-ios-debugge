@@ -70,7 +70,7 @@ pub enum IhOs {
 
 impl IhOs {
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0 => Self::Invalid,
             1 => Self::OpenBsd,
@@ -102,7 +102,7 @@ impl IhOs {
     }
 
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Invalid => "invalid",
             Self::OpenBsd => "openbsd",
@@ -180,7 +180,7 @@ pub enum IhArch {
 
 impl IhArch {
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0 => Self::Invalid,
             1 => Self::Alpha,
@@ -214,7 +214,7 @@ impl IhArch {
     }
 
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Invalid => "invalid",
             Self::Alpha => "alpha",
@@ -282,7 +282,7 @@ pub enum IhType {
 
 impl IhType {
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0 => Self::Invalid,
             1 => Self::Standalone,
@@ -304,7 +304,7 @@ impl IhType {
     }
 
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Invalid => "invalid",
             Self::Standalone => "standalone",
@@ -352,7 +352,7 @@ pub enum IhComp {
 
 impl IhComp {
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0 => Self::None,
             1 => Self::Gzip,
@@ -366,7 +366,7 @@ impl IhComp {
     }
 
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Gzip => "gzip",
@@ -480,7 +480,7 @@ impl UBootLegacyHeader {
 
     /// Total image size: header + payload.
     #[must_use]
-    pub fn total_size(&self) -> usize {
+    pub const fn total_size(&self) -> usize {
         IH_HEADER_SIZE + self.ih_size as usize
     }
 }
@@ -929,13 +929,13 @@ impl UBootImage {
 
     /// Return `true` if this is a FIT image.
     #[must_use]
-    pub fn is_fit(&self) -> bool {
+    pub const fn is_fit(&self) -> bool {
         matches!(self, Self::Fit(_))
     }
 
     /// Return `true` if this is a legacy uImage.
     #[must_use]
-    pub fn is_legacy(&self) -> bool {
+    pub const fn is_legacy(&self) -> bool {
         matches!(self, Self::Legacy(_))
     }
 

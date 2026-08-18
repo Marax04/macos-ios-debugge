@@ -19,7 +19,7 @@ pub struct PdfParser {
 impl PdfParser {
     /// Construct a new `PdfParser` owning `data`.
     #[must_use]
-    pub fn new(data: Vec<u8>) -> Self {
+    pub const fn new(data: Vec<u8>) -> Self {
         Self { data, pos: 0 }
     }
 
@@ -33,7 +33,7 @@ impl PdfParser {
 
     /// Return `true` when the parser has consumed all bytes.
     #[must_use]
-    pub fn is_eof(&self) -> bool {
+    pub const fn is_eof(&self) -> bool {
         self.pos >= self.data.len()
     }
 
@@ -536,7 +536,7 @@ impl PdfParser {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /// Convert a hex ASCII byte to its nibble value.
-fn hex_byte(b: u8) -> u8 {
+const fn hex_byte(b: u8) -> u8 {
     match b {
         b'0'..=b'9' => b - b'0',
         b'a'..=b'f' => b - b'a' + 10,

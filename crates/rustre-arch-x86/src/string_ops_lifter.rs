@@ -93,7 +93,7 @@ impl RepeatPrefix {
 
     /// The counter register name for the configured address size.
     #[must_use]
-    pub fn counter_reg(addr_bits: u8) -> &'static str {
+    pub const fn counter_reg(addr_bits: u8) -> &'static str {
         match addr_bits {
             64 => "rcx",
             32 => "ecx",
@@ -123,7 +123,7 @@ pub struct RepeatController {
 impl RepeatController {
     /// Create a new controller.
     #[must_use]
-    pub fn new(addr_bits: u8, prefix: RepeatPrefix) -> Self {
+    pub const fn new(addr_bits: u8, prefix: RepeatPrefix) -> Self {
         Self { addr_bits, prefix }
     }
 
@@ -220,7 +220,7 @@ pub struct StringOpContext {
 impl StringOpContext {
     /// Create a context for the most common 64-bit case.
     #[must_use]
-    pub fn new_64() -> Self {
+    pub const fn new_64() -> Self {
         Self {
             addr_bits: 64,
             op_size: 8,
@@ -231,7 +231,7 @@ impl StringOpContext {
 
     /// Create a 32-bit context.
     #[must_use]
-    pub fn new_32() -> Self {
+    pub const fn new_32() -> Self {
         Self {
             addr_bits: 32,
             op_size: 4,
@@ -242,28 +242,28 @@ impl StringOpContext {
 
     /// Apply a REP prefix.
     #[must_use]
-    pub fn with_rep(mut self) -> Self {
+    pub const fn with_rep(mut self) -> Self {
         self.prefix = RepeatPrefix::Rep;
         self
     }
 
     /// Apply a REPNE prefix.
     #[must_use]
-    pub fn with_repne(mut self) -> Self {
+    pub const fn with_repne(mut self) -> Self {
         self.prefix = RepeatPrefix::Repne;
         self
     }
 
     /// Set the direction flag to down (STD).
     #[must_use]
-    pub fn std(mut self) -> Self {
+    pub const fn std(mut self) -> Self {
         self.df = DirectionFlag::Down;
         self
     }
 
     /// Source index register name.
     #[must_use]
-    pub fn rsi(&self) -> &'static str {
+    pub const fn rsi(&self) -> &'static str {
         match self.addr_bits {
             64 => "rsi",
             32 => "esi",
@@ -273,7 +273,7 @@ impl StringOpContext {
 
     /// Destination index register name.
     #[must_use]
-    pub fn rdi(&self) -> &'static str {
+    pub const fn rdi(&self) -> &'static str {
         match self.addr_bits {
             64 => "rdi",
             32 => "edi",
@@ -283,7 +283,7 @@ impl StringOpContext {
 
     /// The accumulator register name (for LODS / STOS / SCAS).
     #[must_use]
-    pub fn rax(&self) -> &'static str {
+    pub const fn rax(&self) -> &'static str {
         match (self.addr_bits, self.op_size) {
             (_, 1) => "al",
             (_, 2) => "ax",
@@ -305,7 +305,7 @@ pub struct StringOpLifter {
 impl StringOpLifter {
     /// Create a lifter with the given context.
     #[must_use]
-    pub fn new(ctx: StringOpContext) -> Self {
+    pub const fn new(ctx: StringOpContext) -> Self {
         Self { ctx }
     }
 

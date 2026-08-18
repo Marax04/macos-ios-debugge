@@ -47,13 +47,16 @@ pub struct ExceptionRegion {
 }
 
 impl ExceptionRegion {
-    pub fn contains_try(&self, offset: u32) -> bool {
+    #[must_use]
+    pub const fn contains_try(&self, offset: u32) -> bool {
         offset >= self.try_start && offset < self.try_end
     }
-    pub fn contains_handler(&self, offset: u32) -> bool {
+    #[must_use]
+    pub const fn contains_handler(&self, offset: u32) -> bool {
         offset >= self.handler_start && offset < self.handler_end
     }
-    pub fn overlaps_try(&self, other: &ExceptionRegion) -> bool {
+    #[must_use]
+    pub const fn overlaps_try(&self, other: &ExceptionRegion) -> bool {
         self.try_start < other.try_end && other.try_start < self.try_end
     }
 }
@@ -110,9 +113,11 @@ pub struct CilBlock {
 }
 
 impl CilBlock {
-    pub fn contains(&self, offset: u32) -> bool {
+    #[must_use]
+    pub const fn contains(&self, offset: u32) -> bool {
         offset >= self.start_offset && offset < self.end_offset
     }
+    #[must_use]
     pub fn last_instr(&self) -> Option<&DecodedCilInstr> {
         self.instrs.last()
     }
@@ -134,37 +139,43 @@ pub struct CilCfg {
     /// Immediate dominator of each block (block 0 dominates itself).
     #[serde(skip)]
     pub idoms: Vec<Option<usize>>,
-    /// Loop back-edges: (header_block, latch_block) pairs.
+    /// Loop back-edges: (`header_block`, `latch_block`) pairs.
     pub back_edges: Vec<(usize, usize)>,
     /// Natural loop bodies: for each back-edge, set of block indices in the loop.
     pub loop_bodies: Vec<HashSet<usize>>,
 }
 
 impl CilCfg {
+    #[must_use]
     pub fn entry_block(&self) -> Option<&CilBlock> {
         self.blocks.first()
     }
 
+    #[must_use]
     pub fn block_at(&self, offset: u32) -> Option<&CilBlock> {
         self.offset_to_block
             .get(&offset)
             .and_then(|&i| self.blocks.get(i))
     }
 
-    pub fn block_count(&self) -> usize {
+    #[must_use]
+    pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
+    #[must_use]
     pub fn edge_count(&self) -> usize {
         self.blocks.iter().map(|b| b.succs.len()).sum()
     }
 
     /// Blocks that are loop headers (have at least one back-edge targeting them).
+    #[must_use]
     pub fn loop_headers(&self) -> Vec<usize> {
         self.back_edges.iter().map(|(h, _)| *h).collect()
     }
 
     /// Returns all blocks dominated by `dominator` (including itself).
+    #[must_use]
     pub fn dominated_by(&self, dominator: usize) -> Vec<usize> {
         (0..self.blocks.len())
             .filter(|&b| self.dominates(dominator, b))
@@ -172,6 +183,7 @@ impl CilCfg {
     }
 
     /// True if `a` dominates `b` in the CFG.
+    #[must_use]
     pub fn dominates(&self, a: usize, b: usize) -> bool {
         let mut cur = b;
         loop {
@@ -186,11 +198,13 @@ impl CilCfg {
     }
 
     /// Number of distinct loops detected.
-    pub fn loop_count(&self) -> usize {
+    #[must_use]
+    pub const fn loop_count(&self) -> usize {
         self.loop_bodies.len()
     }
 
     /// Topological ordering of blocks (post-order reversed).
+    #[must_use]
     pub fn rpo(&self) -> Vec<usize> {
         let mut visited = vec![false; self.blocks.len()];
         let mut order = Vec::with_capacity(self.blocks.len());
@@ -234,7 +248,8 @@ pub struct CfgBuilder {
 }
 
 impl CfgBuilder {
-    pub fn new(instrs: Vec<DecodedCilInstr>, regions: Vec<ExceptionRegion>) -> Self {
+    #[must_use]
+    pub const fn new(instrs: Vec<DecodedCilInstr>, regions: Vec<ExceptionRegion>) -> Self {
         Self { instrs, regions }
     }
 
@@ -689,6 +704,7 @@ pub struct LivenessInfo {
 }
 
 impl LivenessInfo {
+    #[must_use]
     pub fn compute(cfg: &CilCfg, num_locals: u32) -> Self {
         let n = cfg.blocks.len();
         let mut live_in: Vec<HashSet<u32>> = vec![HashSet::new(); n];
@@ -760,6 +776,7 @@ pub struct CfgStats {
 }
 
 impl CfgStats {
+    #[must_use]
     pub fn from(cfg: &CilCfg) -> Self {
         let cyclomatic_complexity = cfg.edge_count() as i64 - cfg.block_count() as i64 + 2;
         let loop_header_offsets = cfg

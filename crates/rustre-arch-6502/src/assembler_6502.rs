@@ -1048,6 +1048,7 @@ impl TwoPassAssembler {
         (AddressingMode::Absolute, Some(op.to_owned()))
     }
 
+    #[must_use]
     pub fn instruction_size(instr: &Instruction) -> Option<u8> {
         Self::instruction_size_with_symbols(instr, None)
     }

@@ -1,8 +1,8 @@
 //! `intel_hex` — Intel HEX format parser.
 //!
 //! Implements full parsing of Intel HEX (`.hex`, `.ihex`) files including:
-//! - All six record types (Data, EndOfFile, ExtSegAddr, StartSegAddr,
-//!   ExtLinAddr, StartLinAddr)
+//! - All six record types (Data, `EndOfFile`, `ExtSegAddr`, `StartSegAddr`,
+//!   `ExtLinAddr`, `StartLinAddr`)
 //! - Checksum verification for every record
 //! - Reconstruction of a binary memory image (with configurable gap-fill byte)
 //! - Multi-region output for non-contiguous address maps
@@ -55,7 +55,7 @@ pub enum IhexType {
 impl IhexType {
     /// Map a raw byte to the corresponding [`IhexType`].
     #[must_use]
-    pub fn from_byte(b: u8) -> Self {
+    pub const fn from_byte(b: u8) -> Self {
         match b {
             0x00 => Self::Data,
             0x01 => Self::EndOfFile,
@@ -69,7 +69,7 @@ impl IhexType {
 
     /// Return the raw record type byte value.
     #[must_use]
-    pub fn to_byte(self) -> u8 {
+    pub const fn to_byte(self) -> u8 {
         match self {
             Self::Data => 0x00,
             Self::EndOfFile => 0x01,
@@ -83,7 +83,7 @@ impl IhexType {
 
     /// Return a short human-readable name.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Data => "DATA",
             Self::EndOfFile => "EOF",
@@ -263,7 +263,7 @@ pub struct MemRegion {
 
 impl MemRegion {
     #[must_use]
-    pub fn end_addr(&self) -> u64 {
+    pub const fn end_addr(&self) -> u64 {
         self.start_addr + self.data.len() as u64
     }
 
@@ -280,7 +280,7 @@ impl MemRegion {
 
     /// Size in bytes.
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub const fn size(&self) -> usize {
         self.data.len()
     }
 }
@@ -520,7 +520,7 @@ impl fmt::Display for IhexFile {
 /// Compute Intel HEX checksum for a record body (before appending the
 /// checksum byte itself).
 ///
-/// `body` must contain: [byte_count, addr_hi, addr_lo, record_type, data...].
+/// `body` must contain: [`byte_count`, `addr_hi`, `addr_lo`, `record_type`, data...].
 #[must_use]
 pub fn ihex_checksum(body: &[u8]) -> u8 {
     let sum: u8 = body.iter().fold(0u8, |acc, &b| acc.wrapping_add(b));
@@ -547,7 +547,7 @@ pub fn encode_to_ihex(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             upper as u8,
         ];
         let cs = ihex_checksum(&body);
-        out.push_str(&format!(":02000004{:04X}{:02X}\r\n", upper, cs,));
+        out.push_str(&format!(":02000004{upper:04X}{cs:02X}\r\n",));
     }
 
     // DATA records

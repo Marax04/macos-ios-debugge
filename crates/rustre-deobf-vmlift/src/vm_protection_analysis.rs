@@ -32,7 +32,7 @@ pub enum ObfuscationLevel {
 
 impl ObfuscationLevel {
     #[must_use]
-    pub fn score(self) -> u8 {
+    pub const fn score(self) -> u8 {
         match self {
             Self::None => 0,
             Self::Low => 25,
@@ -43,7 +43,7 @@ impl ObfuscationLevel {
     }
 
     #[must_use]
-    pub fn from_score(s: u8) -> Self {
+    pub const fn from_score(s: u8) -> Self {
         match s {
             0..=10 => Self::None,
             11..=35 => Self::Low,
@@ -99,12 +99,12 @@ impl ProtectedRegion {
     }
 
     #[must_use]
-    pub fn has_known_protector(&self) -> bool {
+    pub const fn has_known_protector(&self) -> bool {
         self.protector_name.is_some()
     }
 
     #[must_use]
-    pub fn native_size_estimate(&self) -> usize {
+    pub const fn native_size_estimate(&self) -> usize {
         // Rough heuristic: 3-5 native instructions per VM bytecode byte.
         self.bytecode_size * 4
     }
@@ -137,7 +137,7 @@ impl DeobfPriority {
     }
 
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Low => "LOW",
             Self::Medium => "MEDIUM",
@@ -263,12 +263,12 @@ impl VmProtectionSummary {
     }
 
     #[must_use]
-    pub fn region_count(&self) -> usize {
+    pub const fn region_count(&self) -> usize {
         self.protected_regions.len()
     }
 
     #[must_use]
-    pub fn is_vm_protected(&self) -> bool {
+    pub const fn is_vm_protected(&self) -> bool {
         !self.protected_regions.is_empty()
     }
 }

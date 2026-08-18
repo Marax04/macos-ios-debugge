@@ -97,7 +97,8 @@ pub enum SmtCmpOp {
 impl SmtExpr {
     // ── Constructors ──────────────────────────────────────────────────────────
 
-    pub fn constant(v: i64) -> Self {
+    #[must_use]
+    pub const fn constant(v: i64) -> Self {
         Self::Const(v)
     }
 
@@ -105,6 +106,7 @@ impl SmtExpr {
         Self::Var { name: name.into(), width }
     }
 
+    #[must_use]
     pub fn add(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::Add,
@@ -113,6 +115,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn sub(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::Sub,
@@ -121,6 +124,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn mul(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::Mul,
@@ -129,6 +133,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn and(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::And,
@@ -137,6 +142,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn or(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::Or,
@@ -145,6 +151,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn xor(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::BinOp {
             op: SmtBinOp::Xor,
@@ -153,6 +160,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn not(inner: SmtExpr) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Not,
@@ -160,6 +168,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn neg(inner: SmtExpr) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Neg,
@@ -167,6 +176,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn square(inner: SmtExpr) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Square,
@@ -174,6 +184,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn eq(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::Cmp {
             op: SmtCmpOp::Eq,
@@ -182,6 +193,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn ne(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::Cmp {
             op: SmtCmpOp::Ne,
@@ -190,6 +202,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn sge(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         // x ≥ rhs  →  NOT (x < rhs)
         Self::UnaryOp {
@@ -202,6 +215,7 @@ impl SmtExpr {
         }
     }
 
+    #[must_use]
     pub fn uge(lhs: SmtExpr, rhs: SmtExpr) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Not,
@@ -214,6 +228,7 @@ impl SmtExpr {
     }
 
     /// Return all free variable names in this expression.
+    #[must_use]
     pub fn free_vars(&self) -> Vec<(String, u8)> {
         let mut vars = Vec::new();
         self.collect_vars(&mut vars);
@@ -239,6 +254,7 @@ impl SmtExpr {
     }
 
     /// Evaluate the expression given a variable assignment.
+    #[must_use]
     pub fn eval(&self, env: &HashMap<String, i64>) -> Option<i64> {
         match self {
             Self::Const(v) => Some(*v),
@@ -261,7 +277,7 @@ impl SmtExpr {
     }
 }
 
-fn eval_binop(op: SmtBinOp, l: i64, r: i64) -> i64 {
+const fn eval_binop(op: SmtBinOp, l: i64, r: i64) -> i64 {
     match op {
         SmtBinOp::Add  => l.wrapping_add(r),
         SmtBinOp::Sub  => l.wrapping_sub(r),
@@ -279,7 +295,7 @@ fn eval_binop(op: SmtBinOp, l: i64, r: i64) -> i64 {
     }
 }
 
-fn eval_unary(op: SmtUnaryOp, v: i64) -> i64 {
+const fn eval_unary(op: SmtUnaryOp, v: i64) -> i64 {
     match op {
         SmtUnaryOp::Not    => !v,
         SmtUnaryOp::Neg    => v.wrapping_neg(),
@@ -316,13 +332,16 @@ pub enum SmtResult {
 }
 
 impl SmtResult {
-    pub fn is_sat(&self) -> bool {
+    #[must_use]
+    pub const fn is_sat(&self) -> bool {
         matches!(self, Self::Sat { .. })
     }
-    pub fn is_unsat(&self) -> bool {
+    #[must_use]
+    pub const fn is_unsat(&self) -> bool {
         matches!(self, Self::Unsat)
     }
-    pub fn is_unknown(&self) -> bool {
+    #[must_use]
+    pub const fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown { .. })
     }
 }
@@ -352,16 +371,19 @@ impl Default for SmtProver {
 }
 
 impl SmtProver {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_timeout(mut self, ms: u64) -> Self {
+    #[must_use]
+    pub const fn with_timeout(mut self, ms: u64) -> Self {
         self.timeout = Duration::from_millis(ms);
         self
     }
 
-    pub fn with_sample_count(mut self, n: u32) -> Self {
+    #[must_use]
+    pub const fn with_sample_count(mut self, n: u32) -> Self {
         self.sample_count = n;
         self
     }
@@ -376,6 +398,7 @@ impl SmtProver {
     /// 3. Exhaustive truth-table for 1-variable predicates.
     /// 4. Sampled truth-table for multi-variable predicates.
     /// 5. Fallback: Unknown.
+    #[must_use]
     pub fn check(&self, predicate: &SmtExpr) -> (PredicateValue, f32, SmtResult) {
         let start = Instant::now();
 
@@ -661,16 +684,19 @@ impl SmtProver {
     // ── Convenience wrappers ──────────────────────────────────────────────────
 
     /// Check a predicate and return only the [`PredicateValue`].
+    #[must_use]
     pub fn classify(&self, predicate: &SmtExpr) -> PredicateValue {
         self.check(predicate).0
     }
 
     /// Prove that `predicate` is a tautology (always true).
+    #[must_use]
     pub fn is_tautology(&self, predicate: &SmtExpr) -> bool {
         matches!(self.check(predicate).0, PredicateValue::AlwaysTrue)
     }
 
     /// Prove that `predicate` is always false (contradiction).
+    #[must_use]
     pub fn is_contradiction(&self, predicate: &SmtExpr) -> bool {
         matches!(self.check(predicate).0, PredicateValue::AlwaysFalse)
     }

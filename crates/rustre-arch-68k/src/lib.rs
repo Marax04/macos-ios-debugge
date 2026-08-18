@@ -30,13 +30,13 @@ pub mod m68k_exception_vectors;
 /// Extended M68K FPU/MMU disassembly: M68kDisassemblerExt, FpuInsn, MmuInsn.
 pub mod m68k_disassembler_ext;
 
-/// Strongly-typed M68k instruction representation: M68kInstr, M68kEa, M68kSize, M68kDecoder.
+/// Strongly-typed M68k instruction representation: `M68kInstr`, `M68kEa`, `M68kSize`, `M68kDecoder`.
 pub mod m68k_decoder;
 
-/// High-level M68k disassembler with configurable Motorola-syntax formatting: M68kDisassembler, DisasmLine.
+/// High-level M68k disassembler with configurable Motorola-syntax formatting: `M68kDisassembler`, `DisasmLine`.
 pub mod m68k_disassembler;
 
-/// M68k register-file emulation model: M68kRegFile, M68kDReg, M68kAReg, M68kSr, M68kCcr.
+/// M68k register-file emulation model: `M68kRegFile`, `M68kDReg`, `M68kAReg`, `M68kSr`, `M68kCcr`.
 pub mod m68k_registers;
 
 use bitflags::bitflags;

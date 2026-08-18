@@ -68,13 +68,15 @@ pub struct DecodedCilInstr {
 }
 
 impl DecodedCilInstr {
-    pub fn branch_target(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn branch_target(&self) -> Option<u32> {
         match &self.operand {
             Operand::BranchTarget(tgt) => Some(*tgt),
             _ => None,
         }
     }
 
+    #[must_use]
     pub fn switch_targets(&self) -> Vec<u32> {
         match &self.operand {
             Operand::SwitchTargets(targets) => targets.clone(),
@@ -82,21 +84,24 @@ impl DecodedCilInstr {
         }
     }
 
-    pub fn local_load_index(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn local_load_index(&self) -> Option<u32> {
         match &self.operand {
             Operand::Local(idx) => Some(*idx),
             _ => None,
         }
     }
 
-    pub fn local_store_index(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn local_store_index(&self) -> Option<u32> {
         match &self.operand {
             Operand::Local(idx) => Some(*idx),
             _ => None,
         }
     }
 
-    pub fn method_token(&self) -> Option<u32> {
+    #[must_use]
+    pub const fn method_token(&self) -> Option<u32> {
         match &self.operand {
             Operand::MethodToken(tok) => Some(*tok),
             _ => None,

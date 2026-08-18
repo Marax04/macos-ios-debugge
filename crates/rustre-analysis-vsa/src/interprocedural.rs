@@ -325,7 +325,7 @@ const MAX_CG_ITERATIONS: usize = 100_000;
 impl<'a> InterproceduralVsa<'a> {
     /// Create a driver for `program`, seeding entry points with `entry_state`.
     #[must_use]
-    pub fn new(program: &'a IpProgram, entry_state: VsaState) -> Self {
+    pub const fn new(program: &'a IpProgram, entry_state: VsaState) -> Self {
         Self {
             program,
             entry_state,
@@ -696,7 +696,7 @@ pub struct IpIndirectResolution {
 
 /// `true` when a value-set is "useful" for call-target resolution: a bounded
 /// constant / global set rather than Top or Bottom.
-fn is_resolved(v: &ValueSet) -> bool {
+const fn is_resolved(v: &ValueSet) -> bool {
     !matches!(v, ValueSet::Top | ValueSet::Bottom)
 }
 

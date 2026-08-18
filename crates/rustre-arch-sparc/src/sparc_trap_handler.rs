@@ -174,7 +174,7 @@ pub struct TrapTable {
     /// Architecture variant.
     arch: SparcArch,
     /// Parsed entries keyed by trap number.
-    /// Uses ahash to resist hash-collision DoS when trap numbers are
+    /// Uses ahash to resist hash-collision `DoS` when trap numbers are
     /// attacker-controlled (dos-hash-collision mitigation).
     entries: AHashMap<u16, TrapTableEntry>,
     /// Base address of the trap table in memory.
@@ -466,7 +466,7 @@ pub struct TrapTableScanner {
 impl TrapTableScanner {
     /// Create a new scanner.
     #[must_use]
-    pub fn new(arch: SparcArch) -> Self {
+    pub const fn new(arch: SparcArch) -> Self {
         Self { arch, min_entries: 8 }
     }
 
@@ -493,7 +493,7 @@ impl TrapTableScanner {
 
     /// Architecture configuration this scanner was built with.
     #[must_use]
-    pub fn arch(&self) -> &SparcArch {
+    pub const fn arch(&self) -> &SparcArch {
         &self.arch
     }
 

@@ -23,12 +23,12 @@ pub struct Addr(pub u64);
 impl Addr {
     /// Construct from a `u64`.
     #[must_use]
-    pub fn new(v: u64) -> Self {
+    pub const fn new(v: u64) -> Self {
         Self(v)
     }
     /// Raw value.
     #[must_use]
-    pub fn as_u64(self) -> u64 {
+    pub const fn as_u64(self) -> u64 {
         self.0
     }
 }
@@ -76,7 +76,7 @@ pub struct VmEntry {
 impl VmEntry {
     /// Create a new VM entry.
     #[must_use]
-    pub fn new(address: Addr, kind: VmEntryKind, target: Addr) -> Self {
+    pub const fn new(address: Addr, kind: VmEntryKind, target: Addr) -> Self {
         Self {
             address,
             kind,
@@ -95,14 +95,14 @@ impl VmEntry {
 
     /// Set opcode value.
     #[must_use]
-    pub fn with_opcode(mut self, op: u64) -> Self {
+    pub const fn with_opcode(mut self, op: u64) -> Self {
         self.opcode = Some(op);
         self
     }
 
     /// Return `true` if the entry has high confidence.
     #[must_use]
-    pub fn is_high_confidence(&self) -> bool {
+    pub const fn is_high_confidence(&self) -> bool {
         self.confidence >= 80
     }
 }
@@ -181,7 +181,7 @@ pub struct VmExit {
 impl VmExit {
     /// Create a new exit.
     #[must_use]
-    pub fn new(address: Addr, kind: VmExitKind) -> Self {
+    pub const fn new(address: Addr, kind: VmExitKind) -> Self {
         Self {
             address,
             kind,
@@ -261,7 +261,7 @@ pub struct VmDispatcherPattern {
 impl VmDispatcherPattern {
     /// Create a new dispatcher pattern.
     #[must_use]
-    pub fn new(address: Addr, shape: DispatcherShape) -> Self {
+    pub const fn new(address: Addr, shape: DispatcherShape) -> Self {
         Self {
             address,
             shape,
@@ -274,7 +274,7 @@ impl VmDispatcherPattern {
 
     /// Return `true` if this looks like a high-quality dispatcher match.
     #[must_use]
-    pub fn is_strong_match(&self) -> bool {
+    pub const fn is_strong_match(&self) -> bool {
         self.confidence >= 80 && self.handler_count >= 16
     }
 }
@@ -396,7 +396,7 @@ impl HandlerExecutionGraph {
 
     /// Number of edges.
     #[must_use]
-    pub fn edge_count(&self) -> usize {
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 
@@ -429,7 +429,7 @@ pub struct VirtualBB {
 impl VirtualBB {
     /// Create a new virtual basic block.
     #[must_use]
-    pub fn new(index: usize, start_addr: Addr) -> Self {
+    pub const fn new(index: usize, start_addr: Addr) -> Self {
         Self {
             index,
             start_addr,
@@ -466,13 +466,13 @@ impl VirtualBBSequence {
 
     /// Number of virtual basic blocks.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.blocks.len()
     }
 
     /// Return `true` when empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.blocks.is_empty()
     }
 
@@ -512,7 +512,7 @@ pub struct VirtualizedFunction {
     pub bytecode: Vec<u8>,
     /// Size of the original native function in bytes.
     pub native_size: usize,
-    /// Human-readable VM family name (e.g. "Themida", "VMProtect", "Custom").
+    /// Human-readable VM family name (e.g. "Themida", "`VMProtect`", "Custom").
     pub vm_family: String,
 }
 
@@ -593,7 +593,7 @@ pub struct VmLiftedFunction {
 impl VmLiftedFunction {
     /// Wrap a virtualised function after lifting.
     #[must_use]
-    pub fn new(source: VirtualizedFunction) -> Self {
+    pub const fn new(source: VirtualizedFunction) -> Self {
         Self {
             source,
             pseudo_il: Vec::new(),
@@ -605,13 +605,13 @@ impl VmLiftedFunction {
 
     /// Number of pseudo-IL lines generated.
     #[must_use]
-    pub fn line_count(&self) -> usize {
+    pub const fn line_count(&self) -> usize {
         self.pseudo_il.len()
     }
 
     /// Return `true` if lifting produced at least one IL line.
     #[must_use]
-    pub fn has_output(&self) -> bool {
+    pub const fn has_output(&self) -> bool {
         !self.pseudo_il.is_empty()
     }
 }
@@ -646,7 +646,7 @@ pub struct VmOpcodeFrequencyAnalyzer;
 impl VmOpcodeFrequencyAnalyzer {
     /// Create a new analyzer.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -714,9 +714,9 @@ impl VmOpcodeFrequencyAnalyzer {
 /// A known VM-protection product family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VmProtectionFamily {
-    /// VMProtect (VMProtect Software).
+    /// `VMProtect` (`VMProtect` Software).
     VMProtect,
-    /// Themida / WinLicense (Oreans).
+    /// Themida / `WinLicense` (Oreans).
     Themida,
     /// Code Virtualizer (Oreans, lightweight).
     CodeVirtualizer,
@@ -731,7 +731,7 @@ pub enum VmProtectionFamily {
 impl VmProtectionFamily {
     /// Short label.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::VMProtect => "VMProtect",
             Self::Themida => "Themida/WinLicense",
@@ -752,7 +752,7 @@ pub struct VmFamilyIdentifier;
 impl VmFamilyIdentifier {
     /// Create a new identifier.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 

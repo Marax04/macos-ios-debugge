@@ -1,7 +1,7 @@
 //! SPARC V9 — 64-bit extensions.
 //!
-//! Covers V9-specific registers, new opcodes (POPC, MOVcc, MOVr, MULX, SDIVX,
-//! UDIVX, FMOVcc, FMOVd, FMOVq, FPADD, FPSUB), a dedicated V9 lifter, and
+//! Covers V9-specific registers, new opcodes (POPC, `MOVcc`, `MOVr`, MULX, SDIVX,
+//! UDIVX, `FMOVcc`, `FMOVd`, `FMOVq`, FPADD, FPSUB), a dedicated V9 lifter, and
 //! the `V9CallingConv` ABI descriptor.
 
 use std::collections::HashMap;
@@ -89,7 +89,7 @@ impl V9RegId {
 
     /// Size in bytes.
     #[must_use]
-    pub fn size_bytes(self) -> usize {
+    pub const fn size_bytes(self) -> usize {
         match self {
             Self::F(_) => 4,
             _ => 8,
@@ -98,7 +98,7 @@ impl V9RegId {
 
     /// Whether this register is privileged (V9 supervisor-only).
     #[must_use]
-    pub fn is_privileged(self) -> bool {
+    pub const fn is_privileged(self) -> bool {
         matches!(
             self,
             Self::Tl
@@ -181,33 +181,33 @@ impl V9Registers {
 
     /// XCC.Z bit.
     #[must_use]
-    pub fn xcc_z(&self) -> bool {
+    pub const fn xcc_z(&self) -> bool {
         (self.ccr >> 4) & 1 != 0
     }
     /// XCC.N bit.
     #[must_use]
-    pub fn xcc_n(&self) -> bool {
+    pub const fn xcc_n(&self) -> bool {
         (self.ccr >> 7) & 1 != 0
     }
     /// XCC.C bit.
     #[must_use]
-    pub fn xcc_c(&self) -> bool {
+    pub const fn xcc_c(&self) -> bool {
         (self.ccr >> 5) & 1 != 0
     }
     /// XCC.V bit.
     #[must_use]
-    pub fn xcc_v(&self) -> bool {
+    pub const fn xcc_v(&self) -> bool {
         (self.ccr >> 6) & 1 != 0
     }
 
     /// ICC.Z bit.
     #[must_use]
-    pub fn icc_z(&self) -> bool {
+    pub const fn icc_z(&self) -> bool {
         (self.ccr) & 1 != 0
     }
     /// ICC.N bit.
     #[must_use]
-    pub fn icc_n(&self) -> bool {
+    pub const fn icc_n(&self) -> bool {
         (self.ccr >> 3) & 1 != 0
     }
 }
@@ -219,9 +219,9 @@ impl V9Registers {
 pub enum V9Opcode {
     /// POPC: population count. `popc rs2, rd`
     Popc,
-    /// MOVcc: conditional move on integer condition codes.
+    /// `MOVcc`: conditional move on integer condition codes.
     Movcc { cond: u8, xcc: bool },
-    /// MOVr: conditional move on register value.
+    /// `MOVr`: conditional move on register value.
     Movr { rcond: u8 },
     /// MULX: 64-bit multiply (signed and unsigned).
     Mulx,
@@ -229,11 +229,11 @@ pub enum V9Opcode {
     Sdivx,
     /// UDIVX: 64-bit unsigned divide.
     Udivx,
-    /// FMOVcc: conditional FP move (single precision).
+    /// `FMOVcc`: conditional FP move (single precision).
     Fmovcc { cond: u8, xcc: bool },
-    /// FMOVd: move double FP register.
+    /// `FMOVd`: move double FP register.
     Fmovd,
-    /// FMOVq: move quad FP register (4×32-bit).
+    /// `FMOVq`: move quad FP register (4×32-bit).
     Fmovq,
     /// FPADD16: packed 16-bit integer add.
     Fpadd16,
@@ -243,11 +243,11 @@ pub enum V9Opcode {
     Fpsub16,
     /// FPSUB32: packed 32-bit integer subtract.
     Fpsub32,
-    /// SLLx: 64-bit logical shift left.
+    /// `SLLx`: 64-bit logical shift left.
     Sllx,
-    /// SRLx: 64-bit logical shift right.
+    /// `SRLx`: 64-bit logical shift right.
     Srlx,
-    /// SRAx: 64-bit arithmetic shift right.
+    /// `SRAx`: 64-bit arithmetic shift right.
     Srax,
     /// STBAR: store barrier.
     Stbar,
@@ -307,12 +307,12 @@ impl V9Opcode {
 
     /// Whether this opcode modifies control flow.
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(self, Self::Done | Self::Retry)
     }
 }
 
-fn icc_cond_name(cond: u8) -> &'static str {
+const fn icc_cond_name(cond: u8) -> &'static str {
     match cond & 0xF {
         0 => "n",
         1 => "e",
@@ -333,7 +333,7 @@ fn icc_cond_name(cond: u8) -> &'static str {
     }
 }
 
-fn rcond_name(rcond: u8) -> &'static str {
+const fn rcond_name(rcond: u8) -> &'static str {
     match rcond & 7 {
         1 => "z",
         2 => "lez",
@@ -416,7 +416,7 @@ impl Default for V9Lifter {
 impl V9Lifter {
     /// Create a new lifter with an empty op list.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { ops: Vec::new() }
     }
 
@@ -541,7 +541,7 @@ pub struct V9CallingConv {
 }
 
 impl V9CallingConv {
-    /// Return the standard SPARC V9 SysV ABI calling convention.
+    /// Return the standard SPARC V9 `SysV` ABI calling convention.
     #[must_use]
     pub fn sparc_v9_sysv() -> Self {
         Self {
@@ -612,7 +612,7 @@ impl V9CallingConv {
 
     /// Return the name of the calling convention.
     #[must_use]
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         self.name
     }
 }
@@ -737,7 +737,7 @@ pub fn decode_v9_instr(word: u32) -> Option<V9Instr> {
                 rs2: None,
                 rd: None,
                 imm: None,
-                operand_str: format!("#0x{:02x}", mask),
+                operand_str: format!("#0x{mask:02x}"),
             })
         }
         // MOVcc (0x2C) – integer condition code
@@ -769,7 +769,7 @@ pub struct V9Block {
 impl V9Block {
     /// Create an empty block at `address`.
     #[must_use]
-    pub fn new(address: u64) -> Self {
+    pub const fn new(address: u64) -> Self {
         Self {
             address,
             instrs: Vec::new(),
@@ -783,13 +783,13 @@ impl V9Block {
 
     /// Whether the block is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.instrs.is_empty()
     }
 
     /// Number of instructions.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.instrs.len()
     }
 }
@@ -812,7 +812,7 @@ pub struct V9Stats {
 
 impl V9Stats {
     /// Tally a single instruction.
-    pub fn tally(&mut self, instr: &V9Instr) {
+    pub const fn tally(&mut self, instr: &V9Instr) {
         match instr.opcode {
             V9Opcode::Popc => self.popc_count += 1,
             V9Opcode::Movcc { .. } => self.movcc_count += 1,
@@ -828,7 +828,7 @@ impl V9Stats {
 
     /// Total instruction count.
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.popc_count
             + self.movcc_count
             + self.mulx_count
@@ -1368,7 +1368,7 @@ pub enum PrivilegeLevel {
 impl PrivilegeLevel {
     /// Check if a V9 opcode requires privilege.
     #[must_use]
-    pub fn required_for(opcode: &V9Opcode) -> Self {
+    pub const fn required_for(opcode: &V9Opcode) -> Self {
         match opcode {
             V9Opcode::Done | V9Opcode::Retry | V9Opcode::Saved | V9Opcode::Restored => {
                 Self::Privileged
@@ -1417,7 +1417,7 @@ impl V9CondCodes {
 
     /// Decode from an 8-bit CCR value.
     #[must_use]
-    pub fn from_ccr(ccr: u8) -> Self {
+    pub const fn from_ccr(ccr: u8) -> Self {
         Self {
             icc_z: ccr & 1 != 0,
             icc_c: (ccr >> 1) & 1 != 0,
@@ -1431,7 +1431,7 @@ impl V9CondCodes {
     }
 
     /// Update from a 32-bit addition result.
-    pub fn set_from_add32(&mut self, a: u32, b: u32, result: u32) {
+    pub const fn set_from_add32(&mut self, a: u32, b: u32, result: u32) {
         self.icc_n = (result >> 31) != 0;
         self.icc_z = result == 0;
         let carry = (a as u64 + b as u64) > 0xFFFF_FFFF;
@@ -1443,7 +1443,7 @@ impl V9CondCodes {
     }
 
     /// Update from a 64-bit addition result.
-    pub fn set_from_add64(&mut self, a: u64, b: u64, result: u64) {
+    pub const fn set_from_add64(&mut self, a: u64, b: u64, result: u64) {
         self.xcc_n = (result >> 63) != 0;
         self.xcc_z = result == 0;
         let carry = (a as u128 + b as u128) > 0xFFFF_FFFF_FFFF_FFFF;
@@ -1463,7 +1463,7 @@ pub struct V9Encoder;
 impl V9Encoder {
     /// Encode a MULX instruction: `mulx rs1, simm13, rd`.
     #[must_use]
-    pub fn encode_mulx(rs1: u8, simm13: i32, rd: u8) -> u32 {
+    pub const fn encode_mulx(rs1: u8, simm13: i32, rd: u8) -> u32 {
         (0b10u32 << 30)
             | ((rd as u32 & 31) << 25)
             | (0x09u32 << 19)
@@ -1474,7 +1474,7 @@ impl V9Encoder {
 
     /// Encode an UDIVX instruction: `udivx rs1, simm13, rd`.
     #[must_use]
-    pub fn encode_udivx(rs1: u8, simm13: i32, rd: u8) -> u32 {
+    pub const fn encode_udivx(rs1: u8, simm13: i32, rd: u8) -> u32 {
         (0b10u32 << 30)
             | ((rd as u32 & 31) << 25)
             | (0x0Du32 << 19)
@@ -1485,13 +1485,13 @@ impl V9Encoder {
 
     /// Encode a FLUSHW instruction.
     #[must_use]
-    pub fn encode_flushw() -> u32 {
+    pub const fn encode_flushw() -> u32 {
         (0b10u32 << 30) | (0x2Bu32 << 19)
     }
 
     /// Encode a MEMBAR instruction with mask.
     #[must_use]
-    pub fn encode_membar(mask: u8) -> u32 {
+    pub const fn encode_membar(mask: u8) -> u32 {
         (0b10u32 << 30)
             | (0x28u32 << 19)
             | (0xFu32 << 14) // rs1 = 0xF (reserved)
@@ -1501,7 +1501,7 @@ impl V9Encoder {
 
     /// Encode a POPC instruction: `popc rs2, rd`.
     #[must_use]
-    pub fn encode_popc(rs2: u8, rd: u8) -> u32 {
+    pub const fn encode_popc(rs2: u8, rd: u8) -> u32 {
         (0b10u32 << 30) | ((rd as u32 & 31) << 25) | (0x2Eu32 << 19) | (rs2 as u32 & 31)
     }
 }

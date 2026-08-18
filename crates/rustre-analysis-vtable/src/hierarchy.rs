@@ -146,7 +146,7 @@ impl InheritanceGraph {
     }
 
     /// All root classes (classes with no base), sorted by name for
-    /// deterministic output (HashMap iteration order is not stable).
+    /// deterministic output (`HashMap` iteration order is not stable).
     #[must_use]
     pub fn roots(&self) -> Vec<&ClassNode> {
         let mut out: Vec<&ClassNode> = self.classes.values().filter(|n| n.is_root()).collect();

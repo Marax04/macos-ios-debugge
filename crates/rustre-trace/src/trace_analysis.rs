@@ -44,17 +44,17 @@ pub struct TraceEntry {
 impl TraceEntry {
     /// Create a minimal entry.
     #[must_use]
-    pub fn new(pc: u64, size: u8) -> Self {
+    pub const fn new(pc: u64, size: u8) -> Self {
         Self { pc, size, thread_id: 0, timestamp_ns: 0, mnemonic: None }
     }
 
     /// Builder: set thread.
     #[must_use]
-    pub fn with_thread(mut self, tid: u32) -> Self { self.thread_id = tid; self }
+    pub const fn with_thread(mut self, tid: u32) -> Self { self.thread_id = tid; self }
 
     /// Builder: set timestamp.
     #[must_use]
-    pub fn with_ts(mut self, ns: u64) -> Self { self.timestamp_ns = ns; self }
+    pub const fn with_ts(mut self, ns: u64) -> Self { self.timestamp_ns = ns; self }
 
     /// Builder: set mnemonic.
     #[must_use]
@@ -83,7 +83,7 @@ pub struct LoopInstance {
 impl LoopInstance {
     /// Loop body size (unique addresses).
     #[must_use]
-    pub fn body_size(&self) -> usize { self.body_addresses.len() }
+    pub const fn body_size(&self) -> usize { self.body_addresses.len() }
 
     /// Return `true` if this loop is a tight loop (1–3 instructions).
     #[must_use]
@@ -187,7 +187,7 @@ impl CallRecord {
 
     /// Return `true` if this call returned.
     #[must_use]
-    pub fn returned(&self) -> bool { self.return_index.is_some() }
+    pub const fn returned(&self) -> bool { self.return_index.is_some() }
 }
 
 // ─── FunctionCallTracker ─────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ pub struct FunctionCallTracker {
 impl FunctionCallTracker {
     /// Create with sets of known call and ret instruction addresses.
     #[must_use]
-    pub fn new(call_insns: HashSet<u64>, ret_insns: HashSet<u64>) -> Self {
+    pub const fn new(call_insns: HashSet<u64>, ret_insns: HashSet<u64>) -> Self {
         Self { call_insns, ret_insns }
     }
 
@@ -291,7 +291,7 @@ pub struct ApiCallEntry {
 
 impl APISequence {
     #[must_use]
-    pub fn new() -> Self { Self { calls: vec![] } }
+    pub const fn new() -> Self { Self { calls: vec![] } }
 
     /// Add a call.
     pub fn add(&mut self, pc: u64, api_name: impl Into<String>, trace_index: usize) {
@@ -330,11 +330,11 @@ impl APISequence {
 
     /// Number of calls.
     #[must_use]
-    pub fn len(&self) -> usize { self.calls.len() }
+    pub const fn len(&self) -> usize { self.calls.len() }
 
     /// Return `true` if the sequence is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool { self.calls.is_empty() }
+    pub const fn is_empty(&self) -> bool { self.calls.is_empty() }
 }
 
 impl Default for APISequence {
@@ -593,7 +593,7 @@ pub struct TraceComparison {
 
 impl TraceComparison {
     #[must_use]
-    pub fn identical(&self) -> bool { self.only_in_a.is_empty() && self.only_in_b.is_empty() }
+    pub const fn identical(&self) -> bool { self.only_in_a.is_empty() && self.only_in_b.is_empty() }
 }
 
 /// Compares two execution traces.
@@ -695,11 +695,11 @@ impl TraceAnalyzer {
 
     /// Number of trace entries.
     #[must_use]
-    pub fn len(&self) -> usize { self.trace.len() }
+    pub const fn len(&self) -> usize { self.trace.len() }
 
     /// Return `true` if the trace is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool { self.trace.is_empty() }
+    pub const fn is_empty(&self) -> bool { self.trace.is_empty() }
 
     /// Unique PCs in the trace.
     #[must_use]

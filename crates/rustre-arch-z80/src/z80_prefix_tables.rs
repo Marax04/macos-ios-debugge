@@ -20,12 +20,13 @@ use rustre_core::arch::InstrFlags;
 const REG8: [&str; 8] = ["B", "C", "D", "E", "H", "L", "(HL)", "A"];
 
 #[inline]
-fn reg8(r: u8) -> &'static str {
+const fn reg8(r: u8) -> &'static str {
     REG8[(r & 7) as usize]
 }
 
 #[inline]
-pub fn cc(c: u8) -> &'static str {
+#[must_use]
+pub const fn cc(c: u8) -> &'static str {
     match c & 7 {
         0 => "NZ",
         1 => "Z",

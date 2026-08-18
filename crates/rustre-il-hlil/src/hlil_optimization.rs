@@ -21,7 +21,7 @@ pub struct OptimizationResult {
 
 impl OptimizationResult {
     #[must_use]
-    pub fn unchanged(instructions: Vec<HlilInstruction>) -> Self {
+    pub const fn unchanged(instructions: Vec<HlilInstruction>) -> Self {
         Self {
             instructions,
             changes: 0,
@@ -38,7 +38,7 @@ impl OptimizationResult {
     }
 
     #[must_use]
-    pub fn was_modified(&self) -> bool {
+    pub const fn was_modified(&self) -> bool {
         self.changes > 0
     }
 }
@@ -56,7 +56,7 @@ fn int_ty(bits: usize) -> HlilType {
 /// Truncate `value` to `bits` bits so a folded result is representable at the
 /// operand width (e.g. `0xFF + 1` at 8 bits is `0`, not `256`). Without this,
 /// downstream raw-64-bit constant comparisons fold to the wrong branch.
-fn mask_to_width(value: u64, bits: usize) -> u64 {
+const fn mask_to_width(value: u64, bits: usize) -> u64 {
     if bits >= 64 {
         value
     } else {
@@ -73,7 +73,7 @@ fn make_const(value: u64, bits: usize) -> HlilExpr {
 }
 
 /// Extract `(value, bits)` from a `Const` expression, if applicable.
-fn const_parts(expr: &HlilExpr) -> Option<(u64, usize)> {
+const fn const_parts(expr: &HlilExpr) -> Option<(u64, usize)> {
     if let HlilExpr::Const { value, ty } = expr {
         let bits = match ty {
             HlilType::Int { bits, .. } => *bits as usize,
@@ -817,7 +817,7 @@ pub struct HlilOptimizer {
 impl HlilOptimizer {
     /// Create an optimizer with all passes enabled and up to 10 iterations.
     #[must_use]
-    pub fn default_pipeline() -> Self {
+    pub const fn default_pipeline() -> Self {
         Self {
             run_constant_folding: true,
             run_dead_assign_elim: true,
@@ -830,7 +830,7 @@ impl HlilOptimizer {
 
     /// Create a minimal optimizer (constant folding + dead assign only).
     #[must_use]
-    pub fn minimal() -> Self {
+    pub const fn minimal() -> Self {
         Self {
             run_constant_folding: true,
             run_dead_assign_elim: true,
@@ -1214,13 +1214,13 @@ impl ExprComplexity {
 
     /// Check if an expression is a constant.
     #[must_use]
-    pub fn is_constant(expr: &HlilExpr) -> bool {
+    pub const fn is_constant(expr: &HlilExpr) -> bool {
         matches!(expr, HlilExpr::Const { .. })
     }
 
     /// Check if an expression is a variable reference.
     #[must_use]
-    pub fn is_variable(expr: &HlilExpr) -> bool {
+    pub const fn is_variable(expr: &HlilExpr) -> bool {
         matches!(expr, HlilExpr::Var { .. })
     }
 }

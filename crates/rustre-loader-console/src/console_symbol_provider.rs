@@ -476,6 +476,7 @@ impl ConsoleSymbolProvider {
         }
     }
 
+    #[must_use]
     pub fn export_csv(&self) -> String {
         let mut lines = Vec::with_capacity(self.by_address.len() + 1);
         lines.push("address,name,kind,description,user_defined".to_string());

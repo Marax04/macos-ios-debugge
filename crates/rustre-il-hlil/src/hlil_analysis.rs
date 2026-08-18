@@ -90,15 +90,15 @@ pub enum HlilType {
 
 impl HlilType {
     #[must_use]
-    pub fn int32() -> Self {
+    pub const fn int32() -> Self {
         Self::Int(4)
     }
     #[must_use]
-    pub fn int64() -> Self {
+    pub const fn int64() -> Self {
         Self::Int(8)
     }
     #[must_use]
-    pub fn uint8() -> Self {
+    pub const fn uint8() -> Self {
         Self::Uint(1)
     }
     #[must_use]
@@ -107,7 +107,7 @@ impl HlilType {
     }
 
     #[must_use]
-    pub fn size_bytes(&self) -> usize {
+    pub const fn size_bytes(&self) -> usize {
         match self {
             Self::Int(n) | Self::Uint(n) => *n as usize,
             Self::Float32 => 4,
@@ -532,7 +532,7 @@ pub struct HlilReport {
 
 impl HlilReport {
     #[must_use]
-    pub fn has_issues(&self) -> bool {
+    pub const fn has_issues(&self) -> bool {
         !self.issues.is_empty()
     }
 }

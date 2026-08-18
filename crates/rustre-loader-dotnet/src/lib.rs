@@ -556,7 +556,7 @@ pub struct ClrHeader {
     pub export_address_table_jumps_size: u32,
     /// RVA of the `ManagedNativeHeader` directory.
     ///
-    /// Null for ordinary IL images; in ReadyToRun images it points at a
+    /// Null for ordinary IL images; in `ReadyToRun` images it points at a
     /// `READYTORUN_HEADER`.
     pub managed_native_header_rva: u32,
     /// Size of the `ManagedNativeHeader` directory.

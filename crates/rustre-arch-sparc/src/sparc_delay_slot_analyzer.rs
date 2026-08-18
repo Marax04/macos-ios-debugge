@@ -365,7 +365,7 @@ impl DelaySlotAnalyzer {
     }
 
     /// Determine how the delay slot is executed for this branch.
-    fn classify_kind(
+    const fn classify_kind(
         &self,
         branch: &rustre_core::arch::Instruction,
         info: &SparcDelayInfo,
@@ -426,7 +426,7 @@ impl DelaySlotAnalyzer {
             .collect()
     }
 
-    /// Return only NOPped delay slots (wasted cycles) from a report.
+    /// Return only `NOPped` delay slots (wasted cycles) from a report.
     #[must_use]
     pub fn find_nop_slots<'a>(
         &self,

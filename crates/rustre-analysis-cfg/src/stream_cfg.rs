@@ -60,7 +60,7 @@ pub struct StreamCfg {
 }
 
 /// Statically-known constant branch target of a jump destination expression.
-fn const_target(expr: &LlilExpr) -> Option<u64> {
+const fn const_target(expr: &LlilExpr) -> Option<u64> {
     if let LlilExpr::Const { value, .. } = expr { Some(*value) } else { None }
 }
 

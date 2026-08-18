@@ -342,7 +342,7 @@ impl MipsCallingConvention {
 /// - **N32/N64**: Arguments 0–7 are in `$a0`–`$a7`.  Argument 8 is at `sp+0`,
 ///   argument 9 at `sp+8`, etc. (no home area).
 #[must_use]
-pub fn stack_arg_offset(conv: MipsCallingConvention, arg_index: usize) -> Option<i32> {
+pub const fn stack_arg_offset(conv: MipsCallingConvention, arg_index: usize) -> Option<i32> {
     let reg_count = conv.arg_reg_count() as usize;
     if arg_index < reg_count {
         return None; // register-passed

@@ -1,7 +1,7 @@
 //! WebAssembly table model.
 //!
 //! Implements the Wasm table semantics: typed element storage, grow, fill,
-//! copy, element-segment application, and call_indirect type checking.
+//! copy, element-segment application, and `call_indirect` type checking.
 
 use std::collections::HashMap;
 
@@ -48,11 +48,13 @@ pub enum TableElement {
 }
 
 impl TableElement {
-    pub fn is_null(&self) -> bool {
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }
 
-    pub fn ref_type(&self) -> Option<WasmRefType> {
+    #[must_use]
+    pub const fn ref_type(&self) -> Option<WasmRefType> {
         match self {
             Self::Null => None,
             Self::FuncRef(_) => Some(WasmRefType::FuncRef),
@@ -73,10 +75,12 @@ pub struct TableLimits {
 }
 
 impl TableLimits {
-    pub fn new(min: u32, max: Option<u32>) -> Self {
+    #[must_use]
+    pub const fn new(min: u32, max: Option<u32>) -> Self {
         Self { min, max }
     }
 
+    #[must_use]
     pub fn effective_max(self) -> u32 {
         self.max.unwrap_or(u32::MAX)
     }
@@ -106,6 +110,7 @@ pub struct TypedTable {
 }
 
 impl TypedTable {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -115,6 +120,7 @@ impl TypedTable {
     }
 
     /// Return `true` if the function at `func_idx` was declared with `type_idx`.
+    #[must_use]
     pub fn matches_type(&self, func_idx: u32, type_idx: u32) -> bool {
         self.types.get(&func_idx).copied() == Some(type_idx)
     }
@@ -139,6 +145,7 @@ impl WasmTable {
     /// Initial allocation is capped at [`MAX_TABLE_ALLOC`] to prevent
     /// memory exhaustion from attacker-controlled `limits.min` values
     /// (dos-memory-exhaustion).
+    #[must_use]
     pub fn new(limits: TableLimits, ref_type: WasmRefType) -> Self {
         let alloc = (limits.min as usize).min(MAX_TABLE_ALLOC);
         WasmTable {
@@ -152,6 +159,7 @@ impl WasmTable {
     /// Create with a pre-populated `TypedTable`.
     ///
     /// Initial allocation is capped at [`MAX_TABLE_ALLOC`] (dos-memory-exhaustion).
+    #[must_use]
     pub fn with_typed(limits: TableLimits, ref_type: WasmRefType, typed: TypedTable) -> Self {
         let alloc = (limits.min as usize).min(MAX_TABLE_ALLOC);
         WasmTable {
@@ -163,11 +171,13 @@ impl WasmTable {
     }
 
     /// Current number of elements.
-    pub fn size(&self) -> u32 {
+    #[must_use]
+    pub const fn size(&self) -> u32 {
         self.elements.len() as u32
     }
 
     /// Get a reference to the element at `idx`, or `None` if out-of-bounds.
+    #[must_use]
     pub fn get(&self, idx: u32) -> Option<&TableElement> {
         self.elements.get(idx as usize)
     }
@@ -315,6 +325,7 @@ impl WasmTable {
     ///   - The type matches according to the `TypedTable`.
     ///
     /// Returns `None` (trap) otherwise.
+    #[must_use]
     pub fn call_indirect(&self, idx: u32, type_idx: u32) -> Option<u32> {
         let elem = self.elements.get(idx as usize)?;
         match elem {
@@ -333,7 +344,7 @@ impl WasmTable {
     // Accessor helpers
     // -----------------------------------------------------------------------
 
-    /// Register a function's type for call_indirect checking.
+    /// Register a function's type for `call_indirect` checking.
     pub fn register_func_type(&mut self, func_idx: u32, type_idx: u32) {
         self.typed.register(func_idx, type_idx);
     }
@@ -348,16 +359,19 @@ impl WasmTable {
     }
 
     /// Count of non-null elements.
+    #[must_use]
     pub fn non_null_count(&self) -> usize {
         self.elements.iter().filter(|e| !e.is_null()).count()
     }
 
     /// Returns whether `idx` is in-bounds.
-    pub fn is_in_bounds(&self, idx: u32) -> bool {
+    #[must_use]
+    pub const fn is_in_bounds(&self, idx: u32) -> bool {
         (idx as usize) < self.elements.len()
     }
 
-    pub fn limits(&self) -> TableLimits {
+    #[must_use]
+    pub const fn limits(&self) -> TableLimits {
         self.limits
     }
 }
@@ -381,6 +395,7 @@ impl MultiTable {
         id
     }
 
+    #[must_use]
     pub fn get(&self, idx: u32) -> Option<&WasmTable> {
         self.tables.get(&idx)
     }
@@ -389,6 +404,7 @@ impl MultiTable {
         self.tables.get_mut(&idx)
     }
 
+    #[must_use]
     pub fn count(&self) -> usize {
         self.tables.len()
     }

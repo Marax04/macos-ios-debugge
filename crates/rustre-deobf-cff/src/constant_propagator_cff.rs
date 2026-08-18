@@ -57,6 +57,7 @@ pub enum AbstractValue {
 }
 
 impl AbstractValue {
+    #[must_use]
     pub const fn join(self, other: Self) -> Self {
         match (self, other) {
             (Self::Undefined, x) | (x, Self::Undefined) => x,

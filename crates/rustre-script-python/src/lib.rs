@@ -1803,7 +1803,7 @@ fn py_cmp_order(a: &PyValue, b: &PyValue) -> std::cmp::Ordering {
 
 /// Maximum bracket nesting accepted in one line of source.
 ///
-/// CPython imposes a fixed parser limit for the same reason and reports it as a
+/// `CPython` imposes a fixed parser limit for the same reason and reports it as a
 /// `SyntaxError` ("too many nested parentheses"); 200 matches that limit. It is
 /// far above anything a real expression contains and far below the depth that
 /// exhausts the stack.

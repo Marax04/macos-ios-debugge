@@ -125,7 +125,7 @@ pub enum XorVariant {
 impl XorVariant {
     /// Apply the variant to a single byte.
     #[must_use]
-    pub fn apply(self, ct: u8, key: u8, extra: u8, prev_ct: u8) -> u8 {
+    pub const fn apply(self, ct: u8, key: u8, extra: u8, prev_ct: u8) -> u8 {
         match self {
             Self::Xor => ct ^ key,
             Self::XorAdd => (ct ^ key).wrapping_add(extra),
@@ -403,7 +403,7 @@ pub fn brute_force_ror_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
 // XOR + ADD / XOR + SUB
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Brute-force XOR + ADD (2-byte key: xor_key, add_key).
+/// Brute-force XOR + ADD (2-byte key: `xor_key`, `add_key`).
 #[must_use]
 pub fn brute_force_xor_add(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
     let mut candidates = Vec::new();
@@ -433,7 +433,7 @@ pub fn brute_force_xor_add(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
 // Rolling XOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Decrypt a rolling XOR stream (each plaintext byte is XORed with the
+/// Decrypt a rolling XOR stream (each plaintext byte is `XORed` with the
 /// previous *ciphertext* byte; initial key byte is `initial_key`).
 #[must_use]
 pub fn decrypt_rolling_xor(ciphertext: &[u8], initial_key: u8) -> Vec<u8> {
@@ -501,7 +501,7 @@ pub struct XorDecryptor {
 
 impl XorDecryptor {
     #[must_use]
-    pub fn new(config: XorDecryptorConfig) -> Self {
+    pub const fn new(config: XorDecryptorConfig) -> Self {
         Self { config }
     }
 

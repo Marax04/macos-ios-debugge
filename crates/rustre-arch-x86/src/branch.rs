@@ -40,13 +40,13 @@ pub enum BranchKind {
 impl BranchKind {
     /// Returns `true` if this kind is any sort of branch or call.
     #[must_use]
-    pub fn is_branch(self) -> bool {
+    pub const fn is_branch(self) -> bool {
         !matches!(self, Self::NotBranch)
     }
 
     /// Returns `true` if this kind terminates a basic block (no fall-through).
     #[must_use]
-    pub fn terminates_block(self) -> bool {
+    pub const fn terminates_block(self) -> bool {
         matches!(
             self,
             Self::DirectJump | Self::IndirectJump | Self::Return | Self::Interrupt | Self::Syscall
@@ -55,13 +55,13 @@ impl BranchKind {
 
     /// Returns `true` for conditional branches that may fall through.
     #[must_use]
-    pub fn is_conditional(self) -> bool {
+    pub const fn is_conditional(self) -> bool {
         matches!(self, Self::ConditionalJump | Self::Loop)
     }
 
     /// Returns `true` for calls.
     #[must_use]
-    pub fn is_call(self) -> bool {
+    pub const fn is_call(self) -> bool {
         matches!(self, Self::DirectCall | Self::IndirectCall)
     }
 }
@@ -195,7 +195,7 @@ pub enum InstrClass {
 ///
 /// For instructions that require further disambiguation (`ModRM` /reg),
 /// this returns a best-effort class based on the primary opcode.
-pub fn classify_opcode(opcode: u8) -> InstrClass {
+pub const fn classify_opcode(opcode: u8) -> InstrClass {
     match opcode {
         0x00..=0x05 | 0x10..=0x15 | 0x18..=0x1D |
         0x28..=0x2D | 0x38..=0x3D |
@@ -271,7 +271,7 @@ pub enum StringInstr {
 impl StringInstr {
     /// The AT&T/GAS mnemonic for this string instruction.
     #[must_use]
-    pub fn mnemonic(self) -> &'static str {
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::MovsByte => "movsb",
             Self::MovsWord => "movsw",
@@ -298,7 +298,7 @@ impl StringInstr {
 
     /// Returns `true` for instructions that read from `[rsi]`.
     #[must_use]
-    pub fn reads_src(self) -> bool {
+    pub const fn reads_src(self) -> bool {
         matches!(
             self,
             Self::MovsByte
@@ -318,7 +318,7 @@ impl StringInstr {
 
     /// Returns `true` for instructions that write to `[rdi]`.
     #[must_use]
-    pub fn writes_dst(self) -> bool {
+    pub const fn writes_dst(self) -> bool {
         matches!(
             self,
             Self::MovsByte

@@ -620,7 +620,7 @@ impl KnowledgeGraph {
     /// # Errors
     ///
     /// Returns an error if the underlying operation fails.
-    /// Addresses are UNSIGNED, but SQLite only has signed 64-bit integers, so
+    /// Addresses are UNSIGNED, but `SQLite` only has signed 64-bit integers, so
     /// `cast_signed` turns every address at or above 2^63 (kernel space) into a
     /// negative number. That round-trip is a bijection, so equality lookups are
     /// unaffected — but plain `>=` / `<` / `ORDER BY` then use the signed order,

@@ -523,18 +523,18 @@ impl ThreatIndicatorDatabase {
             let ioc_uuid = indicator_uuid(&ioc.value, &ioc.ioc_type.to_string());
             let value = escape_stix_literal(&ioc.value);
             let pattern = match ioc.ioc_type {
-                IocType::Md5 => format!("[file:hashes.MD5 = '{}']", value),
-                IocType::Sha1 => format!("[file:hashes.'SHA-1' = '{}']", value),
-                IocType::Sha256 => format!("[file:hashes.'SHA-256' = '{}']", value),
-                IocType::Sha512 => format!("[file:hashes.'SHA-512' = '{}']", value),
-                IocType::Ip => format!("[ipv4-addr:value = '{}']", value),
-                IocType::Domain => format!("[domain-name:value = '{}']", value),
-                IocType::Url => format!("[url:value = '{}']", value),
-                IocType::Email => format!("[email-addr:value = '{}']", value),
-                IocType::Registry => format!("[windows-registry-key:key = '{}']", value),
-                IocType::Filename => format!("[file:name = '{}']", value),
-                IocType::Mutex => format!("[mutex:name = '{}']", value),
-                IocType::Yara => format!("[file:content = '{}']", value),
+                IocType::Md5 => format!("[file:hashes.MD5 = '{value}']"),
+                IocType::Sha1 => format!("[file:hashes.'SHA-1' = '{value}']"),
+                IocType::Sha256 => format!("[file:hashes.'SHA-256' = '{value}']"),
+                IocType::Sha512 => format!("[file:hashes.'SHA-512' = '{value}']"),
+                IocType::Ip => format!("[ipv4-addr:value = '{value}']"),
+                IocType::Domain => format!("[domain-name:value = '{value}']"),
+                IocType::Url => format!("[url:value = '{value}']"),
+                IocType::Email => format!("[email-addr:value = '{value}']"),
+                IocType::Registry => format!("[windows-registry-key:key = '{value}']"),
+                IocType::Filename => format!("[file:name = '{value}']"),
+                IocType::Mutex => format!("[mutex:name = '{value}']"),
+                IocType::Yara => format!("[file:content = '{value}']"),
             };
             let confidence_pct = crate::casts::f64_to_u32_sat((f64::from(ioc.confidence) * 100.0).round());
             objects.push(format!(

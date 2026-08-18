@@ -62,15 +62,18 @@ pub enum HandlerSemantics {
 }
 
 impl HandlerSemantics {
-    pub fn is_control_flow(&self) -> bool {
+    #[must_use]
+    pub const fn is_control_flow(&self) -> bool {
         matches!(self, Self::Jmp | Self::JmpCond | Self::Call | Self::Ret)
     }
 
-    pub fn is_memory_op(&self) -> bool {
+    #[must_use]
+    pub const fn is_memory_op(&self) -> bool {
         matches!(self, Self::LoadMem | Self::StoreMem)
     }
 
-    pub fn is_arithmetic(&self) -> bool {
+    #[must_use]
+    pub const fn is_arithmetic(&self) -> bool {
         matches!(
             self,
             Self::Add | Self::Sub | Self::Mul | Self::Div
@@ -111,7 +114,8 @@ pub struct VmHandler {
 }
 
 impl VmHandler {
-    pub fn new(addr: u64, opcode: u8) -> Self {
+    #[must_use]
+    pub const fn new(addr: u64, opcode: u8) -> Self {
         Self {
             handler_addr: addr,
             opcode,
@@ -166,10 +170,12 @@ pub struct VmLiftedProgram {
 }
 
 impl VmLiftedProgram {
-    pub fn op_count(&self) -> usize {
+    #[must_use]
+    pub const fn op_count(&self) -> usize {
         self.lifted_ops.len()
     }
 
+    #[must_use]
     pub fn unique_opcodes(&self) -> Vec<u8> {
         let mut seen: Vec<u8> = self.lifted_ops.iter().map(|o| o.opcode).collect();
         seen.sort_unstable();
@@ -177,6 +183,7 @@ impl VmLiftedProgram {
         seen
     }
 
+    #[must_use]
     pub fn control_flow_ops(&self) -> Vec<&LiftedOp> {
         self.lifted_ops
             .iter()
@@ -220,17 +227,18 @@ impl RawInstruction {
 // ─── VmHandlerAnalyzer ───────────────────────────────────────────────────────
 
 pub struct VmHandlerAnalyzer {
-    /// Native instructions per basic block (block_addr → instructions)
+    /// Native instructions per basic block (`block_addr` → instructions)
     code: HashMap<u64, Vec<RawInstruction>>,
     /// The dispatch table: opcode → handler address
     dispatch_table: HashMap<u8, u64>,
-    /// The VM context struct layout: field_name → (offset, size)
+    /// The VM context struct layout: `field_name` → (offset, size)
     _context_layout: HashMap<String, (i32, u8)>,
     /// Known VM register names and their context offsets
     vm_regs: Vec<VmReg>,
 }
 
 impl VmHandlerAnalyzer {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             code: HashMap::new(),
@@ -288,7 +296,7 @@ impl VmHandlerAnalyzer {
         None
     }
 
-    fn infer_table_addr(&self, _reg: &str) -> u64 {
+    const fn infer_table_addr(&self, _reg: &str) -> u64 {
         // In a real implementation this would trace the register definition
         // back to a LEA or MOV from a known symbol.
         0x0000_0000_0040_5000
@@ -368,6 +376,7 @@ impl VmHandlerAnalyzer {
 
     /// Pattern-match on register reads/writes and memory operations to
     /// determine the handler's semantics.
+    #[must_use]
     pub fn lift_handler_to_semantics(
         &self,
         insns: &[RawInstruction],

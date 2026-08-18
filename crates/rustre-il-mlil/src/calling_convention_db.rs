@@ -787,7 +787,7 @@ pub enum ArgLocation {
     /// Passed in a register.
     Register(Reg),
     /// Passed in multiple consecutive integer registers (e.g. a 16-byte
-    /// aggregate split across two registers under SysV x86-64).
+    /// aggregate split across two registers under `SysV` x86-64).
     RegisterMulti(Vec<Reg>),
     /// Passed on the stack at a given byte offset from the start of the
     /// argument area (after any shadow space).

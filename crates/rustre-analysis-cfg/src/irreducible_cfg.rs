@@ -545,7 +545,7 @@ impl T1T2Reducer {
     /// which pretends control enters the region at the predecessor instead
     /// of the entry and lets some genuinely irreducible CFGs collapse to a
     /// single node (found by
-    /// soundness_fuzz::reducibility_implementations_agree_fuzz, which
+    /// `soundness_fuzz::reducibility_implementations_agree_fuzz`, which
     /// cross-checks this against `reducibility_analysis`'s entry-aware
     /// T1/T2).
     pub fn reduce(adj: &mut HashMap<Address, HashSet<Address>>, entry: Address) -> bool {

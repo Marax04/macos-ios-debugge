@@ -30,7 +30,7 @@ pub struct BytecodeRegion {
 impl BytecodeRegion {
     /// End offset (exclusive) of this region.
     #[must_use]
-    pub fn end(&self) -> usize {
+    pub const fn end(&self) -> usize {
         self.start + self.length
     }
 
@@ -82,7 +82,7 @@ impl Default for BytecodeFinder {
 impl BytecodeFinder {
     /// Create a new finder with sensible defaults.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             min_region_size: 64,
             block_size: 256,
@@ -93,7 +93,7 @@ impl BytecodeFinder {
 
     /// Set the minimum region size (bytes).
     #[must_use]
-    pub fn with_min_region_size(mut self, size: usize) -> Self {
+    pub const fn with_min_region_size(mut self, size: usize) -> Self {
         self.min_region_size = size;
         self
     }
@@ -107,7 +107,7 @@ impl BytecodeFinder {
 
     /// Disable VM header detection.
     #[must_use]
-    pub fn without_header_check(mut self) -> Self {
+    pub const fn without_header_check(mut self) -> Self {
         self.check_headers = false;
         self
     }

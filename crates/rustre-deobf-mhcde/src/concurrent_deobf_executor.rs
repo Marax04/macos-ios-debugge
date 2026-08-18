@@ -152,7 +152,7 @@ pub struct ConcurrentDeobfExecutor {
 impl ConcurrentDeobfExecutor {
     /// Create a new executor with the given configuration.
     #[must_use]
-    pub fn new(config: ExecutorConfig) -> Self {
+    pub const fn new(config: ExecutorConfig) -> Self {
         Self { config }
     }
 
@@ -535,13 +535,13 @@ impl ResultPool {
 
     /// Total number of results stored.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.results.len()
     }
 
     /// Returns `true` when the pool is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.results.is_empty()
     }
 

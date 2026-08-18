@@ -294,7 +294,7 @@ fn writes_var(stmts: &[HlilStatement], name: &str) -> bool {
 // ── 1. Flag folding ───────────────────────────────────────────────────────────
 
 /// Is `e` a boolean-valued comparison suitable for flag folding?
-fn is_comparison(e: &HlilExpr) -> bool {
+const fn is_comparison(e: &HlilExpr) -> bool {
     use HlilExpr as E;
     matches!(
         e,
@@ -1532,7 +1532,7 @@ fn middle_is_self_contained(middle: &[HlilStatement], outer: &[HlilStatement]) -
 }
 
 /// Is this expression a constant "true" (non-zero integer)?
-fn is_const_true(e: &HlilExpr) -> bool {
+const fn is_const_true(e: &HlilExpr) -> bool {
     matches!(e, HlilExpr::Const { value, .. } if *value != 0)
 }
 
@@ -1857,6 +1857,7 @@ fn cfg_reducibility(body: &[HlilStatement]) -> (usize, usize, usize, bool) {
 /// RICORSIVO, ma la riemissione (`structure_loops_from_cfg`) lavora sul grafo
 /// di LIVELLO. Una stima fatta su una popolazione non descrive l'altra — errore
 /// gia' commesso in questa sessione, da non ripetere prima del node splitting.
+#[must_use]
 pub fn cfg_reducibility_livello(stmts: &[HlilStatement]) -> (usize, usize, usize, bool) {
     fn val_label(l: &str) -> Option<u64> {
         let t = l
@@ -2943,13 +2944,13 @@ pub fn detect_induction_vars(stmts: &mut Vec<HlilStatement>) -> usize {
     changed
 }
 
-fn stmts_prev_is_init(for_stmt: &HlilStatement) -> bool {
+const fn stmts_prev_is_init(for_stmt: &HlilStatement) -> bool {
     matches!(for_stmt, HlilStatement::For { init: Some(_), .. })
 }
 
 // ── 7. Opportunistic type inference ──────────────────────────────────────────
 
-fn known(ty: &HlilType) -> bool {
+const fn known(ty: &HlilType) -> bool {
     !matches!(ty, HlilType::Unknown)
 }
 
@@ -3056,7 +3057,7 @@ pub fn widen_locals_from_128bit_sources(func: &mut HlilFunction) -> usize {
     if matches!(std::env::var("RUSTRE_INT128").as_deref(), Ok("0") | Ok("false")) {
         return 0;
     }
-    fn is_128(e: &HlilExpr) -> bool {
+    const fn is_128(e: &HlilExpr) -> bool {
         matches!(e, HlilExpr::Deref { ty: HlilType::Int { bits: 128, .. }, .. })
     }
     fn raccogli(stmts: &[HlilStatement], out: &mut Vec<String>) {
@@ -3166,7 +3167,7 @@ pub struct StructuringReport {
 
 impl StructuringReport {
     #[must_use]
-    pub fn total(&self) -> usize {
+    pub const fn total(&self) -> usize {
         self.flags_folded
             + self.registers_lifted
             + self.regions_structured
@@ -3183,7 +3184,7 @@ pub struct StructuringPipeline;
 
 impl StructuringPipeline {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 

@@ -32,7 +32,7 @@ impl AlignmentHint {
     /// Does not panic — clamps `alignment` to the nearest supported power-of-two
     /// (1, 2, 4, 8).
     #[must_use]
-    pub fn new(alignment: usize, anchor_offset: usize) -> Self {
+    pub const fn new(alignment: usize, anchor_offset: usize) -> Self {
         let clamped = match alignment {
             0 | 1 => 1,
             2 | 3 => 2,

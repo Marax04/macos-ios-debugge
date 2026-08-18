@@ -86,7 +86,7 @@ pub enum TypedValue {
 impl TypedValue {
     /// Try to interpret this value as a `u64` for use in conditions / counts.
     #[must_use]
-    pub fn as_u64(&self) -> Option<u64> {
+    pub const fn as_u64(&self) -> Option<u64> {
         match self {
             Self::UInt(v) => Some(*v),
             Self::SInt(v) => Some(*v as u64),
@@ -99,7 +99,7 @@ impl TypedValue {
 
     /// Returns `true` if this is a scalar integer.
     #[must_use]
-    pub fn is_integer(&self) -> bool {
+    pub const fn is_integer(&self) -> bool {
         matches!(self, Self::UInt(_) | Self::SInt(_))
     }
 }
@@ -223,7 +223,7 @@ pub struct TemplateInterpreter<'a> {
 impl<'a> TemplateInterpreter<'a> {
     /// Create a new interpreter for `buf` with the given type registry.
     #[must_use]
-    pub fn new(buf: &'a [u8], registry: &'a TypeRegistry) -> Self {
+    pub const fn new(buf: &'a [u8], registry: &'a TypeRegistry) -> Self {
         Self { buf, registry }
     }
 
@@ -231,13 +231,14 @@ impl<'a> TemplateInterpreter<'a> {
     /// want to resolve a named type referenced by a template (e.g. to interpret
     /// a struct by name rather than by inline [`TypeKind`]).
     #[must_use]
-    pub fn registry(&self) -> &'a TypeRegistry {
+    pub const fn registry(&self) -> &'a TypeRegistry {
         self.registry
     }
 
     /// Interpret a top-level named type from the registry at `offset`.
     ///
     /// Returns `None` if `type_name` is not registered.
+    #[must_use]
     pub fn interpret_named(
         &self,
         type_name: &str,
@@ -707,7 +708,7 @@ impl<'a> TemplateInterpreter<'a> {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn check_bounds(&self, offset: usize, need: usize) -> Result<(), InterpretError> {
+    const fn check_bounds(&self, offset: usize, need: usize) -> Result<(), InterpretError> {
         if offset + need > self.buf.len() {
             Err(InterpretError::OutOfBounds {
                 offset,

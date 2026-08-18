@@ -143,7 +143,7 @@ pub struct HandlerSemantic {
 impl HandlerSemantic {
     /// Return `true` if this handler is a control-flow transfer.
     #[must_use]
-    pub fn is_branch(&self) -> bool {
+    pub const fn is_branch(&self) -> bool {
         matches!(
             self.class,
             HandlerClass::Jump
@@ -158,7 +158,7 @@ impl HandlerSemantic {
 
     /// Return `true` if this handler terminates execution.
     #[must_use]
-    pub fn is_terminal(&self) -> bool {
+    pub const fn is_terminal(&self) -> bool {
         matches!(self.class, HandlerClass::Halt)
     }
 }
@@ -243,13 +243,13 @@ pub struct HandlerSemanticInferrer {
 impl HandlerSemanticInferrer {
     /// Create a new inferrer.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { max_insn: 64 }
     }
 
     /// Set the maximum number of instructions to trace per handler.
     #[must_use]
-    pub fn with_max_insn(mut self, n: usize) -> Self {
+    pub const fn with_max_insn(mut self, n: usize) -> Self {
         self.max_insn = n;
         self
     }

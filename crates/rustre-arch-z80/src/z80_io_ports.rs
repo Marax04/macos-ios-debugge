@@ -91,18 +91,18 @@ pub struct Z80IoPort {
 impl Z80IoPort {
     /// Create a new port tracker.
     #[must_use]
-    pub fn new(entry: PortEntry) -> Self {
+    pub const fn new(entry: PortEntry) -> Self {
         Self { entry, last_out: None, last_in: None, access_count: 0 }
     }
 
     /// Record an OUT instruction.
-    pub fn record_out(&mut self, value: u8) {
+    pub const fn record_out(&mut self, value: u8) {
         self.last_out = Some(value);
         self.access_count += 1;
     }
 
     /// Record an IN instruction.
-    pub fn record_in(&mut self, value: u8) {
+    pub const fn record_in(&mut self, value: u8) {
         self.last_in = Some(value);
         self.access_count += 1;
     }
@@ -297,13 +297,13 @@ impl Z80IoPortMap {
 
     /// Number of registered entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 

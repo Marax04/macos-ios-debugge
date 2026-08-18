@@ -13,7 +13,7 @@ use crate::event_types::{
 
 /// Cast helper: isolates usize→f64 precision-loss cast in one place.
 #[inline]
-fn cast_usize_f64(v: usize) -> f64 { v as f64 }
+const fn cast_usize_f64(v: usize) -> f64 { v as f64 }
 
 // ---------------------------------------------------------------------------
 // SubscriberId

@@ -106,10 +106,12 @@ pub struct StringDecoder {
 }
 
 impl StringDecoder {
-    pub fn new(config: StringDecoderConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: StringDecoderConfig) -> Self {
         Self { config }
     }
 
+    #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(StringDecoderConfig::default())
     }
@@ -117,6 +119,7 @@ impl StringDecoder {
     /// Decode a single byte slice using the specified encoding.
     /// Returns `None` when the result fails the printable-ratio or
     /// minimum-length tests.
+    #[must_use]
     pub fn decode_bytes(&self, raw: &[u8], encoding: &Encoding) -> Option<String> {
         let decoded = match encoding {
             Encoding::Ascii => decode_ascii(raw)?,
@@ -147,6 +150,7 @@ impl StringDecoder {
 
     /// Scan the entire `data` slice for strings using all configured encodings.
     /// Returns every successfully decoded [`DetectedString`] found.
+    #[must_use]
     pub fn batch_decode(&self, data: &[u8]) -> Vec<DetectedString> {
         let mut results = Vec::new();
 
@@ -360,6 +364,7 @@ impl StringDecoder {
 // ─── Free-standing decode functions ──────────────────────────────────────────
 
 /// Decode a byte slice as pure 7-bit ASCII, returning `None` if any byte ≥ 128.
+#[must_use]
 pub fn decode_ascii(raw: &[u8]) -> Option<String> {
     if raw.iter().any(|b| *b > 127) {
         return None;
@@ -368,6 +373,7 @@ pub fn decode_ascii(raw: &[u8]) -> Option<String> {
 }
 
 /// Decode UTF-16 LE byte pairs into a String.
+#[must_use]
 pub fn decode_utf16_le(raw: &[u8]) -> Option<String> {
     if raw.len() % 2 != 0 {
         return None;
@@ -377,6 +383,7 @@ pub fn decode_utf16_le(raw: &[u8]) -> Option<String> {
 }
 
 /// Decode UTF-16 BE byte pairs into a String.
+#[must_use]
 pub fn decode_utf16_be(raw: &[u8]) -> Option<String> {
     if raw.len() % 2 != 0 {
         return None;
@@ -386,16 +393,18 @@ pub fn decode_utf16_be(raw: &[u8]) -> Option<String> {
 }
 
 /// Decode Latin-1 (ISO 8859-1): bytes map 1-to-1 to Unicode codepoints.
+#[must_use]
 pub fn decode_latin1(raw: &[u8]) -> String {
     raw.iter().map(|&b| b as char).collect()
 }
 
 /// Decode Windows CP-1252 (superset of Latin-1 with remapped 0x80–0x9F range).
+#[must_use]
 pub fn decode_cp1252(raw: &[u8]) -> String {
     raw.iter().map(|&b| cp1252_char(b)).collect()
 }
 
-fn cp1252_char(b: u8) -> char {
+const fn cp1252_char(b: u8) -> char {
     // The 128-159 range has special mappings; everything else is Latin-1.
     match b {
         0x80 => '\u{20AC}', 0x82 => '\u{201A}', 0x83 => '\u{0192}',
@@ -413,6 +422,7 @@ fn cp1252_char(b: u8) -> char {
 
 /// Approximate Shift-JIS decode: single-byte ASCII range passed through,
 /// two-byte sequences converted via a basic lookup.
+#[must_use]
 pub fn decode_shift_jis_approx(raw: &[u8]) -> Option<String> {
     let mut out = String::with_capacity(raw.len());
     let mut i = 0;
@@ -440,6 +450,7 @@ pub fn decode_shift_jis_approx(raw: &[u8]) -> Option<String> {
 
 /// Decode RFC-4648 Base64 into a UTF-8 string (returns `None` on invalid input
 /// or when the decoded bytes are not valid UTF-8).
+#[must_use]
 pub fn decode_base64(raw: &[u8]) -> Option<String> {
     // Strip whitespace / padding noise
     let clean: Vec<u8> = raw.iter().copied().filter(|&b| b != b'\n' && b != b'\r' && b != b' ').collect();
@@ -448,6 +459,7 @@ pub fn decode_base64(raw: &[u8]) -> Option<String> {
 }
 
 /// Raw Base64 → bytes (no external dependency).
+#[must_use]
 pub fn base64_decode_bytes(raw: &[u8]) -> Option<Vec<u8>> {
     let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut table = [255u8; 256];
@@ -473,6 +485,7 @@ pub fn base64_decode_bytes(raw: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Decode a sequence of hex digit pairs (e.g. `"48656c6c6f"`) into a UTF-8 string.
+#[must_use]
 pub fn decode_hex_string(raw: &[u8]) -> Option<String> {
     if raw.len() % 2 != 0 { return None; }
     let bytes: Option<Vec<u8>> = raw.chunks_exact(2).map(|pair| {
@@ -483,7 +496,7 @@ pub fn decode_hex_string(raw: &[u8]) -> Option<String> {
     String::from_utf8(bytes?).ok()
 }
 
-fn hex_nibble(b: u8) -> Option<u8> {
+const fn hex_nibble(b: u8) -> Option<u8> {
     match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
@@ -493,6 +506,7 @@ fn hex_nibble(b: u8) -> Option<u8> {
 }
 
 /// Decode a URL-percent-encoded byte slice (+ → space, %XX → byte).
+#[must_use]
 pub fn decode_url_encoded(raw: &[u8]) -> Option<String> {
     let mut out = Vec::with_capacity(raw.len());
     let mut i = 0;
@@ -513,6 +527,7 @@ pub fn decode_url_encoded(raw: &[u8]) -> Option<String> {
 }
 
 /// Apply ROT-13 to all ASCII alphabetic bytes; leave others unchanged.
+#[must_use]
 pub fn rot13_decode(raw: &[u8]) -> String {
     raw.iter().map(|&b| match b {
         b'A'..=b'Z' => b'A' + (b - b'A' + 13) % 26,
@@ -523,6 +538,7 @@ pub fn rot13_decode(raw: &[u8]) -> String {
 
 /// Try all 255 non-zero XOR keys against `data`, returning strings where the
 /// XOR-decoded output has sufficient printable ratio.
+#[must_use]
 pub fn decode_xor_strings(data: &[u8], min_len: usize, min_ratio: f64) -> Vec<DetectedString> {
     let mut results = Vec::new();
     for key in 1u8..=255 {
@@ -556,6 +572,7 @@ pub fn decode_xor_strings(data: &[u8], min_len: usize, min_ratio: f64) -> Vec<De
 
 /// Detect the most probable encoding of `data` using BOM detection and
 /// heuristic scoring.
+#[must_use]
 pub fn detect_encoding(data: &[u8]) -> Encoding {
     // BOM detection
     if data.starts_with(&[0xFF, 0xFE]) { return Encoding::Utf16Le; }
@@ -595,11 +612,11 @@ pub fn detect_encoding(data: &[u8]) -> Encoding {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn is_printable_byte(b: u8) -> bool {
+const fn is_printable_byte(b: u8) -> bool {
     b >= 0x20 && b < 0x7F
 }
 
-fn is_printable_u16(cp: u16) -> bool {
+const fn is_printable_u16(cp: u16) -> bool {
     cp >= 0x0020 && cp != 0x007F
 }
 

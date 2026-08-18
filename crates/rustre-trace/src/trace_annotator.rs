@@ -407,7 +407,7 @@ impl TraceAnnotator {
 
     /// Create an annotator with explicit config.
     #[must_use]
-    pub fn with_config(symbol_table: SymbolTable, config: AnnotatorConfig) -> Self {
+    pub const fn with_config(symbol_table: SymbolTable, config: AnnotatorConfig) -> Self {
         Self { symbol_table, config }
     }
 

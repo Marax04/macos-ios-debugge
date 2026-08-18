@@ -1,6 +1,6 @@
 //! `rustre-deobf-vmlift`
 //!
-//! This crate is part of the RustRE Suite, a premium reverse engineering platform.
+//! This crate is part of the `RustRE` Suite, a premium reverse engineering platform.
 //!
 //! # Deobfuscation Pass: VMLIFT
 //! Performs lifting of VM bytecode to an intermediate representation (IR) for static analysis.
@@ -69,56 +69,56 @@ impl std::fmt::Display for GuestInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.opcode {
             GuestOpcode::Add => {
-                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{}", r));
-                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{}", r));
-                write!(f, "ADD {}, {}", dst, src)
+                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{r}"));
+                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{r}"));
+                write!(f, "ADD {dst}, {src}")
             }
             GuestOpcode::Sub => {
-                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{}", r));
-                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{}", r));
-                write!(f, "SUB {}, {}", dst, src)
+                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{r}"));
+                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{r}"));
+                write!(f, "SUB {dst}, {src}")
             }
             GuestOpcode::Push => {
                 if let Some(src) = self.reg_src {
-                    write!(f, "PUSH r{}", src)
+                    write!(f, "PUSH r{src}")
                 } else if let Some(imm) = self.imm {
-                    write!(f, "PUSH {:#x}", imm)
+                    write!(f, "PUSH {imm:#x}")
                 } else {
                     write!(f, "PUSH ?")
                 }
             }
             GuestOpcode::Pop => {
-                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{}", r));
-                write!(f, "POP {}", dst)
+                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{r}"));
+                write!(f, "POP {dst}")
             }
             GuestOpcode::Load => {
-                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{}", r));
+                let dst = self.reg_dst.map_or("?".to_string(), |r| format!("r{r}"));
                 match (self.reg_src, self.imm) {
                     (Some(src), Some(imm)) => {
                         if imm == 0 {
-                            write!(f, "LOAD {}, [r{}]", dst, src)
+                            write!(f, "LOAD {dst}, [r{src}]")
                         } else {
-                            write!(f, "LOAD {}, [r{} + {:#x}]", dst, src, imm)
+                            write!(f, "LOAD {dst}, [r{src} + {imm:#x}]")
                         }
                     }
-                    (Some(src), None) => write!(f, "LOAD {}, [r{}]", dst, src),
-                    (None, Some(imm)) => write!(f, "LOAD {}, {:#x}", dst, imm),
-                    (None, None) => write!(f, "LOAD {}, ?", dst),
+                    (Some(src), None) => write!(f, "LOAD {dst}, [r{src}]"),
+                    (None, Some(imm)) => write!(f, "LOAD {dst}, {imm:#x}"),
+                    (None, None) => write!(f, "LOAD {dst}, ?"),
                 }
             }
             GuestOpcode::Store => {
-                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{}", r));
+                let src = self.reg_src.map_or("?".to_string(), |r| format!("r{r}"));
                 match (self.reg_dst, self.imm) {
                     (Some(dst), Some(imm)) => {
                         if imm == 0 {
-                            write!(f, "STORE [r{}], {}", dst, src)
+                            write!(f, "STORE [r{dst}], {src}")
                         } else {
-                            write!(f, "STORE [r{} + {:#x}], {}", dst, imm, src)
+                            write!(f, "STORE [r{dst} + {imm:#x}], {src}")
                         }
                     }
-                    (Some(dst), None) => write!(f, "STORE [r{}], {}", dst, src),
-                    (None, Some(imm)) => write!(f, "STORE [{:#x}], {}", imm, src),
-                    (None, None) => write!(f, "STORE [?], {}", src),
+                    (Some(dst), None) => write!(f, "STORE [r{dst}], {src}"),
+                    (None, Some(imm)) => write!(f, "STORE [{imm:#x}], {src}"),
+                    (None, None) => write!(f, "STORE [?], {src}"),
                 }
             }
             GuestOpcode::Halt => write!(f, "HALT"),
@@ -130,7 +130,7 @@ impl std::fmt::Display for GuestInstruction {
 pub struct VmLifter;
 
 impl VmLifter {
-    /// Decodes a bytecode buffer into a list of GuestInstruction structures.
+    /// Decodes a bytecode buffer into a list of `GuestInstruction` structures.
     ///
     /// # Bytecode Encoding Scheme:
     /// - `0x01` (Add): `0x01` + `reg_dst: u8` + `reg_src: u8`
@@ -297,6 +297,7 @@ impl VmLifter {
     /// Lenient variant of [`VmLifter::lift_to_instructions`] that never returns
     /// an error: unknown opcodes are emitted as `"UNK_xx"` one-byte placeholders
     /// and decoding continues.  Suitable for analysing arbitrary bytecode blobs.
+    #[must_use]
     pub fn lift_to_instructions_lenient(bytecode: &[u8]) -> Vec<GuestInstruction> {
         // Delegate to the non-strict VmBytecodeLifter which already handles
         // unknown opcodes gracefully, then project into GuestInstruction.
@@ -366,6 +367,7 @@ impl VmLifter {
     }
 
     /// Translates guest instructions to readable pseudo-IL strings for static analysis.
+    #[must_use]
     pub fn to_pseudo_il(instrs: &[GuestInstruction]) -> Vec<String> {
         instrs.iter().map(|instr| instr.to_string()).collect()
     }
@@ -716,13 +718,13 @@ pub enum HandlerSemantic {
 impl HandlerSemantic {
     /// Return `true` if this semantic modifies control flow.
     #[must_use]
-    pub fn is_control_flow(&self) -> bool {
+    pub const fn is_control_flow(&self) -> bool {
         matches!(self, Self::Branch | Self::Call | Self::Ret | Self::Halt)
     }
 
     /// Return `true` if this semantic accesses memory.
     #[must_use]
-    pub fn accesses_memory(&self) -> bool {
+    pub const fn accesses_memory(&self) -> bool {
         matches!(
             self,
             Self::Load(_)
@@ -742,12 +744,12 @@ impl HandlerSemantic {
 impl std::fmt::Display for HandlerSemantic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Push(PushSrc::Constant(v)) => write!(f, "VPUSH #{:#x}", v),
-            Self::Push(PushSrc::VirtualReg(r)) => write!(f, "VPUSH vr{}", r),
+            Self::Push(PushSrc::Constant(v)) => write!(f, "VPUSH #{v:#x}"),
+            Self::Push(PushSrc::VirtualReg(r)) => write!(f, "VPUSH vr{r}"),
             Self::Push(PushSrc::Memory) => write!(f, "VPUSH [mem]"),
-            Self::Pop(PopDst::VirtualReg(r)) => write!(f, "VPOP  vr{}", r),
+            Self::Pop(PopDst::VirtualReg(r)) => write!(f, "VPOP  vr{r}"),
             Self::Pop(PopDst::Memory) => write!(f, "VPOP  [mem]"),
-            Self::BinOp(op) => write!(f, "V{}", op),
+            Self::BinOp(op) => write!(f, "V{op}"),
             Self::Load(n) => write!(f, "VLOAD{}  [addr]", n * 8),
             Self::Store(n) => write!(f, "VSTORE{} [addr]", n * 8),
             Self::Cmp => write!(f, "VCMP"),
@@ -755,7 +757,7 @@ impl std::fmt::Display for HandlerSemantic {
             Self::Call => write!(f, "VCALL"),
             Self::Ret => write!(f, "VRET"),
             Self::Halt => write!(f, "VHALT"),
-            Self::IpAdvance(n) => write!(f, "VIP+={}", n),
+            Self::IpAdvance(n) => write!(f, "VIP+={n}"),
             Self::Unknown => write!(f, "VUNK"),
         }
     }
@@ -763,7 +765,7 @@ impl std::fmt::Display for HandlerSemantic {
 
 /// Return a short static mnemonic for the given semantic.
 #[must_use]
-pub fn suggest_mnemonic(sem: &HandlerSemantic) -> &'static str {
+pub const fn suggest_mnemonic(sem: &HandlerSemantic) -> &'static str {
     match sem {
         HandlerSemantic::Push(_) => "VPUSH",
         HandlerSemantic::Pop(_) => "VPOP",
@@ -823,7 +825,7 @@ impl VmInstructionDef {
         }
     }
 
-    fn default_operand_bytes(sem: &HandlerSemantic) -> usize {
+    const fn default_operand_bytes(sem: &HandlerSemantic) -> usize {
         match sem {
             HandlerSemantic::Push(PushSrc::Constant(_)) => 8,
             HandlerSemantic::Push(PushSrc::VirtualReg(_)) => 1,
@@ -956,7 +958,7 @@ pub struct VmInstruction {
 
 impl std::fmt::Display for VmInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ops: Vec<String> = self.operands.iter().map(|o| format!("{:#x}", o)).collect();
+        let ops: Vec<String> = self.operands.iter().map(|o| format!("{o:#x}")).collect();
         if ops.is_empty() {
             write!(
                 f,
@@ -1047,7 +1049,7 @@ impl VmBytecodeDisassembler {
                         offset,
                         opcode,
                         operands: vec![],
-                        mnemonic: format!("VUNK_{:02X}", opcode),
+                        mnemonic: format!("VUNK_{opcode:02X}"),
                     });
                 }
             }
@@ -1230,7 +1232,7 @@ impl VmLifterPipeline {
         let mut lines: Vec<String> = Vec::new();
 
         // Header
-        lines.push(format!("; VM Lift Report — base={:#x}", base));
+        lines.push(format!("; VM Lift Report — base={base:#x}"));
         lines.push(format!(
             "; dispatchers={} total_handlers={}",
             report.dispatchers_found, report.total_handlers
@@ -1240,7 +1242,7 @@ impl VmLifterPipeline {
         // ISA listing
         lines.push("; ── ISA ──────────────────────────────────────────────".to_owned());
         for handler in report.isa.sorted_handlers() {
-            lines.push(format!(";  {}", handler));
+            lines.push(format!(";  {handler}"));
         }
         lines.push(String::new());
 
@@ -1257,14 +1259,14 @@ impl VmLifterPipeline {
                 Some(def) => def.semantic.to_string(),
                 None => "unknown".to_owned(),
             };
-            lines.push(format!("{}  ; {}", instr, pseudo));
+            lines.push(format!("{instr}  ; {pseudo}"));
         }
         lines.push(String::new());
 
         // Analysis notes
         lines.push("; ── Analysis Notes ───────────────────────────────────".to_owned());
         for note in &report.analysis_notes {
-            lines.push(format!("; {}", note));
+            lines.push(format!("; {note}"));
         }
 
         Ok(lines)
@@ -1275,13 +1277,23 @@ impl VmLifterPipeline {
 ///
 /// Previously this printed to stdout — that broke callers using stdio for structured
 /// IO (e.g. MCP JSON-RPC). It now returns the lines so the caller decides output.
-pub fn run_pass() -> Vec<String> {
-    let bytecode = vec![0x07];
-    if let Ok(instrs) = VmLifter::lift_to_instructions(&bytecode) {
-        VmLifter::to_pseudo_il(&instrs)
-    } else {
-        Vec::new()
-    }
+#[must_use]
+/// Lift `bytecode` and render it as pseudo-IL lines.
+///
+/// Returns an empty vector when the bytes do not lift — an unliftable blob has
+/// no pseudo-IL, and saying so with an empty result keeps the caller from
+/// distinguishing "failed" from "lifted to nothing" only by a side channel.
+///
+/// ⚠ This used to take no argument and lift a hardcoded `vec![0x07]`, so every
+/// caller got the pseudo-IL of one byte nobody chose. Its MCP wrapper then
+/// discarded even that and answered `{"ok": true}` unconditionally — a tool
+/// that reported success for an analysis it never performed on input it never
+/// received.
+#[must_use]
+pub fn run_pass(bytecode: &[u8]) -> Vec<String> {
+    VmLifter::lift_to_instructions(bytecode)
+        .map(|instrs| VmLifter::to_pseudo_il(&instrs))
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -1682,8 +1694,12 @@ mod tests {
     }
 
     #[test]
-    fn test_run_pass_no_panic() {
-        run_pass();
+    fn test_run_pass_lifts_its_input() {
+        // Was `run_pass();` — no input, result discarded, so it asserted only
+        // that a hardcoded byte did not panic.
+        assert!(run_pass(&[]).is_empty(), "no bytes means no pseudo-IL");
+        let a = run_pass(&[0x07]);
+        assert_eq!(a, run_pass(&[0x07]), "lifting must be deterministic");
     }
 
     #[test]

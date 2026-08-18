@@ -51,7 +51,8 @@ pub enum PhaseId {
 
 impl PhaseId {
     /// Human-readable name.
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             PhaseId::CallGraphReconstruction => "call-graph-reconstruction",
             PhaseId::IndirectJumpResolution  => "indirect-jump-resolution",
@@ -64,7 +65,8 @@ impl PhaseId {
     }
 
     /// Default maximum iterations for this phase.
-    pub fn default_max_iter(&self) -> u32 {
+    #[must_use]
+    pub const fn default_max_iter(&self) -> u32 {
         match self {
             PhaseId::CallGraphReconstruction => 8,
             PhaseId::IndirectJumpResolution  => 16,
@@ -105,7 +107,8 @@ pub struct DeobfIteration {
 }
 
 impl DeobfIteration {
-    pub fn initial(phase: PhaseId) -> Self {
+    #[must_use]
+    pub const fn initial(phase: PhaseId) -> Self {
         Self {
             phase,
             phase_iter: 0,
@@ -148,16 +151,19 @@ pub struct IterationResult {
 
 impl IterationResult {
     /// Returns `true` if the run converged and quality is above `threshold`.
+    #[must_use]
     pub fn is_good(&self, threshold: f64) -> bool {
         self.converged && self.final_score >= threshold
     }
 
     /// Return the history entries for a specific phase.
+    #[must_use]
     pub fn phase_history(&self, phase: PhaseId) -> Vec<&DeobfIteration> {
         self.history.iter().filter(|i| i.phase == phase).collect()
     }
 
     /// Compute the average score improvement per iteration.
+    #[must_use]
     pub fn avg_improvement(&self) -> f64 {
         if self.history.is_empty() {
             return 0.0;
@@ -224,6 +230,7 @@ impl Default for OrchConfig {
 
 impl OrchConfig {
     /// Maximum iterations for the given phase.
+    #[must_use]
     pub fn max_iter_for(&self, phase: PhaseId) -> u32 {
         self.phase_limits.get(&phase).copied().unwrap_or(phase.default_max_iter())
     }
@@ -258,6 +265,7 @@ pub trait PhaseHandler: Send {
 // ---------------------------------------------------------------------------
 
 /// Simple convergence check: is the improvement below `threshold`?
+#[must_use]
 pub fn convergence_check(previous: f64, current: f64, threshold: f64) -> bool {
     (current - previous).abs() < threshold
 }
@@ -266,6 +274,7 @@ pub fn convergence_check(previous: f64, current: f64, threshold: f64) -> bool {
 ///
 /// `stall_limit` is the number of consecutive non-improving iterations
 /// required before declaring a stall.
+#[must_use]
 pub fn stall_check(history: &[f64], stall_limit: usize, threshold: f64) -> bool {
     if history.len() < stall_limit {
         return false;
@@ -288,6 +297,7 @@ pub struct DeobfOrchestrator {
 
 impl DeobfOrchestrator {
     /// Create a new orchestrator with the given configuration.
+    #[must_use]
     pub fn new(config: OrchConfig) -> Self {
         Self { config, handlers: HashMap::new() }
     }
@@ -402,12 +412,13 @@ impl DeobfOrchestrator {
     }
 
     /// Access the configuration.
-    pub fn config(&self) -> &OrchConfig {
+    #[must_use]
+    pub const fn config(&self) -> &OrchConfig {
         &self.config
     }
 
     /// Mutably access the configuration.
-    pub fn config_mut(&mut self) -> &mut OrchConfig {
+    pub const fn config_mut(&mut self) -> &mut OrchConfig {
         &mut self.config
     }
 }

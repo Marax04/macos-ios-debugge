@@ -82,7 +82,7 @@ struct TypeInfo {
 /// Return `true` if a concrete type is compatible with the `is_pointer`
 /// flag (plain pointers and function pointers both live in pointer
 /// registers).
-fn ptr_compatible(t: &RecoveredType) -> bool {
+const fn ptr_compatible(t: &RecoveredType) -> bool {
     t.is_pointer() || matches!(t, RecoveredType::FnPtr { .. })
 }
 

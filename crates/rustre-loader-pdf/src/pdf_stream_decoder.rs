@@ -1,7 +1,7 @@
 //! PDF stream decoder.
 //!
-//! Handles all standard PDF filter types: FlateDecode, LZWDecode,
-//! ASCII85Decode, ASCIIHexDecode, RunLengthDecode, CCITTFaxDecode.
+//! Handles all standard PDF filter types: `FlateDecode`, `LZWDecode`,
+//! `ASCII85Decode`, `ASCIIHexDecode`, `RunLengthDecode`, `CCITTFaxDecode`.
 //! Decompresses streams, detects nested filters, handles malformed streams
 //! gracefully, and reconstructs original data.
 
@@ -80,7 +80,7 @@ impl PdfFilter {
 
     /// Returns the canonical filter name.
     #[must_use]
-    pub fn canonical_name(&self) -> &str {
+    pub const fn canonical_name(&self) -> &str {
         match self {
             Self::FlateDecode => "FlateDecode",
             Self::LzwDecode => "LZWDecode",
@@ -130,7 +130,7 @@ pub struct FilterChain {
 impl FilterChain {
     /// Create an empty (no-op) chain.
     #[must_use]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self {
             filters: vec![],
             decode_parms: vec![],
@@ -165,13 +165,13 @@ impl FilterChain {
 
     /// Number of filters in the chain.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.filters.len()
     }
 
     /// Returns true if the chain is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.filters.is_empty()
     }
 
@@ -194,7 +194,7 @@ impl FilterChain {
 
 // ─── DecodeParams ─────────────────────────────────────────────────────────────
 
-/// Parameters for a specific filter (DecodeParms entry).
+/// Parameters for a specific filter (`DecodeParms` entry).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecodeParams {
     /// PNG predictor index (10–15 for PNG, 1 for no predictor).
@@ -232,7 +232,7 @@ pub struct StreamDecoder;
 impl StreamDecoder {
     /// Create a new decoder.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -634,7 +634,7 @@ pub fn png_predictor_undo(
     Ok(out)
 }
 
-fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
+const fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
     let a = a as i32;
     let b = b as i32;
     let c = c as i32;
@@ -652,6 +652,7 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 }
 
 /// Undo TIFF predictor 2 (horizontal differencing).
+#[must_use]
 pub fn tiff_predictor_undo(data: &[u8], colors: usize, bits: usize, columns: usize) -> Vec<u8> {
     if bits != 8 {
         return data.to_vec(); // Only handle 8-bit for now.
@@ -674,7 +675,7 @@ pub fn tiff_predictor_undo(data: &[u8], colors: usize, bits: usize, columns: usi
     out
 }
 
-fn hex_nibble_val(b: u8) -> Option<u8> {
+const fn hex_nibble_val(b: u8) -> Option<u8> {
     match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
@@ -685,7 +686,7 @@ fn hex_nibble_val(b: u8) -> Option<u8> {
 
 // ─── LZW decompressor ─────────────────────────────────────────────────────────
 
-/// Maximum decompressed output size for LZW to prevent DoS via crafted streams.
+/// Maximum decompressed output size for LZW to prevent `DoS` via crafted streams.
 const LZW_MAX_OUTPUT: usize = 256 * 1024 * 1024; // 256 MiB
 
 /// Simple LZW decompressor for PDF (variable-width codes, starting at 9 bits).
@@ -787,7 +788,7 @@ pub struct StreamInfo {
     pub raw_size: usize,
     /// Decoded size in bytes.
     pub decoded_size: usize,
-    /// Compression ratio (raw / decoded), or 1.0 if decoded_size is 0.
+    /// Compression ratio (raw / decoded), or 1.0 if `decoded_size` is 0.
     pub compression_ratio: f32,
     /// Whether the stream was decoded successfully.
     pub decode_ok: bool,

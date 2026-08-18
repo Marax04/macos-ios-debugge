@@ -17,7 +17,7 @@ pub enum RomType {
     Snes,
     /// Commodore 64 `.PRG` binary (2-byte load address header).
     C64,
-    /// Apple II DOS 3.3 / ProDOS binary.
+    /// Apple II DOS 3.3 / `ProDOS` binary.
     Apple2,
     /// Atari 2600 cartridge (2 KB or 4 KB with no header).
     Atari2600,
@@ -35,11 +35,12 @@ impl std::fmt::Display for RomType {
             RomType::Atari2600 => "Atari 2600 cartridge",
             RomType::Generic   => "Generic 6502 binary",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
 /// Identify the format of a ROM image.
+#[must_use]
 pub fn identify_rom_type(data: &[u8]) -> RomType {
     if data.len() >= 4 && &data[0..4] == b"NES\x1A" {
         return RomType::Nes;
@@ -101,6 +102,7 @@ pub struct NesHeader {
 }
 
 /// Parse an iNES 1.0 header from the first 16 bytes of a ROM image.
+#[must_use]
 pub fn parse_ines_header(data: &[u8]) -> Option<NesHeader> {
     if data.len() < 16 {
         return None;
@@ -123,7 +125,8 @@ pub fn parse_ines_header(data: &[u8]) -> Option<NesHeader> {
 }
 
 /// Compute byte offset of the PRG-ROM within an iNES image.
-pub fn nes_prg_offset(header: &NesHeader) -> usize {
+#[must_use]
+pub const fn nes_prg_offset(header: &NesHeader) -> usize {
     16 + if header.has_trainer { 512 } else { 0 }
 }
 
@@ -137,6 +140,7 @@ pub struct C64BinHeader {
 }
 
 /// Parse a C64 `.PRG` file: return `(load_addr, code_bytes)`.
+#[must_use]
 pub fn parse_c64_prg(data: &[u8]) -> (u16, Vec<u8>) {
     if data.len() < 2 {
         return (0x0801, data.to_vec());
@@ -161,6 +165,7 @@ pub struct InterruptVectors {
 /// Read interrupt vectors from `data`, treating the last 6 bytes as $FFFA–$FFFF.
 ///
 /// `base` is the address of `data[0]`; vectors are read relative to $FFFA.
+#[must_use]
 pub fn read_vectors(data: &[u8], base: u16) -> InterruptVectors {
     let read16 = |addr: u16| -> u16 {
         let offset = addr.wrapping_sub(base) as usize;
@@ -194,7 +199,8 @@ pub struct MemoryBank {
 
 impl MemoryBank {
     /// Size in bytes of the bank's address range.
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         // Guard against inverted ranges (addr_range.0 > addr_range.1) which
         // would cause u16 underflow and a wildly wrong result.
         if self.addr_range.1 < self.addr_range.0 {
@@ -204,7 +210,8 @@ impl MemoryBank {
     }
 
     /// True if `addr` falls within this bank's address range.
-    pub fn contains(&self, addr: u16) -> bool {
+    #[must_use]
+    pub const fn contains(&self, addr: u16) -> bool {
         addr >= self.addr_range.0 && addr <= self.addr_range.1
     }
 }
@@ -230,6 +237,7 @@ pub struct RomAnalyzer {
 
 impl RomAnalyzer {
     /// Analyse a ROM image and populate all fields.
+    #[must_use]
     pub fn analyze(data: &[u8]) -> Self {
         let rom_type = identify_rom_type(data);
         let mut analyzer = RomAnalyzer {
@@ -302,7 +310,7 @@ impl RomAnalyzer {
         let (load_addr, code) = parse_c64_prg(data);
         self.c64_load_addr = Some(load_addr);
         self.banks.push(MemoryBank {
-            name: format!("C64 PRG at ${:04X}", load_addr),
+            name: format!("C64 PRG at ${load_addr:04X}"),
             addr_range: (load_addr, load_addr.saturating_add(code.len().saturating_sub(1) as u16)),
             data_offset: 2,
             read_only: false,
@@ -319,7 +327,7 @@ impl RomAnalyzer {
     fn analyze_atari2600(&mut self, data: &[u8]) {
         let base: u16 = if data.len() == 2048 { 0xF800 } else { 0xF000 };
         self.banks.push(MemoryBank {
-            name: format!("Atari 2600 ROM at ${:04X}", base),
+            name: format!("Atari 2600 ROM at ${base:04X}"),
             addr_range: (base, 0xFFFF),
             data_offset: 0,
             read_only: true,
@@ -338,7 +346,7 @@ impl RomAnalyzer {
     fn analyze_apple2(&mut self, data: &[u8]) {
         let (load_addr, code) = parse_c64_prg(data); // same 2-byte header
         self.banks.push(MemoryBank {
-            name: format!("Apple II binary at ${:04X}", load_addr),
+            name: format!("Apple II binary at ${load_addr:04X}"),
             addr_range: (load_addr, load_addr.saturating_add(code.len().saturating_sub(1) as u16)),
             data_offset: 2,
             read_only: false,
@@ -408,6 +416,7 @@ impl RomAnalyzer {
     }
 
     /// Return the code bytes for a given bank.
+    #[must_use]
     pub fn bank_data(&self, bank: &MemoryBank) -> &[u8] {
         let end = (bank.data_offset + bank.size()).min(self.raw.len());
         if bank.data_offset >= self.raw.len() {
@@ -416,7 +425,8 @@ impl RomAnalyzer {
         &self.raw[bank.data_offset..end]
     }
 
-    /// Disassemble a named bank using the base address from its addr_range.
+    /// Disassemble a named bank using the base address from its `addr_range`.
+    #[must_use]
     pub fn disassemble_bank(&self, bank: &MemoryBank)
         -> Vec<crate::mos6502_disassembler::Mos6502Insn>
     {
@@ -426,11 +436,13 @@ impl RomAnalyzer {
     }
 
     /// Compute a simple code/data size estimate for the ROM.
+    #[must_use]
     pub fn code_size_estimate(&self) -> usize {
         self.banks.iter().filter(|b| b.read_only).map(|b| b.size()).sum()
     }
 
     /// Return a human-readable summary of the analyzed ROM.
+    #[must_use]
     pub fn summary(&self) -> String {
         use std::fmt::Write as _;
         let mut s = String::with_capacity(128);
@@ -443,7 +455,7 @@ impl RomAnalyzer {
             );
         }
         if let Some(addr) = self.c64_load_addr {
-            let _ = writeln!(s, "  C64 load address: ${:04X}", addr);
+            let _ = writeln!(s, "  C64 load address: ${addr:04X}");
         }
         if let Some(ref v) = self.vectors {
             let _ = writeln!(

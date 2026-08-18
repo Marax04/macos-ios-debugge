@@ -381,7 +381,7 @@ pub fn detect_rc4_ksa_in_mlil(instructions: &[LlilInstruction]) -> Vec<Rc4KsaPat
 /// single-byte key-stream recovery: it XORs ciphertext with plaintext to get the
 /// keystream and then uses that to verify candidate keys via re-running the KSA.
 ///
-/// Returns a list of (key_length, key) candidates whose re-generated keystream
+/// Returns a list of (`key_length`, key) candidates whose re-generated keystream
 /// matches the observed keystream for the supplied sample.
 #[must_use]
 pub fn rc4_inverse_ksa(s_final: &[u8; 256]) -> Vec<Vec<u8>> {

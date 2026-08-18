@@ -43,6 +43,7 @@ impl fmt::Display for PredicateResult {
 }
 
 /// Convenience: is the result determined (not `Indeterminate`)?
+#[must_use]
 pub fn is_determined(r: PredicateResult) -> bool {
     r != PredicateResult::Indeterminate
 }
@@ -187,7 +188,7 @@ impl Interval {
     }
 
     #[must_use]
-    pub fn add(&self, other: &Self) -> Self {
+    pub const fn add(&self, other: &Self) -> Self {
         Self {
             lo: self.lo.saturating_add(other.lo),
             hi: self.hi.saturating_add(other.hi),
@@ -195,7 +196,7 @@ impl Interval {
     }
 
     #[must_use]
-    pub fn sub(&self, other: &Self) -> Self {
+    pub const fn sub(&self, other: &Self) -> Self {
         Self {
             lo: self.lo.saturating_sub(other.hi),
             hi: self.hi.saturating_sub(other.lo),
@@ -207,18 +208,21 @@ impl Interval {
 
 /// Checks for `x & (x - 1) == 0` where x is a power-of-2 constant.
 /// This is always true when x is a power of two.
-pub fn pattern_power_of_two_and(x: i64) -> bool {
+#[must_use]
+pub const fn pattern_power_of_two_and(x: i64) -> bool {
     x > 0 && (x & (x - 1)) == 0
 }
 
 /// Checks `x * (x + 1)` — always even (hence `& 1 == 0`).
-pub fn pattern_consecutive_product_is_even(x: i64) -> bool {
+#[must_use]
+pub const fn pattern_consecutive_product_is_even(x: i64) -> bool {
     let prod = x.wrapping_mul(x.wrapping_add(1));
     (prod & 1) == 0
 }
 
 /// Returns `true` when `n` is always even, using the parity pattern.
-pub fn pattern_xor_same_zero(x: i64) -> bool {
+#[must_use]
+pub const fn pattern_xor_same_zero(x: i64) -> bool {
     (x ^ x) == 0
 }
 

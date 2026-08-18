@@ -105,7 +105,7 @@ impl NtfsTimestamps {
 
     /// Returns `true` if any timestamp is zero.
     #[must_use]
-    pub fn has_zero_timestamps(&self) -> bool {
+    pub const fn has_zero_timestamps(&self) -> bool {
         self.created.is_zero()
             || self.modified.is_zero()
             || self.metadata_modified.is_zero()

@@ -24,7 +24,7 @@
 //!   (`rustre-decompiler::IlAnalysisPass::run`).
 //! - [`llil_optimizer`] — `LlilOptimizer` runs in tail position after the
 //!   `rustre-il-passes` `PassManager` in `optimize_lifted_llil`, behind the
-//!   opt-in `RUSTRE_LLIL_OPT=1` (it carries DCE + ConstantPropagation, which
+//!   opt-in `RUSTRE_LLIL_OPT=1` (it carries DCE + `ConstantPropagation`, which
 //!   are documented there as destructive for symbol resolution).
 //! - [`llil_branch_resolver`] — third source of jump-table targets in
 //!   `attach_jump_table_edges`, behind the opt-in
@@ -2165,9 +2165,9 @@ impl LlilPass for LlilConstantFolder {
 ///
 /// The inner folder builds results with plain 64-bit arithmetic, so a narrow
 /// operation could yield a `Const` whose value does not FIT its own `size`:
-/// `Neg(Const{20, DWord}, DWord)` produced 0xFFFF_FFFF_FFFF_FFEC where a DWord
-/// negation is 0xFFFF_FFEC, and `Not(Const{0xFF, Byte}, Byte)` produced
-/// 0xFFFF_FFFF_FFFF_FF00 for a byte. That is ill-formed IL — any consumer
+/// `Neg(Const{20, DWord}, DWord)` produced `0xFFFF_FFFF_FFFF_FFEC` where a `DWord`
+/// negation is `0xFFFF_FFEC`, and `Not(Const{0xFF, Byte}, Byte)` produced
+/// `0xFFFF_FFFF_FFFF_FF00` for a byte. That is ill-formed IL — any consumer
 /// reading `.value` without re-masking sees a sign-polluted 64-bit number.
 ///
 /// `rustre_il_passes::fold_binop` masks (it ends `Some(mask(r, size))`) and

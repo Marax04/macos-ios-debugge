@@ -3428,7 +3428,7 @@ impl ExtAflFuzzer {
 /// Not `const`: on Linux it reads `/proc/self/status` at runtime, which a const
 /// fn cannot do (the empty Windows body happens to be const-valid, which is why
 /// this only breaks the Linux build).
-fn estimate_rss_mb() -> u64 {
+const fn estimate_rss_mb() -> u64 {
     #[cfg(target_os = "linux")]
     {
         if let Ok(s) = std::fs::read_to_string("/proc/self/status") {

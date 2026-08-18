@@ -1025,7 +1025,15 @@ pub fn decompile_function_in_load_bounded(
 }
 
 /// Type of the precomputed whole-image arity/return-type cache.
-pub type ArityCache = (HashMap<u64, usize>, HashMap<u64, String>);
+/// #6800: il terzo elemento e' la vista sui SITI DI CHIAMATA
+/// (`callsite_argc_from_bodies`) — quanti registri argomento i chiamanti
+/// PREPARANO davvero per ciascun bersaglio. E' l'unica evidenza che possa
+/// SMENTIRE un parametro dedotto dal corpo del callee.
+pub type ArityCache = (
+    HashMap<u64, usize>,
+    HashMap<u64, String>,
+    HashMap<u64, (usize, usize, usize, usize, usize)>,
+);
 
 /// Same as [`decompile_function_in_load_bounded`] but accepts the whole-image
 /// callee-arity cache from [`image_callee_arities`]. Passing `None` recomputes
@@ -1235,11 +1243,13 @@ pub fn decompile_function_in_load_cached(
         Some(c) => {
             pipeline.set_callee_arities(c.0.clone());
             pipeline.set_callee_return_types(c.1.clone());
+            pipeline.set_callsite_argc(c.2.clone());
         }
         None => {
-            let (arities, ret_types) = callee_arities_for(load, &instructions, bits);
+            let (arities, ret_types, argc) = callee_arities_for(load, &instructions, bits);
             pipeline.set_callee_arities(arities);
             pipeline.set_callee_return_types(ret_types);
+            pipeline.set_callsite_argc(argc);
         }
     }
     drop(perf_ar);
@@ -1256,7 +1266,7 @@ fn callee_arities_for(
     load: &RichLoadResult,
     instructions: &[Instruction],
     bits: u8,
-) -> (HashMap<u64, usize>, HashMap<u64, String>) {
+) -> ArityCache {
     let seeds: Vec<u64> = instructions.iter().filter_map(crate::direct_call_target).collect();
     arities_from_seeds(load, seeds, bits, CALLEE_MAX_NODES)
 }
@@ -1276,7 +1286,7 @@ pub fn image_callee_arities(
     load: &RichLoadResult,
     starts: &[u64],
     bits: u8,
-) -> (HashMap<u64, usize>, HashMap<u64, String>) {
+) -> ArityCache {
     arities_from_seeds(load, starts.to_vec(), bits, usize::MAX)
 }
 
@@ -1347,12 +1357,117 @@ fn e_thunk_di_import(body: &[Instruction]) -> bool {
 /// Shared engine: transitively disassemble from `seeds`, then run the arity
 /// fixpoint. Extracted verbatim from `callee_arities_for` so the per-function
 /// and whole-image paths cannot drift.
+/// Massimo numero di registri-argomento PREPARATI prima di una chiamata a
+/// ciascun bersaglio, osservato su TUTTI i siti di chiamata dell'immagine.
+///
+/// E' la vista complementare a `out` (l'arieta' dedotta dal CORPO del callee) e
+/// serve a una cosa sola: **smentire i parametri fantasma**. Se nessun chiamante
+/// prepara mai `rcx` prima di chiamare `f`, allora il primo parametro che la
+/// definizione di `f` dichiara non lo passa nessuno.
+///
+/// MISURATO sul testo emesso prima di scrivere questo codice: 681 funzioni di
+/// path B dichiarano parametri mentre TUTTI i loro siti passano zero argomenti.
+/// Incrociando con path A come controllo indipendente: **196 sono confermate**
+/// (anche A passa sempre zero), 68 sono argomenti che B perde per il suo clamp,
+/// 417 non sono chiamate in A e restano senza controllo.
+///
+/// ⚠ Assenza dalla mappa significa NESSUNA EVIDENZA, non «zero argomenti»: una
+/// funzione mai chiamata nell'immagine (entry point, callback registrata,
+/// export) non compare, e chi consuma questa mappa deve lasciarla stare. E' la
+/// stessa disciplina delle guardie D9-THUNK e D9-NORETURN qui sopra: meglio
+/// nessuna evidenza di una falsa.
+///
+/// Il conteggio e' un PREFISSO: `rcx,rdx,r8,r9` in ordine. Se un sito prepara
+/// `rcx` e `r8` ma non `rdx`, conta 1 — perche' un buco nella sequenza vuol
+/// dire che `r8` e' scratch, non il terzo argomento.
+/// Ritorna, per bersaglio, `(massimo, minimo, siti, minimo_non_nullo,
+/// siti_non_nulli)`.
+///
+/// #6840 — il minimo su TUTTI i siti e' schiacciato a zero da una sola tabella
+/// di thunk o di stub: `runtime_callbackasm1_abi0` ha 2000 siti che non
+/// preparano nulla, e basta uno di quelli perche' il minimo dica zero e la
+/// direzione «alza» non possa mai scattare. Il minimo calcolato SOLO sui siti
+/// che passano almeno un argomento e' la statistica che quella distorsione non
+/// ha.
+///
+/// #6830 — servono ENTRAMBI gli estremi, e per ragioni opposte:
+/// * il **massimo** SMENTISCE: se nessun sito prepara mai piu' di N registri,
+///   i parametri oltre l'N-esimo non li passa nessuno;
+/// * il **minimo** AFFERMA: se OGNI sito ne prepara almeno N, quegli N sono
+///   certamente passati.
+///
+/// Usare il massimo per affermare e' l'errore che ho misurato: un solo sito con
+/// 4 argomenti alzava la firma e le altre centinaia di chiamate a zero
+/// diventavano incoerenti — `UNDER` 2448 -> **27958**.
+///
+/// #6810 — il CONTEGGIO DEI SITI non e' un di piu': un corpo che
+/// `arities_from_seeds` tronca (`CALLEE_SCAN_BYTES` = 4096, 2000 istruzioni)
+/// puo' nascondere proprio il sito informativo, e allora uno zero significa
+/// «non ho guardato abbastanza», non «nessuno passa argomenti». MISURATO: col
+/// clamp che si fidava di qualunque zero, 7 funzioni perdevano parametri VERI
+/// (path A gliene passa). Chi consuma la mappa deve poter chiedere un minimo di
+/// evidenza.
+fn callsite_argc_from_bodies(
+    bodies: &HashMap<u64, Vec<Instruction>>,
+) -> HashMap<u64, (usize, usize, usize, usize, usize)> {
+    const ARG_REGS: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
+    let mut osservato: HashMap<u64, (usize, usize, usize, usize, usize)> = HashMap::new();
+    for body in bodies.values() {
+        // Stato scorrevole: quali registri argomento sono stati SCRITTI da
+        // quando e' iniziata la funzione. Non si azzera a ogni blocco: un
+        // argomento puo' essere preparato in un blocco e la chiamata trovarsi
+        // in quello dopo.
+        let mut pronto = [false; 4];
+        for ins in body {
+            if let Some(tgt) = crate::direct_call_target(ins) {
+                // Prefisso contiguo dei registri pronti.
+                let mut n = 0usize;
+                while n < 4 && pronto[n] {
+                    n += 1;
+                }
+                let e = osservato.entry(tgt).or_insert((0, usize::MAX, 0, usize::MAX, 0));
+                e.0 = e.0.max(n);
+                e.1 = e.1.min(n);
+                e.2 += 1;
+                if n > 0 {
+                    e.3 = e.3.min(n);
+                    e.4 += 1;
+                }
+                // Una chiamata CONSUMA i registri argomento: quelli del sito
+                // successivo vanno preparati di nuovo. Senza questo, la prima
+                // chiamata della funzione «insegnerebbe» i suoi argomenti a
+                // tutte quelle dopo.
+                pronto = [false; 4];
+                continue;
+            }
+            let o = ins.operands.to_ascii_lowercase();
+            // `split_two` restituisce (destinazione, sorgente) gestendo gia'
+            // l'ordine AT&T, dove la destinazione e' l'ULTIMO operando.
+            let Some((dst, _src)) = crate::split_two(&o) else {
+                continue;
+            };
+            let reg = dst.trim().trim_start_matches('%');
+            if let Some(i) = ARG_REGS.iter().position(|r| *r == reg) {
+                pronto[i] = true;
+            } else if let Some(i) = ["ecx", "edx", "r8d", "r9d"]
+                .iter()
+                .position(|r| *r == reg)
+            {
+                // Anche la meta' a 32 bit conta: `mov $1, %ecx` prepara il
+                // primo argomento tanto quanto `mov $1, %rcx`.
+                pronto[i] = true;
+            }
+        }
+    }
+    osservato
+}
+
 fn arities_from_seeds(
     load: &RichLoadResult,
     seed_targets: Vec<u64>,
     bits: u8,
     max_nodes: usize,
-) -> (HashMap<u64, usize>, HashMap<u64, String>) {
+) -> ArityCache {
     const CALLEE_SCAN_BYTES: usize = 4096;
     const CALLEE_MAX_INSTRS: usize = 2000;
     const MAX_ROUNDS: usize = 8;
@@ -1510,7 +1625,31 @@ fn arities_from_seeds(
         .iter()
         .filter_map(|(&va, b)| crate::predicted_return_type(b).map(|t| (va, t.to_string())))
         .collect();
-    (out, ret_types)
+    // SONDA #6800 (`RUSTRE_DBG_ARGC=1`, effetto ZERO): confronta l'arieta'
+    // dedotta dal CORPO con gli argomenti che i chiamanti PREPARANO davvero.
+    // Serve a validare la mappa PRIMA di collegarla a qualunque decisione.
+    let argc = callsite_argc_from_bodies(&bodies);
+    if std::env::var("RUSTRE_DBG_ARGC").is_ok_and(|v| v != "0") {
+        let (mut sopra, mut pari, mut sotto, mut senza) = (0usize, 0usize, 0usize, 0usize);
+        let mut fantasmi = 0usize;
+        for (&va, &ar) in &out {
+            match argc.get(&va) {
+                None => senza += 1,
+                Some(&(c, ..)) if ar > c => {
+                    sopra += 1;
+                    fantasmi += ar - c;
+                }
+                Some(&(c, ..)) if ar < c => sotto += 1,
+                _ => pari += 1,
+            }
+        }
+        eprintln!(
+            "[argc] bersagli={} con_siti={} arita>argc={sopra} (parametri_smentiti={fantasmi}) arita<argc={sotto} pari={pari} senza_siti={senza}",
+            out.len(),
+            argc.len()
+        );
+    }
+    (out, ret_types, argc)
 }
 
 /// Scan a function's instructions for rip-relative data references whose
@@ -2810,7 +2949,7 @@ mod arity_memo_equivalence_tests {
         let load = load_binary(&path).expect("load");
         let bits = x86_bits_for(&load);
         let starts: Vec<u64> = detect_functions_in_load(&load).iter().map(|f| f.start.0).collect();
-        let (img_ar, img_rt) = image_callee_arities(&load, &starts, bits);
+        let (img_ar, img_rt, _img_argc) = image_callee_arities(&load, &starts, bits);
 
         // Sample real functions (cap the count so the test stays fast — the
         // per-function path is the slow one we are removing).
@@ -2821,7 +2960,7 @@ mod arity_memo_equivalence_tests {
             else {
                 continue;
             };
-            let (fn_ar, fn_rt) = callee_arities_for(&load, &instrs, bits);
+            let (fn_ar, fn_rt, _fn_argc) = callee_arities_for(&load, &instrs, bits);
             for (k, v) in &fn_ar {
                 assert_eq!(
                     img_ar.get(k),

@@ -391,11 +391,13 @@ fn extract_submatches(class: &StringClass, s: &str) -> Vec<String> {
 
 // ── Pattern helpers ───────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn looks_like_url(s: &str) -> bool {
     let s = s.to_ascii_lowercase();
     (s.contains("://") || s.starts_with("www.")) && s.contains('.') && s.len() > 10
 }
 
+#[must_use]
 pub fn looks_like_ipv4(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     if parts.len() != 4 {
@@ -404,6 +406,7 @@ pub fn looks_like_ipv4(s: &str) -> bool {
     parts.iter().all(|p| p.parse::<u8>().is_ok())
 }
 
+#[must_use]
 pub fn looks_like_ipv6(s: &str) -> bool {
     let parts: Vec<&str> = s.split(':').collect();
     if !(3..=8).contains(&parts.len()) {
@@ -414,6 +417,7 @@ pub fn looks_like_ipv6(s: &str) -> bool {
         .all(|p| p.is_empty() || (p.len() <= 4 && p.chars().all(|c| c.is_ascii_hexdigit())))
 }
 
+#[must_use]
 pub fn looks_like_email(s: &str) -> bool {
     let parts: Vec<&str> = s.splitn(2, '@').collect();
     if parts.len() != 2 {
@@ -429,6 +433,7 @@ pub fn looks_like_email(s: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c))
 }
 
+#[must_use]
 pub fn looks_like_uuid(s: &str) -> bool {
     // Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     let s = s.trim_matches(|c| c == '{' || c == '}');
@@ -443,6 +448,7 @@ pub fn looks_like_uuid(s: &str) -> bool {
         .all(|(p, &l)| p.len() == l && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
+#[must_use]
 pub fn looks_like_btc_address(s: &str) -> bool {
     // P2PKH (1...) or P2SH (3...) or bech32 (bc1...)
     let len = s.len();
@@ -457,6 +463,7 @@ pub fn looks_like_btc_address(s: &str) -> bool {
     s.starts_with("bc1") && (39..=62).contains(&len)
 }
 
+#[must_use]
 pub fn looks_like_eth_address(s: &str) -> bool {
     let addr = if s.starts_with("0x") || s.starts_with("0X") {
         &s[2..]
@@ -466,6 +473,7 @@ pub fn looks_like_eth_address(s: &str) -> bool {
     addr.len() == 40 && addr.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+#[must_use]
 pub fn looks_like_iban(s: &str) -> bool {
     let clean: String = s.chars().filter(|c| !c.is_whitespace()).collect();
     if !(15..=34).contains(&clean.len()) {
@@ -491,6 +499,7 @@ pub fn looks_like_credit_card(s: &str) -> bool {
     luhn_check(&digits)
 }
 
+#[must_use]
 pub fn luhn_check(digits: &[u8]) -> bool {
     let sum: u32 = digits
         .iter()
@@ -508,6 +517,7 @@ pub fn luhn_check(digits: &[u8]) -> bool {
     sum.is_multiple_of(10)
 }
 
+#[must_use]
 pub fn looks_like_domain(s: &str) -> bool {
     let parts: Vec<&str> = s.split('.').collect();
     if parts.len() < 2 || parts.len() > 6 {
@@ -525,12 +535,14 @@ pub fn looks_like_domain(s: &str) -> bool {
     })
 }
 
+#[must_use]
 pub fn looks_like_pe_header(s: &str) -> bool {
     // Check for "MZ" magic or NOP sled indicator in the string
     let lower = s.to_ascii_lowercase();
     lower.starts_with("mz") || s.as_bytes().starts_with(b"MZ")
 }
 
+#[must_use]
 pub fn looks_like_shellcode_hex(s: &str) -> bool {
     // "\\x90\\x90..." or "\x90\x90..." NOP sled patterns
     s.contains("\\x90\\x90") || s.contains("\\x90\\x90\\x90")

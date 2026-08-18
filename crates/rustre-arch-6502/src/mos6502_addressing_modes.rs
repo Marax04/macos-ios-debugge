@@ -27,6 +27,7 @@ pub struct AddressingModeInfo {
 }
 
 /// All addressing mode descriptors, keyed by mode name.
+#[must_use]
 pub fn addressing_mode_info(mode: &str) -> Option<AddressingModeInfo> {
     match mode {
         "IMP" => Some(AddressingModeInfo {
@@ -102,19 +103,22 @@ pub fn addressing_mode_info(mode: &str) -> Option<AddressingModeInfo> {
 
 /// Zero-page addition with 8-bit wrap: `(base + index) & 0xFF`.
 #[inline]
-pub fn effective_address_zp_x(zp: u8, x: u8) -> u8 {
+#[must_use]
+pub const fn effective_address_zp_x(zp: u8, x: u8) -> u8 {
     zp.wrapping_add(x)
 }
 
 /// Zero-page,Y with 8-bit wrap.
 #[inline]
-pub fn effective_address_zp_y(zp: u8, y: u8) -> u8 {
+#[must_use]
+pub const fn effective_address_zp_y(zp: u8, y: u8) -> u8 {
     zp.wrapping_add(y)
 }
 
-/// `(Indirect,X)` — `ptr_addr = (zp + X) & 0xFF`, then read 16-bit LE from ptr_addr.
+/// `(Indirect,X)` — `ptr_addr = (zp + X) & 0xFF`, then read 16-bit LE from `ptr_addr`.
 ///
 /// The two pointer bytes are both read from zero-page with 8-bit wrap.
+#[must_use]
 pub fn effective_address_ind_x(mem: &[u8], zp: u8, x: u8) -> u16 {
     let ptr = zp.wrapping_add(x) as usize;
     let lo = mem[ptr & 0xFF];
@@ -125,6 +129,7 @@ pub fn effective_address_ind_x(mem: &[u8], zp: u8, x: u8) -> u16 {
 /// `(Indirect),Y` — read 16-bit LE from zero-page address `zp`, then add Y.
 ///
 /// Both bytes of the pointer are read from zero-page with 8-bit wrap.
+#[must_use]
 pub fn effective_address_ind_y(mem: &[u8], zp: u8, y: u8) -> u16 {
     let lo = mem[zp as usize];
     let hi = mem[zp.wrapping_add(1) as usize];
@@ -133,13 +138,15 @@ pub fn effective_address_ind_y(mem: &[u8], zp: u8, y: u8) -> u16 {
 
 /// Detect whether adding `index` to `base` crosses a 256-byte page boundary.
 #[inline]
-pub fn cross_page_check(base: u16, index: u8) -> bool {
+#[must_use]
+pub const fn cross_page_check(base: u16, index: u8) -> bool {
     (base & 0xFF00) != (base.wrapping_add(index as u16) & 0xFF00)
 }
 
 /// Wrap a zero-page address to stay within page 0.
 #[inline]
-pub fn zero_page_wrap(addr: u8) -> u16 {
+#[must_use]
+pub const fn zero_page_wrap(addr: u8) -> u16 {
     addr as u16
 }
 
@@ -147,6 +154,7 @@ pub fn zero_page_wrap(addr: u8) -> u16 {
 ///
 /// `mem` must be a 64 KB slice; `x`, `y` are the respective index registers;
 /// `pc` is the current program counter (used to compute branch targets).
+#[must_use]
 pub fn decode_address(
     operand: &Mos6502Operand,
     mem: &[u8],
@@ -194,6 +202,7 @@ pub struct Mos6502MemoryModel {
 
 impl Mos6502MemoryModel {
     /// Create a new model initialized with all zeros; SP = $FF (empty stack).
+    #[must_use]
     pub fn new() -> Self {
         Self {
             ram: vec![0u8; 0x10000],
@@ -202,6 +211,7 @@ impl Mos6502MemoryModel {
     }
 
     /// Create a model pre-loaded with `data` at address `load_addr`.
+    #[must_use]
     pub fn with_data(data: &[u8], load_addr: u16) -> Self {
         let mut model = Self::new();
         let start = load_addr as usize;
@@ -211,6 +221,7 @@ impl Mos6502MemoryModel {
     }
 
     /// Read one byte from the bus.
+    #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
         self.ram[addr as usize]
     }
@@ -221,6 +232,7 @@ impl Mos6502MemoryModel {
     }
 
     /// Read a 16-bit little-endian word from `addr` (with 16-bit address wrap).
+    #[must_use]
     pub fn read_u16(&self, addr: u16) -> u16 {
         let lo = self.read(addr);
         let hi = self.read(addr.wrapping_add(1));
@@ -263,17 +275,20 @@ impl Mos6502MemoryModel {
     }
 
     /// Return the current stack depth (number of bytes on the stack).
-    pub fn stack_depth(&self) -> u8 {
+    #[must_use]
+    pub const fn stack_depth(&self) -> u8 {
         0xFF_u8.wrapping_sub(self.sp)
     }
 
     /// Peek at the top-of-stack without changing SP.
+    #[must_use]
     pub fn stack_peek(&self) -> u8 {
         let addr = 0x0100u16 | self.sp.wrapping_add(1) as u16;
         self.read(addr)
     }
 
     /// Copy a slice of memory starting at `addr`.
+    #[must_use]
     pub fn read_slice(&self, addr: u16, len: usize) -> Vec<u8> {
         let start = addr as usize;
         let end = (start + len).min(0x10000);
@@ -290,6 +305,7 @@ impl Mos6502MemoryModel {
     }
 
     /// Read the NMI / RESET / IRQ vectors.
+    #[must_use]
     pub fn read_vectors(&self) -> (u16, u16, u16) {
         let nmi   = self.read_u16(0xFFFA);
         let reset = self.read_u16(0xFFFC);

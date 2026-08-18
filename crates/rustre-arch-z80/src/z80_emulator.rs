@@ -205,35 +205,35 @@ impl Z80State {
         (u16::from(self.h) << 8) | u16::from(self.l)
     }
 
-    pub fn set_af(&mut self, v: u16) {
+    pub const fn set_af(&mut self, v: u16) {
         self.a = (v >> 8) as u8;
         self.f = Flags::from_bits_retain(v as u8);
     }
-    pub fn set_bc(&mut self, v: u16) {
+    pub const fn set_bc(&mut self, v: u16) {
         self.b = (v >> 8) as u8;
         self.c = v as u8;
     }
-    pub fn set_de(&mut self, v: u16) {
+    pub const fn set_de(&mut self, v: u16) {
         self.d = (v >> 8) as u8;
         self.e = v as u8;
     }
-    pub fn set_hl(&mut self, v: u16) {
+    pub const fn set_hl(&mut self, v: u16) {
         self.h = (v >> 8) as u8;
         self.l = v as u8;
     }
 
     // --- Flag helpers ---
 
-    fn flag_c(&self) -> bool {
+    const fn flag_c(&self) -> bool {
         self.f.contains(Flags::C)
     }
-    fn flag_z(&self) -> bool {
+    const fn flag_z(&self) -> bool {
         self.f.contains(Flags::Z)
     }
-    fn flag_s(&self) -> bool {
+    const fn flag_s(&self) -> bool {
         self.f.contains(Flags::S)
     }
-    fn flag_pv(&self) -> bool {
+    const fn flag_pv(&self) -> bool {
         self.f.contains(Flags::PV)
     }
 
@@ -345,12 +345,12 @@ impl Z80State {
     // --- Interrupt servicing ---
 
     /// Trigger a non-maskable interrupt.
-    pub fn nmi(&mut self) {
+    pub const fn nmi(&mut self) {
         self.nmi_pending = true;
     }
 
     /// Trigger a maskable interrupt (provides the data-bus byte for IM0/IM2).
-    pub fn int(&mut self, data: u8) {
+    pub const fn int(&mut self, data: u8) {
         self.int_pending = true;
         self.int_data = data;
     }

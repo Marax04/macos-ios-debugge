@@ -461,6 +461,7 @@ fn constraint_sources(c: &AndersonConstraint) -> Vec<VarId> {
 }
 
 /// The output variables written by a constraint.
+#[must_use]
 pub fn constraint_outputs(c: &AndersonConstraint) -> Vec<VarId> {
     match c {
         AndersonConstraint::Alloc { ptr, .. } => vec![*ptr],

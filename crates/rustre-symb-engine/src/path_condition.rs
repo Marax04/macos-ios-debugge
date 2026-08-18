@@ -211,7 +211,7 @@ impl Constraint {
 /// unsigned comparison gives the opposite verdict. Widths of 0 or >= 64 are
 /// passed through unchanged.
 #[must_use]
-fn sign_extend(val: u64, width: u32) -> i64 {
+const fn sign_extend(val: u64, width: u32) -> i64 {
     if width == 0 || width >= 64 {
         return val.cast_signed();
     }

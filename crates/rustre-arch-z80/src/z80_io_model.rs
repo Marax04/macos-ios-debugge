@@ -57,7 +57,7 @@ impl SimpleRamIoDevice {
 
     /// Direct access to the register backing array (for tests).
     #[must_use]
-    pub fn registers(&self) -> &[u8; 256] {
+    pub const fn registers(&self) -> &[u8; 256] {
         &self.registers
     }
 }
@@ -88,7 +88,7 @@ pub struct CountingIoDevice {
 impl CountingIoDevice {
     /// Create with all counters zeroed.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             read_counts: [0u32; 256],
             write_counts: [0u32; 256],

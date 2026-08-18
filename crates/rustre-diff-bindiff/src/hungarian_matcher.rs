@@ -81,7 +81,7 @@ impl MatchConfidence {
 
     /// Numeric lower bound for this confidence band.
     #[must_use]
-    pub fn lower_bound(self) -> f64 {
+    pub const fn lower_bound(self) -> f64 {
         match self {
             Self::Exact  => 0.95,
             Self::High   => 0.75,
@@ -158,6 +158,7 @@ impl CostMatrix {
     ///
     /// `similarity[i][j]` is the similarity between function `i` in A and
     /// function `j` in B.  Both must be in `[0, 1]`.
+    #[must_use]
     pub fn from_similarity(similarity: &[Vec<f64>]) -> Self {
         let rows_orig = similarity.len();
         // The WIDEST row, not just the first: a jagged input whose later rows
@@ -188,7 +189,7 @@ impl CostMatrix {
     #[inline]
     fn get_mut(&mut self, r: usize, c: usize) -> &mut f64 { &mut self.data[r * self.n + c] }
     #[inline]
-    fn dim(&self) -> usize { self.n }
+    const fn dim(&self) -> usize { self.n }
 
     /// Number of rows in the original (un-padded) similarity matrix.
     ///
@@ -196,15 +197,15 @@ impl CostMatrix {
     /// algorithm has filled padding rows with synthetic zero-similarity
     /// entries.
     #[must_use]
-    pub fn original_rows(&self) -> usize { self.rows_orig }
+    pub const fn original_rows(&self) -> usize { self.rows_orig }
 
     /// Number of columns in the original (un-padded) similarity matrix.
     #[must_use]
-    pub fn original_cols(&self) -> usize { self.cols_orig }
+    pub const fn original_cols(&self) -> usize { self.cols_orig }
 
     /// Padded square dimension actually stored in `data`.
     #[must_use]
-    pub fn padded_dim(&self) -> usize { self.n }
+    pub const fn padded_dim(&self) -> usize { self.n }
 
     /// Read-only access to the cost at `(row, col)`.
     ///
@@ -251,6 +252,7 @@ pub struct HungarianMatcher {
 impl HungarianMatcher {
     /// Solve the assignment problem on `matrix` and return the assignment
     /// vector: `assignment[i]` = column assigned to row `i`.
+    #[must_use]
     pub fn solve(matrix: &CostMatrix) -> Vec<usize> {
         let n = matrix.dim();
         let mut solver = Self {
@@ -468,6 +470,7 @@ impl Default for MatcherConfig {
 
 impl MatcherConfig {
     /// Create a config with custom thresholds.
+    #[must_use]
     pub fn new(min_confidence: f64, sparse_threshold: usize) -> Self {
         Self {
             min_confidence: min_confidence.clamp(0.0, 1.0),
@@ -506,19 +509,23 @@ impl MatcherResult {
     }
 
     /// Number of functions in A that were matched.
-    pub fn matched_a_count(&self) -> usize { self.matches.len() }
+    #[must_use]
+    pub const fn matched_a_count(&self) -> usize { self.matches.len() }
 
     /// Number of unmatched functions in A.
+    #[must_use]
     pub fn unmatched_a_count(&self) -> usize {
         self.unmatched.iter().filter(|u| u.side == Side::A).count()
     }
 
     /// Number of unmatched functions in B.
+    #[must_use]
     pub fn unmatched_b_count(&self) -> usize {
         self.unmatched.iter().filter(|u| u.side == Side::B).count()
     }
 
     /// Overall similarity: matched / total functions.
+    #[must_use]
     pub fn overall_similarity(&self) -> f64 {
         let total_a = self.matched_a_count() + self.unmatched_a_count();
         let total_b = self.matched_a_count() + self.unmatched_b_count();
@@ -530,11 +537,13 @@ impl MatcherResult {
     }
 
     /// Weighted similarity: sum(similarity) / max(|A|, |B|).
+    #[must_use]
     pub fn weighted_similarity(&self) -> f64 {
         self.overall_similarity()
     }
 
     /// Confidence histogram: returns (Exact, High, Medium, Low) counts.
+    #[must_use]
     pub fn confidence_histogram(&self) -> (usize, usize, usize, usize) {
         let mut exact = 0;
         let mut high  = 0;
@@ -571,6 +580,7 @@ impl ExtendedHungarianMatcher {
     ///
     /// `similarity[i][j]` = similarity in `[0, 1]` between function `i` in A
     /// and function `j` in B.
+    #[must_use]
     pub fn match_all(
         similarity: &[Vec<f64>],
         config: &MatcherConfig,
@@ -646,6 +656,7 @@ impl ExtendedHungarianMatcher {
     }
 
     /// Convenience: match with default config.
+    #[must_use]
     pub fn match_default(similarity: &[Vec<f64>]) -> MatcherResult {
         Self::match_all(similarity, &MatcherConfig::default())
     }
@@ -654,6 +665,7 @@ impl ExtendedHungarianMatcher {
     ///
     /// `features_a[i]` and `features_b[j]` are arbitrary `f64` feature slices;
     /// similarity is cosine similarity clamped to `[0, 1]`.
+    #[must_use]
     pub fn build_similarity_matrix(
         features_a: &[Vec<f64>],
         features_b: &[Vec<f64>],
@@ -675,6 +687,7 @@ impl ExtendedHungarianMatcher {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Cosine similarity between two feature vectors, clamped to `[0, 1]`.
+#[must_use]
 pub fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
     let len = a.len().min(b.len());
     if len == 0 {
@@ -769,6 +782,7 @@ impl FunctionFeatureSet {
     }
 
     /// Build the feature vector for cosine similarity in feature space.
+    #[must_use]
     pub fn to_feature_vec(&self) -> Vec<f64> {
         let mut v = Vec::with_capacity(4 + self.opcode_hist.len());
         v.push(self.block_count as f64);
@@ -798,6 +812,7 @@ pub struct HighLevelMatcher;
 
 impl HighLevelMatcher {
     /// Match two lists of function feature sets.
+    #[must_use]
     pub fn match_functions(
         funcs_a: &[FunctionFeatureSet],
         funcs_b: &[FunctionFeatureSet],
@@ -811,6 +826,7 @@ impl HighLevelMatcher {
     }
 
     /// Match with default config.
+    #[must_use]
     pub fn match_default(
         funcs_a: &[FunctionFeatureSet],
         funcs_b: &[FunctionFeatureSet],

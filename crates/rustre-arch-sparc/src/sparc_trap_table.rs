@@ -91,13 +91,13 @@ impl TrapKind {
 
     /// Returns `true` if this is a synchronous hardware trap.
     #[must_use]
-    pub fn is_synchronous(&self) -> bool {
+    pub const fn is_synchronous(&self) -> bool {
         !matches!(self, Self::Interrupt(_) | Self::Reset)
     }
 
     /// Returns `true` if this is an interrupt trap (asynchronous).
     #[must_use]
-    pub fn is_interrupt(&self) -> bool {
+    pub const fn is_interrupt(&self) -> bool {
         matches!(self, Self::Interrupt(_))
     }
 }
@@ -130,7 +130,7 @@ pub struct TrapEntry {
 impl TrapEntry {
     /// Byte address of this trap handler given the trap base address.
     #[must_use]
-    pub fn handler_addr(&self, tbr: u32) -> u32 {
+    pub const fn handler_addr(&self, tbr: u32) -> u32 {
         (tbr & 0xFFFF_F000) | (self.table_offset as u32)
     }
 }
@@ -184,13 +184,13 @@ impl SparcTrapTable {
 
     /// Total number of entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if the table is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }
@@ -362,7 +362,7 @@ pub struct TrapHandlerScanner {
 impl TrapHandlerScanner {
     /// Create a scanner.  If `tbr` is known, results will include resolved addresses.
     #[must_use]
-    pub fn new(tbr: Option<u32>) -> Self {
+    pub const fn new(tbr: Option<u32>) -> Self {
         Self { tbr }
     }
 

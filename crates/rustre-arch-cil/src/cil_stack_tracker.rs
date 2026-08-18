@@ -127,7 +127,7 @@ pub struct CilStack {
 impl CilStack {
     /// Create an empty stack.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { slots: Vec::new() }
     }
 
@@ -149,13 +149,13 @@ impl CilStack {
 
     /// Current stack depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.slots.len()
     }
 
     /// Returns `true` if the stack is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
 
@@ -179,7 +179,7 @@ impl CilStack {
     ///
     /// # Errors
     /// Returns `StackError::Underflow` if there are fewer than `n` items.
-    pub fn require(&self, n: usize) -> Result<(), StackError> {
+    pub const fn require(&self, n: usize) -> Result<(), StackError> {
         if self.slots.len() < n {
             Err(StackError::Underflow)
         } else {
@@ -248,13 +248,13 @@ impl StackEffect {
             pushes: vec![],
         }
     }
-    fn pop1() -> Self {
+    const fn pop1() -> Self {
         Self {
             pops: 1,
             pushes: vec![],
         }
     }
-    fn pop2() -> Self {
+    const fn pop2() -> Self {
         Self {
             pops: 2,
             pushes: vec![],
@@ -534,7 +534,7 @@ impl StackVerifier {
 
     /// Returns `true` if no errors were detected.
     #[must_use]
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         self.errors.is_empty()
     }
 

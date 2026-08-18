@@ -66,7 +66,7 @@ pub struct CallEdge {
 impl CallEdge {
     /// Create a new call edge.
     #[must_use]
-    pub fn new(caller: u64, callee: u64, call_site: u64, kind: EdgeKind) -> Self {
+    pub const fn new(caller: u64, callee: u64, call_site: u64, kind: EdgeKind) -> Self {
         Self {
             caller,
             callee,
@@ -79,7 +79,7 @@ impl CallEdge {
 
     /// Set confidence.
     #[must_use]
-    pub fn with_confidence(mut self, c: f64) -> Self {
+    pub const fn with_confidence(mut self, c: f64) -> Self {
         // `f64::clamp` propagates NaN; a NaN confidence would silently lose
         // every comparison it takes part in.
         self.confidence = if c.is_nan() { 0.0 } else { c.clamp(0.0, 1.0) };
@@ -114,7 +114,7 @@ pub struct CallSite {
 impl CallSite {
     /// Create a new call site.
     #[must_use]
-    pub fn new(addr: u64, function: u64, kind: EdgeKind) -> Self {
+    pub const fn new(addr: u64, function: u64, kind: EdgeKind) -> Self {
         Self {
             addr,
             function,
@@ -133,7 +133,7 @@ impl CallSite {
 
     /// Return `true` if this is a monomorphic call site.
     #[must_use]
-    pub fn is_monomorphic(&self) -> bool {
+    pub const fn is_monomorphic(&self) -> bool {
         self.targets.len() == 1
     }
 }
@@ -237,7 +237,7 @@ impl CallGraph {
 
     /// Return the number of edges.
     #[must_use]
-    pub fn edge_count(&self) -> usize {
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 
@@ -462,7 +462,7 @@ pub struct FunctionInfo {
 impl FunctionInfo {
     /// Create a minimal function record.
     #[must_use]
-    pub fn new(start: u64, size: u32) -> Self {
+    pub const fn new(start: u64, size: u32) -> Self {
         Self {
             start,
             name: None,
@@ -498,7 +498,7 @@ pub struct CallInstruction {
 impl CallInstruction {
     /// Create a direct call.
     #[must_use]
-    pub fn direct(addr: u64, target: u64) -> Self {
+    pub const fn direct(addr: u64, target: u64) -> Self {
         Self {
             addr,
             direct_target: Some(target),
@@ -510,7 +510,7 @@ impl CallInstruction {
 
     /// Create an indirect call with pre-resolved targets.
     #[must_use]
-    pub fn indirect(addr: u64, targets: Vec<u64>) -> Self {
+    pub const fn indirect(addr: u64, targets: Vec<u64>) -> Self {
         Self {
             addr,
             direct_target: None,

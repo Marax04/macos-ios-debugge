@@ -179,7 +179,7 @@ impl SyscallEvent {
     }
 
     /// Set the return value.
-    pub fn set_retval(&mut self, retval: i64) {
+    pub const fn set_retval(&mut self, retval: i64) {
         self.retval = Some(retval);
     }
 
@@ -394,7 +394,7 @@ pub struct SyscallPolicy {
 impl SyscallPolicy {
     /// Create a new, empty policy with a default action.
     #[must_use]
-    pub fn new(default_action: PolicyAction) -> Self {
+    pub const fn new(default_action: PolicyAction) -> Self {
         Self {
             rules: vec![],
             default_action,
@@ -519,7 +519,7 @@ pub struct SyscallNameTable {
 impl SyscallNameTable {
     /// Build the Linux x86-64 syscall table (subset of well-known calls).
     #[must_use]
-    fn defs_io_and_memory() -> &'static [(u32, &'static str, SyscallCategory)] {
+    const fn defs_io_and_memory() -> &'static [(u32, &'static str, SyscallCategory)] {
         &[
             (0, "read", SyscallCategory::FileSystem),
             (1, "write", SyscallCategory::FileSystem),
@@ -566,7 +566,7 @@ impl SyscallNameTable {
         ]
     }
 
-    fn defs_process_and_security() -> &'static [(u32, &'static str, SyscallCategory)] {
+    const fn defs_process_and_security() -> &'static [(u32, &'static str, SyscallCategory)] {
         &[
             (56, "clone", SyscallCategory::Process),
             (57, "fork", SyscallCategory::Process),
@@ -783,7 +783,7 @@ impl PatternDetector {
         matches
     }
 
-    fn update_counters(&mut self, event: &SyscallEvent) {
+    const fn update_counters(&mut self, event: &SyscallEvent) {
         if let Some(rv) = event.retval {
             if rv < 0 {
                 self.consecutive_failures += 1;

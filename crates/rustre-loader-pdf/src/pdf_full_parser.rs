@@ -59,6 +59,7 @@ pub enum StringEncoding {
 }
 
 impl PdfString {
+    #[must_use]
     pub fn as_text(&self) -> String {
         if self.bytes.starts_with(&[0xFE, 0xFF]) {
             // UTF-16 BE
@@ -76,19 +77,23 @@ impl PdfString {
 pub struct PdfDictionary(pub HashMap<String, PdfObject>);
 
 impl PdfDictionary {
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&PdfObject> { self.0.get(key) }
+    #[must_use]
     pub fn get_name(&self, key: &str) -> Option<&str> {
         match self.0.get(key) {
             Some(PdfObject::Name(n)) => Some(n.as_str()),
             _ => None,
         }
     }
+    #[must_use]
     pub fn get_int(&self, key: &str) -> Option<i64> {
         match self.0.get(key) {
             Some(PdfObject::Integer(n)) => Some(*n),
             _ => None,
         }
     }
+    #[must_use]
     pub fn get_array(&self, key: &str) -> Option<&[PdfObject]> {
         match self.0.get(key) {
             Some(PdfObject::Array(a)) => Some(a),
@@ -123,18 +128,21 @@ pub struct XRefTable {
 }
 
 impl XRefTable {
+    #[must_use]
     pub fn root_ref(&self) -> Option<(u32, u16)> {
         match self.trailer.get("Root") {
             Some(PdfObject::Reference(n, g)) => Some((*n, *g)),
             _ => None,
         }
     }
+    #[must_use]
     pub fn info_ref(&self) -> Option<(u32, u16)> {
         match self.trailer.get("Info") {
             Some(PdfObject::Reference(n, g)) => Some((*n, *g)),
             _ => None,
         }
     }
+    #[must_use]
     pub fn encrypt_ref(&self) -> Option<(u32, u16)> {
         match self.trailer.get("Encrypt") {
             Some(PdfObject::Reference(n, g)) => Some((*n, *g)),
@@ -207,7 +215,8 @@ pub struct PdfParser {
 }
 
 impl PdfParser {
-    pub fn new(data: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn new(data: Vec<u8>) -> Self {
         Self { data, pos: 0 }
     }
 
@@ -218,12 +227,12 @@ impl PdfParser {
     }
 
     fn peek(&self) -> Option<u8> { self.data.get(self.pos).copied() }
-    fn advance(&mut self) { if self.pos < self.data.len() { self.pos += 1; } }
+    const fn advance(&mut self) { if self.pos < self.data.len() { self.pos += 1; } }
     fn current(&self) -> Option<u8> { self.data.get(self.pos).copied() }
 
     /// Current cursor position within the raw PDF byte buffer.
     #[must_use]
-    pub fn position(&self) -> usize { self.pos }
+    pub const fn position(&self) -> usize { self.pos }
 
     /// Byte at the current cursor position, or `None` at end of input.
     /// Public wrapper around the internal `current()` accessor.
@@ -261,10 +270,12 @@ impl PdfParser {
         out
     }
 
+    #[must_use]
     pub fn check_magic(&self) -> bool {
         self.data.starts_with(b"%PDF-")
     }
 
+    #[must_use]
     pub fn get_version(&self) -> Option<String> {
         if !self.check_magic() { return None; }
         let end = self.data[5..].iter().position(|&b| b == b'\n' || b == b'\r')

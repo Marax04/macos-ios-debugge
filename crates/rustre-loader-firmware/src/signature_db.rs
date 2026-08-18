@@ -1053,14 +1053,14 @@ impl SignatureDb {
 
     /// Return the number of entries in the database.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Return `true` when the database is empty (should never be the case with
     /// the built-in table).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 

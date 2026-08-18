@@ -2147,7 +2147,7 @@ impl IadlDeobfPass {
 /// A registry of named hypotheses for the IADL loop.
 ///
 /// Uses [`BTreeMap`] instead of [`HashMap`] so that attacker-controlled
-/// hypothesis IDs cannot cause hash-collision DoS.
+/// hypothesis IDs cannot cause hash-collision `DoS`.
 #[derive(Default)]
 pub struct HypothesisRegistry {
     hypotheses: BTreeMap<String, Box<dyn Hypothesis>>,

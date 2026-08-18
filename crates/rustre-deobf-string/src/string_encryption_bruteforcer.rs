@@ -220,56 +220,56 @@ impl StringEncryptionBruteforcer {
 
     /// Enable or disable XOR 1-byte brute force.
     #[must_use]
-    pub fn with_xor_single(mut self, v: bool) -> Self {
+    pub const fn with_xor_single(mut self, v: bool) -> Self {
         self.try_xor_single = v;
         self
     }
 
     /// Enable or disable XOR 2-byte brute force.
     #[must_use]
-    pub fn with_xor_two(mut self, v: bool) -> Self {
+    pub const fn with_xor_two(mut self, v: bool) -> Self {
         self.try_xor_two = v;
         self
     }
 
     /// Enable or disable RC4 1-byte brute force.
     #[must_use]
-    pub fn with_rc4_single(mut self, v: bool) -> Self {
+    pub const fn with_rc4_single(mut self, v: bool) -> Self {
         self.try_rc4_single = v;
         self
     }
 
     /// Enable or disable RC4 2-byte brute force.
     #[must_use]
-    pub fn with_rc4_two(mut self, v: bool) -> Self {
+    pub const fn with_rc4_two(mut self, v: bool) -> Self {
         self.try_rc4_two = v;
         self
     }
 
     /// Enable or disable ADD/SUB constant brute force.
     #[must_use]
-    pub fn with_arith(mut self, v: bool) -> Self {
+    pub const fn with_arith(mut self, v: bool) -> Self {
         self.try_arith = v;
         self
     }
 
     /// Enable or disable ROL/ROR constant brute force.
     #[must_use]
-    pub fn with_rotate(mut self, v: bool) -> Self {
+    pub const fn with_rotate(mut self, v: bool) -> Self {
         self.try_rotate = v;
         self
     }
 
     /// Enable or disable ROT-N brute force.
     #[must_use]
-    pub fn with_rot_n(mut self, v: bool) -> Self {
+    pub const fn with_rot_n(mut self, v: bool) -> Self {
         self.try_rot_n = v;
         self
     }
 
     /// Set the minimum printable ratio.
     #[must_use]
-    pub fn with_min_printable_ratio(mut self, r: f64) -> Self {
+    pub const fn with_min_printable_ratio(mut self, r: f64) -> Self {
         // `clamp` propagates NaN; a NaN ratio rejects every candidate in
         // silence, because all comparisons against NaN are false.
         self.min_printable_ratio = if r.is_nan() { 0.0 } else { r.clamp(0.0, 1.0) };

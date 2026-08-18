@@ -103,13 +103,13 @@ impl PdfDict {
 
     /// Number of entries.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if the dictionary is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
@@ -140,7 +140,7 @@ pub struct PdfStream {
 impl PdfStream {
     /// Create a new stream.
     #[must_use]
-    pub fn new(dict: PdfDict, data: Vec<u8>) -> Self {
+    pub const fn new(dict: PdfDict, data: Vec<u8>) -> Self {
         Self { dict, data }
     }
 
@@ -156,7 +156,7 @@ impl PdfStream {
         self.dict.get_name("Filter")
     }
 
-    /// Returns `true` if this stream has a FlateDecode filter.
+    /// Returns `true` if this stream has a `FlateDecode` filter.
     #[must_use]
     pub fn is_flate_encoded(&self) -> bool {
         self.filter_name() == Some("FlateDecode")
@@ -183,7 +183,7 @@ pub enum PdfObject {
 impl PdfObject {
     /// Returns the integer value, if this is `Integer`.
     #[must_use]
-    pub fn as_int(&self) -> Option<i64> {
+    pub const fn as_int(&self) -> Option<i64> {
         match self {
             Self::Integer(n) => Some(*n),
             _ => None,
@@ -192,7 +192,7 @@ impl PdfObject {
 
     /// Returns the name string, if this is `Name`.
     #[must_use]
-    pub fn as_name(&self) -> Option<&str> {
+    pub const fn as_name(&self) -> Option<&str> {
         match self {
             Self::Name(s) => Some(s.as_str()),
             _ => None,
@@ -210,7 +210,7 @@ impl PdfObject {
 
     /// Returns the dictionary, if this is `Dictionary` or `Stream`.
     #[must_use]
-    pub fn as_dict(&self) -> Option<&PdfDict> {
+    pub const fn as_dict(&self) -> Option<&PdfDict> {
         match self {
             Self::Dictionary(d) => Some(d),
             Self::Stream(s) => Some(&s.dict),
@@ -220,7 +220,7 @@ impl PdfObject {
 
     /// Returns the array, if this is `Array`.
     #[must_use]
-    pub fn as_array(&self) -> Option<&Vec<PdfObject>> {
+    pub const fn as_array(&self) -> Option<&Vec<PdfObject>> {
         match self {
             Self::Array(a) => Some(a),
             _ => None,
@@ -229,13 +229,13 @@ impl PdfObject {
 
     /// Returns `true` if this is `Null`.
     #[must_use]
-    pub fn is_null(&self) -> bool {
+    pub const fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }
 
     /// Type name string for display.
     #[must_use]
-    pub fn type_name(&self) -> &'static str {
+    pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Null => "null",
             Self::Boolean(_) => "boolean",
@@ -279,19 +279,19 @@ pub struct PdfObjectParser<'a> {
 impl<'a> PdfObjectParser<'a> {
     /// Create a new parser starting at byte `0`.
     #[must_use]
-    pub fn new(data: &'a [u8]) -> Self {
+    pub const fn new(data: &'a [u8]) -> Self {
         Self { data, pos: 0 }
     }
 
     /// Create a parser positioned at `offset`.
     #[must_use]
-    pub fn at(data: &'a [u8], offset: usize) -> Self {
+    pub const fn at(data: &'a [u8], offset: usize) -> Self {
         Self { data, pos: offset }
     }
 
     /// Current byte position.
     #[must_use]
-    pub fn position(&self) -> usize {
+    pub const fn position(&self) -> usize {
         self.pos
     }
 
@@ -591,7 +591,7 @@ impl<'a> PdfObjectParser<'a> {
     }
 }
 
-fn hex_nibble(b: u8) -> Option<u8> {
+const fn hex_nibble(b: u8) -> Option<u8> {
     match b {
         b'0'..=b'9' => Some(b - b'0'),
         b'a'..=b'f' => Some(b - b'a' + 10),
@@ -600,11 +600,11 @@ fn hex_nibble(b: u8) -> Option<u8> {
     }
 }
 
-fn is_delimiter(b: u8) -> bool {
+const fn is_delimiter(b: u8) -> bool {
     matches!(b, b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%')
 }
 
-fn is_whitespace(b: u8) -> bool {
+const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x00 | 0x0C)
 }
 

@@ -55,7 +55,8 @@ pub enum CorElementType {
 }
 
 impl CorElementType {
-    pub fn from_byte(b: u8) -> Option<Self> {
+    #[must_use]
+    pub const fn from_byte(b: u8) -> Option<Self> {
         match b {
             0x00 => Some(Self::End),
             0x01 => Some(Self::Void),
@@ -169,13 +170,13 @@ impl fmt::Display for CilType {
             CilType::TypedRef    => write!(f, "typedref"),
             CilType::IntPtr      => write!(f, "native int"),
             CilType::UIntPtr     => write!(f, "native uint"),
-            CilType::ValueType(n) => write!(f, "valuetype {}", n),
-            CilType::Class(n)    => write!(f, "class {}", n),
-            CilType::Ptr(t)      => write!(f, "{}*", t),
-            CilType::ByRef(t)    => write!(f, "{}&", t),
-            CilType::SzArray(t)  => write!(f, "{}[]", t),
+            CilType::ValueType(n) => write!(f, "valuetype {n}"),
+            CilType::Class(n)    => write!(f, "class {n}"),
+            CilType::Ptr(t)      => write!(f, "{t}*"),
+            CilType::ByRef(t)    => write!(f, "{t}&"),
+            CilType::SzArray(t)  => write!(f, "{t}[]"),
             CilType::Array { element, rank } => {
-                write!(f, "{}", element)?;
+                write!(f, "{element}")?;
                 write!(f, "[")?;
                 for i in 0..*rank {
                     if i > 0 { write!(f, ",")?; }
@@ -183,23 +184,24 @@ impl fmt::Display for CilType {
                 write!(f, "]")
             }
             CilType::Generic(name, args) => {
-                write!(f, "{}<", name)?;
+                write!(f, "{name}<")?;
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 { write!(f, ",")?; }
-                    write!(f, "{}", a)?;
+                    write!(f, "{a}")?;
                 }
                 write!(f, ">")
             }
-            CilType::MVar(n) => write!(f, "!!{}", n),
-            CilType::Var(n)  => write!(f, "!{}", n),
-            CilType::Unknown(b) => write!(f, "unknown({:#04x})", b),
+            CilType::MVar(n) => write!(f, "!!{n}"),
+            CilType::Var(n)  => write!(f, "!{n}"),
+            CilType::Unknown(b) => write!(f, "unknown({b:#04x})"),
         }
     }
 }
 
 impl CilType {
     /// True for primitive value types and user-defined value types.
-    pub fn is_value_type(&self) -> bool {
+    #[must_use]
+    pub const fn is_value_type(&self) -> bool {
         matches!(
             self,
             CilType::Boolean
@@ -222,7 +224,8 @@ impl CilType {
     }
 
     /// True for managed reference types.
-    pub fn is_reference_type(&self) -> bool {
+    #[must_use]
+    pub const fn is_reference_type(&self) -> bool {
         matches!(
             self,
             CilType::String
@@ -234,17 +237,20 @@ impl CilType {
         )
     }
 
-    /// True if the type is a managed pointer (ByRef).
-    pub fn is_by_ref(&self) -> bool {
+    /// True if the type is a managed pointer (`ByRef`).
+    #[must_use]
+    pub const fn is_by_ref(&self) -> bool {
         matches!(self, CilType::ByRef(_))
     }
 
     /// True if the type is an unmanaged pointer (Ptr).
-    pub fn is_ptr(&self) -> bool {
+    #[must_use]
+    pub const fn is_ptr(&self) -> bool {
         matches!(self, CilType::Ptr(_))
     }
 
     /// Strip one level of pointer/byref indirection.
+    #[must_use]
     pub fn pointee(&self) -> Option<&CilType> {
         match self {
             CilType::Ptr(inner) | CilType::ByRef(inner) => Some(inner.as_ref()),
@@ -255,7 +261,8 @@ impl CilType {
 
 /// Return the stack size (in bytes) required by a type on the evaluation stack.
 /// Returns `None` for void, typed-ref, and generic params where size is unknown.
-pub fn type_size_in_bytes(t: &CilType) -> Option<u32> {
+#[must_use]
+pub const fn type_size_in_bytes(t: &CilType) -> Option<u32> {
     match t {
         CilType::Void        => None,
         CilType::Boolean | CilType::Int8 | CilType::UInt8 => Some(1),
@@ -275,6 +282,7 @@ pub fn type_size_in_bytes(t: &CilType) -> Option<u32> {
 
 /// Decode a compressed unsigned integer from a signature blob.
 /// Returns `(value, bytes_consumed)`.
+#[must_use]
 pub fn decode_compressed_uint(bytes: &[u8], pos: usize) -> Option<(u32, usize)> {
     if pos >= bytes.len() {
         return None;
@@ -314,7 +322,7 @@ pub fn decode_type_def_or_ref_encoded(bytes: &[u8], pos: &mut usize) -> Option<S
         2 => "TypeSpec",
         _ => "Unknown",
     };
-    Some(format!("[{}:{}]", table_name, row))
+    Some(format!("[{table_name}:{row}]"))
 }
 
 // ── Signature parser ──────────────────────────────────────────────────────────
@@ -450,7 +458,8 @@ pub enum CallingConv {
 }
 
 impl CallingConv {
-    pub fn from_byte(b: u8) -> Self {
+    #[must_use]
+    pub const fn from_byte(b: u8) -> Self {
         // Mask off HAS_THIS / EXPLICIT_THIS for base calling conv.
         match b & 0x0F {
             0x00 => CallingConv::Default,
@@ -468,6 +477,7 @@ impl CallingConv {
 /// Parse a method signature blob.
 ///
 /// Returns `(calling_convention, parameter_types, return_type)`.
+#[must_use]
 pub fn parse_method_sig(bytes: &[u8]) -> (CallingConv, Vec<CilType>, CilType) {
     if bytes.is_empty() {
         return (CallingConv::Default, Vec::new(), CilType::Void);
@@ -508,6 +518,7 @@ pub struct CilTypeSystem {
 }
 
 impl CilTypeSystem {
+    #[must_use]
     pub fn new() -> Self {
         let mut known_types = std::collections::HashMap::new();
         known_types.insert("System.String".to_string(), CilType::String);
@@ -524,17 +535,20 @@ impl CilTypeSystem {
     }
 
     /// Look up a type by its full .NET name.
+    #[must_use]
     pub fn lookup(&self, name: &str) -> Option<&CilType> {
         self.known_types.get(name)
     }
 
     /// Parse a type from a raw signature blob.
+    #[must_use]
     pub fn parse_type(&self, bytes: &[u8]) -> CilType {
         let mut pos = 0;
         parse_sig_type(bytes, &mut pos)
     }
 
     /// Parse a method signature blob.
+    #[must_use]
     pub fn parse_method(&self, bytes: &[u8]) -> (CallingConv, Vec<CilType>, CilType) {
         parse_method_sig(bytes)
     }

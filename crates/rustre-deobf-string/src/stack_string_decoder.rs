@@ -101,13 +101,13 @@ impl StackString {
 
     /// Byte length of the reconstructed string (not counting null-terminator).
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.bytes.len()
     }
 
     /// Returns `true` when no bytes were reconstructed.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
@@ -192,21 +192,21 @@ impl StackStringDecoder {
 
     /// Set the minimum string length.
     #[must_use]
-    pub fn with_min_length(mut self, len: usize) -> Self {
+    pub const fn with_min_length(mut self, len: usize) -> Self {
         self.min_length = len;
         self
     }
 
     /// Allow small gaps within a string (useful for struct padding).
     #[must_use]
-    pub fn with_max_gap(mut self, gap: u32) -> Self {
+    pub const fn with_max_gap(mut self, gap: u32) -> Self {
         self.max_gap = gap;
         self
     }
 
     /// Set the minimum printable ratio.
     #[must_use]
-    pub fn with_min_printable_ratio(mut self, ratio: f64) -> Self {
+    pub const fn with_min_printable_ratio(mut self, ratio: f64) -> Self {
         // `clamp` propagates NaN; a NaN ratio rejects every candidate in
         // silence, because all comparisons against NaN are false.
         self.min_printable_ratio = if ratio.is_nan() { 0.0 } else { ratio.clamp(0.0, 1.0) };

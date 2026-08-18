@@ -1144,8 +1144,8 @@ impl BinarySemanticDiff {
         (index, sigs)
     }
 
-    /// Maximum number of elements taken from constant_pool or call_sites when
-    /// building the MinHash element set. Prevents memory exhaustion when these
+    /// Maximum number of elements taken from `constant_pool` or `call_sites` when
+    /// building the `MinHash` element set. Prevents memory exhaustion when these
     /// vecs are themselves large (dos-memory-exhaustion).
     const MAX_ELEMENTS_PER_FIELD: usize = 65_536;
 

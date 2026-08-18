@@ -69,7 +69,7 @@ impl Fat32BootSector {
 
     /// Bytes per cluster.
     #[must_use]
-    pub fn bytes_per_cluster(&self) -> u32 {
+    pub const fn bytes_per_cluster(&self) -> u32 {
         (self.bytes_per_sector) as u32 * (self.sectors_per_cluster) as u32
     }
 
@@ -236,7 +236,7 @@ impl ClusterChain {
 
     /// Compute the data size given bytes-per-cluster.
     #[must_use]
-    pub fn data_size(&self, bytes_per_cluster: u32) -> u64 {
+    pub const fn data_size(&self, bytes_per_cluster: u32) -> u64 {
         self.clusters.len() as u64 * (bytes_per_cluster) as u64
     }
 }

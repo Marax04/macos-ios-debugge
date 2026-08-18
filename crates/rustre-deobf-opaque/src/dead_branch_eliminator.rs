@@ -119,22 +119,25 @@ pub struct CfgPatch {
     pub branch_patches: Vec<BranchPatch>,
     /// Blocks that should be removed from the CFG.
     pub unreachable_blocks: Vec<UnreachableBlock>,
-    /// Predecessor edges to remove (block_id → dead predecessor).
+    /// Predecessor edges to remove (`block_id` → dead predecessor).
     pub pred_removals: Vec<(u32, u32)>,
-    /// Successor edges to remove (block_id → dead successor).
+    /// Successor edges to remove (`block_id` → dead successor).
     pub succ_removals: Vec<(u32, u32)>,
     /// New unconditional edges to add (from → to).
     pub new_edges: Vec<(u32, u32)>,
 }
 
 impl CfgPatch {
+    #[must_use]
     pub fn new() -> Self { Self::default() }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.branch_patches.is_empty() && self.unreachable_blocks.is_empty()
     }
 
-    pub fn total_changes(&self) -> usize {
+    #[must_use]
+    pub const fn total_changes(&self) -> usize {
         self.branch_patches.len() + self.unreachable_blocks.len()
     }
 }
@@ -176,7 +179,8 @@ impl EliminationResult {
     }
 
     /// Whether any changes were made.
-    pub fn changed(&self) -> bool { self.branches_patched > 0 || self.blocks_removed > 0 }
+    #[must_use]
+    pub const fn changed(&self) -> bool { self.branches_patched > 0 || self.blocks_removed > 0 }
 }
 
 impl fmt::Display for EliminationResult {
@@ -196,7 +200,7 @@ impl fmt::Display for EliminationResult {
 /// Instruction in a simplified CFG block.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CfgInstr {
-    /// Conditional branch: if cond != 0 goto true_block, else false_block.
+    /// Conditional branch: if cond != 0 goto `true_block`, else `false_block`.
     CondBr { cond_var: u32, true_block: u32, false_block: u32 },
     /// Unconditional jump.
     Jump(u32),
@@ -207,10 +211,12 @@ pub enum CfgInstr {
 }
 
 impl CfgInstr {
-    pub fn is_branch(&self) -> bool {
+    #[must_use]
+    pub const fn is_branch(&self) -> bool {
         matches!(self, Self::CondBr { .. } | Self::Jump(_))
     }
 
+    #[must_use]
     pub fn successors(&self) -> Vec<u32> {
         match self {
             Self::CondBr { true_block, false_block, .. } => vec![*true_block, *false_block],
@@ -233,15 +239,18 @@ pub struct CfgBlock {
 }
 
 impl CfgBlock {
-    pub fn new(id: u32) -> Self {
+    #[must_use]
+    pub const fn new(id: u32) -> Self {
         Self { id, instrs: Vec::new(), preds: Vec::new(), succs: Vec::new(), address: None, is_dead: false }
     }
 
-    pub fn with_address(mut self, a: u64) -> Self { self.address = Some(a); self }
+    #[must_use]
+    pub const fn with_address(mut self, a: u64) -> Self { self.address = Some(a); self }
 
     pub fn add_instr(&mut self, i: CfgInstr) { self.instrs.push(i); }
 
     /// Find the index of the terminating branch instruction, if any.
+    #[must_use]
     pub fn branch_instr_idx(&self) -> Option<usize> {
         self.instrs.iter().rposition(|i| i.is_branch())
     }
@@ -255,7 +264,8 @@ pub struct Cfg {
 }
 
 impl Cfg {
-    pub fn new(entry: u32) -> Self { Self { blocks: Vec::new(), entry } }
+    #[must_use]
+    pub const fn new(entry: u32) -> Self { Self { blocks: Vec::new(), entry } }
 
     pub fn add_block(&mut self, block: CfgBlock) { self.blocks.push(block); }
 
@@ -305,12 +315,15 @@ pub struct DeadBranchEliminator {
 }
 
 impl DeadBranchEliminator {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { transitive: true, remove_instrs: true, remove_blocks: true }
     }
 
-    pub fn without_transitive(mut self) -> Self { self.transitive = false; self }
-    pub fn without_remove_blocks(mut self) -> Self { self.remove_blocks = false; self }
+    #[must_use]
+    pub const fn without_transitive(mut self) -> Self { self.transitive = false; self }
+    #[must_use]
+    pub const fn without_remove_blocks(mut self) -> Self { self.remove_blocks = false; self }
 
     /// Run dead branch elimination on `cfg` given a list of `dead_branches`.
     pub fn eliminate(&self, cfg: &mut Cfg, dead_branches: &[DeadBranch]) -> EliminationResult {
@@ -480,6 +493,7 @@ impl DeadBranchEliminator {
     }
 
     /// Analyse `dead_branches` and `cfg` to produce a `CfgPatch` without applying it.
+    #[must_use]
     pub fn plan(&self, cfg: &Cfg, dead_branches: &[DeadBranch]) -> CfgPatch {
         let mut patch = CfgPatch::new();
         let mut initially_dead: HashSet<u32> = HashSet::new();
@@ -530,6 +544,7 @@ impl Default for DeadBranchEliminator {
 /// block 1: ret
 /// block 2: ret
 /// ```
+#[must_use]
 pub fn two_branch_cfg() -> Cfg {
     let mut cfg = Cfg::new(0);
     let mut b0 = CfgBlock::new(0);
@@ -546,6 +561,7 @@ pub fn two_branch_cfg() -> Cfg {
 }
 
 /// Build a chain CFG: 0 → 1 → 2, with a dead branch at 0 to dead block 3.
+#[must_use]
 pub fn chain_with_dead_branch() -> Cfg {
     let mut cfg = Cfg::new(0);
     let mut b0 = CfgBlock::new(0);

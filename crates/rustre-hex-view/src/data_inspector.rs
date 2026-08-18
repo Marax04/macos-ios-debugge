@@ -252,7 +252,7 @@ impl DataInspector {
 
     /// Create an inspector with only little-endian integers enabled.
     #[must_use]
-    pub fn minimal() -> Self {
+    pub const fn minimal() -> Self {
         Self::new(InspectorConfig::minimal())
     }
 

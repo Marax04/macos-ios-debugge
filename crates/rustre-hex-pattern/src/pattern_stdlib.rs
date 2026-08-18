@@ -117,14 +117,14 @@ impl Float16 {
     }
 
     #[must_use]
-    pub fn is_nan(self) -> bool {
+    pub const fn is_nan(self) -> bool {
         let exp = (self.0 >> 10) & 0x1F;
         let mantissa = self.0 & 0x3FF;
         exp == 31 && mantissa != 0
     }
 
     #[must_use]
-    pub fn is_infinite(self) -> bool {
+    pub const fn is_infinite(self) -> bool {
         let exp = (self.0 >> 10) & 0x1F;
         let mantissa = self.0 & 0x3FF;
         exp == 31 && mantissa == 0
@@ -138,7 +138,7 @@ impl fmt::Display for Float16 {
     }
 }
 
-/// A Google BFloat16 value (truncated float32).
+/// A Google `BFloat16` value (truncated float32).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BFloat16(pub u16);
 
@@ -157,9 +157,9 @@ impl BFloat16 {
         Ok(Self(v))
     }
 
-    /// Expand BFloat16 to f32 by appending 16 zero bits.
+    /// Expand `BFloat16` to f32 by appending 16 zero bits.
     #[must_use]
-    pub fn to_f32(self) -> f32 {
+    pub const fn to_f32(self) -> f32 {
         let bits32 = (self.0 as u32) << 16;
         f32::from_bits(bits32)
     }
@@ -187,7 +187,7 @@ pub enum Ieee754Class {
 
 /// Classify a raw f32 bit pattern.
 #[must_use]
-pub fn classify_f32_bits(bits: u32) -> Ieee754Class {
+pub const fn classify_f32_bits(bits: u32) -> Ieee754Class {
     let exp = (bits >> 23) & 0xFF;
     let mantissa = bits & 0x7FFFFF;
     match exp {
@@ -293,7 +293,7 @@ impl PackedBcd {
 
 /// Compute padding needed to align `offset` to `alignment`.
 #[must_use]
-pub fn padding_to_align(offset: usize, alignment: usize) -> usize {
+pub const fn padding_to_align(offset: usize, alignment: usize) -> usize {
     if alignment == 0 || alignment == 1 {
         return 0;
     }
@@ -310,7 +310,7 @@ pub fn align_offset(offset: usize, alignment: usize) -> usize {
 /// Version-conditional field: returns `true` if the field should be parsed
 /// given `file_version >= required_version`.
 #[must_use]
-pub fn version_has_field(file_version: u32, required_version: u32) -> bool {
+pub const fn version_has_field(file_version: u32, required_version: u32) -> bool {
     file_version >= required_version
 }
 
@@ -394,6 +394,7 @@ pub fn read_length_prefixed(
 }
 
 /// Read a fixed-count element array. Returns offsets for each element start.
+#[must_use]
 pub fn element_counted_offsets(
     start: usize,
     count: usize,
@@ -492,7 +493,7 @@ pub struct BitfieldEntry {
 impl BitfieldEntry {
     /// Extract this field's value from a raw integer.
     #[must_use]
-    pub fn extract_u64(&self, raw: u64) -> u64 {
+    pub const fn extract_u64(&self, raw: u64) -> u64 {
         let mask = if self.bit_end >= 63 {
             u64::MAX
         } else {
@@ -503,7 +504,7 @@ impl BitfieldEntry {
 
     /// Number of bits this field spans.
     #[must_use]
-    pub fn width(&self) -> u8 {
+    pub const fn width(&self) -> u8 {
         self.bit_end - self.bit_start + 1
     }
 }
@@ -612,7 +613,7 @@ impl StdlibRegistry {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn check_bounds(data: &[u8], offset: usize, need: usize) -> Result<(), StdlibError> {
+const fn check_bounds(data: &[u8], offset: usize, need: usize) -> Result<(), StdlibError> {
     if offset + need > data.len() {
         Err(StdlibError::BufferTooShort {
             offset,

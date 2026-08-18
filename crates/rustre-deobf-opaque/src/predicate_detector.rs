@@ -152,6 +152,7 @@ impl PredicateExpr {
     fn bx(e: Self) -> Box<Self> { Box::new(e) }
 
     /// Collect all variable names (sorted, deduped).
+    #[must_use]
     pub fn variables(&self) -> Vec<String> {
         let mut v = Vec::new();
         self.collect_vars(&mut v);
@@ -178,6 +179,7 @@ impl PredicateExpr {
     }
 
     /// Evaluate with variable bindings.
+    #[must_use]
     pub fn eval(&self, vars: &HashMap<String, i64>) -> Option<i64> {
         match self {
             Self::Const(c) => Some(*c),
@@ -224,6 +226,7 @@ impl PredicateExpr {
     }
 
     /// Structural equality check.
+    #[must_use]
     pub fn structurally_equal(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Const(a), Self::Const(b)) => a == b,
@@ -257,6 +260,7 @@ impl PredicateExpr {
     }
 
     /// Return Some(c) if the expression is constant (no variables).
+    #[must_use]
     pub fn as_const(&self) -> Option<i64> {
         if self.variables().is_empty() {
             self.eval(&HashMap::new())
@@ -266,6 +270,7 @@ impl PredicateExpr {
     }
 
     /// Light constant-folding simplification pass.
+    #[must_use]
     pub fn simplify(&self) -> Self {
         match self {
             Self::Const(_) | Self::Var(_) => self.clone(),
@@ -484,21 +489,25 @@ pub struct DetectionResult {
 
 impl DetectionResult {
     /// Create an empty result.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self { predicates: Vec::new(), unknown_count: 0, total_examined: 0 }
     }
 
     /// Number of always-true opaque predicates found.
+    #[must_use]
     pub fn always_true_count(&self) -> usize {
         self.predicates.iter().filter(|p| p.outcome == BoolValue::AlwaysTrue).count()
     }
 
     /// Number of always-false opaque predicates found.
+    #[must_use]
     pub fn always_false_count(&self) -> usize {
         self.predicates.iter().filter(|p| p.outcome == BoolValue::AlwaysFalse).count()
     }
 
     /// Filter predicates by minimum confidence.
+    #[must_use]
     pub fn with_min_confidence(&self, min: f64) -> Vec<&OpaquePredicate> {
         self.predicates.iter().filter(|p| p.confidence >= min).collect()
     }
@@ -577,6 +586,7 @@ fn is_or_one(e: &PredicateExpr) -> bool {
 }
 
 /// Build the built-in pattern library.
+#[must_use]
 pub fn build_patterns() -> Vec<PredicatePattern> {
     vec![
         PredicatePattern {
@@ -951,12 +961,16 @@ pub struct TruthSampler {
 }
 
 impl TruthSampler {
-    pub fn new() -> Self { Self { bits: 8, max_samples: 1024 } }
+    #[must_use]
+    pub const fn new() -> Self { Self { bits: 8, max_samples: 1024 } }
 
-    pub fn with_bits(mut self, b: u32) -> Self { self.bits = b; self }
-    pub fn with_max_samples(mut self, n: usize) -> Self { self.max_samples = n; self }
+    #[must_use]
+    pub const fn with_bits(mut self, b: u32) -> Self { self.bits = b; self }
+    #[must_use]
+    pub const fn with_max_samples(mut self, n: usize) -> Self { self.max_samples = n; self }
 
     /// Check all variable assignments and return `AlwaysTrue`, `AlwaysFalse`, or `Unknown`.
+    #[must_use]
     pub fn classify(&self, expr: &PredicateExpr) -> BoolValue {
         let vars = expr.variables();
         if vars.is_empty() {
@@ -1034,6 +1048,7 @@ pub struct PredicateDetector {
 }
 
 impl PredicateDetector {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             patterns: build_patterns(),
@@ -1044,11 +1059,15 @@ impl PredicateDetector {
         }
     }
 
-    pub fn with_min_confidence(mut self, c: f64) -> Self { self.min_confidence = c; self }
-    pub fn without_sampler(mut self) -> Self { self.use_sampler = false; self }
-    pub fn without_patterns(mut self) -> Self { self.use_patterns = false; self }
+    #[must_use]
+    pub const fn with_min_confidence(mut self, c: f64) -> Self { self.min_confidence = c; self }
+    #[must_use]
+    pub const fn without_sampler(mut self) -> Self { self.use_sampler = false; self }
+    #[must_use]
+    pub const fn without_patterns(mut self) -> Self { self.use_patterns = false; self }
 
-    /// Classify a single expression, returning (outcome, kind, confidence, pattern_name).
+    /// Classify a single expression, returning (outcome, kind, confidence, `pattern_name`).
+    #[must_use]
     pub fn classify_expr(&self, expr: &PredicateExpr) -> (BoolValue, PredicateKind, f64, Option<String>) {
         // 1. Constant fold first.
         let simplified = expr.simplify();
@@ -1081,6 +1100,7 @@ impl PredicateDetector {
     }
 
     /// Detect opaque predicates in a list of (address, condition) pairs.
+    #[must_use]
     pub fn detect(&self, branches: &[(u64, PredicateExpr)]) -> DetectionResult {
         let mut result = DetectionResult::new();
         result.total_examined = branches.len();
@@ -1105,6 +1125,7 @@ impl PredicateDetector {
     }
 
     /// Detect and return only high-confidence predicates (>= 0.9).
+    #[must_use]
     pub fn detect_high_confidence(&self, branches: &[(u64, PredicateExpr)]) -> Vec<OpaquePredicate> {
         self.detect(branches).predicates.into_iter().filter(|p| p.confidence >= 0.9).collect()
     }

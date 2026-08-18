@@ -346,7 +346,7 @@ impl LocalVarNaming {
 
     /// Count of local variables.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.names.len()
     }
 
@@ -376,7 +376,7 @@ enum BlockKind {
 
 impl ControlFlowRecovery {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             stmts: Vec::new(),
             block_stack: Vec::new(),
@@ -403,7 +403,7 @@ impl ControlFlowRecovery {
 
     /// Current nesting depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.block_stack.len()
     }
 
@@ -445,7 +445,7 @@ pub struct ExpressionBuilder {
 
 impl ExpressionBuilder {
     #[must_use]
-    pub fn new(locals: LocalVarNaming) -> Self {
+    pub const fn new(locals: LocalVarNaming) -> Self {
         Self {
             stack: Vec::new(),
             locals,
@@ -461,7 +461,7 @@ impl ExpressionBuilder {
     }
 
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.stack.len()
     }
 
@@ -715,6 +715,7 @@ fn parse_offset(operands: &str) -> u64 {
 ///
 /// Convenience wrapper exposed for callers that hold the original bytecode
 /// stream and want to recover the numeric value behind an operand string.
+#[must_use]
 pub fn decode_uleb128_immediate(bytes: &[u8]) -> Option<u64> {
     read_uleb128(bytes, 0).ok().map(|(v, _)| v)
 }
@@ -747,7 +748,7 @@ impl WasmTypeChecker {
 
     /// Stack depth.
     #[must_use]
-    pub fn depth(&self) -> usize {
+    pub const fn depth(&self) -> usize {
         self.type_stack.len()
     }
 
@@ -775,7 +776,7 @@ pub struct WasmFunctionSignature {
 impl WasmFunctionSignature {
     /// Create a void → void signature.
     #[must_use]
-    pub fn void_void() -> Self {
+    pub const fn void_void() -> Self {
         Self {
             params: vec![],
             results: vec![],
@@ -791,15 +792,15 @@ impl WasmFunctionSignature {
         }
     }
 
-    /// Return arity (param_count, result_count).
+    /// Return arity (`param_count`, `result_count`).
     #[must_use]
-    pub fn arity(&self) -> (usize, usize) {
+    pub const fn arity(&self) -> (usize, usize) {
         (self.params.len(), self.results.len())
     }
 
     /// Whether the function has any results.
     #[must_use]
-    pub fn has_results(&self) -> bool {
+    pub const fn has_results(&self) -> bool {
         !self.results.is_empty()
     }
 
@@ -833,7 +834,7 @@ pub struct WasmModuleInfo {
 impl WasmModuleInfo {
     /// Total code functions (non-imported).
     #[must_use]
-    pub fn code_function_count(&self) -> u32 {
+    pub const fn code_function_count(&self) -> u32 {
         self.function_count.saturating_sub(self.import_count)
     }
 }
@@ -966,7 +967,7 @@ pub struct WasmOptimizer;
 impl WasmOptimizer {
     /// Fold consecutive `i32.const` push / local.set pairs where the value is known.
     #[must_use]
-    pub fn fold_constants(stmts: Vec<WasmStmt>) -> Vec<WasmStmt> {
+    pub const fn fold_constants(stmts: Vec<WasmStmt>) -> Vec<WasmStmt> {
         // For now: identity; real implementation would substitute constants.
         stmts
     }
@@ -1060,7 +1061,7 @@ pub struct WasmDecompiler {
 
 impl WasmDecompiler {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { func_count: 0 }
     }
 
@@ -1096,7 +1097,7 @@ pub struct DecompiledWasmFunc {
 impl DecompiledWasmFunc {
     /// Return `true` if the function has no statements (empty body).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.stmts.is_empty()
     }
 }
@@ -1110,7 +1111,7 @@ pub struct WasmPrinter {
 
 impl WasmPrinter {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { indent: 0 }
     }
 
@@ -1164,7 +1165,7 @@ pub struct WasmMemoryModel {
 impl WasmMemoryModel {
     /// Create a memory model with an initial size.
     #[must_use]
-    pub fn new(pages: u32) -> Self {
+    pub const fn new(pages: u32) -> Self {
         Self {
             pages,
             max_pages: None,
@@ -1174,7 +1175,7 @@ impl WasmMemoryModel {
 
     /// Byte size of the current memory.
     #[must_use]
-    pub fn byte_size(&self) -> u64 {
+    pub const fn byte_size(&self) -> u64 {
         self.pages as u64 * 65536
     }
 
@@ -1189,7 +1190,7 @@ impl WasmMemoryModel {
 
 // ── WasmFunctionTable ─────────────────────────────────────────────────────────
 
-/// Represents the Wasm function table (used by call_indirect).
+/// Represents the Wasm function table (used by `call_indirect`).
 #[derive(Debug, Clone, Default)]
 pub struct WasmFunctionTable {
     /// Table entries (function indices or None for null references).
@@ -1219,13 +1220,13 @@ impl WasmFunctionTable {
 
     /// Table size.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether the table is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }

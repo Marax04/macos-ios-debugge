@@ -3,7 +3,7 @@
 //! Supports:
 //! - RC4 (PRGA-only and full KSA+PRGA)
 //! - AES-ECB and AES-CBC (128/192/256-bit keys)
-//! - ChaCha20 (96-bit nonce, 256-bit key)
+//! - `ChaCha20` (96-bit nonce, 256-bit key)
 //! - Custom XOR-based round cipher
 //! - Brute-force short-key recovery
 //! - Ciphertext analysis for longer keys
@@ -42,7 +42,7 @@ impl Rc4 {
     }
 
     /// Produce the next keystream byte (PRGA).
-    pub fn next_byte(&mut self) -> u8 {
+    pub const fn next_byte(&mut self) -> u8 {
         self.i = (self.i + 1) & 0xFF;
         self.j = (self.j + self.s[self.i] as usize) & 0xFF;
         self.s.swap(self.i, self.j);
@@ -206,7 +206,7 @@ pub fn aes128_cbc_decrypt(key: &[u8; 16], iv: &[u8; 16], ciphertext: &[u8]) -> V
 // ChaCha20 (RFC 7539)
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn chacha20_quarter_round(a: &mut u32, b: &mut u32, c: &mut u32, d: &mut u32) {
+const fn chacha20_quarter_round(a: &mut u32, b: &mut u32, c: &mut u32, d: &mut u32) {
     *a = a.wrapping_add(*b); *d ^= *a; *d = d.rotate_left(16);
     *c = c.wrapping_add(*d); *b ^= *c; *b = b.rotate_left(12);
     *a = a.wrapping_add(*b); *d ^= *a; *d = d.rotate_left( 8);
@@ -255,7 +255,7 @@ fn chacha20_block(key: &[u8; 32], nonce: &[u8; 12], counter: u32) -> [u8; 64] {
     out
 }
 
-/// ChaCha20 encryption / decryption.
+/// `ChaCha20` encryption / decryption.
 #[must_use]
 pub fn chacha20_crypt(key: &[u8; 32], nonce: &[u8; 12], counter: u32, data: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(data.len());
@@ -303,6 +303,7 @@ fn printable_score(data: &[u8]) -> f64 {
 }
 
 /// Brute-force RC4 with all 1-byte keys; return best candidate.
+#[must_use]
 pub fn brute_force_rc4_1byte(ciphertext: &[u8]) -> Option<(u8, Vec<u8>, f64)> {
     if ciphertext.is_empty() {
         return None;
@@ -319,6 +320,7 @@ pub fn brute_force_rc4_1byte(ciphertext: &[u8]) -> Option<(u8, Vec<u8>, f64)> {
 }
 
 /// Brute-force RC4 with all 2-byte keys; return best candidate.
+#[must_use]
 pub fn brute_force_rc4_2byte(ciphertext: &[u8]) -> Option<([u8; 2], Vec<u8>, f64)> {
     if ciphertext.is_empty() {
         return None;
@@ -420,9 +422,9 @@ pub enum CipherType {
 pub struct CryptoDecryptConfig {
     pub cipher: CipherType,
     pub key: Vec<u8>,
-    /// IV for CBC modes (16 bytes) or nonce for ChaCha20 (12 bytes).
+    /// IV for CBC modes (16 bytes) or nonce for `ChaCha20` (12 bytes).
     pub iv_or_nonce: Vec<u8>,
-    /// Counter for ChaCha20.
+    /// Counter for `ChaCha20`.
     pub chacha_counter: u32,
     /// Rounds for custom cipher.
     pub custom_rounds: u32,
@@ -433,7 +435,7 @@ pub struct CryptoDecryptConfig {
 impl CryptoDecryptConfig {
     /// RC4 with the given key.
     #[must_use]
-    pub fn rc4(key: Vec<u8>) -> Self {
+    pub const fn rc4(key: Vec<u8>) -> Self {
         Self {
             cipher: CipherType::Rc4,
             key,
@@ -444,9 +446,9 @@ impl CryptoDecryptConfig {
         }
     }
 
-    /// ChaCha20 with the given key and nonce.
+    /// `ChaCha20` with the given key and nonce.
     #[must_use]
-    pub fn chacha20(key: Vec<u8>, nonce: Vec<u8>) -> Self {
+    pub const fn chacha20(key: Vec<u8>, nonce: Vec<u8>) -> Self {
         Self {
             cipher: CipherType::ChaCha20,
             key,

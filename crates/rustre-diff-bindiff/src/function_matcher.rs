@@ -299,7 +299,7 @@ impl Default for FunctionMatcher {
 impl FunctionMatcher {
     /// Create with default settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { min_score: 0.50, one_to_one: true }
     }
 

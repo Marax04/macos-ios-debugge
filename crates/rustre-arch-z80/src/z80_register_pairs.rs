@@ -144,7 +144,7 @@ impl Z80RegisterPair {
 
     /// Returns all 12 register pairs.
     #[must_use]
-    pub fn all() -> &'static [Self] {
+    pub const fn all() -> &'static [Self] {
         &[
             Self::BC, Self::DE, Self::HL, Self::SP, Self::PC,
             Self::IX, Self::IY, Self::AF,
@@ -154,7 +154,7 @@ impl Z80RegisterPair {
 
     /// Returns only the primary (non-shadow) pairs.
     #[must_use]
-    pub fn primary() -> &'static [Self] {
+    pub const fn primary() -> &'static [Self] {
         &[Self::BC, Self::DE, Self::HL, Self::SP, Self::PC, Self::IX, Self::IY, Self::AF]
     }
 
@@ -262,38 +262,38 @@ impl PairUsage {
     }
 
     /// Record a 16-bit load.
-    pub fn record_load(&mut self) {
+    pub const fn record_load(&mut self) {
         self.loads += 1;
     }
 
     /// Record a 16-bit store.
-    pub fn record_store(&mut self) {
+    pub const fn record_store(&mut self) {
         self.stores += 1;
     }
 
     /// Record use as an address operand.
-    pub fn record_address_use(&mut self) {
+    pub const fn record_address_use(&mut self) {
         self.address_uses += 1;
     }
 
     /// Record an arithmetic operation.
-    pub fn record_arithmetic(&mut self) {
+    pub const fn record_arithmetic(&mut self) {
         self.arithmetic += 1;
     }
 
     /// Record an exchange (EXX, EX AF,AF').
-    pub fn record_exchange(&mut self) {
+    pub const fn record_exchange(&mut self) {
         self.exchanges += 1;
     }
 
     /// Record a PUSH.
-    pub fn record_push(&mut self) {
+    pub const fn record_push(&mut self) {
         self.pushes += 1;
         self.stores += 1;
     }
 
     /// Record a POP.
-    pub fn record_pop(&mut self) {
+    pub const fn record_pop(&mut self) {
         self.pops += 1;
         self.loads += 1;
     }
@@ -306,19 +306,19 @@ impl PairUsage {
 
     /// Whether this pair is used as a counter (many INC/DEC, few loads).
     #[must_use]
-    pub fn looks_like_counter(&self) -> bool {
+    pub const fn looks_like_counter(&self) -> bool {
         self.arithmetic >= 2 && self.arithmetic > self.loads
     }
 
     /// Whether this pair is used as a pointer (many address uses, few arithmetic).
     #[must_use]
-    pub fn looks_like_pointer(&self) -> bool {
+    pub const fn looks_like_pointer(&self) -> bool {
         self.address_uses >= 2 && self.address_uses >= self.arithmetic
     }
 
     /// Whether this pair is used primarily as a temporary save/restore container.
     #[must_use]
-    pub fn looks_like_save_restore(&self) -> bool {
+    pub const fn looks_like_save_restore(&self) -> bool {
         self.exchanges >= 1 || (self.pushes >= 1 && self.pops >= 1)
     }
 }

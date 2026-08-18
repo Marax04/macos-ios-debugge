@@ -8,7 +8,7 @@ fn arch() -> Mc68kArch {
     Mc68kArch::default()
 }
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 

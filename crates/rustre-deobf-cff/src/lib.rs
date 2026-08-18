@@ -129,7 +129,7 @@ pub struct CffCandidate {
 /// Bidirectional mapping between state values and basic-block addresses.
 ///
 /// Both maps use `AHashMap` because the keys (state values and block addresses)
-/// originate from untrusted binary input; `std::HashMap`'s SipHash does not
+/// originate from untrusted binary input; `std::HashMap`'s `SipHash` does not
 /// provide collision resistance against a deterministic attacker who can craft
 /// binary inputs with adversarial key sets (dos-hash-collision).
 #[derive(Debug, Clone)]
@@ -148,6 +148,7 @@ impl Default for BlockMapping {
 
 impl BlockMapping {
     /// Create an empty mapping.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state_to_block: AHashMap::new(),
@@ -165,6 +166,7 @@ impl BlockMapping {
     }
 
     /// Return the block address for a given state value, if known.
+    #[must_use]
     pub fn block_for_state(&self, state: u64) -> Option<Address> {
         self.state_to_block.get(&state).copied()
     }
@@ -178,12 +180,14 @@ impl BlockMapping {
     }
 
     /// Number of distinct blocks in the mapping.
+    #[must_use]
     pub fn block_count(&self) -> usize {
         self.block_to_state.len()
     }
 
     /// `true` when every mapped block has at least one incoming state value —
     /// i.e. no block is "stranded" without a way to reach it.
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         if self.state_to_block.is_empty() {
             return false;
@@ -249,6 +253,7 @@ pub struct RecoveredCfg {
 
 impl RecoveredCfg {
     /// All blocks that `addr` can transfer control to.
+    #[must_use]
     pub fn successors(&self, addr: Address) -> Vec<Address> {
         self.edges
             .iter()
@@ -258,6 +263,7 @@ impl RecoveredCfg {
     }
 
     /// All blocks that can transfer control to `addr`.
+    #[must_use]
     pub fn predecessors(&self, addr: Address) -> Vec<Address> {
         self.edges
             .iter()
@@ -267,17 +273,20 @@ impl RecoveredCfg {
     }
 
     /// `true` if `addr` is the function entry block.
+    #[must_use]
     pub fn is_entry(&self, addr: Address) -> bool {
         addr == self.function_start
     }
 
     /// Number of basic blocks in the recovered CFG.
-    pub fn block_count(&self) -> usize {
+    #[must_use]
+    pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
     /// Number of edges in the recovered CFG.
-    pub fn edge_count(&self) -> usize {
+    #[must_use]
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 }
@@ -375,7 +384,8 @@ impl Default for CffDetector {
 
 impl CffDetector {
     /// Create a detector with default parameters.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             min_block_count: 5,
             min_confidence: 0.6,
@@ -385,14 +395,14 @@ impl CffDetector {
 
     /// Override the minimum block count.
     #[must_use]
-    pub fn with_min_blocks(mut self, n: usize) -> Self {
+    pub const fn with_min_blocks(mut self, n: usize) -> Self {
         self.min_block_count = n;
         self
     }
 
     /// Override the minimum confidence threshold.
     #[must_use]
-    pub fn with_min_confidence(mut self, c: f64) -> Self {
+    pub const fn with_min_confidence(mut self, c: f64) -> Self {
         self.min_confidence = c;
         self
     }
@@ -400,6 +410,7 @@ impl CffDetector {
     /// Attempt to detect CFF in `cfg` for the function starting at `function_start`.
     ///
     /// Returns `None` when the CFG does not meet the minimum criteria or confidence.
+    #[must_use]
     pub fn detect(&self, cfg: &SimpleCfg, function_start: Address) -> Option<CffCandidate> {
         if cfg.blocks.len() < self.min_block_count {
             return None;
@@ -437,6 +448,7 @@ impl CffDetector {
     /// Heuristic: the dispatcher is the block with the largest predecessor count,
     /// provided it also has no (or very few) instructions of its own and all its
     /// predecessors have exactly one successor (back to the dispatcher).
+    #[must_use]
     pub fn find_dispatcher(&self, cfg: &SimpleCfg) -> Option<(usize, f64)> {
         if cfg.blocks.is_empty() {
             return None;
@@ -475,6 +487,7 @@ impl CffDetector {
     /// | Dispatcher successor count ≥ 2 | 0.20 |
     /// | Average instruction count of non-dispatcher blocks | 0.10 |
     /// | At least one block ending with an indirect jump | 0.10 |
+    #[must_use]
     pub fn compute_confidence(&self, cfg: &SimpleCfg, dispatcher_idx: usize) -> f64 {
         let n = cfg.blocks.len();
         if n < 2 || dispatcher_idx >= n {
@@ -562,6 +575,7 @@ impl CffDetector {
     /// 1. Look at the registers written by the blocks that feed back to the
     ///    dispatcher.  The most-frequently written register is the state variable.
     /// 2. Fall back to `StateVariable::Unknown`.
+    #[must_use]
     pub fn identify_state_variable(&self, cfg: &SimpleCfg, dispatcher_idx: usize) -> StateVariable {
         let mut reg_freq: HashMap<String, usize> = HashMap::new();
 
@@ -645,7 +659,8 @@ impl Default for CffRecoverer {
 
 impl CffRecoverer {
     /// Create a recoverer with default parameters.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             max_state_trace_depth: 32,
             enable_symbolic_eval: true,
@@ -653,6 +668,7 @@ impl CffRecoverer {
     }
 
     /// Recover the de-flattened CFG from a detected candidate and its simplified CFG.
+    #[must_use]
     pub fn recover(&self, candidate: &CffCandidate, cfg: &SimpleCfg) -> RecoveredCfg {
         let mapping = self.build_block_mapping(candidate, cfg);
         let edges = self.reconstruct_edges(candidate, &mapping, cfg);
@@ -703,6 +719,7 @@ impl CffRecoverer {
     ///
     /// When `enable_symbolic_eval` is `true`, a propagation pass runs after
     /// initial insertion to fill in any states that were not yet resolved.
+    #[must_use]
     pub fn build_block_mapping(&self, candidate: &CffCandidate, cfg: &SimpleCfg) -> BlockMapping {
         let mut mapping = BlockMapping::new();
 
@@ -863,6 +880,7 @@ impl CffRecoverer {
     }
 
     /// Trace `state` through the mapping up to `max_state_trace_depth` hops.
+    #[must_use]
     pub fn trace_state(&self, state: u64, mapping: &BlockMapping) -> Option<Address> {
         let mut current = state;
         for _ in 0..self.max_state_trace_depth {
@@ -887,6 +905,7 @@ impl CffRecoverer {
     /// 2. Any successor that is the dispatcher is replaced by the block that the
     ///    state written by B maps to in `mapping`.
     /// 3. Edges between non-dispatcher blocks are kept as-is.
+    #[must_use]
     pub fn reconstruct_edges(
         &self,
         candidate: &CffCandidate,
@@ -958,6 +977,7 @@ impl CffRecoverer {
     /// If `value` is not directly in the mapping but maps to a block, return that
     /// block's low-32-bit address — i.e. the identity fold.
     /// Returns `None` when no folding is possible.
+    #[must_use]
     pub fn fold_state_expr(value: u64, mapping: &BlockMapping) -> Option<u64> {
         // If the value already has a direct entry, nothing to fold.
         if mapping.block_for_state(value).is_some() {
@@ -992,6 +1012,7 @@ impl CffRecoverer {
     /// [`CffRecoverer::build_block_mapping`] / [`CffRecoverer::reconstruct_edges`]
     /// pipeline so that all existing fallback strategies (address-derived state,
     /// sequential seeds) are preserved.
+    #[must_use]
     pub fn recover_with_dataflow(&self, candidate: &CffCandidate, cfg: &SimpleCfg) -> RecoveredCfg {
         // --- Step 1: run the dataflow propagation pass. ---------------------
         let mut tracker = StateVarTracker::new();
@@ -1144,7 +1165,7 @@ impl ConstLattice {
     /// Meet operator: `Top` is the identity; two equal `Const` values stay
     /// `Const`; anything else collapses to `Bottom`.
     #[must_use]
-    pub fn meet(self, other: ConstLattice) -> ConstLattice {
+    pub const fn meet(self, other: ConstLattice) -> ConstLattice {
         match (self, other) {
             (ConstLattice::Top, x) | (x, ConstLattice::Top) => x,
             (ConstLattice::Const(a), ConstLattice::Const(b)) if a == b => ConstLattice::Const(a),
@@ -1154,7 +1175,7 @@ impl ConstLattice {
 
     /// Return the constant value if this cell holds exactly one.
     #[must_use]
-    pub fn as_const(self) -> Option<u64> {
+    pub const fn as_const(self) -> Option<u64> {
         match self {
             ConstLattice::Const(v) => Some(v),
             _ => None,
@@ -1299,7 +1320,7 @@ pub struct CffVerifyResult {
 impl CffVerifyResult {
     /// `true` when the result has no errors.
     #[must_use]
-    pub fn is_clean(&self) -> bool {
+    pub const fn is_clean(&self) -> bool {
         self.is_valid && self.dangling_edges == 0 && self.multi_dispatch_blocks == 0
     }
 }
@@ -1319,7 +1340,7 @@ pub struct CffVerifier;
 impl CffVerifier {
     /// Create a new verifier.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -1370,8 +1391,7 @@ impl CffVerifier {
         for (&addr, &count) in &unconditional_dispatch {
             if count > 1 {
                 diagnostics.push(format!(
-                    "block {:#x} has {} unconditional dispatch edges (expected ≤1)",
-                    addr, count
+                    "block {addr:#x} has {count} unconditional dispatch edges (expected ≤1)"
                 ));
                 is_valid = false;
             }
@@ -1430,6 +1450,7 @@ impl Default for CffDeobfuscationPass {
 
 impl CffDeobfuscationPass {
     /// Create a pass with default detector and recoverer settings.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             detector: CffDetector::new(),
@@ -1441,6 +1462,7 @@ impl CffDeobfuscationPass {
     ///
     /// Returns `Some(RecoveredCfg)` if the function was identified as CFF and
     /// successfully recovered; `None` otherwise.
+    #[must_use]
     pub fn run_on_function(
         &self,
         cfg: &SimpleCfg,
@@ -1458,6 +1480,7 @@ impl CffDeobfuscationPass {
 
     /// Run the pass over an entire binary represented as a list of
     /// `(function_start_address, simplified_cfg)` pairs.
+    #[must_use]
     pub fn run_on_binary(&self, cfgs: Vec<(Address, SimpleCfg)>) -> DeobfResult {
         let mut result = DeobfResult::default();
 
@@ -1525,7 +1548,7 @@ impl CffDispatcherDetector {
 
     /// Create a new detector.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -1657,7 +1680,7 @@ impl CffDispatcherDetector {
 ///
 /// Uses `AHashMap` instead of `HashMap` so that attacker-controlled state
 /// values (read from untrusted binary input) cannot trigger hash-collision
-/// DoS via crafted key sets (dos-hash-collision).
+/// `DoS` via crafted key sets (dos-hash-collision).
 #[derive(Debug, Clone, Default)]
 pub struct StateGraph {
     /// `state → [(next_state, condition)]`
@@ -1714,7 +1737,7 @@ pub struct StateTransitionAnalyzer;
 impl StateTransitionAnalyzer {
     /// Create a new analyser.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -1811,7 +1834,7 @@ pub struct CffDeflattener;
 impl CffDeflattener {
     /// Create a new deflattener.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -2780,9 +2803,10 @@ pub enum SmtSort {
 
 impl SmtSort {
     /// Return the SMTLIB2 sort string for this variant.
+    #[must_use]
     pub fn to_smtlib2(&self) -> String {
         match self {
-            SmtSort::BitVec(n) => format!("(_ BitVec {})", n),
+            SmtSort::BitVec(n) => format!("(_ BitVec {n})"),
             SmtSort::Bool => "Bool".to_owned(),
         }
     }
@@ -2815,6 +2839,7 @@ impl SmtVar {
     }
 
     /// Return the `(declare-const name sort)` SMTLIB2 declaration string.
+    #[must_use]
     pub fn declaration(&self) -> String {
         format!("(declare-const {} {})", self.name, self.sort.to_smtlib2())
     }
@@ -2847,6 +2872,7 @@ pub struct SmtConstraintBuilder {
 
 impl SmtConstraintBuilder {
     /// Create an empty constraint builder.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -2879,7 +2905,7 @@ impl SmtConstraintBuilder {
     /// (assert (= state (_ bv3735928559 32)))
     /// ```
     pub fn assert_eq(&mut self, var: &str, val: u64, bits: u32) {
-        let assertion = format!("(assert (= {} (_ bv{} {})))", var, val, bits);
+        let assertion = format!("(assert (= {var} (_ bv{val} {bits})))");
         self.assertions.push(assertion);
     }
 
@@ -2887,7 +2913,7 @@ impl SmtConstraintBuilder {
     ///
     /// `expr` must be a well-formed SMTLIB2 term of sort `(_ BitVec bits)`.
     pub fn assert_expr_eq(&mut self, expr: &str, val: u64, bits: u32) {
-        let assertion = format!("(assert (= {} (_ bv{} {})))", expr, val, bits);
+        let assertion = format!("(assert (= {expr} (_ bv{val} {bits})))");
         self.assertions.push(assertion);
     }
 
@@ -2983,6 +3009,7 @@ impl SmtConstraintBuilder {
     /// This is the fallback path used when `z3` is not available.  It only
     /// handles the `(assert (= var (_ bv<val> <bits>)))` pattern emitted by
     /// [`SmtConstraintBuilder::assert_eq`].
+    #[must_use]
     pub fn solve_concrete(&self, env: &HashMap<String, u64>) -> bool {
         for assertion in &self.assertions {
             if !Self::eval_assertion_concrete(assertion, env) {
@@ -2997,6 +3024,7 @@ impl SmtConstraintBuilder {
     // ------------------------------------------------------------------
 
     /// Parse a Z3 `(model ...)` output block into a `name → u64` map.
+    #[must_use]
     pub fn parse_z3_model(output: &str) -> HashMap<String, u64> {
         let mut model = HashMap::new();
 
@@ -3141,7 +3169,8 @@ pub struct BasicBlock {
 
 impl BasicBlock {
     /// Create a new basic block at `address`.
-    pub fn new(address: u64) -> Self {
+    #[must_use]
+    pub const fn new(address: u64) -> Self {
         Self {
             address,
             instrs: Vec::new(),
@@ -3154,6 +3183,7 @@ impl BasicBlock {
     }
 
     /// Return the terminator instruction, if present.
+    #[must_use]
     pub fn terminator(&self) -> Option<&MlilInstruction> {
         self.instrs.last()
     }
@@ -3223,7 +3253,8 @@ pub struct DispatcherBlock {
 
 impl DispatcherBlock {
     /// Create a new dispatcher descriptor.
-    pub fn new(address: u64, dispatch_type: DispType) -> Self {
+    #[must_use]
+    pub const fn new(address: u64, dispatch_type: DispType) -> Self {
         Self {
             address,
             dispatch_type,
@@ -3231,12 +3262,13 @@ impl DispatcherBlock {
         }
     }
 
-    /// Add a (state_value, target) case.
+    /// Add a (`state_value`, target) case.
     pub fn add_case(&mut self, state_value: u64, target: u64) {
         self.cases.push((state_value, target));
     }
 
     /// Resolve `state_value` to a target block address using the case table.
+    #[must_use]
     pub fn resolve(&self, state_value: u64) -> Option<u64> {
         self.cases
             .iter()
@@ -3245,7 +3277,8 @@ impl DispatcherBlock {
     }
 
     /// Number of cases in the dispatch table.
-    pub fn case_count(&self) -> usize {
+    #[must_use]
+    pub const fn case_count(&self) -> usize {
         self.cases.len()
     }
 }
@@ -3450,6 +3483,7 @@ impl CffSymEval {
     ///
     /// Returns a `state_value → real_block_address` map by consulting the
     /// dispatcher's case table.
+    #[must_use]
     pub fn solve_dispatcher_mapping(&self, dispatcher: &DispatcherBlock) -> HashMap<u64, u64> {
         dispatcher.cases.iter().copied().collect()
     }
@@ -3457,6 +3491,7 @@ impl CffSymEval {
     /// Find all state-variable assignments within `bb`.
     ///
     /// Returns `(instruction_index, AssignmentType)` pairs.
+    #[must_use]
     pub fn find_state_var_assignments(&self, bb: &BasicBlock) -> Vec<(u32, AssignmentType)> {
         let mut result = Vec::new();
 
@@ -3510,7 +3545,8 @@ pub struct MlilFunction {
 
 impl MlilFunction {
     /// Create an empty function at `entry`.
-    pub fn new(entry: u64) -> Self {
+    #[must_use]
+    pub const fn new(entry: u64) -> Self {
         Self {
             entry,
             blocks: Vec::new(),
@@ -3529,6 +3565,7 @@ impl MlilFunction {
     }
 
     /// Find the block at `addr`, if present.
+    #[must_use]
     pub fn block_at(&self, addr: u64) -> Option<&BasicBlock> {
         self.blocks.iter().find(|b| b.address == addr)
     }
@@ -3539,6 +3576,7 @@ impl MlilFunction {
     }
 
     /// Return all successor addresses of the block at `addr`.
+    #[must_use]
     pub fn successors_of(&self, addr: u64) -> Vec<u64> {
         self.edges
             .iter()
@@ -3548,6 +3586,7 @@ impl MlilFunction {
     }
 
     /// Return all predecessor addresses of the block at `addr`.
+    #[must_use]
     pub fn predecessors_of(&self, addr: u64) -> Vec<u64> {
         self.edges
             .iter()
@@ -3557,12 +3596,14 @@ impl MlilFunction {
     }
 
     /// Number of basic blocks.
-    pub fn block_count(&self) -> usize {
+    #[must_use]
+    pub const fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
     /// Number of edges.
-    pub fn edge_count(&self) -> usize {
+    #[must_use]
+    pub const fn edge_count(&self) -> usize {
         self.edges.len()
     }
 }
@@ -3695,6 +3736,7 @@ pub struct CffScore {
 
 impl CffScore {
     /// Return `true` when the probability exceeds the conventional 0.7 threshold.
+    #[must_use]
     pub fn is_likely_cff(&self) -> bool {
         self.probability > 0.7
     }
@@ -3722,7 +3764,7 @@ pub struct CffAnalysis {
     pub dispatcher: DispatcherCandidate,
     /// Identified state variable.
     pub state_var: String,
-    /// The complete dispatcher case table (state_value → target_bb_address).
+    /// The complete dispatcher case table (`state_value` → `target_bb_address`).
     pub case_table: HashMap<u64, u64>,
     /// Overall detection confidence.
     pub confidence: f64,
@@ -3748,6 +3790,7 @@ impl OllvmDetectorV2 {
     /// | 3 | Average function-entry distance variance | 0.15 |
     /// | 4 | Hub successor count ≥ 3 | 0.20 |
     /// | 5 | Consistent state-var write across predecessors | 0.10 |
+    #[must_use]
     pub fn score_function(func: &MlilFunction) -> CffScore {
         let n = func.blocks.len();
         let mut indicators = Vec::new();
@@ -3879,6 +3922,7 @@ impl OllvmDetectorV2 {
     /// 1. Has many predecessors (≥ 3).
     /// 2. Has multiple successors (≥ 2, indicating a multi-way branch).
     /// 3. Is not the function entry.
+    #[must_use]
     pub fn find_dispatcher_candidates(func: &MlilFunction) -> Vec<DispatcherCandidate> {
         let mut candidates = Vec::new();
 
@@ -3919,6 +3963,7 @@ impl OllvmDetectorV2 {
     /// 4. At least one predecessor carries a constant state assignment.
     ///
     /// Returns `None` when the structure does not meet the criteria.
+    #[must_use]
     pub fn verify_cff_structure(
         func: &MlilFunction,
         dispatcher: &DispatcherCandidate,

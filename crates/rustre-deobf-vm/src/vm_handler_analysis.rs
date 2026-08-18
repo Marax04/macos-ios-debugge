@@ -1,8 +1,8 @@
 //! VM Handler Pattern Analysis
 //!
 //! Detects and classifies handlers for five major commercial protectors:
-//! - VMProtect 2.x / 3.x
-//! - Themida / WinLicense
+//! - `VMProtect` 2.x / 3.x
+//! - Themida / `WinLicense`
 //! - Code Virtualizer
 //! - Enigma Protector
 //! - Obsidium
@@ -105,7 +105,8 @@ pub enum HandlerSemantic {
 
 impl HandlerSemantic {
     /// Returns `true` if this semantic affects control flow.
-    pub fn is_control_flow(self) -> bool {
+    #[must_use]
+    pub const fn is_control_flow(self) -> bool {
         matches!(
             self,
             Self::Jmp | Self::Jcc | Self::Call | Self::Ret | Self::VmExit | Self::VmEnter
@@ -113,7 +114,8 @@ impl HandlerSemantic {
     }
 
     /// Returns `true` if this semantic is a binary ALU operation.
-    pub fn is_binary_alu(self) -> bool {
+    #[must_use]
+    pub const fn is_binary_alu(self) -> bool {
         matches!(
             self,
             Self::Add
@@ -132,7 +134,8 @@ impl HandlerSemantic {
     }
 
     /// Human-readable mnemonic.
-    pub fn mnemonic(self) -> &'static str {
+    #[must_use]
+    pub const fn mnemonic(self) -> &'static str {
         match self {
             Self::Push => "PUSH",
             Self::Pop => "POP",
@@ -196,7 +199,8 @@ pub struct HandlerCandidate {
 
 impl HandlerCandidate {
     /// Create a minimal candidate.
-    pub fn new(address: u64, body: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn new(address: u64, body: Vec<u8>) -> Self {
         Self {
             address,
             body,
@@ -210,8 +214,9 @@ impl HandlerCandidate {
         }
     }
 
-    /// Stack delta (push_count − pop_count).
-    pub fn stack_delta(&self) -> i32 {
+    /// Stack delta (`push_count` − `pop_count`).
+    #[must_use]
+    pub const fn stack_delta(&self) -> i32 {
         self.stack_push_count as i32 - self.stack_pop_count as i32
     }
 
@@ -241,7 +246,8 @@ pub enum DetectedProtector {
 
 impl DetectedProtector {
     /// Returns the display name.
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::VMProtect2 => "VMProtect 2.x",
             Self::VMProtect3 => "VMProtect 3.x",
@@ -256,7 +262,8 @@ impl DetectedProtector {
     }
 
     /// Whether this protector uses stack-based VM semantics.
-    pub fn is_stack_based(&self) -> bool {
+    #[must_use]
+    pub const fn is_stack_based(&self) -> bool {
         matches!(
             self,
             Self::VMProtect2 | Self::VMProtect3 | Self::Themida | Self::WinLicense
@@ -264,7 +271,8 @@ impl DetectedProtector {
     }
 
     /// Typical handler table entry count range.
-    pub fn handler_count_range(&self) -> (usize, usize) {
+    #[must_use]
+    pub const fn handler_count_range(&self) -> (usize, usize) {
         match self {
             Self::VMProtect2 => (100, 220),
             Self::VMProtect3 => (150, 280),
@@ -298,7 +306,8 @@ pub struct ProtectorDetectionResult {
 
 impl ProtectorDetectionResult {
     /// Create a new result.
-    pub fn new(protector: DetectedProtector) -> Self {
+    #[must_use]
+    pub const fn new(protector: DetectedProtector) -> Self {
         Self {
             protector,
             confidence: 0.0,
@@ -310,6 +319,7 @@ impl ProtectorDetectionResult {
     }
 
     /// Returns `true` if this is a high-confidence detection.
+    #[must_use]
     pub fn is_high_confidence(&self) -> bool {
         self.confidence >= 0.70
     }
@@ -320,6 +330,7 @@ impl ProtectorDetectionResult {
     }
 
     /// Number of successfully classified handlers.
+    #[must_use]
     pub fn classified_count(&self) -> usize {
         self.handlers
             .iter()
@@ -329,6 +340,7 @@ impl ProtectorDetectionResult {
 
     /// Group the candidate handlers by their classified [`HandlerSemantic`].
     /// Useful for summarising the protector's instruction mix.
+    #[must_use]
     pub fn handlers_by_semantic(&self) -> HashMap<HandlerSemantic, Vec<&HandlerCandidate>> {
         let mut out: HashMap<HandlerSemantic, Vec<&HandlerCandidate>> = HashMap::new();
         for h in &self.handlers {
@@ -376,12 +388,14 @@ pub struct VmHandlerAnalyzer {
 
 impl VmHandlerAnalyzer {
     /// Create an analyser with default configuration.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Create an analyser with custom configuration.
-    pub fn with_config(config: HandlerAnalyzerConfig) -> Self {
+    #[must_use]
+    pub const fn with_config(config: HandlerAnalyzerConfig) -> Self {
         Self { config }
     }
 
@@ -428,12 +442,13 @@ impl VmHandlerAnalyzer {
 
     // ── VMProtect ─────────────────────────────────────────────────────────────
 
-    /// Detect VMProtect (2.x or 3.x) handler patterns.
+    /// Detect `VMProtect` (2.x or 3.x) handler patterns.
     ///
-    /// VMProtect uses a dispatcher that fetches an opcode byte from `[ESI/RSI]`,
+    /// `VMProtect` uses a dispatcher that fetches an opcode byte from `[ESI/RSI]`,
     /// advances ESI/RSI by the instruction size, and jumps through a handler table
     /// indexed by the opcode. Handlers are small (20-150 bytes), densely packed, and
     /// end with `JMP [handler_table + opcode * 8]` or `JMP [EAX/RAX]`.
+    #[must_use]
     pub fn detect_vmprotect(&self, binary: &[u8]) -> Option<ProtectorDetectionResult> {
         let mut result = ProtectorDetectionResult::new(DetectedProtector::VMProtect2);
 
@@ -463,8 +478,7 @@ impl VmHandlerAnalyzer {
         let vmp_fetch_count = count_pattern(binary, &[0x0F, 0xB6]);
         if vmp_fetch_count >= 3 {
             result.add_evidence(format!(
-                "MOVZX opcode-fetch pattern appears {} times",
-                vmp_fetch_count
+                "MOVZX opcode-fetch pattern appears {vmp_fetch_count} times"
             ));
             result.confidence += 0.15;
         }
@@ -473,8 +487,7 @@ impl VmHandlerAnalyzer {
         let jmp_table_count = count_pattern(binary, &[0xFF, 0x24]);
         if jmp_table_count >= 5 {
             result.add_evidence(format!(
-                "JMP [table+reg] pattern appears {} times",
-                jmp_table_count
+                "JMP [table+reg] pattern appears {jmp_table_count} times"
             ));
             result.confidence += 0.10;
         }
@@ -482,7 +495,7 @@ impl VmHandlerAnalyzer {
         // Signal 5: CPUID present → VMProtect 3.x anti-VM detection.
         let cpuid_count = count_pattern(binary, &[0x0F, 0xA2]);
         if cpuid_count >= 2 {
-            result.add_evidence(format!("CPUID x{} → likely VMProtect 3.x", cpuid_count));
+            result.add_evidence(format!("CPUID x{cpuid_count} → likely VMProtect 3.x"));
             result.confidence += 0.15;
             result.protector = DetectedProtector::VMProtect3;
         }
@@ -503,11 +516,12 @@ impl VmHandlerAnalyzer {
 
     // ── Themida / WinLicense ──────────────────────────────────────────────────
 
-    /// Detect Themida / WinLicense handler patterns.
+    /// Detect Themida / `WinLicense` handler patterns.
     ///
     /// Themida features very large handlers (50–300 bytes) with heavy XOR-based
     /// decryption loops at the start, API hooking patterns, and the characteristic
     /// `IsDebuggerPresent` anti-debugging import.
+    #[must_use]
     pub fn detect_themida(&self, binary: &[u8]) -> Option<ProtectorDetectionResult> {
         let mut result = ProtectorDetectionResult::new(DetectedProtector::Themida);
 
@@ -555,7 +569,7 @@ impl VmHandlerAnalyzer {
         // RDTSC timing check pattern.
         let rdtsc_count = count_pattern(binary, &[0x0F, 0x31]);
         if rdtsc_count >= 3 {
-            result.add_evidence(format!("RDTSC x{} (timing anti-debug)", rdtsc_count));
+            result.add_evidence(format!("RDTSC x{rdtsc_count} (timing anti-debug)"));
             result.confidence += 0.08;
         }
 
@@ -584,6 +598,7 @@ impl VmHandlerAnalyzer {
     /// Code Virtualizer produces very compact handlers (10–60 bytes) with simple
     /// arithmetic and no encryption. The `.cv_DATA` / `.cv_CODE` sections are the
     /// primary indicator.
+    #[must_use]
     pub fn detect_codevirtualizer(&self, binary: &[u8]) -> Option<ProtectorDetectionResult> {
         let mut result = ProtectorDetectionResult::new(DetectedProtector::CodeVirtualizer);
 
@@ -611,8 +626,7 @@ impl VmHandlerAnalyzer {
         let short_count = short_handlers.len();
         if short_count >= 8 {
             result.add_evidence(format!(
-                "Found {} short-handler+indirect-JMP sequences",
-                short_count
+                "Found {short_count} short-handler+indirect-JMP sequences"
             ));
             result.confidence += 0.15;
         }
@@ -633,6 +647,7 @@ impl VmHandlerAnalyzer {
     /// Enigma Protector uses a mix of register-machine and stack-machine handlers.
     /// Its VM key distinguisher is a `MOV EAX, [EAX * 4 + handler_table]` dispatch
     /// pattern and the `.enigma1` / `.enigma2` section names.
+    #[must_use]
     pub fn detect_enigma(&self, binary: &[u8]) -> Option<ProtectorDetectionResult> {
         let mut result = ProtectorDetectionResult::new(DetectedProtector::Enigma);
 
@@ -660,8 +675,7 @@ impl VmHandlerAnalyzer {
         let shl_pattern = count_pattern(binary, &[0xC1, 0xE0, 0x02]);
         if shl_pattern >= 3 {
             result.add_evidence(format!(
-                "SHL EAX,2 pattern x{} (scaled handler index)",
-                shl_pattern
+                "SHL EAX,2 pattern x{shl_pattern} (scaled handler index)"
             ));
             result.confidence += 0.10;
         }
@@ -702,6 +716,7 @@ impl VmHandlerAnalyzer {
     /// payload, then a runtime VM executes the protected code. Key fingerprints are
     /// the `.obsidium` section names, heavy use of `PUSHFD/POPFD` for flag saving,
     /// and INT 3 anti-debug traps placed before/after handler prologues.
+    #[must_use]
     pub fn detect_obsidium(&self, binary: &[u8]) -> Option<ProtectorDetectionResult> {
         let mut result = ProtectorDetectionResult::new(DetectedProtector::Obsidium);
 
@@ -887,11 +902,13 @@ pub struct HandlerSemanticClassifier;
 
 impl HandlerSemanticClassifier {
     /// Create a new classifier.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
     /// Classify `body` into a [`HandlerSemantic`] with a confidence score.
+    #[must_use]
     pub fn classify(&self, body: &[u8]) -> (HandlerSemantic, f32) {
         if body.is_empty() {
             return (HandlerSemantic::Unknown, 0.0);

@@ -28,15 +28,18 @@ pub enum ConstLattice {
 
 impl ConstLattice {
     /// Return `true` if this element is `Const`.
+    #[must_use]
     pub const fn is_const(self) -> bool { matches!(self, Self::Const(_)) }
 
     /// Extract the constant value, if any.
+    #[must_use]
     pub const fn as_i64(self) -> Option<i64> {
         if let Self::Const(c) = self { Some(c) } else { None }
     }
 
     /// Lattice join (least upper bound).
-    pub fn join(self, other: Self) -> Self {
+    #[must_use]
+    pub const fn join(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bottom, x) | (x, Self::Bottom) => x,
             (Self::Top, _) | (_, Self::Top) => Self::Top,
@@ -47,7 +50,8 @@ impl ConstLattice {
     }
 
     /// Lattice meet (greatest lower bound).
-    pub fn meet(self, other: Self) -> Self {
+    #[must_use]
+    pub const fn meet(self, other: Self) -> Self {
         match (self, other) {
             (Self::Top, x) | (x, Self::Top) => x,
             (Self::Bottom, _) | (_, Self::Bottom) => Self::Bottom,
@@ -58,6 +62,7 @@ impl ConstLattice {
     }
 
     /// Whether this element is strictly "less than" `other` in the lattice order.
+    #[must_use]
     pub fn is_less_than(self, other: Self) -> bool {
         self.join(other) == other && self != other
     }
@@ -127,7 +132,7 @@ pub enum UnOpKind { Neg, Not, Abs, PopCnt }
 pub enum CmpKind { Eq, Ne, Lt, Le, Gt, Ge }
 
 impl CmpKind {
-    fn eval(self, a: i64, b: i64) -> bool {
+    const fn eval(self, a: i64, b: i64) -> bool {
         match self {
             Self::Eq => a == b, Self::Ne => a != b,
             Self::Lt => a < b,  Self::Le => a <= b,
@@ -175,8 +180,10 @@ pub struct InvariantCond {
 }
 
 impl InvariantCond {
-    pub fn is_opaque_true(&self)  -> bool { self.always_true }
-    pub fn is_opaque_false(&self) -> bool { self.always_false }
+    #[must_use]
+    pub const fn is_opaque_true(&self)  -> bool { self.always_true }
+    #[must_use]
+    pub const fn is_opaque_false(&self) -> bool { self.always_false }
 }
 
 impl fmt::Display for InvariantCond {
@@ -206,7 +213,8 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
-    pub fn new(id: u32) -> Self {
+    #[must_use]
+    pub const fn new(id: u32) -> Self {
         Self { id, instrs: Vec::new(), preds: Vec::new(), succs: Vec::new(), address: None }
     }
 
@@ -214,7 +222,8 @@ impl BasicBlock {
         self.instrs.push(instr);
     }
 
-    pub fn with_address(mut self, addr: u64) -> Self { self.address = Some(addr); self }
+    #[must_use]
+    pub const fn with_address(mut self, addr: u64) -> Self { self.address = Some(addr); self }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,8 +237,10 @@ pub struct PropState {
 }
 
 impl PropState {
+    #[must_use]
     pub fn new() -> Self { Self { values: HashMap::new() } }
 
+    #[must_use]
     pub fn get(&self, v: VarId) -> ConstLattice {
         self.values.get(&v).copied().unwrap_or(ConstLattice::Bottom)
     }
@@ -253,6 +264,7 @@ impl PropState {
     }
 
     /// Number of known-constant variables.
+    #[must_use]
     pub fn const_count(&self) -> usize {
         self.values.values().filter(|v| v.is_const()).count()
     }
@@ -278,22 +290,26 @@ pub struct ConstPropPass {
 }
 
 impl ConstPropPass {
+    #[must_use]
     pub fn new() -> Self {
         Self { initial_values: HashMap::new(), max_iterations: 1000 }
     }
 
+    #[must_use]
     pub fn with_initial(mut self, var: VarId, val: i64) -> Self {
         self.initial_values.insert(var, ConstLattice::Const(val));
         self
     }
 
-    pub fn with_max_iterations(mut self, n: usize) -> Self {
+    #[must_use]
+    pub const fn with_max_iterations(mut self, n: usize) -> Self {
         self.max_iterations = n;
         self
     }
 
     /// Run the constant propagation pass over `blocks`.
     /// Returns per-block exit states and any invariant conditions detected.
+    #[must_use]
     pub fn run(&self, blocks: &[BasicBlock]) -> ConstPropResult {
         if blocks.is_empty() {
             return ConstPropResult::empty();
@@ -498,6 +514,7 @@ impl ConstPropPass {
     }
 
     /// Fold a single instruction given the current state — convenience method.
+    #[must_use]
     pub fn fold_instruction(&self, instr: &IrInstr, state: &PropState) -> FoldResult {
         let tmp = state.clone();
         match instr {
@@ -558,7 +575,7 @@ pub struct ConstPropResult {
 }
 
 impl ConstPropResult {
-    fn empty() -> Self {
+    const fn empty() -> Self {
         Self {
             exit_states: Vec::new(),
             entry_states: Vec::new(),
@@ -569,16 +586,19 @@ impl ConstPropResult {
     }
 
     /// Look up the exit-state lattice value for `var` in block `block_idx`.
+    #[must_use]
     pub fn value_at_exit(&self, block_pos: usize, var: VarId) -> ConstLattice {
         self.exit_states.get(block_pos).map_or(ConstLattice::Bottom, |s| s.get(var))
     }
 
     /// Look up the entry-state lattice value for `var` in block `block_pos`.
+    #[must_use]
     pub fn value_at_entry(&self, block_pos: usize, var: VarId) -> ConstLattice {
         self.entry_states.get(block_pos).map_or(ConstLattice::Bottom, |s| s.get(var))
     }
 
     /// All variables that have constant values at block exit.
+    #[must_use]
     pub fn constants_at_exit(&self, block_pos: usize) -> Vec<(VarId, i64)> {
         self.exit_states.get(block_pos)
             .map(|s| s.values.iter().filter_map(|(&v, &l)| l.as_i64().map(|c| (v, c))).collect())
@@ -586,11 +606,13 @@ impl ConstPropResult {
     }
 
     /// Number of always-true opaque predicates.
+    #[must_use]
     pub fn opaque_true_count(&self) -> usize {
         self.invariant_conds.iter().filter(|c| c.is_opaque_true()).count()
     }
 
     /// Number of always-false opaque predicates.
+    #[must_use]
     pub fn opaque_false_count(&self) -> usize {
         self.invariant_conds.iter().filter(|c| c.is_opaque_false()).count()
     }
@@ -601,6 +623,7 @@ impl ConstPropResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Build a trivial single-block CFG from a flat list of IR instructions.
+#[must_use]
 pub fn single_block_cfg(instrs: Vec<IrInstr>) -> Vec<BasicBlock> {
     let mut block = BasicBlock::new(0);
     block.instrs = instrs;

@@ -32,15 +32,18 @@ pub struct MemoryLimits {
 }
 
 impl MemoryLimits {
-    pub fn new(min: u32, max: Option<u32>) -> Self {
+    #[must_use]
+    pub const fn new(min: u32, max: Option<u32>) -> Self {
         Self { min, max }
     }
 
     /// Return the effective maximum (spec cap if none given).
+    #[must_use]
     pub fn effective_max(self) -> u32 {
         self.max.unwrap_or(MAX_PAGES)
     }
 
+    #[must_use]
     pub fn is_valid(self) -> bool {
         self.min <= self.effective_max() && self.effective_max() <= MAX_PAGES
     }
@@ -101,6 +104,7 @@ impl WasmMemory {
     /// module binary (dos-memory-exhaustion). The logical page count reported
     /// by [`size`](Self::size) still reflects `limits.min` so spec-conformant
     /// callers see the correct value, but `data` only backs the capped amount.
+    #[must_use]
     pub fn new(limits: MemoryLimits, bulk_memory_enabled: bool) -> Self {
         let alloc_pages = limits.min.min(MAX_ALLOC_PAGES);
         let initial_bytes = (alloc_pages as usize)
@@ -119,12 +123,14 @@ impl WasmMemory {
     }
 
     /// Return the current size in pages.
-    pub fn size(&self) -> u32 {
+    #[must_use]
+    pub const fn size(&self) -> u32 {
         self.stats.pages
     }
 
     /// Return a snapshot of the current statistics.
-    pub fn stats(&self) -> &MemoryStats {
+    #[must_use]
+    pub const fn stats(&self) -> &MemoryStats {
         &self.stats
     }
 
@@ -393,6 +399,7 @@ impl WasmMemory {
     // -----------------------------------------------------------------------
 
     /// Return a view of the raw byte slice backing this memory.
+    #[must_use]
     pub fn as_slice(&self) -> &[u8] {
         &self.data
     }
@@ -458,6 +465,7 @@ impl WasmMemory {
 
     /// Return the number of non-zero bytes in the memory (useful for quick
     /// "is this memory interesting?" checks).
+    #[must_use]
     pub fn nonzero_byte_count(&self) -> usize {
         self.data.iter().filter(|&&b| b != 0).count()
     }
@@ -475,6 +483,7 @@ pub struct MemoryView {
 }
 
 impl MemoryView {
+    #[must_use]
     pub fn from_memory(mem: &WasmMemory, base: u32, len: u32) -> Option<Self> {
         if (base as usize) + (len as usize) > mem.data.len() {
             return None;
@@ -485,22 +494,26 @@ impl MemoryView {
         })
     }
 
+    #[must_use]
     pub fn read_byte(&self, addr: u32) -> Option<u8> {
         let rel = addr.checked_sub(self.base_addr)? as usize;
         self.data.get(rel).copied()
     }
 
+    #[must_use]
     pub fn read_u32_le(&self, addr: u32) -> Option<u32> {
         let rel = addr.checked_sub(self.base_addr)? as usize;
         let bytes: [u8; 4] = self.data.get(rel..rel + 4)?.try_into().ok()?;
         Some(u32::from_le_bytes(bytes))
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }
@@ -524,6 +537,7 @@ impl MultiMemory {
         id
     }
 
+    #[must_use]
     pub fn get(&self, idx: u32) -> Option<&WasmMemory> {
         self.memories.get(&idx)
     }
@@ -532,6 +546,7 @@ impl MultiMemory {
         self.memories.get_mut(&idx)
     }
 
+    #[must_use]
     pub fn count(&self) -> usize {
         self.memories.len()
     }

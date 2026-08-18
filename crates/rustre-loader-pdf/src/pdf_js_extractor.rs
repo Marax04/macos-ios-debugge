@@ -33,7 +33,7 @@ pub enum ObfuscationKind {
     ObfuscatedNames,
     /// `Function(...)()` constructor call.
     FunctionConstructor,
-    /// Packed / compressed payload (e.g. JsPacker).
+    /// Packed / compressed payload (e.g. `JsPacker`).
     PackedPayload,
 }
 
@@ -116,7 +116,7 @@ impl HeapSprayDetect {
 
     /// Create a positive detection.
     #[must_use]
-    pub fn positive(
+    pub const fn positive(
         nop_pattern: Option<String>,
         alloc_size: Option<usize>,
         fill_expression: Option<String>,
@@ -710,7 +710,7 @@ pub struct PdfJsExtractorFull;
 impl PdfJsExtractorFull {
     /// Create a new extractor.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -841,7 +841,7 @@ fn extract_js_value(data: &[u8], pos: usize) -> String {
     }
 }
 
-fn hex_nibble(b: u8) -> u8 {
+const fn hex_nibble(b: u8) -> u8 {
     match b {
         b'0'..=b'9' => b - b'0',
         b'a'..=b'f' => b - b'a' + 10,

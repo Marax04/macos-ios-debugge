@@ -336,7 +336,7 @@ impl LogcatCapture {
                 - line.as_ptr() as usize;
             let rest = line[level_end..].trim_start();
             if rest.is_empty() { continue; }
-            let timestamp = format!("{} {}", date, time);
+            let timestamp = format!("{date} {time}");
             let pid = pid_str.parse::<u32>().unwrap_or(0);
             let tid = tid_str.parse::<u32>().unwrap_or(0);
             let level = LogLevel::from_char(level_str.chars().next().unwrap_or('V'));

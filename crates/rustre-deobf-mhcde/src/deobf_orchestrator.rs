@@ -41,7 +41,7 @@ pub enum PassCategory {
 impl PassCategory {
     /// Estimated cost of running this pass (higher = more expensive).
     #[must_use]
-    pub fn cost(self) -> u32 {
+    pub const fn cost(self) -> u32 {
         match self {
             Self::StringDecrypt => 10,
             Self::Mba => 50,
@@ -78,7 +78,7 @@ pub struct PassDescriptor {
 
 impl PassDescriptor {
     #[must_use]
-    pub fn new(spec: DeobfPassSpec, category: PassCategory) -> Self {
+    pub const fn new(spec: DeobfPassSpec, category: PassCategory) -> Self {
         Self {
             spec,
             category,
@@ -96,13 +96,13 @@ impl PassDescriptor {
     }
 
     #[must_use]
-    pub fn with_gain(mut self, gain: f32) -> Self {
+    pub const fn with_gain(mut self, gain: f32) -> Self {
         self.expected_gain = gain;
         self
     }
 
     #[must_use]
-    pub fn repeatable(mut self, max: u32) -> Self {
+    pub const fn repeatable(mut self, max: u32) -> Self {
         self.max_runs = max;
         self
     }

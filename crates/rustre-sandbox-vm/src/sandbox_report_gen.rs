@@ -344,13 +344,13 @@ impl IocList {
 
     /// Return the total count.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.iocs.len()
     }
 
     /// Return true if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.iocs.is_empty()
     }
 
@@ -522,13 +522,13 @@ impl MitreMapping {
 
     /// Number of mapped techniques.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.techniques.len()
     }
 
     /// Returns true if empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.techniques.is_empty()
     }
 }

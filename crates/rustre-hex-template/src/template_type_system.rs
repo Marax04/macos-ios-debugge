@@ -216,7 +216,7 @@ impl TypeKind {
 
     /// Whether this type is a scalar integer (signed or unsigned).
     #[must_use]
-    pub fn is_integer(&self) -> bool {
+    pub const fn is_integer(&self) -> bool {
         matches!(
             self,
             Self::Scalar {
@@ -228,13 +228,13 @@ impl TypeKind {
 
     /// Whether this type is a pointer.
     #[must_use]
-    pub fn is_pointer(&self) -> bool {
+    pub const fn is_pointer(&self) -> bool {
         matches!(self, Self::Pointer { .. })
     }
 
     /// Whether this type is a struct.
     #[must_use]
-    pub fn is_struct(&self) -> bool {
+    pub const fn is_struct(&self) -> bool {
         matches!(self, Self::Struct { .. })
     }
 }
@@ -328,7 +328,7 @@ impl BitfieldMember {
 
     /// Extract this member's value from a raw integer.
     #[must_use]
-    pub fn extract(&self, raw: u64) -> u64 {
+    pub const fn extract(&self, raw: u64) -> u64 {
         let mask = if self.bit_count >= 64 {
             u64::MAX
         } else {
@@ -339,7 +339,7 @@ impl BitfieldMember {
 
     /// Insert `val` into `raw` at this member's bit position.
     #[must_use]
-    pub fn insert(&self, raw: u64, val: u64) -> u64 {
+    pub const fn insert(&self, raw: u64, val: u64) -> u64 {
         let mask = if self.bit_count >= 64 {
             u64::MAX
         } else {
@@ -430,7 +430,7 @@ pub fn type_alignment(ty: &TypeKind) -> usize {
 
 /// Align `offset` up to `alignment`.
 #[must_use]
-pub fn align_offset(offset: usize, alignment: usize) -> usize {
+pub const fn align_offset(offset: usize, alignment: usize) -> usize {
     if alignment == 0 {
         return offset;
     }
@@ -469,7 +469,7 @@ impl TemplateType {
 
     /// Create with an explicit alignment override.
     #[must_use]
-    pub fn with_alignment(mut self, align: usize) -> Self {
+    pub const fn with_alignment(mut self, align: usize) -> Self {
         self.alignment_override = align;
         self
     }
@@ -704,7 +704,7 @@ impl StructLayout {
 
 /// Create an unsigned little-endian scalar of `bytes` bytes.
 #[must_use]
-pub fn uint_le(bytes: usize) -> TypeKind {
+pub const fn uint_le(bytes: usize) -> TypeKind {
     TypeKind::Scalar {
         kind: ScalarKind::UInt,
         byte_width: TypeSize::Fixed(bytes),
@@ -714,7 +714,7 @@ pub fn uint_le(bytes: usize) -> TypeKind {
 
 /// Create an unsigned big-endian scalar of `bytes` bytes.
 #[must_use]
-pub fn uint_be(bytes: usize) -> TypeKind {
+pub const fn uint_be(bytes: usize) -> TypeKind {
     TypeKind::Scalar {
         kind: ScalarKind::UInt,
         byte_width: TypeSize::Fixed(bytes),
@@ -724,7 +724,7 @@ pub fn uint_be(bytes: usize) -> TypeKind {
 
 /// Create a signed little-endian scalar of `bytes` bytes.
 #[must_use]
-pub fn sint_le(bytes: usize) -> TypeKind {
+pub const fn sint_le(bytes: usize) -> TypeKind {
     TypeKind::Scalar {
         kind: ScalarKind::SInt,
         byte_width: TypeSize::Fixed(bytes),

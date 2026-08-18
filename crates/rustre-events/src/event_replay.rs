@@ -9,11 +9,11 @@ use crate::{CoreEvent, EventBus, EventKind};
 use serde::{Deserialize, Serialize};
 
 #[inline]
-fn cast_u64_f64(v: u64) -> f64 { v as f64 }
+const fn cast_u64_f64(v: u64) -> f64 { v as f64 }
 #[inline]
-fn cast_usize_f64(v: usize) -> f64 { v as f64 }
+const fn cast_usize_f64(v: usize) -> f64 { v as f64 }
 #[inline]
-fn cast_f64_u64_sat(v: f64) -> u64 { v.max(0.0).min(u64::MAX as f64) as u64 }
+const fn cast_f64_u64_sat(v: f64) -> u64 { v.max(0.0).min(u64::MAX as f64) as u64 }
 
 pub use parking_lot::Mutex as ReplayMutex;
 pub use parking_lot::Mutex;

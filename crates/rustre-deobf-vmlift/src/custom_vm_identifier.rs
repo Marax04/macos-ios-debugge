@@ -42,7 +42,7 @@ impl std::fmt::Display for VmKind {
             Self::ThreadedInterpreter => "ThreadedInterpreter",
             Self::Unknown => "Unknown",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -114,7 +114,8 @@ pub struct CustomVmResult {
 }
 
 impl CustomVmResult {
-    pub fn unknown() -> Self {
+    #[must_use]
+    pub const fn unknown() -> Self {
         Self {
             kind: VmKind::Unknown,
             fde_pattern: None,
@@ -150,7 +151,8 @@ impl Default for CustomVmIdentifier {
 
 impl CustomVmIdentifier {
     /// Create with default settings for an x86-64 userspace binary.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             min_confidence: 0.50,
             ptr_size: 8,
@@ -158,17 +160,20 @@ impl CustomVmIdentifier {
         }
     }
 
-    pub fn with_min_confidence(mut self, t: f32) -> Self {
+    #[must_use]
+    pub const fn with_min_confidence(mut self, t: f32) -> Self {
         self.min_confidence = t;
         self
     }
 
-    pub fn with_ptr_size(mut self, n: u8) -> Self {
+    #[must_use]
+    pub const fn with_ptr_size(mut self, n: u8) -> Self {
         self.ptr_size = n;
         self
     }
 
-    pub fn with_code_range(mut self, min: u64, max: u64) -> Self {
+    #[must_use]
+    pub const fn with_code_range(mut self, min: u64, max: u64) -> Self {
         self.code_range = (min, max);
         self
     }
@@ -181,6 +186,7 @@ impl CustomVmIdentifier {
     /// 1. Call `mmap`/`VirtualAlloc` (rwx) early.
     /// 2. Emit code by storing bytes to a writable/executable buffer.
     /// 3. Cast the buffer to a function pointer and call it.
+    #[must_use]
     pub fn detect_jit(&self, bytes: &[u8]) -> (bool, f32) {
         let mut score = 0.0f32;
 
@@ -238,6 +244,7 @@ impl CustomVmIdentifier {
     /// * `jmp [target]`
     /// * `push target; ret`
     /// * `mov rax, target; jmp rax`
+    #[must_use]
     pub fn detect_trampoline(&self, bytes: &[u8]) -> (bool, f32) {
         if bytes.len() > 64 {
             return (false, 0.0);
@@ -266,6 +273,7 @@ impl CustomVmIdentifier {
     // ── FDE loop detection ────────────────────────────────────────────────────
 
     /// Find the fetch-decode-execute loop in a code region.
+    #[must_use]
     pub fn find_fde_loop(&self, bytes: &[u8], base_address: u64) -> Option<FetchDecodeExecutePattern> {
         // Key indicators of an FDE loop:
         // 1. A register is used as an instruction pointer (advanced by opcode width)
@@ -316,6 +324,7 @@ impl CustomVmIdentifier {
     // ── Handler table detection ───────────────────────────────────────────────
 
     /// Find all candidate handler tables in `bytes`.
+    #[must_use]
     pub fn find_handler_tables(
         &self,
         bytes: &[u8],
@@ -373,6 +382,7 @@ impl CustomVmIdentifier {
     // ── Opcode width inference ────────────────────────────────────────────────
 
     /// Infer the opcode byte width (1 or 2) from the fetch pattern.
+    #[must_use]
     pub fn infer_opcode_width(&self, bytes: &[u8]) -> u8 {
         // If we see `movzx eax, word ptr [rsi]` → 2-byte opcodes
         let word_fetch = bytes.windows(4).any(|w| {
@@ -384,6 +394,7 @@ impl CustomVmIdentifier {
     // ── Threaded interpreter detection ────────────────────────────────────────
 
     /// Detect whether the dispatcher uses computed goto (threaded dispatch).
+    #[must_use]
     pub fn detect_threaded(&self, bytes: &[u8]) -> bool {
         // Threaded interpreters end each handler with jmp [reg] or jmp [reg + disp]
         // where `reg` holds the next handler address fetched from a table.
@@ -400,13 +411,14 @@ impl CustomVmIdentifier {
     // ── Main analysis ─────────────────────────────────────────────────────────
 
     /// Identify the VM kind and collect all structural evidence.
+    #[must_use]
     pub fn identify(&self, bytes: &[u8], base_address: u64) -> CustomVmResult {
         let mut evidence = Vec::new();
 
         // 1. Trampoline check (cheapest, eliminates short stubs immediately)
         let (is_trampoline, tramp_conf) = self.detect_trampoline(bytes);
         if is_trampoline && tramp_conf >= self.min_confidence {
-            evidence.push(format!("trampoline pattern detected (conf={:.2})", tramp_conf));
+            evidence.push(format!("trampoline pattern detected (conf={tramp_conf:.2})"));
             return CustomVmResult {
                 kind: VmKind::Trampoline,
                 overall_confidence: tramp_conf,
@@ -418,7 +430,7 @@ impl CustomVmIdentifier {
         // 2. JIT detection
         let (is_jit, jit_conf) = self.detect_jit(bytes);
         if is_jit && jit_conf >= self.min_confidence {
-            evidence.push(format!("JIT indicators detected (conf={:.2})", jit_conf));
+            evidence.push(format!("JIT indicators detected (conf={jit_conf:.2})"));
             return CustomVmResult {
                 kind: VmKind::JitCompiler,
                 overall_confidence: jit_conf,

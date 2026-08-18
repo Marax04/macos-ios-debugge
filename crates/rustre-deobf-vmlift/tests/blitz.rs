@@ -870,8 +870,15 @@ fn pipeline_full_propagates_decode_error_in_bytecode() {
 // ────────────────────────────────────────────────────────────────────────────
 
 #[test]
-fn run_pass_does_not_panic() {
-    run_pass();
+fn run_pass_lifts_the_bytes_it_is_given() {
+    // The old form called `run_pass()` with no argument and discarded the
+    // result, so it asserted only "did not panic" about a hardcoded byte.
+    // It now lifts real input and the output is checked.
+    let lifted = run_pass(&[0x07]);
+    let empty = run_pass(&[]);
+    assert!(empty.is_empty(), "no bytes means no pseudo-IL, got {empty:?}");
+    // Whatever 0x07 lifts to, it must be deterministic.
+    assert_eq!(lifted, run_pass(&[0x07]), "lifting must be deterministic");
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -49,7 +49,7 @@ impl LjInsn {
         ((self.0 >> 16) & 0xFFFF) as u16
     }
     #[must_use]
-    pub fn sd(self) -> i16 {
+    pub const fn sd(self) -> i16 {
         self.d() as i16
     }
 

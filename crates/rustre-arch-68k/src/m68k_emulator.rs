@@ -225,7 +225,7 @@ impl EffectiveAddress {
     /// Return the memory address for a Memory EA, or the register value for
     /// an address register.  Used by JMP/JSR where the EA IS the target address.
     #[must_use]
-    pub fn address(&self, state: &M68kState) -> u32 {
+    pub const fn address(&self, state: &M68kState) -> u32 {
         match self {
             Self::Memory(addr) => *addr,
             Self::AddrReg(n) => state.a[*n],

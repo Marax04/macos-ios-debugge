@@ -40,7 +40,7 @@ pub enum Endian {
 }
 
 impl Endian {
-    fn as_ksy(&self) -> &str {
+    const fn as_ksy(&self) -> &str {
         match self {
             Endian::Little => "le",
             Endian::Big => "be",
@@ -350,7 +350,7 @@ pub fn export_wireshark_lua(pattern: &IrPattern) -> Result<String, ExportError> 
     Ok(out)
 }
 
-fn ir_type_to_lua_ftype(ty: &IrType) -> &'static str {
+const fn ir_type_to_lua_ftype(ty: &IrType) -> &'static str {
     match ty {
         IrType::U8 | IrType::I8 => "uint8",
         IrType::U16(_) | IrType::I16(_) => "uint16",
@@ -362,7 +362,7 @@ fn ir_type_to_lua_ftype(ty: &IrType) -> &'static str {
     }
 }
 
-fn ir_type_lua_size(ty: &IrType) -> usize {
+const fn ir_type_lua_size(ty: &IrType) -> usize {
     match ty {
         IrType::U8 | IrType::I8 => 1,
         IrType::U16(_) | IrType::I16(_) => 2,

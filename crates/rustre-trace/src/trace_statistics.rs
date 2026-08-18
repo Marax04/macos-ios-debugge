@@ -33,7 +33,8 @@ pub enum InsnCategory {
 }
 
 impl InsnCategory {
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::Alu => "ALU", Self::Mov => "MOV", Self::Control => "Control",
             Self::FloatingPt => "Float/SIMD", Self::Memory => "Memory",
@@ -43,7 +44,8 @@ impl InsnCategory {
     }
 
     /// Classify a raw x86 opcode byte (very coarse, first byte only)
-    pub fn from_x86_opcode(opcode: u8) -> Self {
+    #[must_use]
+    pub const fn from_x86_opcode(opcode: u8) -> Self {
         match opcode {
             // Data movement
             0x88..=0x8C | 0x8E | 0x8F | 0xA0..=0xA5 | 0xB0..=0xBF | 0x50..=0x5F
@@ -80,11 +82,13 @@ impl InstructionMix {
         self.total += 1;
     }
 
+    #[must_use]
     pub fn fraction(&self, cat: InsnCategory) -> f64 {
         if self.total == 0 { return 0.0; }
         *self.counts.get(&cat).unwrap_or(&0) as f64 / self.total as f64
     }
 
+    #[must_use]
     pub fn sorted_by_count(&self) -> Vec<(InsnCategory, u64)> {
         let mut v: Vec<_> = self.counts.iter().map(|(&k, &v)| (k, v)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
@@ -125,6 +129,7 @@ impl BasicBlockHits {
     }
 
     /// Top N most-executed basic blocks, sorted descending
+    #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.hits.iter().map(|(&a, &h)| (a, h)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
@@ -132,9 +137,11 @@ impl BasicBlockHits {
         v
     }
 
+    #[must_use]
     pub fn unique_blocks(&self) -> usize { self.hits.len() }
 
     /// Fraction of total executions in the top N blocks
+    #[must_use]
     pub fn top_n_coverage(&self, n: usize) -> f64 {
         if self.total_executions == 0 { return 0.0; }
         let top: u64 = self.top_n(n).iter().map(|(_, h)| h).sum();
@@ -173,11 +180,13 @@ impl StrideHistogram {
     }
 
     /// Most common stride value
+    #[must_use]
     pub fn dominant_stride(&self) -> Option<i64> {
         self.strides.iter().max_by_key(|&(_, &c)| c).map(|(&s, _)| s)
     }
 
-    /// Fraction of accesses that are sequential (stride == element_size)
+    /// Fraction of accesses that are sequential (stride == `element_size`)
+    #[must_use]
     pub fn sequential_fraction(&self, element_size: i64) -> f64 {
         let total: u64 = self.strides.values().sum();
         if total == 0 { return 0.0; }
@@ -215,11 +224,14 @@ impl MemoryStats {
         *self.cache_line_hits.entry(cl).or_insert(0) += 1;
     }
 
-    pub fn total_accesses(&self) -> u64 { self.read_count + self.write_count }
+    #[must_use]
+    pub const fn total_accesses(&self) -> u64 { self.read_count + self.write_count }
+    #[must_use]
     pub fn write_ratio(&self) -> f64 {
         let t = self.total_accesses();
         if t == 0 { 0.0 } else { self.write_count as f64 / t as f64 }
     }
+    #[must_use]
     pub fn unique_addresses(&self) -> usize {
         let mut s = self.unique_read_addrs.len() + self.unique_write_addrs.len();
         // subtract overlap
@@ -230,6 +242,7 @@ impl MemoryStats {
     }
 
     /// Top N most-accessed cache lines
+    #[must_use]
     pub fn hot_cache_lines(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.cache_line_hits.iter().map(|(&a, &c)| (a, c)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
@@ -252,6 +265,7 @@ impl SyscallFrequency {
         self.total += 1;
     }
 
+    #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.counts.iter().map(|(&k, &v)| (k, v)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
@@ -259,6 +273,7 @@ impl SyscallFrequency {
         v
     }
 
+    #[must_use]
     pub fn unique_syscalls(&self) -> usize { self.counts.len() }
 }
 
@@ -266,7 +281,7 @@ impl SyscallFrequency {
 
 #[derive(Debug, Default, Clone)]
 pub struct BranchStats {
-    /// (from_addr, to_addr) → count
+    /// (`from_addr`, `to_addr`) → count
     pub edges: HashMap<(u64, u64), u64>,
     /// Per-address taken/not-taken counters
     pub taken: HashMap<u64, u64>,
@@ -292,6 +307,7 @@ impl BranchStats {
         }
     }
 
+    #[must_use]
     pub fn taken_rate(&self, addr: u64) -> f64 {
         let t = *self.taken.get(&addr).unwrap_or(&0);
         let nt = *self.not_taken.get(&addr).unwrap_or(&0);
@@ -299,11 +315,13 @@ impl BranchStats {
         if total == 0 { 0.5 } else { t as f64 / total as f64 }
     }
 
+    #[must_use]
     pub fn overall_taken_rate(&self) -> f64 {
         let total_taken: u64 = self.taken.values().sum();
         if self.total_branches == 0 { 0.5 } else { total_taken as f64 / self.total_branches as f64 }
     }
 
+    #[must_use]
     pub fn biased_branches(&self, threshold: f64) -> Vec<(u64, f64)> {
         let mut result = Vec::new();
         let addrs: std::collections::HashSet<u64> = self.taken.keys()
@@ -318,6 +336,7 @@ impl BranchStats {
         result
     }
 
+    #[must_use]
     pub fn likely_loops(&self) -> &[(u64, u64)] { &self.back_edges }
 }
 
@@ -337,12 +356,14 @@ impl CallDepthHistogram {
         self.total_samples += 1;
     }
 
+    #[must_use]
     pub fn mean_depth(&self) -> f64 {
         if self.total_samples == 0 { return 0.0; }
         let sum: u64 = self.depths.iter().map(|(&d, &c)| d as u64 * c).sum();
         sum as f64 / self.total_samples as f64
     }
 
+    #[must_use]
     pub fn percentile_depth(&self, pct: f64) -> u32 {
         if self.total_samples == 0 { return 0; }
         let target = (self.total_samples as f64 * pct / 100.0).ceil() as u64;
@@ -367,6 +388,7 @@ pub struct PcRun {
 }
 
 /// Run-length encode a sequence of PC values (captures hot loops compactly)
+#[must_use]
 pub fn rle_encode_pcs(records: &[TraceRecord]) -> Vec<PcRun> {
     let mut runs = Vec::new();
     let mut last_pc: Option<u64> = None;
@@ -424,9 +446,11 @@ pub struct TraceStatistics {
 }
 
 impl TraceStatistics {
+    #[must_use]
     pub fn new() -> Self { TraceStatistics::default() }
 
     /// Compute statistics from a slice of trace records
+    #[must_use]
     pub fn compute(records: &[TraceRecord]) -> Self {
         let mut stats = Self::new();
         let mut call_stack: Vec<u64> = Vec::new();
@@ -484,6 +508,7 @@ impl TraceStatistics {
         stats
     }
 
+    #[must_use]
     pub fn coverage_metrics(&self) -> CoverageMetrics {
         let unique_pcs = self.bb_hits.hits.len();
         let estimated_bytes_covered = unique_pcs as u64 * 8; // very rough
@@ -495,8 +520,10 @@ impl TraceStatistics {
         }
     }
 
+    #[must_use]
     pub fn thread_count(&self) -> usize { self.unique_threads.len() }
 
+    #[must_use]
     pub fn hot_functions(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.function_entry_counts.iter().map(|(&a, &c)| (a, c)).collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
@@ -504,6 +531,7 @@ impl TraceStatistics {
         v
     }
 
+    #[must_use]
     pub fn top_syscalls(&self, n: usize) -> Vec<(u64, u64)> {
         self.syscalls.top_n(n)
     }
@@ -540,7 +568,8 @@ pub struct TraceDifference {
     pub mem_write_delta: i64,
 }
 
-/// Compare two TraceStatistics and return their differences
+/// Compare two `TraceStatistics` and return their differences
+#[must_use]
 pub fn diff_statistics(before: &TraceStatistics, after: &TraceStatistics) -> TraceDifference {
     let new_bbs: Vec<u64> = after.bb_hits.hits.keys()
         .filter(|k| !before.bb_hits.hits.contains_key(k))

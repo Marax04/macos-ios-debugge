@@ -18,10 +18,10 @@ use rustre_arch_z80::z80_undocumented_opcodes::{
 };
 use rustre_core::address::Address;
 
-fn arch() -> z::Z80Arch {
+const fn arch() -> z::Z80Arch {
     z::Z80Arch
 }
-fn a(n: u64) -> Address {
+const fn a(n: u64) -> Address {
     Address::new(n)
 }
 
@@ -441,7 +441,7 @@ fn linear_disassembler_iterates_all() {
     let dis = z::Z80LinearDisassembler::new(&arch_v, &code, a(0));
     let xs: Vec<_> = dis.collect();
     assert_eq!(xs.len(), 3);
-    assert!(xs.iter().all(|r| r.is_ok()));
+    assert!(xs.iter().all(std::result::Result::is_ok));
 }
 
 #[test]
