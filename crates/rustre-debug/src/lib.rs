@@ -1016,12 +1016,15 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
 /// `step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
 /// printed `target=0x0`, and the loop then ran to exit.
 ///
-/// The iOS backend deliberately does NOT call this yet. Two of its tests rest
-/// on a mock whose `m` reads do not see the interpreter's own stack writes —
-/// the frame slot reads as eight zero bytes while text memory reads back
-/// correctly — so refusing a null target there would turn one red into two.
-/// The refusal belongs on that path as much as on these; it waits for the mock,
-/// and STATUS.md carries the evidence.
+/// Iteration 625 deferred the iOS half and gave the wrong reason for it: it
+/// blamed the mock for not serving its own stack writes. The writes were fine.
+/// The synthetic program those tests run branched to the wrong address —
+/// `bl` takes a PC-RELATIVE displacement and `bl(0x14)` at offset `0x08`
+/// reaches `0x1C`, not the `0x14` the comment beside it claims — so execution
+/// skipped the callee's prologue entirely and read `main`'s frame, whose saved
+/// `x30` is genuinely zero because `main` has no caller. The zeros were real
+/// and the memory was innocent. Corrected and landed on all four backends at
+/// iteration 626.
 ///
 /// # Errors
 /// [`DebugError::StepError`] naming the slot, so the caller learns the frame is

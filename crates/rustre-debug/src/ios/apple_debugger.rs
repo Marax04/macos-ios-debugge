@@ -3022,12 +3022,20 @@ impl Debugger for AppleDebugger {
             ))
         })?;
         let saved = self.read_memory(Address::new(saved_ret_slot), 8).await?;
-        let target = step_out_return_target(u64::from_le_bytes(
-            saved
-                .get(..8)
-                .and_then(|b| <[u8; 8]>::try_from(b).ok())
-                .ok_or_else(|| DebugError::StepError("step_out: short read".to_string()))?,
-        ));
+        // Zero is not a return address. Unchecked, `run_to_return_step` compares
+        // `pc == 0`, which never comes true, so the loop single-steps until the
+        // process EXITS and that exit is handed back as a successful step-out.
+        // Deferred at iteration 625 and landed here once the synthetic program
+        // this path is tested against stopped calling the wrong address.
+        let target = crate::step_out_target_from_frame(
+            step_out_return_target(u64::from_le_bytes(
+                saved
+                    .get(..8)
+                    .and_then(|b| <[u8; 8]>::try_from(b).ok())
+                    .ok_or_else(|| DebugError::StepError("step_out: short read".to_string()))?,
+            )),
+            saved_ret_slot,
+        )?;
         let mut event = self.single_step(tid).await?;
         for _ in 0..self.max_step_out_instructions {
             // Ordering matters and is not ours to re-derive: the hub crate owns
@@ -7731,7 +7739,7 @@ mod tests {
         vec![
             0xA9BF_7BFD,              // 0x00 stp x29, x30, [sp, #-16]!
             0x9100_03FD,              // 0x04 mov x29, sp
-            Arm64Interp::bl(0x14),    // 0x08 bl f
+            Arm64Interp::bl(0x0C),    // 0x08 bl f   (0x08 + 0x0C = 0x14)
             Arm64Interp::NOP,         // 0x0c nop   <- f returns here
             Arm64Interp::brk(0),      // 0x10 brk #0
             0xA9BF_7BFD,              // 0x14 stp x29, x30, [sp, #-16]!

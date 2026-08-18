@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 618. Questa: **624**, aggiornata al **625**, con due
+> non un registro. Precedente riscrittura: 618. Questa: **624**, aggiornata al **626**, con due
 > iterazioni di ritardo — annotate, non nascoste.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
@@ -17,8 +17,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2096 / 1** |
-| Linux x86_64 | WSL, `--test-threads=1` | **2079 / 1** |
+| Windows x86_64 | suite locale, worktree isolato | **2097 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2080 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
@@ -27,9 +27,8 @@
 | iOS Simulator | CI `macos-14`, arm64 reale | **verde** |
 | iOS device | CI | compila e **linka** i test; non esegue (serve hardware) |
 
-I due **1** sono noti e dichiarati: il rosso del debugger è
-`ios::apple_debugger::step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
-(§4), quello dell'MCP è il cricchetto dei fabbricatori (§4).
+**Le due suite del debugger sono interamente verdi dal 626.** Resta solo l'**1**
+dell'MCP: il cricchetto dei fabbricatori, noto e non mio (§4).
 
 ## 2. ⚠ L'albero condiviso non è uno stage — è già costato la build
 
@@ -69,7 +68,6 @@ e azzerare l'indice sui propri file subito dopo.
 
 | Cosa | Dove | Stato |
 |---|---|---|
-| **Il mock non serve via `m` le proprie scritture di stack** | iOS, `mock_debugserver.rs` | **CAUSA RADICE TROVATA AL 625, misurata con una sonda.** In `step_out` sul test rosso: `target = 0x0`, e leggendo 16 byte al frame pointer arrivano **tutti zeri**, mentre `read_memory` sullo stesso percorso restituisce correttamente il **testo** (`fd 7b bf a9` = `0xA9BF7BFD`). L'interprete esegue davvero — `sp` passa da `…ffe0` a `…fff0`, cioè `ldp` è stato eseguito — e il gestore `STP_FP_LR_PRE` scrive correttamente `x29` e `x30`. Quindi le letture `m` e la memoria dell'interprete **non sono la stessa istanza**. Ne dipendono **due** test: `step_out_leaves_the_frame…` (rosso su main) e `step_out_hands_back_a_fault…`. Chi lo chiude probabilmente li chiude entrambi |
 | **iOS non onora `Breakpoint::condition`** | iOS | `condition_allows_stop` compare 5 volte in ciascuno dei tre backend desktop e **0** volte in `apple_debugger.rs`, mentre il tipo documenta «only stop when this evaluates to true». Su iOS un breakpoint condizionale si ferma a ogni hit |
 | **13 difetti iOS confermati** | iOS | verificati da tre scettici al giro 8, fix mai eseguito per errori API 529; il retry ne ha recuperati 5 |
 | **Cricchetto MCP 172/168** | tutti | **non mio**: dei 172 fabbricatori, **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_`. Era 170 al 605. Da riportare al proprietario, **non** da far tacere alzando il soffitto |
@@ -83,6 +81,19 @@ e azzerare l'indice sui propri file subito dopo.
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
 ## 5. Chiuso di recente, con la misura
+
+- **⚠ CORREZIONE DI UNA MIA DIAGNOSI, e il rosso chiuso** (626). Al 625 avevo
+  scritto che il mock «non serve via `m` le proprie scritture di stack». **Era
+  falso.** Le letture `m` e l'interprete usano la stessa `self.memory`: gli zeri
+  erano **veri**. Il programma sintetico su cui girano quei test saltava
+  all'indirizzo sbagliato — `bl` prende un displacement **PC-RELATIVE**, e
+  `bl(0x14)` a offset `0x08` arriva a `0x1C`, non al `0x14` che il commento
+  accanto dichiara. L'esecuzione scavalcava del tutto il prologo del chiamato e
+  `step_out` leggeva il frame di `main`, il cui `x30` salvato è genuinamente
+  zero perché `main` non ha chiamante. Corretto il displacement: **tutti e 10**
+  i test di `step_out` verdi, e la metà iOS del rifiuto rimandata al 625 è stata
+  cablata. La lezione è che un numero misurato (`target = 0x0`) non porta con sé
+  la propria spiegazione: la sonda aveva ragione, la mia frase no.
 
 - **Un indirizzo di ritorno nullo veniva inseguito fino alla morte del processo**
   (625). Ogni backend legge otto byte da `[fp+8]` e li passa a `run_to_return`
@@ -183,7 +194,11 @@ e azzerare l'indice sui propri file subito dopo.
     Si applica il proprio **hunk** su `main`.
 15. **Attribuire con PROVA, nelle due direzioni** (622): il modo più netto è
     chiedersi se il test **esistesse** nel proprio ultimo verde.
-16. **Sondare batte dedurre** (625): tre ipotesi ragionevoli sul perché
+16. **Una misura giusta non è una diagnosi giusta** (625→626): la sonda diceva
+    il vero (`target = 0x0`) e la spiegazione che ci ho costruito sopra era
+    falsa. Il numero va spiegato risalendo, non completato a intuito — e la
+    frase sbagliata va corretta dove è stata scritta, non solo dove fa danno.
+17. **Sondare batte dedurre** (625): tre ipotesi ragionevoli sul perché
     `step_out` corresse fino all'uscita erano tutte sbagliate; una `eprintln!`
     temporanea ha dato la risposta in un colpo — `target = 0x0`. Le sonde vanno
     poi rimosse, come le perturbazioni.
