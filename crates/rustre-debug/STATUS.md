@@ -1,11 +1,14 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 608. Questa: **614** — con una
-> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **617**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
+>
+> Ogni misura è presa in un `git worktree` su HEAD con i **soli hunk miei**
+> applicati sopra. L'albero condiviso contiene in permanenza lavoro non
+> committato di altri attori e spesso non compila; misurarlo non è misurare.
 
 ---
 
@@ -13,109 +16,97 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2057 / 0** |
-| Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
-| Linux x86_64 | WSL, `--test-threads=1` | **2040 / 0** |
-| Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; i fix 607/608/609 non ancora rimisurati |
-| macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
+| Windows x86_64 | suite locale, worktree isolato | **2058 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2041 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
+| MCP | Windows | **399 / 1** |
+| Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
+| Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
+| macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
 | iOS Simulator | CI `macos-14`, arm64 reale | **verde** |
 | iOS device | CI | compila e **linka** i test; non esegue (serve hardware) |
-| MCP | Windows + Linux | **396 / 1** e 367 / 1 |
 
-**Il rosso del debugger è chiuso al 617** (era iOS `encode_into`). Resta l'**1**
-dell'MCP, noto e **non mio**, sotto.
+Le due suite del debugger sono **interamente verdi** dal 617, per la prima volta.
+L'unico rosso è quello dell'MCP, e non è mio: **172 tool** rispondono senza i
+parametri che il loro schema dichiara obbligatori contro un soffitto di 168, e di
+quei 172 **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_` — sono
+`il_*`, `pe_editor_*`, `trace_*`, `symb_*`, `sandbox_*` di altri crate. Era 170 al
+605 e 172 al 612: sale sotto altri attori. Va riportato al proprietario, **non**
+fatto tacere alzando il soffitto.
 
-## 2. I due rossi aperti, entrambi con proprietario
-
-| Rosso | Prova che non è mio | Chi lo possiede |
-|---|---|---|
-| `no_new_wire_tool_answers_without_its_required_params` — **172 tool** rispondono senza i parametri che il loro schema dichiara obbligatori, soffitto 168 | dei 172, **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_`: sono `il_*`, `pe_editor_*`, `trace_*`, `symb_*`, `sandbox_*`. Era 170 al 605, 172 al 612: sale sotto altri attori | altri crate. **Non** si chiude alzando il soffitto |
-
-## 3. Le tre famiglie di difetti che questo crate produce
+## 2. Le tre famiglie di difetti che questo crate produce
 
 1. **Un fallimento riportato come successo**: `let _ =`, `else { continue }`,
    `unwrap_or(0)` che trasforma «non ce l'ho» in zero, un `bool` in cui «non
-   trovato» e «non riuscito» collassano, uno step CI `continue-on-error` il cui
-   esito non risale, un `Drop` che tace.
-2. **Logica condivisa che deriva**: fra i tre backend, fra backend e MCP, fra i
-   due lati dello stesso test, fra una capacità DICHIARATA e il codice che la
-   nega. Il 612 e il 614 sono entrambi di questa famiglia: **tre copie della
-   stessa decisione, con tre risposte diverse**.
-3. **Un'assunzione x86 in codice che gira anche su ARM**: byte di trappola,
-   allineamento, nomi dei registri, PC al trap, PAC, numero di slot, trap flag.
+   trovato» e «non riuscito» collassano, un `Drop` che tace, `dropped` lasciato
+   vuoto per una scrittura mai partita.
+2. **Logica condivisa che deriva**: fra i quattro backend, fra backend e MCP, fra
+   una capacità DICHIARATA e il codice che la nega. Cinque round di fila hanno
+   trovato questo: tre copie con tre risposte diverse (612, 614), due tabelle per
+   una decisione (616), **quattro** elenchi dello stesso insieme di nomi (618).
+3. **Un'assunzione sbagliata su CHI è la macchina**: x86 assunto dove gira ARM
+   (byte di trappola, PAC, slot, trap flag), e — più sottile — l'architettura
+   dell'**host** usata per interpretare i registri del **target** (615, 616).
 
-## 4. Chiuso di recente, con la misura
+## 3. Chiuso di recente, con la misura
 
-- **iOS: `fp` e `lr` non arrivavano mai al device** (617). `RegisterMap::encode_into`
-  piazzava `GenericRole::Pc` e `Sp` e **non** `Fp` né `Ra`, e non leggeva mai
-  `set.fp`/`set.lr`. Poiché `decode` riempie entrambi i campi tipizzati a OGNI
-  lettura, un leggi-modifica-riscrivi portava l'edit del chiamante lì dentro;
-  `encode_into` ci riscriveva sopra il valore stantio da `set.regs` e lasciava
-  `dropped` vuoto, quindi `set_registers` rispondeva `Ok(())` per una scrittura
-  che il device non ha mai visto. Su arm64 quelli sono il frame pointer e
-  l'indirizzo di ritorno: i due registri con cui si costruisce un backtrace.
-  Era rosso da tre round e attribuito con prova a HEAD ogni volta.
-
-- **I nomi di registro stretti funzionano in lettura E in scrittura** (613, 614).
-  `eax` non si leggeva affatto (il fallback prependeva `r` e cercava `reax`),
-  `ax` restituiva tutti e 64 i bit di `rax`, e scrivere `eax` non faceva
-  assolutamente nulla. Decideva il flusso: un breakpoint su `ax == 0x1234` non
-  scattava mai col registro a `0x1234`. Ora `register_view` /
-  `read_register_by_name` / `write_register_by_name` conoscono la larghezza di
-  ogni nome — viste `ah` a bit 8..16, suffissi `r9d`/`r9w`/`r9b`, `w0..w30`
-  ARM64, `eip` — e la scrittura stretta **preserva** il resto del registro.
-- **Una sola tabella dei sotto-registri, non due** (616). `register_view` (613)
-  e `sub_register_of` erano state scritte in parallelo da due attori a poche ore
-  di distanza e decodificavano la stessa cosa. Un test differenziale ha chiesto
-  loro di **concordare** invece di presumere quale fosse giusta: disaccordo su 5
-  nomi — `sil`, `dil`, `bpl`, `spl` ed `eip` — che la seconda non conosceva e
-  dichiarava assenti, tutti registri x86-64 veri. Ora `sub_register_of` delega
-  (resta pubblica, i suoi chiamanti non cambiano) e il test fallisce se una
-  seconda tabella ricompare.
-- **Anche la direzione tipizzato→mappa segue il target** (616).
-  `sync_map_from_special` sceglieva la grafia con `pc_key(native_arch())`: su
-  host x86_64 scriveva `rip` in una mappa che il backend arm64 legge per `pc`,
-  quindi `r.pc = new_pc; set_registers(r)` «returns Ok, changes nothing» — che è
-  testualmente ciò che la sua doc dichiara di prevenire. Non serviva indovinare:
-  il backend ha già pubblicato il vocabolario del TARGET in quella stessa mappa,
-  quindi la grafia da usare è quella che c'è già; `native_arch()` resta solo come
-  ultima risorsa per una mappa ancora vuota.
-- **La vista tipizzata `pc`/`sp`/`fp` segue il TARGET, non il build** (615).
-  `RegisterSet::set` teneva in passo `self.pc`/`sp`/`fp` con la mappa — e
-  decideva quale nome fosse il program counter chiedendolo a `native_arch()`,
-  la cui doc dice essere «l'architettura su cui questo build gira»: l'**host**,
-  scelto a compile time. Ogni sessione remota ha un target che è un'altra
-  macchina, e una sessione iOS ne ha di routine una di un'altra **architettura**:
-  su host x86_64 la funzione cercava `rip` mentre il target pubblica `pc`,
-  quindi il campo tipizzato non si aggiornava mai — ed è esattamente il difetto
-  che il commento lì sopra dichiarava di aver chiuso, chiuso solo nel caso in cui
-  host e target coincidono. `backtrace`, `step_over` e `step_out` leggono quei
-  campi «invece della mappa», quindi leggevano un numero stantio e plausibile.
-  Ora `is_pc_name`/`is_sp_name`/`is_fp_name_any` iterano su `ALL_STEP_ARCHES`:
-  le grafie non collidono fra architetture, quindi non serve sapere quella del
-  target — serve smettere di chiedere quella dell'host.
-- **Una scrittura a `fp`/`lr`/`x29`/`x30` non viene più scartata** (612). I tre
-  backend pubblicavano entrambe le grafie e ne preferivano una diversa ciascuno,
-  quindi il normale leggi-modifica-riscrivi perdeva l'edit e riportava successo.
-- **Breakpoint software su macOS**: non funzionavano affatto (`mach_vm_protect`
-  mancante, 579).
-- **Watchpoint dati e breakpoint hardware su ARM64 Linux** (570, 571), `ENOSPC`
-  chiuso (589), indirizzo staged conservato (594).
-- **macOS riporta l'indirizzo di fault** (595): prima diceva «è crashato» e mai
-  «dove».
+- **Condizioni sui breakpoint: cinque nomi di registro non erano offerti** (618).
+  `SUB_REGISTER_NAMES` è ciò che i tre backend desktop iterano per popolare il
+  contesto di valutazione. Mancavano `sil`, `dil`, `bpl`, `spl` ed `eip` — tutti
+  risolvibili. Una condizione che ne nominava uno non valutava, e per la regola
+  fail-open il target si fermava a **ogni** hit: la condizione non era sbagliata,
+  non veniva applicata, e nulla lo diceva. Il guard che già esisteva controllava
+  una sola direzione — che ogni nome pubblicizzato risolva — e una lista vuota lo
+  avrebbe soddisfatto. Il nuovo guard sorveglia la direzione mancante, e ha
+  subito colto il mio fix incompleto: un **quarto** elenco, lo schema in
+  `register_context.rs`, non aveva i quattro byte bassi REX.
+- **iOS: `fp` e `lr` non arrivavano mai al device** (617). `encode_into` piazzava
+  `Pc` e `Sp` e non `Fp` né `Ra`. Poiché `decode` riempie i campi tipizzati a
+  ogni lettura, un leggi-modifica-riscrivi ci portava l'edit del chiamante;
+  `encode_into` ci riscriveva sopra il valore stantio e lasciava `dropped` vuoto,
+  quindi `Ok(())` per una scrittura che il device non ha mai visto. Su arm64 sono
+  frame pointer e indirizzo di ritorno: la coppia con cui si fa un backtrace.
+- **Una sola tabella dei sotto-registri** (616). `register_view` e
+  `sub_register_of` erano state scritte in parallelo da due attori. Un test
+  differenziale ha chiesto loro di **concordare** invece di presumere quale fosse
+  giusta: 5 divergenze reali, senza alcuna verità esterna.
+- **`pc`/`sp`/`fp` seguono il TARGET, non il build** (615, 616), in entrambe le
+  direzioni. `native_arch()` è l'host, scelto a compile time; su host x86_64 con
+  device arm64 cercava `rip` dove il target pubblica `pc`.
+- **Nomi di registro stretti in lettura e scrittura** (613, 614). `eax` non si
+  leggeva affatto, `ax` restituiva 64 bit, e scrivere `eax` non faceva nulla.
+- **Scritture a `fp`/`lr`/`x29`/`x30` non più scartate** (612): tre backend
+  pubblicavano entrambe le grafie e ne preferivano una **diversa** ciascuno.
+- **Breakpoint software su macOS** (579): non funzionavano affatto.
+- **Watchpoint e breakpoint hardware su ARM64 Linux** (570, 571, 589, 594).
+- **macOS riporta l'indirizzo di fault** (595).
 - **Windows ha una CI** (597) e il backend **compila per ARM64** (602, 606).
-- **Sei tool MCP Linux riparati** (605): `linux_debug.rs` non compilava, quindi
-  l'intera suite MCP non girava su Linux.
-- **iOS, giri avversariali**: giro 6 — 77 agenti, 9 confermati / 9 chiusi / 0
-  falsi positivi; giro 7 — 68 agenti, **12 confermati / 12 chiusi**.
+- **Sei tool MCP Linux riparati** (605).
+
+## 4. iOS — giri avversariali
+
+| Giro | Agenti | Confermati | Chiusi |
+|---|---|---|---|
+| 6 | 77 | 9 | **9** |
+| 7 | 68 | 12 | **12** |
+| 8 | 74 | 15 | **2** |
+
+Il giro 8 non è stato fermato dal codice: **13 agenti di fix sono morti su errori
+server** (529 Overloaded, un 521, un 500). I 13 difetti confermati restano aperti
+e il retry va rifatto quando l'API regge. I 2 chiusi sono reali: una maschera di
+preservazione fissa a 64 bit che distruggeva i bit alti scrivendo `s3`/`h3`/`b3`,
+e una sign-extension a 60 bit invece di 56 che rendeva `-(1<<40)` un positivo
+enorme.
 
 ## 5. Difetti aperti — dichiarati
 
 | Cosa | Dove | Stato |
 |---|---|---|
-| **PAC nell'unwinder** | Linux ARM | 573 e 591 erano entrambi codice morto; il 607 lo legge per primo. **Non ancora rimisurato in CI** |
+| **iOS non onora `Breakpoint::condition`** | iOS | trovato al 618 e **non corretto**: `condition_allows_stop` compare 5 volte in ciascuno dei tre backend desktop e **0** volte in `apple_debugger.rs`, mentre il tipo documenta «only stop when this evaluates to true». Su iOS un breakpoint condizionale si ferma a ogni hit. Non toccato perché il giro 8 sta riscrivendo quel file |
+| **13 difetti iOS confermati** | iOS | verificati da tre scettici, fix mai eseguito per errori API |
+| **PAC nell'unwinder** | Linux ARM | 573 e 591 erano codice morto; il 607 lo legge per primo. **Mai rimisurato in CI** |
 | **2 test sui registri di debug** | Linux ARM | `NT_ARM_HW_WATCH` sembra fallire su quel runner: da capire, non da indovinare |
+| **Cricchetto MCP 172/168** | tutti | non mio, misurato al 612 e al 618 |
 | **Single step su Windows ARM** | Windows | rifiutato esplicitamente (606): il meccanismo AArch64 non è implementato e inventarlo sarebbe peggio |
 | **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha 2 slot, non 4. Capacità dichiarata assente (598) |
 | **Eventi di thread** | macOS, iOS | Mach e RSP non li consegnano. Dichiarati assenti col motivo |
@@ -125,76 +116,57 @@ dell'MCP, noto e **non mio**, sotto.
 
 ## 6. Lezioni di metodo
 
-1. **Misurare il rosso PRIMA.** Se passa al primo colpo, **perturbare**. Un
-   rosso da *compilazione* è il tipo debole: dimostra che manca una funzione,
-   non che il comportamento fosse sbagliato. Al 614 ho implementato e poi
-   perturbato al vecchio comportamento per avere un rosso sul **valore**.
+1. **Misurare il rosso PRIMA.** Se passa al primo colpo, **perturbare**. Un rosso
+   da *compilazione* è il tipo debole: dimostra che manca una funzione, non che
+   il comportamento fosse sbagliato.
 2. **Il rosso misurato smentisce spesso quello previsto** (613): prevedevo «64
    bit», la misura diceva `None`. Si corregge la frase, non la misura.
-3. **Ancorare a un IDENTIFICATORE, mai a una stringa** che può stare in un
+3. **Due implementazioni della stessa decisione: farle CONCORDARE, non scegliere
+   a occhio** (616, 618). Il test differenziale non assume che nessuna sia
+   giusta. Nessuna verità esterna serve: se il codice si contraddice, un lato
+   sbaglia.
+4. **Un guard che sorveglia la PRESENZA non vede la COMPLETEZZA** (618): quello
+   su `SUB_REGISTER_NAMES` verificava che ogni nome elencato risolva — una lista
+   vuota lo soddisfa. Il gap stava nella direzione opposta.
+5. **Un fix incompleto lo dice il guard giusto** (618): aggiunti i cinque nomi,
+   un quarto elenco è diventato rosso all'istante.
+6. **Un difetto risolto in una direzione va cercato nell'altra** (613→614,
+   615→616): lettura/scrittura, mappa→tipizzato/tipizzato→mappa.
+7. **Ancorare a un IDENTIFICATORE, mai a una stringa** che può stare in un
    commento. Costato quattro volte, incluso un guard soddisfatto dalla propria
    prosa.
-4. **Un test può passare A VUOTO** dove i `cfg` lo compilano via.
-5. **Un guard deve sorvegliare la POSIZIONE, non la presenza** (607).
-6. **Un rifiuto esplicito NON è un difetto**: è una difesa che funziona (606, 601).
-7. **Ma un rifiuto può poggiare su una premessa FALSA** (614): un guard rifiutava
-   `eip` come «typo per `rip`». Non lo è: è la metà bassa di `rip`, come `eax` di
-   `rax`. Ho tolto la premessa falsa e **aggiunto** un'asserzione positiva — il
-   guard è più forte, non più debole. Distinguere questo dal caso 601 è il
-   giudizio che serve: lì la difesa era stabilita per bisezione contro una
-   rottura reale, qui codificava solo un'affermazione sbagliata sui nomi.
-8. **Il difetto sta spesso nella FRASE**, non nel codice. Al 612 un commento
-   macOS dichiarava di prevenire proprio ciò che non preveniva; al 614 tre
-   backend chiamavano «typo» un registro vero.
-9. **Correggere una copia su due lascia il difetto** — e al 614 le copie erano
-   **tre**, tutte identiche.
-10. **Una capacità va corretta in lettura E in scrittura** (613→614): il 613 rese
-    `eax` leggibile e lasciò indietro la scrittura. La simmetria è il posto dove
-    guardare al round successivo.
-11. **L'assenza di un fallimento non è la presenza di un successo.**
-12. **Correggere prima la MISURA, poi il difetto.** Ogni volta che ho reso
-    misurabile una piattaforma, quella ha detto subito qualcosa che nessuno
-    sapeva.
-13. **Un ciclo che riprende il target va limitato dagli EVENTI.**
-14. **Verificare le PROPRIE dichiarazioni del round precedente**: difetti reali
-    nove volte. E al 612 ha **assolto** una dichiarazione, il che vale uguale.
-15. **Chiedere al kernel invece di assumere.**
-16. **Un file `cfg`-gated non è verificato dalla suite che non lo compila** (611).
-17. **Un fix può essere giusto e MORTO**: sul thread sbagliato (573), dietro
-    un'uscita anticipata (591), dentro un `cfg` mai compilato.
-18. **Misurare un albero in movimento non è misurare** (613, 614): la suite non
-    compilava per errori altrui in `src/ios/`. Un `git worktree` su HEAD coi miei
-    soli file dà la misura pulita e **prova** di chi sono i rossi. Al 614 quel
-    worktree ha dimostrato che un rosso era preesistente eseguendolo a HEAD
-    **senza nulla di mio**.
-19. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è disfarlo.
-20. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
+8. **Un test può passare A VUOTO** dove i `cfg` lo compilano via, e **un file
+   `cfg`-gated non è verificato dalla suite che non lo compila** (611).
+9. **Un fix può essere giusto e MORTO**: sul thread sbagliato (573), dietro
+   un'uscita anticipata (591), dentro un `cfg` mai compilato.
+10. **Un rifiuto esplicito NON è un difetto** (606, 601) — **ma verificane la
+    PREMESSA** (614): un guard rifiutava `eip` chiamandolo «un typo per `rip`»,
+    e invece è la metà bassa di `rip`. Premessa falsa, rifiuto sbagliato.
+    Distinguere i due casi è il giudizio che serve: nel 601 la difesa era
+    stabilita per bisezione contro una rottura reale.
+11. **Il difetto sta spesso nella FRASE**, non nel codice (612, 614, 617).
+12. **Un mio fix può rendere FALSA la frase di un altro** (617): il 616 corresse
+    `sync_map_from_special` e la doc di un guard iOS ne citava ancora il difetto
+    come motivo della propria esistenza. Metà del motivo reggeva: corretta la
+    metà falsa, non cancellata la frase.
+13. **`native_arch()` risponde all'HOST** (615): dove una decisione dipende
+    dall'architettura, chiedersi *di chi* è l'architettura rivela il difetto.
+14. **Non copiare un FILE intero da un albero condiviso per misurare** (617):
+    due volte ho importato lavoro non committato altrui insieme al mio, e
+    entrambe le volte il rosso sembrava mio e non lo era. Si applica il proprio
+    HUNK su HEAD.
+15. **Attenzione all'INDICE dopo un commit da worktree** (617): l'albero
+    principale conteneva un'inversione del mio stesso commit, pronta a essere
+    committata dal prossimo attore.
+16. **Attribuire con PROVA, nelle due direzioni**: un rosso va eseguito a HEAD
+    senza le proprie modifiche prima di chiamarlo altrui — e prima di chiamarlo
+    proprio.
+17. **Verificare le PROPRIE dichiarazioni del round precedente**: difetti reali
+    dieci volte, e una **assoluzione** (612), che vale uguale.
+18. **Un ciclo che riprende il target va limitato dagli EVENTI** (585).
+19. **Chiedere al kernel invece di assumere** (589, 594).
+20. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è disfarlo.
+21. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.
-21. **`native_arch()` risponde all'HOST** (615): usarla per interpretare i nomi
-    di registro di un target è corretto solo finché host e target coincidono —
-    cioè mai, nel debug remoto. Dove una decisione dipende dall'architettura,
-    chiedersi *di chi* è l'architettura è la domanda che rivela il difetto.
-22. **Un commento che dichiara di aver chiuso un difetto va riletto sul caso
-    generale** (615): quello sopra `RegisterSet::set` descriveva bene il difetto
-    e il fix lo chiudeva solo per host == target.
-23. **Due implementazioni della stessa decisione: farle CONCORDARE, non
-    scegliere a occhio** (616). Il test differenziale non assume che nessuna
-    delle due sia giusta: chiede che diano la stessa risposta su ogni nome che
-    l'una o l'altra dichiara di gestire. Ha trovato 5 divergenze reali senza che
-    servisse alcuna verità esterna — lo stesso principio di `cross_build.py`
-    nell'altro crate: se il codice si contraddice, un lato è sbagliato.
-24. **Un difetto risolto in una direzione va cercato nell'altra** (615→616):
-    mappa→tipizzato e tipizzato→mappa avevano lo STESSO difetto, e la seconda
-    metà era rimasta in piedi con la doc che dichiarava di averla chiusa.
-25. **Non copiare un FILE intero da un albero condiviso per misurare** (617):
-    due volte ho importato in un worktree pulito il lavoro non committato di
-    altri insieme al mio — la prima volta un riferimento a una funzione che a
-    HEAD non esiste, la seconda un test nuovo il cui codice di produzione non
-    avevo copiato. Entrambe le volte il rosso sembrava mio e non lo era.
-    Si applica il proprio HUNK sulla versione a HEAD, non si copia il file.
-26. **Un mio fix può rendere FALSA la frase di un altro** (617): il 616 ha
-    corretto `sync_map_from_special`, e la doc di un guard iOS continuava a
-    citarne il difetto come motivo della propria esistenza. Metà del motivo
-    regge ancora (`lr` non è previsto lì), metà no: corretta, non cancellata.
-27. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
-    dove la doc che avevo scritto tre righe sopra prometteva `false`.
+22. **Un agente fallito per errore di server non è un difetto assente**: va
+    rilanciato, e finché non lo è va dichiarato aperto (giro 8).

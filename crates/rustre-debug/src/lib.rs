@@ -1396,9 +1396,17 @@ pub struct RegisterSet {
 /// Used to populate a condition-evaluation context: the map holds only the
 /// full-width names a backend read from the OS, so the narrow names have to be
 /// derived from them or a condition naming one cannot be evaluated at all.
+// `sil`/`dil`/`bpl`/`spl` are the REX-era low bytes of `rsi`/`rdi`/`rbp`/`rsp`,
+// and `eip` is the low half of `rip`. All five resolve through `register_view`
+// and none of them were listed here, so a breakpoint condition that mentioned
+// one failed to evaluate and the fail-open rule stopped the target on every
+// hit. `every_resolvable_sub_register_is_offered_to_conditions` now watches the
+// direction the older guard could not see: it checked that every advertised
+// name resolves, which an empty list would also satisfy.
 pub const SUB_REGISTER_NAMES: &[&str] = &[
     "eax", "ax", "al", "ah", "ebx", "bx", "bl", "bh", "ecx", "cx", "cl", "ch", "edx", "dx", "dl",
-    "dh", "esi", "si", "edi", "di", "ebp", "bp", "esp", "sp", "r8d", "r8w", "r8b", "r9d", "r9w",
+    "dh", "esi", "si", "sil", "edi", "di", "dil", "ebp", "bp", "bpl", "esp", "sp", "spl", "eip",
+    "r8d", "r8w", "r8b", "r9d", "r9w",
     "r9b", "r10d", "r10w", "r10b", "r11d", "r11w", "r11b", "r12d", "r12w", "r12b", "r13d", "r13w",
     "r13b", "r14d", "r14w", "r14b", "r15d", "r15w", "r15b", "w0", "w1", "w2", "w3", "w4", "w5",
     "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13", "w14", "w15", "w16", "w17", "w18", "w19",
@@ -10800,6 +10808,52 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// Every name the crate can RESOLVE must be offered to condition contexts.
+    ///
+    /// `SUB_REGISTER_NAMES` is what `condition_allows_stop` loops over to
+    /// populate the evaluation context, in all three desktop backends. A name
+    /// missing from it is a name a breakpoint condition cannot mention: the
+    /// operand does not resolve, evaluation fails, and the fail-open rule stops
+    /// the target on EVERY hit — a condition that was never applied, with
+    /// nothing saying so. That is the exact failure the comment beside that
+    /// loop says the list exists to prevent.
+    ///
+    /// A guard for the list already existed and checked only one direction:
+    /// that every advertised name resolves. It could not see the other
+    /// direction, which is where the gap was — `sil`, `dil`, `bpl`, `spl` and
+    /// `eip` all resolve and none of them were advertised. A guard that watches
+    /// presence and not completeness is satisfied by an empty list.
+    #[test]
+    fn every_resolvable_sub_register_is_offered_to_conditions() {
+        // The candidate space, generated rather than listed, so this test does
+        // not become a third copy of the same table.
+        let mut candidates: Vec<String> = Vec::new();
+        for a in 'a'..='z' {
+            for b in 'a'..='z' {
+                candidates.push(format!("{a}{b}"));
+                for c in 'a'..='z' {
+                    candidates.push(format!("{a}{b}{c}"));
+                }
+            }
+        }
+        for i in 0..=31u32 {
+            candidates.push(format!("w{i}"));
+            candidates.push(format!("r{i}d"));
+            candidates.push(format!("r{i}w"));
+            candidates.push(format!("r{i}b"));
+        }
+
+        let missing: Vec<&String> = candidates
+            .iter()
+            .filter(|n| crate::register_view(n).is_some())
+            .filter(|n| !SUB_REGISTER_NAMES.contains(&n.as_str()))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "these names resolve to a real register but are not offered to              breakpoint conditions, so a condition mentioning one of them fails              to evaluate and the target stops on every hit: {missing:?}"
         );
     }
 
