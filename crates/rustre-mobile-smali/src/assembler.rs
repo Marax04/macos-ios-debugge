@@ -743,7 +743,7 @@ mod tests {
 
     #[test]
     fn test_assemble_mock_class() {
-        let c = SmaliClass::mock("Lcom/example/Test;");
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Test;");
         for method in &c.methods {
             let code = assemble(method).expect("assemble");
             assert!(code.code_size > 0 || method.instructions.is_empty());

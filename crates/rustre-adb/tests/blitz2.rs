@@ -974,7 +974,6 @@ fn b2_device_info_from_device_sets_transport() {
 }
 
 // suppress unused-import warnings for things only used conditionally
-#[allow(dead_code)]
 fn _api_touch() {
     let _: AdbClient = AdbClient::default();
     let _: DeviceList = DeviceList::default();

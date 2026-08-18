@@ -4,7 +4,6 @@
 // Identifies bind/reverse shell, download-and-exec, process injection,
 // reflective DLL, Metasploit stager, Cobalt Strike beacon, shikata-ga-nai.
 
-#![allow(dead_code)]
 
 
 // ─── Classification results ───────────────────────────────────────────────────

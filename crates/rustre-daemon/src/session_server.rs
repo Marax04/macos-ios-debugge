@@ -4,7 +4,6 @@
 //! [`SessionPool`], [`SessionRouter`], [`SessionAuth`],
 //! [`SessionMetrics`], and [`SessionCleanup`].
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 pub use std::net::{SocketAddr, TcpListener, TcpStream};

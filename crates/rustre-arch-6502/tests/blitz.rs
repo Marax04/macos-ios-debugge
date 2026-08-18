@@ -76,7 +76,7 @@ fn format_operand_implied_empty() {
     assert_eq!(format_operand(AddrMode::Implied, &[0xEA], 0), "");
 }
 #[test]
-fn format_operand_accumulator_is_A() {
+fn format_operand_accumulator_is_a() {
     assert_eq!(format_operand(AddrMode::Accumulator, &[0x0A], 0), "A");
 }
 #[test]

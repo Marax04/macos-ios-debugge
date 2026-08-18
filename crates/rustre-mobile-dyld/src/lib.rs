@@ -613,12 +613,39 @@ impl DyldCache {
             slide_info_offset,
             slide_info_size,
             uuid,
-            platform: 0,
-            format_version: 0,
-            images_text_offset: 0,
-            images_text_count: 0,
-            subcache_array_offset: 0,
-            subcache_array_count: 0,
+            // Extended fields (present in newer cache versions). `DyldHeader::parse`
+            // already read these; `DyldCache::parse` used to hard-code them to 0,
+            // which made every parsed cache report platform "unknown".
+            platform: if data.len() >= 0xE0 {
+                read_u32_le(data, 0x68).unwrap_or(0)
+            } else {
+                0
+            },
+            format_version: if data.len() >= 0xE0 {
+                read_u32_le(data, 0x6C).unwrap_or(0)
+            } else {
+                0
+            },
+            images_text_offset: if data.len() >= 0xE0 {
+                read_u64_le(data, 0x70).unwrap_or(0)
+            } else {
+                0
+            },
+            images_text_count: if data.len() >= 0xE0 {
+                read_u64_le(data, 0x78).unwrap_or(0)
+            } else {
+                0
+            },
+            subcache_array_offset: if data.len() >= 0xE0 {
+                read_u32_le(data, 0x80).unwrap_or(0)
+            } else {
+                0
+            },
+            subcache_array_count: if data.len() >= 0xE0 {
+                read_u32_le(data, 0x84).unwrap_or(0)
+            } else {
+                0
+            },
         };
 
         let mapping_size = 32usize;
@@ -936,86 +963,243 @@ impl DyldCache {
         Ok(report)
     }
 
-    /// Build a minimal mock cache for testing (no real binary data).
+    /// Compute the file offset of `va` using `mappings` alone.
+    ///
+    /// Split out so it can be used while another field of `self` is borrowed.
+    fn file_offset_in(mappings: &[DyldMapping], va: u64) -> Option<u64> {
+        mappings
+            .iter()
+            .find(|m| va >= m.address && va < m.address.saturating_add(m.size))
+            .map(|m| m.file_offset + (va - m.address))
+    }
+
+    /// Read exported symbols out of the cache bytes by parsing the Mach-O image
+    /// that lives at each image's file offset.
+    ///
+    /// [`DyldCache::parse`] deliberately leaves `symbols` empty — on a real
+    /// multi-gigabyte cache walking every image is expensive, so the caller
+    /// decides when to pay for it. This method performs that walk, which is what
+    /// makes [`DyldCache::symbol_count`] report symbols actually read from bytes
+    /// instead of a canned list.
+    ///
+    /// Returns the number of symbols appended.
+    pub fn load_symbols_from_images(&mut self) -> usize {
+        use goblin::mach::MachO;
+
+        let mappings = self.mappings.clone();
+        let images = self.images.clone();
+        let mut found: Vec<DyldSymbol> = Vec::new();
+
+        for image in &images {
+            let Some(file_start) = Self::file_offset_in(&mappings, image.address) else {
+                continue;
+            };
+            let Ok(file_start) = usize::try_from(file_start) else {
+                continue;
+            };
+            if file_start >= self.data.len() {
+                continue;
+            }
+            let Ok(macho) = MachO::parse(&self.data[file_start..], 0) else {
+                continue;
+            };
+            for entry in macho.symbols() {
+                let Ok((name, nlist)) = entry else { continue };
+                // N_STAB entries are debug records, not symbols.
+                if nlist.n_type & 0xe0 != 0 {
+                    continue;
+                }
+                // Keep only external, section-defined symbols.
+                if nlist.n_type & 0x01 == 0 || nlist.n_type & 0x0e != 0x0e {
+                    continue;
+                }
+                if name.is_empty() {
+                    continue;
+                }
+                found.push(DyldSymbol {
+                    name: name.to_string(),
+                    address: nlist.n_value,
+                    image_path: image.path.clone(),
+                    flags: u32::from(nlist.n_desc),
+                });
+            }
+        }
+
+        let added = found.len();
+        self.symbols.extend(found);
+        added
+    }
+
+    /// Build the reference dyld shared cache image used by [`DyldCache::mock`].
+    ///
+    /// These are real bytes in the on-disk `dyld_v1` layout: a header, one
+    /// mapping descriptor, two image descriptors with their path strings, and
+    /// two hand-assembled arm64 Mach-O dylibs each carrying a real
+    /// `LC_SEGMENT_64` and `LC_SYMTAB`. Nothing about the resulting cache is
+    /// asserted by hand — every field a caller sees comes back out of
+    /// [`DyldCache::parse`] and [`DyldCache::load_symbols_from_images`].
+    #[must_use]
+    pub fn reference_cache_bytes() -> Vec<u8> {
+        fn put_u32(buf: &mut [u8], off: usize, v: u32) {
+            buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        fn put_u64(buf: &mut [u8], off: usize, v: u64) {
+            buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
+        }
+
+        let mut buf = vec![0u8; 8192];
+
+        // Header.
+        buf[..16].copy_from_slice(b"dyld_v1   arm64e");
+        put_u32(&mut buf, 16, 0x100); // mapping_offset
+        put_u32(&mut buf, 20, 1); // mapping_count
+        put_u32(&mut buf, 24, 0x200); // images_offset
+        put_u32(&mut buf, 28, 2); // images_count
+        put_u64(&mut buf, 32, 0x1_8000_0000); // dyld_base_address
+        put_u64(&mut buf, 40, 0); // code_sig_offset
+        put_u64(&mut buf, 48, 0); // code_sig_size
+        put_u64(&mut buf, 56, 0); // slide_info_offset
+        put_u64(&mut buf, 64, 0); // slide_info_size
+        let uuid: [u8; 16] = [
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF,
+        ];
+        buf[0x58..0x68].copy_from_slice(&uuid);
+        put_u32(&mut buf, 0x68, 1); // platform = iOS
+        put_u32(&mut buf, 0x6C, 0); // format_version
+
+        // One read/execute mapping covering the whole file.
+        put_u64(&mut buf, 0x100, 0x1_8000_0000); // address
+        put_u64(&mut buf, 0x108, 0x1000_0000); // size
+        put_u64(&mut buf, 0x110, 0); // file_offset
+        put_u32(&mut buf, 0x118, 5); // init_prot = READ | EXEC
+        put_u32(&mut buf, 0x11C, 5); // max_prot
+
+        // Two image descriptors.
+        let img0_va = 0x1_8000_0400_u64;
+        let img1_va = 0x1_8000_0800_u64;
+        put_u64(&mut buf, 0x200, img0_va);
+        put_u64(&mut buf, 0x208, 0); // mod_time
+        put_u64(&mut buf, 0x210, 1); // inode
+        put_u32(&mut buf, 0x218, 0x300); // path_offset
+        put_u64(&mut buf, 0x220, img1_va);
+        put_u64(&mut buf, 0x228, 0);
+        put_u64(&mut buf, 0x230, 2);
+        put_u32(&mut buf, 0x238, 0x340);
+
+        let p0 = b"/usr/lib/libSystem.B.dylib\0";
+        buf[0x300..0x300 + p0.len()].copy_from_slice(p0);
+        let p1 = b"/usr/lib/libobjc.A.dylib\0";
+        buf[0x340..0x340 + p1.len()].copy_from_slice(p1);
+
+        // Two real Mach-O dylibs.
+        let d0 = Self::reference_dylib_bytes(
+            img0_va,
+            &[("_malloc", 0x1_8000_1000), ("_free", 0x1_8000_2000)],
+        );
+        buf[0x400..0x400 + d0.len()].copy_from_slice(&d0);
+        let d1 = Self::reference_dylib_bytes(img1_va, &[("objc_msgSend", 0x1_8010_1000)]);
+        buf[0x800..0x800 + d1.len()].copy_from_slice(&d1);
+
+        buf
+    }
+
+    /// Assemble a minimal but genuine arm64 Mach-O dylib carrying a real
+    /// `LC_SEGMENT_64` and an `LC_SYMTAB` that defines `symbols`.
+    fn reference_dylib_bytes(vmaddr: u64, symbols: &[(&str, u64)]) -> Vec<u8> {
+        const HEADER_SIZE: usize = 32;
+        const SEG_CMD_SIZE: usize = 72;
+        const SYMTAB_CMD_SIZE: usize = 24;
+
+        fn put_u32(buf: &mut [u8], off: usize, v: u32) {
+            buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        fn put_u64(buf: &mut [u8], off: usize, v: u64) {
+            buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
+        }
+
+        let cmds_size = SEG_CMD_SIZE + SYMTAB_CMD_SIZE;
+        let symoff = HEADER_SIZE + cmds_size;
+        let nsyms = symbols.len();
+        let stroff = symoff + nsyms * 16;
+
+        // String table: index 0 is the empty string, as the format requires.
+        let mut strtab: Vec<u8> = vec![0];
+        let mut strx: Vec<u32> = Vec::with_capacity(nsyms);
+        for (name, _) in symbols {
+            strx.push(u32::try_from(strtab.len()).unwrap_or(0));
+            strtab.extend_from_slice(name.as_bytes());
+            strtab.push(0);
+        }
+
+        let total = stroff + strtab.len();
+        let mut buf = vec![0u8; total];
+
+        // mach_header_64
+        put_u32(&mut buf, 0, 0xFEED_FACF); // MH_MAGIC_64
+        put_u32(&mut buf, 4, 0x0100_000C); // CPU_TYPE_ARM64
+        put_u32(&mut buf, 8, 0); // cpusubtype
+        put_u32(&mut buf, 12, 6); // MH_DYLIB
+        put_u32(&mut buf, 16, 2); // ncmds
+        put_u32(&mut buf, 20, u32::try_from(cmds_size).unwrap_or(0));
+        put_u32(&mut buf, 24, 0x0010_0000); // MH_NO_REEXPORTED_DYLIBS
+        put_u32(&mut buf, 28, 0); // reserved
+
+        // LC_SEGMENT_64 __TEXT
+        let seg = HEADER_SIZE;
+        put_u32(&mut buf, seg, 0x19); // LC_SEGMENT_64
+        put_u32(&mut buf, seg + 4, u32::try_from(SEG_CMD_SIZE).unwrap_or(0));
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        put_u64(&mut buf, seg + 24, vmaddr);
+        put_u64(&mut buf, seg + 32, 0x1000);
+        put_u64(&mut buf, seg + 40, 0); // fileoff
+        put_u64(&mut buf, seg + 48, total as u64); // filesize
+        put_u32(&mut buf, seg + 56, 5); // maxprot
+        put_u32(&mut buf, seg + 60, 5); // initprot
+        put_u32(&mut buf, seg + 64, 0); // nsects
+        put_u32(&mut buf, seg + 68, 0); // flags
+
+        // LC_SYMTAB
+        let st = seg + SEG_CMD_SIZE;
+        put_u32(&mut buf, st, 0x02); // LC_SYMTAB
+        put_u32(&mut buf, st + 4, u32::try_from(SYMTAB_CMD_SIZE).unwrap_or(0));
+        put_u32(&mut buf, st + 8, u32::try_from(symoff).unwrap_or(0));
+        put_u32(&mut buf, st + 12, u32::try_from(nsyms).unwrap_or(0));
+        put_u32(&mut buf, st + 16, u32::try_from(stroff).unwrap_or(0));
+        put_u32(&mut buf, st + 20, u32::try_from(strtab.len()).unwrap_or(0));
+
+        // nlist_64 entries: external, section-defined.
+        for (i, (_, addr)) in symbols.iter().enumerate() {
+            let e = symoff + i * 16;
+            put_u32(&mut buf, e, strx[i]);
+            buf[e + 4] = 0x0F; // N_SECT | N_EXT
+            buf[e + 5] = 1; // n_sect
+            buf[e + 6] = 0; // n_desc lo
+            buf[e + 7] = 0; // n_desc hi
+            put_u64(&mut buf, e + 8, *addr);
+        }
+
+        buf[stroff..].copy_from_slice(&strtab);
+        buf
+    }
+
+    /// Parse the reference cache image from
+    /// [`DyldCache::reference_cache_bytes`].
+    ///
+    /// Kept under the historical name `mock`, but nothing here is invented any
+    /// more: header, mappings, images, paths and symbols are all produced by
+    /// this crate's own parsers running over real `dyld_v1` bytes.
+    ///
+    /// # Panics
+    /// Panics if the reference image fails to parse, which would mean the
+    /// parser and the on-disk layout have diverged.
     #[must_use]
     pub fn mock() -> Self {
-        let header = DyldHeader {
-            magic: "dyld_v1   arm64e".to_string(),
-            mapping_offset: 0x100,
-            mapping_count: 1,
-            images_offset: 0x200,
-            images_count: 2,
-            dyld_base_address: 0x1_8000_0000,
-            code_sig_offset: 0,
-            code_sig_size: 0,
-            slide_info_offset: 0,
-            slide_info_size: 0,
-            uuid: [
-                0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
-                0xEE, 0xFF,
-            ],
-            platform: 1, // iOS
-            format_version: 0,
-            images_text_offset: 0,
-            images_text_count: 0,
-            subcache_array_offset: 0,
-            subcache_array_count: 0,
-        };
-
-        let mappings = vec![DyldMapping {
-            address: 0x1_8000_0000,
-            size: 0x1000_0000,
-            file_offset: 0,
-            init_prot: 5, // READ | EXEC
-            max_prot: 5,
-            flags: 0,
-        }];
-
-        let images = vec![
-            DyldImage {
-                address: 0x1_8000_0000,
-                mod_time: 0,
-                inode: 1,
-                path_offset: 0,
-                path: "/usr/lib/libSystem.B.dylib".to_string(),
-            },
-            DyldImage {
-                address: 0x1_8010_0000,
-                mod_time: 0,
-                inode: 2,
-                path_offset: 0,
-                path: "/usr/lib/libobjc.A.dylib".to_string(),
-            },
-        ];
-
-        let symbols = vec![
-            DyldSymbol {
-                name: "_malloc".to_string(),
-                address: 0x1_8000_1000,
-                image_path: "/usr/lib/libSystem.B.dylib".to_string(),
-                flags: 0,
-            },
-            DyldSymbol {
-                name: "_free".to_string(),
-                address: 0x1_8000_2000,
-                image_path: "/usr/lib/libSystem.B.dylib".to_string(),
-                flags: 0,
-            },
-            DyldSymbol {
-                name: "objc_msgSend".to_string(),
-                address: 0x1_8010_1000,
-                image_path: "/usr/lib/libobjc.A.dylib".to_string(),
-                flags: 0,
-            },
-        ];
-
-        Self {
-            header,
-            mappings,
-            images,
-            symbols,
-            data: vec![0u8; 4096],
-        }
+        let bytes = Self::reference_cache_bytes();
+        let mut cache = Self::parse(&bytes)
+            .expect("reference dyld cache image must parse with DyldCache::parse");
+        cache.load_symbols_from_images();
+        cache
     }
 }
 

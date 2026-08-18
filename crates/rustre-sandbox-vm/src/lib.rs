@@ -54,6 +54,20 @@ pub enum VmError {
     QmpError(String),
     #[error("spawn error: {0}")]
     SpawnError(String),
+    /// A backend needed to make a real observation is not available on this host.
+    ///
+    /// Returned instead of a plausible-looking placeholder: the caller learns
+    /// exactly which component is missing and why, and never receives invented
+    /// guest state.
+    #[error("backend unavailable: {component} is required to observe {observation}; {detail}")]
+    BackendUnavailable {
+        /// The missing component, e.g. `"qemu-system-x86_64"` or `"/proc/<pid>/maps"`.
+        component: String,
+        /// What could not be observed without it, e.g. `"the guest memory map"`.
+        observation: String,
+        /// Why it is unavailable on this host.
+        detail: String,
+    },
 }
 
 impl From<std::io::Error> for VmError {
@@ -470,11 +484,48 @@ impl MemoryRegion {
 
 // ─── MemoryMap ────────────────────────────────────────────────────────────────
 
+/// Where the contents of a [`MemoryMap`] came from.
+///
+/// A consumer must be able to tell an observation apart from a test fixture
+/// without reading this crate's source, so the distinction is carried in the
+/// data and serialised with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MapProvenance {
+    /// Read from a real process or guest.
+    Observed,
+    /// Hand-written sample data. Never a statement about any real process.
+    SyntheticFixture,
+}
+
+impl MapProvenance {
+    /// `true` when the data describes something that was actually observed.
+    #[must_use]
+    pub const fn is_observed(self) -> bool {
+        matches!(self, Self::Observed)
+    }
+}
+
+impl fmt::Display for MapProvenance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Observed => write!(f, "observed"),
+            Self::SyntheticFixture => write!(f, "synthetic-fixture"),
+        }
+    }
+}
+
 /// Complete guest memory map.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryMap {
     pub regions: Vec<MemoryRegion>,
     pub pid: u32,
+    /// Whether these regions were observed or are sample data.
+    #[serde(default = "default_observed_provenance")]
+    pub provenance: MapProvenance,
+}
+
+const fn default_observed_provenance() -> MapProvenance {
+    MapProvenance::Observed
 }
 
 impl MemoryMap {
@@ -484,6 +535,74 @@ impl MemoryMap {
         Self {
             regions: vec![],
             pid,
+            provenance: MapProvenance::Observed,
+        }
+    }
+
+    /// `true` when this map is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, MapProvenance::SyntheticFixture)
+    }
+
+    /// Parse a real Linux `/proc/<pid>/maps` listing into a memory map.
+    ///
+    /// Every region comes from a line of `text`; lines that do not parse are
+    /// skipped rather than replaced with a guess.
+    #[must_use]
+    pub fn from_proc_maps(pid: u32, text: &str) -> Self {
+        let mut map = Self::new(pid);
+        for line in text.lines() {
+            let mut parts = line.split_whitespace();
+            let Some(range) = parts.next() else { continue };
+            let Some(perms) = parts.next() else { continue };
+            let Some((lo, hi)) = range.split_once('-') else { continue };
+            let (Ok(start), Ok(end)) =
+                (u64::from_str_radix(lo, 16), u64::from_str_radix(hi, 16))
+            else {
+                continue;
+            };
+            let mapped = parts.nth(3).filter(|p| !p.is_empty());
+            let label = mapped.map_or_else(|| "[anon]".to_string(), ToString::to_string);
+            map.add(MemoryRegion {
+                start,
+                end,
+                label,
+                readable: perms.contains('r'),
+                writable: perms.contains('w'),
+                executable: perms.contains('x'),
+                mapped_file: mapped
+                    .filter(|p| !p.starts_with('['))
+                    .map(ToString::to_string),
+            });
+        }
+        map
+    }
+
+    /// Read the **real** memory map of a live process.
+    ///
+    /// # Errors
+    /// On Linux, returns [`VmError::Io`] if `/proc/<pid>/maps` cannot be read.
+    /// On every other host this introspection source does not exist, and the
+    /// function returns [`VmError::BackendUnavailable`] naming it — it never
+    /// substitutes a fabricated map.
+    pub fn read_live(pid: u32) -> Result<Self, VmError> {
+        #[cfg(target_os = "linux")]
+        {
+            let path = format!("/proc/{pid}/maps");
+            let text = std::fs::read_to_string(&path).map_err(|e| VmError::Io(format!("{path}: {e}")))?;
+            Ok(Self::from_proc_maps(pid, &text))
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(VmError::BackendUnavailable {
+                component: format!("/proc/{pid}/maps"),
+                observation: "the memory map of a live process".to_string(),
+                detail: format!(
+                    "this host is {}, which has no procfs; a QEMU guest with an                      introspection agent is required to observe guest memory",
+                    std::env::consts::OS
+                ),
+            })
         }
     }
 
@@ -525,10 +644,16 @@ impl MemoryMap {
         self.regions.iter().map(MemoryRegion::size).sum()
     }
 
-    /// Create a mock memory map for testing.
+    /// Sample memory map used by this crate's own tests.
+    ///
+    /// **Not an observation.** The returned map is tagged
+    /// [`MapProvenance::SyntheticFixture`] so no consumer can mistake it for the
+    /// state of a real process. To observe a real one, use
+    /// [`MemoryMap::read_live`] or [`MemoryMap::from_proc_maps`].
     #[must_use]
     pub fn mock(pid: u32) -> Self {
         let mut map = Self::new(pid);
+        map.provenance = MapProvenance::SyntheticFixture;
         map.add(MemoryRegion {
             start: 0x0000_0000_0040_0000,
             end: 0x0000_0000_0050_0000,
@@ -6287,5 +6412,91 @@ mod tests {
     fn test_classify_benign_no_events() {
         let clf = VmBehaviorClassifier::new();
         assert_eq!(clf.classify(&[]), MalwareCategory::Unknown);
+    }
+}
+
+// ─── Memory-map provenance and live-read tests ────────────────────────────────
+
+#[cfg(test)]
+mod memory_map_provenance_tests {
+    use super::*;
+
+    const SAMPLE_MAPS: &str = "\
+00400000-00401000 r-xp 00000000 08:01 1234 /usr/bin/sample
+7ffff7a00000-7ffff7a21000 rw-p 00000000 00:00 0 
+7ffff7b00000-7ffff7b10000 rwxp 00000000 00:00 0 [heap]
+";
+
+    #[test]
+    fn test_from_proc_maps_parses_real_lines() {
+        let m = MemoryMap::from_proc_maps(42, SAMPLE_MAPS);
+        assert_eq!(m.pid, 42);
+        assert_eq!(m.regions.len(), 3);
+        assert_eq!(m.regions[0].start, 0x0040_0000);
+        assert_eq!(m.regions[0].end, 0x0040_1000);
+        assert!(m.regions[0].readable && m.regions[0].executable);
+        assert!(!m.regions[0].writable);
+        assert_eq!(m.regions[0].mapped_file.as_deref(), Some("/usr/bin/sample"));
+        assert!(m.regions[1].mapped_file.is_none());
+        assert_eq!(m.regions[2].label, "[heap]");
+        assert!(m.regions[2].is_rwx());
+        // A parsed map is an observation.
+        assert!(m.provenance.is_observed());
+        assert!(!m.is_synthetic());
+    }
+
+    #[test]
+    fn test_from_proc_maps_skips_unparseable_lines_without_inventing() {
+        let m = MemoryMap::from_proc_maps(1, "garbage\nzzzz-yyyy r--p\n");
+        assert!(m.regions.is_empty());
+    }
+
+    #[test]
+    fn test_mock_map_is_labelled_synthetic() {
+        assert!(MemoryMap::mock(1).is_synthetic());
+        assert!(!MemoryMap::new(1).is_synthetic());
+    }
+
+    /// On a host without procfs the map must be refused with a typed error that
+    /// names the missing component — never a fabricated layout.
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn test_read_live_reports_missing_backend() {
+        let err = MemoryMap::read_live(1234).unwrap_err();
+        match err {
+            VmError::BackendUnavailable {
+                component,
+                observation,
+                detail,
+            } => {
+                assert!(component.contains("1234"), "component: {component}");
+                assert!(observation.contains("memory map"));
+                assert!(!detail.is_empty());
+            }
+            other => panic!("expected BackendUnavailable, got {other:?}"),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_read_live_of_absent_pid_is_an_io_error() {
+        assert!(matches!(
+            MemoryMap::read_live(0xFFFF_FFFF),
+            Err(VmError::Io(_))
+        ));
+    }
+
+    #[test]
+    fn test_provenance_survives_json_round_trip() {
+        let json = serde_json::to_string(&MemoryMap::mock(9)).unwrap();
+        assert!(json.contains("SyntheticFixture"));
+        let back: MemoryMap = serde_json::from_str(&json).unwrap();
+        assert!(back.is_synthetic());
+    }
+
+    #[test]
+    fn test_legacy_json_without_provenance_defaults_to_observed() {
+        let m: MemoryMap = serde_json::from_str(r#"{"regions":[],"pid":3}"#).unwrap();
+        assert!(m.provenance.is_observed());
     }
 }

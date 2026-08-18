@@ -2451,8 +2451,169 @@ fn win64_param_regs_live_in(
     instructions: &[Instruction],
     callee_arities: &HashMap<u64, usize>,
 ) -> [bool; 4] {
+    // SONDA #6630 (`RUSTRE_DBG_PARAMREG`, zero effetto sull'emissione): il
+    // FLUSSO ricevuto. Le sonde LIVEIN/WRITE piu' sotto mostrano promozioni le
+    // cui scritture precedenti non risultano mai registrate, pur essendo
+    // presenti nel corpo emesso; `writes_reg`, `split_two` e
+    // `reg_width_aliases` sono stati verificati corretti uno per uno. Resta da
+    // escludere che il flusso analizzato qui non coincida con quello emesso —
+    // e per saperlo bisogna vedere cosa arriva davvero.
+    if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+        // «Letto prima di scritto» presuppone che il flusso sia in ordine di
+        // INDIRIZZO. Se non lo e', una lettura che segue la sua scrittura nel
+        // binario puo' precederla nel flusso, e l'analisi promuove a parametro
+        // un registro che la funzione definisce da se'. Precedente identico nel
+        // repo: `arities_from_seeds` (binary_entry.rs) documenta che l'ordine
+        // randomizzato di una `HashMap` faceva convergere la stessa VA ad arita'
+        // diverse fra due esecuzioni, risolto ordinando per VA.
+        let sorted = instructions.windows(2).all(|w| w[0].address <= w[1].address);
+        // 224 istruzioni in 399 byte fanno 1.8 byte/istruzione: impossibile per
+        // x86-64 (media 3-4). Quindi il flusso ha DUPLICATI, o salti, o
+        // entrambi — e `sorted` con `<=` non li distingue. Conteggio degli
+        // indirizzi distinti + finestra mirata sul punto in esame.
+        if let Some(f) = instructions.first() {
+            let mut uniq: Vec<u64> = instructions.iter().map(|i| i.address.0).collect();
+            uniq.sort_unstable();
+            uniq.dedup();
+            eprintln!(
+                "[PARAMREG-UNIQ]   fn={:?} n={} distinti={}",
+                f.address,
+                instructions.len(),
+                uniq.len()
+            );
+            if std::env::var("RUSTRE_DBG_PARAMREG_WIN").is_ok() {
+                let lo = 0x1_4000_1b40u64;
+                let hi = 0x1_4000_1b80u64;
+                for ins in instructions.iter().filter(|i| i.address.0 >= lo && i.address.0 <= hi) {
+                    let m = ins.mnemonic.to_lowercase();
+                    let o = ins.operands.to_lowercase();
+                    // Valutazione REALE delle primitive: prese una per una
+                    // rispondono correttamente su `%r8d`, eppure la scrittura
+                    // non viene registrata. Stampare l'esito effettivo e' l'unico
+                    // modo di vedere quale anello cede in esecuzione.
+                    let verdicts: Vec<String> = ["rcx", "rdx", "r8", "r9"]
+                        .iter()
+                        .flat_map(|r| reg_width_aliases(r))
+                        .filter(|a| mentions_reg(&o, a))
+                        .map(|a| format!("{a}:w={}", writes_reg(&m, &o, a)))
+                        .collect();
+                    eprintln!(
+                        "[PARAMREG-WIN]    fn={:?} @{:#x} {} {}   [{}]",
+                        f.address,
+                        ins.address.0,
+                        ins.mnemonic,
+                        ins.operands,
+                        verdicts.join(" ")
+                    );
+                }
+            }
+        }
+        eprintln!(
+            "[PARAMREG-STREAM] fn={:?} n={} first={:?} last={:?} sorted={}",
+            instructions.first().map(|f| f.address),
+            instructions.len(),
+            instructions.first().map(|f| f.address),
+            instructions.last().map(|f| f.address),
+            sorted
+        );
+    }
     // Scan instructions to find which arg registers are READ before WRITE.
     let regs = ["rcx", "rdx", "r8", "r9"];
+
+    // ── #6640: «letto prima di scritto» in ordine di INDIRIZZO e' falso nei CICLI ──
+    //
+    // Questa analisi scorre `instructions` linearmente. Dentro un ciclo l'ordine
+    // di ESECUZIONE non e' quello degli indirizzi: una scrittura a un indirizzo
+    // ALTO precede, sul back-edge, una lettura a un indirizzo BASSO. La scansione
+    // lineare vede la lettura per prima e conclude «parametro» — l'esatto
+    // contrario della verita'.
+    //
+    // MISURATO su `_pei386_runtime_relocator` (sample1, 0x140001a00), che il
+    // prototipo pubblicato da' a ZERO parametri e che usciva con QUATTRO
+    // (regressione di `fidelity.sh` da 15/16 a 14/16):
+    //   0x140001b63  jbe 0x140001AD0     <- back-edge: il ciclo e' [ad0, b63]
+    //   0x140001b44  mov (%rbx), %r8d    <- SCRITTURA di r8, dentro il ciclo
+    //   0x140001af1  sub %r8, %rax       <- lettura di r8, dentro lo stesso ciclo
+    // In esecuzione la scrittura viene prima; in ordine di indirizzo no. Sonda
+    // `RUSTRE_DBG_PARAMREG` alla mano: a3/a4/a1 promossi a 0xaf1/0xaf4/0xaf7.
+    //
+    // GUARDIA: una lettura che sta dentro un ciclo che contiene ANCHE una
+    // scrittura dello stesso registro non e' evidenza di parametro. Non prova
+    // che il registro NON sia un parametro — prova che questa analisi non puo'
+    // deciderlo — e in dubbio si NON promuove: un parametro fantasma compila
+    // pulito ed e' invisibile a `check.sh`, un parametro mancante no.
+    //
+    // Questo e' il rimedio MINIMO e locale. Quello strutturale e' sostituire la
+    // scansione lineare con `rustre_analysis_dataflow::compute_liveness` sul CFG
+    // (il ponte `analysis_bridge::build_liveness_cfg_from_mlil` esiste gia' e non
+    // ha chiamanti), che qui non e' applicabile perche' questa funzione riceve
+    // istruzioni GREZZE e non blocchi MLIL.
+    let back_edges: Vec<(u64, u64)> = instructions
+        .iter()
+        .filter(|ins| {
+            let m = ins.mnemonic.to_ascii_lowercase();
+            m.starts_with('j') && m != "jmpq*" && !m.contains('*')
+        })
+        .filter_map(|ins| {
+            let t = parse_hex_target(ins.operands.trim())?;
+            (t <= ins.address.0).then_some((t, ins.address.0))
+        })
+        .collect();
+
+    // Indirizzi in cui ciascun registro argomento viene SCRITTO, ovunque nel corpo.
+    let write_addrs: Vec<Vec<u64>> = regs
+        .iter()
+        .map(|r| {
+            instructions
+                .iter()
+                .filter(|ins| {
+                    let m = ins.mnemonic.to_lowercase();
+                    let o = ins.operands.to_lowercase();
+                    reg_width_aliases(r).iter().any(|a| writes_reg(&m, &o, a))
+                })
+                .map(|ins| ins.address.0)
+                .collect()
+        })
+        .collect();
+
+    // GATE `RUSTRE_PARAMREG_LOOPGUARD`, **opt-in, default OFF — MISURATO ROSSO**.
+    //
+    // La guardia qui sotto e' corretta nell'intuizione e SBAGLIATA come rimedio.
+    // Misurato sul sottoinsieme `sample1` (10 prototipi controllati):
+    //     prima:  correct 8, over 1, under 1
+    //     dopo:   correct 7, over 1, under 2
+    // OVER NON scende e UNDER sale: il difetto viene SPOSTATO, non corretto —
+    // esattamente il modo di fallire previsto nei criteri di misura.
+    //
+    // Perche' non puo' funzionare: la guardia sopprime la promozione quando
+    // lettura e scrittura cadono nello stesso ciclo, ma non sa distinguere
+    //   (a) la scrittura precede la lettura via back-edge  -> NON e' un parametro
+    //   (b) la lettura precede la scrittura alla PRIMA iterazione -> E' un parametro
+    // Sono opposti e hanno la stessa forma sintattica. Distinguerli richiede
+    // liveness vera con dominanza, cioe' `rustre_analysis_dataflow::compute_liveness`
+    // sul CFG (crate presente, testato, di cui il decompilatore raggiunge 4 nomi
+    // su 404). Questa misura e' la prova sperimentale che un'euristica lineare
+    // non basta.
+    //
+    // Tenuta dietro gate anziche' cancellata: la diagnosi (#6640) resta valida —
+    // su `_pei386_runtime_relocator` porta i parametri fantasma da 4 a 2 e la
+    // guardia scatta 25 volte in sample1 — e serve come banco di prova quando la
+    // liveness su CFG verra' cablata. Con il gate spento l'output e'
+    // byte-identico.
+    let loop_guard_on = matches!(
+        std::env::var("RUSTRE_PARAMREG_LOOPGUARD").as_deref(),
+        Ok("1") | Ok("true")
+    );
+
+    // Vero quando la lettura a `read_at` e la scrittura di `reg_idx` cadono nello
+    // stesso ciclo: allora l'ordine lineare non dice nulla sull'ordine reale.
+    let unreliable_in_loop = |reg_idx: usize, read_at: u64| -> bool {
+        back_edges.iter().any(|&(lo, hi)| {
+            read_at >= lo
+                && read_at <= hi
+                && write_addrs[reg_idx].iter().any(|&w| w >= lo && w <= hi)
+        })
+    };
     let mut is_param = [false; 4];
     let mut written = [false; 4];
     // Whether the register has been MENTIONED at all so far, in any width and
@@ -2505,6 +2666,43 @@ fn win64_param_regs_live_in(
         for (i, r) in regs.iter().enumerate() {
             if !touched[i] && reg_width_aliases(r).iter().any(|a| mentions_reg(&ops, a)) {
                 touched[i] = true;
+            }
+        }
+        // SONDA #6630 (finestra, `RUSTRE_DBG_PARAMREG_WIN`): stato delle
+        // GUARDIE prima del `continue`. Le sonde precedenti hanno mostrato che
+        // `writes_reg` risponde `true` sulle istruzioni in questione ma la
+        // scrittura non viene mai registrata; perche' accada, una fra
+        // `is_param` e `written` deve gia' essere vera — e nessuna delle due
+        // dovrebbe esserlo. Questa stampa e' l'unica che puo' dirlo, e copre
+        // in un colpo solo tutte le domande rimaste aperte.
+        // Finestra CONFIGURABILE: `RUSTRE_DBG_PARAMREG_WIN=<lo>:<hi>` in esadecimale
+        // (`RUSTRE_DBG_PARAMREG_WIN=1` = tutta la funzione). Stampa anche
+        // `fn=`, senza il quale non si distingue QUALE invocazione sta parlando —
+        // e la stessa funzione viene analizzata piu' volte su corpi diversi
+        // (misurato: 57, 57 e 224 istruzioni per `_pei386_runtime_relocator`),
+        // quindi due sonde possono fotografare invocazioni diverse e sembrare
+        // in contraddizione.
+        if let Ok(w) = std::env::var("RUSTRE_DBG_PARAMREG_WIN") {
+            let (lo, hi) = w
+                .split_once(':')
+                .and_then(|(a, b)| {
+                    Some((
+                        u64::from_str_radix(a.trim_start_matches("0x"), 16).ok()?,
+                        u64::from_str_radix(b.trim_start_matches("0x"), 16).ok()?,
+                    ))
+                })
+                .unwrap_or((0, u64::MAX));
+            if ins.address.0 >= lo && ins.address.0 <= hi {
+                eprintln!(
+                    "[PARAMREG-GUARD]  fn={:#x} n={} @{:#x} {} {}   is_param={:?} written={:?}",
+                    instructions.first().map_or(0, |f| f.address.0),
+                    instructions.len(),
+                    ins.address.0,
+                    ins.mnemonic,
+                    ins.operands,
+                    is_param,
+                    written
+                );
             }
         }
         // Treat anything reading the reg before write as a param signal.
@@ -2572,10 +2770,73 @@ fn win64_param_regs_live_in(
                             _ => true,
                         }
                     };
-                    if appears_as_pure_read { is_param[i] = true; }
+                    // #6640: la lettura sta in un ciclo che scrive anche il
+                    // registro → l'ordine lineare non e' evidenza. Vedi la
+                    // guardia costruita in testa alla funzione.
+                    if appears_as_pure_read
+                        && loop_guard_on
+                        && unreliable_in_loop(i, ins.address.0)
+                    {
+                        if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                            eprintln!(
+                                "[PARAMREG-LOOP]   fn={:?} NON promuove a{} ({}) \
+                                 @{:?} {} {} — lettura e scrittura nello stesso ciclo",
+                                instructions.first().map(|f| f.address),
+                                i + 1,
+                                r,
+                                ins.address,
+                                mnem,
+                                ops
+                            );
+                        }
+                        continue;
+                    }
+                    if appears_as_pure_read {
+                        // SONDA #6630 (`RUSTRE_DBG_PARAMREG`, zero effetto sul
+                        // codice emesso): dice QUALE registro viene promosso a
+                        // parametro, a QUALE istruzione e con QUALE mnemonico.
+                        // Serve perche' la LETTURA del codice ha gia' portato a
+                        // quattro spiegazioni plausibili e sbagliate dei
+                        // parametri fantasma di `_pei386_runtime_relocator`
+                        // (regola D9, arity del chiamato, over-scan, sintassi
+                        // AT&T): in questo file convivono funzioni omonime che
+                        // fanno cose diverse, e l'unico modo di sapere chi
+                        // promuove e' vederlo accadere.
+                        if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                            eprintln!(
+                                "[PARAMREG-LIVEIN] fn={:?} promuove a{} ({}) \
+                                 @{:?} {} {}",
+                                instructions.first().map(|f| f.address),
+                                i + 1,
+                                r,
+                                ins.address,
+                                mnem,
+                                ops
+                            );
+                        }
+                        is_param[i] = true;
+                    }
                 }
                 // Mark write if this instruction writes the reg as a destination.
-                if writes_reg(&mnem, &ops, alias) { written[i] = true; }
+                if writes_reg(&mnem, &ops, alias) {
+                    // SONDA #6630 (segue): la promozione a parametro e' vietata
+                    // quando il registro risulta gia' SCRITTO, quindi per capire
+                    // una promozione sbagliata serve vedere anche quali
+                    // scritture sono state riconosciute — e quali no.
+                    if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                        eprintln!(
+                            "[PARAMREG-WRITE]  fn={:?} scrive  a{} ({}) \
+                             @{:?} {} {}",
+                            instructions.first().map(|f| f.address),
+                            i + 1,
+                            r,
+                            ins.address,
+                            mnem,
+                            ops
+                        );
+                    }
+                    written[i] = true;
+                }
             }
         }
     }
@@ -4591,7 +4852,7 @@ fn uniform_self_stride(code: &str, name: &str) -> Option<u64> {
     // Per-segment state.
     let mut seg_strides: Vec<Option<u64>> = Vec::new(); // None = non-literal step
     let mut seg_deref = false;
-    let mut flush = |seg_strides: &mut Vec<Option<u64>>,
+    let flush = |seg_strides: &mut Vec<Option<u64>>,
                      seg_deref: &mut bool,
                      stride: &mut Option<u64>,
                      vetoed: &mut bool| {
@@ -17936,13 +18197,48 @@ fn rewrite_tail_call(stmts: &mut [CfsStatement], in_func_labels: &std::collectio
         // thunks) are not plain identifiers and stay untouched.
         if let Some(op) = text.strip_prefix("JUMPOUT(").and_then(|t| t.strip_suffix(");"))
             && !op.is_empty()
-            && op.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
             && !op.starts_with(|c: char| c.is_ascii_digit())
             && !op.starts_with("off_")
             && !op.starts_with("loc_")
         {
-            *s = CfsStatement::Return(Some(format!("{op}()")));
-            continue;
+            // #6620: un operando di MEMORIA — `*v6`, `ptr->field_18`,
+            // `*(result + 32)` — e' una tail call esattamente quanto un
+            // registro nudo: un salto indiretto in posizione di coda trasferisce
+            // il controllo e il ritorno del chiamato diventa il nostro, che in C
+            // e' precisamente `return f();`.
+            //
+            // MISURATO su runs/base_0818: TUTTI i 18 `JUMPOUT` residui del
+            // corpus hanno questa forma — `ptr->field_18` x8,
+            // `result->field_48` x2, `ptr->field_38` x2, `ptr->field_30` x2,
+            // `*v6` x2, `*(result + 32)` x2 — e stanno tutti nei due bucket C#.
+            //
+            // Non e' cosmesi: `JUMPOUT` NON e' definito in `ida_defs.h`
+            // (35 righe, zero occorrenze), quindi ognuno e' una chiamata a
+            // funzione implicitamente dichiarata. Provato eseguendo il
+            // compilatore: `gcc -std=gnu89 -fsyntax-only -w` esce 0, mentre
+            // `-Werror=implicit-function-declaration` da' «implicit declaration
+            // of function 'JUMPOUT'». Passa la metrica di ricompilabilita' e
+            // ROMPE IL LINK.
+            //
+            // L'operando va PARENTESIZZATO perche' `cast_indirect_call_targets`
+            // lo riconosca: quel pass gia' documenta e testa
+            // `(ptr->field_30)();` -> `((__int64 (*)())(ptr->field_30))();` e
+            // `(*v2)();` -> `((__int64 (*)())(*v2))();`, incluso il caso dentro
+            // `return`.
+            //
+            // Effetto collaterale che e' una CORREZIONE: dove il `JUMPOUT` non
+            // era l'ultima istruzione del blocco (`sub_140007030.c`), le righe
+            // seguenti diventano irraggiungibili. E' giusto — un salto
+            // incondizionato le rendeva gia' morte nel binario — e oggi, con
+            // `JUMPOUT` inesistente, nel C ricompilato verrebbero invece
+            // ESEGUITE: la conversione raddrizza il flusso.
+            let plain = op.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            let mem = op.starts_with('*') || op.contains("->");
+            if plain || mem {
+                let callee = if plain { op.to_string() } else { format!("({op})") };
+                *s = CfsStatement::Return(Some(format!("{callee}()")));
+                continue;
+            }
         }
         let Some(rest) = text.strip_prefix("goto loc_").and_then(|t| t.strip_suffix(';')) else {
             continue;
@@ -18586,8 +18882,7 @@ fn cast_access_width(spelling: &str) -> Option<u8> {
 /// * `base[i * S]`                         → `record_array_access`
 ///
 /// No-op quando il gate e' spento.
-#[allow(dead_code)]
-fn recover_types_into_env(code: &str, env: &mut TypeEnvironment) {
+pub fn recover_types_into_env(code: &str, env: &mut TypeEnvironment) {
     if !type_env_gate() {
         return;
     }
@@ -27139,7 +27434,7 @@ fn fill_mlil_return_values(blocks: &mut [rustre_il_mlil::MlilBasicBlock]) {
     }
 }
 
-fn fill_mlil_call_args(
+pub fn fill_mlil_call_args(
     blocks: &mut [rustre_il_mlil::MlilBasicBlock],
     arities: &HashMap<u64, usize>,
 ) {
@@ -38660,7 +38955,6 @@ mod tests {
         assert!(matches!(&n[0], CfsStatement::Raw(r) if r == "side_effect(a1);"), "{n:?}");
     }
 
-    #[test]
     /// `free`/`abort` are void in the recompile prelude: capturing them emits
     /// `rax = free(ptr);` — gcc's "invalid use of void expression" (2 corpus
     /// files, sample7_cpp, 2026-07-18).
@@ -39213,7 +39507,6 @@ mod tests {
         assert!(normalize_sse_zero(si).contains("xmm1 = 0;"), "{}", normalize_sse_zero(si));
     }
 
-    #[test]
     /// The `dot` witness: mulsd/addsd comment-ops over scalar-only xmm raise
     /// to real double arithmetic, loads reinterpret bits, the trailing
     /// `xmm0 = …; return counter;` becomes `return xmm0;` with a double

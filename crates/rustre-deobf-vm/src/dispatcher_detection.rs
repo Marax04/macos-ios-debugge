@@ -4,7 +4,6 @@
 //! control-flow topology, and byte-level signatures for major commercial
 //! protectors (`VMProtect` 2.x / 3.x, Themida, Code Virtualizer, Tigress).
 
-#![allow(dead_code, unused_imports, unused_variables, unused_mut)]
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use serde::{Deserialize, Serialize};

@@ -16,7 +16,6 @@
 //! | [`PointerType`] | Inferred pointer type for a variable |
 //! | [`NullabilityAnalysis`] | Tracks variables that may or must be null |
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;

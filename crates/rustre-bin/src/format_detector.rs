@@ -271,11 +271,28 @@ pub fn detect_architecture(data: &[u8]) -> Option<String> {
 
 impl FormatDetector {
     /// Returns the names of all architecture backends currently registered in
-    /// the process-wide [`rustre_arch::global_registry`]. Calling this from the
-    /// `info` subcommand also forces the lazy registry to initialise, ensuring
-    /// every bundled `rustre-arch-*` crate is reachable at runtime.
+    /// the process-wide [`rustre_arch::global_registry`], installing the real
+    /// backends first.
+    ///
+    /// ⚠ This used to call only [`rustre_arch::register_all_builtins`] and
+    /// claim it was "ensuring every bundled `rustre-arch-*` crate is reachable
+    /// at runtime". That was false, and it was the most expensive false
+    /// sentence in the workspace: `register_all_builtins` installs
+    /// `PlaceholderArch` stubs whose `disassemble` returns
+    /// `Err("PlaceholderArch: no backend linked")`. The 19 real backends are
+    /// wired by `rustre_arch_registry::register_all`, which had **zero callers
+    /// anywhere in the workspace** — so the process-wide registry this binary
+    /// exposed was made entirely of stubs that refuse to disassemble, while
+    /// every real backend sat compiled and uninstalled.
+    ///
+    /// Order matters: `register_all_builtins` first so the placeholder set
+    /// defines the complete key space, then `register_all`, which overwrites
+    /// each key it has a real backend for. An architecture with no linked
+    /// backend therefore still appears in the listing, as a stub — which is the
+    /// honest answer, rather than disappearing from it.
     pub fn known_architectures() -> Vec<String> {
         rustre_arch::register_all_builtins();
+        rustre_arch_registry::register_all();
         rustre_arch::global_registry()
             .iter()
             .map(|e| e.key().clone())

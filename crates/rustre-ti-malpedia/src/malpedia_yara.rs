@@ -361,7 +361,12 @@ impl FamilyYara {
         matches
     }
 
-    /// Generate a mock primary YARA rule for this family.
+    /// Build a NAME-ONLY YARA rule template for this family.
+    ///
+    /// This is a locally generated template, NOT a Malpedia rule: its only
+    /// string is the family name itself.  It is useful as a scaffold, and it
+    /// must never be presented as Malpedia's detection logic.  Real rules come
+    /// from a rule file the caller supplies, or from the live service.
     #[must_use]
     pub fn mock_rule(&self) -> YaraRule {
         let family = &self.family;
@@ -369,8 +374,8 @@ impl FamilyYara {
         let source = format!(
             r#"rule detect_{family} {{
     meta:
-        description = "Detects {family}"
-        author = "malpedia"
+        description = "LOCAL TEMPLATE - matches the literal family name {family}; this is not a Malpedia rule"
+        author = "rustre-ti-malpedia (locally generated template)"
     strings:
         $s1 = "{family}" ascii wide nocase
     condition:
@@ -430,18 +435,29 @@ impl YaraDownloader {
         self
     }
 
-    /// Mock-download YARA rules for a family.
+    /// Download YARA rules for a family from Malpedia.
+    ///
+    /// Malpedia's rules live on the service; this type has no HTTP transport,
+    /// so no download is performed and NO rule is invented.  It used to return
+    /// a locally generated name-matching rule as if it had been downloaded.
+    ///
+    /// Use [`FamilyYara::mock_rule`] explicitly if a local template is what you
+    /// want, or [`YaraCache`] / a caller-supplied rule file for real rules.
     ///
     /// # Errors
-    /// Returns an error if the download simulation fails.
+    /// Always returns [`YaraError::DownloadFailed`] naming the missing
+    /// credential or transport.
     pub fn download_family(&mut self, family: &str) -> Result<FamilyYara, YaraError> {
-        // Simulate a download by constructing a mock FamilyYara.
-        let mut family_yara = FamilyYara::new(family);
-        let rule = family_yara.mock_rule();
-        family_yara.add_primary_rule(rule);
-        self.last_download = Some(unix_now());
-        self.total_downloaded += 1;
-        Ok(family_yara)
+        Err(YaraError::DownloadFailed(format!(
+            "no network lookup performed for '{family}': downloading Malpedia YARA rules \
+             requires an HTTP request to {} and {}",
+            self.api_url,
+            if self.is_authenticated() {
+                "this build has no HTTP transport"
+            } else {
+                "no API token is configured"
+            }
+        )))
     }
 
     /// Check whether a download is allowed (rate limit check, mock).

@@ -568,7 +568,9 @@ fn parse_annotation_value(p: &mut Parser) -> SmaliAnnotationValue {
 // Opcode mapping
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn opcode_from_str(s: &str) -> SmaliOp {
+/// Map a mnemonic to a [`SmaliOp`].
+#[must_use]
+pub fn opcode_from_str(s: &str) -> SmaliOp {
     match s {
         "nop" => SmaliOp::Nop,
         "move" | "move/from16" | "move/16" => SmaliOp::Move,

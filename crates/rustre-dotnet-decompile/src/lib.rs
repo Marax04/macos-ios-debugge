@@ -7,6 +7,7 @@ pub mod linq_recovery_full;
 pub mod async_recovery;
 pub mod csharp_patterns;
 pub mod linq_recovery;
+pub mod metadata_bridge;
 
 /// Narrowing numeric cast helpers. These wrap saturating/wrapping conversions
 /// in named functions so call sites stay readable. Each helper is a deliberate

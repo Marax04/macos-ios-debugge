@@ -18,7 +18,6 @@
 //! | [`ProgressReporter`] | Emits phase-level progress output |
 //! | [`SummaryFormatter`] | Renders the report as text or JSON |
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;

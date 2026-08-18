@@ -38,11 +38,10 @@
 //! Scalar flag-setting instructions (COMISS, UCOMISS, etc.) additionally emit
 //! `emit_flagset` calls to mark ZF/PF/CF as updated.
 
-#![allow(unused_imports, dead_code)]
 
 use crate::x86_context::{FlagId, X86LiftCtx};
 use crate::x86_operand::{read_operand, write_operand};
-use crate::{Effect, IrExpr, LiftError};
+use crate::{IrExpr, LiftError};
 use iced_x86::{Instruction, Mnemonic};
 
 // =============================================================================
@@ -90,7 +89,7 @@ fn unop_intr(instr: &Instruction, ctx: &mut X86LiftCtx, name: &str) {
 
 /// Emit a 4-operand SIMD intrinsic (blend-with-mask, DPPS, etc.).
 #[inline]
-fn quadop_intr(instr: &Instruction, ctx: &mut X86LiftCtx, name: &str) {
+pub fn quadop_intr(instr: &Instruction, ctx: &mut X86LiftCtx, name: &str) {
     let op0 = read_operand(instr, 0, ctx);
     let op1 = read_operand(instr, 1, ctx);
     let op2 = read_operand(instr, 2, ctx);

@@ -106,9 +106,17 @@ fn the_checkers_never_disagree() {
         }
         for (name, answer) in &answers {
             if *answer != first {
+                // ⚠ `disagreements` was incremented and then never read,
+                // because the `panic!` on the next line ends the test. The
+                // counter promised an aggregate ("how many implementations
+                // disagree") and delivered "the first disagreement, then
+                // stop" — so a table where three implementations disagree
+                // reported the same thing as one where a single one did.
+                // The increment is kept and the count is now reported in the
+                // panic message, which is what the variable was for.
                 disagreements += 1;
                 panic!(
-                    "{name} says {answer} but {} says {first} for a {}-byte table",
+                    "{name} says {answer} but {} says {first} for a {}-byte table                      ({disagreements} disagreement(s) seen on this table)",
                     answers[0].0,
                     case.len()
                 );

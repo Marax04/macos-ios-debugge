@@ -4,7 +4,6 @@
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
-use crate::{args_to_bytes_named};
 use crate::wire_tools::{_il_n5_mk_instr, _il_o1_mk_instr, _il_o1_mk_lifted};
 
 pub struct IlLiftSupportedArchesTool;

@@ -805,11 +805,53 @@ impl ProcessTree {
     }
 }
 
+// ─── RunProvenance ────────────────────────────────────────────────────────────
+
+/// Whether a record or result describes a real sandbox run.
+///
+/// The distinction is carried in the data and serialised with it, so a consumer
+/// that never sees this source - an MCP client, a report renderer - can tell an
+/// observation apart from sample data before acting on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunProvenance {
+    /// Collected by actually executing and observing a sample.
+    Observed,
+    /// Hand-written sample data used to exercise this crate's own code paths.
+    ///
+    /// Never a statement about any real sample.
+    SyntheticFixture,
+}
+
+impl RunProvenance {
+    /// `true` when the data came from a real run.
+    #[must_use]
+    pub const fn is_observed(self) -> bool {
+        matches!(self, Self::Observed)
+    }
+}
+
+impl fmt::Display for RunProvenance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Observed => write!(f, "observed"),
+            Self::SyntheticFixture => write!(f, "synthetic-fixture"),
+        }
+    }
+}
+
+/// Default used when deserialising data written before provenance was tracked.
+const fn default_run_provenance() -> RunProvenance {
+    RunProvenance::Observed
+}
+
 // ─── BehaviorRecord ───────────────────────────────────────────────────────────
 
 /// Comprehensive record of all observed behaviors during a sandbox run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehaviorRecord {
+    /// Whether these traces were observed or are sample data.
+    #[serde(default = "default_run_provenance")]
+    pub provenance: RunProvenance,
     pub syscalls: Vec<SyscallTrace>,
     pub network: Vec<NetworkTrace>,
     pub files: Vec<FileTrace>,
@@ -824,6 +866,7 @@ impl BehaviorRecord {
     #[must_use]
     pub fn new(root_pid: u32) -> Self {
         Self {
+            provenance: RunProvenance::Observed,
             syscalls: vec![],
             network: vec![],
             files: vec![],
@@ -934,10 +977,22 @@ impl BehaviorRecord {
             .count()
     }
 
-    /// Create a mock record for testing.
+    /// `true` when this record is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, RunProvenance::SyntheticFixture)
+    }
+
+    /// Sample behaviour record used by this crate's own tests.
+    ///
+    /// **Not an observation.** The returned record is tagged
+    /// [`RunProvenance::SyntheticFixture`], and any [`SandboxResult`] built from
+    /// it inherits that tag, so it cannot be reported as the behaviour of a real
+    /// sample. Real records come from [`BehaviorRecord::new`] fed by a live run.
     #[must_use]
     pub fn mock() -> Self {
         let mut rec = Self::new(1000);
+        rec.provenance = RunProvenance::SyntheticFixture;
         // Root process.
         rec.process_tree.insert(ProcessNode::new(
             1000,
@@ -1252,6 +1307,9 @@ impl FilesystemSnapshot {
 /// Full result of a sandbox analysis run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxResult {
+    /// Whether this result describes a real run or is sample data.
+    #[serde(default = "default_run_provenance")]
+    pub provenance: RunProvenance,
     pub status: SandboxStatus,
     pub behaviors: BehaviorFlag,
     pub duration_ms: u64,
@@ -1269,6 +1327,7 @@ impl SandboxResult {
     #[must_use]
     pub const fn clean() -> Self {
         Self {
+            provenance: RunProvenance::Observed,
             status: SandboxStatus::Finished,
             behaviors: BehaviorFlag::empty(),
             duration_ms: 0,
@@ -1327,7 +1386,33 @@ impl SandboxResult {
         serde_json::to_string(self).map_err(|e| e.to_string())
     }
 
-    /// Create a mock result with realistic data.
+    /// `true` when this result is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, RunProvenance::SyntheticFixture)
+    }
+
+    /// Build a result from a behaviour record that was actually collected.
+    ///
+    /// The flags and threat score are derived from the traces in `record` - not
+    /// asserted independently - and the record's provenance is carried across,
+    /// so a real run yields a real result and a fixture stays labelled.
+    #[must_use]
+    pub fn from_behavior_record(record: BehaviorRecord, duration_ms: u64) -> Self {
+        let mut r = Self::clean();
+        r.provenance = record.provenance;
+        r.duration_ms = duration_ms;
+        r.behaviors = record.flags;
+        r.log.clone_from(&record.log);
+        r.behavior_record = Some(record);
+        r.compute_threat_score();
+        r
+    }
+
+    /// Sample result used by this crate's own tests.
+    ///
+    /// **Not an observation.** Tagged [`RunProvenance::SyntheticFixture`]; see
+    /// [`SandboxResult::from_behavior_record`] for the real entry point.
     #[must_use]
     pub fn mock() -> Self {
         let behaviors = BehaviorFlag::INJECTION
@@ -1358,6 +1443,7 @@ impl SandboxResult {
         artifacts.set_pcap(vec![0xd4, 0xc3, 0xb2, 0xa1]);
 
         let mut result = Self {
+            provenance: RunProvenance::SyntheticFixture,
             status: SandboxStatus::Finished,
             behaviors,
             duration_ms: 60_000,
@@ -1455,6 +1541,8 @@ impl SandboxSession {
         let artifacts = self.artifacts.lock().clone();
 
         let mut result = SandboxResult {
+            // Inherited from the record the session actually collected.
+            provenance: record.provenance,
             status,
             behaviors,
             duration_ms: self.elapsed_ms(),
@@ -2633,6 +2721,8 @@ mod tests {
 
     fn malicious_result() -> SandboxResult {
         SandboxResult {
+            // Test fixture: labelled as such, like every other one in this crate.
+            provenance: RunProvenance::SyntheticFixture,
             status: SandboxStatus::Finished,
             behaviors: BehaviorFlag::INJECTION | BehaviorFlag::NETWORK,
             duration_ms: 2000,
@@ -5592,5 +5682,67 @@ mod pipeline_tests {
         store.insert([1u8; 32], ArtifactCollector::new());
         let hashes = store.hashes();
         assert_eq!(hashes.len(), 2);
+    }
+}
+
+// ─── Provenance tests ─────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod provenance_tests {
+    use super::*;
+
+    #[test]
+    fn test_new_record_is_observed() {
+        let rec = BehaviorRecord::new(1);
+        assert!(rec.provenance.is_observed());
+        assert!(!rec.is_synthetic());
+    }
+
+    #[test]
+    fn test_mock_record_is_labelled_synthetic() {
+        assert!(BehaviorRecord::mock().is_synthetic());
+    }
+
+    #[test]
+    fn test_mock_result_is_labelled_synthetic() {
+        assert!(SandboxResult::mock().is_synthetic());
+        assert!(!SandboxResult::clean().is_synthetic());
+    }
+
+    #[test]
+    fn test_from_behavior_record_derives_flags_from_the_record() {
+        let mut rec = BehaviorRecord::new(7);
+        rec.record_network(NetworkTrace {
+            proto: NetworkProto::Tcp,
+            local_addr: "127.0.0.1:1".to_string(),
+            remote_addr: "203.0.113.9".to_string(),
+            remote_port: 80,
+            bytes_sent: 1,
+            bytes_recv: 1,
+            ts_ms: 1,
+            pid: 7,
+            dns_query: None,
+        });
+        let flags = rec.flags;
+        let res = SandboxResult::from_behavior_record(rec, 1234);
+        assert!(res.provenance.is_observed());
+        assert!(!res.is_synthetic());
+        assert_eq!(res.duration_ms, 1234);
+        assert_eq!(res.behaviors, flags);
+        assert!(res.behavior_record.is_some());
+    }
+
+    #[test]
+    fn test_from_behavior_record_keeps_fixture_labelled() {
+        let res = SandboxResult::from_behavior_record(BehaviorRecord::mock(), 10);
+        assert!(res.is_synthetic());
+    }
+
+    #[test]
+    fn test_provenance_survives_json_round_trip() {
+        let json = serde_json::to_string(&SandboxResult::mock()).unwrap();
+        assert!(json.contains("SyntheticFixture"));
+        let back: SandboxResult = serde_json::from_str(&json).unwrap();
+        assert!(back.is_synthetic());
     }
 }

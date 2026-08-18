@@ -35,11 +35,8 @@ pub enum PatchError {
         "jump target {target:#x} too far from source {src_addr:#x} for near jump (delta={delta})"
     )]
     JumpTooFar {
-        #[allow(dead_code)]
         src_addr: usize,
-        #[allow(dead_code)]
         target: usize,
-        #[allow(dead_code)]
         delta: i64,
     },
     #[error("empty patch payload")]

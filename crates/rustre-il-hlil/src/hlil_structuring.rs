@@ -3945,7 +3945,7 @@ t.ty = HlilType::Void;
     }
 
     #[test]
-    fn a_materialised_declaration_uses_an_EMITTABLE_type() {
+    fn a_materialised_declaration_uses_an_emittable_type() {
         // Il C emesso e' compilato in gnu89 col prelude `ida_defs.h`, che NON
         // definisce `bool`. Una dichiarazione materializzata con quel tipo da
         // `error: unknown type name` — successo su 114 file. Le altre

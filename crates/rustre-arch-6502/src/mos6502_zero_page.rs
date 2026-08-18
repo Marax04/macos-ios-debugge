@@ -518,7 +518,7 @@ mod tests {
     #[test]
     fn test_total_accesses() {
         let e = {
-            let mut zp = Mos6502ZeroPage::analyze(&[0xA5, 0x05, 0x85, 0x05], 0x0000);
+            let zp = Mos6502ZeroPage::analyze(&[0xA5, 0x05, 0x85, 0x05], 0x0000);
             zp.entry(0x05).total_accesses()
         };
         assert_eq!(e, 2); // 1 read + 1 write

@@ -576,8 +576,7 @@ impl BatchDecompiler {
 /// a fidelity regression, not a cleanup. (A differential test against
 /// `run_decompile_loop_bounded` would be vacuous — this is a one-line
 /// delegation to it, not an independent algorithm.)
-#[allow(dead_code)]
-fn run_decompile_loop(
+pub fn run_decompile_loop(
     load: &rustre_loader::RichLoadResult,
     filtered: &[u64],
     config: &BatchConfig,
@@ -1868,7 +1867,7 @@ mod tests {
     }
 
     #[test]
-    fn void_chiamata_ad_ALTRA_funzione_resta_intatta() {
+    fn void_chiamata_ad_altra_funzione_resta_intatta() {
         // ⚠ Il caso che tiene la regola stretta: `g` non e' la funzione
         // definita qui, e il suo tipo di ritorno NON e' noto da questo file.
         let code = "void f_erase(__int64 a1)\n{\n    uint64_t v8;\n    v8 = g(a1);\n}\n";

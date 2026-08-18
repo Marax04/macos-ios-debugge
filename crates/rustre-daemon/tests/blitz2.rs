@@ -6,7 +6,7 @@
 //!   Daemon, format_duration, is_process_running, HttpDaemonConfig,
 //!   ProjectHandle, ServerState, JsonRpcRequest/Response/Error.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::net::{SocketAddr, TcpListener};
 use std::path::PathBuf;
 use std::sync::Arc;

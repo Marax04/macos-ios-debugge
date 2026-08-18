@@ -648,7 +648,23 @@ impl LineProgram {
             }
         };
         pos += header_size;
-        let unit_end = pos + unit_length;
+        let unit_end = pos
+            .checked_add(unit_length)
+            .ok_or("unit_length overflows the address space")?;
+
+        // ⚠ This check was missing. `unit_length` is attacker-controlled data
+        // read straight out of the section: a unit that claims more bytes than
+        // the buffer holds was accepted, and `parse` returned `unit_end` as the
+        // "next offset" — a value PAST the end of `data`. A caller looping over
+        // units with that offset either indexes out of range or silently stops,
+        // and neither is a parse error it can report.
+        //
+        // Found by `a_truncated_unit_is_rejected`, which only exists because
+        // the hand-encoded fixture it feeds had been sitting uncalled behind an
+        // `#[allow(dead_code)]`.
+        if unit_end > data.len() {
+            return Err("unit_length runs past the end of the section");
+        }
 
         // version
         if pos + 2 > data.len() { return Err("truncated version"); }
@@ -942,7 +958,7 @@ impl LineProgram {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Build a DWARF 5 `.debug_line` unit whose directory and file tables use
@@ -1082,7 +1098,7 @@ mod tests {
         );
     }
 
-    fn minimal_line_program_bytes() -> Vec<u8> {
+    pub(crate) fn minimal_line_program_bytes() -> Vec<u8> {
         // Minimal DWARF 4 .debug_line unit with a single sequence:
         //   SetAddress(0x1000), AdvanceLine(10-1=9), Copy, EndSequence
         let mut prog: Vec<u8> = Vec::new();
@@ -1288,5 +1304,60 @@ mod tests {
         let (addr, line) = sm.decode_special(13);
         assert_eq!(addr, 0);
         assert_eq!(line, -5); // line_base
+    }
+}
+
+#[cfg(test)]
+mod line_program_end_to_end_tests {
+    //! ⚠ `minimal_line_program_bytes` hand-encodes a complete DWARF 4
+    //! `.debug_line` unit — header, `DW_LNE_set_address`, `DW_LNS_advance_line`,
+    //! `DW_LNS_copy`, `DW_LNE_end_sequence` — and had **no caller**. The unit
+    //! tests around it covered ULEB/SLEB decoding and opcode arithmetic in
+    //! isolation, so nothing ever ran a real program through `parse` +
+    //! `execute`. An `#[allow(dead_code)]` hid the unused fixture, and with it
+    //! the fact that the parser had no end-to-end coverage at all.
+
+    use super::tests::minimal_line_program_bytes;
+    use super::*;
+
+    /// The unit parses, and reports consuming the whole buffer.
+    #[test]
+    fn minimal_unit_parses() {
+        let data = minimal_line_program_bytes();
+        let (_prog, next) = LineProgram::parse(&data, 0).expect("hand-encoded unit must parse");
+        assert_eq!(next, data.len(), "the unit must consume exactly its bytes");
+    }
+
+    /// Executing it yields a row at the address the program sets (0x1000) with
+    /// the line the program advances to (1 + 9 = 10).
+    #[test]
+    fn minimal_unit_yields_the_encoded_row() {
+        let data = minimal_line_program_bytes();
+        let (prog, _) = LineProgram::parse(&data, 0).expect("parse");
+        let matrix = prog.execute();
+
+        let row = matrix
+            .lookup(0x1000)
+            .expect("a row must cover the address set by DW_LNE_set_address");
+        assert_eq!(row.address, 0x1000, "address from DW_LNE_set_address");
+        assert_eq!(row.line, 10, "line 1 advanced by 9");
+    }
+
+    /// An address below the sequence start is not covered by it.
+    #[test]
+    fn address_before_the_sequence_is_not_covered() {
+        let data = minimal_line_program_bytes();
+        let (prog, _) = LineProgram::parse(&data, 0).expect("parse");
+        let matrix = prog.execute();
+        assert!(matrix.lookup(0x0FFF).is_none());
+    }
+
+    /// Truncating the unit must produce an error, not a partial matrix that
+    /// silently reports wrong lines.
+    #[test]
+    fn a_truncated_unit_is_rejected() {
+        let data = minimal_line_program_bytes();
+        let cut = &data[..data.len() / 2];
+        assert!(LineProgram::parse(cut, 0).is_err());
     }
 }

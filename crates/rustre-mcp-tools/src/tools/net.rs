@@ -4,7 +4,7 @@
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
-use crate::{args_to_bytes_named, hex_encode};
+use crate::hex_encode;
 
 pub struct NetIpChecksumTool;
 

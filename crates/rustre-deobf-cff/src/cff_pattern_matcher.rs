@@ -7,7 +7,6 @@
 //! * Indirect dispatcher via lookup table
 //! * Hikari obfuscator specifics
 
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 

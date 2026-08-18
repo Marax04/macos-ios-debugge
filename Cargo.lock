@@ -7984,6 +7984,7 @@ dependencies = [
  "dirs 6.0.0",
  "rayon",
  "rustre-arch",
+ "rustre-arch-registry",
  "rustre-core",
  "rustyline",
  "rustyline-derive",
@@ -8415,6 +8416,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
+ "rustre-arch-cil",
  "rustre-dotnet",
  "rustre-dotnet-metadata",
  "serde",
@@ -9356,6 +9358,7 @@ dependencies = [
  "anyhow",
  "bitflags 2.11.1",
  "petgraph",
+ "rustre-mobile-smali",
  "serde",
  "serde_json",
  "tempfile",
@@ -9370,6 +9373,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitflags 2.11.1",
+ "rustre-loader-android",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

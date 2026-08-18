@@ -581,7 +581,12 @@ const PACKER_SIGS: &[PackerSig] = &[
 /// the magic was found. Callers that need a *verdict* must filter on `strong`;
 /// callers that only want to report what was seen can use everything.
 /// [`detect_packers`] is kept as-is beside this — it answers a different, older
-/// question ("which names appear at all") and its callers still want that.
+/// question ("which names appear at all").
+///
+/// ⚠ That sentence used to end "and its callers still want that". It was
+/// false: `detect_packers` had no caller in the workspace except its two unit
+/// tests, and an `#[allow(dead_code)]` kept the contradiction invisible. The
+/// two production call sites (`:1668`, `:4183`) both use *this* function.
 fn detect_packers_detailed(data: &[u8]) -> Vec<(&'static str, bool, usize)> {
     let mut found: Vec<(&'static str, bool, usize)> = Vec::with_capacity(PACKER_SIGS.len());
     for sig in PACKER_SIGS {
@@ -599,7 +604,12 @@ fn detect_packers_detailed(data: &[u8]) -> Vec<(&'static str, bool, usize)> {
     found
 }
 
-fn detect_packers(data: &[u8]) -> Vec<String> {
+/// Flat list of packer names whose magic appears anywhere in `data`.
+///
+/// Exposed rather than folded into [`detect_packers_detailed`]: the two answer
+/// different questions, and collapsing them would force every caller that only
+/// wants names to also reason about `strong` and the match offset.
+pub fn detect_packers(data: &[u8]) -> Vec<String> {
     let mut found: Vec<String> = Vec::with_capacity(PACKER_SIGS.len());
     for sig in PACKER_SIGS {
         if sig.magic.len() <= data.len()
@@ -6754,7 +6764,7 @@ impl McpToolRegistry {
                 "additionalProperties": false
             }),
             |args| {
-                use std::sync::Arc;
+                
                 use iced_x86::{Decoder, DecoderOptions, Formatter as _, NasmFormatter};
                 use rustre_core::address::Address;
                 use rustre_core::arch::Instruction as CoreInstruction;

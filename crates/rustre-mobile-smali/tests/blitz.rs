@@ -246,7 +246,7 @@ fn method_instr_count_empty() {
 
 #[test]
 fn class_mock_has_expected_shape() {
-    let c = SmaliClass::mock("LMyClass;");
+    let c = SmaliClass::synthetic_fixture("LMyClass;");
     assert_eq!(c.name, "LMyClass;");
     assert_eq!(c.super_class, "Ljava/lang/Object;");
     assert!(c.access.contains(SmaliAccess::PUBLIC));
@@ -257,7 +257,7 @@ fn class_mock_has_expected_shape() {
 
 #[test]
 fn class_find_method_hit_and_miss() {
-    let c = SmaliClass::mock("LX;");
+    let c = SmaliClass::synthetic_fixture("LX;");
     assert!(c.find_method("<init>").is_some());
     assert!(c.find_method("execute").is_some());
     assert!(c.find_method("does_not_exist").is_none());
@@ -265,7 +265,7 @@ fn class_find_method_hit_and_miss() {
 
 #[test]
 fn class_static_methods_filters_correctly() {
-    let c = SmaliClass::mock("LX;");
+    let c = SmaliClass::synthetic_fixture("LX;");
     let statics = c.static_methods();
     assert_eq!(statics.len(), 1);
     assert_eq!(statics[0].name, "execute");
@@ -273,7 +273,7 @@ fn class_static_methods_filters_correctly() {
 
 #[test]
 fn class_static_methods_empty_when_none() {
-    let mut c = SmaliClass::mock("LX;");
+    let mut c = SmaliClass::synthetic_fixture("LX;");
     for m in &mut c.methods {
         m.access.remove(SmaliAccess::STATIC);
     }
@@ -455,7 +455,7 @@ fn print_field_contains_name_and_type() {
 
 #[test]
 fn print_method_contains_method_name() {
-    let c = SmaliClass::mock("LFoo;");
+    let c = SmaliClass::synthetic_fixture("LFoo;");
     let m = c.find_method("execute").unwrap();
     let s = print_method(m);
     assert!(s.contains("execute"));
@@ -463,7 +463,7 @@ fn print_method_contains_method_name() {
 
 #[test]
 fn print_class_contains_class_name() {
-    let c = SmaliClass::mock("LFoo;");
+    let c = SmaliClass::synthetic_fixture("LFoo;");
     let s = print_class(&c);
     assert!(s.contains("LFoo;"));
 }
@@ -507,8 +507,8 @@ fn escape_string_preserves_high_chars() {
 
 #[test]
 fn diff_classes_no_changes() {
-    let a = SmaliClass::mock("LFoo;");
-    let b = SmaliClass::mock("LFoo;");
+    let a = SmaliClass::synthetic_fixture("LFoo;");
+    let b = SmaliClass::synthetic_fixture("LFoo;");
     let d = diff_classes(&a, &b);
     assert!(d.added_methods.is_empty());
     assert!(d.removed_methods.is_empty());
@@ -518,8 +518,8 @@ fn diff_classes_no_changes() {
 
 #[test]
 fn diff_classes_added_method() {
-    let a = SmaliClass::mock("LFoo;");
-    let mut b = SmaliClass::mock("LFoo;");
+    let a = SmaliClass::synthetic_fixture("LFoo;");
+    let mut b = SmaliClass::synthetic_fixture("LFoo;");
     b.methods.push(SmaliMethod {
         name: "newOne".into(),
         class: "LFoo;".into(),
@@ -535,8 +535,8 @@ fn diff_classes_added_method() {
 
 #[test]
 fn diff_classes_removed_method() {
-    let a = SmaliClass::mock("LFoo;");
-    let mut b = SmaliClass::mock("LFoo;");
+    let a = SmaliClass::synthetic_fixture("LFoo;");
+    let mut b = SmaliClass::synthetic_fixture("LFoo;");
     b.methods.retain(|m| m.name != "execute");
     let d = diff_classes(&a, &b);
     assert_eq!(d.removed_methods, vec!["execute".to_string()]);
@@ -544,8 +544,8 @@ fn diff_classes_removed_method() {
 
 #[test]
 fn diff_classes_added_field() {
-    let a = SmaliClass::mock("LFoo;");
-    let mut b = SmaliClass::mock("LFoo;");
+    let a = SmaliClass::synthetic_fixture("LFoo;");
+    let mut b = SmaliClass::synthetic_fixture("LFoo;");
     b.fields.push(SmaliField {
         name: "extra".into(),
         type_desc: "I".into(),

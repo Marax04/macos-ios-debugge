@@ -15,6 +15,12 @@ pub mod lua_debug; // Parses function
 pub mod lua_decompiler_full;
 pub mod lua_function_graph;
 pub mod lua_proto_analyzer;
+pub mod lua_real_api;
+
+pub use lua_real_api::{
+    LUAJIT_MAGIC, SUPPORTED_VERSION_BYTES, all_strings_from_chunk_bytes, detect_chunk_version,
+    disassemble_chunk_bytes, parse_bytecode_strict, parse_chunk_strict,
+};
 pub mod lua_string_extractor;
 pub mod lua_version_detector;
 pub mod luajit_loader;
@@ -451,6 +457,22 @@ impl LuaHeader {
     pub fn is_official_format(&self) -> bool {
         self.format == 0
     }
+
+    /// Width in bytes of the `size_t` used for string lengths in the Lua
+    /// 5.1/5.2 dump format.
+    ///
+    /// `luac` writes string lengths with `sizeof(size_t)`, which is the same
+    /// field the header records as the pointer size — not `sizeof(int)`. A
+    /// 64-bit `luac` therefore emits 8-byte lengths while `int_size` stays 4.
+    /// Falls back to the pointer width recorded in the header, or 8 when the
+    /// header records an implausible value.
+    #[must_use]
+    pub fn size_t_size_51(&self) -> u8 {
+        match self.ptr_size {
+            1 | 2 | 4 | 8 => self.ptr_size,
+            _ => 8,
+        }
+    }
 }
 
 impl fmt::Display for LuaHeader {
@@ -884,9 +906,12 @@ impl LuaProto {
 
     /// Parse a Lua 5.1/5.2 function prototype from `reader`.
     fn parse_51_52(r: &mut Reader<'_>, hdr: &LuaHeader) -> Result<Self, LuaLoaderError> {
-        let name = r.read_lua_string(hdr.int_size)?;
+        let name = r.read_lua_string(hdr.size_t_size_51())?;
         let first_line = r.read_sized_int(hdr.int_size)? as u32;
         let last_line = r.read_sized_int(hdr.int_size)? as u32;
+        // luac 5.1/5.2 dumps `nups` immediately before `numparams`; reading
+        // numparams here would shift every subsequent field by one byte.
+        let num_upvalues = r.read_u8()?;
         let num_params = r.read_u8()?;
         let is_vararg = r.read_u8()? != 0;
         let max_stack = r.read_u8()?;
@@ -917,7 +942,7 @@ impl LuaProto {
                 }
                 4 | 5 => {
                     // Short or long string
-                    let s = r.read_lua_string(hdr.int_size)?.unwrap_or_default();
+                    let s = r.read_lua_string(hdr.size_t_size_51())?.unwrap_or_default();
                     if tag == 5 {
                         LuaConst::LongStr(s)
                     } else {
@@ -948,7 +973,7 @@ impl LuaProto {
         let loc_count = r.read_sized_int(hdr.int_size)? as usize;
         let mut locals = Vec::with_capacity(loc_count.min(r.remaining()));
         for _ in 0..loc_count {
-            let lname = r.read_lua_string(hdr.int_size)?.unwrap_or_default();
+            let lname = r.read_lua_string(hdr.size_t_size_51())?.unwrap_or_default();
             let start_pc = r.read_sized_int(hdr.int_size)? as u32;
             let end_pc = r.read_sized_int(hdr.int_size)? as u32;
             locals.push(LuaLocalVar {
@@ -963,11 +988,21 @@ impl LuaProto {
         let mut upvalues =
             Vec::with_capacity(uv_count.min(r.remaining() / usize::from(hdr.int_size).max(1)));
         for _ in 0..uv_count {
-            let uv_name = r.read_lua_string(hdr.int_size)?;
+            let uv_name = r.read_lua_string(hdr.size_t_size_51())?;
             upvalues.push(LuaUpvalue {
                 in_stack: false,
                 idx: 0,
                 name: uv_name,
+            });
+        }
+        // Debug info may have been stripped, in which case the name list is
+        // empty while `nups` still records how many upvalues exist. Record the
+        // missing ones with no name rather than losing them.
+        while upvalues.len() < usize::from(num_upvalues) {
+            upvalues.push(LuaUpvalue {
+                in_stack: false,
+                idx: upvalues.len() as u8,
+                name: None,
             });
         }
 
@@ -2917,9 +2952,12 @@ mod tests {
         // inst_count=0, kst_count=0, proto_count=0, li_count=0, loc_count=0, uv_count=0
         let mut buf: Vec<u8> = Vec::new();
         let push_u32 = |buf: &mut Vec<u8>, v: u32| buf.extend_from_slice(&v.to_le_bytes());
-        push_u32(&mut buf, 0); // name len = 0
+        // name length is a size_t in the 5.1 dump format; parse_proto_51
+        // synthesises an 8-byte pointer size, so the length is 8 bytes wide.
+        buf.extend_from_slice(&0u64.to_le_bytes()); // name len = 0
         push_u32(&mut buf, 0); // first_line
         push_u32(&mut buf, 10); // last_line
+        buf.push(0); // nups
         buf.push(0); // num_params
         buf.push(1); // is_vararg
         buf.push(2); // max_stack

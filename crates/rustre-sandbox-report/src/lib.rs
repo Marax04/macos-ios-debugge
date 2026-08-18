@@ -164,17 +164,118 @@ impl Ioc {
 
 // â"€â"€â"€ IocSet â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
+/// Where the content of a report or IOC set came from.
+///
+/// A report is a *rendering* of observations. The renderer cannot tell whether
+/// the observations it was handed are real, so the distinction travels with the
+/// data and is serialised alongside it: any consumer - including an MCP client
+/// that never sees this source - can check [`ObservationProvenance::is_observed`]
+/// before treating a verdict as a statement about a real sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ObservationProvenance {
+    /// Produced from observations of a real sandbox run.
+    #[default]
+    Observed,
+    /// Hand-written sample data used to exercise the renderers.
+    ///
+    /// Never a statement about any real sample. Renderers label it explicitly.
+    SyntheticFixture,
+}
+
+impl ObservationProvenance {
+    /// `true` when the data describes a real run.
+    #[must_use]
+    pub const fn is_observed(self) -> bool {
+        matches!(self, Self::Observed)
+    }
+
+    /// A one-line banner naming the provenance, for inclusion in rendered
+    /// output. Empty for observed data, which needs no disclaimer.
+    #[must_use]
+    pub const fn banner(self) -> &'static str {
+        match self {
+            Self::Observed => "",
+            Self::SyntheticFixture => {
+                "SYNTHETIC FIXTURE - sample data used to exercise the renderer. This is NOT an observation of any real sample and must not be read as a verdict."
+            }
+        }
+    }
+}
+
+impl fmt::Display for ObservationProvenance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Observed => write!(f, "observed"),
+            Self::SyntheticFixture => write!(f, "synthetic-fixture"),
+        }
+    }
+}
+
+/// Default used when deserialising data written before provenance was tracked.
+const fn default_observed() -> ObservationProvenance {
+    ObservationProvenance::Observed
+}
+
+/// Prepend the provenance banner to a Markdown rendering.
+///
+/// Emits nothing for observed data, so a real report is unchanged; a fixture is
+/// labelled in the output itself, where the reader will see it.
+fn push_provenance_markdown(out: &mut String, provenance: ObservationProvenance) {
+    let banner = provenance.banner();
+    if !banner.is_empty() {
+        let _ = write!(out, "> **{banner}**\n\n");
+    }
+}
+
+/// The provenance banner as an HTML block, or the empty string when observed.
+#[must_use]
+fn provenance_html(provenance: ObservationProvenance) -> String {
+    let banner = provenance.banner();
+    if banner.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"provenance-fixture\" style=\"border:2px solid #b00;background:#fee;color:#900;padding:10px;margin:10px 0;font-weight:bold\">{}</div>",
+            html_escape(banner)
+        )
+    }
+}
+
 /// A collection of IOCs extracted from a sandbox run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IocSet {
     pub iocs: Vec<Ioc>,
+    /// Whether these IOCs were observed or are sample data.
+    #[serde(default = "default_observed")]
+    pub provenance: ObservationProvenance,
 }
 
 impl IocSet {
     /// Create an empty IOC set.
     #[must_use]
     pub const fn new() -> Self {
-        Self { iocs: vec![] }
+        Self {
+            iocs: vec![],
+            provenance: ObservationProvenance::Observed,
+        }
+    }
+
+    /// Build a set from IOCs a caller actually observed.
+    ///
+    /// This is the real-input entry point the renderers are meant to be fed:
+    /// whatever the caller collected is what gets rendered.
+    #[must_use]
+    pub const fn from_observations(iocs: Vec<Ioc>) -> Self {
+        Self {
+            iocs,
+            provenance: ObservationProvenance::Observed,
+        }
+    }
+
+    /// `true` when this set is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, ObservationProvenance::SyntheticFixture)
     }
 
     /// Add an IOC.
@@ -219,10 +320,15 @@ impl IocSet {
         self.iocs.is_empty()
     }
 
-    /// Create a mock IOC set for testing.
+    /// Sample IOC set used by this crate's own tests.
+    ///
+    /// **Not an observation.** The returned set is tagged
+    /// [`ObservationProvenance::SyntheticFixture`]; renderers label it as such.
+    /// For real data use [`IocSet::from_observations`].
     #[must_use]
     pub fn mock() -> Self {
         let mut set = Self::new();
+        set.provenance = ObservationProvenance::SyntheticFixture;
         set.add(Ioc::new(IocKind::Ip, "185.220.101.1", 95, "C2 beacon"));
         set.add(Ioc::new(IocKind::Domain, "c2server.evil", 90, "DNS query"));
         set.add(Ioc::new(
@@ -981,6 +1087,7 @@ impl ReportRenderer {
     pub fn render_markdown(&self, report: &SandboxReport) -> String {
         let mut out = String::new();
 
+        push_provenance_markdown(&mut out, report.provenance);
         let _ = write!(out, "# Sandbox Report: {}\n\n", report.sample);
         let _ = write!(out, "**SHA-256:** `{}`\n\n", report.sha256);
         let _ = write!(
@@ -1042,6 +1149,7 @@ impl ReportRenderer {
     /// Render the report as an HTML document.
     #[must_use]
     pub fn render_html(&self, report: &SandboxReport) -> String {
+        let provenance_banner = provenance_html(report.provenance);
         let verdict_class = match report.verdict {
             Verdict::Clean => "verdict-clean",
             Verdict::Low => "verdict-low",
@@ -1101,6 +1209,7 @@ th {{ background: #f8f9fa; }}
 </style>
 </head>
 <body>
+{provenance_banner}
 <h1>Sandbox Report: {sample}</h1>
 <p><strong>SHA-256:</strong> <code>{sha}</code></p>
 <p><strong>Verdict:</strong> <span class="{vc}">{verdict}</span> (score: {score})</p>
@@ -1160,6 +1269,9 @@ pub struct SandboxReport {
     pub sections: Vec<ReportSection>,
     pub family: String,
     pub tags: Vec<String>,
+    /// Whether this report renders observations or sample data.
+    #[serde(default = "default_observed")]
+    pub provenance: ObservationProvenance,
 }
 
 impl SandboxReport {
@@ -1180,7 +1292,36 @@ impl SandboxReport {
             sections: vec![],
             family: String::new(),
             tags: vec![],
+            provenance: ObservationProvenance::Observed,
         }
+    }
+
+    /// Build a report from observations a caller actually made.
+    ///
+    /// The renderers (`to_markdown`, `to_html`, `SandboxReportBuilder::build_json`)
+    /// render exactly what is passed here, so the output is real whenever the
+    /// caller supplies real observations.
+    #[must_use]
+    pub fn from_observations(
+        sample: impl Into<String>,
+        sha256: impl Into<String>,
+        analysis_ms: u64,
+        indicators: Vec<Indicator>,
+        behaviors: Vec<Behavior>,
+        iocs: IocSet,
+    ) -> Self {
+        let mut r = Self::new(sample, sha256);
+        r.analysis_ms = analysis_ms;
+        r.indicators = indicators;
+        r.behaviors = behaviors;
+        r.iocs = iocs;
+        r
+    }
+
+    /// `true` when this report is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, ObservationProvenance::SyntheticFixture)
     }
 
     /// Add an indicator.
@@ -1269,10 +1410,16 @@ impl SandboxReport {
         ReportRenderer::new().render_html(self)
     }
 
-    /// Create a mock report for testing.
+    /// Sample report used by this crate's own tests and doc examples.
+    ///
+    /// **Not an observation.** The returned report is tagged
+    /// [`ObservationProvenance::SyntheticFixture`] and every renderer in this
+    /// crate prints that fact, so it cannot be mistaken for the verdict on a
+    /// real sample. For real data use [`SandboxReport::from_observations`].
     #[must_use]
     pub fn mock() -> Self {
         let mut r = Self::new("malware.exe", "deadbeef0123456789abcdef0123456789abcdef");
+        r.provenance = ObservationProvenance::SyntheticFixture;
         r.analysis_ms = 30_000;
 
         r.add_indicator(
@@ -1421,6 +1568,9 @@ impl ReportFormat {
 /// Flat collection of IOC strings passed to the report builder.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IocCollection {
+    /// Whether these strings were observed or are sample data.
+    #[serde(default = "default_observed")]
+    pub provenance: ObservationProvenance,
     pub ips: Vec<String>,
     pub domains: Vec<String>,
     pub urls: Vec<String>,
@@ -1520,10 +1670,43 @@ impl IocCollection {
         rows
     }
 
-    /// Construct a populated mock IOC collection for tests.
+    /// Project a real [`IocSet`] into the flat collection the builder consumes.
+    ///
+    /// Carries the source set's provenance across unchanged, so a real set stays
+    /// real and a fixture stays labelled.
+    #[must_use]
+    pub fn from_ioc_set(set: &IocSet) -> Self {
+        let mut c = Self::new();
+        c.provenance = set.provenance;
+        for ioc in &set.iocs {
+            let v = ioc.value.clone();
+            match ioc.kind {
+                IocKind::Ip => c.ips.push(v),
+                IocKind::Domain => c.domains.push(v),
+                IocKind::Url => c.urls.push(v),
+                IocKind::FilePath => c.file_paths.push(v),
+                IocKind::RegistryKey => c.registry_keys.push(v),
+                IocKind::Mutex => c.mutexes.push(v),
+                IocKind::FileHash => c.hashes.push(v),
+                _ => {}
+            }
+        }
+        c
+    }
+
+    /// `true` when this collection is sample data rather than an observation.
+    #[must_use]
+    pub const fn is_synthetic(&self) -> bool {
+        matches!(self.provenance, ObservationProvenance::SyntheticFixture)
+    }
+
+    /// Sample IOC collection used by this crate's own tests.
+    ///
+    /// **Not an observation.** Tagged [`ObservationProvenance::SyntheticFixture`].
     #[must_use]
     pub fn mock() -> Self {
         Self {
+            provenance: ObservationProvenance::SyntheticFixture,
             ips: vec!["185.220.101.1".to_string(), "10.0.0.1".to_string()],
             domains: vec!["c2server.evil".to_string()],
             urls: vec!["https://c2server.evil/beacon".to_string()],
@@ -2348,6 +2531,7 @@ impl<'a> SandboxReportRenderer<'a> {
     #[must_use]
     pub fn render_html(&self, report: &SandboxReport) -> String {
         let r = report;
+        let provenance_banner = provenance_html(r.provenance);
         let verdict_class = match r.verdict {
             Verdict::Malicious => "verdict-malicious",
             Verdict::Suspicious => "verdict-suspicious",
@@ -2358,13 +2542,18 @@ impl<'a> SandboxReportRenderer<'a> {
         let indicator_rows = Self::render_html_indicator_rows(r);
         let behavior_rows = Self::render_html_behavior_rows(r);
         let tags_html = Self::render_html_tags(r);
-        Self::assemble_renderer_html(
+        let html = Self::assemble_renderer_html(
             r,
             verdict_class,
             &indicator_rows,
             &behavior_rows,
             &tags_html,
-        )
+        );
+        if provenance_banner.is_empty() {
+            html
+        } else {
+            html.replacen("<body>", &format!("<body>\n{provenance_banner}"), 1)
+        }
     }
 
     fn render_html_indicator_rows(r: &SandboxReport) -> String {
@@ -2513,6 +2702,7 @@ tr:nth-child(even){{background:#eee}}
         let r = report;
         let mut out = String::new();
 
+        push_provenance_markdown(&mut out, r.provenance);
         out.push_str("# Sandbox Analysis Report\n\n");
 
         // Summary table.
@@ -3852,3 +4042,126 @@ mod tests {
     }
 }
 
+
+// ─── Provenance tests ─────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod provenance_tests {
+    use super::*;
+
+    #[test]
+    fn test_new_report_is_observed() {
+        let r = SandboxReport::new("s.exe", "aa");
+        assert!(r.provenance.is_observed());
+        assert!(!r.is_synthetic());
+    }
+
+    #[test]
+    fn test_mock_report_is_labelled_synthetic() {
+        let r = SandboxReport::mock();
+        assert!(r.is_synthetic());
+        assert!(!r.provenance.is_observed());
+    }
+
+    #[test]
+    fn test_mock_iocset_is_labelled_synthetic() {
+        assert!(IocSet::mock().is_synthetic());
+        assert!(!IocSet::new().is_synthetic());
+        assert!(IocCollection::mock().is_synthetic());
+    }
+
+    #[test]
+    fn test_markdown_of_fixture_carries_banner() {
+        let md = SandboxReport::mock().to_markdown();
+        assert!(md.contains("SYNTHETIC FIXTURE"), "banner missing from: {md:.200}");
+    }
+
+    #[test]
+    fn test_markdown_of_observed_report_has_no_banner() {
+        let md = SandboxReport::new("s.exe", "aa").to_markdown();
+        assert!(!md.contains("SYNTHETIC FIXTURE"));
+    }
+
+    #[test]
+    fn test_html_of_fixture_carries_banner_inside_body() {
+        let html = SandboxReport::mock().to_html();
+        assert!(html.contains("SYNTHETIC FIXTURE"));
+        let body = html.find("<body>").expect("body tag");
+        let banner = html.find("SYNTHETIC FIXTURE").expect("banner");
+        assert!(banner > body, "banner must render inside <body>");
+    }
+
+    #[test]
+    fn test_html_of_observed_report_has_no_banner() {
+        assert!(!SandboxReport::new("s.exe", "aa").to_html().contains("SYNTHETIC FIXTURE"));
+    }
+
+    #[test]
+    fn test_from_observations_renders_exactly_what_it_was_given() {
+        let iocs = IocSet::from_observations(vec![Ioc::new(
+            IocKind::Ip,
+            "203.0.113.7",
+            50,
+            "observed connect",
+        )]);
+        let ind = Indicator::new(
+            "Observed write",
+            "wrote to disk",
+            Severity::Low,
+            IndicatorCategory::Dropper,
+        );
+        let r = SandboxReport::from_observations(
+            "real.exe",
+            "cafe",
+            42,
+            vec![ind],
+            vec![],
+            iocs,
+        );
+        assert!(r.provenance.is_observed());
+        assert_eq!(r.analysis_ms, 42);
+        assert_eq!(r.indicators.len(), 1);
+        assert_eq!(r.iocs.len(), 1);
+        let md = r.to_markdown();
+        assert!(md.contains("real.exe"));
+        assert!(md.contains("Observed write"));
+        assert!(!md.contains("SYNTHETIC FIXTURE"));
+    }
+
+    #[test]
+    fn test_ioc_collection_from_ioc_set_carries_provenance_and_values() {
+        let c = IocCollection::from_ioc_set(&IocSet::mock());
+        assert!(c.is_synthetic());
+        assert!(c.ips.contains(&"185.220.101.1".to_string()));
+
+        let real = IocSet::from_observations(vec![Ioc::new(
+            IocKind::Domain,
+            "example.test",
+            10,
+            "dns",
+        )]);
+        let c2 = IocCollection::from_ioc_set(&real);
+        assert!(!c2.is_synthetic());
+        assert_eq!(c2.domains, vec!["example.test".to_string()]);
+    }
+
+    #[test]
+    fn test_provenance_survives_json_round_trip() {
+        let json = serde_json::to_string(&SandboxReport::mock()).unwrap();
+        assert!(json.contains("SyntheticFixture"));
+        let back: SandboxReport = serde_json::from_str(&json).unwrap();
+        assert!(back.is_synthetic());
+    }
+
+    #[test]
+    fn test_legacy_json_without_provenance_defaults_to_observed() {
+        let set: IocSet = serde_json::from_str(r#"{"iocs":[]}"#).unwrap();
+        assert!(set.provenance.is_observed());
+    }
+
+    #[test]
+    fn test_observed_banner_is_empty() {
+        assert_eq!(ObservationProvenance::Observed.banner(), "");
+        assert!(!ObservationProvenance::SyntheticFixture.banner().is_empty());
+    }
+}

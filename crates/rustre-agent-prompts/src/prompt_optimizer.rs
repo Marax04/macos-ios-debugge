@@ -4,7 +4,6 @@
 //! [`TokenReduction`], [`ContextualExpansion`], [`FewShotSelector`],
 //! [`PromptChain`], and [`OptimizationReport`].
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

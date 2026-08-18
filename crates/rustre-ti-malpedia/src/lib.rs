@@ -59,6 +59,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub enum MalpediaClientError {
     /// Authentication required but no key provided.
     NotAuthenticated,
+    /// The answer can only come from the live Malpedia service (or a local
+    /// database supplied by the caller), and neither was available.
+    ///
+    /// This is returned INSTEAD of an invented family / sample / actor record.
+    NetworkLookupRequired(String),
     /// The requested family was not found.
     FamilyNotFound(String),
     /// The requested actor was not found.
@@ -83,6 +88,10 @@ impl std::fmt::Display for MalpediaClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotAuthenticated => write!(f, "Malpedia API key required"),
+            Self::NetworkLookupRequired(what) => write!(
+                f,
+                "network lookup required for {what}: no Malpedia API key and no local                  database is configured, so no record was produced"
+            ),
             Self::FamilyNotFound(n) => write!(f, "family not found: {n}"),
             Self::ActorNotFound(n) => write!(f, "actor not found: {n}"),
             Self::SampleNotFound(h) => write!(f, "sample not found: {h}"),
@@ -173,35 +182,18 @@ impl MalpediaStats {
         Self::default()
     }
 
-    /// Mock stats for testing.
+    /// An EMPTY statistics snapshot — not a lookup.
+    ///
+    /// See the body: no corpus figures are invented here.
     #[must_use]
     pub fn mock() -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let mut platform_breakdown = HashMap::new();
-        platform_breakdown.insert("win".to_string(), 1823);
-        platform_breakdown.insert("linux".to_string(), 312);
-        platform_breakdown.insert("android".to_string(), 89);
-        platform_breakdown.insert("osx".to_string(), 45);
-
-        let mut actor_country_breakdown = HashMap::new();
-        actor_country_breakdown.insert("RU".to_string(), 28);
-        actor_country_breakdown.insert("CN".to_string(), 25);
-        actor_country_breakdown.insert("KP".to_string(), 8);
-        actor_country_breakdown.insert("IR".to_string(), 12);
-        actor_country_breakdown.insert("US".to_string(), 4);
-
-        Self {
-            family_count: 2269,
-            actor_count: 80,
-            sample_count: 12543,
-            yara_rule_count: 4891,
-            platform_breakdown,
-            actor_country_breakdown,
-            last_updated: now,
-        }
+        // Malpedia corpus statistics are a property of the live service.  This
+        // function has no network access, so it reports an EMPTY snapshot
+        // (every counter zero, `last_updated` zero) rather than the invented
+        // 2269 families / 80 actors / 12543 samples it used to return.
+        // `MalpediaApiClient::get_stats` now returns
+        // `MalpediaClientError::NetworkLookupRequired` for the same reason.
+        Self::default()
     }
 }
 
@@ -978,7 +970,52 @@ impl MalpediaLocalDb {
             .cloned()
     }
 
-    /// Populate with mock data for testing.
+    /// Compute corpus statistics from the records actually held here.
+    ///
+    /// Every counter is a real count over caller-supplied data — nothing is
+    /// invented.  A database the caller has not populated yields zeros.
+    ///
+    /// # Panics
+    /// Panics if an internal mutex is poisoned.
+    #[must_use]
+    pub fn compute_stats(&self) -> MalpediaStats {
+        let families = self.families.lock().unwrap();
+        let actors = self.actors.lock().unwrap();
+        let samples = self.samples.lock().unwrap();
+        let yara = self.yara_rules.lock().unwrap();
+
+        let mut platform_breakdown: HashMap<String, u64> = HashMap::new();
+        let mut yara_rule_count = yara.len() as u64;
+        for f in families.values() {
+            if !f.platform.is_empty() {
+                *platform_breakdown.entry(f.platform.clone()).or_insert(0) += 1;
+            }
+            yara_rule_count += f.yara_rules.len() as u64;
+        }
+        let mut actor_country_breakdown: HashMap<String, u64> = HashMap::new();
+        for a in actors.values() {
+            if let Some(ref c) = a.country {
+                *actor_country_breakdown.entry(c.clone()).or_insert(0) += 1;
+            }
+        }
+        MalpediaStats {
+            family_count: families.len() as u64,
+            actor_count: actors.len() as u64,
+            sample_count: samples.len() as u64,
+            yara_rule_count,
+            platform_breakdown,
+            actor_country_breakdown,
+            last_updated: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        }
+    }
+
+    /// Populate with a small set of TEST FIXTURE records.
+    ///
+    /// These are hand-written examples for unit tests, NOT a Malpedia
+    /// download.  Do not serve them to a user as a lookup result.
     pub fn populate_mock_data(&self) {
         // Families
         self.insert_family(MalpediaFamilySpec {
@@ -1115,23 +1152,33 @@ impl MalpediaApiClient {
         self
     }
 
-    /// Build a mock Malpedia family response for the given name.
-    #[must_use] 
+    /// Build an EMPTY [`MalpediaFamilySpec`] skeleton for the given name.
+    ///
+    /// This is NOT a lookup and asserts nothing about the family: only the
+    /// name, the normalised identifier and the canonical Malpedia URL — all of
+    /// which are derived from the argument — are filled in.  Every field that
+    /// would be a claim about the malware (type, platform, aliases, YARA
+    /// rules, samples, ATT&CK techniques) is left empty.
+    #[must_use]
     pub fn mock_family_response(&self, name: &str) -> MalpediaFamilySpec {
         let normalised = Self::normalize_family_name(name);
         MalpediaFamilySpec {
             name: normalised.clone(),
             common_name: name.to_string(),
-            malware_type: "trojan".to_string(),
-            aliases: vec![format!("{normalised}_alias")],
-            platform: "win".to_string(),
+            malware_type: String::new(),
+            aliases: vec![],
+            platform: normalised
+                .split_once('.')
+                .map_or_else(String::new, |(p, _)| p.to_string()),
             country: None,
-            description: Some(format!("Mock Malpedia entry for {name}")),
-            yara_rules: vec![format!("rule {normalised} {{ condition: false }}")],
-            samples: vec!["e3b0c44298fc1c149afbf4c8996fb924".to_string()],
-            references: vec!["https://malpedia.caad.fkie.fraunhofer.de/".to_string()],
-            attack_techniques: vec!["T1071".to_string()],
-            notes: None,
+            description: None,
+            yara_rules: vec![],
+            samples: vec![],
+            references: vec![],
+            attack_techniques: vec![],
+            notes: Some(
+                "no lookup performed: this record carries no Malpedia data".to_string(),
+            ),
             url: Some(format!(
                 "https://malpedia.caad.fkie.fraunhofer.de/details/{normalised}"
             )),
@@ -1197,8 +1244,9 @@ impl MalpediaApiClient {
         if let Some(ref db) = self.local_db {
             return Ok(db.search_families(query));
         }
-        // Mock: return one result
-        Ok(vec![self.mock_family_response(query)])
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "family search for '{query}'"
+        )))
     }
 
     /// Get a specific family by its canonical name.
@@ -1211,7 +1259,9 @@ impl MalpediaApiClient {
                 .get_family(name)
                 .ok_or_else(|| MalpediaClientError::FamilyNotFound(name.to_string()));
         }
-        Ok(self.mock_family_response(name))
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "family '{name}'"
+        )))
     }
 
     /// List all families (paginated).
@@ -1233,12 +1283,9 @@ impl MalpediaApiClient {
                 .take(end.saturating_sub(start))
                 .collect());
         }
-        // Mock: return a few families
-        Ok(vec![
-            self.mock_family_response("emotet"),
-            self.mock_family_response("trickbot"),
-            self.mock_family_response("wannacry"),
-        ])
+        Err(MalpediaClientError::NetworkLookupRequired(
+            "family listing".to_string(),
+        ))
     }
 
     /// Get a sample record by its SHA-256.
@@ -1254,11 +1301,9 @@ impl MalpediaApiClient {
                 .get_sample(sha256)
                 .ok_or_else(|| MalpediaClientError::SampleNotFound(sha256.to_string()));
         }
-        // Mock
-        Ok(MalpediaSampleSpec::new(
-            sha256.to_string(),
-            "unknown".to_string(),
-        ))
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "sample {sha256}"
+        )))
     }
 
     /// Get an actor by name.
@@ -1271,7 +1316,9 @@ impl MalpediaApiClient {
                 .get_actor(name)
                 .ok_or_else(|| MalpediaClientError::ActorNotFound(name.to_string()));
         }
-        Ok(MalpediaActorSpec::new(name.to_string()))
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "actor '{name}'"
+        )))
     }
 
     /// List all actors.
@@ -1282,10 +1329,9 @@ impl MalpediaApiClient {
         if let Some(ref db) = self.local_db {
             return Ok(db.list_actors());
         }
-        Ok(vec![
-            MalpediaActorSpec::new("APT28".to_string()),
-            MalpediaActorSpec::new("Lazarus".to_string()),
-        ])
+        Err(MalpediaClientError::NetworkLookupRequired(
+            "actor listing".to_string(),
+        ))
     }
 
     /// Search by file hash (SHA-256, SHA-1, or MD5).
@@ -1299,15 +1345,12 @@ impl MalpediaApiClient {
         if let Some(ref db) = self.local_db {
             return Ok(db.find_by_hash(hash));
         }
-        // Mock: hashes containing "evil" are known
-        if hash.contains("evil") || hash.contains("bad") {
-            Ok(Some(MalpediaSampleSpec::new(
-                hash.to_string(),
-                "win.mock_family".to_string(),
-            )))
-        } else {
-            Ok(None)
-        }
+        // Without a local corpus this is a remote lookup.  Returning `Ok(None)`
+        // would assert "this hash is unknown to Malpedia", which is a claim we
+        // cannot make offline, so an error is returned instead.
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "hash {hash}"
+        )))
     }
 
     /// Get YARA rules for a specific family.
@@ -1318,11 +1361,26 @@ impl MalpediaApiClient {
         &self,
         family: &str,
     ) -> Result<Vec<MalpediaYaraRule>, MalpediaClientError> {
-        // Mock: generate one rule per family
-        Ok(vec![MalpediaYaraRule::new(
-            format!("detect_{}", Self::normalize_family_name(family)),
-            family.to_string(),
-        )])
+        if let Some(ref db) = self.local_db
+            && let Some(f) = db.get_family(&Self::normalize_family_name(family))
+        {
+            return Ok(f
+                .yara_rules
+                .iter()
+                .enumerate()
+                .map(|(i, src)| {
+                    let mut r = MalpediaYaraRule::new(
+                        format!("{}_{i}", Self::normalize_family_name(family)),
+                        family.to_string(),
+                    );
+                    r.description = src.clone();
+                    r
+                })
+                .collect());
+        }
+        Err(MalpediaClientError::NetworkLookupRequired(format!(
+            "YARA rules for family '{family}'"
+        )))
     }
 
     /// Get aggregated statistics.
@@ -1346,16 +1404,22 @@ impl MalpediaApiClient {
                 }
             }
         }
-        let stats = MalpediaStats::mock();
-        {
-            let mut guard = self.stats_cache.lock().unwrap();
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            *guard = Some((stats.clone(), now));
+        // Corpus-wide counters are only knowable from the live service.
+        if let Some(ref db) = self.local_db {
+            let stats = db.compute_stats();
+            {
+                let mut guard = self.stats_cache.lock().unwrap();
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                *guard = Some((stats.clone(), now));
+            }
+            return Ok(stats);
         }
-        Ok(stats)
+        Err(MalpediaClientError::NetworkLookupRequired(
+            "corpus statistics".to_string(),
+        ))
     }
 
     /// Execute a structured search query.
@@ -1403,16 +1467,19 @@ impl TiProvider for MalpediaApiClient {
     }
 
     async fn lookup(&self, ioc: &IoC) -> Result<TiResult, TiError> {
+        // A verdict must come from the corpus, never from the shape of the
+        // string being queried.
+        let sample = self
+            .search_by_hash(&ioc.value)
+            .map_err(|e| TiError::Other(e.to_string()))?;
         let mut result = TiResult::new(ioc.clone());
         if ioc.is_hash() {
-            let malicious = ioc.value.contains("evil")
-                || ioc.value.contains("malware")
-                || ioc.value.contains("bad");
+            let malicious = sample.is_some();
             result.verdicts.push(Verdict {
                 malicious,
-                confidence: if malicious { 75 } else { 15 },
+                confidence: if malicious { 90 } else { 0 },
                 tags: if malicious {
-                    vec!["hash-match".to_string()]
+                    vec!["malpedia-corpus-hit".to_string()]
                 } else {
                     vec![]
                 },
@@ -1420,11 +1487,17 @@ impl TiProvider for MalpediaApiClient {
                 positive_count: u32::from(malicious),
                 first_seen: None,
                 last_seen: None,
-                description: Some(format!("Malpedia hash lookup for {}", ioc.value)),
+                description: Some(if malicious {
+                    format!("{} is present in the Malpedia corpus", ioc.value)
+                } else {
+                    format!("{} is absent from the Malpedia corpus", ioc.value)
+                }),
                 provider: "malpedia".to_string(),
             });
-            if malicious {
-                result.malware_families.push("MockFamily".to_string());
+            if let Some(sp) = sample
+                && !sp.family.is_empty()
+            {
+                result.malware_families.push(sp.family);
             }
         }
         Ok(result)
@@ -1620,61 +1693,118 @@ mod tests {
         assert!(anon_client().authenticate().is_err());
     }
 
-    #[test]
-    fn test_get_family_mock() {
-        let f = client().get_family("emotet").unwrap();
-        assert_eq!(f.common_name, "emotet");
+    // ---- Honesty: with no local corpus, nothing is invented ----
+
+    fn db_client() -> MalpediaApiClient {
+        let db = MalpediaLocalDb::new();
+        db.populate_mock_data();
+        MalpediaApiClient::new(Some("k".to_string())).with_local_db(db)
     }
 
     #[test]
-    fn test_list_families_mock() {
-        let families = client().list_families(None, None).unwrap();
-        assert!(!families.is_empty());
+    fn test_get_family_without_corpus_errors() {
+        assert!(matches!(
+            client().get_family("emotet"),
+            Err(MalpediaClientError::NetworkLookupRequired(_))
+        ));
     }
 
     #[test]
-    fn test_get_stats() {
-        let stats = client().get_stats().unwrap();
+    fn test_get_family_from_corpus_works() {
+        let f = db_client().get_family("win.emotet").unwrap();
+        assert_eq!(f.common_name, "Emotet");
+    }
+
+    #[test]
+    fn test_list_families_without_corpus_errors() {
+        assert!(client().list_families(None, None).is_err());
+    }
+
+    #[test]
+    fn test_list_families_from_corpus_works() {
+        assert!(!db_client().list_families(None, None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_get_stats_without_corpus_errors() {
+        assert!(matches!(
+            client().get_stats(),
+            Err(MalpediaClientError::NetworkLookupRequired(_))
+        ));
+    }
+
+    #[test]
+    fn test_get_stats_from_corpus_counts_real_records() {
+        let c = db_client();
+        let stats = c.get_stats().unwrap();
+        let listed = c.list_families(None, None).unwrap().len() as u64;
+        assert_eq!(stats.family_count, listed);
         assert!(stats.family_count > 0);
     }
 
     #[test]
-    fn test_search_by_hash_known() {
-        let result = client().search_by_hash("evil_hash").unwrap();
-        assert!(result.is_some());
+    fn test_search_by_hash_without_corpus_errors() {
+        // The old code answered "known" for anything containing "evil" and
+        // "unknown" for everything else.  Both were inventions.
+        assert!(client().search_by_hash("evil_hash").is_err());
+        assert!(client().search_by_hash("safe_hash").is_err());
     }
 
     #[test]
-    fn test_search_by_hash_unknown() {
-        let result = client().search_by_hash("safe_hash").unwrap();
-        assert!(result.is_none());
+    fn test_search_by_hash_uses_the_corpus() {
+        let c = db_client();
+        assert!(c.search_by_hash("deadbeef").unwrap().is_some());
+        assert!(c.search_by_hash("evil_hash").unwrap().is_none());
     }
 
     #[test]
-    fn test_get_yara_rules() {
-        let rules = client().get_yara_rules("emotet").unwrap();
-        assert!(!rules.is_empty());
+    fn test_get_yara_rules_without_corpus_errors() {
+        assert!(client().get_yara_rules("emotet").is_err());
+    }
+
+    #[test]
+    fn test_get_yara_rules_come_from_the_corpus() {
+        let rules = db_client().get_yara_rules("win.emotet").unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0].description.contains("rule win_emotet"));
+        // A family the corpus has no rules for yields none, not a made-up one.
+        assert!(db_client().get_yara_rules("win.wannacry").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_mock_family_response_asserts_nothing() {
+        let f = client().mock_family_response("Win Emotet");
+        assert_eq!(f.name, "win_emotet");
+        assert!(f.malware_type.is_empty());
+        assert!(f.aliases.is_empty());
+        assert!(f.yara_rules.is_empty());
+        assert!(f.samples.is_empty());
+        assert!(f.attack_techniques.is_empty());
+        assert!(f.description.is_none());
     }
 
     #[tokio::test]
-    async fn test_lookup_hash_clean() {
+    async fn test_lookup_without_corpus_errors() {
         let ioc = hash_ioc("safe_hash");
-        let result = client().lookup(&ioc).await.unwrap();
-        assert!(!result.is_malicious());
+        let err = client().lookup(&ioc).await.unwrap_err();
+        assert!(err.to_string().contains("network lookup required"));
     }
 
     #[tokio::test]
-    async fn test_lookup_hash_malicious() {
-        let ioc = hash_ioc("evil_hash");
-        let result = client().lookup(&ioc).await.unwrap();
-        assert!(result.is_malicious());
+    async fn test_lookup_uses_the_corpus() {
+        let hit = db_client().lookup(&hash_ioc("deadbeef")).await.unwrap();
+        assert!(hit.is_malicious());
+        assert_eq!(hit.malware_families, vec!["win.emotet".to_string()]);
+
+        let miss = db_client().lookup(&hash_ioc("evil_hash")).await.unwrap();
+        assert!(!miss.is_malicious());
+        assert!(miss.malware_families.is_empty());
     }
 
     #[tokio::test]
-    async fn test_bulk_lookup() {
+    async fn test_bulk_lookup_without_corpus_errors() {
         let iocs = vec![hash_ioc("a"), hash_ioc("b")];
-        let results = client().bulk_lookup(&iocs).await.unwrap();
-        assert_eq!(results.len(), 2);
+        assert!(client().bulk_lookup(&iocs).await.is_err());
     }
 
     // ---- MalpediaLocalDb ----
@@ -1780,11 +1910,25 @@ mod tests {
     // ---- MalpediaStats ----
 
     #[test]
-    fn test_stats_mock() {
+    fn test_stats_mock_is_empty_not_invented() {
         let s = MalpediaStats::mock();
-        assert!(s.family_count > 0);
-        assert!(s.actor_count > 0);
-        assert!(!s.platform_breakdown.is_empty());
+        assert_eq!(s.family_count, 0);
+        assert_eq!(s.actor_count, 0);
+        assert_eq!(s.sample_count, 0);
+        assert_eq!(s.yara_rule_count, 0);
+        assert_eq!(s.last_updated, 0);
+        assert!(s.platform_breakdown.is_empty());
+        assert!(s.actor_country_breakdown.is_empty());
+    }
+
+    #[test]
+    fn test_compute_stats_counts_only_real_records() {
+        let db = MalpediaLocalDb::new();
+        assert_eq!(db.compute_stats().family_count, 0);
+        db.populate_mock_data();
+        let s = db.compute_stats();
+        assert_eq!(s.family_count, db.list_families().len() as u64);
+        assert!(s.platform_breakdown.values().sum::<u64>() <= s.family_count);
     }
 
     // ---- MalpediaSearchQuery ----

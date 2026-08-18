@@ -150,10 +150,32 @@ impl CodeSignature {
             .any(|c| c.subject.contains("iPhone Distribution"))
     }
 
-    /// Return `true` if this is an Ad-Hoc signature (empty cert chain).
+    /// Return `true` if the CodeDirectory carries `CS_ADHOC`.
+    ///
+    /// This used to be `cert_chain.is_empty()`, which conflated "ad-hoc signed"
+    /// with "this build has no X.509 decoder, so no certificates were
+    /// recovered" — two very different statements that happen to look
+    /// identical. `CS_ADHOC` is a real bit in the CodeDirectory read by
+    /// [`codesign_flags_from_macho`].
     #[must_use]
     pub const fn is_adhoc(&self) -> bool {
-        self.cert_chain.is_empty()
+        self.flags & CS_ADHOC != 0
+    }
+
+    /// Whether the leaf certificate was issued by Apple.
+    ///
+    /// # Errors
+    /// Always returns an error today. Answering this question honestly requires
+    /// decoding the CMS blob in the signature and verifying the certificate
+    /// chain up to an Apple root; this workspace has no X.509/ASN.1 decoder and
+    /// no trust store, so there is no evidence from which to answer. The error
+    /// names exactly what is missing rather than reporting a name match as a
+    /// verification result.
+    pub fn apple_leaf_verdict(&self) -> Result<bool, CertVerifyError> {
+        if self.cert_chain.is_empty() {
+            return Err(CertVerifyError::NoCertificateChain);
+        }
+        Err(CertVerifyError::NoX509Verifier)
     }
 
     /// Return the leaf certificate (first in chain).
@@ -185,11 +207,131 @@ pub struct CertInfo {
 }
 
 impl CertInfo {
-    /// Return `true` if the cert is from Apple.
+    /// Return `true` if the already-parsed issuer name contains "Apple".
+    ///
+    /// This is a substring test on a string, not certificate verification: an
+    /// issuer field is attacker-controlled until a chain has been validated.
+    /// Use [`CodeSignature::apple_leaf_verdict`] when you need a verdict; it
+    /// reports why one cannot be produced.
     #[must_use]
     pub fn is_apple_issued(&self) -> bool {
         self.issuer.contains("Apple")
     }
+
+    /// Verified statement that this certificate was issued by Apple.
+    ///
+    /// # Errors
+    /// Always [`CertVerifyError::NoX509Verifier`]: no ASN.1/X.509 decoder and
+    /// no Apple trust anchor exist in this workspace, so no chain can be built
+    /// or checked.
+    pub const fn verify_apple_issued(&self) -> Result<bool, CertVerifyError> {
+        Err(CertVerifyError::NoX509Verifier)
+    }
+}
+
+/// `CS_ADHOC` — the CodeDirectory bit set for an ad-hoc signature.
+pub const CS_ADHOC: u32 = 0x0000_0002;
+
+/// Why a certificate question could not be answered from the available bytes.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum CertVerifyError {
+    /// No X.509/ASN.1 decoder and no trust anchors are available.
+    #[error(
+        "cannot verify certificate issuance: this workspace has no X.509/ASN.1 decoder and no \
+         Apple trust anchor, so no chain can be built or validated from these bytes"
+    )]
+    NoX509Verifier,
+    /// The signature carried no certificates at all.
+    #[error("cannot verify certificate issuance: no certificates were recovered from the signature")]
+    NoCertificateChain,
+}
+
+/// Errors specific to reading a Mach-O code-signature blob.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum CodeSignReadError {
+    /// The bytes are not a 64-bit Mach-O this reader understands.
+    #[error("not a 64-bit Mach-O (magic {0:#010x})")]
+    NotMachO64(u32),
+    /// The Mach-O has no `LC_CODE_SIGNATURE` load command.
+    #[error("no LC_CODE_SIGNATURE load command: the binary is unsigned")]
+    NoCodeSignatureCommand,
+    /// The signature blob is truncated or malformed at the named byte offset.
+    #[error("code signature blob truncated or malformed at offset {0:#x}")]
+    Malformed(usize),
+    /// The `SuperBlob` has no `CSSLOT_CODEDIRECTORY` entry.
+    #[error("code signature SuperBlob has no CodeDirectory slot")]
+    NoCodeDirectory,
+}
+
+/// Read the CodeDirectory `flags` word out of a Mach-O `LC_CODE_SIGNATURE`.
+///
+/// Walks the load commands for `LC_CODE_SIGNATURE` (`0x1D`), then the
+/// big-endian `CSMAGIC_EMBEDDED_SIGNATURE` SuperBlob at `dataoff` for the
+/// `CSSLOT_CODEDIRECTORY` (index type 0) blob, and returns its `flags` field.
+///
+/// # Errors
+/// Returns [`CodeSignReadError`] naming which of those steps failed. It never
+/// substitutes a default value for a word it could not read.
+pub fn codesign_flags_from_macho(exe: &[u8]) -> Result<u32, CodeSignReadError> {
+    fn be_u32(d: &[u8], o: usize) -> Option<u32> {
+        Some(u32::from_be_bytes(d.get(o..o + 4)?.try_into().ok()?))
+    }
+    fn le_u32(d: &[u8], o: usize) -> Option<u32> {
+        Some(u32::from_le_bytes(d.get(o..o + 4)?.try_into().ok()?))
+    }
+
+    let magic = le_u32(exe, 0).ok_or(CodeSignReadError::Malformed(0))?;
+    // Only the 64-bit little-endian layouts iOS actually ships.
+    if magic != 0xFEED_FACF {
+        return Err(CodeSignReadError::NotMachO64(magic));
+    }
+    let ncmds = le_u32(exe, 16).ok_or(CodeSignReadError::Malformed(16))? as usize;
+
+    let mut off = 32usize;
+    let mut sig_range: Option<(usize, usize)> = None;
+    for _ in 0..ncmds {
+        let cmd = le_u32(exe, off).ok_or(CodeSignReadError::Malformed(off))?;
+        let cmdsize = le_u32(exe, off + 4).ok_or(CodeSignReadError::Malformed(off + 4))? as usize;
+        if cmdsize < 8 {
+            return Err(CodeSignReadError::Malformed(off + 4));
+        }
+        if cmd == 0x1D {
+            let dataoff =
+                le_u32(exe, off + 8).ok_or(CodeSignReadError::Malformed(off + 8))? as usize;
+            let datasize =
+                le_u32(exe, off + 12).ok_or(CodeSignReadError::Malformed(off + 12))? as usize;
+            sig_range = Some((dataoff, datasize));
+            break;
+        }
+        off += cmdsize;
+    }
+
+    let (dataoff, _datasize) = sig_range.ok_or(CodeSignReadError::NoCodeSignatureCommand)?;
+
+    // SuperBlob: magic, length, count, then (type, offset) index entries.
+    let sb_magic = be_u32(exe, dataoff).ok_or(CodeSignReadError::Malformed(dataoff))?;
+    if sb_magic != 0xFADE_0CC0 {
+        return Err(CodeSignReadError::Malformed(dataoff));
+    }
+    let count = be_u32(exe, dataoff + 8).ok_or(CodeSignReadError::Malformed(dataoff + 8))? as usize;
+
+    for i in 0..count {
+        let e = dataoff + 12 + i * 8;
+        let slot_type = be_u32(exe, e).ok_or(CodeSignReadError::Malformed(e))?;
+        let blob_off = be_u32(exe, e + 4).ok_or(CodeSignReadError::Malformed(e + 4))? as usize;
+        // CSSLOT_CODEDIRECTORY
+        if slot_type == 0 {
+            let cd = dataoff + blob_off;
+            let cd_magic = be_u32(exe, cd).ok_or(CodeSignReadError::Malformed(cd))?;
+            if cd_magic != 0xFADE_0C02 {
+                return Err(CodeSignReadError::Malformed(cd));
+            }
+            // magic(0) length(4) version(8) flags(12)
+            return be_u32(exe, cd + 12).ok_or(CodeSignReadError::Malformed(cd + 12));
+        }
+    }
+
+    Err(CodeSignReadError::NoCodeDirectory)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -404,54 +546,147 @@ fn extract_stored_entry(data: &[u8], local_offset: u32) -> Option<Vec<u8>> {
 // InfoPlist parsing
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Extremely minimal XML-plist key extractor.
-fn parse_info_plist(xml: &str) -> Result<InfoPlist, IpaError> {
-    fn extract_key_values(xml: &str) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        let mut remaining = xml;
-        while let Some(key_start) = remaining.find("<key>") {
-            remaining = &remaining[key_start + 5..];
-            let key_end = remaining.find("</key>").unwrap_or(remaining.len());
-            let key = remaining[..key_end].trim().to_string();
-            remaining = &remaining[key_end + 6..];
+/// Extract every `<key>…</key>` followed by a scalar value from an XML plist.
+///
+/// Scalars are `<string>`, `<true/>`, `<false/>`, `<integer>` and `<real>`.
+/// Keys whose value is a container (`<array>`, `<dict>`, `<data>`) are skipped
+/// here and read by [`plist_string_array`] / [`plist_dict_region`] instead.
+#[must_use]
+pub fn plist_key_values(xml: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let mut remaining = xml;
+    while let Some(key_start) = remaining.find("<key>") {
+        remaining = &remaining[key_start + 5..];
+        let Some(key_end) = remaining.find("</key>") else {
+            break;
+        };
+        let key = remaining[..key_end].trim().to_string();
+        remaining = &remaining[key_end + 6..];
 
-            let trimmed = remaining.trim_start();
-            if let Some(val) = extract_next_string_value(trimmed) {
-                let skip = remaining.len() - trimmed.len();
-                let advance = find_after_value(trimmed);
-                remaining = &remaining[skip + advance..];
-                map.insert(key, val);
+        let trimmed = remaining.trim_start();
+        if let Some(val) = plist_scalar_value(trimmed) {
+            let skip = remaining.len() - trimmed.len();
+            let advance = plist_scalar_len(trimmed);
+            remaining = &remaining[skip + advance..];
+            map.insert(key, val);
+        }
+    }
+    map
+}
+
+/// Read the scalar value that `s` starts with, if any.
+fn plist_scalar_value(s: &str) -> Option<String> {
+    for (open, close) in [
+        ("<string>", "</string>"),
+        ("<integer>", "</integer>"),
+        ("<real>", "</real>"),
+    ] {
+        if s.starts_with(open) {
+            let end = s.find(close)?;
+            return Some(s[open.len()..end].to_string());
+        }
+    }
+    if s.starts_with("<true/>") {
+        return Some("true".to_string());
+    }
+    if s.starts_with("<false/>") {
+        return Some("false".to_string());
+    }
+    None
+}
+
+/// Byte length of the scalar element `s` starts with (0 when it is not one).
+fn plist_scalar_len(s: &str) -> usize {
+    for (open, close) in [
+        ("<string>", "</string>"),
+        ("<integer>", "</integer>"),
+        ("<real>", "</real>"),
+    ] {
+        if s.starts_with(open) {
+            return s.find(close).map_or(s.len(), |p| p + close.len());
+        }
+    }
+    if s.starts_with("<true/>") {
+        return 7;
+    }
+    if s.starts_with("<false/>") {
+        return 8;
+    }
+    0
+}
+
+/// Read the `<string>` members of the `<array>` that follows `<key>key</key>`.
+///
+/// Returns an empty vector when the key is absent or its value is not an array,
+/// so a caller can tell "declared empty" from "not declared" only by also
+/// checking [`plist_key_values`]; the distinction matters for
+/// `CFBundleSupportedPlatforms`, which used to be hard-coded to `iPhoneOS`.
+#[must_use]
+pub fn plist_string_array(xml: &str, key: &str) -> Vec<String> {
+    let needle = format!("<key>{key}</key>");
+    let Some(pos) = xml.find(&needle) else {
+        return Vec::new();
+    };
+    let after = xml[pos + needle.len()..].trim_start();
+    if !after.starts_with("<array>") {
+        return Vec::new();
+    }
+    let Some(end) = after.find("</array>") else {
+        return Vec::new();
+    };
+    let content = &after[7..end];
+    let mut out = Vec::new();
+    let mut rem = content;
+    while let Some(s) = rem.find("<string>") {
+        rem = &rem[s + 8..];
+        let Some(e) = rem.find("</string>") else { break };
+        out.push(rem[..e].to_string());
+        rem = &rem[e + 9..];
+    }
+    out
+}
+
+/// Return the raw XML of the `<dict>` that follows `<key>key</key>`.
+///
+/// Nested dictionaries are tracked so the region ends at the matching
+/// `</dict>`, not at the first one.
+#[must_use]
+pub fn plist_dict_region<'a>(xml: &'a str, key: &str) -> Option<&'a str> {
+    let needle = format!("<key>{key}</key>");
+    let pos = xml.find(&needle)?;
+    let after_key = &xml[pos + needle.len()..];
+    let trimmed = after_key.trim_start();
+    if !trimmed.starts_with("<dict>") {
+        return None;
+    }
+    let body_start = 6;
+    let mut depth = 1usize;
+    let mut idx = body_start;
+    while idx < trimmed.len() {
+        if trimmed[idx..].starts_with("<dict>") {
+            depth += 1;
+            idx += 6;
+        } else if trimmed[idx..].starts_with("</dict>") {
+            depth -= 1;
+            if depth == 0 {
+                return Some(&trimmed[..idx + 7]);
             }
-        }
-        map
-    }
-
-    fn extract_next_string_value(s: &str) -> Option<String> {
-        if s.starts_with("<string>") {
-            let end = s.find("</string>")?;
-            Some(s[8..end].to_string())
-        } else if s.starts_with("<true/>") {
-            Some("true".to_string())
-        } else if s.starts_with("<false/>") {
-            Some("false".to_string())
+            idx += 7;
         } else {
-            None
+            idx += 1;
         }
     }
+    None
+}
 
-    fn find_after_value(s: &str) -> usize {
-        if s.starts_with("<string>") {
-            s.find("</string>").map_or(s.len(), |p| p + 9)
-        } else if s.starts_with("<true/>") {
-            7
-        } else if s.starts_with("<false/>") {
-            8
-        } else {
-            0
-        }
-    }
-
-    let map = extract_key_values(xml);
+/// Parse the subset of `Info.plist` keys this crate models.
+///
+/// # Errors
+/// Returns [`IpaError::PlistParse`] when `CFBundleExecutable` is absent — that
+/// key names the Mach-O to analyse, so guessing it would send every downstream
+/// read to the wrong file.
+fn parse_info_plist(xml: &str) -> Result<InfoPlist, IpaError> {
+    let map = plist_key_values(xml);
 
     let bundle_id = map.get("CFBundleIdentifier").cloned().unwrap_or_default();
     let bundle_name = map
@@ -475,13 +710,16 @@ fn parse_info_plist(xml: &str) -> Result<InfoPlist, IpaError> {
         .cloned()
         .collect();
 
+    // Read from the plist instead of assuming iPhoneOS.
+    let supported_platforms = plist_string_array(xml, "CFBundleSupportedPlatforms");
+
     Ok(InfoPlist {
         bundle_id,
         bundle_name,
         bundle_version,
         min_os_version,
         executable,
-        supported_platforms: vec!["iPhoneOS".into()],
+        supported_platforms,
         entitlements: HashMap::new(),
         permissions,
     })
@@ -528,30 +766,17 @@ impl IpaPackage {
         let plist_path = format!("{app_bundle_prefix}/Info.plist");
         let plist_entry = cd_entries.iter().find(|(p, _, _, _)| p == &plist_path);
 
-        let info_plist = if let Some((_, _, local_offset, _)) = plist_entry {
-            let xml_bytes = extract_stored_entry(data, *local_offset)
-                .ok_or_else(|| IpaError::MissingFile(plist_path.clone()))?;
-            let xml =
-                std::str::from_utf8(&xml_bytes).map_err(|e| IpaError::PlistParse(e.to_string()))?;
-            parse_info_plist(xml)?
-        } else {
-            let bundle_name = app_bundle_prefix
-                .split('/')
-                .nth(1)
-                .unwrap_or("Unknown")
-                .trim_end_matches(".app")
-                .to_string();
-            InfoPlist {
-                bundle_id: bundle_name.clone(),
-                bundle_name: bundle_name.clone(),
-                bundle_version: "1.0".into(),
-                min_os_version: "14.0".into(),
-                executable: bundle_name,
-                supported_platforms: vec!["iPhoneOS".into()],
-                entitlements: HashMap::new(),
-                permissions: Vec::new(),
-            }
-        };
+        // An absent Info.plist used to be answered with an invented bundle
+        // ("1.0", "14.0", iPhoneOS). Those values compile and serialise like
+        // parsed ones, so a caller had no way to tell them apart from a real
+        // read. Name what is missing instead.
+        let (_, _, plist_local_offset, _) = plist_entry
+            .ok_or_else(|| IpaError::MissingFile(plist_path.clone()))?;
+        let xml_bytes = extract_stored_entry(data, *plist_local_offset)
+            .ok_or_else(|| IpaError::MissingFile(plist_path.clone()))?;
+        let xml =
+            std::str::from_utf8(&xml_bytes).map_err(|e| IpaError::PlistParse(e.to_string()))?;
+        let mut info_plist = parse_info_plist(xml)?;
 
         // 4. Build executable path.
         let executable_path = format!("{}/{}", app_bundle_prefix, info_plist.executable);
@@ -582,9 +807,59 @@ impl IpaPackage {
 
         all_entries.retain(|e| !e.path.is_empty());
 
+        // 6. Code signature, read from the bytes that are actually present.
+        //
+        //    Two independent sources, both optional:
+        //      * `embedded.mobileprovision` — a CMS envelope whose payload is an
+        //        XML plist carrying TeamIdentifier and the Entitlements dict.
+        //      * the executable's `LC_CODE_SIGNATURE` load command — the only
+        //        place the real CodeDirectory `flags` word lives.
+        //    When neither is present the signature stays `None` rather than
+        //    being conjured.
+        let profile_path = format!("{app_bundle_prefix}/embedded.mobileprovision");
+        let profile_bytes = cd_entries
+            .iter()
+            .find(|(p, _, _, _)| p == &profile_path)
+            .and_then(|(_, _, off, _)| extract_stored_entry(data, *off));
+
+        let profile = profile_bytes
+            .as_ref()
+            .and_then(|b| ProvisioningProfile::parse_cms(b).ok());
+
+        let entitlements_xml = profile_bytes.as_ref().and_then(|b| {
+            let text = String::from_utf8_lossy(b).into_owned();
+            plist_dict_region(&text, "Entitlements").map(ToString::to_string)
+        });
+
+        if let Some(ref ent_xml) = entitlements_xml {
+            info_plist.entitlements = plist_key_values(ent_xml);
+        }
+
+        let codesign_flags = cd_entries
+            .iter()
+            .find(|(p, _, _, _)| p == &executable_path)
+            .and_then(|(_, _, off, _)| extract_stored_entry(data, *off))
+            .and_then(|exe| codesign_flags_from_macho(&exe).ok());
+
+        let code_signature = if profile.is_some() || codesign_flags.is_some() {
+            let p = profile.unwrap_or_default();
+            Some(CodeSignature {
+                team_id: p.team_identifier,
+                signing_id: p.bundle_id,
+                flags: codesign_flags.unwrap_or(0),
+                // Left empty on purpose: recovering certificates needs an X.509
+                // decoder, which this workspace does not have. See
+                // `CodeSignature::apple_leaf_verdict`.
+                cert_chain: Vec::new(),
+                entitlements_xml: entitlements_xml.unwrap_or_default(),
+            })
+        } else {
+            None
+        };
+
         Ok(Self {
             info_plist,
-            code_signature: None,
+            code_signature,
             entries: all_entries,
             executable_path,
             frameworks,
@@ -687,73 +962,217 @@ impl IpaPackage {
         self.fairplay_info.as_ref().is_some_and(|f| f.is_encrypted)
     }
 
-    /// Build a mock IPA package for testing without needing real ZIP data.
+    /// Build the reference IPA **image**: a real ZIP archive holding a real
+    /// XML `Info.plist`, a real arm64 Mach-O with an `LC_CODE_SIGNATURE`, and a
+    /// real `embedded.mobileprovision` payload.
+    ///
+    /// This exists so [`IpaPackage::mock`] can be a parse rather than a
+    /// declaration: every field it returns is produced by
+    /// [`IpaPackage::parse`] reading these bytes.
+    #[must_use]
+    pub fn reference_ipa_bytes() -> Vec<u8> {
+        let info_plist = br#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.example.TestApp</string>
+    <key>CFBundleName</key><string>TestApp</string>
+    <key>CFBundleShortVersionString</key><string>1.2.3</string>
+    <key>CFBundleVersion</key><string>123</string>
+    <key>MinimumOSVersion</key><string>15.0</string>
+    <key>CFBundleExecutable</key><string>TestApp</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array><string>iPhoneOS</string></array>
+    <key>NSCameraUsageDescription</key><string>Needed to scan codes.</string>
+</dict>
+</plist>
+"#
+        .to_vec();
+
+        let profile = br#"CMS-WRAPPED-PROFILE<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+    <key>Name</key><string>TestApp Development</string>
+    <key>UUID</key><string>2a1f0b6e-0000-4000-8000-0123456789ab</string>
+    <key>TeamName</key><string>Example Ltd</string>
+    <key>TeamIdentifier</key>
+    <array><string>TEAM123456</string></array>
+    <key>ExpirationDate</key><string>2030-01-01T00:00:00Z</string>
+    <key>Entitlements</key>
+    <dict>
+        <key>application-identifier</key><string>TEAM123456.com.example.TestApp</string>
+        <key>com.apple.developer.team-identifier</key><string>TEAM123456</string>
+        <key>get-task-allow</key><true/>
+    </dict>
+</dict>
+</plist>
+"#
+        .to_vec();
+
+        let executable = Self::reference_macho_bytes(0);
+
+        zip_store(&[
+            ("Payload/TestApp.app/", Vec::new()),
+            ("Payload/TestApp.app/Info.plist", info_plist),
+            ("Payload/TestApp.app/TestApp", executable),
+            ("Payload/TestApp.app/embedded.mobileprovision", profile),
+            (
+                "Payload/TestApp.app/Frameworks/MyFramework.framework/",
+                Vec::new(),
+            ),
+        ])
+    }
+
+    /// Assemble an arm64 Mach-O that carries a real `LC_CODE_SIGNATURE`
+    /// pointing at a real `CSMAGIC_EMBEDDED_SIGNATURE` SuperBlob whose
+    /// CodeDirectory has the given `flags`.
+    #[must_use]
+    pub fn reference_macho_bytes(flags: u32) -> Vec<u8> {
+        // header(32) + LC_CODE_SIGNATURE(16), then padding so the binary is
+        // large enough for `IpaEntry::is_likely_binary` to be exercised.
+        const HEADER_SIZE: usize = 32;
+        const LC_SIZE: usize = 16;
+        let sig_off: usize = 4096;
+
+        // SuperBlob: magic, length, count, one index entry, then CodeDirectory.
+        let cd_off: usize = 20; // 12-byte header + one 8-byte index entry
+        let cd_len: usize = 44; // magic..flags plus a little slack
+        let sb_len = cd_off + cd_len;
+
+        let mut buf = vec![0u8; sig_off + sb_len];
+
+        let put_le = |buf: &mut [u8], off: usize, v: u32| {
+            buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
+        };
+        let put_be = |buf: &mut [u8], off: usize, v: u32| {
+            buf[off..off + 4].copy_from_slice(&v.to_be_bytes());
+        };
+
+        put_le(&mut buf, 0, 0xFEED_FACF); // MH_MAGIC_64
+        put_le(&mut buf, 4, 0x0100_000C); // CPU_TYPE_ARM64
+        put_le(&mut buf, 8, 0); // cpusubtype
+        put_le(&mut buf, 12, 2); // MH_EXECUTE
+        put_le(&mut buf, 16, 1); // ncmds
+        put_le(&mut buf, 20, u32::try_from(LC_SIZE).unwrap_or(0));
+        put_le(&mut buf, 24, 0x0020_0085); // NOUNDEFS | DYLDLINK | TWOLEVEL | PIE
+        put_le(&mut buf, 28, 0); // reserved
+
+        // LC_CODE_SIGNATURE
+        put_le(&mut buf, HEADER_SIZE, 0x1D);
+        put_le(&mut buf, HEADER_SIZE + 4, u32::try_from(LC_SIZE).unwrap_or(0));
+        put_le(
+            &mut buf,
+            HEADER_SIZE + 8,
+            u32::try_from(sig_off).unwrap_or(0),
+        );
+        put_le(&mut buf, HEADER_SIZE + 12, u32::try_from(sb_len).unwrap_or(0));
+
+        // CSMAGIC_EMBEDDED_SIGNATURE SuperBlob (big-endian, as on disk).
+        put_be(&mut buf, sig_off, 0xFADE_0CC0);
+        put_be(&mut buf, sig_off + 4, u32::try_from(sb_len).unwrap_or(0));
+        put_be(&mut buf, sig_off + 8, 1); // count
+        put_be(&mut buf, sig_off + 12, 0); // CSSLOT_CODEDIRECTORY
+        put_be(&mut buf, sig_off + 16, u32::try_from(cd_off).unwrap_or(0));
+
+        // CodeDirectory
+        let cd = sig_off + cd_off;
+        put_be(&mut buf, cd, 0xFADE_0C02); // CSMAGIC_CODEDIRECTORY
+        put_be(&mut buf, cd + 4, u32::try_from(cd_len).unwrap_or(0));
+        put_be(&mut buf, cd + 8, 0x0002_0400); // version
+        put_be(&mut buf, cd + 12, flags);
+
+        buf
+    }
+
+    /// Parse the reference IPA image from [`IpaPackage::reference_ipa_bytes`].
+    ///
+    /// Kept under the historical name `mock`, but nothing is declared by hand
+    /// any more: the bundle id, version, minimum OS, supported platforms,
+    /// entitlements, entries, frameworks and code-signature flags all come back
+    /// out of [`IpaPackage::parse`].
+    ///
+    /// # Panics
+    /// Panics if the reference image fails to parse, which would mean the
+    /// writer and the parser have diverged.
     #[must_use]
     pub fn mock() -> Self {
-        let mut entitlements = HashMap::new();
-        entitlements.insert(
-            "com.apple.developer.team-identifier".into(),
-            "TEAM123456".into(),
-        );
-
-        let info_plist = InfoPlist {
-            bundle_id: "com.example.TestApp".into(),
-            bundle_name: "TestApp".into(),
-            bundle_version: "1.2.3".into(),
-            min_os_version: "15.0".into(),
-            executable: "TestApp".into(),
-            supported_platforms: vec!["iPhoneOS".into()],
-            entitlements,
-            permissions: vec!["NSCameraUsageDescription".into()],
-        };
-
-        let entries = vec![
-            IpaEntry {
-                path: "Payload/TestApp.app/".into(),
-                size: 0,
-                is_dir: true,
-            },
-            IpaEntry {
-                path: "Payload/TestApp.app/TestApp".into(),
-                size: 512 * 1024,
-                is_dir: false,
-            },
-            IpaEntry {
-                path: "Payload/TestApp.app/Info.plist".into(),
-                size: 2048,
-                is_dir: false,
-            },
-            IpaEntry {
-                path: "Payload/TestApp.app/Frameworks/MyFramework.framework/".into(),
-                size: 0,
-                is_dir: true,
-            },
-        ];
-
-        let code_sig = CodeSignature {
-            team_id: "TEAM123456".into(),
-            signing_id: "com.example.TestApp".into(),
-            flags: 0,
-            cert_chain: vec![CertInfo {
-                subject: "Apple Development: Test Dev".into(),
-                issuer: "Apple Worldwide Developer Relations CA".into(),
-                serial: "0x1234ABCD".into(),
-                not_before: "2023-01-01T00:00:00Z".into(),
-                not_after: "2024-01-01T00:00:00Z".into(),
-            }],
-            entitlements_xml: "<?xml version=\"1.0\"?><plist></plist>".into(),
-        };
-
-        Self {
-            info_plist,
-            code_signature: Some(code_sig),
-            entries,
-            executable_path: "Payload/TestApp.app/TestApp".into(),
-            frameworks: vec!["Payload/TestApp.app/Frameworks/MyFramework.framework/".into()],
-            plugins: Vec::new(),
-            fairplay_info: None,
-        }
+        let bytes = Self::reference_ipa_bytes();
+        Self::parse(&bytes).expect("reference IPA image must parse with IpaPackage::parse")
     }
+}
+
+/// Write a ZIP archive with every member STORE-compressed.
+///
+/// Used to build reference images that the crate's own central-directory
+/// reader can then parse. Entries whose name ends in `/` are written as
+/// directories (MS-DOS directory attribute set).
+#[must_use]
+pub fn zip_store(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut central: Vec<u8> = Vec::new();
+    let mut count = 0u16;
+
+    for (name, data) in files {
+        let local_offset = u32::try_from(out.len()).unwrap_or(0);
+        let mut crc = flate2::Crc::new();
+        crc.update(data);
+        let crc32 = crc.sum();
+        let size = u32::try_from(data.len()).unwrap_or(0);
+        let name_bytes = name.as_bytes();
+        let is_dir = name.ends_with('/');
+
+        // Local file header.
+        out.extend_from_slice(&LOCAL_HEADER_SIG.to_le_bytes());
+        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        out.extend_from_slice(&0u16.to_le_bytes()); // flags
+        out.extend_from_slice(&0u16.to_le_bytes()); // method = STORE
+        out.extend_from_slice(&0u16.to_le_bytes()); // mod time
+        out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date (1980-01-01)
+        out.extend_from_slice(&crc32.to_le_bytes());
+        out.extend_from_slice(&size.to_le_bytes()); // compressed size
+        out.extend_from_slice(&size.to_le_bytes()); // uncompressed size
+        out.extend_from_slice(&u16::try_from(name_bytes.len()).unwrap_or(0).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // extra len
+        out.extend_from_slice(name_bytes);
+        out.extend_from_slice(data);
+
+        // Central directory header.
+        central.extend_from_slice(&CENTRAL_DIR_SIG.to_le_bytes());
+        central.extend_from_slice(&0x031Eu16.to_le_bytes()); // version made by (unix)
+        central.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        central.extend_from_slice(&0u16.to_le_bytes()); // flags
+        central.extend_from_slice(&0u16.to_le_bytes()); // method = STORE
+        central.extend_from_slice(&0u16.to_le_bytes()); // mod time
+        central.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
+        central.extend_from_slice(&crc32.to_le_bytes());
+        central.extend_from_slice(&size.to_le_bytes());
+        central.extend_from_slice(&size.to_le_bytes());
+        central.extend_from_slice(&u16::try_from(name_bytes.len()).unwrap_or(0).to_le_bytes());
+        central.extend_from_slice(&0u16.to_le_bytes()); // extra len
+        central.extend_from_slice(&0u16.to_le_bytes()); // comment len
+        central.extend_from_slice(&0u16.to_le_bytes()); // disk number
+        central.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
+        central.extend_from_slice(&(if is_dir { 0x10u32 } else { 0 }).to_le_bytes());
+        central.extend_from_slice(&local_offset.to_le_bytes());
+        central.extend_from_slice(name_bytes);
+
+        count = count.saturating_add(1);
+    }
+
+    let cd_offset = u32::try_from(out.len()).unwrap_or(0);
+    let cd_size = u32::try_from(central.len()).unwrap_or(0);
+    out.extend_from_slice(&central);
+
+    // End of central directory.
+    out.extend_from_slice(&EOCD_SIG.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes()); // disk number
+    out.extend_from_slice(&0u16.to_le_bytes()); // cd start disk
+    out.extend_from_slice(&count.to_le_bytes()); // entries on this disk
+    out.extend_from_slice(&count.to_le_bytes()); // entries total
+    out.extend_from_slice(&cd_size.to_le_bytes());
+    out.extend_from_slice(&cd_offset.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes()); // comment length
+
+    out
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1897,9 +2316,16 @@ mod tests {
 
     #[test]
     fn test_code_signature_developer_signed() {
+        // The reference IPA carries a real provisioning profile and a real
+        // LC_CODE_SIGNATURE, but no decodable certificates — this workspace has
+        // no X.509 decoder. `is_developer_signed` scans certificate subjects,
+        // so with no certificates the honest answer is "no evidence", which it
+        // reports as false. It must NOT claim a developer identity it never
+        // read.
         let pkg = IpaPackage::mock();
         let sig = pkg.code_signature.as_ref().unwrap();
-        assert!(sig.is_developer_signed());
+        assert!(sig.cert_chain.is_empty());
+        assert!(!sig.is_developer_signed());
     }
 
     #[test]
@@ -1918,9 +2344,72 @@ mod tests {
 
     #[test]
     fn test_code_signature_leaf_cert() {
+        // No certificate is recovered, and the Apple-issuance question is
+        // refused with a typed error naming the missing capability rather than
+        // answered with a hardcoded "Apple".
         let pkg = IpaPackage::mock();
         let sig = pkg.code_signature.as_ref().unwrap();
-        assert!(sig.leaf_cert().is_some());
+        assert!(sig.leaf_cert().is_none());
+        assert_eq!(
+            sig.apple_leaf_verdict(),
+            Err(CertVerifyError::NoCertificateChain)
+        );
+    }
+
+    #[test]
+    fn test_apple_leaf_verdict_refused_even_with_a_chain() {
+        let sig = CodeSignature {
+            team_id: "TEAM123456".into(),
+            signing_id: "com.example.TestApp".into(),
+            flags: 0,
+            cert_chain: vec![CertInfo {
+                subject: "Apple Development: Test Dev".into(),
+                issuer: "Apple Worldwide Developer Relations CA".into(),
+                serial: "0x1234ABCD".into(),
+                not_before: "2023-01-01T00:00:00Z".into(),
+                not_after: "2024-01-01T00:00:00Z".into(),
+            }],
+            entitlements_xml: String::new(),
+        };
+        // The issuer STRING says Apple; that is not verification.
+        assert!(sig.leaf_cert().unwrap().is_apple_issued());
+        assert_eq!(sig.apple_leaf_verdict(), Err(CertVerifyError::NoX509Verifier));
+    }
+
+    #[test]
+    fn test_codesign_flags_are_read_from_the_macho() {
+        for flags in [0u32, CS_ADHOC, 0x0001_0000] {
+            let exe = IpaPackage::reference_macho_bytes(flags);
+            assert_eq!(codesign_flags_from_macho(&exe), Ok(flags));
+        }
+    }
+
+    #[test]
+    fn test_codesign_flags_unsigned_binary_errors() {
+        // A Mach-O header with no load commands: unsigned, and said so.
+        let mut exe = vec![0u8; 64];
+        exe[..4].copy_from_slice(&0xFEED_FACFu32.to_le_bytes());
+        assert_eq!(
+            codesign_flags_from_macho(&exe),
+            Err(CodeSignReadError::NoCodeSignatureCommand)
+        );
+    }
+
+    #[test]
+    fn test_parse_refuses_an_app_without_info_plist() {
+        let zip = zip_store(&[("Payload/NoPlist.app/", Vec::new())]);
+        match IpaPackage::parse(&zip) {
+            Err(IpaError::MissingFile(p)) => {
+                assert_eq!(p, "Payload/NoPlist.app/Info.plist");
+            }
+            other => panic!("expected MissingFile, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_supported_platforms_come_from_the_plist() {
+        let pkg = IpaPackage::mock();
+        assert_eq!(pkg.info_plist.supported_platforms, vec!["iPhoneOS"]);
     }
 
     #[test]
@@ -1945,8 +2434,10 @@ mod tests {
 
     #[test]
     fn test_mock_entry_count() {
+        // Five real ZIP members: the .app directory, Info.plist, the Mach-O,
+        // embedded.mobileprovision and the framework directory.
         let pkg = IpaPackage::mock();
-        assert_eq!(pkg.entry_count(), 4);
+        assert_eq!(pkg.entry_count(), 5);
     }
 
     #[test]

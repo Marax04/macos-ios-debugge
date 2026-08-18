@@ -8,7 +8,6 @@
 //! - [`OpcodeFingerprintAnalyzer`] — fingerprints handler prologues to assign opcodes
 //! - [`IsaGraphBuilder`] — builds a directed graph of ISA-level relationships
 
-#![allow(dead_code)]
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

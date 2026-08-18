@@ -16,7 +16,6 @@
 //! * `dyld/include/objc-shared-cache.h` (Apple open-source)
 //! * `objc4/runtime/objc-runtime-new.h`
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;
@@ -47,7 +46,7 @@ pub type Result<T> = std::result::Result<T, ObjcOptimizerError>;
 
 // ─── Primitive readers ────────────────────────────────────────────────────────
 
-fn u16_le(data: &[u8], off: usize) -> Result<u16> {
+pub fn u16_le(data: &[u8], off: usize) -> Result<u16> {
     let b = data.get(off..off + 2)
         .ok_or(ObjcOptimizerError::Truncated(off as u64))?;
     Ok(u16::from_le_bytes([b[0], b[1]]))

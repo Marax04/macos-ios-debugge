@@ -2321,7 +2321,6 @@ mod tests {
         assert!(has_branch);
     }
 
-    #[test]
     /// The four ordering branches must lift to REAL comparison nodes, with the
     /// signed and unsigned forms distinguishable.
     ///
@@ -2492,7 +2491,6 @@ mod tests {
         }
     }
 
-    #[test]
     /// A compressed instruction must lift the same as its uncompressed
     /// spelling — they are the same instruction.
     ///

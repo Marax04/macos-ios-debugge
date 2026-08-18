@@ -20,6 +20,15 @@ pub enum ElfAnalyzerError {
     UnsupportedArch(String),
     #[error("parse error: {0}")]
     Parse(String),
+    /// The image does not carry the input needed to compute the requested
+    /// value. The payload names exactly what is missing.
+    #[error("cannot compute {what}: image has no {missing}")]
+    Missing {
+        /// The value that was requested.
+        what: &'static str,
+        /// The ELF input required to compute it, and absent from this image.
+        missing: &'static str,
+    },
 }
 
 // ─── DtTag ────────────────────────────────────────────────────────────────────
@@ -541,96 +550,394 @@ impl ElfAnalyzer {
             .map(|n| BuildId::from_bytes(n.desc.clone()))
     }
 
-    /// Build a mock `GotPltAnalysis` for testing.
-    #[must_use]
-    pub fn mock_got_plt() -> GotPltAnalysis {
-        GotPltAnalysis {
-            plt_base: 0x0040_1010,
-            got_plt_base: 0x0060_1000,
-            entries: vec![
-                GotEntry {
-                    got_va: 0x0060_1018,
-                    plt_va: 0x0040_1020,
-                    symbol: "malloc".into(),
-                    is_lazy: true,
-                },
-                GotEntry {
-                    got_va: 0x0060_1020,
-                    plt_va: 0x0040_1030,
-                    symbol: "free".into(),
-                    is_lazy: true,
-                },
-                GotEntry {
-                    got_va: 0x0060_1028,
-                    plt_va: 0x0040_1040,
-                    symbol: "printf".into(),
-                    is_lazy: true,
-                },
-            ],
+    // ── Real, byte-derived analysis ──
+
+    /// Parse the ELF container out of `image`.
+    fn container(image: &[u8]) -> Result<goblin::elf::Elf<'_>, ElfAnalyzerError> {
+        if image.len() < 16 || &image[..4] != b"\x7fELF" {
+            return Err(ElfAnalyzerError::NotElf(format!(
+                "{} bytes, bad magic",
+                image.len()
+            )));
+        }
+        goblin::elf::Elf::parse(image).map_err(|e| ElfAnalyzerError::Parse(e.to_string()))
+    }
+
+    /// Raw bytes of the section named `name`, as they sit in the file.
+    fn section_bytes<'a>(
+        elf: &goblin::elf::Elf<'_>,
+        image: &'a [u8],
+        name: &str,
+    ) -> Option<&'a [u8]> {
+        for sh in &elf.section_headers {
+            if elf.shdr_strtab.get_at(sh.sh_name) == Some(name) {
+                if sh.sh_type == goblin::elf::section_header::SHT_NOBITS {
+                    return None;
+                }
+                let start = usize::try_from(sh.sh_offset).ok()?;
+                let end = start.checked_add(usize::try_from(sh.sh_size).ok()?)?;
+                if end <= image.len() {
+                    return Some(&image[start..end]);
+                }
+                return None;
+            }
+        }
+        None
+    }
+
+    /// Virtual address of the section named `name`.
+    fn section_addr(elf: &goblin::elf::Elf<'_>, name: &str) -> Option<u64> {
+        elf.section_headers
+            .iter()
+            .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(name))
+            .map(|sh| sh.sh_addr)
+    }
+
+    /// Translate a virtual address to a file offset using the LOAD segments.
+    fn vaddr_to_offset(elf: &goblin::elf::Elf<'_>, vaddr: u64) -> Option<u64> {
+        elf.program_headers
+            .iter()
+            .filter(|ph| ph.p_type == goblin::elf::program_header::PT_LOAD)
+            .find(|ph| vaddr >= ph.p_vaddr && vaddr < ph.p_vaddr + ph.p_filesz)
+            .map(|ph| vaddr - ph.p_vaddr + ph.p_offset)
+    }
+
+    /// Raw `.dynstr` bytes: from the section header when present, otherwise
+    /// located through `DT_STRTAB`/`DT_STRSZ` and the LOAD segments.
+    fn dynstr_bytes<'a>(elf: &goblin::elf::Elf<'_>, image: &'a [u8]) -> Option<&'a [u8]> {
+        if let Some(b) = Self::section_bytes(elf, image, ".dynstr") {
+            return Some(b);
+        }
+        let dynamic = elf.dynamic.as_ref()?;
+        let mut strtab = None;
+        let mut strsz = None;
+        for d in &dynamic.dyns {
+            match DtTag::from_u64(d.d_tag) {
+                DtTag::StrTab => strtab = Some(d.d_val),
+                DtTag::StrSz => strsz = Some(d.d_val),
+                _ => {}
+            }
+        }
+        let off = usize::try_from(Self::vaddr_to_offset(elf, strtab?)?).ok()?;
+        let len = usize::try_from(strsz?).ok()?;
+        let end = off.checked_add(len)?;
+        if end <= image.len() {
+            Some(&image[off..end])
+        } else {
+            None
         }
     }
 
-    /// Build a mock `DynamicSection`.
-    #[must_use]
-    pub fn mock_dynamic() -> DynamicSection {
-        DynamicSection {
-            entries: vec![
-                DynamicEntry {
-                    tag: DtTag::Needed,
-                    value: 0,
-                },
-                DynamicEntry {
-                    tag: DtTag::Needed,
-                    value: 1,
-                },
-            ],
-            needed_libs: vec!["libc.so.6".into(), "libm.so.6".into()],
-            rpath: None,
-            runpath: Some("/usr/local/lib".into()),
-            soname: Some("libexample.so.1".into()),
-            init_fn: Some(0x0040_1000),
-            fini_fn: Some(0x0040_1100),
-            has_textrel: false,
-            has_bind_now: true,
-            flags: 0,
-            flags1: 0x1, // NODELETE
-        }
+    /// Parse the `.dynamic` section of a whole ELF image.
+    ///
+    /// Reads the `.dynamic` section when section headers survive, else the
+    /// `PT_DYNAMIC` segment, resolving every string through `.dynstr`.
+    ///
+    /// # Errors
+    /// [`ElfAnalyzerError::Missing`] when the image has no dynamic array at
+    /// all (a statically linked object), plus the container errors.
+    pub fn analyze_dynamic(&self, image: &[u8]) -> Result<DynamicSection, ElfAnalyzerError> {
+        let elf = Self::container(image)?;
+        let dyn_bytes = Self::section_bytes(&elf, image, ".dynamic").or_else(|| {
+            elf.program_headers
+                .iter()
+                .find(|ph| ph.p_type == goblin::elf::program_header::PT_DYNAMIC)
+                .and_then(|ph| {
+                    let start = usize::try_from(ph.p_offset).ok()?;
+                    let end = start.checked_add(usize::try_from(ph.p_filesz).ok()?)?;
+                    if end <= image.len() {
+                        Some(&image[start..end])
+                    } else {
+                        None
+                    }
+                })
+        });
+        let Some(dyn_bytes) = dyn_bytes else {
+            return Err(ElfAnalyzerError::Missing {
+                what: "dynamic section",
+                missing: ".dynamic section or PT_DYNAMIC segment",
+            });
+        };
+        let strtab = Self::dynstr_bytes(&elf, image).unwrap_or(&[]);
+        Ok(self.parse_dynamic(dyn_bytes, strtab))
     }
 
-    /// Build a mock `TlsSection`.
-    #[must_use]
-    pub const fn mock_tls() -> TlsSection {
-        TlsSection {
-            template_va: 0x0060_2000,
-            init_size: 16,
-            total_size: 64,
-            alignment: 8,
-            variable_count: 3,
+    /// Reconstruct the GOT/PLT pairing of a whole ELF image.
+    ///
+    /// Every field is derived from the image: `got_va` is the relocation
+    /// offset of the `DT_JMPREL` entry, `symbol` is resolved through
+    /// `.dynsym`/`.dynstr`, `plt_va` is computed from the `.plt` address, its
+    /// entry size and whether the section carries a `PLT0` header slot, and
+    /// `is_lazy` follows `DT_BIND_NOW`/`DF_BIND_NOW`/`DF_1_NOW`.
+    ///
+    /// # Errors
+    /// [`ElfAnalyzerError::Missing`] naming the absent `.plt`, `.got.plt` or
+    /// PLT relocation table, plus the container errors.
+    pub fn analyze_got_plt(&self, image: &[u8]) -> Result<GotPltAnalysis, ElfAnalyzerError> {
+        let elf = Self::container(image)?;
+
+        let plt_sh = elf
+            .section_headers
+            .iter()
+            .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(".plt"))
+            .ok_or(ElfAnalyzerError::Missing {
+                what: "GOT/PLT analysis",
+                missing: ".plt section",
+            })?;
+        let plt_base = plt_sh.sh_addr;
+
+        let got_plt_base = Self::section_addr(&elf, ".got.plt")
+            .or_else(|| Self::section_addr(&elf, ".got"))
+            .ok_or(ElfAnalyzerError::Missing {
+                what: "GOT/PLT analysis",
+                missing: ".got.plt or .got section",
+            })?;
+
+        if elf.pltrelocs.is_empty() {
+            return Err(ElfAnalyzerError::Missing {
+                what: "GOT/PLT entries",
+                missing: "DT_JMPREL relocation table",
+            });
         }
+
+        // Lazy binding is on unless the image asked the loader to resolve
+        // everything at load time.
+        let mut eager = false;
+        if let Some(dynamic) = elf.dynamic.as_ref() {
+            for d in &dynamic.dyns {
+                match DtTag::from_u64(d.d_tag) {
+                    DtTag::BindNow => eager = true,
+                    DtTag::Flags if d.d_val & 0x8 != 0 => eager = true,
+                    DtTag::Flags1 if d.d_val & 0x1 != 0 => eager = true,
+                    _ => {}
+                }
+            }
+        }
+
+        let count = u64::try_from(elf.pltrelocs.len()).unwrap_or(u64::MAX);
+        let entsize = if plt_sh.sh_entsize >= 4 {
+            plt_sh.sh_entsize
+        } else if count > 0 && plt_sh.sh_size % count == 0 && plt_sh.sh_size / count >= 4 {
+            plt_sh.sh_size / count
+        } else {
+            16
+        };
+        // A lazy PLT starts with the PLT0 resolver stub; an eager/IPLT one does not.
+        let has_plt0 = entsize > 0 && plt_sh.sh_size / entsize > count;
+
+        let mut entries = Vec::with_capacity(elf.pltrelocs.len());
+        for (i, rel) in elf.pltrelocs.iter().enumerate() {
+            let symbol = elf
+                .dynsyms
+                .get(rel.r_sym)
+                .and_then(|sym| elf.dynstrtab.get_at(sym.st_name))
+                .unwrap_or_default()
+                .to_owned();
+            let slot = u64::try_from(i).unwrap_or(u64::MAX) + u64::from(has_plt0);
+            entries.push(GotEntry {
+                got_va: rel.r_offset,
+                plt_va: plt_base + slot * entsize,
+                symbol,
+                is_lazy: !eager,
+            });
+        }
+
+        Ok(GotPltAnalysis {
+            entries,
+            plt_base,
+            got_plt_base,
+        })
     }
 
-    /// Build a mock `VersionInfo`.
-    #[must_use]
-    pub fn mock_version_info() -> VersionInfo {
-        VersionInfo {
-            needed: vec![VersionNeeded {
-                file: "libc.so.6".into(),
-                versions: vec!["GLIBC_2.5".into(), "GLIBC_2.17".into()],
-            }],
-            defined: vec![VersionDefined {
-                version: "MYLIB_1.0".into(),
-                flags: 1,
-            }],
+    /// Reconstruct the TLS layout of a whole ELF image.
+    ///
+    /// Geometry comes from the `PT_TLS` program header; `variable_count` is
+    /// the number of `STT_TLS` symbols in `.dynsym` and `.symtab`.
+    ///
+    /// # Errors
+    /// [`ElfAnalyzerError::Missing`] when the image has no `PT_TLS` segment,
+    /// plus the container errors.
+    pub fn analyze_tls(&self, image: &[u8]) -> Result<TlsSection, ElfAnalyzerError> {
+        let elf = Self::container(image)?;
+        let ph = elf
+            .program_headers
+            .iter()
+            .find(|ph| ph.p_type == goblin::elf::program_header::PT_TLS)
+            .ok_or(ElfAnalyzerError::Missing {
+                what: "TLS layout",
+                missing: "PT_TLS program header",
+            })?;
+        // Count STT_TLS symbols straight out of the symbol table bytes: the
+        // section header gives the exact entry count, with goblin's parsed
+        // tables as the fallback when section headers are gone.
+        let mut variable_count = 0usize;
+        let mut counted_from_sections = false;
+        for name in [".dynsym", ".symtab"] {
+            if let Some(bytes) = Self::section_bytes(&elf, image, name) {
+                counted_from_sections = true;
+                for entry in bytes.chunks_exact(24) {
+                    if entry[4] & 0xf == goblin::elf::sym::STT_TLS {
+                        variable_count += 1;
+                    }
+                }
+            }
         }
+        if !counted_from_sections {
+            variable_count = elf
+                .dynsyms
+                .iter()
+                .chain(elf.syms.iter())
+                .filter(|s| s.st_type() == goblin::elf::sym::STT_TLS)
+                .count();
+        }
+        Ok(TlsSection {
+            template_va: ph.p_vaddr,
+            init_size: ph.p_filesz,
+            total_size: ph.p_memsz,
+            alignment: ph.p_align,
+            variable_count,
+        })
     }
 
-    /// Build a mock `BuildId`.
-    #[must_use]
-    pub fn mock_build_id() -> BuildId {
-        BuildId::from_bytes(vec![
-            0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB,
-            0xCD, 0xEF, 0x00, 0x11, 0x22, 0x33,
-        ])
+    /// Reconstruct symbol versioning of a whole ELF image from
+    /// `.gnu.version_r` and `.gnu.version_d`.
+    ///
+    /// # Errors
+    /// [`ElfAnalyzerError::Missing`] when neither versioning section is
+    /// present, [`ElfAnalyzerError::Parse`] when one of them is malformed,
+    /// plus the container errors.
+    pub fn analyze_version_info(&self, image: &[u8]) -> Result<VersionInfo, ElfAnalyzerError> {
+        let elf = Self::container(image)?;
+        let verneed = Self::section_bytes(&elf, image, ".gnu.version_r");
+        let verdef = Self::section_bytes(&elf, image, ".gnu.version_d");
+        if verneed.is_none() && verdef.is_none() {
+            return Err(ElfAnalyzerError::Missing {
+                what: "version info",
+                missing: ".gnu.version_r and .gnu.version_d sections",
+            });
+        }
+        let dynstr = Self::dynstr_bytes(&elf, image).unwrap_or(&[]);
+
+        let mut needed = Vec::new();
+        if let Some(data) = verneed {
+            for vn in
+                crate::versioning::parse_verneed(data, dynstr).map_err(ElfAnalyzerError::Parse)?
+            {
+                needed.push(VersionNeeded {
+                    file: vn.filename,
+                    versions: vn.aux.into_iter().map(|a| a.name).collect(),
+                });
+            }
+        }
+
+        let mut defined = Vec::new();
+        if let Some(data) = verdef {
+            for vd in
+                crate::versioning::parse_verdef(data, dynstr).map_err(ElfAnalyzerError::Parse)?
+            {
+                for name in vd.names {
+                    defined.push(VersionDefined {
+                        version: name,
+                        flags: vd.flags,
+                    });
+                }
+            }
+        }
+
+        Ok(VersionInfo { needed, defined })
+    }
+
+    /// Extract the GNU build-ID of a whole ELF image from its note sections
+    /// (or, when section headers are gone, its `PT_NOTE` segments).
+    ///
+    /// # Errors
+    /// [`ElfAnalyzerError::Missing`] when no `NT_GNU_BUILD_ID` note is
+    /// present, plus the container errors.
+    pub fn analyze_build_id(&self, image: &[u8]) -> Result<BuildId, ElfAnalyzerError> {
+        let elf = Self::container(image)?;
+        let mut ranges: Vec<(usize, usize)> = elf
+            .section_headers
+            .iter()
+            .filter(|sh| sh.sh_type == goblin::elf::section_header::SHT_NOTE)
+            .filter_map(|sh| {
+                Some((
+                    usize::try_from(sh.sh_offset).ok()?,
+                    usize::try_from(sh.sh_size).ok()?,
+                ))
+            })
+            .collect();
+        if ranges.is_empty() {
+            ranges = elf
+                .program_headers
+                .iter()
+                .filter(|ph| ph.p_type == goblin::elf::program_header::PT_NOTE)
+                .filter_map(|ph| {
+                    Some((
+                        usize::try_from(ph.p_offset).ok()?,
+                        usize::try_from(ph.p_filesz).ok()?,
+                    ))
+                })
+                .collect();
+        }
+        for (offset, size) in ranges {
+            if offset > image.len() {
+                continue;
+            }
+            let notes = self.parse_notes(image, offset, size);
+            if let Some(id) = self.extract_build_id(&notes) {
+                return Ok(id);
+            }
+        }
+        Err(ElfAnalyzerError::Missing {
+            what: "build ID",
+            missing: "NT_GNU_BUILD_ID note",
+        })
+    }
+
+    // ── Legacy entry points, now byte-derived ──
+    //
+    // These names used to return fabricated sample values. They stay callable
+    // and now delegate to the real parsers above; each one needs the ELF image
+    // it claims to describe.
+
+    /// GOT/PLT analysis of `image`. Delegates to [`Self::analyze_got_plt`].
+    ///
+    /// # Errors
+    /// See [`Self::analyze_got_plt`].
+    pub fn mock_got_plt(image: &[u8]) -> Result<GotPltAnalysis, ElfAnalyzerError> {
+        Self::new().analyze_got_plt(image)
+    }
+
+    /// Dynamic section of `image`. Delegates to [`Self::analyze_dynamic`].
+    ///
+    /// # Errors
+    /// See [`Self::analyze_dynamic`].
+    pub fn mock_dynamic(image: &[u8]) -> Result<DynamicSection, ElfAnalyzerError> {
+        Self::new().analyze_dynamic(image)
+    }
+
+    /// TLS layout of `image`. Delegates to [`Self::analyze_tls`].
+    ///
+    /// # Errors
+    /// See [`Self::analyze_tls`].
+    pub fn mock_tls(image: &[u8]) -> Result<TlsSection, ElfAnalyzerError> {
+        Self::new().analyze_tls(image)
+    }
+
+    /// Version info of `image`. Delegates to [`Self::analyze_version_info`].
+    ///
+    /// # Errors
+    /// See [`Self::analyze_version_info`].
+    pub fn mock_version_info(image: &[u8]) -> Result<VersionInfo, ElfAnalyzerError> {
+        Self::new().analyze_version_info(image)
+    }
+
+    /// Build ID of `image`. Delegates to [`Self::analyze_build_id`].
+    ///
+    /// # Errors
+    /// See [`Self::analyze_build_id`].
+    pub fn mock_build_id(image: &[u8]) -> Result<BuildId, ElfAnalyzerError> {
+        Self::new().analyze_build_id(image)
     }
 }
 
@@ -639,6 +946,276 @@ impl ElfAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Builds a real, self-consistent 64-bit little-endian ELF image in
+    /// memory. Nothing in the analyzer is told what to answer: every test
+    /// below reads its expectations back out of these bytes through the
+    /// ordinary parsers.
+    mod fixture {
+        const BASE: u64 = 0x0040_0000;
+        const FILE_SIZE: usize = 0x2000;
+
+        const O_DYNSYM: usize = 0x0200;
+        const O_DYNSTR: usize = 0x0278; // immediately after 5 × 24-byte symbols
+        const O_RELAPLT: usize = 0x0400;
+        const O_DYNAMIC: usize = 0x0700;
+        const O_VERNEED: usize = 0x0900;
+        const O_VERDEF: usize = 0x0A00;
+        const O_NOTE: usize = 0x0B00;
+        const O_TDATA: usize = 0x0C00;
+        const O_PLT: usize = 0x1010;
+        const O_GOTPLT: usize = 0x1200;
+        const O_SHSTR: usize = 0x1400;
+        const O_SHDRS: usize = 0x1500;
+
+        const PLT_SIZE: u64 = 64; // PLT0 + 3 stubs, 16 bytes each
+        const GOTPLT_SIZE: u64 = 48;
+        const RELAPLT_SIZE: u64 = 72; // 3 × Elf64_Rela
+
+        /// The 20 build-ID bytes physically present in the image.
+        pub const BUILD_ID: [u8; 20] = [
+            0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB,
+            0xCD, 0xEF, 0x00, 0x11, 0x22, 0x33,
+        ];
+
+        struct Strtab {
+            bytes: Vec<u8>,
+        }
+
+        impl Strtab {
+            fn new() -> Self {
+                Self { bytes: vec![0] }
+            }
+            fn add(&mut self, s: &str) -> u32 {
+                let off = u32::try_from(self.bytes.len()).expect("strtab offset fits u32");
+                self.bytes.extend_from_slice(s.as_bytes());
+                self.bytes.push(0);
+                off
+            }
+        }
+
+        fn put(buf: &mut [u8], off: usize, bytes: &[u8]) {
+            buf[off..off + bytes.len()].copy_from_slice(bytes);
+        }
+        fn put_u16(buf: &mut [u8], off: usize, v: u16) {
+            put(buf, off, &v.to_le_bytes());
+        }
+        fn put_u32(buf: &mut [u8], off: usize, v: u32) {
+            put(buf, off, &v.to_le_bytes());
+        }
+        fn put_u64(buf: &mut [u8], off: usize, v: u64) {
+            put(buf, off, &v.to_le_bytes());
+        }
+
+        /// The library names the image declares as `DT_NEEDED`.
+        pub const NEEDED: [&str; 2] = ["libc.so.6", "libm.so.6"];
+        /// The `DT_SONAME` the image declares.
+        pub const SONAME: &str = "libexample.so.1";
+        /// The `DT_RUNPATH` the image declares.
+        pub const RUNPATH: &str = "/usr/local/lib";
+        /// The imported symbols, in PLT relocation order.
+        pub const IMPORTS: [&str; 3] = ["malloc", "free", "printf"];
+        /// Virtual address of `.plt` (its PLT0 header slot).
+        pub const PLT_BASE: u64 = BASE + 0x1010;
+        /// Virtual address of `.got.plt`.
+        pub const GOTPLT_BASE: u64 = BASE + 0x1200;
+
+        /// Assemble the image.
+            pub fn elf_image() -> Vec<u8> {
+            let mut b = vec![0u8; FILE_SIZE];
+
+            // ── .dynstr ──────────────────────────────────────────────────
+            let mut st = Strtab::new();
+            let n_libc = st.add(NEEDED[0]);
+            let n_libm = st.add(NEEDED[1]);
+            let n_soname = st.add(SONAME);
+            let n_runpath = st.add(RUNPATH);
+            let n_malloc = st.add(IMPORTS[0]);
+            let n_free = st.add(IMPORTS[1]);
+            let n_printf = st.add(IMPORTS[2]);
+            let n_tlsvar = st.add("tls_counter");
+            let n_glibc25 = st.add("GLIBC_2.5");
+            let n_glibc217 = st.add("GLIBC_2.17");
+            let n_mylib = st.add("MYLIB_1.0");
+            let dynstr_len = st.bytes.len();
+            put(&mut b, O_DYNSTR, &st.bytes);
+
+            // ── .dynsym: null, malloc, free, printf, tls_counter ─────────
+            let sym = |buf: &mut [u8], idx: usize, name: u32, info: u8, shndx: u16, val: u64| {
+                let o = O_DYNSYM + idx * 24;
+                put_u32(buf, o, name);
+                buf[o + 4] = info;
+                buf[o + 5] = 0;
+                put_u16(buf, o + 6, shndx);
+                put_u64(buf, o + 8, val);
+                put_u64(buf, o + 16, 0);
+            };
+            // STB_GLOBAL << 4 | STT_FUNC = 0x12, | STT_TLS = 0x16
+            sym(&mut b, 1, n_malloc, 0x12, 0, 0);
+            sym(&mut b, 2, n_free, 0x12, 0, 0);
+            sym(&mut b, 3, n_printf, 0x12, 0, 0);
+            sym(&mut b, 4, n_tlsvar, 0x16, 10, 0);
+
+            // ── .rela.plt: three R_X86_64_JUMP_SLOT ──────────────────────
+            for (i, sym_idx) in [1u64, 2, 3].into_iter().enumerate() {
+                let o = O_RELAPLT + i * 24;
+                let got_va = GOTPLT_BASE + 24 + u64::try_from(i).expect("index fits u64") * 8;
+                put_u64(&mut b, o, got_va);
+                put_u64(&mut b, o + 8, (sym_idx << 32) | 7);
+                put_u64(&mut b, o + 16, 0);
+            }
+
+            // ── .note.gnu.build-id ───────────────────────────────────────
+            put_u32(&mut b, O_NOTE, 4); // namesz "GNU\0"
+            put_u32(&mut b, O_NOTE + 4, 20); // descsz
+            put_u32(&mut b, O_NOTE + 8, 3); // NT_GNU_BUILD_ID
+            put(&mut b, O_NOTE + 12, b"GNU\0");
+            put(&mut b, O_NOTE + 16, &BUILD_ID);
+            let note_size = 16 + BUILD_ID.len();
+
+            // ── .gnu.version_r: libc.so.6 needs GLIBC_2.5, GLIBC_2.17 ────
+            put_u16(&mut b, O_VERNEED, 1); // vn_version
+            put_u16(&mut b, O_VERNEED + 2, 2); // vn_cnt
+            put_u32(&mut b, O_VERNEED + 4, n_libc); // vn_file
+            put_u32(&mut b, O_VERNEED + 8, 16); // vn_aux
+            put_u32(&mut b, O_VERNEED + 12, 0); // vn_next
+            put_u32(&mut b, O_VERNEED + 16, 0x0b09_2f02); // vna_hash
+            put_u16(&mut b, O_VERNEED + 20, 0);
+            put_u16(&mut b, O_VERNEED + 22, 2);
+            put_u32(&mut b, O_VERNEED + 24, n_glibc25);
+            put_u32(&mut b, O_VERNEED + 28, 16); // vna_next
+            put_u32(&mut b, O_VERNEED + 32, 0x0698_2f02);
+            put_u16(&mut b, O_VERNEED + 36, 0);
+            put_u16(&mut b, O_VERNEED + 38, 3);
+            put_u32(&mut b, O_VERNEED + 40, n_glibc217);
+            put_u32(&mut b, O_VERNEED + 44, 0);
+
+            // ── .gnu.version_d: defines MYLIB_1.0 ────────────────────────
+            put_u16(&mut b, O_VERDEF, 1); // vd_version
+            put_u16(&mut b, O_VERDEF + 2, 1); // vd_flags (VER_FLG_BASE)
+            put_u16(&mut b, O_VERDEF + 4, 1); // vd_ndx
+            put_u16(&mut b, O_VERDEF + 6, 1); // vd_cnt
+            put_u32(&mut b, O_VERDEF + 8, 0x1234_5678); // vd_hash
+            put_u32(&mut b, O_VERDEF + 12, 20); // vd_aux
+            put_u32(&mut b, O_VERDEF + 16, 0); // vd_next
+            put_u32(&mut b, O_VERDEF + 20, n_mylib);
+            put_u32(&mut b, O_VERDEF + 24, 0);
+
+            // ── .dynamic ─────────────────────────────────────────────────
+            let dyns: Vec<(u64, u64)> = vec![
+                (1, u64::from(n_libc)),                       // DT_NEEDED
+                (1, u64::from(n_libm)),                       // DT_NEEDED
+                (14, u64::from(n_soname)),                    // DT_SONAME
+                (0x1D, u64::from(n_runpath)),                 // DT_RUNPATH
+                (12, BASE + 0x1000),                          // DT_INIT
+                (13, BASE + 0x1100),                          // DT_FINI
+                (24, 0),                                      // DT_BIND_NOW
+                (6, BASE + O_DYNSYM as u64),                  // DT_SYMTAB
+                (11, 24),                                     // DT_SYMENT
+                (5, BASE + O_DYNSTR as u64),                  // DT_STRTAB
+                (10, dynstr_len as u64),                      // DT_STRSZ
+                (3, GOTPLT_BASE),                             // DT_PLTGOT
+                (23, BASE + O_RELAPLT as u64),                // DT_JMPREL
+                (2, RELAPLT_SIZE),                            // DT_PLTRELSZ
+                (20, 7),                                      // DT_PLTREL = DT_RELA
+                (0x6FFF_FFFE, BASE + O_VERNEED as u64),       // DT_VERNEED
+                (0x6FFF_FFFF, 1),                             // DT_VERNEEDNUM
+                (0x6FFF_FFFC, BASE + O_VERDEF as u64),        // DT_VERDEF
+                (0x6FFF_FFFD, 1),                             // DT_VERDEFNUM
+                (0, 0),                                       // DT_NULL
+            ];
+            for (i, (tag, val)) in dyns.iter().enumerate() {
+                put_u64(&mut b, O_DYNAMIC + i * 16, *tag);
+                put_u64(&mut b, O_DYNAMIC + i * 16 + 8, *val);
+            }
+            let dynamic_size = (dyns.len() * 16) as u64;
+
+            // ── .shstrtab ────────────────────────────────────────────────
+            let mut sh = Strtab::new();
+            let s_dynsym = sh.add(".dynsym");
+            let s_dynstr = sh.add(".dynstr");
+            let s_relaplt = sh.add(".rela.plt");
+            let s_plt = sh.add(".plt");
+            let s_gotplt = sh.add(".got.plt");
+            let s_dynamic = sh.add(".dynamic");
+            let s_verneed = sh.add(".gnu.version_r");
+            let s_verdef = sh.add(".gnu.version_d");
+            let s_note = sh.add(".note.gnu.build-id");
+            let s_tdata = sh.add(".tdata");
+            let s_shstr = sh.add(".shstrtab");
+            let shstr_len = sh.bytes.len() as u64;
+            put(&mut b, O_SHSTR, &sh.bytes);
+
+            // ── section headers ──────────────────────────────────────────
+            // (name, type, flags, addr, offset, size, link, info, align, entsize)
+            let shdrs: Vec<(u32, u32, u64, u64, u64, u64, u32, u32, u64, u64)> = vec![
+                (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                (s_dynsym, 11, 2, BASE + O_DYNSYM as u64, O_DYNSYM as u64, 5 * 24, 2, 1, 8, 24),
+                (s_dynstr, 3, 2, BASE + O_DYNSTR as u64, O_DYNSTR as u64, dynstr_len as u64, 0, 0, 1, 0),
+                (s_relaplt, 4, 2, BASE + O_RELAPLT as u64, O_RELAPLT as u64, RELAPLT_SIZE, 1, 4, 8, 24),
+                (s_plt, 1, 6, PLT_BASE, O_PLT as u64, PLT_SIZE, 0, 0, 16, 16),
+                (s_gotplt, 1, 3, GOTPLT_BASE, O_GOTPLT as u64, GOTPLT_SIZE, 0, 0, 8, 8),
+                (s_dynamic, 6, 3, BASE + O_DYNAMIC as u64, O_DYNAMIC as u64, dynamic_size, 2, 0, 8, 16),
+                (s_verneed, 0x6FFF_FFFE, 2, BASE + O_VERNEED as u64, O_VERNEED as u64, 48, 2, 1, 8, 0),
+                (s_verdef, 0x6FFF_FFFD, 2, BASE + O_VERDEF as u64, O_VERDEF as u64, 28, 2, 1, 8, 0),
+                (s_note, 7, 2, BASE + O_NOTE as u64, O_NOTE as u64, note_size as u64, 0, 0, 4, 0),
+                (s_tdata, 1, 0x403, BASE + O_TDATA as u64, O_TDATA as u64, 16, 0, 0, 8, 0),
+                (s_shstr, 3, 0, 0, O_SHSTR as u64, shstr_len, 0, 0, 1, 0),
+            ];
+            for (i, s) in shdrs.iter().enumerate() {
+                let o = O_SHDRS + i * 64;
+                put_u32(&mut b, o, s.0);
+                put_u32(&mut b, o + 4, s.1);
+                put_u64(&mut b, o + 8, s.2);
+                put_u64(&mut b, o + 16, s.3);
+                put_u64(&mut b, o + 24, s.4);
+                put_u64(&mut b, o + 32, s.5);
+                put_u32(&mut b, o + 40, s.6);
+                put_u32(&mut b, o + 44, s.7);
+                put_u64(&mut b, o + 48, s.8);
+                put_u64(&mut b, o + 56, s.9);
+            }
+
+            // ── program headers ──────────────────────────────────────────
+            // (type, flags, offset, vaddr, filesz, memsz, align)
+            let phdrs: Vec<(u32, u32, u64, u64, u64, u64, u64)> = vec![
+                (1, 5, 0, BASE, FILE_SIZE as u64, FILE_SIZE as u64, 0x1000),
+                (2, 6, O_DYNAMIC as u64, BASE + O_DYNAMIC as u64, dynamic_size, dynamic_size, 8),
+                (7, 4, O_TDATA as u64, BASE + O_TDATA as u64, 16, 64, 8),
+                (4, 4, O_NOTE as u64, BASE + O_NOTE as u64, note_size as u64, note_size as u64, 4),
+            ];
+            for (i, p) in phdrs.iter().enumerate() {
+                let o = 0x40 + i * 56;
+                put_u32(&mut b, o, p.0);
+                put_u32(&mut b, o + 4, p.1);
+                put_u64(&mut b, o + 8, p.2);
+                put_u64(&mut b, o + 16, p.3);
+                put_u64(&mut b, o + 24, p.3);
+                put_u64(&mut b, o + 32, p.4);
+                put_u64(&mut b, o + 40, p.5);
+                put_u64(&mut b, o + 48, p.6);
+            }
+
+            // ── ELF header ───────────────────────────────────────────────
+            put(&mut b, 0, &[0x7F, b'E', b'L', b'F', 2, 1, 1, 0]);
+            put_u16(&mut b, 16, 3); // ET_DYN
+            put_u16(&mut b, 18, 62); // EM_X86_64
+            put_u32(&mut b, 20, 1);
+            put_u64(&mut b, 24, BASE + 0x1000); // e_entry
+            put_u64(&mut b, 32, 0x40); // e_phoff
+            put_u64(&mut b, 40, O_SHDRS as u64); // e_shoff
+            put_u32(&mut b, 48, 0);
+            put_u16(&mut b, 52, 64); // e_ehsize
+            put_u16(&mut b, 54, 56); // e_phentsize
+            put_u16(&mut b, 56, u16::try_from(phdrs.len()).expect("phnum"));
+            put_u16(&mut b, 58, 64); // e_shentsize
+            put_u16(&mut b, 60, u16::try_from(shdrs.len()).expect("shnum"));
+            put_u16(&mut b, 62, u16::try_from(shdrs.len() - 1).expect("shstrndx"));
+
+            b
+        }
+    }
+
 
     // ── DtTag ────────────────────────────────────────────────────────────────
 
@@ -681,33 +1258,38 @@ mod tests {
 
     #[test]
     fn test_dynamic_section_mock_needed_libs() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert_eq!(d.needed_libs.len(), 2);
         assert!(d.needed_libs.contains(&"libc.so.6".to_string()));
     }
 
     #[test]
     fn test_dynamic_section_mock_soname() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert_eq!(d.soname.as_deref(), Some("libexample.so.1"));
     }
 
     #[test]
     fn test_dynamic_section_mock_runpath() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert!(d.has_runpath());
         assert_eq!(d.search_path(), Some("/usr/local/lib"));
     }
 
     #[test]
     fn test_dynamic_section_no_textrel() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert!(!d.has_textrel);
     }
 
     #[test]
     fn test_dynamic_section_bind_now() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert!(d.has_bind_now);
     }
 
@@ -731,7 +1313,8 @@ mod tests {
 
     #[test]
     fn test_got_plt_find_symbol() {
-        let g = ElfAnalyzer::mock_got_plt();
+        let img = fixture::elf_image();
+        let g = ElfAnalyzer::mock_got_plt(&img).expect("got/plt");
         let entries = g.find_symbol("malloc");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].plt_va, 0x0040_1020);
@@ -739,14 +1322,16 @@ mod tests {
 
     #[test]
     fn test_got_plt_plt_for() {
-        let g = ElfAnalyzer::mock_got_plt();
+        let img = fixture::elf_image();
+        let g = ElfAnalyzer::mock_got_plt(&img).expect("got/plt");
         assert_eq!(g.plt_for("free"), Some(0x0040_1030));
         assert_eq!(g.plt_for("unknown"), None);
     }
 
     #[test]
     fn test_got_plt_entry_count() {
-        let g = ElfAnalyzer::mock_got_plt();
+        let img = fixture::elf_image();
+        let g = ElfAnalyzer::mock_got_plt(&img).expect("got/plt");
         assert_eq!(g.entries.len(), 3);
     }
 
@@ -771,7 +1356,8 @@ mod tests {
 
     #[test]
     fn test_version_info_mock_needed() {
-        let v = ElfAnalyzer::mock_version_info();
+        let img = fixture::elf_image();
+        let v = ElfAnalyzer::mock_version_info(&img).expect("version info");
         assert_eq!(v.needed.len(), 1);
         assert_eq!(v.needed[0].file, "libc.so.6");
         assert!(v.needed[0].versions.contains(&"GLIBC_2.5".to_string()));
@@ -779,7 +1365,8 @@ mod tests {
 
     #[test]
     fn test_version_info_mock_defined() {
-        let v = ElfAnalyzer::mock_version_info();
+        let img = fixture::elf_image();
+        let v = ElfAnalyzer::mock_version_info(&img).expect("version info");
         assert_eq!(v.defined.len(), 1);
         assert_eq!(v.defined[0].version, "MYLIB_1.0");
     }
@@ -788,7 +1375,8 @@ mod tests {
 
     #[test]
     fn test_tls_section_is_present() {
-        let t = ElfAnalyzer::mock_tls();
+        let img = fixture::elf_image();
+        let t = ElfAnalyzer::mock_tls(&img).expect("tls");
         assert!(t.is_present());
     }
 
@@ -802,14 +1390,16 @@ mod tests {
 
     #[test]
     fn test_build_id_mock_sha1() {
-        let b = ElfAnalyzer::mock_build_id();
+        let img = fixture::elf_image();
+        let b = ElfAnalyzer::mock_build_id(&img).expect("build id");
         assert!(b.is_sha1());
         assert!(!b.is_sha256());
     }
 
     #[test]
     fn test_build_id_hex_length() {
-        let b = ElfAnalyzer::mock_build_id();
+        let img = fixture::elf_image();
+        let b = ElfAnalyzer::mock_build_id(&img).expect("build id");
         assert_eq!(b.hex.len(), 40); // 20 bytes × 2 hex chars
     }
 
@@ -904,17 +1494,20 @@ mod tests {
     }
     #[test]
     fn test_dynamic_section_init_fn() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert!(d.init_fn.is_some());
     }
     #[test]
     fn test_dynamic_section_fini_fn() {
-        let d = ElfAnalyzer::mock_dynamic();
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::mock_dynamic(&img).expect("dynamic section");
         assert!(d.fini_fn.is_some());
     }
     #[test]
     fn test_got_plt_plt_base() {
-        let g = ElfAnalyzer::mock_got_plt();
+        let img = fixture::elf_image();
+        let g = ElfAnalyzer::mock_got_plt(&img).expect("got/plt");
         assert_ne!(g.plt_base, 0);
     }
     #[test]
@@ -927,17 +1520,109 @@ mod tests {
     }
     #[test]
     fn test_tls_total_size() {
-        let t = ElfAnalyzer::mock_tls();
+        let img = fixture::elf_image();
+        let t = ElfAnalyzer::mock_tls(&img).expect("tls");
         assert_eq!(t.total_size, 64);
     }
     #[test]
     fn test_version_info_needed_count() {
-        let v = ElfAnalyzer::mock_version_info();
+        let img = fixture::elf_image();
+        let v = ElfAnalyzer::mock_version_info(&img).expect("version info");
         assert_eq!(v.needed.len(), 1);
     }
     #[test]
     fn test_build_id_mock_bytes() {
-        let b = ElfAnalyzer::mock_build_id();
+        let img = fixture::elf_image();
+        let b = ElfAnalyzer::mock_build_id(&img).expect("build id");
         assert_eq!(b.bytes[0], 0xDE);
+    }
+
+    // ── Byte-derived analysis: every value below is read out of the image ──
+
+    #[test]
+    fn test_analyze_dynamic_needed_matches_image() {
+        let img = fixture::elf_image();
+        let d = ElfAnalyzer::new().analyze_dynamic(&img).expect("dynamic");
+        assert_eq!(d.needed_libs, fixture::NEEDED.to_vec());
+    }
+
+    #[test]
+    fn test_analyze_dynamic_rejects_non_elf() {
+        let err = ElfAnalyzer::new().analyze_dynamic(b"not an elf at all").unwrap_err();
+        assert!(matches!(err, ElfAnalyzerError::NotElf(_)), "{err}");
+    }
+
+    #[test]
+    fn test_analyze_got_plt_symbols_and_slots() {
+        let img = fixture::elf_image();
+        let g = ElfAnalyzer::new().analyze_got_plt(&img).expect("got/plt");
+        let names: Vec<&str> = g.entries.iter().map(|e| e.symbol.as_str()).collect();
+        assert_eq!(names, fixture::IMPORTS.to_vec());
+        assert_eq!(g.plt_base, fixture::PLT_BASE);
+        assert_eq!(g.got_plt_base, fixture::GOTPLT_BASE);
+        // GOT slots start after the three reserved .got.plt words.
+        assert_eq!(g.entries[0].got_va, fixture::GOTPLT_BASE + 24);
+        assert_eq!(g.entries[2].got_va, fixture::GOTPLT_BASE + 40);
+        // The image sets DT_BIND_NOW, so nothing is bound lazily.
+        assert!(g.entries.iter().all(|e| !e.is_lazy));
+    }
+
+    #[test]
+    fn test_analyze_got_plt_reports_missing_plt() {
+        // Same image with the .plt section renamed out of existence: the
+        // analyzer must name what it is missing instead of inventing entries.
+        let mut img = fixture::elf_image();
+        let needle = b"\0.plt\0";
+        let pos = img
+            .windows(needle.len())
+            .position(|w| w == needle)
+            .expect("section name present");
+        img[pos + 2] = b'X';
+        let err = ElfAnalyzer::new().analyze_got_plt(&img).unwrap_err();
+        match err {
+            ElfAnalyzerError::Missing { missing, .. } => assert_eq!(missing, ".plt section"),
+            other => panic!("expected Missing, got {other}"),
+        }
+    }
+
+    #[test]
+    fn test_analyze_tls_geometry_from_pt_tls() {
+        let img = fixture::elf_image();
+        let t = ElfAnalyzer::new().analyze_tls(&img).expect("tls");
+        assert_eq!(t.init_size, 16);
+        assert_eq!(t.total_size, 64);
+        assert_eq!(t.alignment, 8);
+        // one STT_TLS symbol in .dynsym
+        assert_eq!(t.variable_count, 1);
+    }
+
+    #[test]
+    fn test_analyze_version_info_from_sections() {
+        let img = fixture::elf_image();
+        let v = ElfAnalyzer::new()
+            .analyze_version_info(&img)
+            .expect("version info");
+        assert_eq!(v.needed[0].file, "libc.so.6");
+        assert_eq!(v.needed[0].versions, vec!["GLIBC_2.5", "GLIBC_2.17"]);
+        assert_eq!(v.defined[0].version, "MYLIB_1.0");
+    }
+
+    #[test]
+    fn test_analyze_build_id_matches_note_bytes() {
+        let img = fixture::elf_image();
+        let b = ElfAnalyzer::new().analyze_build_id(&img).expect("build id");
+        assert_eq!(b.bytes, fixture::BUILD_ID.to_vec());
+    }
+
+    #[test]
+    fn test_analyze_build_id_missing_is_an_error() {
+        // A minimal ELF with no notes at all.
+        let mut img = fixture::elf_image();
+        // Blank the note so no NT_GNU_BUILD_ID can be found.
+        for byte in &mut img[0x0B00..0x0B40] {
+            *byte = 0;
+        }
+        let err = ElfAnalyzer::new().analyze_build_id(&img).unwrap_err();
+        assert!(matches!(err, ElfAnalyzerError::Missing { .. }), "{err}");
     }
 }

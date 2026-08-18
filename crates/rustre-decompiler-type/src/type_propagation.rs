@@ -677,13 +677,13 @@ pub fn seed_calling_convention_types(
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::StructField;
 
     fn i32() -> DecompType { DecompType::Int(IntWidth::I32) }
-    fn i64() -> DecompType { DecompType::Int(IntWidth::I64) }
-    fn u32() -> DecompType { DecompType::Int(IntWidth::U32) }
+    pub(crate) fn i64() -> DecompType { DecompType::Int(IntWidth::I64) }
+    pub(crate) fn u32() -> DecompType { DecompType::Int(IntWidth::U32) }
     fn ptr_i32() -> DecompType { DecompType::Ptr(Box::new(DecompType::Int(IntWidth::I32))) }
 
     #[test]
@@ -838,5 +838,54 @@ mod tests {
         eng.propagate_pointer_arith(&assigns);
         // Should infer the type of field at offset 8.
         assert!(eng.get("field_ptr").is_some());
+    }
+}
+
+#[cfg(test)]
+mod width_coverage_tests {
+    //! ⚠ `i64()` and `u32()` existed as fixtures in the module above and were
+    //! never called: every propagation test used `i32()` or `ptr_i32()`. So the
+    //! engine was only ever exercised at one signed 32-bit width, on a
+    //! decompiler whose whole point is recovering 64-bit and unsigned types.
+
+    use super::*;
+    use crate::{DecompType, IntWidth};
+
+    fn i32t() -> DecompType { DecompType::Int(IntWidth::I32) }
+    // The `i64`/`u32` fixtures the existing test module already had, now used.
+    use super::tests::{i64 as i64t, u32 as u32t};
+
+    /// A seeded 64-bit type comes back as 64-bit, not widened or narrowed.
+    #[test]
+    fn seeded_i64_round_trips() {
+        let mut eng = TypePropagationEngine::new();
+        eng.seed("q", i64t());
+        assert_eq!(eng.get("q"), Some(&i64t()));
+    }
+
+    /// Unsigned and signed 32-bit are distinct types and must not collapse:
+    /// conflating them is exactly how a decompiler emits a wrong comparison.
+    #[test]
+    fn u32_and_i32_are_not_the_same_type() {
+        assert_ne!(u32t(), i32t());
+        let mut eng = TypePropagationEngine::new();
+        eng.seed("s", i32t());
+        eng.seed("u", u32t());
+        assert_eq!(eng.get("s"), Some(&i32t()));
+        assert_eq!(eng.get("u"), Some(&u32t()));
+    }
+
+    /// Seeding the same name twice with different widths must leave a single,
+    /// well-defined answer rather than two live entries.
+    #[test]
+    fn reseeding_a_name_leaves_one_type() {
+        let mut eng = TypePropagationEngine::new();
+        eng.seed("x", i32t());
+        eng.seed("x", i64t());
+        let got = eng.get("x").cloned();
+        assert!(
+            got == Some(i32t()) || got == Some(i64t()),
+            "re-seed must resolve to one of the two, got {got:?}"
+        );
     }
 }

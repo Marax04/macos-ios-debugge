@@ -168,7 +168,8 @@ impl PassResult {
 ///
 /// Instances of this struct are passed by value to Rhai API functions which
 /// mutate or query the analysis state.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RhaiAnalysisContext {
     /// Functions keyed by address.
     pub functions: HashMap<u64, RhaiFunction>,
@@ -196,52 +197,43 @@ impl RhaiAnalysisContext {
         }
     }
 
-    /// Create a context with some mock data for testing.
-    #[must_use]
-    pub fn mock() -> Self {
-        let mut ctx = Self::new();
-
-        // Add a couple of mock functions.
-        ctx.functions.insert(0x1000, RhaiFunction::new("main", 0x1000));
-        ctx.functions.insert(0x2000, RhaiFunction {
-            name: "sub_2000".to_string(),
-            address: 0x2000,
-            size: 64,
-            is_library: false,
-            is_renamed: false,
-            calling_convention: "System V AMD64".to_string(),
-            arch: "x86_64".to_string(),
-        });
-
-        // Add basic blocks for `main`.
-        let mut bb0 = BasicBlock::new(0, 0x1000, 0x1020);
-        bb0.is_entry = true;
-        bb0.successors = vec![1, 2];
-        bb0.instruction_addrs = vec![0x1000, 0x1008, 0x1010, 0x1018];
-
-        let mut bb1 = BasicBlock::new(1, 0x1020, 0x1030);
-        bb1.predecessors = vec![0];
-        bb1.successors = vec![3];
-        bb1.instruction_addrs = vec![0x1020, 0x1028];
-
-        let mut bb2 = BasicBlock::new(2, 0x1030, 0x1040);
-        bb2.predecessors = vec![0];
-        bb2.successors = vec![3];
-        bb2.instruction_addrs = vec![0x1030, 0x1038];
-
-        let mut bb3 = BasicBlock::new(3, 0x1040, 0x1050);
-        bb3.predecessors = vec![1, 2];
-        bb3.is_return = true;
-        bb3.instruction_addrs = vec![0x1040, 0x1048];
-
-        ctx.blocks.insert(0x1000, vec![bb0, bb1, bb2, bb3]);
-
-        // Some variable types.
-        ctx.var_types.insert("0x1000:rdi".to_string(), "int64_t*".to_string());
-        ctx.var_types.insert("0x1000:rsi".to_string(), "size_t".to_string());
-
-        ctx
+    /// Build a context from a JSON analysis snapshot.
+    ///
+    /// The snapshot carries the same fields as the context itself: the
+    /// function map, the per-function basic blocks, variable types, comments,
+    /// type overrides and the architecture. Everything the context reports is
+    /// therefore what the caller supplied — nothing is invented here.
+    ///
+    /// # Errors
+    /// [`AnalysisContextError::EmptyInput`] when `json` is blank, and
+    /// [`AnalysisContextError::Json`] when it is not a valid snapshot.
+    pub fn from_json(json: &str) -> Result<Self, AnalysisContextError> {
+        if json.trim().is_empty() {
+            return Err(AnalysisContextError::EmptyInput);
+        }
+        let ctx: Self = serde_json::from_str(json)?;
+        Ok(ctx)
     }
+
+    /// Historical name for [`Self::from_json`]. It used to return a
+    /// hand-written sample context; it now decodes the snapshot it is given.
+    ///
+    /// # Errors
+    /// See [`Self::from_json`].
+    pub fn mock(json: &str) -> Result<Self, AnalysisContextError> {
+        Self::from_json(json)
+    }
+}
+
+/// Everything that can stop an analysis context from being built.
+#[derive(Debug, thiserror::Error)]
+pub enum AnalysisContextError {
+    /// No snapshot was supplied at all.
+    #[error("no analysis snapshot supplied: expected JSON with at least an `arch` field")]
+    EmptyInput,
+    /// The snapshot is not valid JSON, or does not match the context shape.
+    #[error("invalid analysis snapshot: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 // ── RhaiAnalysisApi ───────────────────────────────────────────────────────────
@@ -264,10 +256,15 @@ impl RhaiAnalysisApi {
         Self { ctx: RhaiAnalysisContext::new() }
     }
 
-    /// Create an API with a mock context for testing.
-    #[must_use]
-    pub fn with_mock() -> Self {
-        Self { ctx: RhaiAnalysisContext::mock() }
+    /// Create an API over the context described by a JSON snapshot.
+    ///
+    /// Historical name; it used to wrap a hand-written sample context and now
+    /// wraps whatever the snapshot describes.
+    ///
+    /// # Errors
+    /// See [`RhaiAnalysisContext::from_json`].
+    pub fn with_mock(json: &str) -> Result<Self, AnalysisContextError> {
+        Ok(Self { ctx: RhaiAnalysisContext::from_json(json)? })
     }
 
     /// Create an API wrapping the given context.
@@ -542,8 +539,72 @@ impl Default for RhaiAnalysisApi {
 mod tests {
     use super::*;
 
+    /// A JSON analysis snapshot. Every expectation in the tests below is a
+    /// property of THIS text, decoded by `from_json`.
+    const SNAPSHOT: &str = r#"{
+        "arch": "x86_64",
+        "functions": {
+            "4096": {
+                "name": "main", "address": 4096, "size": 0,
+                "is_library": false, "is_renamed": false,
+                "calling_convention": "unknown", "arch": "x86_64"
+            },
+            "8192": {
+                "name": "sub_2000", "address": 8192, "size": 64,
+                "is_library": false, "is_renamed": false,
+                "calling_convention": "System V AMD64", "arch": "x86_64"
+            }
+        },
+        "blocks": {
+            "4096": [
+                {"id": 0, "start": 4096, "end": 4128,
+                 "instruction_addrs": [4096, 4104, 4112, 4120],
+                 "successors": [1, 2], "predecessors": [],
+                 "is_entry": true, "is_return": false},
+                {"id": 1, "start": 4128, "end": 4144,
+                 "instruction_addrs": [4128, 4136],
+                 "successors": [3], "predecessors": [0],
+                 "is_entry": false, "is_return": false},
+                {"id": 2, "start": 4144, "end": 4160,
+                 "instruction_addrs": [4144, 4152],
+                 "successors": [3], "predecessors": [0],
+                 "is_entry": false, "is_return": false},
+                {"id": 3, "start": 4160, "end": 4176,
+                 "instruction_addrs": [4160, 4168],
+                 "successors": [], "predecessors": [1, 2],
+                 "is_entry": false, "is_return": true}
+            ]
+        },
+        "var_types": {
+            "0x1000:rdi": "int64_t*",
+            "0x1000:rsi": "size_t"
+        }
+    }"#;
+
     fn api() -> RhaiAnalysisApi {
-        RhaiAnalysisApi::with_mock()
+        RhaiAnalysisApi::with_mock(SNAPSHOT).expect("snapshot decodes")
+    }
+
+    #[test]
+    fn test_from_json_rejects_empty_input() {
+        let err = RhaiAnalysisContext::from_json("   ").unwrap_err();
+        assert!(matches!(err, AnalysisContextError::EmptyInput), "{err}");
+    }
+
+    #[test]
+    fn test_from_json_rejects_malformed_input() {
+        let err = RhaiAnalysisContext::from_json("{ not json").unwrap_err();
+        assert!(matches!(err, AnalysisContextError::Json(_)), "{err}");
+    }
+
+    #[test]
+    fn test_from_json_reads_the_snapshot_it_is_given() {
+        let ctx = RhaiAnalysisContext::from_json(SNAPSHOT).expect("snapshot decodes");
+        assert_eq!(ctx.arch, "x86_64");
+        assert_eq!(ctx.functions.len(), 2);
+        assert_eq!(ctx.functions[&0x1000].name, "main");
+        assert_eq!(ctx.blocks[&0x1000].len(), 4);
+        assert_eq!(ctx.var_types["0x1000:rdi"], "int64_t*");
     }
 
     // ── BasicBlock ───────────────────────────────────────────────────────────

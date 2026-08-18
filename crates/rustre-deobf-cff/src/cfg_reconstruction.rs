@@ -6,7 +6,6 @@
 //! * Handling multiple (nested) state variables
 //! * [`CfgReconstructor`] — top-level entry point
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet, VecDeque};
 

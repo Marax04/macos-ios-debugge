@@ -1911,7 +1911,7 @@ impl Architecture for AndroidArch {
         Endian::Little
     }
 
-    fn disassemble(&self, address: Address, bytes: &[u8]) -> Result<Instruction, CoreError> {
+    fn disassemble(&self, _address: Address, bytes: &[u8]) -> Result<Instruction, CoreError> {
         // This used to answer `nop` for every input, sized `len.min(4).max(1)`.
         // `name()` reports "aarch64", so a caller would need an ARM64 decoder —
         // which this crate does not have: it loads APK/DEX/ART containers and

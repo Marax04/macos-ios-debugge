@@ -5,7 +5,6 @@
 //! [`DecompileFunc`], [`FindVulns`], [`IdentifyCrypto`],
 //! [`ExtractConfig`], and [`GenerateYara`].
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

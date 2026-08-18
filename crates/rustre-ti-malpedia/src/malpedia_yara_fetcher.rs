@@ -401,9 +401,10 @@ impl RuleCache {
 
 /// Fetches YARA rules from Malpedia, caching results to avoid redundant fetches.
 ///
-/// In a real deployment this would make HTTP requests to the Malpedia API.
-/// Here we use a purely synchronous mock implementation suitable for testing
-/// and offline analysis pipelines.
+/// This type has no HTTP transport.  It serves rules from its cache and from
+/// bundles loaded with [`MalpediaYaraFetcher::load_bundle`]; a family it has
+/// never been given rules for is reported as requiring a network lookup, not
+/// answered with generated rules.
 pub struct MalpediaYaraFetcher {
     /// API key for authenticated Malpedia endpoints.
     api_key: Option<String>,
@@ -455,13 +456,14 @@ impl MalpediaYaraFetcher {
         self.api_key.as_ref().is_some_and(|k| !k.is_empty())
     }
 
-    /// Fetch YARA rules for a family, using the cache if available.
+    /// Fetch YARA rules for a family from the cache or a loaded bundle.
     ///
-    /// This mock implementation generates deterministic fake rules for any
-    /// family id.
+    /// A miss is reported as a miss.  It used to synthesise deterministic fake
+    /// rules for ANY family id and return them as if they came from Malpedia.
     ///
     /// # Errors
-    /// Returns a description string if the fetch fails.
+    /// Returns a message naming the required network lookup when the family is
+    /// not present in the cache or in a loaded bundle.
     ///
     /// # Panics
     /// Panics if the cache state becomes inconsistent between checks (should not occur in practice).
@@ -474,11 +476,17 @@ impl MalpediaYaraFetcher {
             return Ok(rules);
         }
 
-        // Simulate a fetch.
         self.fetch_count += 1;
-        let rules = Self::generate_mock_rules(family_id);
-        self.cache.put(rules.clone());
-        Ok(rules)
+        Err(format!(
+            "no YARA rules for '{family_id}' in the cache or in a loaded bundle; \
+             fetching them requires a network lookup against {}{}",
+            self.base_url,
+            if self.is_authenticated() {
+                " (no HTTP transport is compiled into this crate)"
+            } else {
+                " and no API key is configured"
+            }
+        ))
     }
 
     /// Batch-fetch rules for multiple families.
@@ -535,8 +543,13 @@ impl MalpediaYaraFetcher {
         self.cache.clear();
     }
 
-    /// Generate deterministic mock YARA rules for a given family id.
-    fn generate_mock_rules(family_id: &str) -> FamilyRules {
+    /// Generate a deterministic LOCAL rule TEMPLATE set for a family id.
+    ///
+    /// Nothing here comes from Malpedia.  It is exposed so that callers who
+    /// want a scaffold ask for one explicitly; [`Self::fetch_family_rules`] no
+    /// longer returns it in place of a real fetch.
+    #[must_use]
+    pub fn generate_mock_rules(family_id: &str) -> FamilyRules {
         let clean = family_id.replace(['.', '-'], "_");
         let rule_name = format!("detect_{clean}");
         let mut rs = YaraRuleSet::new(&rule_name, family_id);
@@ -613,9 +626,33 @@ mod tests {
         assert!(!MalpediaYaraFetcher::new(None).is_authenticated());
     }
 
+    /// Seed the cache the way a caller would: with rules it already holds.
+    fn seeded(ids: &[&str]) -> MalpediaYaraFetcher {
+        let mut f = fetcher();
+        let mut bundle = HashMap::new();
+        for &id in ids {
+            bundle.insert(
+                id.to_string(),
+                MalpediaYaraFetcher::generate_mock_rules(id).render_all(),
+            );
+        }
+        f.load_bundle(&bundle);
+        f
+    }
+
+    #[test]
+    fn test_fetch_without_rules_reports_network_lookup() {
+        let mut f = fetcher();
+        let err = f.fetch_family_rules("win.emotet").unwrap_err();
+        assert!(err.contains("network lookup"), "{err}");
+        assert!(err.contains("win.emotet"), "{err}");
+        // Nothing was invented and nothing was cached.
+        assert!(f.cache.is_empty());
+    }
+
     #[test]
     fn test_fetch_returns_rules() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet"]);
         let r = f.fetch_family_rules("win.emotet").unwrap();
         assert_eq!(r.family_id, "win.emotet");
         assert!(!r.is_empty());
@@ -623,11 +660,11 @@ mod tests {
 
     #[test]
     fn test_fetch_second_call_uses_cache() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet"]);
         let _ = f.fetch_family_rules("win.emotet").unwrap();
         let _ = f.fetch_family_rules("win.emotet").unwrap();
-        assert_eq!(f.stats().fetch_count, 1);
-        assert_eq!(f.stats().cache_hit_count, 1);
+        assert_eq!(f.stats().fetch_count, 0);
+        assert_eq!(f.stats().cache_hit_count, 2);
     }
 
     #[test]
@@ -640,15 +677,23 @@ mod tests {
 
     #[test]
     fn test_batch_fetch() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet", "linux.mirai"]);
         let result = f.fetch_batch(&["win.emotet", "linux.mirai"]);
         assert_eq!(result.len(), 2);
         assert!(result.contains_key("win.emotet"));
     }
 
     #[test]
+    fn test_batch_fetch_skips_families_with_no_rules() {
+        let mut f = seeded(&["win.emotet"]);
+        let result = f.fetch_batch(&["win.emotet", "linux.mirai"]);
+        assert_eq!(result.len(), 1);
+        assert!(!result.contains_key("linux.mirai"));
+    }
+
+    #[test]
     fn test_invalidate_clears_entry() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet"]);
         let _ = f.fetch_family_rules("win.emotet");
         assert_eq!(f.cache.len(), 1);
         f.invalidate("win.emotet");
@@ -657,7 +702,7 @@ mod tests {
 
     #[test]
     fn test_clear_cache() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet", "win.wannacry"]);
         let _ = f.fetch_family_rules("win.emotet");
         let _ = f.fetch_family_rules("win.wannacry");
         f.clear_cache();
@@ -678,7 +723,7 @@ mod tests {
 
     #[test]
     fn test_family_rules_render_all() {
-        let mut f = fetcher();
+        let mut f = seeded(&["win.emotet"]);
         let r = f.fetch_family_rules("win.emotet").unwrap();
         let text = r.render_all();
         assert!(text.contains("rule "));

@@ -6,7 +6,6 @@
 //! - [`VmLiftResult`] — complete result of a VM lifting pass
 //! - Metadata annotation and IR serialisation
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

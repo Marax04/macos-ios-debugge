@@ -17,7 +17,6 @@
 //! | [`MemoryRegion`] | Simulated memory region |
 //! | [`DebugSession`] | A complete debug session wrapping a MockDebugger |
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;

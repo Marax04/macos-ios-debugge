@@ -4,7 +4,6 @@
 //! [`SessionState`], [`SessionConfig`], [`SessionLog`],
 //! [`SessionExport`], and [`SessionRestore`] as supporting types.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

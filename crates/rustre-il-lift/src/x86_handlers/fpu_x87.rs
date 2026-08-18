@@ -17,11 +17,10 @@
 //! through `__fpu_top`. Exception bits IE/DE/ZE/OE/UE/PE are emitted as
 //! `__fpu_ie`, `__fpu_de`, `__fpu_ze`, `__fpu_oe`, `__fpu_ue`, `__fpu_pe`.
 
-#![allow(unused_imports, dead_code)]
 
 use crate::x86_context::{FlagId, X86LiftCtx};
 use crate::x86_operand::read_operand;
-use crate::{Effect, IrExpr, LiftError};
+use crate::{IrExpr, LiftError};
 use iced_x86::Instruction;
 
 // ─────────────────────────────────────────────────────────────────────────────

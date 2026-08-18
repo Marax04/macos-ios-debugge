@@ -279,6 +279,13 @@ pub struct MalpediaRestClient {
     request_count: Arc<Mutex<u64>>,
     error_count: Arc<Mutex<u64>>,
     cache_hit_count: Arc<Mutex<u64>>,
+    /// When `true`, requests are answered from the built-in OFFLINE FIXTURES
+    /// instead of the network.  Off by default: a client that cannot reach
+    /// Malpedia reports that, it does not answer from canned documents.
+    ///
+    /// Only the crate's own tests (which exercise the retry / cache /
+    /// rate-limit machinery, not Malpedia's data) switch this on.
+    offline_fixtures: bool,
 }
 
 /// Percent-encode a single URL path segment (RFC 3986 §2.3 unreserved set).
@@ -323,7 +330,26 @@ impl MalpediaRestClient {
             request_count: Arc::new(Mutex::new(0)),
             error_count: Arc::new(Mutex::new(0)),
             cache_hit_count: Arc::new(Mutex::new(0)),
+            offline_fixtures: false,
         }
+    }
+
+    /// Answer requests from the built-in offline fixtures rather than the
+    /// network.
+    ///
+    /// The fixtures are hand-written example documents; they describe no real
+    /// malware family, sample or actor.  Enable this ONLY in tests, never on a
+    /// client whose results reach a user.
+    #[must_use]
+    pub const fn with_offline_fixtures(mut self) -> Self {
+        self.offline_fixtures = true;
+        self
+    }
+
+    /// Whether this client answers from offline fixtures.
+    #[must_use]
+    pub const fn uses_offline_fixtures(&self) -> bool {
+        self.offline_fixtures
     }
 
     /// Override the API base URL.
@@ -405,10 +431,17 @@ impl MalpediaRestClient {
 
             { *self.request_count.lock() += 1; }
 
-            // Simulate network call (returns mock data based on URL pattern).
             // The `auth` header value is referenced here so the field is part
-            // of the request flow even though the mock backend ignores it.
+            // of the request flow.
             let _ = &auth;
+            if !self.offline_fixtures {
+                *self.error_count.lock() += 1;
+                return Err(ClientError::Network(format!(
+                    "no HTTP transport is compiled into rustre-ti-malpedia: answering \
+                     this request requires a live GET of {url}. No document was \
+                     fabricated. Enable with_offline_fixtures() only for tests."
+                )));
+            }
             let result = self.simulate_http_get(url).await;
 
             match result {
@@ -436,8 +469,15 @@ impl MalpediaRestClient {
         Err(ClientError::MaxRetriesExceeded { retries: self.retry_policy.max_retries })
     }
 
-    /// Mock HTTP GET — returns plausible JSON based on URL patterns.
-    async fn simulate_http_get(&self, url: &str) -> Result<String, ClientError> {
+    /// Return a built-in OFFLINE FIXTURE document for a URL pattern.
+    ///
+    /// These are hand-written example payloads used to exercise the client's
+    /// parsing, caching and retry code.  They are not Malpedia data and are
+    /// only reachable when [`Self::with_offline_fixtures`] was called.
+    ///
+    /// # Errors
+    /// Returns [`ClientError::NotFound`] for a URL with no fixture.
+    pub async fn simulate_http_get(&self, url: &str) -> Result<String, ClientError> {
         // Simulate ~5ms latency
         sleep(Duration::from_millis(5)).await;
 
@@ -798,14 +838,41 @@ impl ClientBuilder {
 
 #[cfg(test)]
 mod tests {
+    // Tests below exercise the client machinery (auth gate, cache, retry,
+    // rate limiting) and therefore opt into the offline fixtures explicitly.
+
     use super::*;
 
     fn client() -> MalpediaRestClient {
-        MalpediaRestClient::new(Some("test_key".into()))
+        MalpediaRestClient::new(Some("test_key".into())).with_offline_fixtures()
     }
 
     fn anon() -> MalpediaRestClient {
-        MalpediaRestClient::new(None)
+        MalpediaRestClient::new(None).with_offline_fixtures()
+    }
+
+    /// A client configured the way production configures it: no fixtures.
+    fn live_client() -> MalpediaRestClient {
+        MalpediaRestClient::new(Some("test_key".into()))
+    }
+
+    #[test]
+    fn test_offline_fixtures_are_off_by_default() {
+        assert!(!live_client().uses_offline_fixtures());
+        assert!(client().uses_offline_fixtures());
+    }
+
+    #[tokio::test]
+    async fn test_live_client_reports_missing_transport_instead_of_a_family() {
+        let err = live_client().get_family("win.emotet").await.unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("no HTTP transport"), "{msg}");
+        assert!(msg.contains("No document was fabricated"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_live_client_reports_missing_transport_for_a_hash() {
+        assert!(live_client().get_sample(&"a".repeat(64)).await.is_err());
     }
 
     #[test]

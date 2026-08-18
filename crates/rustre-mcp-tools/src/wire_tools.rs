@@ -1,146 +1,73 @@
 ﻿//! Cross-cutting MCP tool wrappers — orchestrator.
 //! The actual tools live under crate::tools::<prefix>.
 
-use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult, RustReMcpServer};
+use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use crate::{args_to_bytes, hex_encode};
 
 // Import all split tool modules so their struct types are in scope for impl blocks and
 // for registration functions like rs_sym_core_extra_handlers().
-#[allow(unused_imports)]
 use crate::tools::adb::*;
-#[allow(unused_imports)]
-use crate::tools::adf::*;
-#[allow(unused_imports)]
 use crate::tools::agent::*;
-#[allow(unused_imports)]
-use crate::tools::an_cfg::*;
-#[allow(unused_imports)]
 use crate::tools::analysis::*;
-#[allow(unused_imports)]
 use crate::tools::analysis_cfg::*;
-#[allow(unused_imports)]
-use crate::tools::analysis_typerecov::*;
-#[allow(unused_imports)]
 use crate::tools::arch6502::*;
-#[allow(unused_imports)]
 use crate::tools::arch68k::*;
-#[allow(unused_imports)]
 use crate::tools::arch_cil::*;
-#[allow(unused_imports)]
 use crate::tools::arch_dex::*;
-#[allow(unused_imports)]
 use crate::tools::arch_jvm::*;
-#[allow(unused_imports)]
 use crate::tools::arch_lua::*;
-#[allow(unused_imports)]
 use crate::tools::arch_wasm::*;
-#[allow(unused_imports)]
 use crate::tools::arch_x86::*;
-#[allow(unused_imports)]
 use crate::tools::arm::*;
-#[allow(unused_imports)]
 use crate::tools::arm64::*;
-#[allow(unused_imports)]
 use crate::tools::avr::*;
-#[allow(unused_imports)]
-use crate::tools::axr::*;
-#[allow(unused_imports)]
 use crate::tools::bpf::*;
-#[allow(unused_imports)]
 use crate::tools::callconv::*;
-#[allow(unused_imports)]
 use crate::tools::codeview::*;
-#[allow(unused_imports)]
 use crate::tools::crypto::*;
-#[allow(unused_imports)]
 use crate::tools::db_base_migrations::*;
-#[allow(unused_imports)]
-use crate::tools::debug::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-macos disabled
 // use crate::tools::debug_macos::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-unicorn disabled
 // use crate::tools::debug_unicorn::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-windbg disabled
 // use crate::tools::debug_windbg::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-windows disabled
 // use crate::tools::debug_windows::*;
-#[allow(unused_imports)]
 use crate::tools::decomp::*;
-#[allow(unused_imports)]
-use crate::tools::decomp2::*;
-#[allow(unused_imports)]
 use crate::tools::decompiler::*;
-#[allow(unused_imports)]
-use crate::tools::decompiler_expr::*;
-#[allow(unused_imports)]
 use crate::tools::decompiler_type::*;
-#[allow(unused_imports)]
 use crate::tools::demangle::*;
-#[allow(unused_imports)]
 use crate::tools::deobf::*;
-#[allow(unused_imports)]
 use crate::tools::diff::*;
-#[allow(unused_imports)]
-use crate::tools::dm::*;
-#[allow(unused_imports)]
 use crate::tools::dotnet::*;
-#[allow(unused_imports)]
 use crate::tools::dotnet_edit::*;
-#[allow(unused_imports)]
 use crate::tools::dotnet_metadata::*;
-#[allow(unused_imports)]
-use crate::tools::dt::*;
-#[allow(unused_imports)]
 use crate::tools::dwarf::*;
-#[allow(unused_imports)]
 use crate::tools::emu::*;
 // [DISABLED 2026-07-12] rustre-emu-unicorn dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::emu_unicorn::*;
-#[allow(unused_imports)]
 use crate::tools::events::*;
-#[allow(unused_imports)]
-use crate::tools::f::*;
-#[allow(unused_imports)]
-use crate::tools::ffs::*;
-#[allow(unused_imports)]
 use crate::tools::firmware::*;
-#[allow(unused_imports)]
 use crate::tools::flirt::*;
-#[allow(unused_imports)]
 use crate::tools::flirt_apply::*;
-#[allow(unused_imports)]
 use crate::tools::flirt_gen::*;
-#[allow(unused_imports)]
 use crate::tools::forensics::*;
-#[allow(unused_imports)]
 use crate::tools::forensics_fs::*;
-#[allow(unused_imports)]
 use crate::tools::forensics_mem::*;
 // [DISABLED 2026-07-12] rustre-debug-frida dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::frida::*;
-#[allow(unused_imports)]
 use crate::tools::function::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz_afl::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz_cov::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz_libfuzzer::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz_net::*;
-#[allow(unused_imports)]
 use crate::tools::fuzz_san::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-gdb disabled
 // use crate::tools::gdb::*;
 // [DISABLED 2026-07-12] rustre-decompiler-ghidra dep disabled.
@@ -150,221 +77,95 @@ use crate::tools::fuzz_san::*;
 // use crate::tools::ghidra_backend::*;
 // #[allow(unused_imports)]
 // use crate::tools::ghidra_pcode::*;
-#[allow(unused_imports)]
-use crate::tools::hex::*;
-#[allow(unused_imports)]
 use crate::tools::hex_pattern::*;
-#[allow(unused_imports)]
 use crate::tools::hex_template::*;
-#[allow(unused_imports)]
 use crate::tools::hex_view::*;
-#[allow(unused_imports)]
 use crate::tools::iadl::*;
-#[allow(unused_imports)]
-use crate::tools::il_hlil::*;
-#[allow(unused_imports)]
 use crate::tools::il_lift::*;
-#[allow(unused_imports)]
-use crate::tools::il_mlil::*;
-#[allow(unused_imports)]
 use crate::tools::il_passes::*;
-#[allow(unused_imports)]
 use crate::tools::ios::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-kgdb disabled
 // use crate::tools::kgdb::*;
-#[allow(unused_imports)]
 use crate::tools::llm::*;
-#[allow(unused_imports)]
 use crate::tools::loader::*;
-#[allow(unused_imports)]
 use crate::tools::lua::*;
-#[allow(unused_imports)]
 use crate::tools::luajit::*;
-#[allow(unused_imports)]
 use crate::tools::m68k::*;
-#[allow(unused_imports)]
 use crate::tools::malpedia::*;
-#[allow(unused_imports)]
 use crate::tools::mem::*;
-#[allow(unused_imports)]
 use crate::tools::mem_diff::*;
-#[allow(unused_imports)]
-use crate::tools::mem_kx7::*;
-#[allow(unused_imports)]
-use crate::tools::mem_ma::*;
-#[allow(unused_imports)]
 use crate::tools::mhcde::*;
-#[allow(unused_imports)]
 use crate::tools::mips::*;
-#[allow(unused_imports)]
 use crate::tools::mobile::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_apktool::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_dyld::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_ios::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_ipa::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_jadx::*;
-#[allow(unused_imports)]
 use crate::tools::mobile_smali::*;
-#[allow(unused_imports)]
 use crate::tools::msp430::*;
-#[allow(unused_imports)]
 use crate::tools::net::*;
-#[allow(unused_imports)]
 use crate::tools::net_dissect::*;
-#[allow(unused_imports)]
-use crate::tools::net_dns::*;
-#[allow(unused_imports)]
 use crate::tools::net_pcap::*;
-#[allow(unused_imports)]
 use crate::tools::net_proxy::*;
-#[allow(unused_imports)]
 use crate::tools::net_rules::*;
-#[allow(unused_imports)]
 use crate::tools::noreturn::*;
-#[allow(unused_imports)]
 use crate::tools::patch::*;
-#[allow(unused_imports)]
 use crate::tools::pe::*;
-#[allow(unused_imports)]
 use crate::tools::pe_editor::*;
-#[allow(unused_imports)]
 use crate::tools::plugin::*;
-#[allow(unused_imports)]
 use crate::tools::ppc::*;
-#[allow(unused_imports)]
 use crate::tools::python::*;
-#[allow(unused_imports)]
-use crate::tools::rd::*;
-#[allow(unused_imports)]
 use crate::tools::recover::*;
-#[allow(unused_imports)]
 use crate::tools::rhai::*;
-#[allow(unused_imports)]
-use crate::tools::rlib_dec::*;
-#[allow(unused_imports)]
-use crate::tools::rlib_dec2::*;
-#[allow(unused_imports)]
-use crate::tools::rs::*;
-#[allow(unused_imports)]
 use crate::tools::rs_sym::*;
-#[allow(unused_imports)]
-use crate::tools::rustre_decompiler::*;
-#[allow(unused_imports)]
-use crate::tools::rustre_symb::*;
-#[allow(unused_imports)]
 use crate::tools::rv::*;
-#[allow(unused_imports)]
 use crate::tools::sandbox::*;
-#[allow(unused_imports)]
 use crate::tools::sandbox_report::*;
-#[allow(unused_imports)]
 use crate::tools::script::*;
-#[allow(unused_imports)]
 use crate::tools::script_lua::*;
-#[allow(unused_imports)]
 use crate::tools::script_python::*;
-#[allow(unused_imports)]
 use crate::tools::script_rhai::*;
-#[allow(unused_imports)]
 use crate::tools::smali::*;
-#[allow(unused_imports)]
 use crate::tools::sparc::*;
-#[allow(unused_imports)]
-use crate::tools::sr::*;
-#[allow(unused_imports)]
 use crate::tools::stabs::*;
-#[allow(unused_imports)]
 use crate::tools::stack::*;
-#[allow(unused_imports)]
 use crate::tools::survey::*;
-#[allow(unused_imports)]
 use crate::tools::symb::*;
 // [DISABLED 2026-07-12] rustre-symb-z3 dep disabled.
 // #[allow(unused_imports)]
 // use crate::tools::symb_z3::*;
-#[allow(unused_imports)]
 use crate::tools::symbols::*;
-#[allow(unused_imports)]
 use crate::tools::symbols_pdb::*;
-#[allow(unused_imports)]
-use crate::tools::symbols_stabs::*;
-#[allow(unused_imports)]
-use crate::tools::symbols_v6::*;
-#[allow(unused_imports)]
-use crate::tools::symbols_v7::*;
-#[allow(unused_imports)]
 use crate::tools::syscalls::*;
-#[allow(unused_imports)]
 use crate::tools::syscalls_linux::*;
-use crate::tools::linux_debug::*;
-#[allow(unused_imports)]
 use crate::tools::syscalls_windows::*;
-#[allow(unused_imports)]
 use crate::tools::sysinternals::*;
-#[allow(unused_imports)]
 use crate::tools::threatintel::*;
-#[allow(unused_imports)]
 use crate::tools::threatintel_group::*;
-#[allow(unused_imports)]
 use crate::tools::threatintel_indicator::*;
-#[allow(unused_imports)]
-use crate::tools::threatintel_ioc::*;
-#[allow(unused_imports)]
-use crate::tools::ti::*;
-#[allow(unused_imports)]
 use crate::tools::ti_malpedia::*;
-#[allow(unused_imports)]
 use crate::tools::ti_misp::*;
-#[allow(unused_imports)]
 use crate::tools::ti_opencti::*;
-#[allow(unused_imports)]
 use crate::tools::ti_otx::*;
-#[allow(unused_imports)]
-use crate::tools::ti_vt::*;
-#[allow(unused_imports)]
 use crate::tools::trace::*;
-#[allow(unused_imports)]
 use crate::tools::trace_cov::*;
-#[allow(unused_imports)]
 use crate::tools::trace_coverage::*;
-#[allow(unused_imports)]
 use crate::tools::trace_navigate::*;
-#[allow(unused_imports)]
 use crate::tools::trace_pt::*;
-#[allow(unused_imports)]
 use crate::tools::triage_die::*;
-#[allow(unused_imports)]
 use crate::tools::triage_entropy::*;
-#[allow(unused_imports)]
 use crate::tools::ttd::*;
-#[allow(unused_imports)]
 use crate::tools::ttd_query::*;
-#[allow(unused_imports)]
 use crate::tools::ttd_recorder::*;
-#[allow(unused_imports)]
 use crate::tools::ttd_replay::*;
-#[allow(unused_imports)]
 use crate::tools::ttd_replayer::*;
-#[allow(unused_imports)]
-use crate::tools::vmlift::*;
-#[allow(unused_imports)]
 use crate::tools::vsa::*;
-#[allow(unused_imports)]
 use crate::tools::vtable::*;
-#[allow(unused_imports)]
 // [DISABLED 2026-07-12] rustre-debug-windbg disabled
 // use crate::tools::windbg::*;
-#[allow(unused_imports)]
 use crate::tools::wire::*;
-#[allow(unused_imports)]
 use crate::tools::yara::*;
-#[allow(unused_imports)]
 use crate::tools::z80::*;
 
 
@@ -18135,7 +17936,6 @@ impl ToolHandler for ForensicsFsLnkParseTool {
 
 /// All wire-mcp cross-cutting tools as `Box<dyn ToolHandler>` with their
 /// `ToolDefinition`s, ready for `ToolRegistry::register`.
-#[must_use]
 // â”€â”€ analysis-type: builtin catalog + winapi lookup wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// List every built-in type record from the analysis-type catalog.
@@ -34729,6 +34529,53 @@ rhai_cast_tool!(ScriptRhaiTruncU128ToU64Tool, "script_rhai_trunc_u128_to_u64",
 
 // ── rustre-decompiler extra wrappers (rlib_dec2_ round) ─────────────────────
 
+
+/// Every SPARC wire tool defined in this file, paired with its definition.
+///
+/// ⚠ Why this exists: the 28 `Sparc*WireTool` types above are complete
+/// wrappers over `rustre_arch_sparc::*` that nothing ever constructed.
+/// `crate::tools::sparc::handlers()` registers two tools and does not know
+/// about these. Without this function the whole SPARC surface of the MCP
+/// server compiles and is unreachable.
+///
+/// Adding a new `sparc_wire_word_tool!` and forgetting this list puts the
+/// tool straight back into the unreachable state, so `sparc_wire_tool_count`
+/// in the tests below pins the count.
+fn sparc_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
+    vec![
+        (SparcBuildEpilogueWireTool::definition(), Box::new(SparcBuildEpilogueWireTool) as Box<dyn ToolHandler>),
+        (SparcBuildPrologueWireTool::definition(), Box::new(SparcBuildPrologueWireTool) as Box<dyn ToolHandler>),
+        (SparcBuildReturnSeqWireTool::definition(), Box::new(SparcBuildReturnSeqWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeAluImmWireTool::definition(), Box::new(SparcEncodeAluImmWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeAluRegWireTool::definition(), Box::new(SparcEncodeAluRegWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeBiccWireTool::definition(), Box::new(SparcEncodeBiccWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeCallWireTool::definition(), Box::new(SparcEncodeCallWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeJmplWireTool::definition(), Box::new(SparcEncodeJmplWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeLoadWireTool::definition(), Box::new(SparcEncodeLoadWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeNopWireTool::definition(), Box::new(SparcEncodeNopWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeSethiWireTool::definition(), Box::new(SparcEncodeSethiWireTool) as Box<dyn ToolHandler>),
+        (SparcEncodeStoreWireTool::definition(), Box::new(SparcEncodeStoreWireTool) as Box<dyn ToolHandler>),
+        (SparcExtractBranchTargetsWireTool::definition(), Box::new(SparcExtractBranchTargetsWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupAsiWireTool::definition(), Box::new(SparcLookupAsiWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupV8TrapWireTool::definition(), Box::new(SparcLookupV8TrapWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupV9TrapWireTool::definition(), Box::new(SparcLookupV9TrapWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupConditionWireTool::definition(), Box::new(SparcLookupConditionWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupFpOpcodeWireTool::definition(), Box::new(SparcLookupFpOpcodeWireTool) as Box<dyn ToolHandler>),
+        (SparcLookupPrivRegWireTool::definition(), Box::new(SparcLookupPrivRegWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthClrWireTool::definition(), Box::new(SparcSynthClrWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthCmpImmWireTool::definition(), Box::new(SparcSynthCmpImmWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthCmpRegWireTool::definition(), Box::new(SparcSynthCmpRegWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthDecWireTool::definition(), Box::new(SparcSynthDecWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthIncWireTool::definition(), Box::new(SparcSynthIncWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthMovImmWireTool::definition(), Box::new(SparcSynthMovImmWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthMovRegWireTool::definition(), Box::new(SparcSynthMovRegWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthNegWireTool::definition(), Box::new(SparcSynthNegWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthNotWireTool::definition(), Box::new(SparcSynthNotWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthSetWireTool::definition(), Box::new(SparcSynthSetWireTool) as Box<dyn ToolHandler>),
+        (SparcSynthTstWireTool::definition(), Box::new(SparcSynthTstWireTool) as Box<dyn ToolHandler>),
+    ]
+}
+
 pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     let mut all = Vec::new();
     all.extend(crate::tools::adb::handlers());
@@ -34921,6 +34768,33 @@ pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     all.extend(crate::tools::wire::handlers());
     all.extend(crate::tools::yara::handlers());
     all.extend(crate::tools::z80::handlers());
+    // -- sparc --------------------------------------------------------------
+    //
+    // `crate::tools::sparc::handlers()` above registers exactly TWO tools.
+    // The other 28 SPARC wrappers live in this file, are fully implemented
+    // against `rustre_arch_sparc::*`, compile, and had ZERO callers: nothing
+    // constructed them, so no MCP client could reach `sparc_encode_sethi`,
+    // `sparc_encode_alu_{reg,imm}`, `sparc_encode_{load,store,jmpl,bicc}`,
+    // the ten `sparc_synth_*` synthesizers, the two frame builders, or the
+    // five `sparc_lookup_*` tables.
+    //
+    // They were not dead code to delete — they were live code never wired,
+    // the same defect class as `all_ttd_replay_extra_handlers` above.
+    // Wired 2026-08-18; found by removing the `#[allow(dead_code)]` that had
+    // been hiding the warning rather than by reading the file.
+    all.extend(sparc_wire_handlers());
+    // -- decompiler-type / dataflow extras ------------------------------------
+    //
+    // Both files are `include!`d above (lines 235-236), so their registrars were
+    // in scope the whole time and simply never called. That made them worse than
+    // the SPARC case: these are not individual tools left out, they are the
+    // functions that register ENTIRE GROUPS, so 10 + 12 = 22 working tools were
+    // unreachable behind two missing call sites.
+    //
+    // Verified before wiring: none of the 22 names collides with a tool already
+    // in `all`, so registration cannot shadow an existing handler.
+    push_decompiler_type_extra_handlers(&mut all);
+    all.extend(dataflow_extra_handlers());
     all
 }
 
@@ -35584,7 +35458,7 @@ impl ToolHandler for SurveyBinaryTool {
                 })
                 .collect();
 
-            let mut scanner = ConstantScanner::new();
+            let scanner = ConstantScanner::new();
             let hits = scanner.scan_with_sections(data, &sections);
 
             let mut by_algorithm: std::collections::BTreeMap<String, usize> =
@@ -36071,7 +35945,6 @@ impl ToolHandler for AnalysisCryptoScanPathTool {
 // Re-export the silenced `hex_encode` helper as `pub use` so it is wired in
 // via the wire module (avoids a dead-code warning for the import above when
 // no future tool consumes it).
-#[allow(dead_code)]
 pub(crate) fn _ensure_hex_encode_wired() -> String {
     hex_encode(&[0u8])
 }
@@ -37277,7 +37150,7 @@ impl ToolHandler for AnalysisBasicBlocksPathTool {
         let mut preds: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
         let mut block_end: BTreeMap<usize, u64> = BTreeMap::new();
 
-        for &(ip, next, target, is_cond, ends) in &instrs {
+        for &(ip, next, target, _is_cond, ends) in &instrs {
             let Some(b) = block_of(ip) else { continue };
             block_end.insert(b, next);
             let mut add = |from: usize, to: u64| {

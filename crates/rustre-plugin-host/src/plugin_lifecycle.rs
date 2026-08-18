@@ -13,7 +13,6 @@
 //! | [`PluginHealthMonitor`] | Periodic health checks |
 //! | [`LifecycleLog`] | Time-stamped lifecycle event log |
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt;

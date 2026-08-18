@@ -154,8 +154,14 @@ echo "  arity fidelity (n=$arity_n): $arity_ok correct (${arity_pct}%)  over=$ar
 # ── Behavioural fidelity: compile, LINK and RUN the emitted C against the
 #    original. The only metric here that measures the stated goal rather than a
 #    proxy for it. See behavior.py.
-python "$CORPUS/behavior.py" "$DEST/out" > "$DEST/behavior.txt" 2>&1
-python "$CORPUS/behavior.py" "$DEST/out" --json > "$DEST/behavior.json" 2>/dev/null
+# ONE invocation, both outputs (`--json-out`). This used to be two identical
+# runs differing only in output format, and behaviour is the expensive metric:
+# it compiles, links the transitive closure and EXECUTES every function in the
+# spec against 2000-3300 objects per bucket. Measured on runs/wip_0815:
+# behavior.txt at 20:03:48, behavior.json at 20:33:55 -- ~30 minutes to reprint
+# the same analysis, i.e. a full measurement cost ~62 minutes instead of ~32.
+python "$CORPUS/behavior.py" "$DEST/out" --json-out "$DEST/behavior.json" \
+       > "$DEST/behavior.txt" 2>&1
 read -r beh_total beh_agree <<<"$(
   python -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["total"],d["agree"])' \
     "$DEST/behavior.json" 2>/dev/null || echo "0 0"

@@ -49,8 +49,16 @@ use std::time::{Duration, Instant};
 // ---------------------------------------------------------------------------
 
 /// All errors from the `VirusTotal` integration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum VtClientError {
+    /// No usable `VirusTotal` API key is configured, so no lookup was performed.
+    ///
+    /// This is returned INSTEAD of an invented report: a verdict about a hash,
+    /// URL, domain or IP can only come from the live `VirusTotal` service.
+    NoApiKey,
+    /// The requested answer can only be obtained from the live service and no
+    /// network lookup was possible.
+    NetworkRequired(String),
     /// Rate limit exceeded.
     RateLimitExceeded,
     /// Resource not found.
@@ -74,6 +82,16 @@ pub enum VtClientError {
 impl std::fmt::Display for VtClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::NoApiKey => write!(
+                f,
+                "no VirusTotal API key configured: a network lookup against {} {}",
+                "https://www.virustotal.com is required to answer this query;",
+                "no verdict was produced"
+            ),
+            Self::NetworkRequired(what) => write!(
+                f,
+                "network lookup required for {what}: no result was produced offline"
+            ),
             Self::RateLimitExceeded => write!(f, "VirusTotal rate limit exceeded"),
             Self::NotFound(r) => write!(f, "resource not found: {r}"),
             Self::AuthenticationError => write!(f, "VirusTotal authentication failed"),
@@ -777,6 +795,27 @@ pub enum VtRelationshipType {
     Other(String),
 }
 
+impl VtRelationshipType {
+    /// The `VirusTotal` v3 relationship path segment for this type.
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        match self {
+            Self::ContactedIps => "contacted_ips",
+            Self::ContactedDomains => "contacted_domains",
+            Self::ContactedUrls => "contacted_urls",
+            Self::EmbeddedUrls => "embedded_urls",
+            Self::EmbeddedDomains => "embedded_domains",
+            Self::ExecutionParents => "execution_parents",
+            Self::EmbeddedFiles => "embedded_files",
+            Self::CompressedParents => "compressed_parents",
+            Self::SimilarFiles => "similar_files",
+            Self::DroppedFiles => "dropped_files",
+            Self::Pcaps => "pcaps",
+            Self::Other(s) => s.as_str(),
+        }
+    }
+}
+
 /// A single relationship entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VtRelationship {
@@ -979,46 +1018,112 @@ impl VtIpReportSpec {
     }
 }
 
-/// Build a mock [`VtFileReportSpec`] for the given SHA-256.
+/// Return `true` when `key` looks like a real `VirusTotal` API key.
+///
+/// `VirusTotal` v3 keys are 64 lowercase hexadecimal characters.  Anything
+/// else (empty string, placeholder such as `"test-api-key"`, a truncated key)
+/// cannot authenticate, so no lookup is attempted with it.
 #[must_use]
-pub fn mock_file_report(sha256: &str) -> VtFileReportSpec {
-    let malicious = sha256.contains("bad") || sha256.contains("evil");
-    VtFileReportSpec {
-        sha256: sha256.to_string(),
-        md5: "d41d8cd98f00b204e9800998ecf8427e".to_string(),
-        meaningful_name: Some("sample.exe".to_string()),
-        scan_results: vec![
-            VtScanResult {
-                engine_name: "MockAV".to_string(),
-                category: if malicious { "malicious" } else { "undetected" }.to_string(),
-                result: if malicious {
-                    Some("Trojan.Generic".to_string())
-                } else {
-                    None
-                },
-            },
-            VtScanResult {
-                engine_name: "MockAV2".to_string(),
-                category: "undetected".to_string(),
-                result: None,
-            },
-        ],
-        first_submission: Some(1_600_000_000),
-        last_analysis_date: Some(1_700_000_000),
-    }
+pub fn api_key_is_valid(key: &str) -> bool {
+    key.len() == 64 && key.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Build a mock [`VtIpReportSpec`] for the given IP.
-#[must_use]
-pub fn mock_ip_report(ip: &str) -> VtIpReportSpec {
-    let malicious = ip.starts_with("10.0.0.") || ip.contains("evil");
-    VtIpReportSpec {
-        ip_address: ip.to_string(),
-        country: Some("US".to_string()),
-        as_owner: Some("Mock AS".to_string()),
-        malicious_count: if malicious { 5 } else { 0 },
-        suspicious_count: if malicious { 2 } else { 0 },
+/// Parse a real `VirusTotal` `/api/v3/files/<hash>` JSON document into a
+/// [`VtFileReportSpec`].
+///
+/// This is an OFFLINE parser: it invents nothing, it only reshapes a document
+/// the caller already obtained from `VirusTotal`.
+///
+/// # Errors
+///
+/// Returns [`VtClientError::Parse`] if the document has no `data.attributes`.
+pub fn parse_file_report_spec(json: &serde_json::Value) -> Result<VtFileReportSpec, VtClientError> {
+    let attrs = &json["data"]["attributes"];
+    if !attrs.is_object() {
+        return Err(VtClientError::Parse(
+            "missing data.attributes in VirusTotal file response".to_string(),
+        ));
     }
+    let mut scan_results = Vec::new();
+    if let Some(map) = attrs["last_analysis_results"].as_object() {
+        for (engine, v) in map {
+            scan_results.push(VtScanResult {
+                engine_name: v["engine_name"]
+                    .as_str()
+                    .unwrap_or(engine.as_str())
+                    .to_string(),
+                category: v["category"].as_str().unwrap_or("undetected").to_string(),
+                result: v["result"].as_str().map(str::to_string),
+            });
+        }
+    }
+    Ok(VtFileReportSpec {
+        sha256: attrs["sha256"].as_str().unwrap_or_default().to_string(),
+        md5: attrs["md5"].as_str().unwrap_or_default().to_string(),
+        meaningful_name: attrs["meaningful_name"].as_str().map(str::to_string),
+        scan_results,
+        first_submission: attrs["first_submission_date"].as_u64(),
+        last_analysis_date: attrs["last_analysis_date"].as_u64(),
+    })
+}
+
+/// Parse a real `VirusTotal` `/api/v3/ip_addresses/<ip>` JSON document into a
+/// [`VtIpReportSpec`].
+///
+/// Offline parser — see [`parse_file_report_spec`].
+///
+/// # Errors
+///
+/// Returns [`VtClientError::Parse`] if the document has no `data.attributes`.
+pub fn parse_ip_report_spec(json: &serde_json::Value) -> Result<VtIpReportSpec, VtClientError> {
+    let attrs = &json["data"]["attributes"];
+    if !attrs.is_object() {
+        return Err(VtClientError::Parse(
+            "missing data.attributes in VirusTotal IP response".to_string(),
+        ));
+    }
+    let stats = &attrs["last_analysis_stats"];
+    Ok(VtIpReportSpec {
+        ip_address: json["data"]["id"].as_str().unwrap_or_default().to_string(),
+        country: attrs["country"].as_str().map(str::to_string),
+        as_owner: attrs["as_owner"].as_str().map(str::to_string),
+        malicious_count: u32::try_from(stats["malicious"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX),
+        suspicious_count: u32::try_from(stats["suspicious"].as_u64().unwrap_or(0))
+            .unwrap_or(u32::MAX),
+    })
+}
+
+/// Report on a file by SHA-256.
+///
+/// A file verdict is only knowable from the live `VirusTotal` service, and this
+/// free function has neither an API key nor an async context in which to make
+/// the request.  It therefore performs NO lookup and returns
+/// [`VtClientError::NetworkRequired`] rather than a fabricated verdict.
+///
+/// To obtain a real report use [`VtClient::lookup_file`] or
+/// [`VirusTotalClient::get_file_report`] with a configured API key, or feed an
+/// already-fetched response to [`parse_file_report_spec`].
+///
+/// # Errors
+///
+/// Always returns [`VtClientError::NetworkRequired`].
+pub fn mock_file_report(sha256: &str) -> Result<VtFileReportSpec, VtClientError> {
+    Err(VtClientError::NetworkRequired(format!(
+        "VirusTotal file report for {sha256}"
+    )))
+}
+
+/// Report on an IP address.
+///
+/// See [`mock_file_report`]: no lookup is performed and nothing is invented.
+///
+/// # Errors
+///
+/// Always returns [`VtClientError::NetworkRequired`].
+pub fn mock_ip_report(ip: &str) -> Result<VtIpReportSpec, VtClientError> {
+    Err(VtClientError::NetworkRequired(format!(
+        "VirusTotal IP report for {ip}"
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -1031,6 +1136,8 @@ pub struct VirusTotalClient {
     base_url: String,
     rate_limiter: Option<VtTokenBucketLimiter>,
     timeout: Duration,
+    /// Real HTTP transport.  Every report method below goes through this.
+    http: reqwest::Client,
 }
 
 impl VirusTotalClient {
@@ -1042,6 +1149,10 @@ impl VirusTotalClient {
             base_url: "https://www.virustotal.com".to_string(),
             rate_limiter: Some(VtTokenBucketLimiter::new(4)),
             timeout: Duration::from_secs(30),
+            http: reqwest::Client::builder()
+                .use_rustls_tls()
+                .build()
+                .unwrap_or_default(),
         }
     }
 
@@ -1072,169 +1183,246 @@ impl VirusTotalClient {
         self
     }
 
-    /// Build a mock `Verdict` for the given `IoC`.
-    fn make_verdict(&self, ioc: &IoC) -> Verdict {
-        let malicious = ioc.value.contains("malware")
-            || ioc.value.contains("evil")
-            || ioc.value.contains("bad");
-        let (positive, engines) = if malicious {
-            (40_u32, 72_u32)
+    /// Return the configured API key, or an error naming exactly what is
+    /// missing.  No method in this client invents a verdict when this fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VtClientError::NoApiKey`] when no usable key is configured.
+    pub fn require_api_key(&self) -> Result<&str, VtClientError> {
+        if api_key_is_valid(&self.api_key) {
+            Ok(&self.api_key)
         } else {
-            (0_u32, 72_u32)
-        };
-        let key_hint = self.api_key.chars().take(4).collect::<String>();
+            Err(VtClientError::NoApiKey)
+        }
+    }
+
+    /// Perform a real authenticated `GET` against the `VirusTotal` v3 API.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VtClientError::NoApiKey`] when unauthenticated, and the
+    /// transport / status errors otherwise.  It never falls back to canned data.
+    pub async fn api_get(&self, path: &str) -> Result<serde_json::Value, VtClientError> {
+        let key = self.require_api_key()?;
+        if let Some(ref limiter) = self.rate_limiter
+            && !limiter.try_consume()
+        {
+            return Err(VtClientError::RateLimitExceeded);
+        }
+        let url = format!("{}{}", self.base_url, path);
+        let resp = self
+            .http
+            .get(&url)
+            .header("x-apikey", key)
+            .header("Accept", "application/json")
+            .timeout(self.timeout)
+            .send()
+            .await
+            .map_err(|e| VtClientError::Http(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            401 | 403 => return Err(VtClientError::AuthenticationError),
+            404 => return Err(VtClientError::NotFound(path.to_string())),
+            429 => return Err(VtClientError::RateLimitExceeded),
+            s if s >= 400 => {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(VtClientError::Http(format!("HTTP {s}: {body}")));
+            }
+            _ => {}
+        }
+        resp.json::<serde_json::Value>()
+            .await
+            .map_err(|e| VtClientError::Parse(e.to_string()))
+    }
+
+    /// Build a [`Verdict`] from a real `last_analysis_stats` block.
+    ///
+    /// Offline: it summarises a document the caller already fetched.
+    #[must_use]
+    pub fn verdict_from_json(json: &serde_json::Value) -> Verdict {
+        let attrs = &json["data"]["attributes"];
+        let stats = parse_stats_json(&attrs["last_analysis_stats"]);
+        let positive = stats.malicious + stats.suspicious;
+        let engines = stats.malicious
+            + stats.suspicious
+            + stats.undetected
+            + stats.harmless
+            + stats.timeout
+            + stats.confirmed_timeout
+            + stats.failure
+            + stats.type_unsupported;
         Verdict {
-            malicious,
-            confidence: if malicious { 85 } else { 10 },
-            tags: if malicious {
-                vec!["malware".to_string()]
+            malicious: stats.malicious > 0,
+            confidence: if engines == 0 {
+                0
             } else {
-                vec![]
+                u8::try_from((u64::from(positive) * 100 / u64::from(engines)).min(100))
+                    .unwrap_or(100)
             },
+            tags: parse_string_vec(&attrs["tags"]),
             engine_count: engines,
             positive_count: positive,
-            first_seen: Some(1_600_000_000),
-            last_seen: Some(1_700_000_000),
-            description: Some(format!(
-                "Mock VT verdict for {} [key={}***]",
-                ioc.value, key_hint
-            )),
+            first_seen: attrs["first_submission_date"].as_u64(),
+            last_seen: attrs["last_analysis_date"].as_u64(),
+            description: attrs["popular_threat_classification"]["suggested_threat_label"]
+                .as_str()
+                .map(str::to_string),
             provider: "virustotal".to_string(),
         }
     }
 
-    /// Produce a mock `TiResult` for the given `IoC`.
-    fn mock_vt_response(&self, ioc: &IoC) -> TiResult {
-        let mut result = TiResult::new(ioc.clone());
-        result.verdicts.push(self.make_verdict(ioc));
-        if ioc.is_hash() {
-            result.malware_families.push("MockFamily".to_string());
+    /// Path under `/api/v3` for the given `IoC`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VtClientError::Other`] for an IoC type VirusTotal has no
+    /// endpoint for.
+    pub fn ioc_path(ioc: &IoC) -> Result<String, VtClientError> {
+        match ioc.ioc_type {
+            IoCType::Md5 | IoCType::Sha1 | IoCType::Sha256 => {
+                Ok(format!("/api/v3/files/{}", ioc.value))
+            }
+            IoCType::Ip => Ok(format!("/api/v3/ip_addresses/{}", ioc.value)),
+            IoCType::Domain => Ok(format!("/api/v3/domains/{}", ioc.value)),
+            IoCType::Url => Ok(format!("/api/v3/urls/{}", vt_url_id(&ioc.value))),
+            _ => Err(VtClientError::Other(format!(
+                "VirusTotal has no endpoint for IoC type {:?}",
+                ioc.ioc_type
+            ))),
         }
-        result
+    }
+
+    /// Perform a real lookup for an `IoC` and build a [`TiResult`].
+    ///
+    /// # Errors
+    ///
+    /// Propagates the transport / auth error; produces no result offline.
+    pub async fn lookup_ioc(&self, ioc: &IoC) -> Result<TiResult, VtClientError> {
+        let path = Self::ioc_path(ioc)?;
+        let json = self.api_get(&path).await?;
+        let mut result = TiResult::new(ioc.clone());
+        result.verdicts.push(Self::verdict_from_json(&json));
+        if ioc.is_hash()
+            && let Some(label) = json["data"]["attributes"]["popular_threat_classification"]
+                ["popular_threat_name"]
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|v| v["value"].as_str())
+        {
+            result.malware_families.push(label.to_string());
+        }
+        Ok(result)
     }
 
     // ---- Full API methods ----
 
-    /// Scan a file (submit for analysis).
+    /// Submit a file for analysis.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
-    pub async fn scan_file(&self, _data: &[u8]) -> Result<String, VtClientError> {
-        Ok("mock-analysis-id-12345".to_string())
+    /// Returns [`VtClientError::NoApiKey`] when unauthenticated, otherwise the
+    /// transport error.  No analysis id is invented.
+    pub async fn scan_file(&self, data: &[u8]) -> Result<String, VtClientError> {
+        let key = self.require_api_key()?;
+        let part = reqwest::multipart::Part::bytes(data.to_vec())
+            .file_name("sample.bin")
+            .mime_str("application/octet-stream")
+            .map_err(|e| VtClientError::Http(e.to_string()))?;
+        let form = reqwest::multipart::Form::new().part("file", part);
+        let resp = self
+            .http
+            .post(format!("{}/api/v3/files", self.base_url))
+            .header("x-apikey", key)
+            .timeout(self.timeout)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| VtClientError::Http(e.to_string()))?;
+        Self::analysis_id_from(resp).await
     }
 
-    /// Scan a URL.
+    /// Submit a URL for analysis.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// As [`Self::scan_file`].
     pub async fn scan_url(&self, url: &str) -> Result<String, VtClientError> {
-        let id = format!("url-analysis-{}", url.len());
-        Ok(id)
+        let key = self.require_api_key()?;
+        let resp = self
+            .http
+            .post(format!("{}/api/v3/urls", self.base_url))
+            .header("x-apikey", key)
+            .timeout(self.timeout)
+            .form(&[("url", url)])
+            .send()
+            .await
+            .map_err(|e| VtClientError::Http(e.to_string()))?;
+        Self::analysis_id_from(resp).await
     }
 
-    /// Get a full file report.
+    async fn analysis_id_from(resp: reqwest::Response) -> Result<String, VtClientError> {
+        let status = resp.status().as_u16();
+        match status {
+            401 | 403 => return Err(VtClientError::AuthenticationError),
+            429 => return Err(VtClientError::RateLimitExceeded),
+            s if s >= 400 => {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(VtClientError::Http(format!("HTTP {s}: {body}")));
+            }
+            _ => {}
+        }
+        let json = resp
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| VtClientError::Parse(e.to_string()))?;
+        json["data"]["id"]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| VtClientError::Parse("missing data.id in submit response".to_string()))
+    }
+
+    /// Get a full file report from `VirusTotal`.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// Returns [`VtClientError::NoApiKey`] when unauthenticated; the API's
+    /// error otherwise.  Nothing is fabricated.
     pub async fn get_file_report(&self, sha256: &str) -> Result<VtFileReportFull, VtClientError> {
-        let malicious = sha256.contains("evil") || sha256.contains("bad");
-        let mut results = HashMap::new();
-        results.insert(
-            "MockAV".to_string(),
-            VtAVResult {
-                category: if malicious { "malicious" } else { "undetected" }.to_string(),
-                engine_name: "MockAV".to_string(),
-                engine_version: Some("1.0".to_string()),
-                engine_update: Some("20240101".to_string()),
-                result: if malicious {
-                    Some("Trojan.MockFamily".to_string())
-                } else {
-                    None
-                },
-                method: Some("signature".to_string()),
-            },
-        );
-
-        let stats = VtAnalysisStats {
-            malicious: u32::from(malicious),
-            undetected: if malicious { 71 } else { 72 },
-            ..Default::default()
-        };
-
-        Ok(VtFileReportFull {
-            sha256: sha256.to_string(),
-            sha1: "mocksha1".to_string(),
-            md5: "mockmd5".to_string(),
-            meaningful_name: Some("sample.exe".to_string()),
-            size: 102_400,
-            type_tag: Some("peexe".to_string()),
-            type_description: Some("PE32 executable".to_string()),
-            magic: Some("PE32 executable (GUI) Intel 80386".to_string()),
-            creation_date: Some(1_600_000_000),
-            first_submission_date: Some(1_600_000_100),
-            last_analysis_date: Some(1_700_000_000),
-            last_submission_date: Some(1_700_000_000),
-            times_submitted: 3,
-            last_analysis_results: results,
-            last_analysis_stats: stats,
-            reputation: if malicious { -10 } else { 0 },
-            popular_threat_classification: if malicious {
-                Some(VtPopularThreatClassification {
-                    suggested_threat_label: Some("trojan.mockfamily/win32".to_string()),
-                    popular_threat_category: vec![VtThreatClassItem {
-                        value: "trojan".to_string(),
-                        count: 20,
-                    }],
-                    popular_threat_name: vec![VtThreatClassItem {
-                        value: "mockfamily".to_string(),
-                        count: 15,
-                    }],
-                })
-            } else {
-                None
-            },
-            sandbox_verdicts: vec![],
-            names: vec!["sample.exe".to_string()],
-            tags: if malicious {
-                vec!["malware".to_string()]
-            } else {
-                vec![]
-            },
-            imphash: Some("mockhash".to_string()),
-            ssdeep: None,
-            tlsh: None,
-            authentihash: None,
-            signature_info: None,
-        })
+        let key = sha256.trim().to_ascii_lowercase();
+        if !matches!(key.len(), 32 | 40 | 64) || !key.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(VtClientError::InvalidHash(sha256.to_string()));
+        }
+        let json = self.api_get(&format!("/api/v3/files/{key}")).await?;
+        Ok(parse_file_report_full(&json))
     }
 
     /// Get a URL report.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_url_report(&self, url: &str) -> Result<VtUrlReportFull, VtClientError> {
-        let malicious = url.contains("evil") || url.contains("malware");
+        if url.trim().is_empty() {
+            return Err(VtClientError::InvalidUrl(url.to_string()));
+        }
+        let json = self
+            .api_get(&format!("/api/v3/urls/{}", vt_url_id(url)))
+            .await?;
+        let attrs = &json["data"]["attributes"];
         Ok(VtUrlReportFull {
             url: url.to_string(),
-            final_url: Some(url.to_string()),
-            title: Some("Mock Page".to_string()),
-            last_analysis_stats: VtAnalysisStats {
-                malicious: if malicious { 5 } else { 0 },
-                undetected: if malicious { 67 } else { 72 },
-                ..Default::default()
-            },
-            last_analysis_results: HashMap::new(),
-            categories: HashMap::new(),
-            trackers: HashMap::new(),
-            html_meta: HashMap::new(),
-            last_analysis_date: Some(1_700_000_000),
-            first_submission_date: Some(1_600_000_000),
-            reputation: if malicious { -5 } else { 0 },
-            tags: vec![],
+            final_url: attrs["last_final_url"].as_str().map(str::to_string),
+            title: attrs["title"].as_str().map(str::to_string),
+            last_analysis_stats: parse_stats_json(&attrs["last_analysis_stats"]),
+            last_analysis_results: parse_av_results(&attrs["last_analysis_results"]),
+            categories: parse_string_map(&attrs["categories"]),
+            trackers: parse_string_list_map(&attrs["trackers"]),
+            html_meta: parse_string_list_map(&attrs["html_meta"]),
+            last_analysis_date: attrs["last_analysis_date"].as_u64(),
+            first_submission_date: attrs["first_submission_date"].as_u64(),
+            reputation: parse_i32(&attrs["reputation"]),
+            tags: parse_string_vec(&attrs["tags"]),
         })
     }
 
@@ -1242,34 +1430,43 @@ impl VirusTotalClient {
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_domain_report(
         &self,
         domain: &str,
     ) -> Result<VtDomainReportFull, VtClientError> {
-        let malicious = domain.contains("evil");
+        let key = domain.trim().to_ascii_lowercase();
+        if key.is_empty() {
+            return Err(VtClientError::Other("empty domain".to_string()));
+        }
+        let json = self.api_get(&format!("/api/v3/domains/{key}")).await?;
+        let attrs = &json["data"]["attributes"];
+        let last_dns_records = attrs["last_dns_records"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|r| VtDnsRecord {
+                        type_: r["type"].as_str().unwrap_or_default().to_string(),
+                        value: r["value"].as_str().unwrap_or_default().to_string(),
+                        ttl: r["ttl"].as_u64().and_then(|v| u32::try_from(v).ok()),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Ok(VtDomainReportFull {
-            id: domain.to_string(),
-            registrar: Some("Mock Registrar".to_string()),
-            creation_date: Some("2010-01-01".to_string()),
-            expiry_date: Some("2030-01-01".to_string()),
-            whois: None,
-            last_dns_records: vec![VtDnsRecord {
-                type_: "A".to_string(),
-                value: "203.0.113.1".to_string(),
-                ttl: Some(3600),
-            }],
-            last_analysis_stats: VtAnalysisStats {
-                malicious: if malicious { 3 } else { 0 },
-                undetected: if malicious { 69 } else { 72 },
-                ..Default::default()
-            },
-            last_analysis_results: HashMap::new(),
-            categories: HashMap::new(),
-            subdomains: vec![],
-            reputation: if malicious { -3 } else { 0 },
-            tags: vec![],
-            last_modification_date: Some(1_700_000_000),
+            id: json["data"]["id"].as_str().unwrap_or(&key).to_string(),
+            registrar: attrs["registrar"].as_str().map(str::to_string),
+            creation_date: attrs["creation_date"].as_u64().map(|v| v.to_string()),
+            expiry_date: attrs["expiration_date"].as_u64().map(|v| v.to_string()),
+            whois: attrs["whois"].as_str().map(str::to_string),
+            last_dns_records,
+            last_analysis_stats: parse_stats_json(&attrs["last_analysis_stats"]),
+            last_analysis_results: parse_av_results(&attrs["last_analysis_results"]),
+            categories: parse_string_map(&attrs["categories"]),
+            subdomains: parse_string_vec(&attrs["subdomains"]),
+            reputation: parse_i32(&attrs["reputation"]),
+            tags: parse_string_vec(&attrs["tags"]),
+            last_modification_date: attrs["last_modification_date"].as_u64(),
             popularity_ranks: HashMap::new(),
         })
     }
@@ -1278,135 +1475,382 @@ impl VirusTotalClient {
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_ip_report(&self, ip: &str) -> Result<VtIpReportFull, VtClientError> {
-        let malicious = ip.starts_with("10.0.0.") || ip.contains("evil");
+        if ip.trim().is_empty() {
+            return Err(VtClientError::Other("empty IP address".to_string()));
+        }
+        let json = self.api_get(&format!("/api/v3/ip_addresses/{ip}")).await?;
+        let attrs = &json["data"]["attributes"];
         Ok(VtIpReportFull {
-            id: ip.to_string(),
-            as_owner: Some("Mock ISP".to_string()),
-            asn: Some(12345),
-            country: Some("US".to_string()),
-            network: Some("203.0.113.0/24".to_string()),
-            regional_internet_registry: Some("ARIN".to_string()),
-            last_analysis_stats: VtAnalysisStats {
-                malicious: if malicious { 5 } else { 0 },
-                undetected: if malicious { 67 } else { 72 },
-                ..Default::default()
-            },
-            last_analysis_results: HashMap::new(),
-            reputation: if malicious { -10 } else { 0 },
-            tags: vec![],
-            last_modification_date: Some(1_700_000_000),
-            jarm: None,
+            id: json["data"]["id"].as_str().unwrap_or(ip).to_string(),
+            as_owner: attrs["as_owner"].as_str().map(str::to_string),
+            asn: attrs["asn"].as_u64().and_then(|v| u32::try_from(v).ok()),
+            country: attrs["country"].as_str().map(str::to_string),
+            network: attrs["network"].as_str().map(str::to_string),
+            regional_internet_registry: attrs["regional_internet_registry"]
+                .as_str()
+                .map(str::to_string),
+            last_analysis_stats: parse_stats_json(&attrs["last_analysis_stats"]),
+            last_analysis_results: parse_av_results(&attrs["last_analysis_results"]),
+            reputation: parse_i32(&attrs["reputation"]),
+            tags: parse_string_vec(&attrs["tags"]),
+            last_modification_date: attrs["last_modification_date"].as_u64(),
+            jarm: attrs["jarm"].as_str().map(str::to_string),
         })
     }
 
-    /// Search for files.
+    /// Run a `VirusTotal` Intelligence search.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].  Requires a Premium API key; the API's
+    /// own 403 is surfaced rather than masked with sample results.
     pub async fn search(
         &self,
         query: &VtSearchQuery,
     ) -> Result<Vec<VtFileReportFull>, VtClientError> {
-        let count = query.limit.unwrap_or(5).min(5);
-        let mut results = Vec::new();
-        for i in 0..count {
-            let r = self.get_file_report(&format!("mockhash{i:08x}")).await?;
-            results.push(r);
-        }
-        Ok(results)
+        let limit = query.limit.unwrap_or(20);
+        let json = self
+            .api_get(&format!(
+                "/api/v3/intelligence/search?query={}&limit={limit}",
+                percent_encode(&query.query)
+            ))
+            .await?;
+        Ok(json["data"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|item| {
+                        let wrapped = serde_json::json!({ "data": item });
+                        parse_file_report_full(&wrapped)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-    /// Get votes for a resource.
+    /// Get community votes for a resource.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
-    pub async fn get_votes(&self, _resource_id: &str) -> Result<Vec<VtVote>, VtClientError> {
-        Ok(vec![VtVote {
-            verdict: "malicious".to_string(),
-            voter: None,
-            date: 1_700_000_000,
-            value: 1,
-        }])
+    /// See [`Self::get_file_report`].
+    pub async fn get_votes(&self, resource_id: &str) -> Result<Vec<VtVote>, VtClientError> {
+        let json = self
+            .api_get(&format!("/api/v3/files/{resource_id}/votes"))
+            .await?;
+        Ok(json["data"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|v| {
+                        let attrs = &v["attributes"];
+                        let verdict = attrs["verdict"].as_str().unwrap_or("harmless").to_string();
+                        VtVote {
+                            value: if verdict == "malicious" { -1 } else { 1 },
+                            verdict,
+                            voter: v["id"].as_str().map(str::to_string),
+                            date: attrs["date"].as_u64().unwrap_or(0),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-    /// Get comments for a resource.
+    /// Get community comments for a resource.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
-    pub async fn get_comments(&self, _resource_id: &str) -> Result<Vec<VtComment>, VtClientError> {
-        Ok(vec![VtComment {
-            id: "comment-1".to_string(),
-            text: "Mock comment".to_string(),
-            author: Some("analyst".to_string()),
-            date: 1_700_000_000,
-            tags: vec![],
-            votes_positive: 5,
-            votes_negative: 0,
-        }])
+    /// See [`Self::get_file_report`].
+    pub async fn get_comments(&self, resource_id: &str) -> Result<Vec<VtComment>, VtClientError> {
+        let json = self
+            .api_get(&format!("/api/v3/files/{resource_id}/comments"))
+            .await?;
+        Ok(json["data"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|v| {
+                        let attrs = &v["attributes"];
+                        VtComment {
+                            id: v["id"].as_str().unwrap_or_default().to_string(),
+                            text: attrs["text"].as_str().unwrap_or_default().to_string(),
+                            author: attrs["author"].as_str().map(str::to_string),
+                            date: attrs["date"].as_u64().unwrap_or(0),
+                            tags: parse_string_vec(&attrs["tags"]),
+                            votes_positive: parse_u32(&attrs["votes"]["positive"]),
+                            votes_negative: parse_u32(&attrs["votes"]["negative"]),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-    /// Get behavioral analysis for a file.
+    /// Get a sandbox behaviour summary for a file.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_behavior(&self, sha256: &str) -> Result<VtBehavior, VtClientError> {
-        let mut b = VtBehavior::new(sha256.to_string(), "MockSandbox".to_string());
-        b.network.dns_lookups.push(VtDnsLookup {
-            hostname: "c2.evil.example.com".to_string(),
-            resolved_ips: vec!["203.0.113.1".to_string()],
-        });
-        b.mutexes.push("Global\\MockMutex".to_string());
-        b.registry_keys_set
-            .push(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Malware".to_string());
+        let json = self
+            .api_get(&format!("/api/v3/files/{sha256}/behaviour_summary"))
+            .await?;
+        let attrs = &json["data"];
+        let mut b = VtBehavior::new(sha256.to_string(), "virustotal".to_string());
+        if let Some(list) = attrs["dns_lookups"].as_array() {
+            for d in list {
+                b.network.dns_lookups.push(VtDnsLookup {
+                    hostname: d["hostname"].as_str().unwrap_or_default().to_string(),
+                    resolved_ips: parse_string_vec(&d["resolved_ips"]),
+                });
+            }
+        }
+        b.mutexes = parse_string_vec(&attrs["mutexes_created"]);
+        b.registry_keys_set = parse_string_vec(&attrs["registry_keys_set"]);
         Ok(b)
     }
 
-    /// Get relationships for a resource.
+    /// Get relationships of a resource.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_relationships(
         &self,
         resource_id: &str,
         rel_type: &VtRelationshipType,
     ) -> Result<Vec<VtRelationship>, VtClientError> {
-        let _ = (resource_id, rel_type);
-        Ok(vec![VtRelationship {
-            relationship_type: VtRelationshipType::ContactedIps,
-            related_id: "203.0.113.1".to_string(),
-            context_attributes: HashMap::new(),
-        }])
+        let json = self
+            .api_get(&format!(
+                "/api/v3/files/{resource_id}/{}",
+                rel_type.endpoint()
+            ))
+            .await?;
+        Ok(json["data"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|v| VtRelationship {
+                        relationship_type: rel_type.clone(),
+                        related_id: v["id"].as_str().unwrap_or_default().to_string(),
+                        context_attributes: HashMap::new(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
-    /// Get collections associated with a resource.
+    /// Get collections a resource belongs to.
     ///
     /// # Errors
     ///
-    /// Returns an error when the operation fails.
+    /// See [`Self::get_file_report`].
     pub async fn get_collections(
         &self,
-        _resource_id: &str,
+        resource_id: &str,
     ) -> Result<Vec<VtCollection>, VtClientError> {
-        Ok(vec![VtCollection {
-            id: "collection-1".to_string(),
-            name: "Mock Collection".to_string(),
-            description: Some("Test collection".to_string()),
-            owner: Some("analyst".to_string()),
-            creation_date: 1_700_000_000,
-            tags: vec!["malware".to_string()],
-            files_count: 5,
-            urls_count: 2,
-            domains_count: 3,
-            ips_count: 4,
-        }])
+        let json = self
+            .api_get(&format!("/api/v3/files/{resource_id}/collections"))
+            .await?;
+        Ok(json["data"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|v| {
+                        let attrs = &v["attributes"];
+                        VtCollection {
+                            id: v["id"].as_str().unwrap_or_default().to_string(),
+                            name: attrs["name"].as_str().unwrap_or_default().to_string(),
+                            description: attrs["description"].as_str().map(str::to_string),
+                            owner: attrs["owner"].as_str().map(str::to_string),
+                            creation_date: attrs["creation_date"].as_u64().unwrap_or(0),
+                            tags: parse_string_vec(&attrs["tags"]),
+                            files_count: parse_u32(&attrs["files_count"]),
+                            urls_count: parse_u32(&attrs["urls_count"]),
+                            domains_count: parse_u32(&attrs["domains_count"]),
+                            ips_count: parse_u32(&attrs["ips_count"]),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
+}
+
+// ---------------------------------------------------------------------------
+// Offline JSON -> struct helpers (shared by the methods above)
+// ---------------------------------------------------------------------------
+
+fn parse_u32(v: &serde_json::Value) -> u32 {
+    u32::try_from(v.as_u64().unwrap_or(0)).unwrap_or(u32::MAX)
+}
+
+fn parse_i32(v: &serde_json::Value) -> i32 {
+    i32::try_from(v.as_i64().unwrap_or(0)).unwrap_or(i32::MAX)
+}
+
+fn parse_string_vec(v: &serde_json::Value) -> Vec<String> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_string_map(v: &serde_json::Value) -> HashMap<String, String> {
+    v.as_object()
+        .map(|o| {
+            o.iter()
+                .filter_map(|(k, val)| val.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_string_list_map(v: &serde_json::Value) -> HashMap<String, Vec<String>> {
+    v.as_object()
+        .map(|o| {
+            o.iter()
+                .map(|(k, val)| (k.clone(), parse_string_vec(val)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Parse a `last_analysis_stats` object.  Absent keys count as zero — this
+/// reports what the service said, never a guess.
+fn parse_stats_json(v: &serde_json::Value) -> VtAnalysisStats {
+    VtAnalysisStats {
+        malicious: parse_u32(&v["malicious"]),
+        suspicious: parse_u32(&v["suspicious"]),
+        undetected: parse_u32(&v["undetected"]),
+        timeout: parse_u32(&v["timeout"]),
+        confirmed_timeout: parse_u32(&v["confirmed-timeout"]),
+        failure: parse_u32(&v["failure"]),
+        type_unsupported: parse_u32(&v["type-unsupported"]),
+        harmless: parse_u32(&v["harmless"]),
+    }
+}
+
+fn parse_av_results(v: &serde_json::Value) -> HashMap<String, VtAVResult> {
+    v.as_object()
+        .map(|o| {
+            o.iter()
+                .map(|(k, r)| {
+                    (
+                        k.clone(),
+                        VtAVResult {
+                            category: r["category"].as_str().unwrap_or("undetected").to_string(),
+                            engine_name: r["engine_name"].as_str().unwrap_or(k).to_string(),
+                            engine_version: r["engine_version"].as_str().map(str::to_string),
+                            engine_update: r["engine_update"].as_str().map(str::to_string),
+                            result: r["result"].as_str().map(str::to_string),
+                            method: r["method"].as_str().map(str::to_string),
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Parse a full `/api/v3/files` document into a [`VtFileReportFull`].
+///
+/// Offline: reshapes only what the service returned.
+#[must_use]
+pub fn parse_file_report_full(json: &serde_json::Value) -> VtFileReportFull {
+    let attrs = &json["data"]["attributes"];
+    let ptc = &attrs["popular_threat_classification"];
+    let class_items = |v: &serde_json::Value| -> Vec<VtThreatClassItem> {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|i| VtThreatClassItem {
+                        value: i["value"].as_str().unwrap_or_default().to_string(),
+                        count: parse_u32(&i["count"]),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    VtFileReportFull {
+        sha256: attrs["sha256"].as_str().unwrap_or_default().to_string(),
+        sha1: attrs["sha1"].as_str().unwrap_or_default().to_string(),
+        md5: attrs["md5"].as_str().unwrap_or_default().to_string(),
+        meaningful_name: attrs["meaningful_name"].as_str().map(str::to_string),
+        size: attrs["size"].as_u64().unwrap_or(0),
+        type_tag: attrs["type_tag"].as_str().map(str::to_string),
+        type_description: attrs["type_description"].as_str().map(str::to_string),
+        magic: attrs["magic"].as_str().map(str::to_string),
+        creation_date: attrs["creation_date"].as_u64(),
+        first_submission_date: attrs["first_submission_date"].as_u64(),
+        last_analysis_date: attrs["last_analysis_date"].as_u64(),
+        last_submission_date: attrs["last_submission_date"].as_u64(),
+        times_submitted: parse_u32(&attrs["times_submitted"]),
+        last_analysis_results: parse_av_results(&attrs["last_analysis_results"]),
+        last_analysis_stats: parse_stats_json(&attrs["last_analysis_stats"]),
+        reputation: parse_i32(&attrs["reputation"]),
+        popular_threat_classification: if ptc.is_object() {
+            Some(VtPopularThreatClassification {
+                suggested_threat_label: ptc["suggested_threat_label"].as_str().map(str::to_string),
+                popular_threat_category: class_items(&ptc["popular_threat_category"]),
+                popular_threat_name: class_items(&ptc["popular_threat_name"]),
+            })
+        } else {
+            None
+        },
+        sandbox_verdicts: vec![],
+        names: parse_string_vec(&attrs["names"]),
+        tags: parse_string_vec(&attrs["tags"]),
+        imphash: attrs["pe_info"]["imphash"].as_str().map(str::to_string),
+        ssdeep: attrs["ssdeep"].as_str().map(str::to_string),
+        tlsh: attrs["tlsh"].as_str().map(str::to_string),
+        authentihash: attrs["authentihash"].as_str().map(str::to_string),
+        signature_info: attrs["signature_info"]
+            .is_object()
+            .then(|| parse_string_map(&attrs["signature_info"])),
+    }
+}
+
+/// `VirusTotal` URL identifier: unpadded base64url of the URL.
+#[must_use]
+pub fn vt_url_id(url: &str) -> String {
+    const TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let bytes = url.as_bytes();
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = chunk.get(1).copied().map_or(0, u32::from);
+        let b2 = chunk.get(2).copied().map_or(0, u32::from);
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(TABLE[((n >> 6) & 63) as usize] as char);
+        }
+        if chunk.len() > 2 {
+            out.push(TABLE[(n & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// Minimal percent-encoding for a query-string value.
+fn percent_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.as_bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(*b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 #[async_trait]
@@ -1427,7 +1871,9 @@ impl TiProvider for VirusTotalClient {
     }
 
     async fn lookup(&self, ioc: &IoC) -> Result<TiResult, TiError> {
-        Ok(self.mock_vt_response(ioc))
+        self.lookup_ioc(ioc)
+            .await
+            .map_err(|e| TiError::Other(e.to_string()))
     }
 
     fn rate_limit_per_minute(&self) -> u32 {
@@ -1484,168 +1930,291 @@ mod tests {
         assert_eq!(client().rate_limit_per_minute(), 4);
     }
 
-    // ---- Verdicts ----
+    // ---- Honesty: no key => no verdict, never a fabricated one ----
 
-    #[test]
-    fn test_make_verdict_clean() {
-        let ioc = hash_ioc("safe_hash");
-        let v = client().make_verdict(&ioc);
-        assert!(!v.malicious);
-        assert_eq!(v.positive_count, 0);
+    fn no_key_client() -> VirusTotalClient {
+        VirusTotalClient::new("test-api-key-xxxxxxxxxxxxxxxxxxxxxxxx".to_string())
     }
 
     #[test]
-    fn test_make_verdict_malicious() {
-        let ioc = hash_ioc("evil_hash_value");
-        let v = client().make_verdict(&ioc);
-        assert!(v.malicious);
-        assert!(v.confidence > 0);
+    fn test_api_key_is_valid_rejects_placeholder() {
+        assert!(!api_key_is_valid(""));
+        assert!(!api_key_is_valid("test-api-key-xxxxxxxxxxxxxxxxxxxxxxxx"));
+        assert!(api_key_is_valid(&"a".repeat(64)));
+        assert!(!api_key_is_valid(&"z".repeat(64)));
     }
 
     #[test]
-    fn test_mock_response_hash_adds_family() {
-        let ioc = hash_ioc("some_hash");
-        let result = client().mock_vt_response(&ioc);
-        assert_eq!(result.malware_families.len(), 1);
+    fn test_require_api_key_errors_without_key() {
+        assert!(matches!(
+            no_key_client().require_api_key(),
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[test]
-    fn test_mock_response_ip_has_no_family() {
-        let ioc = ip_ioc("8.8.8.8");
-        let result = client().mock_vt_response(&ioc);
-        assert!(result.malware_families.is_empty());
+    fn test_mock_file_report_never_fabricates() {
+        let e = mock_file_report("safe_hash").unwrap_err();
+        assert!(matches!(e, VtClientError::NetworkRequired(_)));
+        assert!(e.to_string().contains("network lookup required"));
     }
 
     #[test]
-    fn test_make_verdict_malicious_domain() {
-        let ioc = domain_ioc("evil.example.com");
-        let v = client().make_verdict(&ioc);
-        assert!(v.malicious);
-        assert!(v.confidence > 0);
+    fn test_mock_file_report_no_verdict_for_bad_looking_hash() {
+        // The old implementation called any hash containing "bad" malicious.
+        assert!(mock_file_report("bad_hash").is_err());
     }
 
-    // ---- Async API ----
-
-    #[tokio::test]
-    async fn test_scan_file() {
-        let id = client().scan_file(&[0u8; 4]).await.unwrap();
-        assert!(!id.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_scan_url() {
-        let id = client().scan_url("http://example.com").await.unwrap();
-        assert!(!id.is_empty());
+    #[test]
+    fn test_mock_ip_report_never_fabricates() {
+        assert!(matches!(
+            mock_ip_report("8.8.8.8").unwrap_err(),
+            VtClientError::NetworkRequired(_)
+        ));
+        assert!(mock_ip_report("10.0.0.1").is_err());
     }
 
     #[tokio::test]
-    async fn test_get_file_report_clean() {
-        let r = client().get_file_report("safehash").await.unwrap();
-        assert!(!r.is_malicious());
+    async fn test_scan_file_requires_key() {
+        assert!(matches!(
+            no_key_client().scan_file(&[0u8; 4]).await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_file_report_malicious() {
-        let r = client().get_file_report("evil_hash").await.unwrap();
-        assert!(r.is_malicious());
+    async fn test_scan_url_requires_key() {
+        assert!(matches!(
+            no_key_client().scan_url("http://example.com").await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_file_report_detection_ratio() {
-        let r = client().get_file_report("evil_sample").await.unwrap();
-        let ratio = r.detection_ratio();
-        assert!(ratio.contains('/'));
+    async fn test_get_file_report_requires_key() {
+        let e = no_key_client().get_file_report(&"a".repeat(64)).await;
+        assert!(matches!(e, Err(VtClientError::NoApiKey)));
     }
 
     #[tokio::test]
-    async fn test_get_file_report_threat_label() {
-        let r = client().get_file_report("evil_file").await.unwrap();
-        assert!(r.threat_label().is_some());
+    async fn test_get_file_report_rejects_non_hash() {
+        assert!(matches!(
+            no_key_client().get_file_report("evil_hash").await,
+            Err(VtClientError::InvalidHash(_))
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_url_report_malicious() {
-        let r = client()
-            .get_url_report("http://evil.example.com")
-            .await
-            .unwrap();
-        assert!(r.is_malicious());
+    async fn test_get_url_report_requires_key() {
+        assert!(matches!(
+            no_key_client().get_url_report("http://evil.example.com").await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_url_report_clean() {
-        let r = client()
-            .get_url_report("http://clean.example.com")
-            .await
-            .unwrap();
-        assert!(!r.is_malicious());
+    async fn test_get_domain_report_requires_key() {
+        assert!(matches!(
+            no_key_client().get_domain_report("example.com").await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_domain_report() {
-        let r = client().get_domain_report("example.com").await.unwrap();
-        assert_eq!(r.id, "example.com");
-        assert!(!r.last_dns_records.is_empty());
+    async fn test_get_ip_report_requires_key() {
+        assert!(matches!(
+            no_key_client().get_ip_report("10.0.0.1").await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_ip_report_malicious() {
-        let r = client().get_ip_report("10.0.0.1").await.unwrap();
-        assert!(r.is_malicious());
-    }
-
-    #[tokio::test]
-    async fn test_get_ip_report_clean() {
-        let r = client().get_ip_report("8.8.8.8").await.unwrap();
-        assert!(!r.is_malicious());
-    }
-
-    #[tokio::test]
-    async fn test_search_returns_results() {
+    async fn test_search_requires_key() {
         let q = VtSearchQuery::new("malware").with_limit(3);
-        let results = client().search(&q).await.unwrap();
-        assert_eq!(results.len(), 3);
+        assert!(matches!(
+            no_key_client().search(&q).await,
+            Err(VtClientError::NoApiKey)
+        ));
     }
 
     #[tokio::test]
-    async fn test_get_votes() {
-        let votes = client().get_votes("sha256hash").await.unwrap();
-        assert!(!votes.is_empty());
+    async fn test_votes_comments_behavior_require_key() {
+        let c = no_key_client();
+        assert!(c.get_votes("sha256hash").await.is_err());
+        assert!(c.get_comments("sha256hash").await.is_err());
+        assert!(c.get_behavior("anyhash").await.is_err());
+        assert!(
+            c.get_relationships("sha256hash", &VtRelationshipType::ContactedIps)
+                .await
+                .is_err()
+        );
+        assert!(c.get_collections("sha256hash").await.is_err());
     }
 
     #[tokio::test]
-    async fn test_get_comments() {
-        let comments = client().get_comments("sha256hash").await.unwrap();
-        assert!(!comments.is_empty());
+    async fn test_lookup_reports_missing_key_instead_of_verdict() {
+        let ioc = hash_ioc(&"a".repeat(64));
+        let err = no_key_client().lookup(&ioc).await.unwrap_err();
+        assert!(err.to_string().contains("no VirusTotal API key configured"));
     }
 
-    #[tokio::test]
-    async fn test_get_behavior() {
-        let b = client().get_behavior("everhash").await.unwrap();
-        assert_eq!(b.sandbox_name, "MockSandbox");
-        assert!(!b.network.dns_lookups.is_empty());
+    // ---- Offline parsers: real document in, real numbers out ----
+
+    fn sample_file_json() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "id": "aa".repeat(32),
+                "attributes": {
+                    "sha256": "aa".repeat(32),
+                    "sha1": "bb".repeat(20),
+                    "md5": "cc".repeat(16),
+                    "meaningful_name": "invoice.exe",
+                    "size": 4096,
+                    "type_tag": "peexe",
+                    "times_submitted": 7,
+                    "reputation": -12,
+                    "names": ["invoice.exe", "inv.exe"],
+                    "tags": ["peexe", "signed"],
+                    "first_submission_date": 1_600_000_000_u64,
+                    "last_analysis_date": 1_700_000_000_u64,
+                    "last_analysis_stats": {
+                        "malicious": 42, "suspicious": 3, "undetected": 20,
+                        "harmless": 0, "timeout": 1, "confirmed-timeout": 0,
+                        "failure": 0, "type-unsupported": 5
+                    },
+                    "last_analysis_results": {
+                        "Kaspersky": {
+                            "category": "malicious", "engine_name": "Kaspersky",
+                            "engine_version": "21.0", "result": "Trojan.Win32.Agent",
+                            "method": "blacklist"
+                        },
+                        "ClamAV": {
+                            "category": "undetected", "engine_name": "ClamAV",
+                            "result": serde_json::Value::Null
+                        }
+                    },
+                    "popular_threat_classification": {
+                        "suggested_threat_label": "trojan.agent/emotet",
+                        "popular_threat_name": [{"value": "emotet", "count": 30}]
+                    }
+                }
+            }
+        })
     }
 
-    #[tokio::test]
-    async fn test_get_behavior_contacted_domains() {
-        let b = client().get_behavior("anyhash").await.unwrap();
-        let domains = b.contacted_domains();
-        assert!(!domains.is_empty());
+    #[test]
+    fn test_parse_file_report_full_uses_real_numbers() {
+        let r = parse_file_report_full(&sample_file_json());
+        assert_eq!(r.last_analysis_stats.malicious, 42);
+        assert_eq!(r.last_analysis_stats.type_unsupported, 5);
+        assert_eq!(r.meaningful_name.as_deref(), Some("invoice.exe"));
+        assert_eq!(r.times_submitted, 7);
+        assert_eq!(r.reputation, -12);
+        assert_eq!(r.last_analysis_results.len(), 2);
+        assert_eq!(
+            r.last_analysis_results["Kaspersky"].result.as_deref(),
+            Some("Trojan.Win32.Agent")
+        );
+        assert!(r.last_analysis_results["ClamAV"].result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_get_relationships() {
-        let rels = client()
-            .get_relationships("sha256hash", &VtRelationshipType::ContactedIps)
-            .await
-            .unwrap();
-        assert!(!rels.is_empty());
+    #[test]
+    fn test_parse_file_report_spec_reflects_document() {
+        let r = parse_file_report_spec(&sample_file_json()).unwrap();
+        assert_eq!(r.scan_results.len(), 2);
+        assert!(r.is_malicious());
+        assert_eq!(r.first_submission, Some(1_600_000_000));
     }
 
-    #[tokio::test]
-    async fn test_get_collections() {
-        let cols = client().get_collections("sha256hash").await.unwrap();
-        assert_eq!(cols.len(), 1);
+    #[test]
+    fn test_parse_file_report_spec_rejects_garbage() {
+        let e = parse_file_report_spec(&serde_json::json!({})).unwrap_err();
+        assert!(matches!(e, VtClientError::Parse(_)));
+    }
+
+    #[test]
+    fn test_parse_ip_report_spec() {
+        let json = serde_json::json!({
+            "data": {
+                "id": "203.0.113.7",
+                "attributes": {
+                    "country": "DE",
+                    "as_owner": "Example AS",
+                    "last_analysis_stats": {"malicious": 4, "suspicious": 1}
+                }
+            }
+        });
+        let r = parse_ip_report_spec(&json).unwrap();
+        assert_eq!(r.ip_address, "203.0.113.7");
+        assert_eq!(r.malicious_count, 4);
+        assert_eq!(r.suspicious_count, 1);
+        assert!(r.is_malicious());
+    }
+
+    #[test]
+    fn test_parse_ip_report_spec_clean_document() {
+        let json = serde_json::json!({
+            "data": {"id": "8.8.8.8", "attributes": {"last_analysis_stats": {"malicious": 0}}}
+        });
+        assert!(!parse_ip_report_spec(&json).unwrap().is_malicious());
+    }
+
+    #[test]
+    fn test_verdict_from_json_counts_engines() {
+        let v = VirusTotalClient::verdict_from_json(&sample_file_json());
+        assert!(v.malicious);
+        assert_eq!(v.positive_count, 45);
+        assert_eq!(v.engine_count, 71);
+        assert_eq!(v.description.as_deref(), Some("trojan.agent/emotet"));
+        assert_eq!(v.provider, "virustotal");
+    }
+
+    #[test]
+    fn test_verdict_from_json_empty_document_is_not_malicious() {
+        let v = VirusTotalClient::verdict_from_json(&serde_json::json!({}));
+        assert!(!v.malicious);
+        assert_eq!(v.engine_count, 0);
+        assert_eq!(v.confidence, 0);
+    }
+
+    #[test]
+    fn test_vt_url_id_matches_base64url() {
+        // Known VT identifier for "http://www.example.com/".
+        assert_eq!(
+            vt_url_id("http://www.example.com/"),
+            "aHR0cDovL3d3dy5leGFtcGxlLmNvbS8"
+        );
+    }
+
+    #[test]
+    fn test_ioc_path_per_type() {
+        let h = hash_ioc("abc");
+        assert_eq!(
+            VirusTotalClient::ioc_path(&h).unwrap(),
+            "/api/v3/files/abc"
+        );
+        let ip = ip_ioc("1.2.3.4");
+        assert_eq!(
+            VirusTotalClient::ioc_path(&ip).unwrap(),
+            "/api/v3/ip_addresses/1.2.3.4"
+        );
+        let d = domain_ioc("evil.example.com");
+        assert_eq!(
+            VirusTotalClient::ioc_path(&d).unwrap(),
+            "/api/v3/domains/evil.example.com"
+        );
+    }
+
+    #[test]
+    fn test_relationship_endpoint_names() {
+        assert_eq!(
+            VtRelationshipType::ContactedIps.endpoint(),
+            "contacted_ips"
+        );
+        assert_eq!(
+            VtRelationshipType::Other("carbonblack_children".to_string()).endpoint(),
+            "carbonblack_children"
+        );
     }
 
     // ---- Rate limiter ----
@@ -1714,45 +2283,17 @@ mod tests {
         assert_eq!(stats.detection_ratio(), "10/72");
     }
 
-    // ---- Backward compat ----
-
-    #[test]
-    fn test_mock_file_report_clean() {
-        let r = mock_file_report("safe_hash");
-        assert!(!r.is_malicious());
-    }
-
-    #[test]
-    fn test_mock_file_report_malicious() {
-        let r = mock_file_report("bad_hash");
-        assert!(r.is_malicious());
-    }
-
-    #[test]
-    fn test_mock_ip_report_clean() {
-        let r = mock_ip_report("8.8.8.8");
-        assert!(!r.is_malicious());
-    }
-
-    #[test]
-    fn test_ioc_severity_propagated() {
-        let mut ioc = hash_ioc("test_hash");
-        ioc.severity = Severity::Critical;
-        let result = client().mock_vt_response(&ioc);
-        assert_eq!(result.ioc.severity, Severity::Critical);
-    }
-
     #[tokio::test]
-    async fn test_lookup_returns_result() {
+    async fn test_lookup_returns_error_not_a_result() {
         let ioc = hash_ioc("testvalue");
-        let result = client().lookup(&ioc).await.unwrap();
-        assert_eq!(result.ioc.value, "testvalue");
+        assert!(client().lookup(&ioc).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_bulk_lookup() {
+    async fn test_bulk_lookup_reports_missing_key_for_every_ioc() {
         let iocs = vec![hash_ioc("a"), hash_ioc("b"), hash_ioc("c")];
-        let results = client().bulk_lookup(&iocs).await.unwrap();
-        assert_eq!(results.len(), 3);
+        // Without a key there is no verdict for ANY of them, and the failure
+        // is surfaced rather than papered over with three invented results.
+        assert!(client().bulk_lookup(&iocs).await.is_err());
     }
 }

@@ -15,7 +15,6 @@
 //! 6. Reconstruct `try`/`catch`/`finally` from the fault-handler pattern.
 //! 7. Emit a synthetic `AsyncFunction` AST node.
 
-#![allow(dead_code)]
 
 use std::fmt::Write as _;
 use ahash::AHashMap;

@@ -644,7 +644,7 @@ mod tests {
     #[test]
     fn test_analysis_single_class() {
         let engine = SmaliAnalysis::new();
-        let class = SmaliClass::mock("Lcom/example/Foo;");
+        let class = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         let report = engine.analyze(&[class]);
         assert_eq!(report.class_count, 1);
         assert!(report.method_count > 0);
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn test_analysis_report_summary() {
         let engine = SmaliAnalysis::new();
-        let class = SmaliClass::mock("Lcom/A;");
+        let class = SmaliClass::synthetic_fixture("Lcom/A;");
         let report = engine.analyze(&[class]);
         assert!(!report.summary().is_empty());
     }
@@ -864,21 +864,21 @@ mod tests {
 
     #[test]
     fn test_obfuscation_score_clean_classes() {
-        let classes = vec![SmaliClass::mock("Lcom/example/MainActivity;")];
+        let classes = vec![SmaliClass::synthetic_fixture("Lcom/example/MainActivity;")];
         let score = ObfuscationScore::from_classes(&classes);
         assert!(!score.is_obfuscated());
     }
 
     #[test]
     fn test_obfuscation_score_short_names() {
-        let classes = vec![SmaliClass::mock("La/b;"), SmaliClass::mock("Lc/d;")];
+        let classes = vec![SmaliClass::synthetic_fixture("La/b;"), SmaliClass::synthetic_fixture("Lc/d;")];
         let score = ObfuscationScore::from_classes(&classes);
         assert!(score.short_name_classes > 0);
     }
 
     #[test]
     fn test_obfuscation_score_range() {
-        let classes = vec![SmaliClass::mock("Lcom/Foo;")];
+        let classes = vec![SmaliClass::synthetic_fixture("Lcom/Foo;")];
         let score = ObfuscationScore::from_classes(&classes);
         assert!(score.score >= 0.0 && score.score <= 1.0);
     }
@@ -888,7 +888,7 @@ mod tests {
     #[test]
     fn test_report_is_high_risk_false_for_clean() {
         let engine = SmaliAnalysis::new();
-        let report = engine.analyze(&[SmaliClass::mock("Lcom/Clean;")]);
+        let report = engine.analyze(&[SmaliClass::synthetic_fixture("Lcom/Clean;")]);
         // Mock class has minimal invoke instructions — no exec calls
         let _ = report.is_high_risk();
     }
@@ -907,7 +907,7 @@ mod tests {
     #[test]
     fn test_report_summary_contains_class_count() {
         let engine = SmaliAnalysis::new();
-        let classes = vec![SmaliClass::mock("La;"), SmaliClass::mock("Lb;")];
+        let classes = vec![SmaliClass::synthetic_fixture("La;"), SmaliClass::synthetic_fixture("Lb;")];
         let report = engine.analyze(&classes);
         assert!(report.summary().contains('2'));
     }
@@ -915,7 +915,7 @@ mod tests {
     #[test]
     fn test_report_serialization() {
         let engine = SmaliAnalysis::new();
-        let report = engine.analyze(&[SmaliClass::mock("Lcom/Test;")]);
+        let report = engine.analyze(&[SmaliClass::synthetic_fixture("Lcom/Test;")]);
         let json = serde_json::to_string(&report).unwrap();
         let d: SmaliReport = serde_json::from_str(&json).unwrap();
         assert_eq!(d.class_count, report.class_count);

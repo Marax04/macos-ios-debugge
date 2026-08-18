@@ -485,7 +485,7 @@ pub fn emit_sizeof_comment(ty: &DecompType, engine: &LayoutEngine) -> String {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::StructField;
 
@@ -496,7 +496,7 @@ mod tests {
     fn u8_ty() -> DecompType { DecompType::Int(IntWidth::U8) }
 
     fn engine() -> LayoutEngine { LayoutEngine::new(CompilerAbi::GccClang) }
-    fn msvc_engine() -> LayoutEngine { LayoutEngine::new(CompilerAbi::Msvc) }
+    pub(crate) fn msvc_engine() -> LayoutEngine { LayoutEngine::new(CompilerAbi::Msvc) }
 
     // ── size_of ───────────────────────────────────────────────────────────────
 
@@ -697,5 +697,100 @@ mod tests {
         let s = emit_sizeof_comment(&i32(), &engine());
         assert!(s.contains("sizeof=4"));
         assert!(s.contains("alignof=4"));
+    }
+}
+
+#[cfg(test)]
+mod msvc_abi_layout_tests {
+    //! ⚠ Why this module exists.
+    //!
+    //! `msvc_engine()` — the fixture that builds a [`LayoutEngine`] on
+    //! [`CompilerAbi::Msvc`] — sat in the test module with **no caller**: every
+    //! existing test used `engine()`, i.e. `GccClang`. So the MSVC branch of
+    //! this file was untested end to end, on a decompiler whose primary corpus
+    //! is PE binaries. The gap was invisible because an `#[allow(dead_code)]`
+    //! suppressed the unused-fixture warning.
+    //!
+    //! These tests pin the places where the two ABIs actually diverge, rather
+    //! than re-testing agreement.
+
+    use super::*;
+    use crate::{DecompType, IntWidth, StructField, StructType};
+
+    fn gcc() -> LayoutEngine {
+        LayoutEngine::new(CompilerAbi::GccClang)
+    }
+    fn msvc() -> LayoutEngine {
+        // The fixture the existing test module already had, now actually used.
+        super::tests::msvc_engine()
+    }
+
+    /// The documented divergence: GCC/Clang cap natural alignment at 16,
+    /// MSVC at 8.
+    #[test]
+    fn max_alignment_differs_between_abis() {
+        assert_eq!(CompilerAbi::GccClang.max_alignment(), 16);
+        assert_eq!(CompilerAbi::Msvc.max_alignment(), 8);
+    }
+
+    /// Scalar sizes are ABI-independent; only alignment policy differs. If this
+    /// ever fails, the divergence has leaked into `size_of`, which it must not.
+    #[test]
+    fn scalar_sizes_agree_across_abis() {
+        for ty in [
+            DecompType::Bool,
+            DecompType::Int(IntWidth::I8),
+            DecompType::Int(IntWidth::I16),
+            DecompType::Int(IntWidth::I32),
+            DecompType::Int(IntWidth::I64),
+            DecompType::Float32,
+            DecompType::Float64,
+        ] {
+            assert_eq!(
+                gcc().size_of(&ty),
+                msvc().size_of(&ty),
+                "scalar size must not depend on the ABI: {ty:?}"
+            );
+        }
+    }
+
+    /// A struct of `{ i8, i64 }` must pad the first field up to the 8-byte
+    /// alignment of the second under BOTH ABIs, and report that padding.
+    #[test]
+    fn msvc_pads_a_char_before_a_long_long() {
+        let st = StructType::new(
+            "S",
+            vec![
+                StructField::new(0, "c", DecompType::Int(IntWidth::I8)),
+                StructField::new(8, "q", DecompType::Int(IntWidth::I64)),
+            ],
+            16,
+        );
+        let layout = msvc().layout_struct(&st);
+        assert_eq!(layout.alignment, 8, "i64 forces 8-byte struct alignment");
+        assert_eq!(layout.size, 16, "1 byte + 7 pad + 8 = 16");
+        assert!(layout.has_padding, "the 7 pad bytes must be reported");
+
+        // The engine MATERIALISES padding as an explicit `FieldLayout` rather
+        // than only setting `has_padding` — so a 2-field struct lays out as
+        // three entries. Measured, not assumed: the first draft of this test
+        // asserted 2 and the engine answered 3.
+        let real: Vec<&FieldLayout> = layout.fields.iter().filter(|f| !f.is_padding).collect();
+        let pads: Vec<&FieldLayout> = layout.fields.iter().filter(|f| f.is_padding).collect();
+        assert_eq!(real.len(), 2, "two declared fields");
+        assert_eq!(pads.len(), 1, "one inserted pad run");
+        assert_eq!(real[0].offset, 0);
+        assert_eq!(real[1].offset, 8);
+        assert_eq!(pads[0].offset, 1, "pad starts right after the char");
+        assert_eq!(pads[0].size, 7, "and runs to the i64 boundary");
+    }
+
+    /// A pointer is 8 bytes on the default (64-bit) engine under MSVC too, and
+    /// 4 on the 32-bit engine — the `x86` constructor must carry the ABI.
+    #[test]
+    fn msvc_pointer_size_follows_the_engine_width() {
+        let p = DecompType::Ptr(Box::new(DecompType::Void));
+        assert_eq!(msvc().size_of(&p), 8);
+        assert_eq!(LayoutEngine::x86(CompilerAbi::Msvc).size_of(&p), 4);
     }
 }

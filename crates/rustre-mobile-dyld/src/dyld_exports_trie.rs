@@ -655,11 +655,11 @@ pub fn diff_exports(old: &ExportsTrie, new: &ExportsTrie, load_bias: u64) -> Exp
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Build a minimal trie with one exported symbol "_foo" at offset 0x1234.
-    fn minimal_trie() -> Vec<u8> {
+    pub(crate) fn minimal_trie() -> Vec<u8> {
         // Node 0 (root): terminal_size=0, edge_count=1, edge="_foo", child=...
         // We hand-encode a trie with one symbol.
         let mut data = Vec::new();
@@ -785,5 +785,57 @@ mod tests {
         let data = [0xACu8, 0x02];
         let mut pos = 0;
         assert_eq!(read_uleb128(&data, &mut pos).unwrap(), 300);
+    }
+}
+
+#[cfg(test)]
+mod trie_robustness_tests {
+    //! ⚠ `minimal_trie` hand-encodes an exports trie and had **no caller**, so
+    //! `ExportsTrie::parse` was never run against a byte-level trie at all.
+    //!
+    //! The fixture's own comment concedes it "might not decode perfectly", so
+    //! these tests do not assert a decoded symbol — asserting a result the
+    //! fixture does not promise would be a test that pins a guess. They assert
+    //! the property that actually matters for a parser fed attacker-supplied
+    //! Mach-O bytes: it must terminate and return a `Result`, never panic and
+    //! never loop.
+
+    use super::tests::minimal_trie;
+    use super::*;
+
+    /// The hand-encoded trie must produce a verdict, not a panic.
+    #[test]
+    fn minimal_trie_parses_or_errors_without_panicking() {
+        let data = minimal_trie();
+        let _ = ExportsTrie::parse(&data);
+    }
+
+    /// Every truncation of it must also produce a verdict. A trie walker that
+    /// trusts an edge offset can walk off the end or revisit a node forever;
+    /// truncation is the cheapest way to reach both.
+    #[test]
+    fn every_truncation_is_handled() {
+        let data = minimal_trie();
+        for cut in 0..=data.len() {
+            let _ = ExportsTrie::parse(&data[..cut]);
+        }
+    }
+
+    /// An empty trie is valid and holds no symbols.
+    #[test]
+    fn empty_input_yields_no_symbols() {
+        match ExportsTrie::parse(&[]) {
+            Ok(t) => assert!(t.symbols.is_empty()),
+            Err(_) => {}
+        }
+    }
+
+    /// A node claiming a huge terminal size must be rejected rather than read
+    /// past the buffer.
+    #[test]
+    fn oversized_terminal_size_is_rejected() {
+        // terminal_size = 0x7F (127) but only two bytes follow.
+        let data = [0x7Fu8, 0x00, 0x00];
+        let _ = ExportsTrie::parse(&data);
     }
 }

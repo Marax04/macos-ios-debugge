@@ -5,7 +5,7 @@
 //! boundaries, malformed inputs, round-trips, and currently-unwired APIs.
 
 use rustre_pe_editor::{
-    section_chars, CertificateHeader, DosHeader, EditError, ExportEdit, ExportEditor, HeaderField,
+    section_chars, CertificateHeader, EditError, ExportEdit, ExportEditor, HeaderField,
     ImportEditor, ImportEntry, Patch, PatchSet, PeEditor, PeField, PeParser, PeSection,
     PeSigningScaffold, PeTreeBuilder, PeTreeNode, Rc4, ResourceEditor, ResourceEntry, ResourceType,
     SectionEdit, SectionEditor, resource_types, xor_section,

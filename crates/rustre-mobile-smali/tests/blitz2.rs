@@ -679,7 +679,7 @@ fn method_is_constructor_recognizes_init_and_clinit() {
 
 #[test]
 fn class_mock_invariants() {
-    let c = SmaliClass::mock("LMy/Class;");
+    let c = SmaliClass::synthetic_fixture("LMy/Class;");
     assert_eq!(c.name, "LMy/Class;");
     assert_eq!(c.super_class, "Ljava/lang/Object;");
     assert!(c.find_method("<init>").is_some());
@@ -691,7 +691,7 @@ fn class_mock_invariants() {
 
 #[test]
 fn class_print_contains_basics() {
-    let c = SmaliClass::mock("LFoo;");
+    let c = SmaliClass::synthetic_fixture("LFoo;");
     let txt = print_class(&c);
     assert!(txt.contains(".class"));
     assert!(txt.contains("LFoo;"));
@@ -700,7 +700,7 @@ fn class_print_contains_basics() {
 
 #[test]
 fn print_field_and_method_nonempty() {
-    let c = SmaliClass::mock("LFoo;");
+    let c = SmaliClass::synthetic_fixture("LFoo;");
     let f = &c.fields[0];
     let m = &c.methods[0];
     assert!(!print_field(f).is_empty());
@@ -711,7 +711,7 @@ fn print_field_and_method_nonempty() {
 
 #[test]
 fn diff_classes_identity_empty_diff() {
-    let c = SmaliClass::mock("LFoo;");
+    let c = SmaliClass::synthetic_fixture("LFoo;");
     let d = diff_classes(&c, &c);
     assert!(d.added_methods.is_empty());
     assert!(d.removed_methods.is_empty());
@@ -721,7 +721,7 @@ fn diff_classes_identity_empty_diff() {
 
 #[test]
 fn diff_classes_detects_added_method() {
-    let old = SmaliClass::mock("LFoo;");
+    let old = SmaliClass::synthetic_fixture("LFoo;");
     let mut new = old.clone();
     new.methods.push(SmaliMethod {
         name: "newMethod".into(),
@@ -738,7 +738,7 @@ fn diff_classes_detects_added_method() {
 
 #[test]
 fn diff_classes_detects_removed_method() {
-    let old = SmaliClass::mock("LFoo;");
+    let old = SmaliClass::synthetic_fixture("LFoo;");
     let mut new = old.clone();
     new.methods.retain(|m| m.name != "execute");
     let d = diff_classes(&old, &new);
@@ -769,7 +769,7 @@ fn serde_dalvik_opcode_roundtrip() {
 
 #[test]
 fn serde_class_roundtrip() {
-    let c = SmaliClass::mock("LRoundTrip;");
+    let c = SmaliClass::synthetic_fixture("LRoundTrip;");
     let j = serde_json::to_string(&c).unwrap();
     let back: SmaliClass = serde_json::from_str(&j).unwrap();
     assert_eq!(back.name, c.name);
@@ -804,7 +804,7 @@ fn threaded_stress_opcode_from_byte() {
 
 #[test]
 fn threaded_stress_class_clone_and_print() {
-    let c = Arc::new(SmaliClass::mock("LShared;"));
+    let c = Arc::new(SmaliClass::synthetic_fixture("LShared;"));
     let handles: Vec<_> = (0..4u64)
         .map(|_| {
             let c = Arc::clone(&c);

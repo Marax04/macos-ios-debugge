@@ -757,10 +757,10 @@ pub const fn rel32_displacement(from_va: u64, to_va: u64) -> i32 {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn make_buf(len: usize) -> Vec<u8> {
+    pub(crate) fn make_buf(len: usize) -> Vec<u8> {
         (0..len as u8).collect()
     }
 
@@ -927,5 +927,55 @@ mod tests {
         p.kill_function(0, 6).unwrap();
         assert_eq!(p.bytes()[0], opcode::RET_NEAR);
         assert_eq!(&p.bytes()[1..6], &[0x90; 5]);
+    }
+}
+
+#[cfg(test)]
+mod patch_on_known_buffer_tests {
+    //! ⚠ `make_buf` produced a buffer with *distinct* bytes (0,1,2,…) and had
+    //! no caller: every patcher test ran against `generate_nops` output or a
+    //! zeroed buffer, so nothing checked that a patch touches only the range it
+    //! was given. A buffer where every byte differs is exactly what makes an
+    //! off-by-one visible.
+
+    use super::*;
+
+    use super::tests::make_buf;
+
+    /// Patching [4,8) must leave [0,4) and [8,16) byte-identical.
+    #[test]
+    fn nop_range_touches_only_its_own_range() {
+        let original = make_buf(16);
+        let mut p = PePatcher::new(original.clone());
+        p.nop_range(4, 4, NopStyle::Simple).expect("in bounds");
+
+        let out = p.bytes();
+        assert_eq!(&out[0..4], &original[0..4], "prefix must be untouched");
+        assert_eq!(&out[4..8], &[0x90u8; 4], "the patched run");
+        assert_eq!(&out[8..16], &original[8..16], "suffix must be untouched");
+    }
+
+    /// INT3 fill has the same containment property.
+    #[test]
+    fn int3_range_touches_only_its_own_range() {
+        let original = make_buf(16);
+        let mut p = PePatcher::new(original.clone());
+        p.int3_range(10, 2).expect("in bounds");
+
+        let out = p.bytes();
+        assert_eq!(&out[0..10], &original[0..10]);
+        assert_eq!(&out[10..12], &[0xCCu8, 0xCC]);
+        assert_eq!(&out[12..16], &original[12..16]);
+    }
+
+    /// A patch that runs one byte past the end must be refused, and must not
+    /// have written anything first.
+    #[test]
+    fn out_of_bounds_patch_is_refused_and_leaves_the_buffer_intact() {
+        let original = make_buf(8);
+        let mut p = PePatcher::new(original.clone());
+        let err = p.nop_range(6, 4, NopStyle::Simple);
+        assert!(err.is_err(), "6+4 > 8 must be rejected");
+        assert_eq!(p.bytes(), &original[..], "a refused patch must not write");
     }
 }

@@ -10,7 +10,6 @@
 //! Also provides semantic classification of handler bodies into the canonical
 //! VM operations: PUSH, POP, ADD, SUB, AND, OR, XOR, NOT, SHL, SHR, JCC, CALL, RET.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

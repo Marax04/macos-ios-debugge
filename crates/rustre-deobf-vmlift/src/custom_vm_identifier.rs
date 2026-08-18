@@ -6,7 +6,6 @@
 //! * [`CustomVmIdentifier`] — main analysis entry point
 //! * Handler table detection, dispatch loop heuristics, opcode width inference
 
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 

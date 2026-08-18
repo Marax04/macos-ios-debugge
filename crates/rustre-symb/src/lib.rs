@@ -1786,7 +1786,7 @@ impl SpecSymExpr {
             // wide as the left one. `SymWidth` only has 8/16/32/64, so a sum
             // it cannot express (24 bits, or anything over 64) is reported as
             // unknown rather than as a plausible-looking wrong width.
-            Self::Concat(l, r) => match (l.width()?.bits() + r.width()?.bits()) {
+            Self::Concat(l, r) => match l.width()?.bits() + r.width()?.bits() {
                 8 => Some(SymWidth::W8),
                 16 => Some(SymWidth::W16),
                 32 => Some(SymWidth::W32),

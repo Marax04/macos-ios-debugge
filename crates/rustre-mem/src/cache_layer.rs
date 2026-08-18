@@ -3,7 +3,6 @@
 //! Provides [`CacheLayer`], [`PageCache`], [`CacheStats`],
 //! [`CacheEviction`], [`WriteThrough`], and [`CacheInvalidation`].
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -569,7 +568,7 @@ impl<P: MemoryProvider> CacheLayer<P> {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use async_trait::async_trait;
     use rustre_core::address::Address;
@@ -577,17 +576,17 @@ mod tests {
     // ── Stub MemoryProvider ───────────────────────────────────────────────────
 
     #[derive(Clone)]
-    struct FlatMemory {
+    pub(crate) struct FlatMemory {
         data: Arc<Mutex<Vec<u8>>>,
     }
 
     impl FlatMemory {
-        fn new(size: usize) -> Self {
+        pub(crate) fn new(size: usize) -> Self {
             Self {
                 data: Arc::new(Mutex::new(vec![0u8; size])),
             }
         }
-        fn fill(&self, byte: u8) {
+        pub(crate) fn fill(&self, byte: u8) {
             self.data.lock().iter_mut().for_each(|b| *b = byte);
         }
     }
@@ -619,6 +618,20 @@ mod tests {
     fn make_layer(cap: usize) -> CacheLayer<FlatMemory> {
         let mem = FlatMemory::new(65536);
         CacheLayer::new_lru(mem, cap, 256).unwrap()
+    }
+
+    /// Same, but also hands back a handle to the backing store so a test can
+    /// change the bytes *behind* the cache.
+    ///
+    /// ⚠ `FlatMemory::fill` existed and had no caller: every cache test read
+    /// through a backing store that never changed, so nothing ever exercised
+    /// the one behaviour a cache can get wrong — serving a stale page after the
+    /// source moved. `FlatMemory` is `Clone` over an `Arc`, so the handle and
+    /// the store inside the layer are the same memory.
+    pub(crate) fn make_layer_with_backing(cap: usize) -> (CacheLayer<FlatMemory>, FlatMemory) {
+        let mem = FlatMemory::new(65536);
+        let handle = mem.clone();
+        (CacheLayer::new_lru(mem, cap, 256).unwrap(), handle)
     }
 
     // ── PageCache ─────────────────────────────────────────────────────────────
@@ -1070,5 +1083,60 @@ mod tests {
         layer.write(0, &[1]).unwrap();
         layer.write(256, &[2]).unwrap();
         assert_eq!(layer.stats().write_throughs, 2);
+    }
+}
+
+#[cfg(test)]
+mod staleness_tests {
+    //! The behaviour a cache exists to optimise is also the one it can get
+    //! wrong: after the backing store changes, a cached page is stale until it
+    //! is invalidated. No test covered this, because the fixture that mutates
+    //! the backing store (`FlatMemory::fill`) had no caller.
+
+    use super::tests::*;
+
+    /// A page read once is served from the cache afterwards, so a change made
+    /// behind the layer is NOT visible until invalidation. This pins the
+    /// current contract; if the layer ever starts revalidating, this test is
+    /// the one that must be updated deliberately.
+    #[test]
+    fn a_cached_page_hides_a_later_backing_write() {
+        let (layer, backing) = make_layer_with_backing(4);
+
+        let first = layer.read(0, 8).expect("first read populates the cache");
+        assert_eq!(first, vec![0u8; 8], "the store starts zeroed");
+
+        backing.fill(0xAB);
+
+        let cached = layer.read(0, 8).expect("second read is served from cache");
+        assert_eq!(cached, vec![0u8; 8], "still the cached page, by design");
+    }
+
+    /// After invalidating the range, the same read must observe the new bytes.
+    /// This is the half that proves the staleness above is a cache effect and
+    /// not a broken backing store.
+    #[test]
+    fn invalidation_makes_the_backing_write_visible() {
+        let (layer, backing) = make_layer_with_backing(4);
+
+        let _ = layer.read(0, 8).expect("populate");
+        backing.fill(0xAB);
+        let dropped = layer.invalidate_range(0, 8);
+        assert!(dropped > 0, "the page holding [0,8) must be dropped");
+
+        let fresh = layer.read(0, 8).expect("re-read after invalidation");
+        assert_eq!(fresh, vec![0xABu8; 8], "the new bytes must be visible now");
+    }
+
+    /// `invalidate_all` must have the same effect as invalidating the range.
+    #[test]
+    fn invalidate_all_also_refreshes() {
+        let (layer, backing) = make_layer_with_backing(4);
+
+        let _ = layer.read(1024, 4).expect("populate");
+        backing.fill(0x5A);
+        layer.invalidate_all();
+
+        assert_eq!(layer.read(1024, 4).unwrap(), vec![0x5Au8; 4]);
     }
 }

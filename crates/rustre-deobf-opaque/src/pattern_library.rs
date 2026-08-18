@@ -7,7 +7,6 @@
 //! * Fermat's little theorem patterns
 //! * Detection without SMT for pattern-matched predicates
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

@@ -6279,7 +6279,7 @@ mod tests {
     }
 
     #[test]
-    fn a_push_and_the_matching_pop_touch_the_SAME_variable() {
+    fn a_push_and_the_matching_pop_touch_the_same_variable() {
         use rustre_il_llil::{LlilExpr, LlilInstruction, LlilRegister};
 
         // The whole point of a save/restore pair: `push %rbx` reads rbx and

@@ -7,7 +7,6 @@
 //! * Predecessor analysis for each state
 //! * Legitimate vs. obfuscated transition filtering
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
 

@@ -135,7 +135,7 @@ pub fn xor_brute_force_top3(data: &[u8]) -> Vec<XorBruteforceCandidate> {
     if data.is_empty() {
         return Vec::new();
     }
-    let mut scored: Vec<(u8, Vec<u8>, f64)> = (0u8..=255)
+    let scored: Vec<(u8, Vec<u8>, f64)> = (0u8..=255)
         .map(|key| {
             let dec: Vec<u8> = data.iter().map(|&b| b ^ key).collect();
             let ratio = printable_ratio(&dec);
@@ -443,6 +443,19 @@ pub fn detect_base64_variant(data: &[u8]) -> Option<Base64Variant> {
     let all_b64_url = data
         .iter()
         .all(|&b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'=');
+    // A '+' or '/' can only come from the STANDARD alphabet, so its presence
+    // settles the question on its own — no url-safe encoding can contain one.
+    //
+    // ⚠ `has_plus_slash` was computed here and never read, behind an
+    // `#[allow(unused_variables)]`-free warning that a crate-level allow was
+    // hiding. The classification still worked, but by elimination rather than
+    // by evidence: an input of pure alphanumerics is valid in BOTH alphabets
+    // and was reported `Standard` with no positive signal for it. This branch
+    // is behaviour-identical (`all_b64_std` already excludes '-' and '_', so
+    // it implies `!has_dash_underscore`) and makes the positive case explicit.
+    if all_b64_std && has_plus_slash {
+        return Some(Base64Variant::Standard);
+    }
     if all_b64_std && !has_dash_underscore {
         return Some(Base64Variant::Standard);
     }

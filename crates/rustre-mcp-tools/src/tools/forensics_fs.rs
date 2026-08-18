@@ -4,7 +4,6 @@
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
-use crate::{args_to_bytes, hex_encode};
 use crate::wire_tools::{artifact_to_json, read_path_or_data};
 
 pub struct ForensicsFsPrefetchParseTool;

@@ -8,7 +8,6 @@
 //! - [`VmStateTracker`] — accumulates snapshots and computes deltas
 //! - [`LoopIterationCounter`] — detects and counts loop iterations
 
-#![allow(dead_code)]
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 

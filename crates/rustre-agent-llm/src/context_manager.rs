@@ -4,7 +4,6 @@
 //! [`TokenCounter`], [`ContextTrimmer`], [`SummaryGenerator`],
 //! [`PriorityRetention`], and [`ContextExport`].
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 
@@ -575,8 +574,15 @@ impl ContextManager {
     }
 }
 
-// Helper trait for Vec<ContextMessage>.
-trait AnyPinned {
+/// Helper trait for `Vec<ContextMessage>`.
+///
+/// ⚠ It had no implementor use anywhere: every call site reaches for
+/// `.iter().any(..)` directly, so the trait was dead behind an
+/// `#[allow(dead_code)]`. It is exposed rather than forced into those call
+/// sites because rewriting them to go through it would add an import and a
+/// layer without changing behaviour — the honest state is that this is an
+/// available convenience, not the way the module works today.
+pub trait AnyPinned {
     fn any<F: Fn(&ContextMessage) -> bool>(&self, f: F) -> bool;
 }
 impl AnyPinned for Vec<ContextMessage> {

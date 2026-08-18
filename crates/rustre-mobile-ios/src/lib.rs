@@ -149,54 +149,291 @@ pub struct IpaBundle {
 }
 
 impl IpaBundle {
-    /// Create a mock bundle for testing.
+    /// Parse an IPA from raw ZIP bytes.
+    ///
+    /// Everything returned is read from the archive:
+    /// * `info` from the bundle's `Info.plist`;
+    /// * embedded frameworks from the `Frameworks/*.framework/` members;
+    /// * system frameworks from the executable's `LC_LOAD_DYLIB` commands;
+    /// * `signature` from the `Entitlements` dictionary inside
+    ///   `embedded.mobileprovision`.
+    ///
+    /// # Errors
+    /// Returns [`IosError`] naming the archive member or the `Info.plist` key
+    /// that is missing. No value is defaulted: an IPA without
+    /// `CFBundleExecutable` is an error, not an app called after its directory.
+    pub fn from_ipa_bytes(data: &[u8]) -> Result<Self, IosError> {
+        use crate::plist::{parse_xml_plist, PlistValue};
+        use std::io::Read as _;
+
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(data))
+            .map_err(|e| IosError::InvalidBundle(format!("not a readable IPA archive: {e}")))?;
+
+        let names: Vec<String> = (0..zip.len())
+            .filter_map(|i| zip.name_for_index(i).map(ToString::to_string))
+            .collect();
+
+        let prefix = names
+            .iter()
+            .find_map(|n| {
+                let mut parts = n.splitn(3, '/');
+                let p0 = parts.next()?;
+                let p1 = parts.next()?;
+                if p0 == "Payload" && p1.ends_with(".app") {
+                    Some(format!("{p0}/{p1}/"))
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                IosError::InvalidBundle("no Payload/*.app directory in the archive".to_string())
+            })?;
+
+        fn member(
+            zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
+            path: &str,
+        ) -> Option<Vec<u8>> {
+            let mut f = zip.by_name(path).ok()?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).ok()?;
+            Some(buf)
+        }
+
+        // ── Info.plist ──────────────────────────────────────────────────────
+        let plist_path = format!("{prefix}Info.plist");
+        let raw = member(&mut zip, &plist_path)
+            .ok_or_else(|| IosError::MissingInfo(plist_path.clone()))?;
+        let info = parse_xml_plist(&raw).map_err(|e| IosError::Plist(e.to_string()))?;
+
+        let text = |key: &str| {
+            info.get(key)
+                .and_then(PlistValue::as_str)
+                .map(ToString::to_string)
+        };
+
+        let bundle_id =
+            text("CFBundleIdentifier").ok_or_else(|| IosError::MissingInfo("CFBundleIdentifier".to_string()))?;
+        let executable =
+            text("CFBundleExecutable").ok_or_else(|| IosError::MissingInfo("CFBundleExecutable".to_string()))?;
+        let name = text("CFBundleDisplayName")
+            .or_else(|| text("CFBundleName"))
+            .unwrap_or_else(|| executable.clone());
+        let version = text("CFBundleShortVersionString")
+            .or_else(|| text("CFBundleVersion"))
+            .ok_or_else(|| IosError::MissingInfo("CFBundleShortVersionString".to_string()))?;
+        let min_os =
+            text("MinimumOSVersion").ok_or_else(|| IosError::MissingInfo("MinimumOSVersion".to_string()))?;
+
+        let platform_name = info
+            .get("CFBundleSupportedPlatforms")
+            .map(PlistValue::string_array)
+            .and_then(|v| v.first().map(ToString::to_string))
+            .ok_or_else(|| IosError::MissingInfo("CFBundleSupportedPlatforms".to_string()))?;
+        let platform = match platform_name.as_str() {
+            "iPhoneOS" => IosPlatform::IphoneOs,
+            "MacOSX" => IosPlatform::MacOs,
+            "AppleTVOS" => IosPlatform::TvOs,
+            "WatchOS" => IosPlatform::WatchOs,
+            "XROS" => IosPlatform::VisionOs,
+            other => {
+                return Err(IosError::ParseError(format!(
+                    "unknown CFBundleSupportedPlatforms entry {other:?}"
+                )))
+            }
+        };
+
+        // ── Embedded frameworks, from the archive members ───────────────────
+        let fw_prefix = format!("{prefix}Frameworks/");
+        let mut frameworks: Vec<IosFramework> = Vec::new();
+        for n in &names {
+            let Some(rest) = n.strip_prefix(&fw_prefix) else {
+                continue;
+            };
+            let Some(dir) = rest.split('/').next() else {
+                continue;
+            };
+            if !dir.ends_with(".framework") {
+                continue;
+            }
+            let fw_name = dir.trim_end_matches(".framework").to_string();
+            if frameworks.iter().any(|f| f.name == fw_name) {
+                continue;
+            }
+            frameworks.push(IosFramework {
+                name: fw_name,
+                path: format!("Frameworks/{dir}"),
+                is_system: false,
+            });
+        }
+
+        // ── System frameworks, from the executable's LC_LOAD_DYLIB list ─────
+        let exe_path = format!("{prefix}{executable}");
+        if let Some(exe) = member(&mut zip, &exe_path)
+            && let Ok(macho) = goblin::mach::MachO::parse(&exe, 0)
+        {
+            for lib in &macho.libs {
+                if *lib == "self" {
+                    continue;
+                }
+                let Some(idx) = lib.find(".framework/") else {
+                    continue;
+                };
+                let dir = &lib[..idx + ".framework".len()];
+                let Some(fw_name) = dir.rsplit('/').next().map(|d| d.trim_end_matches(".framework"))
+                else {
+                    continue;
+                };
+                if !dir.starts_with("/System/Library/") {
+                    continue;
+                }
+                if frameworks.iter().any(|f| f.name == fw_name) {
+                    continue;
+                }
+                frameworks.push(IosFramework {
+                    name: fw_name.to_string(),
+                    path: dir.to_string(),
+                    is_system: true,
+                });
+            }
+        }
+
+        // ── Entitlements, from embedded.mobileprovision ─────────────────────
+        let signature = member(&mut zip, &format!("{prefix}embedded.mobileprovision"))
+            .and_then(|raw| Self::code_signature_from_profile(&raw));
+
+        Ok(Self {
+            info: BundleInfo {
+                bundle_id,
+                name,
+                version,
+                min_os,
+                platform,
+            },
+            signature,
+            frameworks,
+            executable,
+        })
+    }
+
+    /// Build a [`CodeSignature`] from the `Entitlements` dictionary inside a
+    /// CMS-wrapped `embedded.mobileprovision`.
+    ///
+    /// Returns `None` when no XML plist payload or no `Entitlements` dictionary
+    /// can be found — an absent entitlement set is reported as absent.
+    #[must_use]
+    fn code_signature_from_profile(raw: &[u8]) -> Option<CodeSignature> {
+        use crate::plist::{parse_xml_plist_str, PlistValue};
+
+        let text = String::from_utf8_lossy(raw);
+        let start = text.find("<?xml")?;
+        let end = text.find("</plist>").map_or(text.len(), |p| p + 8);
+        let xml = &text[start..end];
+        let root = parse_xml_plist_str(xml).ok()?;
+
+        let team_id = root
+            .get("TeamIdentifier")
+            .map(PlistValue::string_array)
+            .and_then(|v| v.first().map(ToString::to_string))
+            .unwrap_or_default();
+
+        let ent_dict = root.get("Entitlements")?;
+        let PlistValue::Dict(pairs) = ent_dict else {
+            return None;
+        };
+
+        let mut entitlements = Vec::with_capacity(pairs.len());
+        for (key, value) in pairs {
+            let converted = match value {
+                PlistValue::Boolean(b) => EntitlementValue::Bool(*b),
+                PlistValue::String(s) => EntitlementValue::Str(s.clone()),
+                PlistValue::Array(_) => EntitlementValue::Array(
+                    value.string_array().into_iter().map(ToString::to_string).collect(),
+                ),
+                other => EntitlementValue::Str(format!("{other:?}")),
+            };
+            entitlements.push(Entitlement {
+                key: key.clone(),
+                value: converted,
+            });
+        }
+
+        let signing_id = entitlements
+            .iter()
+            .find(|e| e.key == "application-identifier")
+            .map(|e| e.value.to_string())
+            .unwrap_or_default();
+
+        Some(CodeSignature {
+            team_id,
+            signing_id,
+            entitlements,
+        })
+    }
+
+    /// Build the reference IPA image parsed by [`IpaBundle::mock`].
+    ///
+    /// A real ZIP archive with a real XML `Info.plist`, a real arm64 Mach-O
+    /// declaring two `LC_LOAD_DYLIB` system frameworks, an embedded framework
+    /// directory, and a real provisioning-profile payload.
+    ///
+    /// # Panics
+    /// Panics if the archive cannot be written, which would mean the `zip`
+    /// writer is unusable in this build.
+    #[must_use]
+    pub fn reference_ipa_bytes() -> Vec<u8> {
+        use std::io::Write as _;
+        use zip::write::SimpleFileOptions;
+
+        let opts = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut cursor);
+
+            w.add_directory("Payload/ExampleApp.app/", opts)
+                .expect("zip directory");
+
+            w.start_file("Payload/ExampleApp.app/Info.plist", opts)
+                .expect("zip Info.plist");
+            w.write_all(REFERENCE_INFO_PLIST).expect("write Info.plist");
+
+            w.start_file("Payload/ExampleApp.app/ExampleApp", opts)
+                .expect("zip executable");
+            w.write_all(&reference_macho_with_dylibs(&[
+                "/System/Library/Frameworks/UIKit.framework/UIKit",
+                "/System/Library/Frameworks/Foundation.framework/Foundation",
+            ]))
+            .expect("write executable");
+
+            w.start_file("Payload/ExampleApp.app/embedded.mobileprovision", opts)
+                .expect("zip profile");
+            w.write_all(REFERENCE_PROFILE).expect("write profile");
+
+            w.add_directory(
+                "Payload/ExampleApp.app/Frameworks/Alamofire.framework/",
+                opts,
+            )
+            .expect("zip framework dir");
+
+            w.finish().expect("finish zip");
+        }
+        cursor.into_inner()
+    }
+
+    /// Parse the reference IPA image from [`IpaBundle::reference_ipa_bytes`].
+    ///
+    /// Kept under the historical name `mock`, but the bundle id, name, version,
+    /// minimum OS, platform, framework list and entitlements are now all read
+    /// out of those bytes by [`IpaBundle::from_ipa_bytes`].
+    ///
+    /// # Panics
+    /// Panics if the reference image fails to parse, which would mean the
+    /// writer and the parser have diverged.
     #[must_use]
     pub fn mock() -> Self {
-        Self {
-            info: BundleInfo {
-                bundle_id: "com.example.App".to_string(),
-                name: "ExampleApp".to_string(),
-                version: "1.0.0".to_string(),
-                min_os: "14.0".to_string(),
-                platform: IosPlatform::IphoneOs,
-            },
-            signature: Some(CodeSignature {
-                team_id: "ABCD1234EF".to_string(),
-                signing_id: "com.example.App".to_string(),
-                entitlements: vec![
-                    Entitlement {
-                        key: "get-task-allow".to_string(),
-                        value: EntitlementValue::Bool(false),
-                    },
-                    Entitlement {
-                        key: "application-identifier".to_string(),
-                        value: EntitlementValue::Str("ABCD1234EF.com.example.App".to_string()),
-                    },
-                    Entitlement {
-                        key: "keychain-access-groups".to_string(),
-                        value: EntitlementValue::Array(vec!["ABCD1234EF.*".to_string()]),
-                    },
-                ],
-            }),
-            frameworks: vec![
-                IosFramework {
-                    name: "UIKit".to_string(),
-                    path: "/System/Library/Frameworks/UIKit.framework".to_string(),
-                    is_system: true,
-                },
-                IosFramework {
-                    name: "Alamofire".to_string(),
-                    path: "Frameworks/Alamofire.framework".to_string(),
-                    is_system: false,
-                },
-                IosFramework {
-                    name: "Foundation".to_string(),
-                    path: "/System/Library/Frameworks/Foundation.framework".to_string(),
-                    is_system: true,
-                },
-            ],
-            executable: "ExampleApp".to_string(),
-        }
+        Self::from_ipa_bytes(&Self::reference_ipa_bytes())
+            .expect("reference IPA image must parse with IpaBundle::from_ipa_bytes")
     }
 
     /// Return the number of frameworks.
@@ -221,6 +458,110 @@ impl IpaBundle {
     pub fn system_frameworks(&self) -> Vec<&IosFramework> {
         self.frameworks.iter().filter(|f| f.is_system).collect()
     }
+}
+
+/// `Info.plist` of the reference IPA image, as real XML.
+const REFERENCE_INFO_PLIST: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>com.example.App</string>
+    <key>CFBundleName</key><string>ExampleApp</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key><string>42</string>
+    <key>MinimumOSVersion</key><string>14.0</string>
+    <key>CFBundleExecutable</key><string>ExampleApp</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array><string>iPhoneOS</string></array>
+</dict>
+</plist>
+"#;
+
+/// `embedded.mobileprovision` payload of the reference IPA image.
+///
+/// The leading bytes stand in for the CMS envelope that wraps the plist on a
+/// real device build; the parser locates the payload by its `<?xml` magic, so
+/// this exercises the same path.
+const REFERENCE_PROFILE: &[u8] = br#"CMS-WRAPPED-PROFILE<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+    <key>Name</key><string>ExampleApp Development</string>
+    <key>TeamIdentifier</key>
+    <array><string>ABCD1234EF</string></array>
+    <key>Entitlements</key>
+    <dict>
+        <key>get-task-allow</key><false/>
+        <key>application-identifier</key><string>ABCD1234EF.com.example.App</string>
+        <key>keychain-access-groups</key>
+        <array><string>ABCD1234EF.*</string></array>
+    </dict>
+</dict>
+</plist>
+"#;
+
+/// Assemble an arm64 Mach-O executable that declares `dylibs` through real
+/// `LC_LOAD_DYLIB` commands, so a parser has to read them to find them.
+#[must_use]
+fn reference_macho_with_dylibs(dylibs: &[&str]) -> Vec<u8> {
+    const HEADER_SIZE: usize = 32;
+    const SEG_CMD_SIZE: usize = 72;
+
+    fn put_u32(buf: &mut [u8], off: usize, v: u32) {
+        buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    fn put_u64(buf: &mut [u8], off: usize, v: u64) {
+        buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
+    }
+
+    // Each LC_LOAD_DYLIB is a 24-byte command followed by its NUL-terminated
+    // path, padded so the next command stays 8-byte aligned.
+    let dylib_sizes: Vec<usize> = dylibs
+        .iter()
+        .map(|d| {
+            let raw = 24 + d.len() + 1;
+            raw.div_ceil(8) * 8
+        })
+        .collect();
+    let cmds_size: usize = SEG_CMD_SIZE + dylib_sizes.iter().sum::<usize>();
+    let total = HEADER_SIZE + cmds_size;
+
+    let mut buf = vec![0u8; total];
+
+    put_u32(&mut buf, 0, 0xFEED_FACF); // MH_MAGIC_64
+    put_u32(&mut buf, 4, 0x0100_000C); // CPU_TYPE_ARM64
+    put_u32(&mut buf, 8, 0); // cpusubtype
+    put_u32(&mut buf, 12, 2); // MH_EXECUTE
+    put_u32(&mut buf, 16, u32::try_from(1 + dylibs.len()).unwrap_or(0)); // ncmds
+    put_u32(&mut buf, 20, u32::try_from(cmds_size).unwrap_or(0));
+    put_u32(&mut buf, 24, 0x0020_0085); // NOUNDEFS | DYLDLINK | TWOLEVEL | PIE
+    put_u32(&mut buf, 28, 0); // reserved
+
+    // LC_SEGMENT_64 __TEXT
+    let seg = HEADER_SIZE;
+    put_u32(&mut buf, seg, 0x19);
+    put_u32(&mut buf, seg + 4, u32::try_from(SEG_CMD_SIZE).unwrap_or(0));
+    buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+    put_u64(&mut buf, seg + 24, 0x1_0000_0000); // vmaddr
+    put_u64(&mut buf, seg + 32, 0x4000); // vmsize
+    put_u64(&mut buf, seg + 40, 0); // fileoff
+    put_u64(&mut buf, seg + 48, total as u64); // filesize
+    put_u32(&mut buf, seg + 56, 5); // maxprot
+    put_u32(&mut buf, seg + 60, 5); // initprot
+    put_u32(&mut buf, seg + 64, 0); // nsects
+    put_u32(&mut buf, seg + 68, 0); // flags
+
+    let mut off = seg + SEG_CMD_SIZE;
+    for (path, size) in dylibs.iter().zip(&dylib_sizes) {
+        put_u32(&mut buf, off, 0x0C); // LC_LOAD_DYLIB
+        put_u32(&mut buf, off + 4, u32::try_from(*size).unwrap_or(0));
+        put_u32(&mut buf, off + 8, 24); // dylib.name offset
+        put_u32(&mut buf, off + 12, 0); // timestamp
+        put_u32(&mut buf, off + 16, 0x0001_0000); // current_version
+        put_u32(&mut buf, off + 20, 0x0001_0000); // compatibility_version
+        buf[off + 24..off + 24 + path.len()].copy_from_slice(path.as_bytes());
+        off += size;
+    }
+
+    buf
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -321,6 +662,67 @@ mod tests {
             entitlements: vec![],
         };
         assert!(sig.get("key").is_none());
+    }
+
+    #[test]
+    fn test_from_ipa_bytes_rejects_non_zip() {
+        match IpaBundle::from_ipa_bytes(b"not a zip at all") {
+            Err(IosError::InvalidBundle(m)) => assert!(m.contains("readable IPA archive")),
+            other => panic!("expected InvalidBundle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_from_ipa_bytes_names_the_missing_info_plist() {
+        use std::io::Write as _;
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut cursor);
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            w.start_file("Payload/Empty.app/placeholder", opts).unwrap();
+            w.write_all(b"x").unwrap();
+            w.finish().unwrap();
+        }
+        match IpaBundle::from_ipa_bytes(&cursor.into_inner()) {
+            Err(IosError::MissingInfo(m)) => assert_eq!(m, "Payload/Empty.app/Info.plist"),
+            other => panic!("expected MissingInfo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_system_frameworks_come_from_load_dylib_commands() {
+        // Remove the LC_LOAD_DYLIB list and the system frameworks must vanish:
+        // they are read from the binary, not assumed.
+        let b = IpaBundle::mock();
+        assert_eq!(b.system_frameworks().len(), 2);
+        let names: Vec<&str> = b
+            .system_frameworks()
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
+        assert!(names.contains(&"UIKit"));
+        assert!(names.contains(&"Foundation"));
+        // The one embedded framework comes from an archive member instead.
+        let embedded: Vec<&str> = b
+            .frameworks
+            .iter()
+            .filter(|f| !f.is_system)
+            .map(|f| f.name.as_str())
+            .collect();
+        assert_eq!(embedded, vec!["Alamofire"]);
+    }
+
+    #[test]
+    fn test_entitlements_come_from_the_provisioning_profile() {
+        let b = IpaBundle::mock();
+        let sig = b.signature.as_ref().expect("profile carries entitlements");
+        assert_eq!(sig.team_id, "ABCD1234EF");
+        assert!(sig.has("keychain-access-groups"));
+        assert!(matches!(
+            sig.get("get-task-allow"),
+            Some(EntitlementValue::Bool(false))
+        ));
     }
 
     #[test]

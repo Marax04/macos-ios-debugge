@@ -366,14 +366,14 @@ mod tests {
 
     #[test]
     fn test_print_class_contains_class_name() {
-        let c = SmaliClass::mock("Lcom/example/Foo;");
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         let text = print_class(&c);
         assert!(text.contains("Lcom/example/Foo;"), "text: {text}");
     }
 
     #[test]
     fn test_print_class_contains_method() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let text = print_class(&c);
         assert!(text.contains(".method"), "text: {text}");
         assert!(text.contains(".end method"), "text: {text}");
@@ -381,14 +381,14 @@ mod tests {
 
     #[test]
     fn test_print_class_contains_field() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let text = print_class(&c);
         assert!(text.contains(".field"), "text: {text}");
     }
 
     #[test]
     fn test_print_method_registers() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let m = &c.methods[0];
         let text = print_method(m);
         assert!(text.contains(".registers"), "text: {text}");
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_print_method_return_void() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let m = c.methods.iter().find(|m| m.name == "<init>").expect("init");
         let text = print_method(m);
         assert!(text.contains("return-void"), "text: {text}");
@@ -404,7 +404,7 @@ mod tests {
 
     #[test]
     fn test_print_field() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let f = &c.fields[0];
         let text = print_field(f);
         assert!(text.contains(".field"), "text: {text}");
@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_diff_classes_added_method() {
-        let old = SmaliClass::mock("Lfoo;");
+        let old = SmaliClass::synthetic_fixture("Lfoo;");
         let mut new_class = old.clone();
         new_class.methods.push(super::super::SmaliMethod {
             name: "newMethod".to_owned(),
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_diff_classes_removed_field() {
-        let old = SmaliClass::mock("Lfoo;");
+        let old = SmaliClass::synthetic_fixture("Lfoo;");
         let mut new_class = old.clone();
         new_class.fields.clear();
         let diff = diff_classes(&old, &new_class);
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_print_options_with_index_comments() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let m = c.methods.iter().find(|m| m.name == "<init>").expect("init");
         let opts = PrintOptions {
             emit_index_comments: true,
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_print_super() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let text = print_class(&c);
         assert!(text.contains(".super Ljava/lang/Object;"), "text: {text}");
     }

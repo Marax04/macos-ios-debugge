@@ -320,7 +320,12 @@ pub struct AndroidManifest {
 }
 
 impl AndroidManifest {
-    /// Create a mock manifest for testing.
+    /// A hand-written fixture used by this crate's own tests.
+    ///
+    /// It is NOT derived from any APK: nothing in it was measured, so it must
+    /// never be reported to a user as the analysis of a real file. The real
+    /// paths are `ApkAnalyzer::parse_bytes` (ZIP + DEX + AXML from bytes) and
+    /// `AndroidManifest::parse` (binary AXML).
     #[must_use]
     pub fn mock(pkg: impl Into<String>) -> Self {
         let boot_filter = IntentFilter {
@@ -958,7 +963,12 @@ impl Apk {
         }
     }
 
-    /// Create a rich mock APK for testing.
+    /// A hand-written fixture used by this crate's own tests.
+    ///
+    /// It is NOT derived from any APK: nothing in it was measured, so it must
+    /// never be reported to a user as the analysis of a real file. The real
+    /// paths are `ApkAnalyzer::parse_bytes` (ZIP + DEX + AXML from bytes) and
+    /// `AndroidManifest::parse` (binary AXML).
     #[must_use]
     pub fn mock() -> Self {
         let mut apk = Self::new();

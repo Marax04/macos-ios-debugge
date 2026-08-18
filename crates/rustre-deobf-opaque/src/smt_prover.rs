@@ -15,7 +15,6 @@
 //!
 //! A timeout mechanism aborts slow checks and reports `Unknown`.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

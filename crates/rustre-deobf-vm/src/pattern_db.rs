@@ -8,7 +8,6 @@
 //! - [`FuzzyMatchResult`] — result of a fuzzy pattern search
 //! - [`HashLookupTable`] — fast hash-based exact matching
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

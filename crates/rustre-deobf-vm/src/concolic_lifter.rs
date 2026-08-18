@@ -8,7 +8,6 @@
 //! - [`PathCondition`] — accumulated branch constraints
 //! - [`HandlerOutputAnalysis`] — summarises what the handler produced
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 
@@ -346,7 +345,21 @@ impl SymbolicValue {
         vars
     }
 
-    fn collect_vars(&self, out: &mut Vec<String>) {
+    /// Recursive variable collector — **superseded**, kept as the reference
+    /// formulation of the traversal.
+    ///
+    /// ⚠ Do not reach for this on untrusted input. [`Self::symbolic_vars`] was
+    /// deliberately rewritten as an *iterative* traversal to close an unbounded
+    /// recursion (a deep symbolic tree overflows the stack); this method is the
+    /// recursive form that change replaced. Calling it from the pipeline would
+    /// reintroduce the defect, so it is exposed rather than wired, and this is
+    /// the sentence that says so — it previously had no caller and no warning,
+    /// because an `#[allow(dead_code)]` was hiding both.
+    ///
+    /// It stays because it is the readable statement of what the iterative
+    /// version computes, and `recursive_and_iterative_agree` below pins the two
+    /// to the same answer on trees shallow enough to be safe.
+    pub fn collect_vars(&self, out: &mut Vec<String>) {
         match self {
             Self::Concrete(_) => {}
             Self::Var { name, .. } => out.push(name.clone()),
@@ -1313,5 +1326,37 @@ mod tests {
     fn test_x86_reg_name() {
         assert_eq!(X86Reg::Esi.name(), "ESI");
         assert_eq!(X86Reg::R15.name(), "R15");
+    }
+}
+
+
+#[cfg(test)]
+mod collect_vars_agreement_tests {
+    use super::{SymBinOp, SymbolicValue};
+
+    /// The superseded recursive collector and the iterative one that replaced
+    /// it must return the same variable set. Depth is kept small on purpose:
+    /// the recursive form is exactly the one that cannot take a deep tree.
+    #[test]
+    fn recursive_and_iterative_agree() {
+        let expr = SymbolicValue::BinOp {
+            op: SymBinOp::Add,
+            lhs: Box::new(SymbolicValue::Var { name: "a".to_string(), bits: 64 }),
+            rhs: Box::new(SymbolicValue::BinOp {
+                op: SymBinOp::Add,
+                lhs: Box::new(SymbolicValue::Var { name: "b".to_string(), bits: 64 }),
+                rhs: Box::new(SymbolicValue::Concrete(7)),
+            }),
+        };
+
+        let iterative = expr.symbolic_vars();
+
+        let mut recursive = Vec::new();
+        expr.collect_vars(&mut recursive);
+        recursive.sort();
+        recursive.dedup();
+
+        assert_eq!(iterative, recursive, "the two traversals must agree");
+        assert_eq!(iterative, vec!["a".to_string(), "b".to_string()]);
     }
 }

@@ -970,7 +970,6 @@ fn lower_one(instr: &DalvikInstr) -> IrInstr {
 }
 
 // Suppress dead-code warning for `MoveObjectFrom16` which is referenced in decode_one match arm.
-#[allow(dead_code)]
 const _DALVIK_MOVE_OBJECT_FROM_16: DalvikOpcode = DalvikOpcode::MoveObject;
 
 // ---------------------------------------------------------------------------

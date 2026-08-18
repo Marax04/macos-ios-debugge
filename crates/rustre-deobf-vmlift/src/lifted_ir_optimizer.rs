@@ -10,7 +10,6 @@
 //! All passes operate on [`IrFunction`] / [`IrBlock`] / [`IrInsn`], a lightweight
 //! IR that mirrors the LLIL types from `tigress_lifter` but adds def-use information.
 
-#![allow(dead_code, unused_variables)]
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -510,7 +509,16 @@ impl RedundantMemOpElimination {
                             last_load.insert(key, dst);
                         }
                     }
-                    IrInsn::Store { addr, offset, val, width } => {
+                    // `val` is deliberately NOT consulted: a store is dead when a
+                    // later store to the same address overwrites it, whatever
+                    // value either wrote. Binding it and ignoring it read as an
+                    // oversight, so it is destructured away explicitly.
+                    //
+                    // (Comparing values would additionally catch a store that
+                    // rewrites the SAME value, but that is a different
+                    // optimisation with a different correctness argument — it
+                    // is not folded in here silently.)
+                    IrInsn::Store { addr, offset, val: _, width } => {
                         let key = (format!("{:?}", addr), offset, width);
                         // Invalidate any cached load for this address
                         last_load.remove(&key);

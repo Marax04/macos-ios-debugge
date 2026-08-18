@@ -6,7 +6,6 @@
 //! * [`OpaqueRewriter`] — applies rewrites to a CFG and propagates constants
 //! * Re-analysis notification for downstream passes
 
-#![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -366,10 +365,26 @@ impl OpaqueRewriter {
             }
         }
 
-        // Write discovered constants back into blocks
+        // Write discovered constants back into blocks.
+        //
+        // ⚠ This loop used to reach into `ctx.block_consts` directly while
+        // `ConstPropContext::get` — the accessor for exactly this lookup — had
+        // no caller at all and was kept alive by an `#[allow(dead_code)]`.
+        // Two ways to read the same map is how the two drift apart, so the
+        // write-back now goes through the accessor and `get` has the single
+        // definition of "the constant proven for (block, vreg)".
+        //
+        // The vreg list is collected first because `get` borrows `ctx` while
+        // `blocks` is borrowed mutably; the result is identical to iterating
+        // the inner map.
         for (&addr, block) in blocks.iter_mut() {
-            if let Some(consts) = ctx.block_consts.get(&addr) {
-                for (&vreg, &val) in consts {
+            let vregs: Vec<u32> = ctx
+                .block_consts
+                .get(&addr)
+                .map(|m| m.keys().copied().collect())
+                .unwrap_or_default();
+            for vreg in vregs {
+                if let Some(val) = ctx.get(addr, vreg) {
                     block.const_defs.entry(vreg).or_insert(val);
                 }
             }

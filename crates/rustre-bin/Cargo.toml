@@ -17,6 +17,11 @@ path = "src/main.rs"
 [dependencies]
 rustre-core = { path = "../rustre-core" }
 rustre-arch = { path = "../rustre-arch" }
+# Composition crate that installs the 19 REAL architecture backends over the
+# PlaceholderArch stubs `rustre_arch::register_all_builtins` inserts. Without
+# this dependency the binary links no backend at all and every disassembly
+# request fails with "PlaceholderArch: no backend linked". Added 2026-08-18.
+rustre-arch-registry = { path = "../rustre-arch-registry" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -13,12 +13,10 @@
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
-use std::collections::BTreeMap;
 
 use rustre_debug::time_travel_debug::{
     TtdConfig, TtdSession, TtdState, TracePosition,
 };
-use rustre_debug::ttd_open::detect_trace_kind;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

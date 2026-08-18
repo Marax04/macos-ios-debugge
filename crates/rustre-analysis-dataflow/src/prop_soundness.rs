@@ -675,7 +675,6 @@ mod ssa_opt {
     }
 
     // Payloads are carried only for their Debug rendering in test failures.
-    #[allow(dead_code)]
     #[derive(Debug)]
     enum ExecErr {
         UndefinedVar(SsaRef),

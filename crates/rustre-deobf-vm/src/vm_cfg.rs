@@ -7,7 +7,6 @@
 //! - [`VmCfgBuilder`] — builds a [`VirtualCfg`] from an instruction trace
 //! - Loop detection and irreducibility handling
 
-#![allow(dead_code)]
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 

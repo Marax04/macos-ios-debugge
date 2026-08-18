@@ -20,6 +20,7 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 tempfile = "3"
 zip = "2"
+rustre-mobile-smali = { path = "../rustre-mobile-smali" }
 
 [lints]
 workspace = true

@@ -4,7 +4,6 @@
 //! [`StepExecutor`], [`BranchExecutor`], [`LoopExecutor`],
 //! [`ParallelExecutor`], and [`ErrorHandler`].
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::sync::Arc;

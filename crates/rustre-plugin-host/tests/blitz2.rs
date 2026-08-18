@@ -8,8 +8,7 @@ use rustre_plugin_host::{
     PluginEntry, PluginHost, PluginMetadata, PluginSandbox, PluginSource, SandboxConfig,
 };
 use rustre_plugin_api::{
-    Plugin, PluginCapability, PluginError, PluginManifest, PluginMeta, PluginSettings,
-    PluginState, PluginValue, SettingValue, Version,
+    Plugin, PluginCapability, PluginError, PluginManifest, PluginMeta, PluginSettings, PluginValue, SettingValue, Version,
 };
 use parking_lot::RwLock;
 use std::any::Any;

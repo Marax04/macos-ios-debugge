@@ -14600,7 +14600,7 @@ mod tests {
             ops.iter().any(|o| matches!(
                 &o.instr,
                 LlilInstruction::SetReg { dest: LlilRegister::Concrete(d), value, .. }
-                    if is_dest(d, "eax") && intrinsic_name(value).is_some_and(|n| (n.contains("vmovmsk") || n.contains("movmsk")))
+                    if is_dest(d, "eax") && intrinsic_name(value).is_some_and(|n| n.contains("vmovmsk") || n.contains("movmsk"))
             )),
             "vpmovmskb should write an Intrinsic(\"vmovmsk\", ..) result into eax, got {ops:?}"
         );
@@ -15186,7 +15186,7 @@ mod tests {
     }
 
     #[test]
-    fn an_8_bit_write_PRESERVES_the_upper_bits_of_its_parent() {
+    fn an_8_bit_write_preserves_the_upper_bits_of_its_parent() {
         // E' LA differenza rispetto ai 32 bit: `mov $1,%cl` NON azzera
         // rcx[8..63]. Se questa transform producesse uno zero-extend, il
         // valore verrebbe silenziosamente corrotto.

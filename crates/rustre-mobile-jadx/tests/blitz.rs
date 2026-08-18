@@ -94,7 +94,7 @@ fn jm_clinit_not_constructor() {
 
 #[test]
 fn dp_mock_invariants() {
-    let p = DecompiledProject::mock();
+    let p = DecompiledProject::synthetic_fixture();
     assert_eq!(p.classes.len(), 9);
     assert_eq!(p.total, p.classes.len());
     assert_eq!(p.failed, 0);
@@ -102,7 +102,7 @@ fn dp_mock_invariants() {
 
 #[test]
 fn dp_find_by_simple_and_fqn() {
-    let p = DecompiledProject::mock();
+    let p = DecompiledProject::synthetic_fixture();
     assert!(p.find_class("MainActivity").is_some());
     assert!(p.find_class("com.example.app.MainActivity").is_some());
     assert!(p.find_class("nope").is_none());
@@ -111,7 +111,7 @@ fn dp_find_by_simple_and_fqn() {
 
 #[test]
 fn dp_in_package_exact_match() {
-    let p = DecompiledProject::mock();
+    let p = DecompiledProject::synthetic_fixture();
     assert_eq!(p.in_package("com.example.app").len(), 3);
     assert_eq!(p.in_package("com.example").len(), 0); // prefix should not match
 }
@@ -161,11 +161,10 @@ fn dp_success_rate_failed_gt_total_saturates() {
 // ── MockJadxRunner / trait ──────────────────────────────────────────────────
 
 #[test]
-fn mock_runner_returns_mock_project() {
+fn runner_reports_a_missing_input_instead_of_inventing_a_project() {
     let r = MockJadxRunner;
     let cfg = JadxConfig::new("j", "a", "o");
-    let p = r.decompile(&cfg).unwrap();
-    assert_eq!(p.classes.len(), 9);
+    assert!(matches!(r.decompile(&cfg), Err(JadxError::NotFound(_))));
 }
 
 #[test]

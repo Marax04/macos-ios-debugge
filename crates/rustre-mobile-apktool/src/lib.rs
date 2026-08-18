@@ -155,34 +155,53 @@ impl MockApktoolRunner {
 }
 
 impl ApktoolRunner for MockApktoolRunner {
+    /// Decode `apk` by actually running the external apktool.
+    ///
+    /// This runner never synthesises an outcome. `decode_ok == false` means
+    /// "configured to refuse", and is reported as such; otherwise the APK must
+    /// exist on disk and a real apktool must be locatable, or a typed error is
+    /// returned naming exactly what is missing.
     fn decode(&self, apk: &str, cfg: &ApktoolConfig) -> Result<DecodeResult, ApktoolError> {
-        if self.decode_ok {
-            Ok(DecodeResult {
-                output_dir: cfg.output_dir.clone(),
-                smali_dirs: self.smali_dirs.clone(),
-                res_dir: if cfg.no_res {
-                    None
-                } else {
-                    Some(format!("{}/res", cfg.output_dir))
-                },
-                success: true,
-                log: format!("Decoded {apk} successfully"),
-            })
-        } else {
-            Err(ApktoolError::Decode(format!("failed to decode {apk}")))
+        if !self.decode_ok {
+            return Err(ApktoolError::Decode(format!(
+                "runner configured with decode_ok = false; refusing to decode {apk}"
+            )));
         }
+        if !std::path::Path::new(apk).is_file() {
+            return Err(ApktoolError::NotFound(format!(
+                "input APK not found on disk: {apk}"
+            )));
+        }
+        let cli = CliApktoolRunner::new()?;
+        let mut result = cli.decode(apk, cfg)?;
+        // Honour an explicit smali-dir filter, but only for directories the
+        // real decode actually produced.
+        if !self.smali_dirs.is_empty() {
+            result.smali_dirs.retain(|d| {
+                self.smali_dirs
+                    .iter()
+                    .any(|want| d == want || d.ends_with(want.as_str()))
+            });
+        }
+        Ok(result)
     }
 
+    /// Build `dir` by actually running the external apktool.
+    ///
+    /// Same contract as [`MockApktoolRunner::decode`]: no outcome is invented.
     fn build(&self, dir: &str, cfg: &ApktoolConfig) -> Result<BuildResult, ApktoolError> {
-        if self.build_ok {
-            Ok(BuildResult {
-                apk_path: format!("{}/dist/app.apk", cfg.output_dir),
-                success: true,
-                log: format!("Built {dir} successfully"),
-            })
-        } else {
-            Err(ApktoolError::Build(format!("failed to build {dir}")))
+        if !self.build_ok {
+            return Err(ApktoolError::Build(format!(
+                "runner configured with build_ok = false; refusing to build {dir}"
+            )));
         }
+        if !std::path::Path::new(dir).is_dir() {
+            return Err(ApktoolError::NotFound(format!(
+                "decoded project directory not found on disk: {dir}"
+            )));
+        }
+        let cli = CliApktoolRunner::new()?;
+        cli.build(dir, cfg)
     }
 }
 
@@ -409,12 +428,57 @@ impl CliApktoolRunner {
             )));
         }
 
+        if !std::path::Path::new(&apk_path).is_file() {
+            return Err(ApktoolError::Build(format!(
+                "apktool b exited 0 but produced no file at {apk_path}: {}",
+                log.trim()
+            )));
+        }
+
         Ok(BuildResult {
             apk_path,
             success: true,
             log,
         })
     }
+
+    /// Run `apktool if <apk>` to install a framework resource.
+    ///
+    /// # Errors
+    /// Returns [`ApktoolError::Io`] if the subprocess cannot be spawned and
+    /// [`ApktoolError::Build`] if apktool reports failure.
+    pub fn install_framework(&self, apk_path: &str) -> Result<(), ApktoolError> {
+        let output = std::process::Command::new(&self.apktool_path)
+            .arg("if")
+            .arg(apk_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .map_err(|e| ApktoolError::Io(format!("failed to spawn apktool: {e}")))?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(ApktoolError::Build(format!(
+                "apktool if failed (exit {}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )))
+        }
+    }
+}
+
+/// Portable PATH lookup for a CLI tool, exposed for callers that need to know
+/// whether an external tool is installed before offering to run it.
+#[must_use]
+pub fn cli_find_in_path(name: &str) -> Option<std::path::PathBuf> {
+    apktool_which(name)
+}
+
+/// Locate a usable apktool, or `None` when none is installed.
+#[must_use]
+pub fn apktool_find() -> Option<std::path::PathBuf> {
+    CliApktoolRunner::find_apktool()
 }
 
 impl ApktoolRunner for CliApktoolRunner {
@@ -485,13 +549,31 @@ impl ApktoolRunnerImpl {
         Self { config }
     }
 
-    /// Decode `apk_path` and return a structured result.
+    /// The directory a decode of `apk_path` would be written to.
     ///
-    /// This is a structural implementation; in a real tool this would invoke
-    /// the apktool JAR via a subprocess.
+    /// Pure path arithmetic, separated out so it can be reasoned about (and
+    /// tested) without pretending a decode happened.
+    #[must_use]
+    pub fn output_dir_for(&self, apk_path: &str) -> String {
+        let base_name = apk_path
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(apk_path)
+            .trim_end_matches(".apk")
+            .trim_end_matches(".APK");
+        format!("{}/{base_name}", self.config.output_dir)
+    }
+
+    /// Decode `apk_path` by running the external apktool, and report only
+    /// what the decode actually wrote to disk.
+    ///
+    /// Nothing here is synthesised: the APK must exist, an apktool must be
+    /// locatable, the subprocess must succeed, and every path in the returned
+    /// [`ApkDecodeResult`] is verified to exist before it is reported.
     ///
     /// # Errors
-    /// Returns an [`ApktoolError`] if decoding fails or the path is invalid.
+    /// Returns an [`ApktoolError`] if the path is invalid, the APK or the
+    /// apktool binary is missing, or the decode subprocess fails.
     pub fn decode(&self, apk_path: &str) -> Result<ApkDecodeResult, ApktoolError> {
         if !std::path::Path::new(&apk_path.to_lowercase()).extension().is_some_and(|e| e.eq_ignore_ascii_case("apk")) {
             return Err(ApktoolError::Decode(format!(
@@ -499,35 +581,46 @@ impl ApktoolRunnerImpl {
             )));
         }
 
-        let base_name = apk_path
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or(apk_path)
-            .trim_end_matches(".apk")
-            .trim_end_matches(".APK");
+        if !std::path::Path::new(apk_path).is_file() {
+            return Err(ApktoolError::NotFound(format!(
+                "input APK not found on disk: {apk_path}"
+            )));
+        }
 
-        let output_dir = format!("{}/{base_name}", self.config.output_dir);
+        let output_dir = self.output_dir_for(apk_path);
 
-        let smali_dirs = if self.config.no_src {
-            vec![]
+        let cli = CliApktoolRunner::new()?;
+        let mut sub_cfg = self.config.clone();
+        sub_cfg.output_dir = output_dir.clone();
+        let decoded = cli.decode(apk_path, &sub_cfg)?;
+
+        // Report only paths that really exist after the decode.
+        let smali_dirs: Vec<String> = decoded
+            .smali_dirs
+            .into_iter()
+            .filter(|d| std::path::Path::new(d).is_dir())
+            .collect();
+
+        let res_dir = decoded
+            .res_dir
+            .filter(|d| std::path::Path::new(d).is_dir());
+
+        let manifest_candidate = format!("{output_dir}/AndroidManifest.xml");
+        let manifest_path = if std::path::Path::new(&manifest_candidate).is_file() {
+            Some(manifest_candidate)
         } else {
-            vec![
-                format!("{output_dir}/smali"),
-                format!("{output_dir}/smali_classes2"),
-            ]
-        };
-
-        let res_dir = if self.config.no_res {
             None
-        } else {
-            Some(format!("{output_dir}/res"))
         };
-
-        let manifest_path = Some(format!("{output_dir}/AndroidManifest.xml"));
 
         let mut warnings = Vec::new();
         if self.config.no_src {
             warnings.push("Source decoding skipped (--no-src)".to_string());
+        }
+        if smali_dirs.is_empty() && !self.config.no_src {
+            warnings.push("apktool produced no smali directory".to_string());
+        }
+        if manifest_path.is_none() {
+            warnings.push("apktool produced no AndroidManifest.xml".to_string());
         }
 
         Ok(ApkDecodeResult {
@@ -539,38 +632,61 @@ impl ApktoolRunnerImpl {
         })
     }
 
-    /// Build the decoded APK at `dir`.
+    /// Build the decoded project at `dir` by running the external apktool.
+    ///
+    /// The reported `size_bytes` is the real size of the produced file; if no
+    /// file was produced, that is an error rather than a zero-size success.
     ///
     /// # Errors
-    /// Returns an [`ApktoolError::Build`] if the directory path is empty.
+    /// Returns an [`ApktoolError`] if the directory path is empty or missing,
+    /// apktool cannot be located, or the build subprocess fails.
     pub fn build(&self, dir: &str) -> Result<ApkBuildResult, ApktoolError> {
         if dir.is_empty() {
             return Err(ApktoolError::Build("directory path is empty".to_string()));
         }
+        if !std::path::Path::new(dir).is_dir() {
+            return Err(ApktoolError::NotFound(format!(
+                "decoded project directory not found on disk: {dir}"
+            )));
+        }
 
-        let apk_name = dir.rsplit(['/', '\\']).next().unwrap_or("output");
-        let apk_path = format!("{}/dist/{apk_name}.apk", self.config.output_dir);
+        let cli = CliApktoolRunner::new()?;
+        let built = cli.build(dir, &self.config)?;
+
+        let meta = std::fs::metadata(&built.apk_path).map_err(|e| {
+            ApktoolError::Build(format!(
+                "apktool reported success but {} is not readable: {e}",
+                built.apk_path
+            ))
+        })?;
 
         Ok(ApkBuildResult {
-            apk_path,
+            apk_path: built.apk_path,
             unsigned: true,
-            size_bytes: 0,
+            size_bytes: meta.len(),
         })
     }
 
-    /// Install an APK as a framework resource.
+    /// Install an APK as an apktool framework resource by running
+    /// `apktool if <apk>` for real.
     ///
     /// # Errors
-    /// Returns an [`ApktoolError::NotFound`] if the path is not an APK file.
+    /// Returns an [`ApktoolError::NotFound`] if the path is not an existing
+    /// APK file or apktool cannot be located, and [`ApktoolError::Build`] if
+    /// the subprocess reports failure.
     pub fn install_framework(&self, apk_path: &str) -> Result<(), ApktoolError> {
         if !std::path::Path::new(&apk_path.to_lowercase()).extension().is_some_and(|e| e.eq_ignore_ascii_case("apk")) {
             return Err(ApktoolError::NotFound(format!(
                 "{apk_path}: not an APK file"
             )));
         }
-        // In a real implementation this would copy the APK to the apktool
-        // framework directory. Here we validate the path and succeed.
-        Ok(())
+        if !std::path::Path::new(apk_path).is_file() {
+            return Err(ApktoolError::NotFound(format!(
+                "framework APK not found on disk: {apk_path}"
+            )));
+        }
+        let cli = CliApktoolRunner::new()?;
+        cli.install_framework(apk_path)
     }
 }
 
@@ -643,22 +759,29 @@ mod tests {
         assert_eq!(r.smali_count(), 0);
     }
 
+    /// A runner configured to run must never invent a decode: with a
+    /// nonexistent APK it has to fail, and name why.
     #[test]
-    fn test_mock_runner_success_decode() {
+    fn test_runner_never_invents_decode() {
         let runner = MockApktoolRunner::success();
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
-        let result = runner.decode("app.apk", &cfg).unwrap();
-        assert!(result.success);
-        assert!(!result.smali_dirs.is_empty());
+        match runner.decode("definitely-not-here.apk", &cfg) {
+            Err(ApktoolError::NotFound(m)) => assert!(m.contains("definitely-not-here.apk")),
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("decoded an APK that does not exist"),
+        }
     }
 
+    /// Same contract for build: no directory, no result.
     #[test]
-    fn test_mock_runner_success_build() {
+    fn test_runner_never_invents_build() {
         let runner = MockApktoolRunner::success();
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
-        let result = runner.build("/tmp/out", &cfg).unwrap();
-        assert!(result.success);
-        assert!(result.apk_path.contains(".apk"));
+        match runner.build("definitely-not-a-directory", &cfg) {
+            Err(ApktoolError::NotFound(m)) => assert!(m.contains("definitely-not-a-directory")),
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("built a directory that does not exist"),
+        }
     }
 
     #[test]
@@ -677,20 +800,35 @@ mod tests {
         assert!(matches!(err, ApktoolError::Build(_)));
     }
 
+    /// `--no-res` cannot turn a missing APK into a result either.
     #[test]
-    fn test_mock_runner_no_res_decode() {
+    fn test_runner_no_res_still_requires_real_input() {
         let runner = MockApktoolRunner::success();
         let cfg = ApktoolConfig::new("apktool", "/tmp/out").with_no_res();
-        let result = runner.decode("app.apk", &cfg).unwrap();
-        assert!(result.res_dir.is_none());
+        assert!(matches!(
+            runner.decode("app-not-present.apk", &cfg),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
+    /// A real, empty file is not a real APK: apktool must be consulted, and
+    /// when it is absent the error must say so rather than reporting success.
     #[test]
-    fn test_mock_runner_with_res_decode() {
+    fn test_runner_reports_missing_apktool() {
+        let dir = std::env::temp_dir().join("rustre_apktool_probe");
+        let _ = std::fs::create_dir_all(&dir);
+        let apk = dir.join("probe.apk");
+        std::fs::write(&apk, b"not really an apk").unwrap();
         let runner = MockApktoolRunner::success();
-        let cfg = ApktoolConfig::new("apktool", "/tmp/out");
-        let result = runner.decode("app.apk", &cfg).unwrap();
-        assert!(result.res_dir.is_some());
+        let cfg = ApktoolConfig::new("apktool", dir.join("out").to_string_lossy().as_ref());
+        match runner.decode(apk.to_string_lossy().as_ref(), &cfg) {
+            Err(ApktoolError::NotFound(m)) => assert!(m.contains("apktool")),
+            // apktool really is installed here: it must reject the fake APK.
+            Err(ApktoolError::Decode(_) | ApktoolError::Io(_)) => {}
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("decoded 17 bytes of garbage as an APK"),
+        }
+        let _ = std::fs::remove_file(&apk);
     }
 
     #[test]
@@ -739,15 +877,15 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_result_log() {
+    fn test_decode_error_names_the_input() {
         let runner = MockApktoolRunner::success();
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
-        let result = runner.decode("test.apk", &cfg).unwrap();
-        assert!(result.log.contains("test.apk"));
+        let err = runner.decode("test.apk", &cfg).unwrap_err();
+        assert!(err.to_string().contains("test.apk"));
     }
 
     #[test]
-    fn test_mock_runner_custom_smali_dirs() {
+    fn test_custom_smali_dirs_do_not_conjure_a_decode() {
         let runner = MockApktoolRunner {
             decode_ok: true,
             build_ok: true,
@@ -758,8 +896,10 @@ mod tests {
             ],
         };
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
-        let result = runner.decode("app.apk", &cfg).unwrap();
-        assert_eq!(result.smali_count(), 3);
+        assert!(matches!(
+            runner.decode("app.apk", &cfg),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
     #[test]
@@ -787,11 +927,11 @@ mod tests {
     }
 
     #[test]
-    fn test_build_result_apk_path() {
+    fn test_build_error_names_the_directory() {
         let runner = MockApktoolRunner::success();
         let cfg = ApktoolConfig::new("apktool", "/build");
-        let r = runner.build("/build", &cfg).unwrap();
-        assert!(!r.apk_path.is_empty());
+        let err = runner.build("/build-does-not-exist", &cfg).unwrap_err();
+        assert!(err.to_string().contains("/build-does-not-exist"));
     }
 
     #[test]
@@ -813,11 +953,14 @@ mod tests {
     // â"€â"€â"€ ApktoolRunnerImpl â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     #[test]
-    fn runner_impl_decode_success() {
+    fn runner_impl_decode_requires_a_real_apk() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.decode("app.apk").unwrap();
-        assert!(!result.output_dir.is_empty());
+        match runner.decode("app.apk") {
+            Err(ApktoolError::NotFound(m)) => assert!(m.contains("app.apk")),
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("decoded an APK that does not exist"),
+        }
     }
 
     #[test]
@@ -829,46 +972,51 @@ mod tests {
     }
 
     #[test]
-    fn runner_impl_decode_smali_dirs() {
+    fn runner_impl_reports_missing_input_not_smali_dirs() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.decode("myapp.apk").unwrap();
-        assert!(!result.smali_dirs.is_empty());
+        assert!(matches!(
+            runner.decode("myapp.apk"),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
     #[test]
-    fn runner_impl_decode_no_src() {
+    fn runner_impl_no_src_still_requires_a_real_apk() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out").with_no_src();
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.decode("myapp.apk").unwrap();
-        assert!(result.smali_dirs.is_empty());
-        assert!(!result.warnings.is_empty());
+        assert!(matches!(
+            runner.decode("myapp.apk"),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
     #[test]
-    fn runner_impl_decode_no_res() {
+    fn runner_impl_no_res_still_requires_a_real_apk() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out").with_no_res();
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.decode("myapp.apk").unwrap();
-        assert!(result.res_dir.is_none());
+        assert!(matches!(
+            runner.decode("myapp.apk"),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
     #[test]
-    fn runner_impl_decode_manifest_path() {
+    fn runner_impl_never_claims_a_manifest_it_did_not_see() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.decode("myapp.apk").unwrap();
-        let mp = result.manifest_path.unwrap();
-        assert!(mp.ends_with("AndroidManifest.xml"));
+        let err = runner.decode("myapp.apk").unwrap_err();
+        assert!(err.to_string().contains("myapp.apk"));
     }
 
     #[test]
-    fn runner_impl_build_success() {
+    fn runner_impl_build_requires_a_real_directory() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        let result = runner.build("/tmp/out/myapp").unwrap();
-        assert!(std::path::Path::new(&result.apk_path).extension().is_some_and(|e| e.eq_ignore_ascii_case("apk")));
-        assert!(result.unsigned);
+        assert!(matches!(
+            runner.build("/tmp/out/myapp-does-not-exist"),
+            Err(ApktoolError::NotFound(_))
+        ));
     }
 
     #[test]
@@ -880,10 +1028,14 @@ mod tests {
     }
 
     #[test]
-    fn runner_impl_install_framework_ok() {
+    fn runner_impl_install_framework_requires_a_real_file() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        assert!(runner.install_framework("framework.apk").is_ok());
+        match runner.install_framework("framework.apk") {
+            Err(ApktoolError::NotFound(m)) => assert!(m.contains("framework.apk")),
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(()) => panic!("installed a framework APK that does not exist"),
+        }
     }
 
     #[test]
@@ -922,11 +1074,10 @@ mod tests {
     }
 
     #[test]
-    fn apk_build_result_unsigned() {
+    fn apk_build_result_is_not_produced_without_a_project() {
         let cfg = ApktoolConfig::new("apktool", "/tmp/out");
         let runner = ApktoolRunnerImpl::new(cfg);
-        let r = runner.build("/myapp").unwrap();
-        assert!(r.unsigned);
+        assert!(runner.build("/myapp").is_err());
     }
 }
 

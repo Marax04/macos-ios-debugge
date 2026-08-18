@@ -730,7 +730,21 @@ mod tests {
     fn test_seq_by_category() {
         let seq = injection_seq(1);
         let injection = seq.by_category(ApiCategory::Injection);
-        assert_eq!(injection.len(), 2); // VirtualAllocEx + WriteProcessMemory
+        // All THREE calls are injection markers, not two.
+        //
+        // ⚠ This asserted 2 with the comment "VirtualAllocEx +
+        // WriteProcessMemory", i.e. it expected `CreateRemoteThread` to land
+        // somewhere else. It does not, and it should not: `ApiCategory::infer`
+        // matches `createremotethread` in its injection arm (line ~107),
+        // deliberately ahead of the generic "process" bucket. Creating a thread
+        // in another process is the canonical third step of the
+        // allocate/write/execute injection sequence — the classifier is right
+        // and the expectation was wrong.
+        //
+        // The test failed on this before any change in this session; it was the
+        // assertion that encoded the wrong belief, so the assertion is what
+        // moved.
+        assert_eq!(injection.len(), 3);
     }
 
     #[test]

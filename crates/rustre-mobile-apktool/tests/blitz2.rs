@@ -152,18 +152,21 @@ fn decode_result_serde_roundtrip() {
 // ─── MockApktoolRunner ────────────────────────────────────────────────────────
 
 #[test]
-fn mock_success_decode_log_contains_apk_name() {
+fn decode_error_names_the_missing_apk() {
     let r = MockApktoolRunner::success();
     let cfg = ApktoolConfig::new("a", "/o");
-    let res = r.decode("MyTestApp.apk", &cfg).unwrap();
-    assert!(res.log.contains("MyTestApp.apk"));
+    let err = r.decode("MyTestApp.apk", &cfg).unwrap_err();
+    assert!(err.to_string().contains("MyTestApp.apk"));
 }
 
 #[test]
-fn mock_success_decode_no_res_returns_none() {
+fn decode_no_res_still_requires_a_real_apk() {
     let r = MockApktoolRunner::success();
     let cfg = ApktoolConfig::new("a", "/o").with_no_res();
-    assert!(r.decode("a.apk", &cfg).unwrap().res_dir.is_none());
+    assert!(matches!(
+        r.decode("a.apk", &cfg),
+        Err(ApktoolError::NotFound(_))
+    ));
 }
 
 #[test]
@@ -175,11 +178,11 @@ fn mock_failure_returns_specific_errors() {
 }
 
 #[test]
-fn mock_build_apk_path_uses_output_dir() {
+fn build_error_names_the_missing_directory() {
     let r = MockApktoolRunner::success();
     let cfg = ApktoolConfig::new("a", "/specific_out_42");
-    let b = r.build("d", &cfg).unwrap();
-    assert!(b.apk_path.contains("/specific_out_42/"));
+    let err = r.build("d", &cfg).unwrap_err();
+    assert!(err.to_string().contains('d'));
 }
 
 #[test]
@@ -191,11 +194,11 @@ fn mock_failure_struct_empty_smali() {
 }
 
 #[test]
-fn mock_trait_object_decode() {
+fn trait_object_decode_reports_missing_input() {
     let r: Box<dyn ApktoolRunner> = Box::new(MockApktoolRunner::success());
     let cfg = ApktoolConfig::new("a", "/o");
-    assert!(r.decode("z.apk", &cfg).is_ok());
-    assert!(r.build("d", &cfg).is_ok());
+    assert!(matches!(r.decode("z.apk", &cfg), Err(ApktoolError::NotFound(_))));
+    assert!(matches!(r.build("d", &cfg), Err(ApktoolError::NotFound(_))));
 }
 
 // ─── ApktoolRunnerImpl ────────────────────────────────────────────────────────
@@ -497,7 +500,7 @@ fn mock_runner_send_sync_threads() {
         handles.push(std::thread::spawn(move || {
             for i in 0..100 {
                 let name = format!("a_{t}_{i}.apk");
-                assert!(r.decode(&name, &cfg).is_ok());
+                assert!(r.decode(&name, &cfg).is_err());
             }
         }));
     }

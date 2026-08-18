@@ -8,7 +8,6 @@
 //! * Stack-based vs register-based VM distinction
 //! * Anti-debug check removal (RDTSC, IsDebuggerPresent, NtQueryInformationProcess)
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

@@ -9,7 +9,7 @@
 use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use rustre_core::address::Address;
 use rustre_debug::ThreadId;

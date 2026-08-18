@@ -1,8 +1,7 @@
 //! MCP wrappers for the rustre-net_dissect crate.
 //! Extracted from wire_tools.rs by workflow_split_wire_tools.
 
-use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
-use serde_json::{json, Value};
+use rustre_mcp_server::{ToolDefinition, ToolHandler};
 
 pub struct NetDissectByteEntropyTool;
 

@@ -504,6 +504,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json-out", metavar="PATH",
+                    help="also write the JSON payload to PATH while stdout "
+                         "stays the text report. One run, both outputs: "
+                         "measure.sh used to invoke this script TWICE (once per "
+                         "format), and each run compiles, links and executes "
+                         "every function in the spec against 2000-3300 objects "
+                         "per bucket -- measured at ~30 minutes thrown away per "
+                         "measurement (runs/wip_0815: behavior.txt 20:03:48, "
+                         "behavior.json 20:33:55).")
     ap.add_argument("--keep", action="store_true", help="keep the build dir")
     ap.add_argument("--spec", default=os.path.join(HERE, "behavior_spec.json"))
     a = ap.parse_args()
@@ -566,16 +575,24 @@ def main():
 
     total = sum(tally.values())
     agree = tally.get("AGREE", 0)
-    if a.json:
-        # Per-function status travels with the counts. Counts alone hide a swap:
-        # one function regressing AGREE→DIVERGE while another improves leaves the
-        # totals identical and the output quietly worse.
-        per_fn = {f"{b}:{n}": r["status"]
-                  for b, fns in results.items()
-                  for n, r in fns.items() if n != "_bucket"}
-        print(json.dumps({"total": total, "agree": agree, "tally": tally,
+    # Per-function status travels with the counts. Counts alone hide a swap:
+    # one function regressing AGREE→DIVERGE while another improves leaves the
+    # totals identical and the output quietly worse.
+    #
+    # Built unconditionally, so `--json-out` can write it while stdout carries
+    # the text report: the analysis above is the expensive part and repeating it
+    # for a second output format is pure waste.
+    per_fn = {f"{b}:{n}": r["status"]
+              for b, fns in results.items()
+              for n, r in fns.items() if n != "_bucket"}
+    payload = json.dumps({"total": total, "agree": agree, "tally": tally,
                           "pct": round(100.0 * agree / total, 2) if total else 0.0,
-                          "functions": per_fn}))
+                          "functions": per_fn})
+    if a.json_out:
+        with open(a.json_out, "w", encoding="utf-8") as fh:
+            fh.write(payload + "\n")
+    if a.json:
+        print(payload)
         return 0
 
     for bucket, fns in results.items():

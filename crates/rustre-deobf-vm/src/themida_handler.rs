@@ -7,7 +7,6 @@
 //! * Opcode semantic recovery via emulation
 //! * Key-based crypto in handlers (RC4, custom XOR chains)
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

@@ -5,7 +5,7 @@
 //! the `switch_detection` types.
 
 use rustre_il_passes::constant_propagation::{
-    self as cp, BBId, BasicBlock, ConstantLattice, FuncId, Lattice, MlilExpr, MlilFunction,
+    BBId, BasicBlock, ConstantLattice, FuncId, Lattice, MlilExpr, MlilFunction,
     MlilStmt, ScCpStats, VarId, WorkItem, analyse_function, collect_defs, fold_constants,
     fold_expr, initial_work_items, reanalyse_from, remove_dead_blocks,
     run_constant_propagation_pipeline, run_sccp,

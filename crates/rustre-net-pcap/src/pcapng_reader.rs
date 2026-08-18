@@ -571,14 +571,42 @@ fn parse_options_from(buf: &[u8], le: bool) -> Vec<PcapNgOption> {
 /// Return an iterator over all blocks in a PCAPNG buffer.
 ///
 /// The iterator yields `Result<Block, String>`.
-pub fn block_iterator(data: &[u8]) -> impl Iterator<Item = Result<Block, String>> + '_ {
+///
+/// ⚠ This returned `impl Iterator` and so erased [`BlockIter`], which kept the
+/// concrete type — and therefore its accessors — unreachable. Returning the
+/// concrete type is strictly more permissive: it still satisfies every caller
+/// that only wanted an `Iterator`, and it lets one that holds the iterator ask
+/// for the backing capture via [`BlockIter::data`].
+pub fn block_iterator(data: &[u8]) -> BlockIter<'_> {
     BlockIter { reader: PcapngReader::new(data).ok(), data }
 }
 
-struct BlockIter<'a> {
+/// Iterator over the blocks of a PCAPNG buffer, as returned by
+/// [`block_iterator`].
+pub struct BlockIter<'a> {
     reader: Option<PcapngReader<'a>>,
-    #[allow(dead_code)]
     data: &'a [u8],
+}
+
+impl<'a> BlockIter<'a> {
+    /// The whole capture buffer this iterator walks.
+    ///
+    /// ⚠ `data` was stored and never read: the field existed, was populated at
+    /// construction, and nothing could observe it. A field that only costs
+    /// memory is not a feature, so it is now readable — a caller that has an
+    /// iterator can recover the backing bytes (to hash the capture, or to
+    /// re-parse a block at a byte offset a `Block` reports) without threading
+    /// the original slice alongside the iterator.
+    #[must_use]
+    pub const fn data(&self) -> &'a [u8] {
+        self.data
+    }
+
+    /// Length in bytes of the capture being walked.
+    #[must_use]
+    pub const fn capture_len(&self) -> usize {
+        self.data.len()
+    }
 }
 
 impl Iterator for BlockIter<'_> {

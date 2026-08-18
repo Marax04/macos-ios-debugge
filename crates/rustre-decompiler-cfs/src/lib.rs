@@ -336,7 +336,6 @@ impl CfgGraph {
 // loops instead), so these are currently exercised only by the unit tests.
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[allow(dead_code)]
 fn compute_dominators(cfg: &CfgGraph, entry: NodeIndex) -> HashMap<NodeIndex, NodeIndex> {
     // RPO ordering.
     let rpo = rpo_order(cfg, entry);
@@ -374,7 +373,6 @@ fn compute_dominators(cfg: &CfgGraph, entry: NodeIndex) -> HashMap<NodeIndex, No
     idom
 }
 
-#[allow(dead_code)]
 fn intersect(
     mut b1: NodeIndex,
     mut b2: NodeIndex,
@@ -396,7 +394,6 @@ fn intersect(
     b1
 }
 
-#[allow(dead_code)]
 fn rpo_order(cfg: &CfgGraph, entry: NodeIndex) -> Vec<NodeIndex> {
     // Iterative post-order DFS to avoid stack overflow on deep CFGs.
     let mut visited = HashSet::new();
@@ -2194,6 +2191,45 @@ impl DomTree {
     pub fn set_idom(&mut self, block: BlockId, idom: BlockId) {
         self.idom.insert(block, idom);
         self.children.entry(idom).or_default().push(block);
+    }
+
+    /// Build the immediate-dominator tree of `blocks`, rooted at `entry`.
+    ///
+    /// ⚠ Why this exists: `DomTree` was a public type that could only be filled
+    /// in by hand through [`Self::set_idom`] — there was no way to *compute* one
+    /// from a CFG. Meanwhile [`compute_dominators`] implemented exactly that
+    /// (Cooper et al., iterative) and was private with no caller outside the
+    /// unit tests, so the algorithm and the type that needed it could not reach
+    /// each other. This is the missing edge between them.
+    ///
+    /// Returns `None` when the CFG cannot be built (empty block list) or when
+    /// `entry` is not one of the blocks — a caller that guessed an entry id gets
+    /// `None` rather than a tree silently rooted somewhere else.
+    ///
+    /// The root maps to itself in `idom`, as in the Cooper formulation; it is
+    /// therefore excluded from `children` so `dominance_path` terminates.
+    #[must_use]
+    pub fn from_blocks(blocks: &[BasicBlock], entry: BlockId) -> Option<Self> {
+        let cfg = CfgGraph::build(blocks).ok()?;
+        let entry_node = *cfg.id_to_node.get(&entry)?;
+        let idom_nodes = compute_dominators(&cfg, entry_node);
+
+        let mut tree = Self::new();
+        for (&node, &dom) in &idom_nodes {
+            // Skip the self-dominating root: recording it as its own child would
+            // make `children(entry)` contain `entry`.
+            if node == entry_node {
+                continue;
+            }
+            let (Some(&block), Some(&dom_block)) =
+                (cfg.node_to_id.get(&node), cfg.node_to_id.get(&dom))
+            else {
+                continue;
+            };
+            tree.set_idom(block, dom_block);
+        }
+        tree.idom.insert(entry, entry);
+        Some(tree)
     }
 
     #[must_use]
@@ -6146,5 +6182,70 @@ mod enterprise_battery {
             assert_eq!(a.id, b.id);
             assert_eq!(a.successors, b.successors);
         }
+    }
+}
+
+#[cfg(test)]
+mod dom_tree_from_blocks_tests {
+    use super::*;
+
+    fn blk(id: u32, succs: &[u32]) -> BasicBlock {
+        BasicBlock::new(BlockId::new(id))
+            .with_successors(succs.iter().copied().map(BlockId::new).collect())
+    }
+
+    /// Diamond: 0 -> {1,2} -> 3. Every node's immediate dominator is 0 except
+    /// 0 itself, because 1 and 2 do not dominate 3.
+    #[test]
+    fn diamond_idoms_all_point_at_the_entry() {
+        let blocks = vec![
+            blk(0, &[1, 2]),
+            blk(1, &[3]),
+            blk(2, &[3]),
+            blk(3, &[]),
+        ];
+        let tree = DomTree::from_blocks(&blocks, BlockId::new(0))
+            .expect("diamond CFG with a valid entry must build");
+
+        assert_eq!(tree.idom(BlockId::new(1)), Some(BlockId::new(0)));
+        assert_eq!(tree.idom(BlockId::new(2)), Some(BlockId::new(0)));
+        assert_eq!(tree.idom(BlockId::new(3)), Some(BlockId::new(0)));
+        assert_eq!(tree.idom(BlockId::new(0)), Some(BlockId::new(0)));
+    }
+
+    /// A chain 0 -> 1 -> 2 dominates strictly, so `dominates` must agree with
+    /// the chain and reject the reverse direction.
+    #[test]
+    fn chain_dominance_is_directional() {
+        let blocks = vec![blk(0, &[1]), blk(1, &[2]), blk(2, &[])];
+        let tree = DomTree::from_blocks(&blocks, BlockId::new(0)).unwrap();
+
+        assert!(tree.dominates(BlockId::new(0), BlockId::new(2)));
+        assert!(tree.dominates(BlockId::new(1), BlockId::new(2)));
+        assert!(!tree.dominates(BlockId::new(2), BlockId::new(0)));
+    }
+
+    /// The root must not be its own child, or `children(entry)` would contain
+    /// `entry` and a tree walk would not terminate.
+    #[test]
+    fn entry_is_not_its_own_child() {
+        let blocks = vec![blk(0, &[1]), blk(1, &[])];
+        let tree = DomTree::from_blocks(&blocks, BlockId::new(0)).unwrap();
+        assert!(!tree.children(BlockId::new(0)).contains(&BlockId::new(0)));
+        assert_eq!(tree.children(BlockId::new(0)), &[BlockId::new(1)]);
+    }
+
+    /// An entry id that is not in `blocks` yields `None`, not a tree rooted at
+    /// some arbitrary block.
+    #[test]
+    fn unknown_entry_is_rejected() {
+        let blocks = vec![blk(0, &[1]), blk(1, &[])];
+        assert!(DomTree::from_blocks(&blocks, BlockId::new(99)).is_none());
+    }
+
+    /// An empty CFG cannot be built, so there is no tree to return.
+    #[test]
+    fn empty_cfg_is_rejected() {
+        assert!(DomTree::from_blocks(&[], BlockId::new(0)).is_none());
     }
 }

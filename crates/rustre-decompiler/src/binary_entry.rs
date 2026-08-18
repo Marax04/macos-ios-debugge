@@ -1988,9 +1988,21 @@ fn starts_at_function_boundary(load: &RichLoadResult, va: u64) -> bool {
 }
 
 /// A boundary that is only a low-confidence prologue guess, with no other
-/// evidence, is likely spurious. Used to curb over-detection.
-#[allow(dead_code)]
-const fn is_weak_false_positive(b: &FunctionBoundary) -> bool {
+/// evidence, is likely spurious.
+///
+/// ⚠ The previous sentence here read "Used to curb over-detection". That was
+/// false: this predicate had **no caller anywhere in the workspace**, so no
+/// over-detection was ever curbed by it. The claim was hidden behind an
+/// `#[allow(dead_code)]`; removing the attribute surfaced it.
+///
+/// It is exposed rather than wired into the boundary filter on purpose.
+/// Dropping every `Low`+`ProloguePattern` boundary changes which functions the
+/// batch path emits, so it moves `c_files`, `arity_*` and `behaviour_*` at
+/// once. That is a fidelity change and belongs to a measured before/after run
+/// via `measure.sh`, not to a warning cleanup. Until such a run exists, the
+/// honest state is: the predicate is available and unused, and this comment
+/// says so instead of claiming otherwise.
+pub const fn is_weak_false_positive(b: &FunctionBoundary) -> bool {
     matches!(b.confidence, rustre_analysis_fn::Confidence::Low)
         && matches!(b.source, rustre_analysis_fn::DetectionSource::ProloguePattern)
 }

@@ -140,7 +140,6 @@ impl FamilyDatabase {
     }
 
     /// Find families matching any of the given API names.
-    #[must_use]
     /// Scan raw bytes for the API / command indicators of each family's
     /// behavioural signatures.
     ///

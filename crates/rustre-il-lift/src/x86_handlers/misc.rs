@@ -29,7 +29,6 @@
 //! (random-number generation, I/O ports, CET, AMX, …) are emitted as named
 //! intrinsics so analysis passes can still see and reason about them.
 
-#![allow(unused_imports, dead_code)]
 
 use crate::x86_context::{FlagId, X86LiftCtx};
 use crate::x86_operand::{operand_size, read_operand, write_operand};
@@ -57,7 +56,7 @@ fn all_flags_undef(ctx: &mut X86LiftCtx) {
 
 /// Clear every status flag to zero.
 #[inline]
-fn all_flags_zero(ctx: &mut X86LiftCtx) {
+pub fn all_flags_zero(ctx: &mut X86LiftCtx) {
     for f in [
         FlagId::Cf,
         FlagId::Of,
@@ -72,7 +71,7 @@ fn all_flags_zero(ctx: &mut X86LiftCtx) {
 
 /// Clear all status flags except CF, which is set to `cf_val`.
 #[inline]
-fn flags_cf_only(ctx: &mut X86LiftCtx, cf_val: IrExpr) {
+pub fn flags_cf_only(ctx: &mut X86LiftCtx, cf_val: IrExpr) {
     ctx.emit_flagset(FlagId::Cf, cf_val);
     for f in [FlagId::Of, FlagId::Sf, FlagId::Zf, FlagId::Af, FlagId::Pf] {
         ctx.emit_flagset(f, IrExpr::Const(0));
@@ -81,7 +80,7 @@ fn flags_cf_only(ctx: &mut X86LiftCtx, cf_val: IrExpr) {
 
 /// Set ZF to `zf_val` and mark all other status flags undefined.
 #[inline]
-fn flags_zf_undef(ctx: &mut X86LiftCtx, zf_val: IrExpr) {
+pub fn flags_zf_undef(ctx: &mut X86LiftCtx, zf_val: IrExpr) {
     ctx.emit_flagset(FlagId::Zf, zf_val);
     for f in [FlagId::Cf, FlagId::Of, FlagId::Sf, FlagId::Af, FlagId::Pf] {
         ctx.emit_flagset(f, IrExpr::Undef);
@@ -2083,7 +2082,11 @@ pub fn lift_nop_rm(instr: &Instruction, ctx: &mut X86LiftCtx) -> Result<(), Lift
 // ── Keep unused-import warnings quiet for paths used only in some arms ────────
 // ─────────────────────────────────────────────────────────────────────────────
 
-use crate::x86_flags as _flags_ref;
+// The flag semantics these handlers emit live in [`crate::x86_flags`]. That
+// relationship used to be expressed as `use crate::x86_flags as _flags_ref;`,
+// an import that named the module and used nothing from it — so it read as a
+// dependency the compiler could not see the point of. Stated as a reference
+// instead: the link is still documented and there is no phantom import.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Unit tests ───────────────────────────────────────────────────────────────

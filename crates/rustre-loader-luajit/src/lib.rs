@@ -17,6 +17,12 @@ pub mod upvalue_analysis;
 pub mod luajit_bytecode_analyzer;
 pub mod luajit_string_extractor;
 pub mod luajit_cfg_builder;
+pub mod lj_real_api;
+
+pub use lj_real_api::{
+    SUPPORTED_BC_VERSIONS, all_strings_from_dump_bytes, detect_dump_version,
+    parse_all_protos_strict, parse_dump_strict,
+};
 
 pub use luajit_vm_analysis::{
     IrConst, IrInstruction, IrOp, IrSnapshot, JitOptimization, LjError, LuaJitVmAnalysis,

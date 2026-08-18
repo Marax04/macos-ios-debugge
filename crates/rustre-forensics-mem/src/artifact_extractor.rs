@@ -656,10 +656,10 @@ fn read_ascii_string(data: &[u8], offset: usize, max_len: usize) -> String {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn make_memory(size: usize) -> Vec<u8> {
+    pub(crate) fn make_memory(size: usize) -> Vec<u8> {
         vec![0u8; size]
     }
 
@@ -952,5 +952,41 @@ mod tests {
         let data = b"ab";
         let s = read_ascii_string(data, 0, 100);
         assert_eq!(s, "ab");
+    }
+}
+
+#[cfg(test)]
+mod empty_memory_tests {
+    //! ⚠ `make_memory` built a zeroed buffer and had no caller: every test used
+    //! a hand-written region with content, so the extractor was never run
+    //! against blank memory — the case a real dump is mostly made of.
+
+    use super::*;
+
+    use super::tests::make_memory;
+
+    /// Searching blank memory for a non-zero pattern must find nothing, not
+    /// report a spurious hit at offset 0.
+    #[test]
+    fn blank_memory_yields_no_matches() {
+        let r = MemoryRegion::new(0x1000, make_memory(4096));
+        assert!(r.find_bytes(&[0xDE, 0xAD, 0xBE, 0xEF]).is_empty());
+    }
+
+    /// A zero pattern DOES occur in blank memory, at every offset. This is the
+    /// companion case: it proves the emptiness above comes from the pattern,
+    /// not from the search refusing to run.
+    #[test]
+    fn blank_memory_matches_a_zero_pattern_everywhere() {
+        let r = MemoryRegion::new(0x1000, make_memory(16));
+        let hits = r.find_bytes(&[0x00, 0x00]);
+        assert_eq!(hits.len(), 15, "15 overlapping 2-byte windows in 16 bytes");
+    }
+
+    /// A pattern longer than the region cannot match.
+    #[test]
+    fn pattern_longer_than_region_finds_nothing() {
+        let r = MemoryRegion::new(0x1000, make_memory(2));
+        assert!(r.find_bytes(&[0, 0, 0, 0]).is_empty());
     }
 }

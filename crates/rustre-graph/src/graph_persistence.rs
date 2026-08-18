@@ -4,7 +4,6 @@
 //! [`NodeSerializer`], [`EdgeSerializer`], [`GraphTransaction`],
 //! [`GraphBackup`], and [`GraphMigration`] as supporting types.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

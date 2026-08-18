@@ -40,10 +40,9 @@
 //! the flag registers that arithmetic handlers write.  No flag intrinsics are
 //! needed here: control-flow handlers only *read* flags.
 
-#![allow(unused_imports, dead_code)]
 
-use crate::x86_context::{FlagId, X86LiftCtx};
-use crate::x86_operand::{operand_size, read_operand};
+use crate::x86_context::X86LiftCtx;
+use crate::x86_operand::operand_size;
 use crate::{Effect, IrExpr, LiftError};
 use iced_x86::{Instruction, Mnemonic, OpKind, Register};
 
@@ -59,7 +58,7 @@ use iced_x86::{Instruction, Mnemonic, OpKind, Register};
 /// memory jumps where the memory cell **contains** the destination IP.  The
 /// caller decides which semantics are wanted by calling this helper or not.
 #[inline]
-fn peel_deref(e: IrExpr) -> IrExpr {
+pub fn peel_deref(e: IrExpr) -> IrExpr {
     match e {
         IrExpr::Deref(inner, _) => *inner,
         other => other,
@@ -1195,28 +1194,28 @@ fn build_mem_addr(instr: &Instruction, ctx: &X86LiftCtx) -> IrExpr {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::x86_context::{ModeHint, X86LiftCtx};
     use iced_x86::{Decoder, DecoderOptions};
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    fn decode64(bytes: &[u8]) -> iced_x86::Instruction {
+    pub(crate) fn decode64(bytes: &[u8]) -> iced_x86::Instruction {
         let mut dec = Decoder::with_ip(64, bytes, 0x1000, DecoderOptions::NONE);
         dec.decode()
     }
 
-    fn decode32(bytes: &[u8]) -> iced_x86::Instruction {
+    pub(crate) fn decode32(bytes: &[u8]) -> iced_x86::Instruction {
         let mut dec = Decoder::with_ip(32, bytes, 0x1000, DecoderOptions::NONE);
         dec.decode()
     }
 
-    fn ctx64() -> X86LiftCtx {
+    pub(crate) fn ctx64() -> X86LiftCtx {
         X86LiftCtx::new(0x1000, 64, ModeHint::default())
     }
 
-    fn ctx32() -> X86LiftCtx {
+    pub(crate) fn ctx32() -> X86LiftCtx {
         X86LiftCtx::new(0x1000, 32, ModeHint::default())
     }
 
@@ -1272,7 +1271,12 @@ mod tests {
     }
 
     /// Check that a `RegWrite` to the stack pointer was emitted.
-    fn has_sp_write(ctx: &X86LiftCtx, sp_name: &str) -> bool {
+    ///
+    /// ⚠ This helper had no caller: `call_rel32_decrements_rsp_by_8` open-codes
+    /// the same scan inline, and no test covered the 32-bit (`esp`) side or the
+    /// RET side at all. The `stack_pointer_write_tests` module below uses it
+    /// and closes those two gaps.
+    pub(crate) fn has_sp_write(ctx: &X86LiftCtx, sp_name: &str) -> bool {
         ctx.effects
             .iter()
             .any(|e| matches!(e, Effect::RegWrite { reg, .. } if reg == sp_name))
@@ -2224,5 +2228,55 @@ mod tests {
                 if reg == "esp" && src == "ebp")
         });
         assert!(sp_from_bp, "LEAVE in 32-bit mode must set ESP = EBP");
+    }
+}
+
+#[cfg(test)]
+mod stack_pointer_write_tests {
+    //! Stack-pointer effects of CALL/RET, in both widths.
+    //!
+    //! A lifter that forgets the implicit SP adjustment produces IR where the
+    //! stack never moves — every stack slot then aliases, and downstream
+    //! variable recovery invents one variable for the whole frame. Nothing
+    //! covered the 32-bit or the RET case before this module.
+
+    use super::tests::*;
+    use super::*;
+
+    /// CALL rel32 pushes a return address, so it must write RSP in 64-bit mode.
+    #[test]
+    fn call_writes_rsp_in_64_bit_mode() {
+        let i = decode64(&[0xe8, 0x00, 0x00, 0x00, 0x00]);
+        let mut ctx = ctx64();
+        lift_call(&i, &mut ctx).unwrap();
+        assert!(has_sp_write(&ctx, "rsp"), "CALL must adjust rsp");
+    }
+
+    /// The same in 32-bit mode, where the stack pointer is ESP.
+    #[test]
+    fn call_writes_esp_in_32_bit_mode() {
+        let i = decode32(&[0xe8, 0x00, 0x00, 0x00, 0x00]);
+        let mut ctx = ctx32();
+        lift_call(&i, &mut ctx).unwrap();
+        assert!(has_sp_write(&ctx, "esp"), "CALL must adjust esp in 32-bit mode");
+    }
+
+    /// RET pops the return address, so it must write the stack pointer too.
+    #[test]
+    fn ret_writes_rsp_in_64_bit_mode() {
+        let i = decode64(&[0xc3]);
+        let mut ctx = ctx64();
+        lift_ret(&i, &mut ctx).unwrap();
+        assert!(has_sp_write(&ctx, "rsp"), "RET must adjust rsp");
+    }
+
+    /// `RET imm16` pops the return address AND imm bytes of arguments; it must
+    /// still be a single stack-pointer write, not zero.
+    #[test]
+    fn ret_imm16_writes_rsp() {
+        let i = decode64(&[0xc2, 0x08, 0x00]);
+        let mut ctx = ctx64();
+        lift_ret(&i, &mut ctx).unwrap();
+        assert!(has_sp_write(&ctx, "rsp"), "RET imm16 must adjust rsp");
     }
 }

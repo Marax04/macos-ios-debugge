@@ -1630,7 +1630,7 @@ pub fn parse_fat_exception_handlers(data: &[u8]) -> Result<Vec<ExceptionHandler>
     if data.len() < 4 {
         return Ok(vec![]);
     }
-    let kind = data[0] & 0x3f;
+    let _kind = data[0] & 0x3f;
     // Test the fat bit on the raw byte: `kind` has it masked off by `& 0x3f`,
     // so `kind & 0x40` can never be true. The old code compensated with a
     // `data[0] == 0x41` special case, which missed every other fat section —

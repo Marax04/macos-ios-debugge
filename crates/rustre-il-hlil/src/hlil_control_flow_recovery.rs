@@ -588,7 +588,6 @@ impl Default for HlilControlFlowRecovery {
 /// Convenience function: build a recovery object and run it on `blocks`.
 ///
 /// Returns the recovered loop list, sorted by nesting depth (innermost first).
-#[must_use]
 /// Costruisce il CFG dei salti a partire dagli `HlilStatement`.
 ///
 /// ⚠ **E' il pezzo che mancava.** Questo modulo (758 righe) era esportato ma

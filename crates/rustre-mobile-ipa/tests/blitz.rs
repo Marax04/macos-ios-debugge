@@ -159,6 +159,9 @@ fn targets_iphone_negative() {
 
 #[test]
 fn codesig_adhoc_when_empty_chain() {
+    // An empty certificate chain no longer means "ad-hoc": it means no
+    // certificates were recovered. `CS_ADHOC` in the CodeDirectory flags is
+    // what actually says a signature is ad-hoc.
     let cs = CodeSignature {
         team_id: String::new(),
         signing_id: String::new(),
@@ -166,7 +169,13 @@ fn codesig_adhoc_when_empty_chain() {
         cert_chain: vec![],
         entitlements_xml: String::new(),
     };
-    assert!(cs.is_adhoc());
+    assert!(!cs.is_adhoc());
+
+    let adhoc = CodeSignature {
+        flags: rustre_mobile_ipa::CS_ADHOC,
+        ..cs.clone()
+    };
+    assert!(adhoc.is_adhoc());
     assert!(cs.leaf_cert().is_none());
     assert!(cs.root_cert().is_none());
 }

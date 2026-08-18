@@ -342,9 +342,11 @@ fn cache_va_to_file_offset_via_mappings() {
 #[test]
 fn cache_read_at_va_in_mock() {
     let cache = DyldCache::mock();
-    // mock data is 4096 zeros at file offset 0; mapping starts at va 0x1_8000_0000.
+    // The cache now carries its own file bytes, so file offset 0 is the header
+    // magic. It used to carry an unrelated 4096-zero buffer, meaning the data a
+    // caller read had nothing to do with the header it was told about.
     let slice = cache.read_at_va(0x1_8000_0000, 16).unwrap();
-    assert_eq!(slice, [0u8; 16]);
+    assert_eq!(slice, b"dyld_v1   arm64e");
 }
 
 #[test]

@@ -173,23 +173,31 @@ fn wa_find_processes_empty_image() {
 
 #[test]
 fn wa_try_find_processes_empty_regions() {
-    // RawMemoryImage with no bytes — regions() should be empty.
+    // `try_find_processes` now runs the real `_EPROCESS` carve, which needs a
+    // structure profile.  A buffer of zeroes carries no KDBG, so the honest
+    // answer is an error naming what is missing — never an invented list.
     let img = zero_img();
-    let regions = rustre_forensics::MemoryImage::regions(&img);
-    if regions.is_empty() {
-        let r = WindowsAnalyzer::try_find_processes(&img);
-        assert!(r.is_err(), "expected error for empty regions, got {r:?}");
-    } else {
-        // If RawMemoryImage always exposes at least one region, ok must succeed.
-        assert!(WindowsAnalyzer::try_find_processes(&img).is_ok());
-    }
+    let r = WindowsAnalyzer::try_find_processes(&img);
+    assert!(r.is_err(), "expected an error for an image with no KDBG, got {r:?}");
 }
 
 #[test]
-fn wa_try_find_processes_ok_for_real_image() {
+fn wa_try_find_processes_reports_missing_profile_for_fixture() {
+    // The crate's synthetic fixture contains `b"EPRC"` records, not real
+    // `_EPROCESS` objects, so the real scanner must refuse rather than report
+    // the fixture's contents as if they had been carved from a dump.
     let r = WindowsAnalyzer::try_find_processes(&win_img());
-    assert!(r.is_ok());
-    assert!(!r.unwrap().is_empty());
+    let e = r.expect_err("fixture records must not be reported as real processes");
+    let msg = format!("{e}");
+    assert!(msg.contains("KDBG") || msg.contains("profile"), "{msg}");
+}
+
+#[test]
+fn wa_fixture_processes_still_readable() {
+    // The fixture reader itself is retained and still parses the records this
+    // crate writes.
+    let procs = WindowsAnalyzer::find_fixture_processes(&win_img());
+    assert!(!procs.is_empty());
 }
 
 // ───── WindowsAnalyzer::find_modules ──────────────────────────────────────────

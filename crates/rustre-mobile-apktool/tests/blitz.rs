@@ -42,8 +42,10 @@ fn mock_runner_failure_decode_variant() {
 fn runner_impl_decode_apk_case_insensitive() {
     let cfg = ApktoolConfig::new("ap", "/out");
     let r = ApktoolRunnerImpl::new(cfg);
-    // Uppercase .APK should also work per docstring
-    assert!(r.decode("APP.APK").is_ok());
+    // Uppercase .APK passes the extension check, so the failure must be the
+    // missing file — never an invented success.
+    assert!(matches!(r.decode("APP.APK"), Err(ApktoolError::NotFound(_))));
+    assert_eq!(r.output_dir_for("APP.APK"), "/out/APP");
 }
 
 #[test]
@@ -57,8 +59,14 @@ fn runner_impl_decode_rejects_jar() {
 fn runner_impl_install_framework_apk_ok() {
     let cfg = ApktoolConfig::new("ap", "/out");
     let r = ApktoolRunnerImpl::new(cfg);
-    assert!(r.install_framework("x.apk").is_ok());
-    assert!(r.install_framework("X.APK").is_ok());
+    assert!(matches!(
+        r.install_framework("x.apk"),
+        Err(ApktoolError::NotFound(_))
+    ));
+    assert!(matches!(
+        r.install_framework("X.APK"),
+        Err(ApktoolError::NotFound(_))
+    ));
 }
 
 #[test]
@@ -552,9 +560,9 @@ fn manifest_error_eq() {
 fn runner_impl_decode_basename_no_double_strip() {
     let cfg = ApktoolConfig::new("ap", "/out");
     let r = ApktoolRunnerImpl::new(cfg);
-    let res = r.decode("/path/myapp.apk").unwrap();
+    let out = r.output_dir_for("/path/myapp.apk");
     // expected: /out/myapp
-    assert!(res.output_dir.ends_with("/myapp"), "got {}", res.output_dir);
+    assert!(out.ends_with("/myapp"), "got {out}");
 }
 
 /// `trim_end_matches` takes a *set of chars* with a char slice arg, but here
@@ -566,8 +574,8 @@ fn runner_impl_decode_name_ending_in_pk() {
     let r = ApktoolRunnerImpl::new(cfg);
     // The path itself must end in .apk to pass the extension check; we
     // verify here that the basename trim only removes the literal .apk.
-    let res = r.decode("/path/quickpick.apk").unwrap();
-    assert!(res.output_dir.ends_with("/quickpick"), "got {}", res.output_dir);
+    let out = r.output_dir_for("/path/quickpick.apk");
+    assert!(out.ends_with("/quickpick"), "got {out}");
 }
 
 /// Disassembler with 0-length opcode could spin — but length is forced

@@ -60,11 +60,10 @@
 //! (effective range 0–31) and to 6 bits for 64-bit operands (0–63).
 //! We emit the mask explicitly so analysis passes see the correct domain.
 
-#![allow(unused_imports, dead_code)]
 
 use crate::x86_context::{FlagId, X86LiftCtx};
 use crate::x86_operand::{operand_size, read_operand, write_operand};
-use crate::{Effect, IrExpr, LiftError};
+use crate::{IrExpr, LiftError};
 use iced_x86::Instruction;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,7 +143,7 @@ fn ite(cond: IrExpr, then_val: IrExpr, else_val: IrExpr) -> IrExpr {
 /// is even. Encoded as a lazy intrinsic since full XOR-tree expansion is
 /// verbose and adds no analysis value before constant folding.
 #[inline]
-fn parity_low_byte(ctx: &mut X86LiftCtx, expr: IrExpr) -> IrExpr {
+pub fn parity_low_byte(ctx: &mut X86LiftCtx, expr: IrExpr) -> IrExpr {
     let t = ctx.fresh_temp();
     ctx.emit_intrinsic("x86.parity".to_string(), vec![expr]);
     ctx.emit_reg_write(t.clone(), IrExpr::Undef);
@@ -153,7 +152,7 @@ fn parity_low_byte(ctx: &mut X86LiftCtx, expr: IrExpr) -> IrExpr {
 
 /// Emit SF = MSB(result), ZF = (result == 0), PF = parity(result[7:0]).
 /// These three flags have the same formula for every shift/rotate.
-fn emit_szp_flags(ctx: &mut X86LiftCtx, result: &IrExpr, w_bits: u8) {
+pub fn emit_szp_flags(ctx: &mut X86LiftCtx, result: &IrExpr, w_bits: u8) {
     // SF
     ctx.emit_flagset(FlagId::Sf, msb(result.clone(), w_bits));
     // ZF
@@ -165,7 +164,7 @@ fn emit_szp_flags(ctx: &mut X86LiftCtx, result: &IrExpr, w_bits: u8) {
 
 /// Emit AF = undefined (shared by all shift/rotate operations).
 #[inline]
-fn emit_af_undef(ctx: &mut X86LiftCtx) {
+pub fn emit_af_undef(ctx: &mut X86LiftCtx) {
     ctx.emit_flagset(FlagId::Af, IrExpr::Undef);
 }
 
@@ -2248,5 +2247,76 @@ mod tests {
         let f = IrExpr::Const(0);
         let r = super::ite(cond, t, f);
         assert!(matches!(r, IrExpr::IfThenElse(_, _, _)));
+    }
+}
+
+#[cfg(test)]
+mod exposed_flag_helper_tests {
+    //! Why these exist.
+    //!
+    //! `parity_low_byte`, `emit_szp_flags` and `emit_af_undef` were private and
+    //! had no caller: `shl`/`shr`/`sar`/`shld`/`shrd` emit the same flags
+    //! inline in a *count-gated* form (flags are preserved when the shift count
+    //! masks to zero), and `rol`/`ror`/`rcl`/`rcr` correctly do not touch
+    //! SF/ZF/PF/AF at all, per the x86 ISA.
+    //!
+    //! They were therefore NOT force-wired into those handlers: doing so would
+    //! replace the gated formula with the ungated one and make the lifting
+    //! *wrong* for a variable count. They are the plain ISA formula, valid when
+    //! the count is a known non-zero constant, and are now public so a handler
+    //! with that guarantee can use them. These tests pin their behaviour so the
+    //! exposure is real API and not a warning dodge.
+
+    use super::*;
+    use crate::x86_context::ModeHint;
+    use crate::Effect;
+
+    /// Names of the flag registers written by the effects, in order.
+    fn flags_written(ctx: &X86LiftCtx) -> Vec<String> {
+        ctx.effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::RegWrite { reg, .. } if reg.len() == 2 && reg.ends_with('f') => {
+                    Some(reg.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `emit_szp_flags` must write exactly SF, ZF and PF, never AF or CF.
+    #[test]
+    fn emit_szp_flags_writes_only_sf_zf_pf() {
+        let mut ctx = X86LiftCtx::new(0x1000, 64, ModeHint::default());
+        emit_szp_flags(&mut ctx, &IrExpr::Const(0), 32);
+        let written = flags_written(&ctx);
+        assert!(written.iter().any(|f| f == FlagId::Sf.as_reg()), "SF: {written:?}");
+        assert!(written.iter().any(|f| f == FlagId::Zf.as_reg()), "ZF: {written:?}");
+        assert!(written.iter().any(|f| f == FlagId::Pf.as_reg()), "PF: {written:?}");
+        assert!(!written.iter().any(|f| f == FlagId::Af.as_reg()), "AF is not SZP: {written:?}");
+        assert!(!written.iter().any(|f| f == FlagId::Cf.as_reg()), "CF is not SZP: {written:?}");
+    }
+
+    /// `emit_af_undef` marks AF undefined and touches no other flag.
+    #[test]
+    fn emit_af_undef_writes_only_af() {
+        let mut ctx = X86LiftCtx::new(0x1000, 64, ModeHint::default());
+        emit_af_undef(&mut ctx);
+        assert_eq!(flags_written(&ctx), vec![FlagId::Af.as_reg().to_string()]);
+    }
+
+    /// `parity_low_byte` emits the `x86.parity` intrinsic rather than an
+    /// expanded XOR tree, and yields a register expression.
+    #[test]
+    fn parity_low_byte_emits_the_parity_intrinsic() {
+        let mut ctx = X86LiftCtx::new(0x1000, 64, ModeHint::default());
+        let out = parity_low_byte(&mut ctx, IrExpr::Const(0xFF));
+        assert!(matches!(out, IrExpr::Reg(_)), "expected a register expr, got {out:?}");
+        assert!(
+            ctx.effects
+                .iter()
+                .any(|e| matches!(e, Effect::Intrinsic { name, .. } if name == "x86.parity")),
+            "x86.parity intrinsic must be emitted"
+        );
     }
 }

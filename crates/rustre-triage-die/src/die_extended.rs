@@ -543,7 +543,7 @@ fn detect_packers_detailed(data: &[u8]) -> Vec<(&'static str, bool, usize)> {
 ///
 /// Kept unchanged for callers and tests that want everything that matched;
 /// use [`detect_packers_detailed`] when the distinction matters.
-fn detect_packers(data: &[u8]) -> Vec<String> {
+pub fn detect_packers(data: &[u8]) -> Vec<String> {
     detect_packers_detailed(data)
         .into_iter()
         .map(|(name, _, _)| name.to_string())
@@ -589,7 +589,7 @@ fn detect_protectors_detailed(data: &[u8]) -> Vec<(&'static str, bool, usize)> {
 ///
 /// Kept unchanged: callers and tests use it to see everything that matched.
 /// Use [`detect_protectors_detailed`] when the distinction matters.
-fn detect_protectors(data: &[u8]) -> Vec<String> {
+pub fn detect_protectors(data: &[u8]) -> Vec<String> {
     detect_protectors_detailed(data)
         .into_iter()
         .map(|(name, _, _)| name.to_string())

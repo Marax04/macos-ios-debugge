@@ -7,7 +7,6 @@
 //! * Opcode extraction via symbolic execution
 //! * Lifting to LLIL-compatible IR
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 

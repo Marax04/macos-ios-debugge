@@ -79,7 +79,7 @@ impl LinuxProcSnapshotTool {
 
 #[async_trait]
 impl ToolHandler for LinuxProcSnapshotTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_proc_snapshot");
 
@@ -143,7 +143,7 @@ impl LinuxProcMapsTool {
 
 #[async_trait]
 impl ToolHandler for LinuxProcMapsTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_proc_maps");
 
@@ -203,7 +203,7 @@ impl LinuxRrListTracesTool {
 
 #[async_trait]
 impl ToolHandler for LinuxRrListTracesTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_rr_list_traces");
 
@@ -273,7 +273,7 @@ impl LinuxRrTraceInfoTool {
 
 #[async_trait]
 impl ToolHandler for LinuxRrTraceInfoTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_rr_trace_info");
 
@@ -332,7 +332,7 @@ impl LinuxPerfSnapshotTool {
 
 #[async_trait]
 impl ToolHandler for LinuxPerfSnapshotTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_perf_snapshot");
 
@@ -439,7 +439,7 @@ impl LinuxEbpfUprobeConfigTool {
 
 #[async_trait]
 impl ToolHandler for LinuxEbpfUprobeConfigTool {
-    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_ebpf_uprobe_config");
 

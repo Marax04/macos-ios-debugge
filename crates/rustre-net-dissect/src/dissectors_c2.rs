@@ -9,7 +9,6 @@
 //! - Empire/Starkiller — REST API call patterns
 //! - Generic C2 heuristics — jitter/beacon-interval analysis
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 
@@ -305,10 +304,21 @@ impl MetasploitDissector {
     pub fn detect(buf: &[u8]) -> Option<MetasploitDetection> {
         if buf.len() < 8 { return None; }
 
-        // Check for 4-byte LE stage size followed by x64/x86 shellcode prolog.
-        let size = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
-        if size > 0 && size < 0x0010_0000 && buf.len() >= size + 4 {
-            let code = &buf[4..];
+        // Check for the LE stage-size prefix followed by an x64/x86 shellcode
+        // prolog.
+        //
+        // The prefix width is `MSF_STAGE_SIZE_MAGIC`, which existed as a named
+        // constant while this code spelled the same 4 three times as a literal
+        // and the constant had no reader at all. A named width that nothing
+        // reads is a width that can be changed without changing the parser, so
+        // the literals now go through it.
+        let size_bytes: [u8; MSF_STAGE_SIZE_MAGIC] = buf
+            .get(..MSF_STAGE_SIZE_MAGIC)?
+            .try_into()
+            .ok()?;
+        let size = u32::from_le_bytes(size_bytes) as usize;
+        if size > 0 && size < 0x0010_0000 && buf.len() >= size + MSF_STAGE_SIZE_MAGIC {
+            let code = &buf[MSF_STAGE_SIZE_MAGIC..];
             let arch = if code.starts_with(MSF_REVERSE_TCP_MAGIC) {
                 Some("x86_64".to_string())
             } else if code.starts_with(MSF_REVERSE_TCP_X86) {

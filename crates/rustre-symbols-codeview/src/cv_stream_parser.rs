@@ -17,7 +17,6 @@
 //! | [`LineInfo`] | Resolved address → (file, line) mapping |
 //! | [`SourceFileMap`] | All source files referenced by a binary |
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;

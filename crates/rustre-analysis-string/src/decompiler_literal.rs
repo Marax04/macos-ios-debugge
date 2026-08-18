@@ -252,13 +252,20 @@ mod tests {
         // Every 3-byte string over a byte alphabet that exercises each class:
         // printable, C whitespace, NUL, high, control.
         const ALPHABET: [u8; 6] = [b'A', b'\t', b'\n', 0, 0x80, 0x01];
-        let mut v = [0u8; 5];
         for a in ALPHABET {
             for b in ALPHABET {
                 for c in ALPHABET {
                     for d in ALPHABET {
                         for e in ALPHABET {
-                            v = [a, b, c, d, e];
+                            // Built inside the loop: the previous form declared
+                            // `let mut v = [0u8; 5]` outside it and overwrote the
+                            // initial value on the very first iteration without
+                            // ever reading it, so the zeroed case — a 5-byte NUL
+                            // string, a real input class — was never tested even
+                            // though the array looked like it covered it.
+                            // ALPHABET does contain 0, so the all-NUL case is
+                            // reached on merit here.
+                            let v = [a, b, c, d, e];
                             agree(&v);
                         }
                     }

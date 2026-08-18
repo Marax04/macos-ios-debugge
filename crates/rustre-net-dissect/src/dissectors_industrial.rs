@@ -8,7 +8,6 @@
 //! - PROFINET — RT frames, DCP, LLDP
 //! - EtherNet/IP — CIP encapsulation
 
-#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 use crate::DissectError;

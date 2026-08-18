@@ -14,6 +14,8 @@ pub mod smali_patcher;
 pub mod smali_type_resolver;
 pub mod smali_annotation_parser;
 pub mod smali_control_flow;
+/// Real DEX → smali decoding (no synthesised classes).
+pub mod dex_to_smali;
 
 use std::fmt;
 
@@ -256,9 +258,32 @@ pub struct SmaliClass {
 }
 
 impl SmaliClass {
-    /// Create a mock class for testing.
+    /// A class carrying only what a bare class *name* can justify: the name
+    /// itself and the implicit `java.lang.Object` superclass.
+    ///
+    /// A name is not a program, so no methods, fields or interfaces are
+    /// reported — inventing them is exactly the defect this replaces. To get
+    /// the real members, decode real bytes with
+    /// [`crate::dex_to_smali::class_from_dex_bytes`].
     #[must_use]
     pub fn mock(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            super_class: "Ljava/lang/Object;".to_string(),
+            access: SmaliAccess::empty(),
+            methods: Vec::new(),
+            fields: Vec::new(),
+            interfaces: Vec::new(),
+        }
+    }
+
+    /// A hand-written class used as a fixture by this crate's own tests.
+    ///
+    /// It is *not* derived from any input and must never be reported as
+    /// analysis of a real APK; it exists so the printer, analyser and
+    /// assembler have a stable, known-shaped class to exercise.
+    #[must_use]
+    pub fn synthetic_fixture(name: impl Into<String>) -> Self {
         let class_name = name.into();
         Self {
             name: class_name.clone(),
@@ -2675,14 +2700,23 @@ mod tests {
     }
 
     #[test]
-    fn test_smali_class_mock() {
+    fn mock_from_a_bare_name_invents_nothing() {
         let c = SmaliClass::mock("Lcom/example/Foo;");
+        assert_eq!(c.name, "Lcom/example/Foo;");
+        assert!(c.methods.is_empty(), "a class name cannot imply methods");
+        assert!(c.fields.is_empty(), "a class name cannot imply fields");
+        assert!(c.interfaces.is_empty());
+    }
+
+    #[test]
+    fn test_smali_class_mock() {
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         assert_eq!(c.name, "Lcom/example/Foo;");
     }
 
     #[test]
     fn test_smali_class_find_method() {
-        let c = SmaliClass::mock("Lcom/example/Foo;");
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         let m = c.find_method("<init>");
         assert!(m.is_some());
         assert!(m.unwrap().is_constructor());
@@ -2690,13 +2724,13 @@ mod tests {
 
     #[test]
     fn test_smali_class_find_method_not_found() {
-        let c = SmaliClass::mock("Lcom/example/Foo;");
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         assert!(c.find_method("nonexistent").is_none());
     }
 
     #[test]
     fn test_smali_class_static_methods() {
-        let c = SmaliClass::mock("Lcom/example/Foo;");
+        let c = SmaliClass::synthetic_fixture("Lcom/example/Foo;");
         let statics = c.static_methods();
         assert!(!statics.is_empty());
         assert!(
@@ -2726,7 +2760,7 @@ mod tests {
 
     #[test]
     fn test_smali_class_serialization() {
-        let c = SmaliClass::mock("Lfoo;");
+        let c = SmaliClass::synthetic_fixture("Lfoo;");
         let json = serde_json::to_string(&c).unwrap();
         let decoded: SmaliClass = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.name, c.name);

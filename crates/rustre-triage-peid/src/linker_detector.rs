@@ -15,7 +15,6 @@
 //! | [`DetectedLinker`] | Result type for a detection attempt |
 //! | [`RichHeaderAnalyzer`] | Parse and decode the PE Rich Header |
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;

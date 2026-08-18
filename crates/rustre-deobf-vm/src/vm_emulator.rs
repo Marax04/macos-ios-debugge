@@ -11,7 +11,6 @@
 //! dispatch table.  For true native emulation plug in the `unicorn_backend`
 //! feature (not included here — this file provides the pure-Rust layer).
 
-#![allow(dead_code, unused_variables)]
 
 use std::collections::HashMap;
 

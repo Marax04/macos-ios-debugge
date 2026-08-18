@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 rustre-dotnet = { path = "../rustre-dotnet" }
 rustre-dotnet-metadata = { path = "../rustre-dotnet-metadata" }
+rustre-arch-cil = { path = "../rustre-arch-cil" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -423,14 +423,14 @@ fn format_decrypted_sorted_by_offset() {
 
 #[test]
 fn project_mock_invariants() {
-    let p = DecompiledProject::mock();
+    let p = DecompiledProject::synthetic_fixture();
     assert!(p.total >= p.failed);
     assert!(p.success_rate() >= 0.0 && p.success_rate() <= 1.0);
 }
 
 #[test]
 fn project_find_class_simple_and_fqn() {
-    let p = DecompiledProject::mock();
+    let p = DecompiledProject::synthetic_fixture();
     let any = p.classes.first().cloned().expect("non-empty mock");
     let by_simple = p.find_class(&any.class_name).expect("simple");
     assert_eq!(by_simple.class_name, any.class_name);

@@ -236,7 +236,7 @@ pub fn score_with_evidence(code: &str) -> ConfidenceReport {
     let mut findings: Vec<Finding> = Vec::new();
 
     // Each entry: (signal, raw count, per-occurrence weight, cap).
-    let mut apply = |findings: &mut Vec<Finding>,
+    let apply = |findings: &mut Vec<Finding>,
                      score: &mut i32,
                      signal: Signal,
                      raw: i32,

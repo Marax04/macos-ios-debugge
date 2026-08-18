@@ -1463,7 +1463,7 @@ impl AnalysisStringExtractUrlsPathTool {
 impl ToolHandler for AnalysisStringExtractUrlsPathTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         use rustre_analysis_string::{StringScanner, StringScannerConfig, extract_urls};
-        use rustre_core::address::Address;
+        
 
         let path = args.get("path").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'path'".into()))?;

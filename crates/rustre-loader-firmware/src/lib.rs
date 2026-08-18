@@ -51,7 +51,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use rustre_core::address::{Address, AddressRange};
 use rustre_core::arch::{
-    Architecture, BranchInfo, CallingConvention, InstrFlags, Instruction, RegisterInfo,
+    Architecture, BranchInfo, CallingConvention, Instruction, RegisterInfo,
 };
 use rustre_core::binary_view::{BinaryView, Memory, Segment};
 use rustre_core::endian::Endian;

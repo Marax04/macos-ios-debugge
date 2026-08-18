@@ -11,7 +11,6 @@
 //! 4. **`foreach` loops** — `GetEnumerator()` + `MoveNext()` + `Current` patterns.
 //! 5. **Delegate calls** — `Action<T>`, `Func<T,R>`, `Predicate<T>` inferred from usage.
 
-#![allow(dead_code)]
 
 use ahash::AHashMap;
 use std::fmt;

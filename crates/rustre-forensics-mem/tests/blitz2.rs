@@ -11,7 +11,6 @@ use rustre_forensics_mem::strings_extractor::{
     self as se, MemString, StringClass, StringEncoding, StringExtractionConfig,
 };
 use rustre_forensics_mem::*;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 // ── seeded LCG ──────────────────────────────────────────────────────────────
@@ -230,10 +229,16 @@ fn win_try_find_processes_empty_or_ok() {
 }
 
 #[test]
-fn win_try_find_processes_real_ok() {
+fn win_try_find_processes_real_refuses_fixture() {
+    // The fixture holds `b"EPRC"` records, not real `_EPROCESS` objects.  The
+    // real carve must report what is missing instead of passing the fixture
+    // off as carved evidence.
     let img = build_mock_image(OsType::Windows);
-    let r = WindowsAnalyzer::try_find_processes(&img).unwrap();
-    assert!(r.len() >= 2);
+    let e = WindowsAnalyzer::try_find_processes(&img)
+        .expect_err("fixture records must not be reported as real processes");
+    assert!(!format!("{e}").is_empty());
+    // The fixture reader is still available and still reads them.
+    assert!(WindowsAnalyzer::find_fixture_processes(&img).len() >= 2);
 }
 
 #[test]

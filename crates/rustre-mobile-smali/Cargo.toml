@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 bitflags = { workspace = true }
+rustre-loader-android = { path = "../rustre-loader-android" }
 
 [lints]
 workspace = true

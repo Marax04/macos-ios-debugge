@@ -426,10 +426,19 @@ impl MalpediaYaraDownloader {
             return Ok(cached);
         }
 
-        // Mock: generate rules for the family.
-        let rule_set = Self::mock_rule_set(family);
-        self.cache.put(family, rule_set.clone());
-        Ok(rule_set)
+        // A cache miss is a miss.  This type has no HTTP transport, so rules
+        // for an uncached family cannot be obtained without a network lookup;
+        // it used to generate placeholder rules and cache them as real ones.
+        Err(format!(
+            "no YARA rules cached for '{family}': downloading them requires a network \
+             lookup against {}{}",
+            self.base_url,
+            if self.is_authenticated() {
+                ""
+            } else {
+                " and no API key is configured"
+            }
+        ))
     }
 
     /// Download rules for multiple families.
@@ -462,7 +471,15 @@ impl MalpediaYaraDownloader {
         if family.is_empty() {
             return Err("family name must not be empty".to_string());
         }
-        Ok(Self::mock_family_profile(family))
+        // The profile (description, malware type, aliases) is Malpedia's data.
+        // It used to be answered from a five-entry hard-coded table, and with
+        // "Unknown malware family"/"trojan" for everything else - a guess
+        // presented as an attribution.
+        Err(format!(
+            "no profile for '{family}' available offline: this requires a network lookup \
+             against {}",
+            self.base_url
+        ))
     }
 
     /// Get profiles for multiple families.
@@ -483,9 +500,14 @@ impl MalpediaYaraDownloader {
         &self.cache
     }
 
-    // ---- Mock helpers ----
+    // ---- Local template builders (never presented as Malpedia data) ----
 
-    fn mock_rule_set(family: &str) -> YaraRuleSet {
+    /// Build a LOCAL placeholder rule set for a family.
+    ///
+    /// Its strings are `mock_string_N` and match nothing real.  Exposed so a
+    /// caller that wants a scaffold must ask for it by name.
+    #[must_use]
+    pub fn mock_rule_set(family: &str) -> YaraRuleSet {
         let platform = family.split('.').next().unwrap_or("win").to_string();
         let mut rs = YaraRuleSet::new(family, &platform);
         let rule_count = match family {
@@ -508,7 +530,11 @@ impl MalpediaYaraDownloader {
         rs
     }
 
-    fn mock_family_profile(family: &str) -> FamilyProfile {
+    /// Build a LOCAL profile record from the small built-in example table.
+    ///
+    /// This is example data for tests, not a Malpedia lookup.
+    #[must_use]
+    pub fn mock_family_profile(family: &str) -> FamilyProfile {
         let descriptions: &[(&str, &str, &str)] = &[
             ("win.emotet", "Banking trojan / loader / botnet", "trojan"),
             (
@@ -540,8 +566,55 @@ impl MalpediaYaraDownloader {
 mod tests {
     use super::*;
 
+    /// A downloader whose cache has already been filled by the caller.
+    ///
+    /// Tests below exercise the cache / rule-set machinery, so they supply the
+    /// rules themselves instead of relying on the downloader to invent any.
     fn downloader() -> MalpediaYaraDownloader {
+        let d = bare_downloader();
+        for f in [
+            "win.emotet",
+            "win.wannacry",
+            "win.trickbot",
+            "win.cobalt_strike",
+            "win.mimikatz",
+            "linux.mirai",
+        ] {
+            d.cache().put(f, MalpediaYaraDownloader::mock_rule_set(f));
+        }
+        d
+    }
+
+    /// A downloader configured the way production configures it: empty cache.
+    fn bare_downloader() -> MalpediaYaraDownloader {
         MalpediaYaraDownloader::new(Some("test-api-key".to_string()), Duration::from_secs(3600))
+    }
+
+    #[tokio::test]
+    async fn test_download_without_cache_reports_network_lookup() {
+        let err = bare_downloader()
+            .download_yara_rules("win.emotet")
+            .await
+            .unwrap_err();
+        assert!(err.contains("no YARA rules cached"), "{err}");
+        assert!(err.contains("network"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn test_family_profile_is_never_guessed() {
+        // Previously answered "Unknown malware family"/"trojan" for anything
+        // outside a five-entry table.
+        let err = bare_downloader()
+            .get_family_profile("win.some_unknown_family")
+            .await
+            .unwrap_err();
+        assert!(err.contains("network lookup"), "{err}");
+        assert!(
+            downloader()
+                .get_family_profile("win.emotet")
+                .await
+                .is_err()
+        );
     }
 
     // ---- YaraRuleTag ----
@@ -723,7 +796,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_family_profile() {
-        let p = downloader().get_family_profile("win.emotet").await.unwrap();
+        let p = MalpediaYaraDownloader::mock_family_profile("win.emotet");
         assert_eq!(p.name, "win.emotet");
         assert!(!p.description.is_empty());
     }
@@ -737,7 +810,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_all_profiles() {
         let fams = ["win.emotet", "win.wannacry"];
-        let profiles = downloader().get_all_profiles(&fams).await.unwrap();
+        let profiles: Vec<_> = fams
+            .iter()
+            .map(|f| MalpediaYaraDownloader::mock_family_profile(f))
+            .collect();
         assert_eq!(profiles.len(), 2);
     }
 

@@ -13,6 +13,7 @@ pub mod memory_forensics;
 pub mod process_dump_analysis;
 pub mod process_tree;
 pub mod profile_detect;
+pub mod real_scan;
 pub mod strings_extractor;
 pub mod timeline_builder;
 pub mod vad_tree;
@@ -284,6 +285,24 @@ impl WindowsAnalyzer {
     ///   `b"EPRC"` (4) | pid(4) | ppid(4) | ImageFileName(16) | base(8) | size(8) | `handle_count(4)` | `create_time(8)`
     #[must_use]
     pub fn find_processes(image: &dyn MemoryImage) -> Vec<ProcessInfo> {
+        // Real path first: carve genuine `_EPROCESS` objects out of the image.
+        if let Ok(real) = Self::scan_processes_real(image)
+            && !real.is_empty()
+        {
+            return real;
+        }
+        Self::find_fixture_processes(image)
+    }
+
+    /// Read the crate's own synthetic `b"EPRC"` fixture records.
+    ///
+    /// This format is written only by [`build_mock_image`]; it never occurs in a
+    /// real dump, so this reader can only ever report what this crate itself
+    /// placed in the buffer.  It is retained so the fixture-based tests in this
+    /// workspace keep working, and is consulted only after
+    /// [`Self::scan_processes_real`] has found nothing.
+    #[must_use]
+    pub fn find_fixture_processes(image: &dyn MemoryImage) -> Vec<ProcessInfo> {
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -316,7 +335,7 @@ impl WindowsAnalyzer {
                 message: "memory image contains no readable regions".to_owned(),
             });
         }
-        Ok(Self::find_processes(image))
+        Self::scan_processes_real(image)
     }
 
     fn parse_eprocess(buf: &[u8]) -> Option<ProcessInfo> {
@@ -351,7 +370,20 @@ impl WindowsAnalyzer {
     ///   `b"LDRM"` (4) | base(8) | size(8) | ModuleName(32) | Path(64)
     #[must_use]
     pub fn find_modules(image: &dyn MemoryImage, pid: u32) -> Vec<ModuleInfo> {
-        let _ = pid; // In a real tool we'd find the EPROCESS for this pid first
+        // Real path: locate genuine mapped PE images in the dump.
+        if let Ok(real) = Self::scan_modules_real(image)
+            && !real.is_empty()
+        {
+            return real;
+        }
+        Self::find_fixture_modules(image, pid)
+    }
+
+    /// Read the crate's own synthetic `b"LDRM"` fixture records.  See
+    /// [`Self::find_fixture_processes`] for why this exists.
+    #[must_use]
+    pub fn find_fixture_modules(image: &dyn MemoryImage, pid: u32) -> Vec<ModuleInfo> {
+        let _ = pid; // the fixture format carries no per-process association
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -397,6 +429,25 @@ impl WindowsAnalyzer {
     ///   | `local_addr(16)` | `remote_addr(16)` | pid(4)
     #[must_use]
     pub fn find_network_connections(image: &dyn MemoryImage) -> Vec<NetworkConnection> {
+        Self::find_fixture_network_connections(image)
+    }
+
+    /// Decode network connections, or say precisely why it cannot be done.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::scan_network_connections_real`]: decoding requires a
+    /// `tcpip.sys` endpoint profile this workspace does not carry.
+    pub fn try_find_network_connections(
+        image: &dyn MemoryImage,
+    ) -> Result<Vec<NetworkConnection>, CoreError> {
+        Self::scan_network_connections_real(image)
+    }
+
+    /// Read the crate's own synthetic `b"NCON"` fixture records.  See
+    /// [`Self::find_fixture_processes`] for why this exists.
+    #[must_use]
+    pub fn find_fixture_network_connections(image: &dyn MemoryImage) -> Vec<NetworkConnection> {
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -469,6 +520,19 @@ impl WindowsAnalyzer {
     ///   `b"HIVE"` (4) | base(8) | size(8) | HiveName(32) | data …
     #[must_use]
     pub fn extract_registry_hives(image: &dyn MemoryImage) -> Vec<RegistryHive> {
+        // Real path: checksum-verified `regf` base blocks.
+        if let Ok(real) = Self::scan_registry_hives_real(image)
+            && !real.is_empty()
+        {
+            return real;
+        }
+        Self::extract_fixture_registry_hives(image)
+    }
+
+    /// Read the crate's own synthetic `b"HIVE"` fixture records.  See
+    /// [`Self::find_fixture_processes`] for why this exists.
+    #[must_use]
+    pub fn extract_fixture_registry_hives(image: &dyn MemoryImage) -> Vec<RegistryHive> {
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -520,6 +584,17 @@ impl WindowsAnalyzer {
     /// Try to find the KDBG (`KdDebuggerDataBlock`) by scanning for its signature.
     #[must_use]
     pub fn find_kernel_info(image: &dyn MemoryImage) -> Option<WindowsKernelInfo> {
+        if let Ok(real) = Self::scan_kernel_info_real(image) {
+            return Some(real);
+        }
+        Self::find_fixture_kernel_info(image)
+    }
+
+    /// Read the crate's own synthetic `b"KDBG"` fixture record (a 4-byte tag
+    /// followed by base/major/minor/build), which is NOT the layout of a real
+    /// `_KDDEBUGGER_DATA64`.  See [`Self::find_fixture_processes`].
+    #[must_use]
+    pub fn find_fixture_kernel_info(image: &dyn MemoryImage) -> Option<WindowsKernelInfo> {
         const KDBG_SIG: &[u8] = b"KDBG";
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -563,6 +638,28 @@ impl LinuxAnalyzer {
     ///   `b"TSKB"` (4) | pid(4) | ppid(4) | comm(16) | base(8) | size(8) | `handle_count(4)` | `create_time(8)`
     #[must_use]
     pub fn find_processes(image: &dyn MemoryImage) -> Vec<ProcessInfo> {
+        if let Ok(real) = Self::scan_processes_real(image)
+            && !real.is_empty()
+        {
+            return real;
+        }
+        Self::find_fixture_processes(image)
+    }
+
+    /// Same as [`Self::find_processes`] but surfaces the reason the real scan
+    /// failed instead of silently falling back to the fixture format.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::scan_processes_real`].
+    pub fn try_find_processes(image: &dyn MemoryImage) -> Result<Vec<ProcessInfo>, CoreError> {
+        Self::scan_processes_real(image)
+    }
+
+    /// Read the crate's own synthetic `b"TSKB"` fixture records.  See
+    /// [`WindowsAnalyzer::find_fixture_processes`] for why this exists.
+    #[must_use]
+    pub fn find_fixture_processes(image: &dyn MemoryImage) -> Vec<ProcessInfo> {
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -612,6 +709,22 @@ impl LinuxAnalyzer {
     /// Record format: `b"KMOD"` (4) | base(8) | size(8) | name(32) | path(64)
     #[must_use]
     pub fn find_modules(image: &dyn MemoryImage) -> Vec<ModuleInfo> {
+        Self::find_fixture_modules(image)
+    }
+
+    /// Enumerate kernel modules, or say precisely why it cannot be done.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::scan_modules_real`].
+    pub fn try_find_modules(image: &dyn MemoryImage) -> Result<Vec<ModuleInfo>, CoreError> {
+        Self::scan_modules_real(image)
+    }
+
+    /// Read the crate's own synthetic `b"KMOD"` fixture records.  See
+    /// [`WindowsAnalyzer::find_fixture_processes`] for why this exists.
+    #[must_use]
+    pub fn find_fixture_modules(image: &dyn MemoryImage) -> Vec<ModuleInfo> {
         let mut result = Vec::new();
         for region in image.regions() {
             if let Ok(data) = image.read(region.start, ((region.end - region.start).min(MAX_REGION_READ)) as usize) {
@@ -655,7 +768,16 @@ impl LinuxAnalyzer {
     /// Uses the same `b"NCON"` format as `WindowsAnalyzer`.
     #[must_use]
     pub fn find_sockets(image: &dyn MemoryImage) -> Vec<NetworkConnection> {
-        WindowsAnalyzer::find_network_connections(image)
+        WindowsAnalyzer::find_fixture_network_connections(image)
+    }
+
+    /// Enumerate sockets, or say precisely why it cannot be done.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::scan_sockets_real`].
+    pub fn try_find_sockets(image: &dyn MemoryImage) -> Result<Vec<NetworkConnection>, CoreError> {
+        Self::scan_sockets_real(image)
     }
 }
 

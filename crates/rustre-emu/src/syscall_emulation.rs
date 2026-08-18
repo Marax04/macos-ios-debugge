@@ -81,7 +81,6 @@ pub enum SyscallError {
 
 // ─── Linux Syscall Numbers (x86-64) ──────────────────────────────────────────
 
-#[allow(dead_code)]
 pub mod linux_x64 {
     pub const READ: u64 = 0;
     pub const WRITE: u64 = 1;

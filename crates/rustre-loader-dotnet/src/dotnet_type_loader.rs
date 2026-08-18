@@ -562,7 +562,7 @@ impl fmt::Display for TypeStats {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn make_strings(entries: &[&str]) -> Vec<u8> {
@@ -574,7 +574,7 @@ mod tests {
         v
     }
 
-    fn make_typedef(ns_idx: u32, name_idx: u32, flags: u32, extends: u32) -> TypeDefRow {
+    pub(crate) fn make_typedef(ns_idx: u32, name_idx: u32, flags: u32, extends: u32) -> TypeDefRow {
         TypeDefRow {
             flags,
             type_name: name_idx,
@@ -869,5 +869,89 @@ mod tests {
         let mut t = make_typedef_type("WithMethods", "");
         t.method_indices = vec![0, 1, 2];
         assert_eq!(t.method_count(), 3);
+    }
+}
+
+#[cfg(test)]
+mod typedef_flag_tests {
+    //! ⚠ `make_typedef` built a `TypeDefRow` from explicit flags and had no
+    //! caller: nothing exercised `load_all`'s flag decoding, so the abstract /
+    //! sealed / static / interface classification was untested on a loader
+    //! whose whole job is that classification.
+
+    use super::*;
+
+    const ABSTRACT: u32 = 0x0000_0080;
+    const SEALED: u32 = 0x0000_0100;
+    const INTERFACE: u32 = 0x0000_0020;
+
+    use super::tests::make_typedef;
+
+    /// A string heap holding "" at 0, "Ns" at 1, "T" at 4.
+    fn heap() -> Vec<u8> {
+        let mut h = vec![0u8];
+        h.extend_from_slice(b"Ns\0");
+        h.extend_from_slice(b"T\0");
+        h
+    }
+
+    fn load(rows: &[TypeDefRow], strings: &[u8]) -> Vec<DotnetType> {
+        DotnetTypeLoader::new(rows, &[], &[], &[], &[], strings).load_all()
+    }
+
+    /// `abstract` and `sealed` together mean a C# `static class`. Neither alone
+    /// does — that is the whole point of the conjunction.
+    #[test]
+    fn abstract_plus_sealed_is_static() {
+        let h = heap();
+        let rows = [
+            make_typedef(1, 4, ABSTRACT, 0),
+            make_typedef(1, 4, SEALED, 0),
+            make_typedef(1, 4, ABSTRACT | SEALED, 0),
+        ];
+        let out = load(&rows, &h);
+
+        assert!(out[0].is_abstract && !out[0].is_sealed && !out[0].is_static);
+        assert!(!out[1].is_abstract && out[1].is_sealed && !out[1].is_static);
+        assert!(out[2].is_abstract && out[2].is_sealed && out[2].is_static);
+    }
+
+    /// The interface flag wins over base-type inference.
+    #[test]
+    fn interface_flag_classifies_as_interface() {
+        let h = heap();
+        let rows = [make_typedef(1, 4, INTERFACE, 0)];
+        assert_eq!(load(&rows, &h)[0].kind, TypeKind::Interface);
+    }
+
+    /// A plain row with no flags and no base type is a class.
+    #[test]
+    fn no_flags_is_a_plain_class() {
+        let h = heap();
+        let rows = [make_typedef(1, 4, 0, 0)];
+        let out = load(&rows, &h);
+        assert_eq!(out[0].kind, TypeKind::Class);
+        assert!(!out[0].is_abstract && !out[0].is_sealed && !out[0].is_static);
+    }
+
+    /// `extends == 0` and `extends == 0xFFFF_FFFF` both mean "no base type",
+    /// and must not produce a resolved name.
+    #[test]
+    fn sentinel_extends_values_give_no_base_type() {
+        let h = heap();
+        let rows = [make_typedef(1, 4, 0, 0), make_typedef(1, 4, 0, 0xFFFF_FFFF)];
+        let out = load(&rows, &h);
+        assert!(out[0].base_type.is_empty());
+        assert!(out[1].base_type.is_empty());
+    }
+
+    /// The namespace is joined with a dot only when non-empty.
+    #[test]
+    fn full_name_joins_namespace_only_when_present() {
+        let h = heap();
+        let rows = [make_typedef(1, 4, 0, 0), make_typedef(0, 4, 0, 0)];
+        let out = load(&rows, &h);
+        assert_eq!(out[0].full_name, "Ns.T");
+        assert_eq!(out[1].full_name, "T", "empty namespace must not add a dot");
     }
 }

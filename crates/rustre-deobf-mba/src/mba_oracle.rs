@@ -452,7 +452,17 @@ fn expr_complexity(expr: &MbaExpr) -> usize {
         | MbaExpr::And(a, b)
         | MbaExpr::Or(a, b)
         | MbaExpr::Xor(a, b) => 1 + expr_complexity(a) + expr_complexity(b),
-        _ => 1,
+        // ⚠ No catch-all arm, deliberately.
+        //
+        // The comment above records what the catch-all cost: `Sar` fell into
+        // `_ => 1`, so a Sar-rooted candidate reported complexity 1 no matter
+        // how large its subtree was, and `MbaOracle::simplify` — which ranks by
+        // this metric — always picked it as the "simplest" match. The arm was
+        // added for Sar, which made the catch-all unreachable and left the trap
+        // armed for the NEXT variant somebody adds.
+        //
+        // With the match exhaustive, adding a variant to `MbaExpr` is a compile
+        // error here instead of a silent score of 1. That is the whole point.
     }
 }
 

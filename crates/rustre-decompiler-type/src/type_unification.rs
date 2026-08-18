@@ -501,13 +501,13 @@ pub fn unify_all(types: &[DecompType]) -> DecompType {
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::CallingConvention;
 
     fn i32() -> DecompType { DecompType::Int(IntWidth::I32) }
-    fn i64() -> DecompType { DecompType::Int(IntWidth::I64) }
-    fn u32() -> DecompType { DecompType::Int(IntWidth::U32) }
+    pub(crate) fn i64() -> DecompType { DecompType::Int(IntWidth::I64) }
+    pub(crate) fn u32() -> DecompType { DecompType::Int(IntWidth::U32) }
     fn ptr() -> DecompType { DecompType::Ptr(Box::new(DecompType::Void)) }
 
     // ── UnionFind ─────────────────────────────────────────────────────────────
@@ -687,5 +687,66 @@ mod tests {
         let arg_types = vec![None];
         let result = resolve_overload(&candidates, &arg_types).unwrap();
         assert!(result.score < 50); // neutral score, not high confidence.
+    }
+}
+
+#[cfg(test)]
+mod width_pinning_tests {
+    //! ⚠ `i64()` and `u32()` were fixtures with no caller here too: the
+    //! unification tests only ever pinned `i32()` or `ptr()`. Unification is
+    //! precisely where two different widths for the same variable must be
+    //! reconciled, so testing one width tested the least interesting case.
+
+    use super::*;
+    use crate::{DecompType, IntWidth};
+
+    fn i32t() -> DecompType { DecompType::Int(IntWidth::I32) }
+    // The `i64`/`u32` fixtures the existing test module already had, now used.
+    use super::tests::{i64 as i64t, u32 as u32t};
+
+    /// Pinning a 64-bit type survives a `union` with an unpinned variable, and
+    /// both members of the class report it.
+    #[test]
+    fn i64_pin_propagates_across_a_union() {
+        let mut uf = UnionFind::new();
+        uf.pin_type("a", i64t());
+        uf.union("a", "b");
+        assert_eq!(uf.pinned_type("a"), Some(i64t()));
+        assert_eq!(uf.pinned_type("b"), Some(i64t()), "the class carries the pin");
+    }
+
+    /// Two variables pinned to *different* widths are a real conflict. Whatever
+    /// the resolution policy is, it must be deterministic and must not leave
+    /// both answers live.
+    #[test]
+    fn conflicting_widths_resolve_to_a_single_type() {
+        let mut uf = UnionFind::new();
+        uf.pin_type("x", i32t());
+        uf.pin_type("y", i64t());
+        uf.union("x", "y");
+        let tx = uf.pinned_type("x");
+        let ty = uf.pinned_type("y");
+        assert_eq!(tx, ty, "one class must not report two types");
+        assert!(tx.is_some(), "the conflict must not erase the type entirely");
+    }
+
+    /// Signedness is part of the type: unifying `u32` with `i32` must not be
+    /// treated as a no-op agreement.
+    #[test]
+    fn signedness_is_carried_by_the_pin() {
+        let mut uf = UnionFind::new();
+        uf.pin_type("u", u32t());
+        assert_eq!(uf.pinned_type("u"), Some(u32t()));
+        assert_ne!(uf.pinned_type("u"), Some(i32t()));
+    }
+
+    /// Distinct, never-unioned variables stay in distinct components.
+    #[test]
+    fn unrelated_pins_stay_in_separate_components() {
+        let mut uf = UnionFind::new();
+        uf.pin_type("p", i64t());
+        uf.pin_type("q", u32t());
+        assert_ne!(uf.find("p"), uf.find("q"));
+        assert_eq!(uf.component_count(), 2);
     }
 }

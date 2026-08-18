@@ -20,7 +20,6 @@ use rustre_debug::time_travel_debug::TracePosition;
 // Helpers (copied verbatim from tools/debug.rs so this file compiles alone)
 // ---------------------------------------------------------------------------
 
-#[allow(dead_code)]
 fn req_str<'a>(args: &'a Value, key: &str) -> AnyhowResult<&'a str> {
     args.get(key)
         .and_then(Value::as_str)

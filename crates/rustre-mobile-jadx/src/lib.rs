@@ -12,6 +12,8 @@ pub mod lambda_recovery;
 pub mod jadx_output_parser;
 pub mod jadx_resource_decoder;
 pub mod jadx_call_graph_builder;
+/// Real DEX/APK → project decoding (no synthesised classes).
+pub mod dex_project;
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -191,9 +193,26 @@ impl DecompiledProject {
         f64::from(succeeded_u32) / f64::from(total_u32)
     }
 
-    /// Create a mock project with 3 packages, 9 classes, and various methods.
+    /// An empty project.
+    ///
+    /// Called with no input, there is nothing to report: a project is what a
+    /// DEX file contains, and no DEX file was supplied. Use
+    /// [`crate::dex_project::project_from_path`] or
+    /// [`crate::dex_project::project_from_bytes`] to decode a real one.
     #[must_use]
     pub fn mock() -> Self {
+        Self {
+            classes: Vec::new(),
+            total: 0,
+            failed: 0,
+        }
+    }
+
+    /// A hand-written 9-class project used as a fixture by this crate's own
+    /// tests. It is not derived from any input and must never be reported as
+    /// the analysis of a real APK.
+    #[must_use]
+    pub fn synthetic_fixture() -> Self {
         let make_method = |name: &str, static_m: bool, native_m: bool, ret: &str| JavaMethod {
             name: name.to_string(),
             signature: format!("{name}()"),
@@ -319,8 +338,12 @@ pub trait JadxRunner: Send + Sync {
 pub struct MockJadxRunner;
 
 impl JadxRunner for MockJadxRunner {
-    fn decompile(&self, _cfg: &JadxConfig) -> Result<DecompiledProject, JadxError> {
-        Ok(DecompiledProject::mock())
+    /// Decompile `cfg.input` for real, by parsing the DEX/APK bytes it names.
+    ///
+    /// No project is synthesised: a missing or unparsable input is reported as
+    /// a typed [`JadxError`].
+    fn decompile(&self, cfg: &JadxConfig) -> Result<DecompiledProject, JadxError> {
+        crate::dex_project::project_from_path(&cfg.input)
     }
 }
 
@@ -2163,7 +2186,7 @@ mod tests {
 
     #[test]
     fn test_java_class_static_methods() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let utils = mock.find_class("Utils").unwrap();
         let statics = utils.static_methods();
         assert_eq!(statics.len(), 2);
@@ -2171,7 +2194,7 @@ mod tests {
 
     #[test]
     fn test_java_class_native_methods() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let aes = mock.find_class("AesHelper").unwrap();
         let natives = aes.native_methods();
         assert_eq!(natives.len(), 1);
@@ -2179,47 +2202,47 @@ mod tests {
 
     #[test]
     fn test_project_find_class_by_name() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let cls = mock.find_class("MainActivity");
         assert!(cls.is_some());
     }
 
     #[test]
     fn test_project_find_class_not_found() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         assert!(mock.find_class("Nonexistent").is_none());
     }
 
     #[test]
     fn test_project_find_class_by_fqn() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let cls = mock.find_class("com.example.app.Utils");
         assert!(cls.is_some());
     }
 
     #[test]
     fn test_project_in_package() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let classes = mock.in_package("com.example.network");
         assert_eq!(classes.len(), 3);
     }
 
     #[test]
     fn test_project_in_package_empty() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let classes = mock.in_package("com.nonexistent");
         assert!(classes.is_empty());
     }
 
     #[test]
     fn test_project_success_rate_full() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         assert!((mock.success_rate() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_project_success_rate_partial() {
-        let mut mock = DecompiledProject::mock();
+        let mut mock = DecompiledProject::synthetic_fixture();
         mock.failed = 3;
         let rate = mock.success_rate();
         assert!(rate < 1.0);
@@ -2238,13 +2261,13 @@ mod tests {
 
     #[test]
     fn test_mock_has_nine_classes() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         assert_eq!(mock.classes.len(), 9);
     }
 
     #[test]
     fn test_mock_three_packages() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let mut pkgs: Vec<_> = mock.classes.iter().map(|c| c.package.as_str()).collect();
         pkgs.sort_unstable();
         pkgs.dedup();
@@ -2252,11 +2275,21 @@ mod tests {
     }
 
     #[test]
-    fn test_mock_jadx_runner() {
+    fn test_jadx_runner_requires_a_real_input() {
         let runner = MockJadxRunner;
         let cfg = JadxConfig::new("jadx", "app.apk", "/tmp/out");
-        let result = runner.decompile(&cfg).unwrap();
-        assert_eq!(result.classes.len(), 9);
+        match runner.decompile(&cfg) {
+            Err(JadxError::NotFound(m)) => assert!(m.contains("app.apk")),
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("decompiled an APK that does not exist"),
+        }
+    }
+
+    #[test]
+    fn test_mock_project_is_empty_not_invented() {
+        let p = DecompiledProject::mock();
+        assert_eq!(p.total, 0);
+        assert!(p.classes.is_empty(), "no input can imply no classes");
     }
 
     #[test]
@@ -2293,34 +2326,34 @@ mod tests {
 
     #[test]
     fn test_project_total_matches_classes() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         assert_eq!(mock.total, mock.classes.len());
     }
 
     #[test]
     fn test_mock_crypto_package_has_three_classes() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let crypto = mock.in_package("com.example.crypto");
         assert_eq!(crypto.len(), 3);
     }
 
     #[test]
     fn test_mock_app_package_has_three_classes() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let app = mock.in_package("com.example.app");
         assert_eq!(app.len(), 3);
     }
 
     #[test]
     fn test_java_class_no_native_methods() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let hash = mock.find_class("HashUtil").unwrap();
         assert!(hash.native_methods().is_empty());
     }
 
     #[test]
     fn test_java_class_all_static_in_hash_util() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         let hash = mock.find_class("HashUtil").unwrap();
         let statics = hash.static_methods();
         assert_eq!(statics.len(), 2);
@@ -2328,7 +2361,7 @@ mod tests {
 
     #[test]
     fn test_project_failed_zero() {
-        let mock = DecompiledProject::mock();
+        let mock = DecompiledProject::synthetic_fixture();
         assert_eq!(mock.failed, 0);
     }
 
