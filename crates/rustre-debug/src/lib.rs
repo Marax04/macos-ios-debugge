@@ -997,6 +997,23 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
+/// Read a little-endian `u64` out of a buffer that may be SHORTER than eight bytes.
+///
+/// `read_memory` is asked for eight bytes and is allowed to return fewer — a
+/// short read at a page boundary, a partially mapped stack, a target that died
+/// mid-call. Three backends then did `bytes[..8].try_into()`, whose `try_into`
+/// arm carries the message "step_out: short read" and can never run: slicing
+/// `[..8]` on a shorter `Vec` panics first. The guard the author wrote for
+/// exactly this case was unreachable, and the failure it meant to report as an
+/// error took the process down instead — in a debugger, that is the session,
+/// the MCP server, and every other target it was holding.
+///
+/// The iOS backend already did it correctly, two files away, with `.get(..8)`.
+#[must_use]
+pub fn u64_from_le_prefix(bytes: &[u8]) -> Option<u64> {
+    bytes.get(..8).and_then(|b| <[u8; 8]>::try_from(b).ok()).map(u64::from_le_bytes)
+}
+
 /// What happened when a backend tried to step off one of its own planted traps.
 ///
 /// Three states, because `Option<DebugEvent>` gave the same shape to seven
@@ -11030,6 +11047,51 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// A short read must be an ERROR, not a panic.
+    ///
+    /// `step_out` reads eight bytes for the saved return address and is allowed
+    /// to get fewer. All three desktop backends wrote
+    /// `return_addr_bytes[..8].try_into().map_err(|_| … "step_out: short read")`
+    /// — a guard whose message names this exact case and which can never run,
+    /// because the slice panics before `try_into` is reached.
+    ///
+    /// A panic here is not a failed step. It unwinds out of the debugger, and
+    /// in the MCP server that is every session it was holding, not just this
+    /// one. The iOS backend already had the correct form two files away.
+    #[test]
+    fn a_short_read_of_a_return_address_is_an_error_not_a_panic() {
+        use crate::u64_from_le_prefix as le;
+
+        assert_eq!(le(&[1, 0, 0, 0, 0, 0, 0, 0]), Some(1));
+        assert_eq!(le(&0xDEAD_BEEF_CAFE_BABEu64.to_le_bytes()), Some(0xDEAD_BEEF_CAFE_BABE));
+
+        // Longer is fine: eight bytes were asked for, more is not a failure.
+        assert_eq!(le(&[2, 0, 0, 0, 0, 0, 0, 0, 99, 99]), Some(2));
+
+        // The cases that used to take the process down.
+        for short in [&[][..], &[1][..], &[1, 2, 3, 4][..], &[1, 2, 3, 4, 5, 6, 7][..]] {
+            assert_eq!(
+                le(short),
+                None,
+                "a {}-byte read must be reportable as a short read; the code that                  was supposed to report it could never run because the slice                  panicked first",
+                short.len()
+            );
+        }
+
+        // And no backend may go back to slicing it raw.
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            assert!(
+                !stripped.contains("return_addr_bytes[..8]"),
+                "{name}: slices the read result without checking its length, so a short                  read panics instead of reaching the error the next line spells out"
+            );
+        }
     }
 
     /// Stepping off a planted trap must not report a FAILURE as "no trap here".

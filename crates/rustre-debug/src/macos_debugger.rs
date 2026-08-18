@@ -3884,9 +3884,18 @@ impl crate::Debugger for MacosDebugger {
             "step_out: frame pointer {fp:#x} leaves no room for the caller's stack pointer"
         )))?;
         let return_addr_bytes = self.read_memory(Address(saved_ret_slot), 8).await?;
-        let return_addr = u64::from_le_bytes(
-            return_addr_bytes[..8].try_into().map_err(|_| DebugError::StepError("step_out: short read".into()))?,
-        );
+        // NOT `return_addr_bytes[..8]`. The `map_err` that used to follow it
+        // carried the message "step_out: short read" and could never run: the
+        // slice panics before `try_into` is reached, so the case the author had
+        // in mind took the whole process down instead of being reported. In a
+        // debugger that is every session it was holding.
+        let return_addr = crate::u64_from_le_prefix(&return_addr_bytes).ok_or_else(|| {
+            DebugError::StepError(format!(
+                "step_out: short read at {saved_ret_slot:#x} — asked for 8 bytes of the saved                  return address and got {}",
+                return_addr_bytes.len()
+            ))
+        })?;
+
         self.run_to_return(tid, Address(return_addr), caller_sp).await
     }
 
