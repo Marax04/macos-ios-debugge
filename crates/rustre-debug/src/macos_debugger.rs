@@ -1566,7 +1566,19 @@ impl Drop for MacosDebugger {
         let planted: Vec<(u64, Vec<u8>)> =
             self.breakpoints.lock().iter().map(|(a, b)| (*a, b.clone())).collect();
         for (addr, original) in planted {
-            let _ = self.send(Command::WriteMemory(addr, original));
+            // The VALUE has nowhere to go — `Drop` cannot fail — but the FACT
+            // does. A restore that does not land leaves a trap in the target's
+            // code, and that target will die on it later in a process this
+            // debugger has already let go of, with nothing anywhere connecting
+            // the two. Same resolution as iteration 568: a path that may not
+            // FAIL must still not stay quiet.
+            if let Err(e) = self.send(Command::WriteMemory(addr, original)) {
+                tracing::error!(
+                    address = format_args!("{addr:#x}"),
+                    error = %e,
+                    "detaching without restoring the original bytes: a trap is being left in                      the target's code and it will trap there with no debugger attached"
+                );
+            }
         }
         self.breakpoints.lock().clear();
         self.hit_counts.lock().clear();

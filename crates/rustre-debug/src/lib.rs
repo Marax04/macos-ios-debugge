@@ -10525,6 +10525,56 @@ mod tests_extra {
         );
     }
 
+    /// A trap left in the target on `Drop` must not be left in SILENCE.
+    ///
+    /// Every backend's `Drop` restores the original bytes before letting go,
+    /// which is right. Each does it like this:
+    ///
+    /// ```text
+    /// let _ = self.send(Command::WriteMemory(addr, original));
+    /// ```
+    ///
+    /// `Drop` cannot return an error, so discarding the `Result` is the only
+    /// thing to do with the VALUE. It is not the only thing to do with the
+    /// FACT. If that write fails the target keeps a trap in its code — `0xCC`
+    /// on x86, a `BRK` on AArch64 — and will die on it later, in a process the
+    /// debugger has already let go of, with nothing anywhere connecting the two.
+    ///
+    /// This is the shape 568 dealt with in the resume paths and the same
+    /// resolution applies: a path that may not FAIL must still not stay quiet.
+    /// There the fact was recorded in a field; here the object is being
+    /// destroyed, so the only place left is the log — and the crate already
+    /// depends on `tracing`.
+    ///
+    /// Not hypothetical: the write goes through a channel to the ptrace thread,
+    /// which during teardown may already be gone, and a target whose memory has
+    /// been unmapped refuses it outright.
+    #[test]
+    fn a_drop_that_cannot_restore_a_trap_says_so() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            // Searched over the WHOLE file rather than an extracted `impl Drop`
+            // body. The first spelling extracted an `impl Drop for` body with a
+            // newline-brace-newline end marker and the helper REFUSED it — "no
+            // end marker matched
+            // and 352536 characters remain" — because the working copy is CRLF
+            // and the delimiter was not. The helper was right to refuse: a body
+            // that silently ran to end-of-file would have contained every
+            // needle this guard looks for and passed no matter what.
+            //
+            // The needle is specific enough not to need the scope: restoring an
+            // original byte through the command channel happens in exactly one
+            // place per backend.
+            assert!(
+                !src.contains("let _ = self.send(Command::WriteMemory"),
+                "{name}: `Drop` discards the outcome of restoring an implanted trap. The value                  has nowhere to go — `Drop` cannot fail — but the FACT does: a target left                  with a trap in its code will die on it later with nothing to connect the two"
+            );
+        }
+    }
+
     /// A capability gated by architecture must be DECLARED that way.
     ///
     /// `windows_debugger.rs` refuses hardware watchpoints off x86:
