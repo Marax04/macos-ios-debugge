@@ -347,6 +347,7 @@ impl LinuxDebugger {
                 }
                 crate::DebugRegisterState::Armed(_) => {}
             }
+
             regs.set("dr0", 0);
             regs.set("dr1", 0);
             regs.set("dr2", 0);
@@ -831,23 +832,27 @@ impl LinuxDebugger {
     /// handed that event back as the answer for B — the caller was told its
     /// thread had advanced when a different one had.
     async fn step_off_planted_breakpoint(&self, who: Option<ThreadId>) -> crate::StepOff {
-        let Some(tid) = who.or(*self.current_tid.lock()) else { return None };
-        let Ok(regs) = self.get_registers(tid).await else { return None };
+        let Some(tid) = who.or(*self.current_tid.lock()) else { return crate::StepOff::NotOnATrap };
+        let Ok(regs) = self.get_registers(tid).await else { return crate::StepOff::NotOnATrap };
         let pc = regs.pc;
         let original = {
             let planted = self.breakpoints.lock();
             if self.disabled.lock().contains(&pc) {
-                return None;
+                return crate::StepOff::NotOnATrap;
             }
             match planted.get(&pc) {
                 Some(b) => b.clone(),
-                None => return None,
+                None => return crate::StepOff::NotOnATrap,
             }
         };
         if self.write_memory_raw(Address(pc), &original).await.is_err() {
             // The trap is still in place and the thread is still on it. Saying
             // "no trap here" would send the caller to step straight into it.
-            return crate::StepOff::Failed(DebugError::MemoryAccess(Address(pc)));
+            return crate::StepOff::Failed(DebugError::MemoryError(
+                pc,
+                "could not restore the original byte under a planted breakpoint; the trap                  is still in place and the thread is still standing on it"
+                    .to_string(),
+            ));
         }
         let stepped = self.single_step_raw(tid).await;
         if self.write_memory_raw(Address(pc), crate::host_trap_bytes()).await.is_err() {
