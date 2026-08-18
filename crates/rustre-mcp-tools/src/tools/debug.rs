@@ -1977,6 +1977,13 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "registers_verified": verified,
                         "all_verified": verified == requested.len(),
                         "details": details,
+                        // These typed fields used to be stale on any session
+                        // whose TARGET architecture differed from this build's:
+                        // `RegisterSet::set` decided which name was the program
+                        // counter by asking `native_arch()`, the host. Driving
+                        // an arm64 iOS device from an x86_64 host, it looked for
+                        // `rip` while the target published `pc`, so these two
+                        // numbers reported the value from BEFORE the write.
                         "pc": after.pc,
                         "sp": after.sp,
                         "live": true,
@@ -4959,7 +4966,6 @@ mod tests {
     ///
     /// Only `Unsupported` may be silent, because that is the case the note
     /// actually argues for. Anything else has to appear in the reply.
-    #[test]
     /// A 32-bit register name must yield the 32-bit VALUE, not the whole 64.
     ///
     /// `LiveRegs` accepted a narrow name by prepending `r` to it. Measured, the
@@ -5005,6 +5011,7 @@ mod tests {
         assert_eq!(regs.read_register("ecx"), None);
     }
 
+    #[test]
     fn detach_reports_whether_the_watchpoint_registers_were_actually_cleared() {
         let src = include_str!("debug.rs");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(src);

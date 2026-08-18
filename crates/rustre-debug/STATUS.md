@@ -2,7 +2,7 @@
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
 > non un registro. Precedente riscrittura: 608. Questa: **614** — con una
-> iterazione di ritardo, annotata invece che nascosta.
+> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **615**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -13,9 +13,9 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2053 / 1** |
+| Windows x86_64 | suite locale, worktree isolato | **2054 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
-| Linux x86_64 | WSL, `--test-threads=1` | **2036 / 1** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2037 / 1** |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; i fix 607/608/609 non ancora rimisurati |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
@@ -55,6 +55,20 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
   `read_register_by_name` / `write_register_by_name` conoscono la larghezza di
   ogni nome — viste `ah` a bit 8..16, suffissi `r9d`/`r9w`/`r9b`, `w0..w30`
   ARM64, `eip` — e la scrittura stretta **preserva** il resto del registro.
+- **La vista tipizzata `pc`/`sp`/`fp` segue il TARGET, non il build** (615).
+  `RegisterSet::set` teneva in passo `self.pc`/`sp`/`fp` con la mappa — e
+  decideva quale nome fosse il program counter chiedendolo a `native_arch()`,
+  la cui doc dice essere «l'architettura su cui questo build gira»: l'**host**,
+  scelto a compile time. Ogni sessione remota ha un target che è un'altra
+  macchina, e una sessione iOS ne ha di routine una di un'altra **architettura**:
+  su host x86_64 la funzione cercava `rip` mentre il target pubblica `pc`,
+  quindi il campo tipizzato non si aggiornava mai — ed è esattamente il difetto
+  che il commento lì sopra dichiarava di aver chiuso, chiuso solo nel caso in cui
+  host e target coincidono. `backtrace`, `step_over` e `step_out` leggono quei
+  campi «invece della mappa», quindi leggevano un numero stantio e plausibile.
+  Ora `is_pc_name`/`is_sp_name`/`is_fp_name_any` iterano su `ALL_STEP_ARCHES`:
+  le grafie non collidono fra architetture, quindi non serve sapere quella del
+  target — serve smettere di chiedere quella dell'host.
 - **Una scrittura a `fp`/`lr`/`x29`/`x30` non viene più scartata** (612). I tre
   backend pubblicavano entrambe le grafie e ne preferivano una diversa ciascuno,
   quindi il normale leggi-modifica-riscrivi perdeva l'edit e riportava successo.
@@ -130,5 +144,12 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
 19. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è disfarlo.
 20. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.
-21. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
+21. **`native_arch()` risponde all'HOST** (615): usarla per interpretare i nomi
+    di registro di un target è corretto solo finché host e target coincidono —
+    cioè mai, nel debug remoto. Dove una decisione dipende dall'architettura,
+    chiedersi *di chi* è l'architettura è la domanda che rivela il difetto.
+22. **Un commento che dichiara di aver chiuso un difetto va riletto sul caso
+    generale** (615): quello sopra `RegisterSet::set` descriveva bene il difetto
+    e il fix lo chiudeva solo per host == target.
+23. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
     dove la doc che avevo scritto tre righe sopra prometteva `false`.

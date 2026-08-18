@@ -136,6 +136,42 @@ pub const fn fp_key(arch: StepArch) -> &'static str {
     }
 }
 
+/// Every architecture this crate can describe registers for.
+///
+/// Written as an array rather than left implicit so that the
+/// architecture-independent predicates below cannot silently forget a variant
+/// when one is added: adding a `StepArch` without extending this array is a
+/// non-exhaustive-match error at the one place that builds it.
+pub const ALL_STEP_ARCHES: [StepArch; 3] = [StepArch::X86_64, StepArch::X86, StepArch::Aarch64];
+
+/// Does `name` denote the program counter on ANY architecture?
+///
+/// The target's architecture is not always the host's. A debugger driving an
+/// arm64 iOS device from an x86_64 host receives a register map whose program
+/// counter is spelled `pc`, and asking `pc_key(native_arch())` there answers
+/// `rip` — the host's spelling, about a machine that is not the host. These
+/// names do not collide across architectures, so recognising all of them is
+/// both sufficient and safer than guessing which one applies.
+#[must_use]
+pub fn is_pc_name(name: &str) -> bool {
+    ALL_STEP_ARCHES.iter().any(|a| name == pc_key(*a))
+}
+
+/// Does `name` denote the stack pointer on ANY architecture? See [`is_pc_name`].
+#[must_use]
+pub fn is_sp_name(name: &str) -> bool {
+    ALL_STEP_ARCHES.iter().any(|a| name == sp_key(*a))
+}
+
+/// Does `name` denote the frame pointer on ANY architecture? See [`is_pc_name`].
+///
+/// Includes the AArch64 role spelling `fp` alongside the architectural `x29`,
+/// because both are in live use — the same reason [`is_fp_name`] does.
+#[must_use]
+pub fn is_fp_name_any(name: &str) -> bool {
+    ALL_STEP_ARCHES.iter().any(|a| is_fp_name(*a, name))
+}
+
 /// Does `name` denote the frame pointer on `arch`?
 ///
 /// The frame pointer is the one register this crate names TWO ways, and the two

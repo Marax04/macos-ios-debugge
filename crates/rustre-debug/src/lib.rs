@@ -1720,12 +1720,23 @@ impl RegisterSet {
         // `rip` through this method left `pc` holding the value the thread had
         // BEFORE the write, so code that set a register and then consulted the
         // typed field read a stale number that looked perfectly plausible.
-        let arch = crate::instr_step::native_arch();
-        if name == crate::instr_step::pc_key(arch) {
+        // Which name is the program counter must NOT be decided by
+        // `native_arch()`. Its own doc says it is "the architecture this build
+        // actually runs on" — the HOST, chosen at compile time. Every remote
+        // session has a target that is a different machine, and an iOS session
+        // routinely has one that is a different architecture: on an x86_64 host
+        // `pc_key(native_arch())` is `rip` while the arm64 target publishes
+        // `pc`, so the typed field silently never updated and `backtrace`,
+        // `step_over` and `step_out` read a stale, plausible-looking number.
+        //
+        // The spellings do not collide across architectures, so the sync does
+        // not need to know the target's architecture — only to stop asking
+        // about the host's.
+        if crate::instr_step::is_pc_name(name) {
             self.pc = value;
-        } else if name == crate::instr_step::sp_key(arch) {
+        } else if crate::instr_step::is_sp_name(name) {
             self.sp = value;
-        } else if crate::instr_step::is_fp_name(arch, name) {
+        } else if crate::instr_step::is_fp_name_any(name) {
             // Both AArch64 spellings, because both are in live use — see
             // `is_fp_name`. Matching only `fp_key` let `set("fp", …)` update
             // the map while leaving the typed `fp` field stale.
@@ -10804,6 +10815,52 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// The typed pc/sp/fp view must follow the TARGET, not the host build.
+    ///
+    /// `RegisterSet::set` keeps `self.pc`/`sp`/`fp` in step with the map, and
+    /// the comment above it says why: `backtrace`, `step_over` and `step_out`
+    /// read those typed fields "instead of the named-register map", so a stale
+    /// one is a plausible-looking wrong number rather than an error.
+    ///
+    /// But it decided WHICH name is the program counter by calling
+    /// `native_arch()`, whose own doc says it is "the architecture this build
+    /// actually runs on" — chosen at compile time. That is the host. For every
+    /// remote-debugging session the host and the target are different machines,
+    /// and for iOS they are routinely different ARCHITECTURES: an x86_64
+    /// Windows or Intel-Mac host driving an arm64 device. There
+    /// `pc_key(native_arch())` is `"rip"`, the target publishes `"pc"`, and the
+    /// typed field silently never updates — the exact defect the comment claims
+    /// to have fixed, fixed only in the case where host and target agree.
+    ///
+    /// The names do not collide across architectures, so the sync does not need
+    /// to know the target's architecture at all; it needs to stop asking about
+    /// the host's.
+    #[test]
+    fn the_typed_register_view_follows_the_target_not_the_host_build() {
+        // Every architecture's spelling, on whatever host runs this test.
+        for pc in ["rip", "pc", "eip"] {
+            let mut r = RegisterSet::default();
+            r.set(pc, 0xABCD_1234);
+            assert_eq!(r.pc, 0xABCD_1234, "set({pc}) must update the typed pc");
+        }
+        for sp in ["rsp", "sp", "esp"] {
+            let mut r = RegisterSet::default();
+            r.set(sp, 0x7FFF_0000);
+            assert_eq!(r.sp, 0x7FFF_0000, "set({sp}) must update the typed sp");
+        }
+        for fp in ["rbp", "x29", "fp", "ebp"] {
+            let mut r = RegisterSet::default();
+            r.set(fp, 0x7FFF_8000);
+            assert_eq!(r.fp, Some(0x7FFF_8000), "set({fp}) must update the typed fp");
+        }
+
+        // A register that is none of the three must leave all three alone,
+        // rather than the sync grabbing anything that looks vaguely related.
+        let mut r = RegisterSet::default();
+        r.set("rax", 0xDEAD);
+        assert_eq!((r.pc, r.sp, r.fp), (0, 0, None));
     }
 
     /// Writing a narrow register name must change only that narrow FIELD.
