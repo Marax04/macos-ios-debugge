@@ -674,7 +674,30 @@ pub(crate) fn x86_encode_watchpoint_dr7(
 /// `None` when all four are in use — the caller must report that rather than
 /// silently overwriting somebody else's watchpoint.
 pub(crate) fn x86_free_watchpoint_slot(dr7: u64) -> Option<u8> {
-    (0u8..4).find(|n| dr7 & (1u64 << (2 * u32::from(*n))) == 0)
+    // Four is the x86 answer and belongs to the architecture, so it is spelled
+    // here once for the backends that genuinely have four.
+    free_watchpoint_slot(dr7, 4)
+}
+
+/// The same search, over the number of slots the hardware ACTUALLY has.
+///
+/// x86 has four debug registers and that is part of the architecture. AArch64
+/// does not: the Linux kernel reports the real count in
+/// `user_hwdebug_state::dbg_info`, real CPUs publish between two and sixteen,
+/// and Windows' own header declares `ARM64_MAX_WATCHPOINTS = 2`.
+///
+/// Searching a fixed `0..4` on a two-slot machine hands the engine slot 2, and
+/// the refusal then comes from the kernel when the write is attempted — correct
+/// (589) but too late to be useful: the caller is told no AFTER the engine
+/// committed, instead of being given the slot that exists or a full-house
+/// answer it can act on.
+///
+/// Taking the count as an argument makes the assumption VISIBLE at every call
+/// site rather than hidden in a literal: a backend with four says four, and a
+/// backend that asked the kernel passes what it was told.
+#[must_use]
+pub(crate) fn free_watchpoint_slot(dr7: u64, slots: u8) -> Option<u8> {
+    (0u8..slots).find(|n| dr7 & (1u64 << (2 * u32::from(*n))) == 0)
 }
 
 /// Encode an AArch64 watchpoint control register (`DBGWCR<n>_EL1`).
@@ -10609,6 +10632,47 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// The free-slot search must not hand out a slot the CPU does not have.
+    ///
+    /// `x86_free_watchpoint_slot` searches `0..4` unconditionally, because x86
+    /// has exactly four debug registers and that number is part of the
+    /// architecture. It is not part of AArch64: the kernel reports the real
+    /// count in `user_hwdebug_state::dbg_info`, real CPUs publish between two
+    /// and sixteen, and Windows' own header says `ARM64_MAX_WATCHPOINTS = 2`.
+    ///
+    /// So on a two-slot machine the engine allocates slot 2, and only when the
+    /// write reaches the kernel does `ensure_slot_exists` (589) refuse. The
+    /// refusal is correct and arrives too late to be useful: the caller is told
+    /// no AFTER the engine committed, rather than being given the slot that
+    /// exists.
+    ///
+    /// Taking the count as an argument is what makes the assumption VISIBLE at
+    /// every call site instead of hidden in a literal — an x86 backend passes
+    /// four and says so, and a backend that asked the kernel passes what it was
+    /// told.
+    #[test]
+    fn the_free_slot_search_respects_how_many_slots_exist() {
+        use crate::free_watchpoint_slot as pick;
+
+        // Nothing armed: the first slot is free on any machine.
+        assert_eq!(pick(0, 4), Some(0));
+        assert_eq!(pick(0, 2), Some(0));
+
+        // Slots 0 and 1 armed. Four-slot hardware has more; two-slot hardware
+        // is full, and saying so is the whole point.
+        let two_armed = 1u64 | (1u64 << 2);
+        assert_eq!(pick(two_armed, 4), Some(2));
+        assert_eq!(
+            pick(two_armed, 2),
+            None,
+            "a two-slot CPU with both slots armed is FULL; handing out slot 2 makes the engine              commit to a register that does not exist, and the refusal then arrives from the              kernel after the fact"
+        );
+
+        // A count of zero is a CPU with no watchpoint registers at all, which
+        // must answer None rather than slot 0.
+        assert_eq!(pick(0, 0), None);
     }
 
     /// A DISABLED slot keeps its control bits, exactly as it keeps its address.

@@ -2929,6 +2929,14 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
         regs.set(PAC_INSN_MASK_KEY, mask);
     }
     let Ok(watch) = read_arm_hw_regset(pid, NT_ARM_HW_WATCH) else { return };
+    // How many slots the hardware really has, published for the allocator.
+    //
+    // `x86_free_watchpoint_slot` searches 0..4 because four is an x86 fact;
+    // AArch64 publishes its own number and it can be two. Handing the engine a
+    // slot that does not exist makes it commit, and the refusal then arrives
+    // from the kernel (589) rather than from the allocator that could have
+    // answered honestly.
+    regs.set(WATCHPOINT_SLOTS_KEY, watch.slot_count() as u64);
     // The breakpoint file is read separately and may legitimately be absent: a
     // kernel that refuses NT_ARM_HW_BREAK still has usable watchpoints, and
     // failing both because one is missing would throw away working
@@ -2990,6 +2998,14 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
     regs.set("dr6", 0);
     regs.set("dr7", dr7);
 }
+
+/// Register-map key carrying how many watchpoint slots the CPU has.
+///
+/// Not a register: a fact about the hardware that only the tracer thread can
+/// ask for, carried with the registers because that is the message which
+/// already crosses from that thread.
+#[cfg(target_arch = "aarch64")]
+const WATCHPOINT_SLOTS_KEY: &str = "__watchpoint_slots";
 
 /// Register-map key carrying the kernel's PAC instruction mask.
 ///
@@ -3960,7 +3976,33 @@ impl crate::Debugger for LinuxDebugger {
         });
         let slot = match existing {
             Some(slot) => slot,
-            None => crate::x86_free_watchpoint_slot(combined_dr7).ok_or_else(|| {
+            // The count comes from the HARDWARE where the hardware can say.
+            //
+            // x86 has four debug registers as a fact of the architecture.
+            // AArch64 does not: the kernel reports the real number in
+            // `dbg_info`, and a two-slot CPU handed slot 2 would have the engine
+            // commit to a register that does not exist, with the refusal
+            // arriving later from the kernel (589) instead of here where the
+            // caller can act on it.
+            // The count travels WITH THE REGISTERS, like the PAC mask.
+            //
+            // Asking the kernel here directly would repeat 573 and 591 exactly:
+            // this is an async body, ptrace is only valid from the tracer
+            // thread, and from anywhere else it answers ESRCH — a helper that
+            // looks right and silently returns the fallback forever. The count
+            // is published by `merge_debug_state`, which runs ON that thread.
+            //
+            // Absent — every non-AArch64 host — means four, the architectural
+            // answer, so this changes nothing where nothing needed changing.
+            None => crate::free_watchpoint_slot(
+                combined_dr7,
+                per_thread
+                    .first()
+                    .and_then(|(_, r): &(ThreadId, RegisterSet)| r.get(WATCHPOINT_SLOTS_KEY))
+                    .and_then(|v| u8::try_from(v).ok())
+                    .unwrap_or(4),
+            )
+            .ok_or_else(|| {
                 DebugError::Unsupported(
                     "all four x86 debug-register slots (DR0-DR3) are in use".into(),
                 )
