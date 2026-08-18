@@ -102,6 +102,24 @@ Misurato mentre lo scrivevo: `cargo check --target aarch64-pc-windows-msvc` non
 gira sull'host di sviluppo — `libsqlite3-sys` vuole un cross-compiler C, lo
 stesso muro di `aarch64-unknown-linux-gnu`. Non c'è surrogato locale.
 
+### 598 — la stessa dichiarazione falsa, sull'altro backend
+
+Trovata misurando le asimmetrie fra i tre backend, non leggendo a caso: Windows
+è l'unico che ancora rifiuta i watchpoint hardware fuori da x86 — Linux li
+traduce via `NT_ARM_HW_WATCH` (570), macOS via `ARM_DEBUG_STATE64`. Ma
+`backend_capabilities()` dichiarava `hardware_watchpoints: true` **senza gate**,
+quindi su Windows-on-ARM l'API promette ciò che la chiamata dopo rifiuta.
+
+Stessa classe del `fault_address` macOS corretto al 595, e **le ho introdotte
+entrambe nel 577**. Ora la dichiarazione usa lo stesso `cfg!` del backend, così
+le due non possono divergere per costruzione invece che per memoria.
+
+Il guard che le tiene allineate **passa a vuoto su questo host** (qui x86 e
+dichiarazione concordano): il difetto vive dove non posso compilare. Perturbato
+per dimostrare che non è inerte — dichiarando `false` su x86 diventa rosso col
+messaggio giusto. La riga `windows-11-arm` del 597 è ciò che lo verificherà dove
+conta.
+
 ## 4-ter. Il primo run ARM che risponde davvero (593-594)
 
 `193c7c0` ha chiuso l'`ENOSPC`: **1993/6 → 1997/5**, e nessun «No space left on

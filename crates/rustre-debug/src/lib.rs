@@ -1170,10 +1170,32 @@ pub fn backend_capabilities() -> &'static [BackendCapability] {
                 supported: true,
                 because: "",
             },
+            // GATED, because the backend gates it. `set_watchpoint_sized`
+            // refuses off x86 — "this backend programs the x86 debug
+            // registers" — while this list declared `true` unconditionally, so
+            // on Windows-on-ARM the API promised what the next call refuses.
+            //
+            // Same defect as the macOS `fault_address` corrected in 595, and
+            // both were introduced together in 577. Declared with `cfg!`, which
+            // reads the architecture this binary was compiled for exactly as
+            // the backend does, so the two cannot drift by construction rather
+            // than by anyone remembering to keep them in step.
+            //
+            // Windows-on-ARM CAN do this — its ARM64 CONTEXT carries
+            // Bcr/Bvr/Wcr/Wvr, and Linux (570) and macOS both translate to
+            // their equivalents. It is not implemented yet, and until it is,
+            // saying so is the honest answer.
+            #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
             BackendCapability {
                 name: "hardware_watchpoints",
                 supported: true,
                 because: "",
+            },
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
+            BackendCapability {
+                name: "hardware_watchpoints",
+                supported: false,
+                because: "this backend programs the x86 debug registers, which this                           architecture does not have. Windows-on-ARM exposes Bcr/Bvr/Wcr/Wvr                           in its ARM64 CONTEXT and the translation is not written yet; poll                           or use a software breakpoint instead of waiting on a watchpoint                           that cannot be armed.",
             },
             BackendCapability {
                 name: "fault_address",
@@ -10501,6 +10523,61 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// A capability gated by architecture must be DECLARED that way.
+    ///
+    /// `windows_debugger.rs` refuses hardware watchpoints off x86:
+    ///
+    /// ```text
+    /// if !cfg!(any(target_arch = "x86_64", target_arch = "x86")) {
+    ///     return Err(Unsupported("hardware watchpoints on this backend
+    ///                            program the x86 debug registers, ..."))
+    /// }
+    /// ```
+    ///
+    /// and `backend_capabilities()` declares `hardware_watchpoints: true` for
+    /// Windows with no gate at all. On Windows-on-ARM the API therefore
+    /// promises a capability the backend refuses in the next breath.
+    ///
+    /// Same class as the macOS `fault_address` corrected in 595, and I put both
+    /// there in 577: a capability list is only worth having if a caller can act
+    /// on it, and one that disagrees with the backend on a whole architecture
+    /// is worse than none. `supported: false` carries a reason a caller can
+    /// read; `supported: true` where the answer is `Unsupported` sends them to
+    /// a call that cannot work.
+    ///
+    /// The declaration is per-target — `cfg!` reads the architecture this
+    /// binary is compiled for, exactly as the backend does — so the two cannot
+    /// drift by construction rather than by remembering.
+    #[test]
+    fn a_capability_is_declared_with_the_same_gate_the_backend_enforces() {
+        let caps = crate::backend_capabilities();
+        let hw = caps
+            .iter()
+            .find(|c| c.name == "hardware_watchpoints")
+            .expect("every backend publishes this capability");
+
+        // What the backend will ACTUALLY do on this host, spelled from the same
+        // condition `set_watchpoint_sized` uses.
+        #[cfg(target_os = "windows")]
+        let backend_can = cfg!(any(target_arch = "x86_64", target_arch = "x86"));
+        // Linux translates through NT_ARM_HW_WATCH (570) and macOS through
+        // ARM_DEBUG_STATE64, so both answer on either architecture.
+        #[cfg(not(target_os = "windows"))]
+        let backend_can = true;
+
+        assert_eq!(
+            hw.supported, backend_can,
+            "the capability list says hardware_watchpoints = {}, and this backend will actually              answer {backend_can} on this architecture. A caller cannot act on a list that              disagrees with the code it describes",
+            hw.supported
+        );
+        if !hw.supported {
+            assert!(
+                !hw.because.is_empty(),
+                "an unsupported capability must carry the reason, or the caller learns only                  that something is missing and not what to do instead"
+            );
+        }
     }
 
     /// macOS can report the faulting address, and said it could not.
