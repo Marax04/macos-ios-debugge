@@ -1582,116 +1582,23 @@ pub fn backend_capabilities() -> &'static [BackendCapability] {
 }
 
 pub fn sub_register_of(name: &str) -> Option<(&'static str, u32, u64)> {
-    const M8: u64 = 0xFF;
-    const M16: u64 = 0xFFFF;
-    const M32: u64 = 0xFFFF_FFFF;
-    // x86-64: the four legacy registers carry a high-byte alias, the rest do
-    // not (there is no `sih`).
-    let legacy = [
-        ("a", "rax"),
-        ("b", "rbx"),
-        ("c", "rcx"),
-        ("d", "rdx"),
-    ];
-    for (letter, parent) in legacy {
-        if name == format!("e{letter}x") {
-            return Some((parent, 0, M32));
-        }
-        if name == format!("{letter}x") {
-            return Some((parent, 0, M16));
-        }
-        if name == format!("{letter}l") {
-            return Some((parent, 0, M8));
-        }
-        if name == format!("{letter}h") {
-            return Some((parent, 8, M8));
-        }
-    }
-    for (short, parent) in [
-        ("esi", "rsi"),
-        ("edi", "rdi"),
-        ("ebp", "rbp"),
-        ("esp", "rsp"),
-    ] {
-        if name == short {
-            return Some((parent, 0, M32));
-        }
-    }
-    for (short, parent) in [("si", "rsi"), ("di", "rdi"), ("bp", "rbp"), ("sp", "rsp")] {
-        // `sp` is a REAL register name on AArch64, so it must never be
-        // rewritten into `rsp` there; the exact-match branch in
-        // `get_narrowed` already served it, and this path is only reached
-        // when the map has no `sp` of its own.
-        if name == short {
-            return Some((parent, 0, M16));
-        }
-    }
-    // r8..r15 with d/w/b suffixes.
-    for n in 8..=15u32 {
-        let parent: &'static str = match n {
-            8 => "r8",
-            9 => "r9",
-            10 => "r10",
-            11 => "r11",
-            12 => "r12",
-            13 => "r13",
-            14 => "r14",
-            _ => "r15",
-        };
-        if name == format!("{parent}d") {
-            return Some((parent, 0, M32));
-        }
-        if name == format!("{parent}w") {
-            return Some((parent, 0, M16));
-        }
-        if name == format!("{parent}b") {
-            return Some((parent, 0, M8));
-        }
-    }
-    // AArch64: `w<n>` is the low 32 bits of `x<n>`.
-    if let Some(rest) = name.strip_prefix('w')
-        && let Ok(n) = rest.parse::<u32>()
-        && n <= 30
-    {
-        return Some((
-            match n {
-                0 => "x0",
-                1 => "x1",
-                2 => "x2",
-                3 => "x3",
-                4 => "x4",
-                5 => "x5",
-                6 => "x6",
-                7 => "x7",
-                8 => "x8",
-                9 => "x9",
-                10 => "x10",
-                11 => "x11",
-                12 => "x12",
-                13 => "x13",
-                14 => "x14",
-                15 => "x15",
-                16 => "x16",
-                17 => "x17",
-                18 => "x18",
-                19 => "x19",
-                20 => "x20",
-                21 => "x21",
-                22 => "x22",
-                23 => "x23",
-                24 => "x24",
-                25 => "x25",
-                26 => "x26",
-                27 => "x27",
-                28 => "x28",
-                29 => "x29",
-                _ => "x30",
-            },
-            0,
-            M32,
-        ));
-    }
-    None
+    // ONE table, not two. This function and `register_view` were written
+    // independently, hours apart, by two actors, and both decoded the parent,
+    // shift and mask behind a narrow register name. A differential test asked
+    // them to agree and they disagreed on five names — `sil`, `dil`, `bpl`,
+    // `spl` and `eip` — which this one did not know and answered `None` for.
+    // All five are real x86-64 register names, so `get_narrowed` was reporting
+    // them absent while `read_register_by_name` resolved them.
+    //
+    // The body is delegated rather than deleted: this function is public and
+    // its callers keep working, but there is now a single place where the
+    // answer lives, and `the_two_sub_register_tables_agree_on_every_name`
+    // fails if a second one ever reappears.
+    //
+    // The field ORDER differs from `register_view` and is preserved, because
+    // that is this function's published signature.
+    let (parent, mask, shift) = register_view(name)?;
+    Some((parent, shift, mask))
 }
 
 impl RegisterSet {
@@ -1764,11 +1671,34 @@ impl RegisterSet {
     /// Precedence is coherent because [`Self::set`] now updates both: whichever
     /// of the two a caller wrote LAST is the one that survives.
     pub fn sync_map_from_special(&mut self) {
+        // Going map -> typed, the NAME tells you the architecture. Going the
+        // other way there is only a value, so a spelling has to be chosen — and
+        // choosing `pc_key(native_arch())` chose the HOST's. On an x86_64 host
+        // driving an arm64 device that wrote `rip` into a map the backend reads
+        // by `pc`, so the write was dropped and `set_registers` still answered
+        // `Ok(())`: precisely the failure the doc above says this method exists
+        // to prevent, left in place for every cross-architecture session.
+        //
+        // No guess is needed. The backend already published the TARGET's own
+        // vocabulary into this very map, so the spelling to use is the one
+        // already there. `native_arch()` survives only as the last resort for a
+        // map that is still empty, where there is genuinely nothing to read and
+        // the host's spelling is as good a default as any.
         let arch = crate::instr_step::native_arch();
-        self.regs.insert(crate::instr_step::pc_key(arch).to_owned(), self.pc);
-        self.regs.insert(crate::instr_step::sp_key(arch).to_owned(), self.sp);
+        let pick = |set: &Self, is: fn(&str) -> bool, fallback: &'static str| -> String {
+            set.regs
+                .keys()
+                .find(|k| is(k))
+                .cloned()
+                .unwrap_or_else(|| fallback.to_owned())
+        };
+        let pc_name = pick(self, crate::instr_step::is_pc_name, crate::instr_step::pc_key(arch));
+        let sp_name = pick(self, crate::instr_step::is_sp_name, crate::instr_step::sp_key(arch));
+        let fp_name = pick(self, crate::instr_step::is_fp_name_any, crate::instr_step::fp_key(arch));
+        self.regs.insert(pc_name, self.pc);
+        self.regs.insert(sp_name, self.sp);
         if let Some(fp) = self.fp {
-            self.regs.insert(crate::instr_step::fp_key(arch).to_owned(), fp);
+            self.regs.insert(fp_name, fp);
         }
     }
 
@@ -2409,6 +2339,62 @@ pub fn run_to_return_step(
     match regs {
         Some((pc, sp)) if pc == target && sp >= min_sp => RunToReturnStep::Done,
         _ => RunToReturnStep::KeepGoing,
+    }
+}
+
+/// Why a `run_to_return`/`step_out` loop CANNOT reach the return site from
+/// this stop — `None` when the loop may legitimately pump another event.
+///
+/// [`run_to_return_step`] answers only two questions: did the process exit,
+/// and is the thread back at the return site. Every OTHER stop reason fell
+/// into `KeepGoing`, so the loop resumed the thread again — and on a PRECISE
+/// exception (an AArch64 data abort leaves the pc ON the faulting
+/// instruction) resuming re-executes the same load, which faults again. The
+/// loop then spends its whole instruction budget on one instruction and ends
+/// in an error that LIES: "did not return within N instructions", about a
+/// SIGSEGV it had in hand from the first step and discarded. The budget
+/// counted INSTRUCTIONS when the thing that had gone wrong was an EVENT.
+///
+/// The same shape, without a crash: a user breakpoint hit during the step-out
+/// was silently stepped past instead of being reported, so a breakpoint the
+/// caller had set never appeared to fire.
+///
+/// `SIGTRAP` is deliberately NOT blocking: a stub that does not send
+/// `reason:trace` reports our own single-step trap as a plain signal, and
+/// treating that as a fault would stop every step loop on its first
+/// iteration. Nor are the informational stops (thread/library/process
+/// notifications) — those are events to pump past, not walls.
+#[must_use]
+pub fn run_to_return_blocked_by(reason: &StopReason) -> Option<String> {
+    /// The single-step trace trap, which is this loop's own mechanism.
+    const SIGTRAP: i32 = 5;
+    match reason {
+        StopReason::Signal { signum: SIGTRAP, .. } => None,
+        StopReason::Signal { signum, signame, address } => Some(format!(
+            "the target stopped with {signame} ({signum}){}, which no amount of              single-stepping can step past",
+            address.map_or(String::new(), |a| format!(" at {a}")),
+        )),
+        StopReason::Exception { code, address, description } => Some(format!(
+            "the target stopped with exception {code:#x} ({description}){}",
+            address.map_or(String::new(), |a| format!(" at {a}")),
+        )),
+        StopReason::AccessViolation { address, is_write } => Some(format!(
+            "the target stopped on an invalid {} at {address}",
+            if *is_write { "write" } else { "read" },
+        )),
+        StopReason::Breakpoint { address, .. } => {
+            Some(format!("the target hit a breakpoint at {address}"))
+        }
+        StopReason::Unknown { description } => {
+            Some(format!("the target stopped for an unrecognised reason: {description}"))
+        }
+        StopReason::SingleStep { .. }
+        | StopReason::ProcessExit { .. }
+        | StopReason::ThreadCreate { .. }
+        | StopReason::ThreadExit { .. }
+        | StopReason::LibraryLoad { .. }
+        | StopReason::LibraryUnload { .. }
+        | StopReason::ProcessCreate { .. } => None,
     }
 }
 
@@ -10814,6 +10800,115 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// Pushing the typed view back into the map must use the TARGET's spelling.
+    ///
+    /// The mirror of the defect iteration 615 fixed, and the doc on
+    /// `sync_map_from_special` describes exactly the failure it still had:
+    /// `r.pc = new_pc; set_registers(r)` "returns Ok, changes nothing".
+    ///
+    /// Going map -> typed, the NAME tells you the architecture. Going typed ->
+    /// map there is no name, only a value, so the function has to choose a
+    /// spelling — and it chose `pc_key(native_arch())`, the host's. On an
+    /// x86_64 host driving an arm64 device it wrote `rip` into a map the iOS
+    /// backend reads by `pc`, so the write was dropped and reported as success.
+    ///
+    /// It does not have to guess. The backend already published the target's
+    /// own vocabulary into this very map, so the spelling to use is the one
+    /// already there.
+    #[test]
+    fn pushing_the_typed_view_back_uses_the_spelling_the_target_published() {
+        // An arm64 target's map, as an iOS or Linux-ARM backend publishes it.
+        let mut r = RegisterSet::default();
+        r.set("pc", 0x1000);
+        r.set("sp", 0x2000);
+        r.set("x29", 0x3000);
+
+        r.pc = 0xAAAA;
+        r.sp = 0xBBBB;
+        r.fp = Some(0xCCCC);
+        r.sync_map_from_special();
+
+        assert_eq!(r.get("pc"), Some(0xAAAA), "the target spells its pc `pc`");
+        assert_eq!(r.get("sp"), Some(0xBBBB));
+        assert_eq!(r.get("x29"), Some(0xCCCC));
+        assert_eq!(
+            r.get("rip"),
+            None,
+            "writing the HOST's spelling into an arm64 target's map invents a              register the backend never applies, so the write is silently dropped"
+        );
+
+        // And an x86_64 target's map keeps working exactly as before.
+        let mut r = RegisterSet::default();
+        r.set("rip", 0x10);
+        r.set("rsp", 0x20);
+        r.set("rbp", 0x30);
+        r.pc = 0x1111;
+        r.sp = 0x2222;
+        r.fp = Some(0x3333);
+        r.sync_map_from_special();
+        assert_eq!(r.get("rip"), Some(0x1111));
+        assert_eq!(r.get("rsp"), Some(0x2222));
+        assert_eq!(r.get("rbp"), Some(0x3333));
+        assert_eq!(r.get("pc"), None);
+    }
+
+    /// The crate must not hold TWO tables of which register is a view of which.
+    ///
+    /// `register_view` (iteration 613) and `sub_register_of` were written
+    /// independently, by two actors, within hours of each other, and they
+    /// decode the same thing: the parent register, shift and mask behind a
+    /// narrow name. Two implementations of one decision is this crate's second
+    /// defect family, and the failure mode is not that one is wrong today — it
+    /// is that they drift, and then `get_narrowed` and `read_register_by_name`
+    /// answer differently about the same register with nothing to say which is
+    /// right.
+    ///
+    /// This test does not assume either is correct. It asks them to AGREE, over
+    /// every spelling either one claims to handle, so that a name added to one
+    /// table and not the other breaks the build instead of splitting the
+    /// crate's answer in two.
+    #[test]
+    fn the_two_sub_register_tables_agree_on_every_name() {
+        let mut names: Vec<String> = Vec::new();
+        for r in ["a", "b", "c", "d"] {
+            names.extend([format!("e{r}x"), format!("{r}x"), format!("{r}l"), format!("{r}h")]);
+        }
+        for r in ["si", "di", "bp", "sp"] {
+            names.extend([format!("e{r}"), r.to_string(), format!("{r}l")]);
+        }
+        for i in 8..=15 {
+            names.extend([format!("r{i}d"), format!("r{i}w"), format!("r{i}b"), format!("r{i}")]);
+        }
+        for i in 0..=31 {
+            names.push(format!("w{i}"));
+        }
+        names.extend(
+            ["eip", "rip", "pc", "rax", "x0", "x29", "fp", "not_a_register", "", "r16d", "w32"]
+                .iter()
+                .map(|s| (*s).to_string()),
+        );
+
+        let mut disagreements: Vec<String> = Vec::new();
+        for n in &names {
+            // Both return (parent, shift, mask), spelled in a different field
+            // order; normalise before comparing so the ORDER is not what is
+            // under test.
+            let mine = crate::register_view(n).map(|(p, mask, shift)| (p, shift, mask));
+            let theirs = crate::sub_register_of(n);
+            if mine != theirs {
+                disagreements.push(format!("{n}: register_view={mine:?} sub_register_of={theirs:?}"));
+            }
+        }
+        assert!(
+            disagreements.is_empty(),
+            "the two sub-register tables disagree on {} name(s); one of them is              giving the wrong parent, shift or mask and nothing in the crate says              which:
+  {}",
+            disagreements.len(),
+            disagreements.join("
+  ")
         );
     }
 

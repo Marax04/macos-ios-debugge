@@ -2,7 +2,7 @@
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
 > non un registro. Precedente riscrittura: 608. Questa: **614** — con una
-> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **615**.
+> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **616**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -13,9 +13,9 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2054 / 1** |
+| Windows x86_64 | suite locale, worktree isolato | **2056 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
-| Linux x86_64 | WSL, `--test-threads=1` | **2037 / 1** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2039 / 1** |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; i fix 607/608/609 non ancora rimisurati |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
@@ -55,6 +55,22 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
   `read_register_by_name` / `write_register_by_name` conoscono la larghezza di
   ogni nome — viste `ah` a bit 8..16, suffissi `r9d`/`r9w`/`r9b`, `w0..w30`
   ARM64, `eip` — e la scrittura stretta **preserva** il resto del registro.
+- **Una sola tabella dei sotto-registri, non due** (616). `register_view` (613)
+  e `sub_register_of` erano state scritte in parallelo da due attori a poche ore
+  di distanza e decodificavano la stessa cosa. Un test differenziale ha chiesto
+  loro di **concordare** invece di presumere quale fosse giusta: disaccordo su 5
+  nomi — `sil`, `dil`, `bpl`, `spl` ed `eip` — che la seconda non conosceva e
+  dichiarava assenti, tutti registri x86-64 veri. Ora `sub_register_of` delega
+  (resta pubblica, i suoi chiamanti non cambiano) e il test fallisce se una
+  seconda tabella ricompare.
+- **Anche la direzione tipizzato→mappa segue il target** (616).
+  `sync_map_from_special` sceglieva la grafia con `pc_key(native_arch())`: su
+  host x86_64 scriveva `rip` in una mappa che il backend arm64 legge per `pc`,
+  quindi `r.pc = new_pc; set_registers(r)` «returns Ok, changes nothing» — che è
+  testualmente ciò che la sua doc dichiara di prevenire. Non serviva indovinare:
+  il backend ha già pubblicato il vocabolario del TARGET in quella stessa mappa,
+  quindi la grafia da usare è quella che c'è già; `native_arch()` resta solo come
+  ultima risorsa per una mappa ancora vuota.
 - **La vista tipizzata `pc`/`sp`/`fp` segue il TARGET, non il build** (615).
   `RegisterSet::set` teneva in passo `self.pc`/`sp`/`fp` con la mappa — e
   decideva quale nome fosse il program counter chiedendolo a `native_arch()`,
@@ -151,5 +167,14 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
 22. **Un commento che dichiara di aver chiuso un difetto va riletto sul caso
     generale** (615): quello sopra `RegisterSet::set` descriveva bene il difetto
     e il fix lo chiudeva solo per host == target.
-23. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
+23. **Due implementazioni della stessa decisione: farle CONCORDARE, non
+    scegliere a occhio** (616). Il test differenziale non assume che nessuna
+    delle due sia giusta: chiede che diano la stessa risposta su ogni nome che
+    l'una o l'altra dichiara di gestire. Ha trovato 5 divergenze reali senza che
+    servisse alcuna verità esterna — lo stesso principio di `cross_build.py`
+    nell'altro crate: se il codice si contraddice, un lato è sbagliato.
+24. **Un difetto risolto in una direzione va cercato nell'altra** (615→616):
+    mappa→tipizzato e tipizzato→mappa avevano lo STESSO difetto, e la seconda
+    metà era rimasta in piedi con la doc che dichiarava di averla chiusa.
+25. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
     dove la doc che avevo scritto tre righe sopra prometteva `false`.
