@@ -907,6 +907,15 @@ pub fn register_view(name: &str) -> Option<(&'static str, u64, u32)> {
             return Some((full, 0xFF, 8));
         }
     }
+    // The instruction pointer has a 32-bit name too. `windows_debugger.rs` and
+    // its two siblings called `eip` "a typo for `rip`" while refusing it; it is
+    // no more a typo than `eax` is for `rax`. The 16-bit `ip` is deliberately
+    // NOT accepted: nothing in 64-bit debugging means it, and silently
+    // truncating a caller who wrote `ip` meaning the program counter to 16 bits
+    // would be a worse answer than refusing the name.
+    if name == "eip" {
+        return Some(("rip", 0xFFFF_FFFF, 0));
+    }
     // r8..r15 carry the width in a suffix instead of a distinct name.
     const R: &[(&str, &str)] = &[
         ("r8", "r8"), ("r9", "r9"), ("r10", "r10"), ("r11", "r11"),
@@ -956,6 +965,36 @@ pub fn read_register_by_name(name: &str, lookup: impl Fn(&str) -> Option<u64>) -
     }
     let (full, mask, shift) = register_view(name)?;
     lookup(full).map(|v| (v >> shift) & mask)
+}
+
+/// Write a register by any of the names it answers to, touching ONLY that field.
+///
+/// The counterpart of `read_register_by_name`, and the copy iteration 613 left
+/// behind. `RegisterSet::set` takes the name verbatim, so writing `eax`
+/// inserted an `"eax"` entry that no backend's `apply_register_set` ever reads:
+/// the write silently did nothing, and there was no mechanism that could have
+/// preserved the upper half of `rax` anyway, because nothing read it first.
+///
+/// Returns whether the name was MERGED into a wider register. `false` means the
+/// name was stored as given — either because it is already a full-width name,
+/// or because it is a narrow view of a register this set does not contain, in
+/// which case there is nothing to merge into and inventing a zeroed `rax` to
+/// merge with would be worse than storing the name and letting the caller's
+/// read-back report it.
+pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) -> bool {
+    let Some((full, mask, shift)) = register_view(name) else {
+        regs.set(name, value);
+        return false;
+    };
+    let Some(current) = regs.get(full) else {
+        regs.set(name, value);
+        return false;
+    };
+    // Truncate to the view before merging: a value wider than the field must
+    // not spill into the neighbouring bits it does not name.
+    let merged = (current & !(mask << shift)) | ((value & mask) << shift);
+    regs.set(full, merged);
+    true
 }
 
 /// Pick the value a caller MEANT when a register has two accepted spellings.
@@ -10765,6 +10804,65 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// Writing a narrow register name must change only that narrow FIELD.
+    ///
+    /// Iteration 613 made `eax` READABLE. This is the symmetric copy, which the
+    /// same iteration left behind: `debug.set_registers` passes the caller's
+    /// name to `RegisterSet::set` verbatim, so writing `eax` inserted a fresh
+    /// `"eax"` entry that no backend's `apply_register_set` ever looks at. The
+    /// write silently did nothing to `rax`, and the upper half of `rax` had no
+    /// way to be preserved because nothing was reading it.
+    ///
+    /// The asymmetry is the defect on its own: a caller can condition a
+    /// breakpoint on `eax` and cannot then assign to it.
+    #[test]
+    fn writing_a_narrow_register_name_changes_only_that_field() {
+        let mut regs = RegisterSet::default();
+        regs.set("rax", 0xFFFF_FFFF_0000_1234);
+        regs.set("r9", 0x1122_3344_5566_7788);
+        regs.set("x0", 0xDEAD_BEEF_CAFE_BABE);
+
+        // The low 32 bits change; the HIGH 32 must survive untouched. That is
+        // the whole point of a narrow write, and inserting an "eax" key cannot
+        // express it.
+        assert!(crate::write_register_by_name(&mut regs, "eax", 0x9999_8888));
+        assert_eq!(
+            regs.get("rax"),
+            Some(0xFFFF_FFFF_9999_8888),
+            "a write to eax must preserve the top half of rax"
+        );
+
+        // A high-byte view touches bits 8..16 and nothing else.
+        assert!(crate::write_register_by_name(&mut regs, "ah", 0x77));
+        assert_eq!(regs.get("rax"), Some(0xFFFF_FFFF_9999_7788));
+
+        // A value wider than the view is truncated to the view, not spilled
+        // into the neighbouring bits.
+        assert!(crate::write_register_by_name(&mut regs, "al", 0x1FF));
+        assert_eq!(regs.get("rax"), Some(0xFFFF_FFFF_9999_77FF));
+
+        // Suffix spellings and AArch64 halves go through the same path.
+        assert!(crate::write_register_by_name(&mut regs, "r9w", 0xBEEF));
+        assert_eq!(regs.get("r9"), Some(0x1122_3344_5566_BEEF));
+        assert!(crate::write_register_by_name(&mut regs, "w0", 0x0000_0001));
+        assert_eq!(regs.get("x0"), Some(0xDEAD_BEEF_0000_0001));
+
+        // A full-width name is written exactly as given — and reports `false`,
+        // because "merged into a wider register" is precisely what did NOT
+        // happen. My first draft of this test asserted `true` here and failed,
+        // contradicting the contract I had written three lines above it.
+        assert!(!crate::write_register_by_name(&mut regs, "rbx", 0x42));
+        assert_eq!(regs.get("rbx"), Some(0x42));
+
+        // A narrow name whose full register the backend does NOT publish cannot
+        // be merged into anything. Today's behaviour — insert it verbatim and
+        // let the verification read-back report it — is preserved rather than
+        // quietly changed, but it is reported as unmerged so the caller can be
+        // told the difference.
+        assert!(!crate::write_register_by_name(&mut regs, "ecx", 0x5));
+        assert_eq!(regs.get("ecx"), Some(0x5));
     }
 
     /// A narrow register name must read the narrow VALUE.

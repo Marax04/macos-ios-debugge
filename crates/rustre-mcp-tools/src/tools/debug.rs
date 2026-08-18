@@ -1931,8 +1931,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 if let Some(r) = with_live(&session_id, |sess| {
                     let mut base = block_on(sess.dbg.get_registers(sess.tid))
                         .map_err(|e| anyhow!("{e}"))?;
+                    // A narrow name must change only the field it names. Passing
+                    // it to `set` verbatim inserted an entry no backend reads,
+                    // so writing `eax` did nothing at all — the write half of
+                    // the defect iteration 613 fixed for reads.
+                    let mut merged_names: Vec<&str> = Vec::new();
                     for (name, value) in &requested {
-                        base.set(name, *value);
+                        if rustre_debug::write_register_by_name(&mut base, name, *value) {
+                            merged_names.push(name.as_str());
+                        }
                     }
                     block_on(sess.dbg.set_registers(sess.tid, base))
                         .map_err(|e| anyhow!("set_registers failed: {e}"))?;
@@ -1942,7 +1949,11 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     let details: Vec<Value> = requested
                         .iter()
                         .map(|(name, want)| {
-                            let got = after.get(name);
+                            // Read back through the same width the caller wrote:
+                            // `after` publishes `rax`, so asking it for `eax`
+                            // verbatim would report every narrow write as
+                            // unverified even when it landed perfectly.
+                            let got = rustre_debug::read_register_by_name(name, |n| after.get(n));
                             json!({
                                 "name": name,
                                 "requested": want,
@@ -1958,6 +1969,11 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     Ok(json!({
                         "session_id": session_id,
                         "registers_written": requested.len(),
+                        // Which names were narrow views merged into a wider
+                        // register, rather than written as given. A caller that
+                        // wrote `eax` and sees it here knows the upper half of
+                        // `rax` was preserved on purpose.
+                        "narrow_names_merged": merged_names,
                         "registers_verified": verified,
                         "all_verified": verified == requested.len(),
                         "details": details,

@@ -3678,22 +3678,28 @@ impl crate::Debugger for LinuxDebugger {
 
     async fn get_register(&self, tid: ThreadId, name: &str) -> Result<u64, DebugError> {
         let regs = self.get_registers(tid).await?;
-        regs.get(name).ok_or_else(|| DebugError::RegisterError(format!("unknown register {name}")))
+        // Narrow names are real registers, not typos: `eax` is the low half of
+        // `rax` and must answer with the low half. See `read_register_by_name`.
+        crate::read_register_by_name(name, |n| regs.get(n))
+            .ok_or_else(|| DebugError::RegisterError(format!("unknown register {name}")))
     }
 
     async fn set_register(&self, tid: ThreadId, name: &str, value: u64) -> Result<(), DebugError> {
         let mut regs = self.get_registers(tid).await?;
         // Refuse exactly what `get_register` refuses. `RegisterSet::set`
         // inserts ANY name into its map, and the backend then applies only the
-        // names it recognises when writing the thread context — so a typo
-        // (`eip` for `rip`, `x0` on x86) was accepted, silently dropped, and
+        // names it recognises when writing the thread context — so a name the
+        // backend does not apply (`x0` on x86) was accepted, silently dropped,
+        // and
         // reported as success. Reading that same name answers "unknown
         // register": the two halves of the API were giving opposite answers
         // about the same register, and the write was the one that lied.
-        if regs.get(name).is_none() {
+        if crate::read_register_by_name(name, |n| regs.get(n)).is_none() {
             return Err(DebugError::RegisterError(format!("unknown register {name}")));
         }
-        regs.set(name, value);
+        // A narrow name must change only the field it names, preserving the
+        // rest of the register it is a view of.
+        crate::write_register_by_name(&mut regs, name, value);
         self.set_registers(tid, regs).await
     }
 
