@@ -666,6 +666,15 @@ pub fn resolve_jump_table(
 /// would otherwise hide from CFG construction. Adjacency is required — a
 /// farther lea could be reordered with a redefinition of `R` in between —
 /// and the target must land on plausible code (never fabricate an edge).
+/// Riconosce `0xHEX` come `parse_hex_target` in `lib.rs`, per la sola SONDA
+/// #6550: serve a distinguere un `jmp` DIRETTO (gia' gestito) da uno indiretto.
+fn parse_hex_target_probe(s: &str) -> Option<u64> {
+    let s = s.trim();
+    s.strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .and_then(|h| u64::from_str_radix(h, 16).ok())
+}
+
 fn fold_lea_direct_jumps(instructions: &mut [Instruction], load: &RichLoadResult) {
     for i in 1..instructions.len() {
         let jm = instructions[i].mnemonic.trim().to_ascii_lowercase();
@@ -673,9 +682,59 @@ fn fold_lea_direct_jumps(instructions: &mut [Instruction], load: &RichLoadResult
             continue;
         }
         let jr = instructions[i].operands.trim();
+        // SONDA #6550: PRIMA del filtro `*%`, perche' i JUMPOUT di
+        // `sub_140001aa0` non compaiono affatto nella sonda #6540 — l'indirizzo
+        // piu' basso dei suoi 43 scatti e' 0x1400025F4, OLTRE la fine della
+        // funzione. Quindi li' il `jmp` NON ha forma `*%reg`: stampare l'ope-
+        // rando GREZZO di ogni `jmp` non diretto e' l'unico modo per vederla.
+        if std::env::var("RUSTRE_DBG_JMPFORM").is_ok() && parse_hex_target_probe(jr).is_none() {
+            eprintln!("JMPFORM 0x{:X} ops=[{jr}]", instructions[i].address.as_u64());
+        }
         let Some(jr) = jr.strip_prefix("*%") else {
             continue;
         };
+        // SONDA #6540 (effetto ZERO, gated): il fold richiede il `lea`
+        // IMMEDIATAMENTE prima (`instructions[i - 1]`). I JUMPOUT residui — 8
+        // su tutto path B, e MISURATO che i loro target sono INTERNI alla
+        // funzione secondo `.pdata` — potrebbero nascere proprio da una coppia
+        // NON adiacente. Qui si stampa, per ogni `jmp *%R` che il fold NON
+        // piega, a quale distanza indietro sta il `lea` che carica lo stesso
+        // registro: se la distanza e' 2..N il fold va esteso, se il `lea` non
+        // c'e' affatto la causa e' un'altra e va cercata altrove.
+        if std::env::var("RUSTRE_DBG_LEAJMP").is_ok()
+            && !instructions[i - 1].mnemonic.trim().eq_ignore_ascii_case("lea")
+        {
+            let dietro = (1..=8usize)
+                .find(|k| {
+                    i.checked_sub(*k).is_some_and(|j| {
+                        instructions[j].mnemonic.trim().eq_ignore_ascii_case("lea")
+                            && instructions[j]
+                                .operands
+                                .rsplit_once(',')
+                                .is_some_and(|(_, d)| d.trim().trim_start_matches('%') == jr)
+                    })
+                })
+                .map_or("NESSUNO_ENTRO_8".to_string(), |k| format!("distanza_{k}"));
+            // Le 6 istruzioni precedenti: solo cosi' si vede la FORMA del
+            // dispatch (dove nasce la base, se c'e' una maschera, ecc.).
+            // `disasm_dump` non serve: TRONCA prima di questo codice.
+            let ctx = (1..=6usize)
+                .rev()
+                .filter_map(|k| i.checked_sub(k))
+                .map(|j| {
+                    format!(
+                        "{} {}",
+                        instructions[j].mnemonic.trim(),
+                        instructions[j].operands.trim()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ; ");
+            eprintln!(
+                "LEAJMP 0x{:X} jmp *%{jr} lea={dietro} ctx=[{ctx}]",
+                instructions[i].address.as_u64(),
+            );
+        }
         let prev = &instructions[i - 1];
         if !prev.mnemonic.trim().eq_ignore_ascii_case("lea") {
             continue;
@@ -1221,6 +1280,19 @@ pub fn image_callee_arities(
     arities_from_seeds(load, starts.to_vec(), bits, usize::MAX)
 }
 
+/// Un THUNK di import: la prima istruzione e' un `jmp` INDIRETTO (`jmp
+/// *0x24212(%rip)`), il salto di sei byte che la PE Import Address Table
+/// interpone davanti a ogni funzione importata.
+///
+/// Serve a `arities_from_seeds` per NON inferire un'arita' da un corpo che non
+/// esiste. Il vincolo dell'asterisco e' deliberato: un tail-call DIRETTO
+/// (`jmp target`) e' una funzione vera e va misurata normalmente.
+fn e_thunk_di_import(body: &[Instruction]) -> bool {
+    body.first().is_some_and(|i| {
+        i.mnemonic.to_lowercase().starts_with("jmp") && i.operands.contains('*')
+    })
+}
+
 /// Shared engine: transitively disassemble from `seeds`, then run the arity
 /// fixpoint. Extracted verbatim from `callee_arities_for` so the per-function
 /// and whole-image paths cannot drift.
@@ -1276,6 +1348,26 @@ fn arities_from_seeds(
     //    processing order by VA makes that deterministic and reproducible.
     let mut order: Vec<u64> = bodies.keys().copied().collect();
     order.sort_unstable();
+    // ── D9-THUNK (#6600, gate `RUSTRE_THUNK_NO_ARITY`, default ON).
+    //    Un THUNK di import (`jmp *0x24212(%rip)`, sei byte attraverso la IAT)
+    //    NON HA UN CORPO da cui ricavare un'arita': il passo 1 qui sopra ne
+    //    disassembla `CALLEE_SCAN_BYTES` = 4096, cioe' l'INTERA TABELLA dei
+    //    thunk successivi, e l'inferenza gira su quella spazzatura. L'arita'
+    //    che ne esce e' un artefatto, e la regola D9 la propaga nel CHIAMANTE
+    //    come parametro fantasma.
+    //    MISURATO con la sonda `RUSTRE_DBG_PARAMREG`: i due soli inconsistenti
+    //    di `cross_build.py` nascono entrambi cosi' in `sample7_cpp` —
+    //    `__acrt_iob_func` <- thunk 0x1400173b0 arity=2, `_FindPESectionByName`
+    //    <- thunk 0x1400174b0 arity=2 — mentre le altre cinque build emettono
+    //    la forma giusta.
+    //    ⚠ Si richiede il jump INDIRETTO (`*`): un tail-call diretto
+    //    (`jmp target`) e' una funzione vera e resta misurata.
+    //    Assenza dalla mappa e' il comportamento corretto: D9 e' gia' scritta
+    //    per non fare nulla quando il callee non ha un'arita' nota — meglio
+    //    NESSUNA evidenza di una FALSA.
+    if !matches!(std::env::var("RUSTRE_THUNK_NO_ARITY").as_deref(), Ok("0") | Ok("false")) {
+        order.retain(|va| !e_thunk_di_import(&bodies[va]));
+    }
     let mut out: HashMap<u64, usize> =
         order.iter().map(|&va| (va, crate::win64_recovered_arity(&bodies[&va]))).collect();
     for _ in 0..MAX_ROUNDS {
@@ -1922,6 +2014,40 @@ mod tests {
     use super::*;
     use rustre_analysis_fn::{Confidence, DetectionSource};
     use rustre_core::address::Address;
+
+    fn istr(addr: u64, mnem: &str, ops: &str) -> Instruction {
+        let mut i = Instruction::new(Address::new(addr), 6, mnem.to_string(), vec![0x90]);
+        i.operands = ops.to_string();
+        i
+    }
+
+    /// #6600: il thunk di import va riconosciuto — e' la forma da cui NON si
+    /// puo' ricavare un'arita'.
+    #[test]
+    fn thunk_di_import_riconosciuto() {
+        let corpo = vec![
+            istr(0x1400173b0, "jmpq", "*0x24212(%rip)"),
+            istr(0x1400173b6, "nop", ""),
+        ];
+        assert!(e_thunk_di_import(&corpo));
+    }
+
+    /// ⚠ Il vincolo dell'asterisco: un tail-call DIRETTO e' una funzione vera.
+    #[test]
+    fn tail_call_diretto_non_e_un_thunk() {
+        let corpo = vec![istr(0x140001000, "jmp", "0x140002000")];
+        assert!(!e_thunk_di_import(&corpo));
+    }
+
+    /// Una funzione normale non viene mai scambiata per un thunk.
+    #[test]
+    fn funzione_normale_non_e_un_thunk() {
+        let corpo = vec![
+            istr(0x140001000, "push", "%rbp"),
+            istr(0x140001001, "jmpq", "*%rax"),
+        ];
+        assert!(!e_thunk_di_import(&corpo));
+    }
 
     /// Synthetic layout: .text / .rdata (init) / .idata / .bss, image base 0x1000.
     fn synthetic_oracle() -> DataOracle {

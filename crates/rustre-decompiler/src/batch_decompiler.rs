@@ -1190,6 +1190,73 @@ fn repair_return_void_call(code: &str, enabled: bool) -> String {
         + "\n"
 }
 
+/// Gate `RUSTRE_VOID_SELF_CAPTURE` (default-ON, `=0` disabilita): toglie la
+/// cattura del valore di una chiamata RICORSIVA a una funzione `void`.
+///
+/// Misurato: `sample7_cpp/sub_140001600.hlil.c` definisce
+/// `void _M_erase…clone__isra_0_(…)` e nel corpo fa
+/// `v8 = <quella STESSA funzione>(a1);` ⇒ gcc «invalid use of void
+/// expression». Il valore **non esiste**: la funzione non ne produce.
+/// ✅ Verificato sul caso: `v8` e' riassegnata poche righe dopo e NON e' letta
+/// nel mezzo, quindi togliere l'assegnamento non cambia nulla di osservabile.
+///
+/// ⚠⚠ Perche' questa NON e' la «regola larga sulle funzioni void» che
+/// `repair_return_void_call` vieta esplicitamente (errore gia' pagato cinque
+/// volte): li' servirebbe un ELENCO dei nomi `void`, che non e' enumerabile.
+/// Qui il callee e' la funzione **definita nello stesso file**, e il file ne
+/// dichiara la firma: la prova sta nel testo, e' **auto-verificante**. Non si
+/// deduce nulla e non si consulta nessun database.
+///
+/// ⚠ STRETTA di proposito: solo `X = NOME(` con NOME **identico** al nome
+/// definito, e solo se la definizione comincia con `void `. Una chiamata a
+/// un'ALTRA funzione, o dentro una funzione non-`void`, resta intatta.
+fn strip_recursive_void_capture(code: &str) -> String {
+    if matches!(
+        std::env::var("RUSTRE_VOID_SELF_CAPTURE").as_deref(),
+        Ok("0") | Ok("false")
+    ) {
+        return code.to_string();
+    }
+    // ⚠ `is_word_char` di `lib.rs` e' PRIVATA: si ridefinisce qui invece di
+    // allargarne la visibilita' — cambiare la visibilita' di una funzione di
+    // un altro modulo per una passata locale e' gia' stato fatto e revocato
+    // (gate #23). La semantica e' quella LETTA nel sorgente
+    // (`lib.rs:2848`): alfanumerico ASCII oppure `_`.
+    let parola = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    // La DEFINIZIONE: riga a colonna 0 che inizia con `void ` e non e' una
+    // dichiarazione (`;`). Il nome e' l'ultimo identificatore prima di `(`.
+    let mut nome: Option<&str> = None;
+    for line in code.lines() {
+        let Some(resto) = line.strip_prefix("void ") else { continue };
+        if line.trim_end().ends_with(';') {
+            continue; // dichiarazione, non definizione
+        }
+        let Some(open) = resto.find('(') else { continue };
+        let testa = &resto[..open];
+        let cand = testa.rsplit(|c: char| c == ' ' || c == '*').next().unwrap_or("");
+        if !cand.is_empty() && cand.bytes().all(parola) {
+            nome = Some(cand);
+            break;
+        }
+    }
+    let Some(nome) = nome else { return code.to_string() };
+    let bersaglio = format!("{nome}(");
+    code.lines()
+        .map(|line| {
+            let t = line.trim_start();
+            // `X = NOME(` con X identificatore semplice.
+            let Some((lhs, rhs)) = t.split_once(" = ") else { return line.to_string() };
+            if !lhs.bytes().all(parola) || lhs.is_empty() || !rhs.starts_with(&bersaglio) {
+                return line.to_string();
+            }
+            let indent = &line[..line.len() - t.len()];
+            format!("{indent}{rhs}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 /// Gate `RUSTRE_TRAP_BODY`, **opt-in**: definisce `__trap__`.
 ///
 /// `__trap__` e' un **marcatore del modello** per `ud2`/`int3`
@@ -1470,6 +1537,7 @@ fn emit_batch_outputs(
             let hlil = declare_renamed_imports(&hlil, decl_ren);
             let hlil = define_simd_bodies(&hlil, simd_bodies);
             let hlil = repair_return_void_call(&hlil, ret_void);
+            let hlil = strip_recursive_void_capture(&hlil);
             let hlil = define_trap_body(&hlil, trap_body);
             // ULTIMO fra i produttori: rinomina token che i passi precedenti
             // possono aver introdotto (`declare_renamed_imports` aggiunge
@@ -1787,6 +1855,32 @@ impl Default for CallGraphBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn void_ricorsiva_perde_la_cattura() {
+        // La funzione definita nel file e' `void`, e assegna il valore della
+        // chiamata a SE STESSA: quel valore non esiste.
+        let code = "void f_erase(__int64 a1)\n{\n    uint64_t v8;\n    v8 = f_erase(a1);\n    v8 = 3;\n}\n";
+        let out = strip_recursive_void_capture(code);
+        assert!(out.contains("    f_erase(a1);"), "{out}");
+        assert!(!out.contains("v8 = f_erase("), "{out}");
+        assert!(out.contains("v8 = 3;"), "altre assegnazioni intatte: {out}");
+    }
+
+    #[test]
+    fn void_chiamata_ad_ALTRA_funzione_resta_intatta() {
+        // ⚠ Il caso che tiene la regola stretta: `g` non e' la funzione
+        // definita qui, e il suo tipo di ritorno NON e' noto da questo file.
+        let code = "void f_erase(__int64 a1)\n{\n    uint64_t v8;\n    v8 = g(a1);\n}\n";
+        assert_eq!(strip_recursive_void_capture(code), code);
+    }
+
+    #[test]
+    fn funzione_non_void_resta_intatta() {
+        // ⚠ Se la definizione non e' `void`, il valore ESISTE: non si tocca.
+        let code = "__int64 f_erase(__int64 a1)\n{\n    uint64_t v8;\n    v8 = f_erase(a1);\n}\n";
+        assert_eq!(strip_recursive_void_capture(code), code);
+    }
 
     #[test]
     fn sort_key_ordering() {

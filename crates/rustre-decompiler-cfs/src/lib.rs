@@ -2495,6 +2495,59 @@ impl EmptyBlockEliminator {
         Self::default()
     }
 
+    /// Like [`Self::eliminate`], but never removes `entry`.
+    ///
+    /// ⚠ Why this exists, measured and not assumed: [`Self::eliminate`] drops
+    /// **any** empty block with a single successor — the entry block included.
+    /// Every caller that structures a CFG identifies the entry POSITIONALLY
+    /// (`blocks[0].id`, then `structure(entry)`), so an eliminated entry does
+    /// not degrade the output, it makes `structure` fail on a `BlockId` that no
+    /// longer exists and the whole function falls back to unstructured text.
+    ///
+    /// The alternative — «skip the pass when the entry is eliminable» — is
+    /// worse and is refused on purpose: it is a silent no-op on exactly the
+    /// CFGs that need the cleanup most, and a pass that no-ops is a bug
+    /// (REGOLA #2). Preserving one block keeps the pass total.
+    ///
+    /// The preserved entry still gets its successors rewritten, so an empty
+    /// entry chaining into the real body costs one extra hop and never a
+    /// dangling edge.
+    pub fn eliminate_preserving_entry(
+        &mut self,
+        blocks: Vec<BasicBlock>,
+        entry: BlockId,
+    ) -> Vec<BasicBlock> {
+        fn follow(redirect: &HashMap<BlockId, BlockId>, mut id: BlockId) -> BlockId {
+            let mut visited = std::collections::HashSet::new();
+            while let Some(&next) = redirect.get(&id) {
+                if !visited.insert(id) {
+                    break;
+                }
+                id = next;
+            }
+            id
+        }
+
+        let mut redirect: HashMap<BlockId, BlockId> = HashMap::new();
+        for b in &blocks {
+            if b.id != entry && b.stmts.is_empty() && b.successors.len() == 1 {
+                redirect.insert(b.id, b.successors[0]);
+            }
+        }
+
+        let eliminated_ids: std::collections::HashSet<BlockId> = redirect.keys().copied().collect();
+        self.eliminated += eliminated_ids.len();
+
+        blocks
+            .into_iter()
+            .filter(|b| !eliminated_ids.contains(&b.id))
+            .map(|mut b| {
+                b.successors = b.successors.iter().map(|&s| follow(&redirect, s)).collect();
+                b
+            })
+            .collect()
+    }
+
     pub fn eliminate(&mut self, blocks: Vec<BasicBlock>) -> Vec<BasicBlock> {
         fn follow(redirect: &HashMap<BlockId, BlockId>, mut id: BlockId) -> BlockId {
             let mut visited = std::collections::HashSet::new();
@@ -5963,5 +6016,135 @@ mod enterprise_battery {
         }
         std::panic::set_hook(prev);
         assert!(fail.is_none(), "structurer panicked at seed {fail:?}");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // EmptyBlockEliminator::eliminate_preserving_entry
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Helper locale: questo modulo di test non ne ha uno proprio.
+    fn ebb(id: u32, stmts: Vec<Statement>, succs: Vec<u32>) -> BasicBlock {
+        BasicBlock::new(BlockId::new(id))
+            .with_stmts(stmts)
+            .with_successors(succs.into_iter().map(BlockId::new).collect())
+    }
+
+    /// Il difetto che la variante evita, DIMOSTRATO sul metodo originale:
+    /// un entry vuoto con un solo successore viene rimosso, e `structure`
+    /// riceve un `BlockId` che non esiste piu'.
+    #[test]
+    fn plain_eliminate_drops_the_entry_block_and_breaks_structuring() {
+        let blocks = vec![
+            ebb(0, vec![], vec![1]),
+            ebb(1, vec![Statement::Return(None)], vec![]),
+        ];
+        let entry = blocks[0].id;
+
+        let cleaned = EmptyBlockEliminator::new().eliminate(blocks);
+
+        assert!(
+            !cleaned.iter().any(|b| b.id == entry),
+            "precondizione del test: `eliminate` DEVE rimuovere l'entry vuoto"
+        );
+        assert!(
+            ControlFlowStructurer::new(cleaned).structure(entry).is_err(),
+            "strutturare su un entry rimosso deve fallire, non riuscire per caso"
+        );
+    }
+
+    /// Stessa CFG, variante che preserva l'entry: lo structuring riesce.
+    #[test]
+    fn preserving_entry_keeps_the_entry_and_structuring_succeeds() {
+        let blocks = vec![
+            ebb(0, vec![], vec![1]),
+            ebb(1, vec![Statement::Return(None)], vec![]),
+        ];
+        let entry = blocks[0].id;
+
+        let cleaned = EmptyBlockEliminator::new().eliminate_preserving_entry(blocks, entry);
+
+        assert!(
+            cleaned.iter().any(|b| b.id == entry),
+            "l'entry deve sopravvivere"
+        );
+        assert!(
+            ControlFlowStructurer::new(cleaned).structure(entry).is_ok(),
+            "con l'entry preservato lo structuring deve riuscire"
+        );
+    }
+
+    /// Non e' un no-op travestito: un blocco vuoto NON-entry viene rimosso e
+    /// i predecessori vengono ricuciti sul suo successore.
+    #[test]
+    fn preserving_entry_still_removes_non_entry_empty_blocks() {
+        let blocks = vec![
+            ebb(0, vec![Statement::Raw("a();".into())], vec![1]),
+            ebb(1, vec![], vec![2]),
+            ebb(2, vec![Statement::Return(None)], vec![]),
+        ];
+        let entry = blocks[0].id;
+
+        let mut elim = EmptyBlockEliminator::new();
+        let cleaned = elim.eliminate_preserving_entry(blocks, entry);
+
+        assert_eq!(elim.eliminated(), 1, "il blocco vuoto 1 deve essere eliminato");
+        assert!(!cleaned.iter().any(|b| b.id == BlockId::new(1)));
+        let b0 = cleaned.iter().find(|b| b.id == entry).expect("entry");
+        assert_eq!(
+            b0.successors,
+            vec![BlockId::new(2)],
+            "il predecessore va ricucito sul successore del blocco rimosso"
+        );
+    }
+
+    /// Catena di blocchi vuoti: il redirect va seguito fino in fondo, non di
+    /// un salto solo.
+    #[test]
+    fn preserving_entry_follows_a_chain_of_empty_blocks() {
+        let blocks = vec![
+            ebb(0, vec![Statement::Raw("a();".into())], vec![1]),
+            ebb(1, vec![], vec![2]),
+            ebb(2, vec![], vec![3]),
+            ebb(3, vec![Statement::Return(None)], vec![]),
+        ];
+        let entry = blocks[0].id;
+        let cleaned = EmptyBlockEliminator::new().eliminate_preserving_entry(blocks, entry);
+
+        let b0 = cleaned.iter().find(|b| b.id == entry).expect("entry");
+        assert_eq!(b0.successors, vec![BlockId::new(3)], "la catena va seguita fino a 3");
+    }
+
+    /// Un ciclo di blocchi vuoti non deve mandare `follow` in loop infinito.
+    #[test]
+    fn preserving_entry_terminates_on_a_cycle_of_empty_blocks() {
+        let blocks = vec![
+            ebb(0, vec![Statement::Raw("a();".into())], vec![1]),
+            ebb(1, vec![], vec![2]),
+            ebb(2, vec![], vec![1]),
+        ];
+        let entry = blocks[0].id;
+        let cleaned = EmptyBlockEliminator::new().eliminate_preserving_entry(blocks, entry);
+        assert!(cleaned.iter().any(|b| b.id == entry), "deve terminare e tenere l'entry");
+    }
+
+    /// Nessun blocco vuoto ⇒ la CFG esce IDENTICA (nessun effetto collaterale).
+    #[test]
+    fn preserving_entry_is_identity_when_no_block_is_empty() {
+        let blocks = vec![
+            ebb(0, vec![Statement::Raw("a();".into())], vec![1]),
+            ebb(1, vec![Statement::Return(None)], vec![]),
+        ];
+        let entry = blocks[0].id;
+        let before = blocks.clone();
+
+        let mut elim = EmptyBlockEliminator::new();
+        let after = elim.eliminate_preserving_entry(blocks, entry);
+
+        assert_eq!(elim.eliminated(), 0);
+        assert_eq!(after.len(), before.len());
+        for (a, b) in after.iter().zip(before.iter()) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.successors, b.successors);
+        }
     }
 }

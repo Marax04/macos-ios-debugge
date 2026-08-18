@@ -2476,6 +2476,26 @@ fn win64_param_regs_live_in(
             // zero-parameter caller.
             for i in 1..arity.min(4) {
                 if is_param[i - 1] && !written[i] && !touched[i] {
+                    // SONDA #6580 (`RUSTRE_DBG_PARAMREG`): la regola D9 e' la
+                    // sola che puo' creare un parametro che il corpo non legge
+                    // MAI (`__acrt_iob_func` esce con un `a2` fantasma in
+                    // `sample7_cpp` e con la forma giusta nelle altre 5 build).
+                    // Il C emesso non puo' dire QUALE callee l'ha causato —
+                    // `__iob_func` e' solo importata e le righe di chiamata sono
+                    // identiche nei due bucket — quindi la risposta va presa
+                    // qui, dove `arity` e' visibile. Zero effetto: solo stampa.
+                    if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                        eprintln!(
+                            "[PARAMREG] fn={} callee={:#x} arity={} accende a{}",
+                            instructions
+                                .first()
+                                .map(|f| format!("{:?}", f.address))
+                                .unwrap_or_default(),
+                            tgt,
+                            arity,
+                            i + 1
+                        );
+                    }
                     is_param[i] = true;
                 }
             }
@@ -11850,6 +11870,48 @@ fn data_symbol_definitions(
             else {
                 continue;
             };
+            // ⚠⚠ #6470, MISURATO SUI BYTE: un blocco i cui qword sono INDIRIZZI
+            // DENTRO L'IMMAGINE non e' un dato, e' una TABELLA DI PUNTATORI.
+            // `off_140004000` di `sample11_c/dispatch` iniziava con
+            // `50 14 00 40 01 00 00 00` = **0x140001450**, poi 0x140001460,
+            // 0x140001470, 0x140001480: puntatori a funzione. Materializzarli
+            // fa saltare il programma a indirizzi del binario ORIGINALE, che
+            // nel processo ricompilato non contengono quelle funzioni ⇒ il
+            // `dispatch` passo' da LINK_FAIL a **CRASH**. Non e' «rivelare il
+            // difetto sotto»: e' CREARNE uno, e un `extern` onesto e' meglio.
+            // E' la stessa ragione per cui #5700 esclude le basi di tabella,
+            // ma quel filtro guarda `tables` e questa tabella NON vi compare
+            // (non risolta come jump table) ⇒ serve il test SUI BYTE.
+            let punta_nell_immagine = !bss
+                && b.chunks_exact(8).any(|q| {
+                    let p = u64::from_le_bytes(q.try_into().unwrap_or([0; 8]));
+                    p != 0 && !matches!(oracle.section_kind(p), binary_entry::SectionKind::None)
+                });
+            // SONDA #6510 (effetto ZERO, gated): la guardia rifiuta **4551**
+            // blocchi, ma dal testo emesso se ne riconoscono con puntatori solo
+            // **2627** — differenza **1924** che dall'ESTERNO non e'
+            // spiegabile, perche' `section_kind` vede le sezioni vere mentre
+            // una sonda in Python puo' solo indovinare un range. Qui si stampa
+            // la SEZIONE in cui cade il primo qword colpevole: se molti sono
+            // `Bss`/`Idata` invece di `Text`, la guardia si puo' STRINGERE e
+            // recuperare simboli senza rimettere i CRASH di #6470.
+            if punta_nell_immagine && std::env::var("RUSTRE_DBG_PTRGUARD").is_ok() {
+                if let Some(q) = b.chunks_exact(8).find_map(|q| {
+                    let p = u64::from_le_bytes(q.try_into().unwrap_or([0; 8]));
+                    (p != 0 && !matches!(oracle.section_kind(p), binary_entry::SectionKind::None))
+                        .then_some(p)
+                }) {
+                    eprintln!("PTRGUARD {:?}", oracle.section_kind(q));
+                }
+            }
+            if punta_nell_immagine
+                && !matches!(
+                    std::env::var("RUSTRE_DATA_PTR_GUARD").as_deref(),
+                    Ok("0") | Ok("false")
+                )
+            {
+                continue;
+            }
             let vals: Vec<String> = b.iter().map(|x| format!("0x{x:02X}")).collect();
             out.push(format!(
                 "static uint8_t {name}[{ARRAY_BYTES}] = {{ {} }};",
@@ -12114,11 +12176,29 @@ fn emit_callee_forward_decls(
     // (`v1 = &__gcc_deregister_frame;`) non entrano nella mappa dei chiamati.
     // Va rifatta con un'emissione che non possa produrre sintassi invalida, e
     // **misurata sul corpus completo PRIMA di essere dichiarata**.
-    // Resta OPT-IN (`RUSTRE_ADDROF_DECLS=1`) per poterla riprendere e misurare
-    // senza riscriverla da zero.
-    if matches!(
+    //
+    // ✅ RIAPERTA E RIATTIVATA (2026-08-14), perche' la ritirata fu decisa sul
+    // TOTALE e il totale nascondeva DOVE il gate agiva. Rimisurata bucket per
+    // bucket su path A, **tutti e 12**:
+    //   sample1_c 2->0, sample6_c 2->0, sample2_cpp 2->0, sample1 2->0,
+    //   sample11_c 3->1, sample3_rust 19->5, sample8_rust 19->5,
+    //   sample7_cpp 8->1, sample9_go 39->6, sample4_go 37->5,
+    //   sample5_cs 8->8, sample10_cs 8->8   ⇒ **149 -> 39 file falliti**.
+    // **NESSUN bucket peggiora**; i due C# sono neutri.
+    //
+    // Verificato il MECCANISMO, non solo il numero — per classe d'errore:
+    //   `undeclared` **164 -> 0**, e OGNI altra classe delta **esattamente 0**
+    //   (conflicting 26, incompatible-arg 90, incompatible-assign 32,
+    //   vector 4, too-few-args 2, duplicate-case 2). Nessuno SCAMBIO di classi.
+    //   **Errori di sintassi: 0 con gate OFF e 0 con gate ON** — il difetto che
+    //   causo' la ritirata (13 -> 352) NON si ripresenta: e' stato eliminato
+    //   nel frattempo da un'altra riparazione, non da questa passata.
+    // ⚠ Quindi il gate e' DEFAULT-ON: si spegne con `RUSTRE_ADDROF_DECLS=0`.
+    // ⚠ Cambia path A DELIBERATAMENTE: l'invariante #28 va ri-baselinato, non
+    //   aggiornato in silenzio.
+    if !matches!(
         std::env::var("RUSTRE_ADDROF_DECLS").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("0") | Ok("false")
     ) {
         let mut declared_here: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for line in code.lines() {
@@ -12224,7 +12304,93 @@ fn emit_callee_forward_decls(
     // produttore vero delle dichiarazioni di B e' `prepend_hlil_externs`, ed
     // e' li' che vanno. `oracle` resta nella firma perche' e' il canale con cui
     // l'immagine arriva a questa catena.
-    let _ = oracle;
+    //
+    // ✅ #5400 vale per la catena **B**, e SOLO per lei: la ragione data e' che
+    // li' i nomi `off_` arrivano dopo. Su **path A** ci sono gia' — le righe
+    // `extern __int64 off_X;` qui sotto le produce proprio questo blocco, da
+    // `vars`. Misurato 2026-08-14: path A **11337 extern e ZERO definiti**,
+    // path B 4404 e **8654** definiti, perche' la materializzazione vive in
+    // `prepend_hlil_externs` (nome `hlil_`) e su A non gira nessuno.
+    //
+    // ⚠⚠ `addrof` e' **false** qui, e non e' un dettaglio: con `addrof` si
+    // emette un ARRAY di byte, e un array DECADE a puntatore. Misurata la
+    // convenzione dei due path su `sample7_cpp`: path B usa `&off_X` 1621
+    // volte contro 915 nude (coerente con `RUSTRE_HLIL_ADDROF` default-ON, che
+    // rende `off_X` l'OGGETTO), path A **419 contro 1357 NUDE**. Su A `off_X`
+    // e' dunque prevalentemente un VALORE: definirlo come array darebbe a
+    // `v = off_X;` l'INDIRIZZO invece del valore — codice che COMPILA ed e'
+    // sbagliato, la classe peggiore. Con `addrof = false` la funzione accetta
+    // solo `Init` e rifiuta ogni simbolo ASSEGNATO o di cui si prende
+    // l'INDIRIZZO, quindi il rischio e' un NO-OP, non un danno.
+    // ⚠ Le definizioni sono `static`: ogni `.c` ha la propria copia e linkare
+    // migliaia di file non puo' produrre un simbolo duplicato.
+    let dati_on = !matches!(
+        std::env::var("RUSTRE_EMIT_DATA_A").as_deref(),
+        Ok("0") | Ok("false")
+    );
+    // ⚠⚠ La forma si decide PER SIMBOLO, non per path. Misurato che i
+    // `LINK_FAIL` sono 16 `DATA_NOT_EMITTED` su 19 e che i loro simboli sono
+    // usati **tutti** come `&off_X` (`v3 = &off_140004000;`,
+    // `_mm_loadu_si128((__m128i *)&off_140004000)`), cioe' ESATTAMENTE la
+    // classe che il ramo `addrof=false` rifiuta: definire i soli simboli NUDI
+    // non poteva muoverli per costruzione.
+    //
+    // Ripartizione misurata sul corpus (22296 coppie file/simbolo ancora
+    // `extern`): **SOLO_NUDO 11295 (50.7%)**, **SOLO_AMP 10309 (46.2%)**,
+    // **MISTO 692 (3.1%)**. I 3.1% misti restano `extern`: una copia `static`
+    // per file non e' l'oggetto condiviso, quindi mescolare le due forme
+    // sarebbe un falso positivo.
+    //
+    // Si chiama la stessa funzione DUE volte invece di riscriverla: la logica
+    // e le sue guardie restano quelle gia' misurate, cambia solo QUALI simboli
+    // riceve. Le basi di jump table sono escluse dentro (#5700, verificato sui
+    // byte: gli offset rel32 sono relativi alla base ORIGINALE e su un array
+    // locale il salto finisce in memoria arbitraria ⇒ CRASH).
+    // ⚠ Il ramo `addrof` esce PRIMA delle guardie «assegnato / indirizzo
+    // preso»; passargli solo i SOLO_AMP e' piu' STRETTO di quelle guardie, non
+    // piu' largo, perche' un simbolo cosi' non compare mai nudo.
+    let per_simbolo = !matches!(
+        std::env::var("RUSTRE_DATA_PER_SYMBOL").as_deref(),
+        Ok("0") | Ok("false")
+    );
+    let corpo: String = code
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("extern "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let solo_indirizzo = |n: &String| -> bool {
+        let mut tot = 0usize;
+        let mut amp = 0usize;
+        let mut from = 0usize;
+        while let Some(rel) = corpo[from..].find(n.as_str()) {
+            let at = from + rel;
+            let end = at + n.len();
+            from = end;
+            // Confine di parola: `off_1400` non e' un uso di `off_140`.
+            if corpo[..at].chars().next_back().is_some_and(|c| is_word_char(c as u8))
+                || corpo[end..].chars().next().is_some_and(|c| is_word_char(c as u8))
+            {
+                continue;
+            }
+            tot += 1;
+            if corpo[..at].chars().next_back() == Some('&') {
+                amp += 1;
+            }
+        }
+        tot > 0 && amp == tot
+    };
+    let (indirizzati, nudi): (Vec<String>, Vec<String>) = if per_simbolo {
+        vars.iter().cloned().partition(solo_indirizzo)
+    } else {
+        (Vec::new(), vars.clone())
+    };
+    let (mut data_defs, mut data_covered) =
+        data_symbol_definitions(code, &nudi, oracle, dati_on, tables, false);
+    let (defs_amp, cov_amp) =
+        data_symbol_definitions(code, &indirizzati, oracle, dati_on && per_simbolo, tables, true);
+    data_defs.extend(defs_amp);
+    data_covered.extend(cov_amp);
+    decls.extend(data_defs);
     // A global data symbol referenced but not defined here — declare `extern`.
     // ⚠ #5980: MAI il simbolo DEFINITO in questo file. `extern __int64 X;` +
     // `void X(...)` nello stesso file e' «`X` redeclared as different kind of
@@ -12243,6 +12409,10 @@ fn emit_callee_forward_decls(
     decls.extend(
         vars.iter()
             .filter(|n| !jt_covered.contains(*n))
+            // Un simbolo DEFINITO sopra non va anche dichiarato `extern`:
+            // sarebbe `extern __int64 X;` accanto a `static const … X[]`,
+            // cioe' due tipi per lo stesso nome. Stesso filtro di `jt_covered`.
+            .filter(|n| !data_covered.contains(n.as_str()))
             .map(|n| format!("extern __int64 {n};")),
     );
     if image_base_used {
@@ -13179,7 +13349,12 @@ fn parse_int_lit(s: &str) -> Option<u64> {
 /// a prior multiplier chain `n += n*c;` so that K == (c+1)*E), rewrites the
 /// loop to the counted source form:
 ///
-///     for (i = 0; i < n; ++i) { … p[i].field … }
+/// ```text
+/// for (i = 0; i < n; ++i) { … p[i].field … }
+/// ```
+///
+/// (blocco `text`: indentato di quattro spazi rustdoc lo compilava come
+/// DOCTEST Rust e falliva su `…` e su `for` — era C, non Rust.)
 ///
 /// deleting the multiplier and end-pointer lines. The trip count is `n`'s
 /// pre-multiplication value, which is exactly what `n` holds once the
@@ -18706,6 +18881,34 @@ fn apply_env_types_to_declarations(code: &str, env: &TypeEnvironment) -> String 
     out
 }
 
+/// Gate di [`drop_empty_blocks`]: `RUSTRE_CFS_EMPTY_BLOCK`, **opt-in, default OFF**.
+///
+/// REGOLA #28: finche' resta spento, `emit_structured_code` riceve la stessa
+/// `Vec<BasicBlock>` di prima e nessun byte di path A puo' cambiare.
+fn cfs_empty_block_enabled() -> bool {
+    matches!(
+        std::env::var("RUSTRE_CFS_EMPTY_BLOCK").as_deref(),
+        Ok("1") | Ok("true")
+    )
+}
+
+/// Rimuove i blocchi vuoti dalla CFG delegando a `rustre-decompiler-cfs`,
+/// preservando l'entry.
+///
+/// ⚠ Funzione PURA (REGOLA #19): il flag arriva come ARGOMENTO, non letto
+/// dall'ambiente, cosi' i test possono provarla accesa e spenta senza
+/// `std::env::set_var` — che in edition 2024 e' `unsafe` e corre con gli altri
+/// test in parallelo.
+///
+/// Con `enabled = false` restituisce l'input **identico**, che e' cio' che rende
+/// l'invariante di REGOLA #28 vero per costruzione.
+fn drop_empty_blocks(blocks: Vec<BasicBlock>, entry: BlockId, enabled: bool) -> Vec<BasicBlock> {
+    if !enabled {
+        return blocks;
+    }
+    rustre_decompiler_cfs::EmptyBlockEliminator::new().eliminate_preserving_entry(blocks, entry)
+}
+
 impl DecompilerPipeline {
     /// Attach recovered callee arities (see [`win64_recovered_arity`]) so
     /// parameter registers that are only forwarded to a callee are still
@@ -18937,6 +19140,18 @@ impl DecompilerPipeline {
         }
 
         let entry = blocks[0].id;
+        // CABLAGGIO CATENA #1a — `rustre-decompiler-cfs::EmptyBlockEliminator`.
+        // La crate esiste per fare questo e non era raggiunta da nessun sito:
+        // 16 dei suoi 17 sottosistemi erano scollegati (misurato 2026-08-15).
+        //
+        // Gate OPT-IN, default OFF (REGOLA #28): a gate spento questa riga
+        // restituisce `blocks` invariato e path A non puo' cambiare di un byte,
+        // quindi l'invariante vale per costruzione e non per misura.
+        // La forma e' quella imposta dalla REGOLA #19 — funzione PURA che
+        // prende il flag come argomento, piu' un wrapper che legge l'ambiente —
+        // cosi' il gruppo di controllo e' provabile ACCESO e SPENTO senza
+        // toccare l'ambiente del processo.
+        let blocks = drop_empty_blocks(blocks, entry, cfs_empty_block_enabled());
         let structurer = ControlFlowStructurer::new(blocks);
         let ast = structurer.structure(entry).ok()?;
 
@@ -19764,7 +19979,18 @@ impl DecompilerPipeline {
             };
             named_callees.insert(sanitize_c_identifier(&resolved), ret.clone());
         }
-        func.pseudo_code = emit_callee_forward_decls(&func.pseudo_code, &named_callees, &jump_tables_for_decls, None);
+        // ⚠ Era `None`, e DELIBERATAMENTE: il commento qui sotto («A is
+        // untouched, so the 11144/11144 baseline cannot regress») documenta la
+        // scelta prudente di non dare l'immagine a path A. Ma senza oracle
+        // `data_symbol_definitions` esce subito, ed e' la ragione per cui path
+        // A definisce **ZERO** simboli dati contro gli 8654 di B: non manca la
+        // passata, manca l'INGREDIENTE. Si spegne con `RUSTRE_ORACLE_A=0`.
+        let oracle_a = if matches!(std::env::var("RUSTRE_ORACLE_A").as_deref(), Ok("0") | Ok("false")) {
+            None
+        } else {
+            self.data_oracle.as_deref()
+        };
+        func.pseudo_code = emit_callee_forward_decls(&func.pseudo_code, &named_callees, &jump_tables_for_decls, oracle_a);
 
         // STEP 1 of unifying the two emission paths: lend the HLIL path (`B`)
         // the same forward-declaration plumbing the main pseudo-C path (`A`)
@@ -26786,8 +27012,11 @@ fn fill_mlil_return_values(blocks: &mut [rustre_il_mlil::MlilBasicBlock]) {
     // Misurato #1190: sono `ONE_PRED` 153 + `PREDS_SAME` 87 = **240/1740**, e
     // i casi in CONFLITTO (`PREDS_DIFFER`) sono **ZERO**. Restano fuori, per
     // scelta: `NO_PRED` (755, blocco unico ⇒ quasi certamente funzioni DAVVERO
-    // void: riempirle sarebbe un falso positivo) e `PRED_MISSING` (745, serve
-    // una risalita transitiva **non ancora misurata**).
+    // void: riempirle sarebbe un falso positivo) e `PRED_MISSING` (745).
+    // ⚠ OBSOLETO quanto diceva qui prima («serve una risalita transitiva **non
+    // ancora misurata**»): la transitiva ESISTE ed e' #1230, sotto — i
+    // `PRED_MISSING` sono gia' coperti da `from_preds`, che risale finche'
+    // ogni cammino trova la STESSA versione.
     //
     // La versione usata e' quella di un predecessore REALE, quindi nomina una
     // variabile che su B esiste: non si ricade nel disastro #850 (`var_rax`,
@@ -26852,6 +27081,16 @@ fn fill_mlil_return_values(blocks: &mut [rustre_il_mlil::MlilBasicBlock]) {
         //   - `NO_PRED` (755): blocco unico, void davvero.
         // `DEEP_DIFFER` e' **0**, misurato: il conflitto di versioni non si
         // presenta ne' a un livello ne' in profondita'.
+        //
+        // ⚠ RI-MISURATO su popolazione PIU' AMPIA (2026-08-14, sonda
+        // `RUSTRE_DBG_FILLDEEP` su TUTTI e 12 i bucket, n=**5321** contro i
+        // 1740 di allora): `DEEP_SAME` **1500**, `DEEP_PARTIAL` **879**,
+        // `DEEP_NONE` **941**, `NO_PRED` **2001**, e `DEEP_DIFFER` di nuovo
+        // **0**. Le proporzioni reggono (DEEP_SAME 24.1% -> 28.2%) e
+        // l'assenza di conflitti e' confermata su una popolazione TRIPLA:
+        // e' un braccio di controllo indipendente, non una ripetizione.
+        // ⚠ Il livello 1 da solo (`ONE_PRED` 436 + `PREDS_SAME` 469 = 905)
+        // copre molto meno dei 1500 della transitiva: la profondita' PAGA.
         let from_preds = || -> Option<rustre_il_mlil::SsaVar> {
             if !pred_fallback || b.predecessors.is_empty() {
                 return None;
@@ -44017,6 +44256,102 @@ mod jump_table_definition_tests {
         assert_eq!(
             apply_jump_table_definitions(altro, std::slice::from_ref(&t)),
             altro
+        );
+    }
+}
+
+#[cfg(test)]
+mod cfs_wiring_tests {
+    use super::*;
+    use rustre_decompiler_cfs::Statement as S;
+
+    fn wb(id: u32, stmts: Vec<S>, succs: Vec<u32>) -> BasicBlock {
+        BasicBlock::new(BlockId::new(id))
+            .with_stmts(stmts)
+            .with_successors(succs.into_iter().map(BlockId::new).collect())
+    }
+
+    /// REGOLA #28 provata, non affermata: a gate SPENTO la CFG esce IDENTICA,
+    /// quindi path A non puo' cambiare di un byte.
+    #[test]
+    fn gate_off_returns_the_cfg_untouched() {
+        let blocks = vec![
+            wb(0, vec![S::Raw("a();".into())], vec![1]),
+            wb(1, vec![], vec![2]),
+            wb(2, vec![S::Return(None)], vec![]),
+        ];
+        let before: Vec<(BlockId, Vec<BlockId>)> =
+            blocks.iter().map(|b| (b.id, b.successors.clone())).collect();
+
+        let after = drop_empty_blocks(blocks, BlockId::new(0), false);
+        let after_v: Vec<(BlockId, Vec<BlockId>)> =
+            after.iter().map(|b| (b.id, b.successors.clone())).collect();
+
+        assert_eq!(before, after_v, "a gate spento la CFG deve essere identica");
+    }
+
+    /// REGOLA #19: il gruppo di controllo va provato ACCESO, altrimenti il gate
+    /// da' falsa protezione. Acceso il pass DEVE agire — se non agisse sarebbe
+    /// un no-op travestito, che per la REGOLA #2 e' un bug.
+    #[test]
+    fn gate_on_actually_removes_the_empty_block() {
+        let blocks = vec![
+            wb(0, vec![S::Raw("a();".into())], vec![1]),
+            wb(1, vec![], vec![2]),
+            wb(2, vec![S::Return(None)], vec![]),
+        ];
+        let after = drop_empty_blocks(blocks, BlockId::new(0), true);
+
+        assert_eq!(after.len(), 2, "il blocco vuoto deve sparire");
+        assert!(!after.iter().any(|b| b.id == BlockId::new(1)));
+        assert_eq!(
+            after[0].successors,
+            vec![BlockId::new(2)],
+            "il predecessore va ricucito sul successore"
+        );
+    }
+
+    /// L'entry sopravvive anche acceso: e' la ragione per cui esiste la
+    /// variante `_preserving_entry` invece del metodo originale.
+    #[test]
+    fn gate_on_never_removes_the_entry_even_when_empty() {
+        let blocks = vec![
+            wb(0, vec![], vec![1]),
+            wb(1, vec![S::Return(None)], vec![]),
+        ];
+        let after = drop_empty_blocks(blocks, BlockId::new(0), true);
+        assert!(
+            after.iter().any(|b| b.id == BlockId::new(0)),
+            "l'entry deve sopravvivere o `structure(entry)` fallisce"
+        );
+    }
+
+    /// Il wrapper d'ambiente e' OPT-IN: senza variabile impostata deve essere
+    /// spento. Non tocca l'ambiente (REGOLA #19), lo legge soltanto.
+    #[test]
+    fn env_wrapper_defaults_to_off() {
+        if std::env::var("RUSTRE_CFS_EMPTY_BLOCK").is_err() {
+            assert!(!cfs_empty_block_enabled(), "il gate deve essere OFF di default");
+        }
+    }
+
+    /// Prova end-to-end che il cablaggio non rompe l'emissione: con il pass
+    /// acceso la funzione strutturata viene comunque prodotta.
+    #[test]
+    fn structured_emission_survives_the_cleanup() {
+        let blocks = vec![
+            wb(0, vec![S::Raw("v1 = 1;".into())], vec![1]),
+            wb(1, vec![], vec![2]),
+            wb(2, vec![S::Return(None)], vec![]),
+        ];
+        let cleaned = drop_empty_blocks(blocks, BlockId::new(0), true);
+        let out = DecompilerPipeline::emit_structured_code("f", cleaned, &[]);
+        let src = out.expect("l'emissione strutturata deve riuscire dopo il cleanup");
+        assert_eq!(
+            src.matches('{').count(),
+            src.matches('}').count(),
+            "REGOLA #13: graffe bilanciate
+{src}"
         );
     }
 }
