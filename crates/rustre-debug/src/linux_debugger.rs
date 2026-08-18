@@ -3679,7 +3679,10 @@ impl crate::Debugger for LinuxDebugger {
                 return_addr_bytes.len()
             ))
         })?;
-
+        // Zero is not a return address. Unchecked, `run_to_return` compares
+        // `pc == 0`, which never comes true, so the loop single-steps until the
+        // process EXITS and reports that exit as a successful step-out.
+        let return_addr = crate::step_out_target_from_frame(return_addr, saved_ret_slot)?;
         self.run_to_return(tid, Address(return_addr), caller_sp).await
     }
 

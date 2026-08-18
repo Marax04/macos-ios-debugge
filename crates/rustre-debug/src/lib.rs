@@ -997,6 +997,44 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
+/// Validate the return address `step_out` just read out of a stack frame.
+///
+/// Every backend reads eight bytes from `[fp+8]` and hands the result to
+/// `run_to_return` as the address to stop at. None of them asked whether the
+/// value was usable, and zero is the one value that certainly is not: no
+/// function returns to address 0. `run_to_return_step` then compares
+/// `pc == 0`, which never comes true, so the loop single-steps until the
+/// process EXITS and reports that exit as the answer.
+///
+/// That is the worst available outcome. The caller asked to leave one frame and
+/// the debugger ran their program to completion, then said the step succeeded.
+/// A corrupt or non-standard frame is exactly the situation a debugger is
+/// opened for, and this crate already knows the rule elsewhere: the unwinder's
+/// `validate` refuses `pc == 0` with "null return address (end of stack)".
+///
+/// Measured, not supposed: instrumenting the iOS `step_out` on
+/// `step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
+/// printed `target=0x0`, and the loop then ran to exit.
+///
+/// The iOS backend deliberately does NOT call this yet. Two of its tests rest
+/// on a mock whose `m` reads do not see the interpreter's own stack writes —
+/// the frame slot reads as eight zero bytes while text memory reads back
+/// correctly — so refusing a null target there would turn one red into two.
+/// The refusal belongs on that path as much as on these; it waits for the mock,
+/// and STATUS.md carries the evidence.
+///
+/// # Errors
+/// [`DebugError::StepError`] naming the slot, so the caller learns the frame is
+/// unusable instead of learning nothing.
+pub fn step_out_target_from_frame(raw: u64, slot: u64) -> Result<u64, DebugError> {
+    if raw == 0 {
+        return Err(DebugError::StepError(format!(
+            "step_out: the saved return address at {slot:#x} is null, so there is no frame to              return to; refusing to run the target looking for address 0"
+        )));
+    }
+    Ok(raw)
+}
+
 /// Read a little-endian `u64` out of a buffer that may be SHORTER than eight bytes.
 ///
 /// `read_memory` is asked for eight bytes and is allowed to return fewer — a
@@ -11047,6 +11085,45 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// A null return address must be refused, not chased to process exit.
+    ///
+    /// Every backend read `[fp+8]` and handed it straight to `run_to_return`.
+    /// Zero is not a return address; `pc == 0` never comes true, so the loop
+    /// single-stepped until the process EXITED and then reported that exit as
+    /// the result of the step-out. The caller asked to leave one frame and had
+    /// their program run to completion, and was told it worked.
+    ///
+    /// Not hypothetical: instrumenting the iOS `step_out` on the currently-red
+    /// `step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
+    /// printed `target=0x0` and then exactly that run-to-exit.
+    #[test]
+    fn a_null_return_address_is_refused_not_chased() {
+        use crate::step_out_target_from_frame as check;
+
+        assert_eq!(check(0x1_0000_400C, 0x16f00ffe8).unwrap(), 0x1_0000_400C);
+
+        let err = check(0, 0x16f00ffe8).expect_err("address 0 is not a frame to return to");
+        let text = format!("{err}");
+        assert!(
+            text.contains("16f00ffe8"),
+            "the refusal must name the slot it read, so the caller can look at the frame: {text}"
+        );
+
+        // And no backend may hand an unchecked value to `run_to_return`.
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            let body = item_body(&stripped, "async fn step_out(", &[NEXT_FN, NEXT_ASYNC_FN]);
+            assert!(
+                body.contains("step_out_target_from_frame"),
+                "{name}: step_out chases whatever was in the frame slot, including 0, and a                  process that exits while it looks is reported as a successful return"
+            );
+        }
     }
 
     /// A short read must be an ERROR, not a panic.
