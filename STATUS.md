@@ -1137,3 +1137,131 @@ Il lavoro è salvo, ma attribuito al commit sbagliato.
 Il corollario operativo è quello già scritto in §4.3, e vale anche per chi scrive
 questo documento: **nessuna affermazione qui dentro vale più della misura che la
 sostiene**, e le tre correzioni sopra sono lasciate visibili apposta.
+
+---
+
+# Addendum B — gli `allow`, e la misura che ha cambiato l'obiettivo
+
+> Additivo come il resto del documento. Nulla sopra è stato tolto.
+
+## B.0 Il numero che mancava
+
+Prima di tutto, la correzione più importante di questo addendum:
+
+> **`cargo check` non esegue i lint clippy.**
+
+Tutte le cifre "0 warning" di §A.0 sono **rustc**. Gli `#[allow(...)]` sopprimevano
+lint **clippy**, e la superficie clippy del workspace è:
+
+| | |
+|---|---|
+| Warning **rustc** fuori da `rustre-debug` | **0** |
+| Warning **clippy** in tutto il workspace | **13.370** |
+
+Non è mai stata vicina a zero. Rimuovere un `allow` in un file che ha centinaia
+di altri warning clippy cambia quasi nulla, e dire il contrario sarebbe
+esattamente il tipo di affermazione falsa che questo repo continua a trovare nei
+propri commenti.
+
+## B.1 Il risultato
+
+| | Prima | Dopo |
+|---|---|---|
+| `allow` attivi | 132 | **30** |
+| ↳ in `rustre-debug` (altra sessione) | — | 8 |
+| ↳ con `reason = "..."` leggibile dalla macchina | 2 | **9** |
+| Warning rustc fuori da `rustre-debug` e dal lint `unsafe` | 0 | **0** |
+| `rustre-arch` — warning clippy, tutti i target | 11 | **0** |
+| `rustre-dotnet-metadata` — warning clippy | 511 | **73** |
+
+## B.2 Perché i blocchi generici sono tornati, ristretti
+
+Nove blocchi `#![allow(...)]` da 45-59 righe (in `fuzz` ×5, `dotnet-metadata`,
+`loader-android`, `mobile-android`, `arch`) coprivano ~15 categorie di lint
+ciascuno. Rimuoverli ha scoperto **~1043 warning** in quei cinque crate.
+`cargo clippy --fix` si rifiuta di applicare i propri suggerimenti lì
+(«errors present after applying fixes»), quindi non era lavoro meccanico.
+
+I blocchi sono tornati **ristretti**, e la restrizione è il punto:
+
+- **Fuori dalla lista, quindi visibili**: `cast_possible_truncation`,
+  `cast_sign_loss`, `cast_possible_wrap`, `cast_lossless`. In uno strumento di
+  reverse engineering un `as` che tronca un indirizzo produce una risposta
+  sbagliata che sembra giusta.
+- **Dentro la lista**: presentazione (attributi che clippy vorrebbe aggiunti,
+  formattazione dei doc, raggruppamento dei letterali) più
+  `cast_precision_loss`, la cui unica conseguenza qui è una statistica
+  arrotondata.
+
+`dotnet-metadata` è passato da 511 a 73 warning così, con i ~60 cast **ancora
+visibili** invece che sepolti sotto 450 di stile. **Un warning che nessuno legge
+è peggio di nessun warning** — è lo stesso argomento che §4.3 fa sui test verdi.
+
+## B.3 Difetti reali trovati
+
+1. **`SharedCorpus::add_entry` restituisce se l'input è stato ACCETTATO** — lo
+   rifiuta se non aggiunge copertura — e `sync_to_shared` buttava via quel bool.
+   Per un fuzzer è il numero che conta: un worker che sincronizza 500 input di
+   cui 0 nuovi era indistinguibile da uno che ne sincronizza 500 nuovi. Ora
+   `sync_to_shared` restituisce il conteggio accettato. Emerso perché un
+   `#[must_use]` ha trasformato lo scarto in errore, sotto
+   `unused_must_use = "deny"` del workspace.
+2. **Due `allow` erano stantii**: `approx_constant` in `dotnet-decompile` e
+   `float_cmp` in `arch` non sopprimevano più niente. Verificato, rimossi.
+3. **Sette `assert_eq!(density, 0.0)`** sostituiti da confronti su `to_bits()`:
+   è un confronto **intero** (niente lint) ed è anche **più severo**, perché
+   rifiuta `-0.0`, che per una densità indicherebbe un bug di segno.
+
+## B.4 Le struct di parametri, e perché il lint aveva ragione
+
+`too_many_arguments` non segnalava la lunghezza, segnalava un pericolo:
+
+| Funzione | Il pericolo |
+|---|---|
+| `strongconnect` (Tarjan) → `TarjanState` | sei `&mut` vettori di fila: trasporne due **compila** e calcola SCC sbagliate |
+| `parse_version_info_endian` → `VersionSections` | quattro `&[u8]` di fila: scambiare `verneed_data` e `verdef_data` **compila** e dà una risposta plausibile e falsa, perché entrambi si leggono contro lo stesso `.dynstr` |
+| `classify54`/`classify_legacy` → `InstrCtx` + `ClassifySink` | undici parametri, quattro `usize` consecutivi e cinque `&mut` consecutivi |
+
+Campi con un nome rendono lo scambio **impossibile da scrivere**.
+
+## B.5 Un allow tenuto apposta, con il warning visibile
+
+`rustre-deobf::casts` **non ha più l'allow e il warning clippy resta visibile**.
+La ragione è tecnica e va scritta perché non venga "risistemata" da qualcuno:
+
+> Non esiste una conversione float→intero verificata in `std` — `try_from` non è
+> implementato per sorgenti float. `f64 as u32` **è** la conversione saturante
+> corretta, e il `clamp` sopra ne prova il limite. Le uniche alternative erano
+> rimettere l'attributo o lasciare il warning.
+
+Un tentativo precedente instradava la conversione attraverso `u64` credendo di
+renderla verificata: `clamped as u64` è un cast float→int identico, e clippy lo
+segnalava **una riga più sotto**. Il problema era stato spostato, non risolto.
+Quel tentativo è registrato nel commento del sorgente perché nessuno lo ripeta.
+
+## B.6 I 30 `allow` rimasti, con verdetto
+
+**Corretti, e ora lo dichiarano** (`reason = "..."`, 9):
+
+| Dove | Perché è corretto |
+|---|---|
+| `SymExpr::Const` / `Symbol` / `Ite` | costruttori che specchiano il nome della variante, **3979 chiamanti** |
+| `AF_shadow()` | la maiuscola **è** la funzionalità: ogni datasheet Z80 scrive `AF'`, e lo snake_case `af_shadow()` esiste già accanto |
+| I due moduli IDA-compat | i nomi **sono** il contratto con gli script IDA esistenti; rinominarli toglie l'unica ragione per cui quei moduli esistono |
+| Tre `unsafe_code` | rimuoverli significherebbe cancellare il codice `unsafe` |
+
+**In `rustre-debug`** (8): non toccati, un'altra sessione ci lavora in parallelo.
+
+**Restanti** (~13): `too_many_lines` su funzioni la cui divisione è a rischio o a
+valore nullo, più i quattro blocchi solo-stile di §B.2, che portano dentro di sé
+la spiegazione di cosa è stato tolto dalla lista e perché.
+
+## B.7 Cosa resta aperto, in aggiunta a §A.6
+
+9. **13.370 warning clippy nel workspace.** È l'obiettivo che *sembrava* essere
+   quello degli `allow`, ed è di ordini di grandezza più grande. È anche dove
+   stanno i difetti veri: in questa sessione i cast hanno rivelato tre bug
+   distinti. Va affrontato per classi di lint, misurando a ogni passo.
+10. **`crates/rustre-decompiler/src/binary_entry.rs` non compila** — 112 righe
+    non committate di un'altra sessione, il cui test destruttura una coppia da
+    una funzione che ora restituisce una tripla. Modifica loro, correzione loro.
