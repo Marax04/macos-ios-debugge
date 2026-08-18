@@ -10525,6 +10525,49 @@ mod tests_extra {
         );
     }
 
+    /// The PAC mask must be published BEFORE anything that can bail out.
+    ///
+    /// Iteration 591 moved the `NT_ARM_PAC_MASK` read onto the tracer thread,
+    /// because 573 had called ptrace from an async body where it always
+    /// answered ESRCH. That was the right diagnosis and the fix STILL never
+    /// ran: it was placed at the END of `merge_debug_state`, and that function
+    /// opens with
+    ///
+    /// ```text
+    /// let Ok(watch) = read_arm_hw_regset(pid, NT_ARM_HW_WATCH) else { return };
+    /// ```
+    ///
+    /// Sixty-seven lines earlier. On `ubuntu-24.04-arm` the debug-register
+    /// tests are red, which is evidence that read does fail there — so the mask
+    /// is never published, the unwinder never strips, and
+    /// `backtrace_unwinds_past_the_first_frame_via_dwarf_cfi` stayed red
+    /// through both 573 and 591.
+    ///
+    /// Two fixes in a row that were present in the source and dead on the
+    /// machine that mattered, by two different mechanisms: the wrong thread,
+    /// then an unrelated early return. The addresses confirm the target was
+    /// always right — `0x56aabdc2615c0c` strips to `0xaabdc2615c0c`, which is
+    /// exactly where ARM64 Linux maps a PIE executable.
+    ///
+    /// Pointer authentication has NOTHING to do with the watchpoint register
+    /// file. Coupling them was the defect; the guard keeps them independent.
+    #[test]
+    fn the_pac_mask_is_read_before_anything_that_can_return_early() {
+        let src = include_str!("linux_debugger.rs");
+        let start = src
+            .find("fn merge_debug_state(")
+            .expect("merge_debug_state must exist for this guard to mean anything");
+        let body = &src[start..];
+        let pac = body
+            .find("PAC_INSN_MASK_KEY, mask")
+            .expect("the PAC mask must be published somewhere in this function");
+        let bail = body.find("else { return }").unwrap_or(usize::MAX);
+        assert!(
+            pac < bail,
+            "linux: the PAC mask is published AFTER an early return that fires when an              unrelated regset is unavailable, so on a host where that read fails the mask is              never set and the unwinder never strips. Read it first: pointer authentication              does not depend on the watchpoint registers"
+        );
+    }
+
     /// `resolve_symbol` refuses while the answer is already mapped.
     ///
     /// From the live audit: asking for a symbol before `debug.load_symbols`

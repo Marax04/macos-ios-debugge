@@ -2912,6 +2912,22 @@ fn ensure_slot_exists(state: &UserHwdebugState, slot: u8, regset: libc::c_int) -
 /// `dr` vocabulary is reported as an EMPTY slot rather than a wrong one.
 #[cfg(target_arch = "aarch64")]
 fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
+    // FIRST, before anything that can bail out.
+    //
+    // 591 put this at the END of the function, and the line below returns early
+    // whenever the watchpoint regset is unavailable — which the red
+    // debug-register tests on ubuntu-24.04-arm say it is. So the mask was never
+    // published, the unwinder never stripped, and
+    // `backtrace_unwinds_past_the_first_frame_via_dwarf_cfi` stayed red through
+    // 573 AND 591: two fixes present in the source and dead on the one machine
+    // that could run them, first by being on the wrong thread and then by
+    // sitting behind an unrelated early return.
+    //
+    // Pointer authentication has nothing to do with the watchpoint register
+    // file. Coupling the two was the whole defect.
+    if let Some(mask) = pac_insn_mask(pid) {
+        regs.set(PAC_INSN_MASK_KEY, mask);
+    }
     let Ok(watch) = read_arm_hw_regset(pid, NT_ARM_HW_WATCH) else { return };
     // The breakpoint file is read separately and may legitimately be absent: a
     // kernel that refuses NT_ARM_HW_BREAK still has usable watchpoints, and
@@ -2963,24 +2979,6 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
     }
     regs.set("dr6", 0);
     regs.set("dr7", dr7);
-    // The PAC mask travels with the registers, and it MUST.
-    //
-    // Iteration 573 read `NT_ARM_PAC_MASK` by calling `libc::ptrace` directly
-    // from the async `backtrace`, and ptrace is only valid from the TRACER
-    // thread — the rule this file already states for `PTRACE_POKEUSER`. From
-    // any other thread it answers ESRCH, so `pac_insn_mask` returned `None`
-    // every time, nothing was stripped, and the fix never actually ran.
-    // Measured: `unwound frame pc 0x2daafdda4a5c0c should fall inside a loaded
-    // module` was STILL red on ubuntu-24.04-arm after 573.
-    //
-    // `merge_debug_state` runs ON the tracer thread, inside the command
-    // channel, so reading it here is the one place it can succeed. Publishing
-    // it as a register entry means the unwinder gets it from the `get_registers`
-    // it already performs — no new command, and no second way to be on the
-    // wrong thread.
-    if let Some(mask) = pac_insn_mask(pid) {
-        regs.set(PAC_INSN_MASK_KEY, mask);
-    }
 }
 
 /// Register-map key carrying the kernel's PAC instruction mask.
