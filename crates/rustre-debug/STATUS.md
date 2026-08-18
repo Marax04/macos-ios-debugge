@@ -66,7 +66,7 @@
 |---|---|---|
 | **PAC nell'unwinder** | Linux ARM | 573 e 591 erano entrambi **codice morto**; il 607 lo legge per primo. Non ancora misurato |
 | **2 test sui registri di debug** | Linux ARM | `NT_ARM_HW_WATCH` sembra fallire su quel runner: da capire, non da indovinare |
-| **Cricchetto MCP a 170/168** | Linux + macOS | **non mio**: nessuno dei 170 è un tool `linux_*`. Il soffitto non era mai stato tarato su quelle piattaforme |
+| **Cricchetto MCP a 172/168** | Windows, Linux, macOS | **non mio, rimisurato al 612**: dei 172 fabbricatori **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_` — sono `il_*`, `pe_editor_*`, `trace_*`, `symb_*`, `sandbox_*` di altri crate. Era 170, ora 172: altri attori ne aggiungono. Da riportare al proprietario, **non** da far tacere alzando il soffitto (lezione 17) |
 | **Single step su Windows ARM** | Windows | rifiutato esplicitamente (606): il meccanismo AArch64 non è implementato e inventarlo sarebbe peggio |
 | **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha `Bcr`/`Bvr`/`Wcr`/`Wvr` (**2 slot**, non 4). Capacità dichiarata assente (598) |
 | **Eventi di thread** | macOS, iOS | Mach e RSP non li consegnano. Dichiarati assenti col motivo |
