@@ -2953,6 +2953,16 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
                     slot,
                 )
             })
+        })
+        // Last: a pair STAGED but not armed. It contributes its R/W and LEN
+        // fields and NO enable bit, so it cannot be mistaken for a live
+        // watchpoint — which is precisely what it is not.
+        .or_else(|| {
+            crate::dr_slot_from_arm64_watchpoint_staged(
+                watch.dbg_regs[i].addr,
+                u64::from(watch.dbg_regs[i].ctrl),
+                slot,
+            )
         });
         match found {
             Some((addr, bits)) => {
@@ -3019,6 +3029,15 @@ fn write_debug_registers(pid: libc::pid_t, regs: &RegisterSet) -> Result<(), Deb
             Some((wvr, wcr)) => {
                 watch.dbg_regs[i].addr = wvr;
                 watch.dbg_regs[i].ctrl = u32::try_from(wcr & 0xFFFF_FFFF).unwrap_or(0);
+            }
+            // Disabled, but with control fields STAGED. 594 kept the address
+            // of such a slot; this keeps the rest. `E` stays clear so nothing is
+            // armed either way — only that bit decides — and a caller who writes
+            // a whole `DR7` before switching it on gets all of it back.
+            None if crate::arm64_watchpoint_ctrl_for_disabled_slot(dr7, slot).is_some() => {
+                let ctrl = crate::arm64_watchpoint_ctrl_for_disabled_slot(dr7, slot).unwrap_or(0);
+                watch.dbg_regs[i].addr = addr;
+                watch.dbg_regs[i].ctrl = u32::try_from(ctrl & 0xFFFF_FFFF).unwrap_or(0);
             }
             None => {
                 // Disabled in `DR7`, or an EXECUTION slot the watchpoint file

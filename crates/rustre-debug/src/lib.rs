@@ -849,6 +849,92 @@ pub(crate) fn arm64_watchpoint_from_dr_slot(
     Some((arm64_watchpoint_wvr(addr), wcr))
 }
 
+/// Encode the control word of a DISABLED data slot, preserving its fields.
+///
+/// On x86 the `R/W` and `LEN` fields of a slot whose `L` bit is clear are plain
+/// storage: a caller may stage a whole `DR7` and enable it later, and reading it
+/// back must return what was written. Iteration 594 established that for the
+/// ADDRESS register; this is the same fact for the control word, and
+/// `ubuntu-24.04-arm` reported the gap exactly — `DR7` came back `0x110005`
+/// against `0x1110005`, missing bit 24, the direction field of a slot that is
+/// off in both.
+///
+/// `E` stays CLEAR, so nothing is armed: only the enable bit decides that, and
+/// preserving the rest costs no safety.
+///
+/// `None` for a slot that is ENABLED — that is the ordinary path's job — and
+/// for an execution slot, which belongs to `DBGBVR`/`DBGBCR`.
+#[must_use]
+pub(crate) fn arm64_watchpoint_ctrl_for_disabled_slot(dr7: u64, slot: u8) -> Option<u64> {
+    if dr7 & (1u64 << (2 * u32::from(slot))) != 0 {
+        return None;
+    }
+    let shift = 16 + 4 * u32::from(slot);
+    let rw = (dr7 >> shift) & 0b11;
+    let len = (dr7 >> (shift + 2)) & 0b11;
+    if rw == 0b00 {
+        // Execution: the breakpoint file's business, not this one's.
+        return None;
+    }
+    let size: u8 = match len {
+        0b00 => 1,
+        0b01 => 2,
+        0b11 => 4,
+        _ => 8,
+    };
+    let kind = match rw {
+        0b01 => BreakpointKind::DataWrite,
+        0b11 => BreakpointKind::DataReadWrite,
+        _ => return None,
+    };
+    // Encoded as if armed, then the enable bit removed: the field layout is the
+    // same either way, and deriving it keeps one encoder rather than two that
+    // can drift.
+    let armed = arm64_encode_watchpoint_wcr(0, kind, size)?;
+    Some(armed & !1)
+}
+
+/// Read back a slot that was STAGED but not enabled.
+///
+/// The counterpart of [`arm64_watchpoint_ctrl_for_disabled_slot`]. The ordinary
+/// reader refuses a pair with `E = 0`, correctly — such a pair is not a
+/// watchpoint — but the `dr` vocabulary still has to report the fields the
+/// caller put there, or a staged `DR7` comes back incomplete.
+///
+/// Returns the address and the `DR7` bits WITHOUT any enable bit, so a caller
+/// cannot mistake a staged slot for an armed one.
+#[must_use]
+pub(crate) fn dr_slot_from_arm64_watchpoint_staged(
+    wvr: u64,
+    wcr: u64,
+    slot: u8,
+) -> Option<(u64, u64)> {
+    if wcr & 1 != 0 {
+        // Armed: the ordinary reader owns this case.
+        return None;
+    }
+    let bas = (wcr >> 5) & 0xff;
+    if bas == 0 {
+        // Nothing staged: an untouched pair, not a slot with fields in it.
+        return None;
+    }
+    let size = bas.count_ones();
+    let len_bits: u64 = match size {
+        1 => 0b00,
+        2 => 0b01,
+        4 => 0b11,
+        8 => 0b10,
+        _ => return None,
+    };
+    let rw_bits: u64 = match (wcr >> 3) & 0b11 {
+        0b10 => 0b01,
+        0b11 => 0b11,
+        _ => return None,
+    };
+    let shift = 16 + 4 * u32::from(slot);
+    Some((wvr, (rw_bits << shift) | (len_bits << (shift + 2))))
+}
+
 /// The inverse: describe an armed AArch64 pair in the `dr` vocabulary.
 ///
 /// The engine reads `DR7` to find a free slot and to recognise the address it
@@ -10522,6 +10608,58 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// A DISABLED slot keeps its control bits, exactly as it keeps its address.
+    ///
+    /// 594 fixed one half of this: an address staged in `DR0` without enabling
+    /// it in `DR7` used to vanish on read-back, and now survives. The other half
+    /// was still lost, and `ubuntu-24.04-arm` says so precisely:
+    ///
+    /// ```text
+    /// DR7 should read back exactly what was written
+    ///   left: 0x110005   right: 0x1110005
+    /// ```
+    ///
+    /// The missing bit is 24 — `R/W2`, the direction field of slot 2 — while
+    /// `L2` is off in both. On x86 the `R/W` and `LEN` fields of a DISABLED
+    /// slot are plain storage: writable, readable, and returned verbatim. The
+    /// translation only reconstructed bits for ENABLED slots, so a caller
+    /// staging a whole `DR7` before switching it on got part of it back.
+    ///
+    /// AArch64 expresses this exactly, as it did for the address: `DBGWCR`
+    /// holds `LSC` and `BAS` with `E = 0`. Nothing is armed either way — only
+    /// the enable bit decides that — so preserving the rest costs no safety and
+    /// stops a written value from disappearing.
+    ///
+    /// Pure arithmetic, so this runs on every host, not only where the failure
+    /// is observable.
+    #[test]
+    fn a_disabled_slot_round_trips_its_control_bits() {
+        use crate::{arm64_watchpoint_from_dr_slot as to_arm, dr_slot_from_arm64_watchpoint as to_dr};
+
+        // Slot 0 ENABLED as an 8-byte write watch, slot 1 DISABLED but with its
+        // R/W and LEN fields staged — the shape the ARM run reported.
+        let slot0_on = 1u64;
+        let rw_len_0 = (0b01u64 << 16) | (0b10u64 << 18);
+        let rw_len_1 = (0b01u64 << 20) | (0b10u64 << 22);
+        let dr7 = slot0_on | rw_len_0 | rw_len_1;
+
+        let (wvr, wcr) = to_arm(0x1000, dr7, 0).expect("an enabled slot must translate");
+        let (_, back0) = to_dr(wvr, wcr, 0).expect("an armed pair must translate back");
+        assert_eq!(back0, slot0_on | rw_len_0, "slot 0 must come back bit for bit");
+
+        // Slot 1 is disabled, so it arms nothing — but its staged fields must
+        // survive rather than being reported as zero.
+        let staged = crate::arm64_watchpoint_ctrl_for_disabled_slot(dr7, 1)
+            .expect("a disabled data slot must still encode its control bits");
+        assert_eq!(staged & 1, 0, "a staged slot must NOT be enabled: E stays clear");
+        let (_, back1) = crate::dr_slot_from_arm64_watchpoint_staged(0x2000, staged, 1)
+            .expect("a staged pair must translate back");
+        assert_eq!(
+            back1, rw_len_1,
+            "the R/W and LEN fields of a disabled slot are storage on x86 and must survive the              round trip, or a caller that stages a whole DR7 before enabling it gets part of it              back"
         );
     }
 
