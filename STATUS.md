@@ -809,3 +809,331 @@ cargo check --workspace --release --all-targets --message-format short
 - Il conteggio delle righe con `xargs ... | wc -l` **sottostima**: con 4.092 file `xargs` divide in più invocazioni e produce più righe `total`. Va usato `-exec ... +` con un solo `wc` finale, oppure sommate tutte le parziali.
 - I conteggi di marcatori sono **occorrenze per riga**, non identificatori distinti: una riga con `stub` e `mock` conta due volte. Sono indicatori di densità, non inventari — l'inventario vero è il lavoro del punto 6 del piano.
 - I `revdeps` contano le menzioni nei manifest, incluse le dipendenze `optional`. Una crate `optional` disattivata risulta comunque come dipendenza.
+
+---
+---
+
+# Addendum — sessione 2026-08-18
+
+> **Regola di questo documento: si aggiunge, non si toglie.** Nulla sopra questa
+> riga è stato cancellato o riscritto, comprese due conclusioni che questa
+> sessione ha dimostrato **sbagliate** (§A.2). Restano visibili accanto alla
+> versione corretta, perché un documento che cancella i propri errori non
+> permette di controllare il metodo che li ha prodotti.
+
+## A.0 Sintesi dell'addendum
+
+| Voce | Prima | Dopo |
+|---|---|---|
+| Warning fuori da `rustre-debug` e dal lint di policy `unsafe` | 498 in tutto il workspace | **0** |
+| Errori di compilazione | 0 | **0** |
+| Attributi `#[allow(...)]` | 382 | **159** (234 rimossi; alcuni rientrati dal lavoro concorrente su `rustre-debug`) |
+| Tool MCP resi raggiungibili | — | **+50** |
+| Tool MCP che riferivano su una fixture interna senza accettare input | 21 | **8** |
+| Difetti reali trovati e chiusi | — | **17** (§A.3) |
+
+Commit della sessione: `7c33d8b`, `8940d98`, `ca13eb1`, `e45c91a`.
+
+---
+
+## A.1 Cosa è stato fatto, in ordine
+
+### 1. Il diff da 953 righe — committato (`7c33d8b`)
+
+Il port di `data_symbol_definitions` da path B a path A, che §7.2a descriveva
+come «la cosa di maggior valore attualmente non protetta da un commit». Con esso
+`EmptyBlockEliminator::eliminate_preserving_entry` e `RULES.md`.
+
+### 2. STATUS.md — committato (`8940d98`)
+
+Il documento sopra, 811 righe, con l'appendice completa delle 190 crate.
+
+### 3. `CLAUDE.md` riallineato alla baseline misurata
+
+Quattro numeri erano falsi. Ora il file porta una sezione `BASELINE 2026-08-18
+— runs/base_0818` che precede ogni cifra più vecchia:
+
+| metrica | valore misurato |
+|---|---|
+| file emessi | 11342 |
+| arity vs 135 prototipi | 122/135 (90,4%) — 6 OVER, 7 UNDER |
+| fidelity, 16 pubblicati | **14/16** (regressione reale, causa isolata) |
+| behaviour | **15/63** (23,8%) — è cambiata la scala, non il codice |
+| `goto` emessi | **0** su 11342 |
+| `JUMPOUT` | 18, in 12 file, tutti C# |
+| data symbol definiti (path A) | 5427 |
+| unresolved actionable | 4012 |
+
+Più quattro cose che il file non diceva: la causa isolata della regressione di
+fedeltà (regola D9 in `win64_param_regs_live_in`, `lib.rs:2450`, che propaga
+l'errore **verso l'alto**); che `JUMPOUT` non è estetica ma rompe il link; che
+~28% dei file chiama funzioni mai dichiarate; e che esiste una sesta metrica,
+`callsite_consistency.py`, con 9756 OVER / 6042 UNDER su 10330 definizioni.
+
+### 4. I 234 `allow` rimossi, e cosa nascondevano (`ca13eb1`)
+
+Rimossi per primi, poi i warning emersi chiusi **aggiungendo** codice.
+
+- **50 tool MCP scritti, compilati e irraggiungibili.** 28 tool SPARC completi
+  su `rustre_arch_sparc::*` che nessuno costruiva, più
+  `push_decompiler_type_extra_handlers` e `dataflow_extra_handlers` — le due
+  funzioni che registrano **gruppi interi** (10 + 12 tool), entrambe già in
+  scope via `include!` e mai chiamate.
+- **Il registro delle architetture conteneva solo stub** (§A.2).
+- **36 test nuovi**, ciascuno scritto per *usare* una fixture senza chiamanti —
+  motivo per cui le lacune erano invisibili: layout ABI MSVC mai testato,
+  programma DWARF mai eseguito end-to-end, staleness della cache mai verificata,
+  flag `TypeDef` .NET, contenimento delle patch PE, scrittura dello stack
+  pointer su CALL/RET a 32 bit, robustezza del trie dyld su ogni troncamento,
+  larghezze intere in propagazione e unificazione.
+
+### 5. I dati finti — sette agenti in parallelo (`e45c91a`)
+
+Vedi §A.4 per la classificazione e §A.5 per ciò che gli agenti hanno trovato.
+
+---
+
+## A.2 Due conclusioni di questo documento che erano SBAGLIATE
+
+Restano scritte sopra. Ecco la correzione.
+
+### Errore 1 — §3.2: «i registry sono gusci»
+
+**Sbagliato.** `rustre-arch-registry` (77 righe) cabla davvero tutte e 19 le
+architetture; `rustre-loader-registry` (215) ha adattatori completi per 13
+formati; `rustre-mobile` (43) ri-esporta tutti e 7 i sotto-crate; `rustre-il`
+(152) è una crate di primitive condivise con 6 dipendenti — perfettamente sana.
+Sono piccole perché sono crate di **composizione**: è la dimensione giusta per
+quel lavoro. Ho dedotto un difetto dalla dimensione invece di leggere il
+contenuto.
+
+**Il difetto vero è peggiore, ed è stato misurato:**
+
+> `rustre_arch_registry::register_all()` — che installa i 19 backend reali —
+> **non era chiamata da nessuno nel workspace.** L'unico chiamante in
+> quest'area è `rustre-bin/src/format_detector.rs:278`, che chiama
+> `rustre_arch::register_all_builtins()`: quella installa `PlaceholderArch`, il
+> cui `disassemble` restituisce `Err("PlaceholderArch: no backend linked")`.
+
+Il registro globale del binario era fatto **interamente di stub che si rifiutano
+di disassemblare**, mentre ogni backend reale stava compilato e non installato.
+E la funzione si documentava come «*ensuring every bundled `rustre-arch-*` crate
+is reachable at runtime*».
+
+**Chiuso**: `rustre-bin` dipende ora da `rustre-arch-registry` e chiama
+`register_all()` dopo `register_all_builtins()`, in quest'ordine, così
+un'architettura senza backend resta elencata come stub invece di sparire.
+
+Lezione, dello stesso tipo di quelle già in §6: **P1 non era non implementato.
+Era implementato e mai invocato.** La differenza è invisibile a un conteggio di
+righe e a un grafo di dipendenze, e visibile solo leggendo chi chiama cosa.
+
+### Errore 2 — §6: «~8.000 punti di mock»
+
+**Sovrastima grossolana.** In reverse engineering **"stub" è vocabolario di
+dominio**: un IAT stub, un PLT stub, un thunk, uno stub pure-virtual. Misurato:
+
+| Classe | Quantità | Verdetto |
+|---|---|---|
+| `pub fn` con `stub` nel nome che sono **analisi reali sugli stub** (`identify_stub_pattern`, `find_stubs`, `is_stub`, `populate_libc_stubs`, `plt_entries`) | **58** | **non è un difetto** |
+| Funzioni che **costruiscono dati inventati** (`mock_*`, `fake_*`, `dummy_*`) | **32** | difetto |
+| **Tool MCP** con `mock` nel nome, esposti all'utente | **54** | difetto, il peggiore |
+| Marcatori d'intento (`in a real implementation`, `for now`) in `src/` | ~500 | ammissioni di incompletezza |
+
+Il conteggio di 8.000 sommava anche commenti che spiegano perché una cosa **non**
+è un mock. La cifra da citare è ~90 funzioni più 54 tool, non 8.000.
+
+Ciò che §6 dice sul **rapporto** resta vero e resta la diagnosi: **1 solo
+`todo!()`** in tutto il workspace, oggi come allora. Il codice, dove è
+incompleto, continua a restituire un valore plausibile invece di fallire. È la
+superficie del problema a essere più piccola di quanto scritto, non la sua
+natura.
+
+---
+
+## A.3 I 17 difetti reali trovati e chiusi
+
+Ordinati per gravità.
+
+1. **Il registro delle architetture installava solo placeholder** (§A.2). Ogni
+   disassemblaggio via registro globale falliva con "no backend linked".
+2. **`LineProgram::parse` (DWARF) accettava unità troncate.**
+   `unit_end = pos + unit_length` non era mai confrontato con `data.len()`, e
+   `parse` restituiva un offset "prossima unità" **fuori dal buffer**. Input
+   controllato dall'attaccante in uno strumento RE. 323/323 verdi dopo il fix.
+3. **Il walker DIE scartava silenziosamente attributi validi.**
+   `DW_AT_decl_line`/`decl_file` matchavano solo `AttrValue::Uint`; codificati
+   come `DW_FORM_sdata` (legale, e prodotto da alcuni compilatori) venivano
+   decodificati correttamente e poi buttati via da `_ => {}`. La funzione
+   risultava senza riga né file, senza alcun errore.
+4. **Il walker DIE emetteva le dichiarazioni come definizioni.** Una DIE con
+   `DW_AT_declaration` descrive una funzione definita altrove: emetterla
+   attribuiva un intervallo di indirizzi a un corpo assente.
+5. **`HexNormalizerPass` corrompeva le regole YARA.** `in_hex` si attivava alla
+   prima `{`, che è quella del corpo: il pass maiuscolava gli **identificatori**,
+   `$a` diventava `$A`, e `condition: $a` non si riferiva più alla stringa
+   definita.
+6. **`has_catastrophic_backtracking` non trovava il proprio esempio canonico.**
+   Ciclo su `0..len-4`; in `(a+)+b` il `+` interno è all'indice 2 e `len-4` è 2.
+   Off-by-two: il rilevatore era cieco al caso che il suo test asseriva.
+7. **Tre moduli interi di regole YARA reali mai caricati.**
+   `apt_detection_rules`, `packer_detection_rules`, `ransomware_rules` erano
+   `pub mod` in `lib.rs` e alimentavano nulla. 99 → 138 regole.
+8. **WannaCry e Mimikatz non esistevano nel database di regole.** Aggiunte con
+   indicatori pubblicati, più LockBit, Conti, Cobalt Strike. Totale 143.
+9. **`test_seq_by_category` codificava una convinzione sbagliata**: si aspettava
+   che `CreateRemoteThread` non fosse process injection. Lo è, e il
+   classificatore lo diceva. Corretto il test, non il codice.
+10. **Un test vacuo**: `assert!(stats.converted_to_continue >= 0)` su un unsigned
+    non può fallire — e guardava pure il contatore sbagliato: misurato, quel
+    `goto` viene rimosso invertendo la guardia, non con un `continue`.
+11. **`detect_base64_variant` decideva per esclusione**, con l'evidenza positiva
+    (`has_plus_slash`) calcolata e mai letta.
+12. **`expr_complexity` teneva un catch-all** che il commento sopra accusa di
+    aver pesato `Sar` come 1 qualunque fosse il suo sottoalbero, facendolo
+    vincere sempre come "più semplice". Match ora esaustivo.
+13. **Un test differenziale non testava il caso che sembrava coprire**: l'array
+    era costruito fuori dal ciclo e sovrascritto prima della prima lettura, così
+    il caso tutto-NUL non veniva mai esercitato.
+14. **`req_str` definita identica in due file**, usata 83 volte in uno e mai
+    nell'altro — due definizioni dello stesso contratto, libere di divergere.
+15. **Il fallback di `make_backend` era codice morto su ogni piattaforma
+    supportata**; ora cfg-gated, così aggiungere un backend senza estendere
+    l'elenco è un errore di compilazione.
+16. **Sei attributi `#[test]`/`#[must_use]` duplicati.**
+17. **Tre frasi false nel sorgente**, il pattern che questo repo conosce già:
+    «*its callers still want that*» su una funzione senza chiamanti; «*Used to
+    curb over-detection*» su un predicato mai invocato; e la più costosa,
+    «*ensuring every bundled `rustre-arch-*` crate is reachable at runtime*».
+
+---
+
+## A.4 Il confine dove la fabbricazione raggiungeva l'utente
+
+Tre agenti indipendenti hanno trovato **lo stesso difetto sistemico**, che non
+stava nei crate ma nel wrapper MCP:
+
+> **21 tool MCP dichiaravano `input_schema: {"properties": {}}`** — non
+> accettavano alcun argomento — costruivano una fixture, la analizzavano e ne
+> riportavano il risultato.
+
+Rendere reali gli analizzatori sottostanti non cambiava nulla: i byte analizzati
+restavano fabbricati. Un client che chiedeva «quali processi giravano in questo
+dump» riceveva i processi che il workspace aveva appena scritto in un proprio
+buffer da 4 KiB, e non aveva **nessun modo** di passare un dump.
+
+Chiusi in questa sessione (21 → 8):
+
+| Gruppo | Tool | Ora prende |
+|---|---|---|
+| forensics memoria | 8 | `path`, con rilevamento del container per magic (MDMP / ELF core / flat) |
+| IPA iOS | 8 | `path` del `.ipa` |
+| Malpedia | 4 | `corpus_path` (nuovo `MalpediaLocalDb::load_json`/`load_path`) |
+| sandbox report | 5 | il `SandboxReport`/`IocSet` reale da renderizzare |
+
+Restano 8 wrapper mobile/jadx dello stesso tipo.
+
+**Principio applicato**: dove una fixture resta raggiungibile, è dietro un
+opt-in esplicito che **etichetta** l'output (`is_synthetic_fixture`,
+`is_reference_fixture`, o il banner `SYNTHETIC FIXTURE` che il renderer già
+emette e che ha un test). Una fixture chiesta per nome non è la stessa cosa di
+una fixture consegnata in silenzio.
+
+**Nota su `MalpediaLocalDb`**: prima di questa sessione gli unici modi di
+riempirlo erano `insert_*` un record alla volta e `populate_mock_data`. I tool
+MCP usavano il secondo. Non esisteva alcun modo di puntare il client a dati
+reali **nemmeno avendoli**.
+
+---
+
+## A.5 Cosa hanno trovato gli agenti nei crate
+
+Sette agenti su 22 crate. Selezione di ciò che il mock nascondeva.
+
+- **Il parser Lua 5.1/5.2 non poteva parsare bytecode `luac` autentico.** Due
+  difetti: il campo `nups` non veniva letto (spostando di un byte tutto ciò che
+  segue — conteggio istruzioni, array del codice, pool delle costanti), e le
+  lunghezze delle stringhe erano lette come `int` invece che `size_t`, quindi su
+  qualunque build a 64 bit il primo campo (il nome del sorgente) era già
+  sbagliato. **Invisibile perché le uniche fixture di test 5.1 erano costruite
+  con lo stesso layout errato.**
+- **Il recupero async .NET falliva su assembly reali.** Compilato un assembly
+  vero con `dotnet`, il bridge recupera la state machine autentica
+  (`<DoWorkAsync>d__0`, campi reali, `MoveNext` di 110 istruzioni), ma
+  `decompile_async` non trova lo switch di stato: Roslyn emette
+  `brfalse`/`bne.un` per state machine piccole, non una `switch` table — e il
+  mock ne emetteva **sempre** una, quindi ogni test passava contro una forma che
+  il compilatore non produce.
+- **`IpaPackage::parse` fabbricava un bundle quando `Info.plist` mancava**
+  (`bundle_version: "1.0"`, `min_os_version: "14.0"`), valori che serializzano
+  identici a quelli parsati. `CFBundleSupportedPlatforms` era hardcoded a
+  `iPhoneOS` su ogni percorso, quindi `targets_iphone` era vero anche per un
+  bundle watchOS. `is_adhoc` era `cert_chain.is_empty()`, cioè riportava un
+  limite del parser come proprietà della firma.
+- **`LinuxAnalyzer::find_sockets` era il percorso Windows**, chiamato alla
+  lettera: i "socket Linux" erano record Windows.
+- **`ApktoolRunnerImpl` era un secondo fabbricatore non elencato**:
+  `decode("app.apk")` restituiva percorsi inventati per un file mai esistito, e
+  `build` restituiva `size_bytes: 0` come "successo".
+- **Due client per servizio, uno vero e uno finto**, con API quasi identiche e
+  nessun segnale su quale fosse quale (`VtClient` vs `VirusTotalClient`,
+  `MispClient` vs `MispApiClient`).
+- **`OtxPulse::sample()` era esposto come tool MCP** — una fixture di test
+  consegnata come intelligence, con un IP instradabile e un'attribuzione a
+  Emotet.
+
+---
+
+## A.6 Cosa resta aperto
+
+1. **8 tool MCP mobile/jadx** ancora senza input, stesso schema di §A.4.
+2. **`RegistryHive::parse_key`** (raggiungibile via MCP) fabbrica ancora: per
+   qualunque path in qualunque buffer che inizi con `regf` restituisce una
+   chiave chiamata come l'ultimo segmento del path, con `LastWriteTime` a zero e
+   nessuna sottochiave — non cammina mai le celle `nk`/`lf`/`vk`.
+3. **`MAX_REGION_READ` tronca in silenzio**: ogni scanner forensics legge al
+   massimo 64 MiB per regione. Su un dump reale da più GB esposto come una sola
+   regione, solo i primi 64 MiB vengono esaminati, e **nulla segnala che lo scan
+   è parziale**.
+4. **`rustre-decompiler-c`: 6 test falliti pre-esistenti.**
+   `as_c_declaration()` emette `int`, i test pretendono `int32_t`. Entrambi sono
+   codice committato e non modificato — l'unica modifica in
+   `rustre-decompiler-type` è un import di test di una riga, che non può
+   raggiungere `c_name`. Decidere quale grafia è giusta cambia i nomi di tipo
+   emessi su tutto il corpus: va misurato con `measure.sh`, non deciso a mano.
+5. **`rustre-debug`: 133 warning**, non toccati perché un'altra sessione lavora
+   su quel crate in parallelo.
+6. **Il lint di policy `unsafe_code`: 114 occorrenze.** Non è un difetto: la
+   crate imposta deliberatamente `#![warn(unsafe_code)]` perché ogni blocco
+   `unsafe` resti visibile. Silenziarlo richiede un `allow` (vietato) o
+   cancellare l'`unsafe` (fuori scopo). Va lasciato acceso.
+7. **Il punto 5 del piano — Z3/Unicorn — non è stato affrontato.** La scelta fra
+   reintrodurli come feature opzionale o riscrivere `info.txt` §11/§12/§13 resta
+   aperta, ed è ancora la sorgente strutturale della classe di mismatch.
+8. **Il punto 6 — mock → `todo!()`** — è stato eseguito nella forma additiva che
+   §10 prescriveva: inventario, classificazione, e sostituzione con **errori
+   tipizzati** anziché con `todo!()`. Un errore tipizzato che nomina ciò che
+   manca è più utile di un panic e non rompe i chiamanti. `todo!()` resta a 1.
+
+---
+
+## A.7 Nota di metodo
+
+Tre volte in questa sessione la misura ha smentito la deduzione, e ogni volta la
+deduzione era mia:
+
+1. Ho concluso che i registry fossero vuoti **dalla loro dimensione**. Erano
+   completi e non chiamati (§A.2).
+2. Ho contato ~8.000 mock **da un grep**. Erano ~90 più 54 tool; il resto era
+   vocabolario di dominio e commenti che dicevano il contrario (§A.2).
+3. Ho scritto un test che asseriva 2 campi di layout. Il motore ne restituisce 3,
+   perché materializza il padding come campo esplicito — comportamento migliore
+   di quello che avevo assunto.
+
+E un errore di coordinamento reale: il commit `ca13eb1` ha inglobato parte del
+working tree di altri agenti, perché ho eseguito `git add -A` mentre lavoravano.
+Il lavoro è salvo, ma attribuito al commit sbagliato.
+
+Il corollario operativo è quello già scritto in §4.3, e vale anche per chi scrive
+questo documento: **nessuna affermazione qui dentro vale più della misura che la
+sostiene**, e le tre correzioni sopra sono lasciate visibili apposta.
