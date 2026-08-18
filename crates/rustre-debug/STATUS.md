@@ -16,7 +16,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2062 / 0** |
+| Windows x86_64 | worktree isolato, prima del merge | **2062 / 0** |
+| Windows x86_64 | dopo il merge col lavoro del giro 9 | **2093 / 2** — i 2 sono iOS, non miei (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
@@ -33,6 +34,27 @@ quei 172 **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_` — so
 `il_*`, `pe_editor_*`, `trace_*`, `symb_*`, `sandbox_*` di altri crate. Era 170 al
 605 e 172 al 612: sale sotto altri attori. Va riportato al proprietario, **non**
 fatto tacere alzando il soffitto.
+
+## 1-bis. ⚠ Un commit altrui ha portato `main` a NON COMPILARE (622)
+
+Il commit `956a6feea` («clippy: five lint classes down») ha incluso, insieme al
+proprio lavoro, il **mio 622 a metà** preso dall'albero condiviso: la firma nuova
+di `step_off_planted_breakpoint` con i `return None` ancora vecchi, e una
+`DebugError::MemoryAccess` che **non esiste**. Verificato: `main` non compilava.
+Nei tre backend quel commit non conteneva **nessuna** modifica clippy propria —
+ogni riga era mia, trapelata. Ha anche riportato `STATUS.md` al 618, annullando
+gli aggiornamenti di 619, 620 e 621.
+
+Il cherry-pick del 622 sopra di esso rimette `main` in compilazione e ripristina
+lo STATUS. La causa è il rischio già annotato al 617: **l'albero condiviso non è
+uno stage**. Chi committa con `git add` ampio prende il lavoro a metà di tutti
+gli altri.
+
+I **2 rossi** residui sono `ios::apple_debugger::…step_out_leaves_the_frame…` e
+`ios::unwind::…a_frameless_leaf…`. Provato che non sono miei: **nessuno dei due
+esiste** in `944bca0f4`, il mio ultimo verde, e sono arrivati con le 2439 righe
+di lavoro iOS del giro 9 contenute in quel commit. Il mio 622 non tocca
+`src/ios/`.
 
 ## 2. Le tre famiglie di difetti che questo crate produce
 
