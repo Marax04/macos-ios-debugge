@@ -98,6 +98,33 @@ su una CPU che ne espone **due**), entrambe le grafie `fp`/`x29` accettate (una
 sola ignorerebbe in silenzio metà dei chiamanti), e `watchpoint_hit` che
 risponde `None` come misura, non come segnaposto.
 
+## 4-quater. 605 — il difetto che Windows non poteva vedere
+
+La CI Linux ha catturato sei tool rotti che **nessuna esecuzione locale poteva
+trovare**: `tools/linux_debug.rs` compila SOLO su Linux.
+
+Causa isolata al commit: `ca13eb1`, *«remove 234 silencing attributes»*, ha
+rinominato `args` in `_args` per zittire un warning su non-Linux — ma il blocco
+`cfg(target_os = "linux")` **usa** `args`. Su Windows tutto verde, su Linux sei
+tool che non compilano.
+
+È l'anti-pattern che questo workspace vieta per iscritto: *mai correggere un
+warning togliendo o rinominando; la cosa «inutilizzata» è di solito usata dove
+il compilatore che hai lanciato non ha guardato.* Corretto senza `#[allow]`,
+come impone la stessa regola: il parametro riprende il nome e il ramo non-Linux
+lo USA con un binding.
+
+**E ha smascherato un buco nel mio ciclo.** Il fallimento stava nello step
+`Test rustre-mcp-tools`, che su Linux non stavo eseguendo: lanciavo solo
+`rustre-debug --lib`. La regola del loop lo chiede, e non lo facevo. È
+precisamente lo scarto fra «i miei test passano» e «la piattaforma è
+verificata».
+
+### ARM, misurato su `43ebeb1`
+
+**Da 5 a 3 rossi**: 590, 591 e 594 ne hanno chiusi due. Restano il PAC
+nell'unwinder e i due test sui registri di debug.
+
 ## 5. Lezioni di metodo
 
 1. **Misurare il rosso PRIMA del fix.** Un test che passa senza aver mai fallito

@@ -22,6 +22,11 @@ use serde_json::{json, Value};
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
+// Declared only where it is CALLED. Every call site sits under
+// `cfg(not(target_os = "linux"))`, so on Linux this compiled to a function
+// nobody could reach and warned accordingly. Gating the declaration to match
+// its use is not silencing the warning — it is answering it.
+#[cfg(not(target_os = "linux"))]
 fn linux_only_error(tool: &str) -> Result<ToolResult, McpError> {
     Ok(ToolResult::text(
         json!({
@@ -79,7 +84,16 @@ impl LinuxProcSnapshotTool {
 
 #[async_trait]
 impl ToolHandler for LinuxProcSnapshotTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_proc_snapshot");
 
@@ -143,7 +157,16 @@ impl LinuxProcMapsTool {
 
 #[async_trait]
 impl ToolHandler for LinuxProcMapsTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_proc_maps");
 
@@ -203,7 +226,16 @@ impl LinuxRrListTracesTool {
 
 #[async_trait]
 impl ToolHandler for LinuxRrListTracesTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_rr_list_traces");
 
@@ -273,7 +305,16 @@ impl LinuxRrTraceInfoTool {
 
 #[async_trait]
 impl ToolHandler for LinuxRrTraceInfoTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_rr_trace_info");
 
@@ -332,7 +373,16 @@ impl LinuxPerfSnapshotTool {
 
 #[async_trait]
 impl ToolHandler for LinuxPerfSnapshotTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_perf_snapshot");
 
@@ -439,7 +489,16 @@ impl LinuxEbpfUprobeConfigTool {
 
 #[async_trait]
 impl ToolHandler for LinuxEbpfUprobeConfigTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // `args` is consumed by the `cfg(target_os = "linux")` block below, so
+        // this arm has to acknowledge it or the parameter reads as unused on
+        // every other host. A BINDING is used here rather than an attribute:
+        // commit ca13eb1 renamed it to `_args` to silence exactly that warning
+        // and broke all six tools in this file on Linux, where the block that
+        // needs it does compile. Invisible from Windows — this file only builds
+        // on Linux — which is what the Linux CI row exists to catch.
+        #[cfg(not(target_os = "linux"))]
+        let _ = &args;
         #[cfg(not(target_os = "linux"))]
         return linux_only_error("linux_ebpf_uprobe_config");
 
