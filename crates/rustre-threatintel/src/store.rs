@@ -568,7 +568,14 @@ mod tests {
     #[test]
     fn a_corrupt_ioc_type_column_is_an_error_not_a_silent_sha256() {
         let conn = DbConnection::sqlite_in_memory().expect("in-memory sqlite");
-        if let DbConnection::Sqlite(m) = &conn {
+        // `DbConnection` has a single variant today, so `if let` here was
+        // irrefutable and rustc said so; `let ... else` is irrefutable for the
+        // same reason. A plain destructuring `let` is the form that matches the
+        // fact, and it is the one that will FAIL TO COMPILE if a second backend
+        // is ever added — which is the outcome you want: the test is then forced
+        // to say which backend it needs, instead of silently exercising one.
+        let DbConnection::Sqlite(m) = &conn;
+        {
             m.lock()
                 .execute(
                     "INSERT INTO iocs

@@ -5,7 +5,6 @@
 //! that exposes logging, version info, action registration, event handling,
 //! and a comprehensive binary analysis API.
 
-#![allow(clippy::needless_pass_by_value)]
 
 pub mod rhai_analysis_api;
 pub mod rhai_api_bindings;

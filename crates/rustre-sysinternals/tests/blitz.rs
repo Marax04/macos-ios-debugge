@@ -12,9 +12,8 @@ use rustre_sysinternals::{
     ThreadState,
 };
 
-#[allow(clippy::similar_names)]
-fn sample_proc(pid: u32, ppid: u32, name: &str) -> ProcessInfo {
-    ProcessInfo::new(pid, ppid, name)
+fn sample_proc(pid: u32, parent_pid: u32, name: &str) -> ProcessInfo {
+    ProcessInfo::new(pid, parent_pid, name)
 }
 
 #[test]

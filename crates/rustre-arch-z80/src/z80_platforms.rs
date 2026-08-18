@@ -515,7 +515,6 @@ pub struct GbDecoded {
 /// Only opcodes valid on Game Boy are handled.  Many Z80 opcodes are
 /// undefined/illegal on Game Boy and will decode as "ILLEGAL".
 #[must_use]
-#[allow(clippy::too_many_lines)]
 pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
     if bytes.is_empty() {
         return GbDecoded {

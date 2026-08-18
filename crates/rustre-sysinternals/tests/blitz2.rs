@@ -238,9 +238,8 @@ fn in_memory_monitor_add_and_list() {
 
 // ─── ProcessTree ──────────────────────────────────────────────────────────
 
-#[allow(clippy::similar_names)]
-fn make_proc(pid: u32, ppid: u32) -> ProcessInfo {
-    ProcessInfo::new(pid, ppid, format!("p{pid}"))
+fn make_proc(pid: u32, parent_pid: u32) -> ProcessInfo {
+    ProcessInfo::new(pid, parent_pid, format!("p{pid}"))
 }
 
 #[test]
@@ -581,17 +580,16 @@ fn error_specific_variants() {
 // ─── Round-trip on 50 LCG-seeded inputs ───────────────────────────────────
 
 #[test]
-#[allow(clippy::similar_names)]
 fn process_info_json_roundtrip_50() {
     let mut s = lcg_seed();
     for _ in 0..50 {
         let pid = u32::try_from(lcg_next(&mut s) % 100_000).unwrap();
-        let ppid = u32::try_from(lcg_next(&mut s) % 100_000).unwrap();
-        let p = ProcessInfo::new(pid, ppid, format!("proc_{pid}"));
+        let parent_pid = u32::try_from(lcg_next(&mut s) % 100_000).unwrap();
+        let p = ProcessInfo::new(pid, parent_pid, format!("proc_{pid}"));
         let j = p.to_json().unwrap();
         let p2: ProcessInfo = serde_json::from_str(&j).unwrap();
         assert_eq!(p2.pid, pid);
-        assert_eq!(p2.ppid, ppid);
+        assert_eq!(p2.ppid, parent_pid);
     }
 }
 

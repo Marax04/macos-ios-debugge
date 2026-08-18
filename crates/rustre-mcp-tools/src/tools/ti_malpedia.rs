@@ -83,16 +83,28 @@ impl TiMalpediaMockStatsTool {
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "ti_malpedia_mock_stats".to_string(),
-            description: "Return mock Malpedia knowledge-base statistics (family/actor/sample counts, breakdowns).".to_string(),
-            input_schema: json!({"type":"object","properties":{}}),
+            description: "Malpedia knowledge-base statistics COUNTED from the corpus at \
+                          `corpus_path`: family/actor/sample/YARA counts plus platform and \
+                          actor-country breakdowns."
+                .to_string(),
+            input_schema: with_corpus_args(json!({"type": "object", "properties": {}})),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for TiMalpediaMockStatsTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let s = rustre_ti_malpedia::MalpediaStats::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // ⚠ This took no arguments and returned `MalpediaStats::mock()`. An
+        // earlier pass had already stripped the invented 2269 families / 80
+        // actors / 12543 samples out of that constructor, so it answered all
+        // zeroes — honest, and useless: a client asking how large the knowledge
+        // base is learned only that this tool could not tell it.
+        //
+        // `MalpediaLocalDb::compute_stats` counts the records actually loaded,
+        // so pointing the tool at a corpus makes the numbers mean something.
+        let (db, is_synthetic_fixture) = malpedia_db_from_args(&args)?;
+        let s = db.compute_stats();
         Ok(ToolResult::text(json!({
             "family_count": s.family_count,
             "actor_count": s.actor_count,
@@ -100,7 +112,8 @@ impl ToolHandler for TiMalpediaMockStatsTool {
             "yara_rule_count": s.yara_rule_count,
             "platform_breakdown": s.platform_breakdown,
             "actor_country_breakdown": s.actor_country_breakdown,
-            "source": "rustre_ti_malpedia::MalpediaStats::mock",
+            "is_synthetic_fixture": is_synthetic_fixture,
+            "source": "rustre_ti_malpedia::MalpediaLocalDb::compute_stats",
         }).to_string()))
     }
 }
@@ -901,4 +914,67 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
         (TiMalpediaLocalDbListFamiliesTool::definition(), Box::new(TiMalpediaLocalDbListFamiliesTool)),
         (TiMalpediaClientSearchQueryExecTool::definition(), Box::new(TiMalpediaClientSearchQueryExecTool)),
     ]
+}
+
+#[cfg(test)]
+mod corpus_required_tests {
+    //! Pins that the corpus-backed tools cannot be called without a corpus.
+    //!
+    //! ⚠ A grep for `"properties": {}` reports `ti_malpedia_mock_stats` as
+    //! argument-less, because `with_corpus_args` wraps an empty inner schema.
+    //! That is a false positive of the grep, not of the tool — and the way to
+    //! know which is to assert the effective schema rather than read the source.
+
+    use super::*;
+
+    /// Every corpus-backed tool must declare `corpus_path` as required.
+    #[test]
+    fn the_effective_schema_requires_a_corpus_path() {
+        for schema in [
+            TiMalpediaMockStatsTool::definition().input_schema,
+            TiMalpediaMockDbSearchTool::definition().input_schema,
+            TiMalpediaMockDbFindByHashTool::definition().input_schema,
+        ] {
+            let required = schema["required"]
+                .as_array()
+                .expect("a corpus-backed tool must declare a required list");
+            assert!(
+                required.iter().any(|v| v == "corpus_path"),
+                "corpus_path must be required, got {required:?}"
+            );
+            assert!(
+                schema["properties"]["corpus_path"].is_object(),
+                "corpus_path must be documented in properties"
+            );
+        }
+    }
+
+    /// A call with no corpus is a parameter error, not zeroed statistics.
+    #[tokio::test]
+    async fn stats_without_a_corpus_is_rejected() {
+        match TiMalpediaMockStatsTool.call(json!({})).await {
+            Err(McpError::InvalidParams(m)) => {
+                assert!(m.contains("corpus_path"), "the error must name it: {m}");
+            }
+            other => panic!("expected InvalidParams, got {other:?}"),
+        }
+    }
+
+    /// A corpus that loads zero records is reported as such, rather than
+    /// answering with zeroes as if that were a measurement.
+    #[tokio::test]
+    async fn an_empty_corpus_is_reported_not_counted() {
+        let dir = std::env::temp_dir().join("rustre_malpedia_corpus_test");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("empty.json");
+        std::fs::write(&path, r#"{"families":[],"actors":[],"samples":[]}"#).expect("write");
+
+        let out = TiMalpediaMockStatsTool
+            .call(json!({"corpus_path": path.to_string_lossy()}))
+            .await;
+        assert!(
+            matches!(out, Err(McpError::ToolError(ref m)) if m.contains("0 records")),
+            "an empty corpus must be an error naming the emptiness, got {out:?}"
+        );
+    }
 }

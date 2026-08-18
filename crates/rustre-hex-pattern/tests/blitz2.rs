@@ -1,5 +1,4 @@
 //! Deep adversarial tests for rustre-hex-pattern (Y070).
-#![allow(clippy::needless_range_loop)]
 
 use rustre_hex_pattern::{
     AlternationPattern, CompiledPattern, MaskedPattern, Pattern, PatternByte, PatternDatabase,

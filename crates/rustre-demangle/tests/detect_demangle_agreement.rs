@@ -30,6 +30,13 @@ fn corpora() -> Vec<&'static str> {
         .collect()
 }
 
+/// One row of a detect/demangle agreement table: the demangler's display name,
+/// its inherent `detect` predicate, and its inherent `demangle` entry point.
+///
+/// Naming the triple keeps the two tables below readable and lets the tuple's
+/// shape be changed in one place.
+type DetectDemanglePair = (&'static str, fn(&str) -> bool, fn(&str) -> Option<String>);
+
 #[test]
 fn detect_never_promises_more_than_demangle_delivers() {
     let backends: Vec<(&str, Box<dyn Demangler>)> = vec![
@@ -92,11 +99,7 @@ fn detect_never_promises_more_than_demangle_delivers() {
 fn inherent_detect_methods_agree_with_their_demangle() {
     use rustre_demangle::{DDemangler, ObjCDemangler, RustV0Demangler};
 
-    #[allow(
-        clippy::type_complexity,
-        reason = "a table of (name, detect, demangle) triples reads better inline than behind an alias"
-    )]
-    let pairs: &[(&str, fn(&str) -> bool, fn(&str) -> Option<String>)] = &[
+    let pairs: &[DetectDemanglePair] = &[
         ("DDemangler", DDemangler::detect, DDemangler::demangle),
         (
             "RustV0Demangler",
@@ -160,11 +163,7 @@ fn inherent_detect_methods_agree_with_their_demangle() {
 fn degenerate_inputs_keep_detect_and_demangle_in_step() {
     use rustre_demangle::{DDemangler, ObjCDemangler, RustV0Demangler};
 
-    #[allow(
-        clippy::type_complexity,
-        reason = "a table of (name, detect, demangle) triples reads better inline"
-    )]
-    let pairs: &[(&str, fn(&str) -> bool, fn(&str) -> Option<String>)] = &[
+    let pairs: &[DetectDemanglePair] = &[
         ("DDemangler", DDemangler::detect, DDemangler::demangle),
         (
             "RustV0Demangler",

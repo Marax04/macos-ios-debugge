@@ -1072,9 +1072,11 @@ mod tests {
                 .into_iter()
                 .enumerate()
             {
+                // Register ids are `u32`; convert the enumerate index once,
+                // exactly (there are four seeds), instead of truncating it.
+                let id = u32::try_from(id).unwrap_or(u32::MAX);
                 func.instructions.push(LlilInstruction::SetRegister {
-                    #[allow(clippy::cast_possible_truncation)]
-                    dest: id as u32,
+                    dest: id,
                     size: Size::B8,
                     value: LlilExpr::Const { value: val, size: Size::B8 },
                 }.into());

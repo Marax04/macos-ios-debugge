@@ -2,7 +2,6 @@
 //! Disjoint from blitz.rs: focuses on fuzz, threading, round-trips, integer overflow,
 //! state-machine invariants, and Display/FromStr-ish round-trips.
 
-#![allow(clippy::too_many_lines)]
 
 use rustre_symbols::*;
 use std::sync::Arc;

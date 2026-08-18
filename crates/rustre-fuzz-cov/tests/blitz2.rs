@@ -1,5 +1,4 @@
 //! Deep adversarial tests for `rustre-fuzz-cov` core API.
-#![allow(clippy::float_cmp)]
 
 use rustre_fuzz_cov::{
     CmplogEntry, CmplogMap, CorpusPruner, CovError, CoverageDatabase, CoverageDiff,

@@ -3,7 +3,6 @@
 //! Focus: pure parsers, encoders, state machines, hash/eq invariants,
 //! LCG-fuzzed never-panic guarantees, threaded Send+Sync exercise.
 
-#![allow(clippy::too_many_lines)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;

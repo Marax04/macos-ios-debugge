@@ -3,8 +3,6 @@
 //! Covers: fuzz-resistance, boundaries, classifier consistency, round trips,
 //! Send+Sync threading, hash/eq.
 
-#![allow(clippy::cast_possible_truncation, reason = "seeded LCG indices are bounded by % before the cast")]
-
 use rustre_demangle::*;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -23,12 +21,29 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
+    /// A uniform-ish index into a collection of `len` elements.
+    ///
+    /// The `%` reduction happens in `u64`, so only an already-bounded value is
+    /// converted: `try_from` replaces a truncating `as usize` cast that would
+    /// have been silently wrong on a 32-bit target.
+    fn index(&mut self, len: usize) -> usize {
+        let modulus = u64::try_from(len).unwrap_or(u64::MAX).max(1);
+        usize::try_from(self.next() % modulus).unwrap_or(0)
+    }
+
+    /// A random printable-ASCII byte (32..=126).
+    ///
+    /// `try_from` cannot fail here: the modulo bounds the value at 94, so the
+    /// sum is at most 126.
+    fn printable_byte(&mut self) -> u8 {
+        u8::try_from(self.next() % 95).unwrap_or(0) + 32
+    }
+
     fn ascii_string(&mut self, max_len: usize) -> String {
-        let n = (self.next() as usize) % max_len.max(1) + 1;
+        let n = self.index(max_len.max(1)) + 1;
         let mut s = String::with_capacity(n);
         for _ in 0..n {
-            let b = (self.next() % 95) as u8 + 32; // printable ascii
-            s.push(b as char);
+            s.push(char::from(self.printable_byte()));
         }
         s
     }
@@ -74,9 +89,8 @@ fn itanium_demangle_does_not_panic_on_fuzz() {
     let mut lcg = Lcg::new(0xDEAD_BEEF_CAFE_BABE);
     for _ in 0..200 {
         let mut s = String::from("_Z");
-        for _ in 0..((lcg.next() as usize) % 40) {
-            let b = (lcg.next() % 95) as u8 + 32;
-            s.push(b as char);
+        for _ in 0..lcg.index(40) {
+            s.push(char::from(lcg.printable_byte()));
         }
         let _ = ItaniumDemangler.demangle(&s);
     }
@@ -113,9 +127,8 @@ fn msvc_fuzz_no_panic() {
     let mut lcg = Lcg::new(0x1234_5678_9ABC_DEF0);
     for _ in 0..200 {
         let mut s = String::from("?");
-        for _ in 0..((lcg.next() as usize) % 40) {
-            let b = (lcg.next() % 95) as u8 + 32;
-            s.push(b as char);
+        for _ in 0..lcg.index(40) {
+            s.push(char::from(lcg.printable_byte()));
         }
         let _ = MsvcDemangler.demangle(&s);
     }
@@ -180,10 +193,10 @@ fn rust_demangle_does_not_panic_on_fuzz() {
     let mut lcg = Lcg::new(0xCAFE_F00D_DEAD_BEEF);
     for _ in 0..150 {
         let mut s = String::from(if lcg.next() & 1 == 0 { "_R" } else { "_ZN" });
-        for _ in 0..((lcg.next() as usize) % 30) {
+        for _ in 0..lcg.index(30) {
             // restrict to ASCII alphanum so rustc-demangle is exercised meaningfully
             let alphabet = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-            let b = alphabet[(lcg.next() as usize) % alphabet.len()];
+            let b = alphabet[lcg.index(alphabet.len())];
             s.push(b as char);
         }
         let _ = RustDemangler.demangle(&s);
@@ -743,7 +756,7 @@ fn auto_demangler_threaded_stress() {
         handles.push(std::thread::spawn(move || {
             let mut lcg = Lcg::new(0x1000_0000 + t);
             for _ in 0..100 {
-                let s = inputs[(lcg.next() as usize) % inputs.len()];
+                let s = inputs[lcg.index(inputs.len())];
                 let _ = auto.demangle(s);
             }
         }));

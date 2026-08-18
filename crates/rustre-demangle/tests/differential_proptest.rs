@@ -10,14 +10,37 @@
 //! reported here is real by construction. Symbols the reference itself rejects
 //! are skipped — for those there is no ground truth.
 
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    reason = "test harness: RNG values are bounded by % before use, and the \
-              acceptance rate is a display-only ratio"
-)]
-
 use proptest::prelude::*;
+
+/// Convert an RNG value the caller has already reduced with `%` to `usize`.
+///
+/// The reduction happens in `u64`, so the value reaching this function is small
+/// by construction; `try_from` states that in code rather than leaving a
+/// truncating `as usize` cast to be trusted.
+fn to_usize(v: u64) -> usize {
+    usize::try_from(v).unwrap_or(usize::MAX)
+}
+
+/// Pick an index into a `len`-element table from an RNG value, reducing in
+/// `u64` so no value is ever truncated on the way to `usize`.
+fn pick(v: u64, len: usize) -> usize {
+    let modulus = u64::try_from(len).unwrap_or(u64::MAX).max(1);
+    to_usize(v % modulus)
+}
+
+/// `usize` → `f64` for the acceptance-rate ratio, without a lossy cast.
+///
+/// Split into two 32-bit halves, each of which `f64::from` converts exactly;
+/// the scaling by 2^32 is exact, so the single rounding in the final addition
+/// is the same one a correct `x as f64` performs.
+fn to_f64(x: usize) -> f64 {
+    const TWO_POW_32: f64 = 4_294_967_296.0;
+    let wide = u64::try_from(x).unwrap_or(u64::MAX);
+    let hi = u32::try_from(wide >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(wide & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(TWO_POW_32, f64::from(lo))
+}
+
 
 /// Builtin Itanium type codes and the identifiers they map to.
 const TYPE_CODES: &[&str] = &[
@@ -93,11 +116,11 @@ fn generators_produce_symbols_the_reference_accepts() {
     let mut accepted = 0usize;
     let mut total = 0usize;
     for _ in 0..500 {
-        let len = (next() % 6 + 3) as usize;
+        let len = to_usize(next() % 6 + 3);
         let name: String = (0..len)
             .map(|_| char::from(b'a' + u8::try_from(next() % 26).unwrap_or(0)))
             .collect();
-        let ty = TYPE_CODES[(next() as usize) % TYPE_CODES.len()];
+        let ty = TYPE_CODES[pick(next(), TYPE_CODES.len())];
         for sym in [
             format!("_Z{}{name}{ty}", name.len()),
             format!("_ZN{}{name}{}{name}E{ty}", name.len(), name.len()),
@@ -110,7 +133,7 @@ fn generators_produce_symbols_the_reference_accepts() {
         }
     }
 
-    let rate = accepted as f64 / total as f64;
+    let rate = to_f64(accepted) / to_f64(total);
     assert!(
         rate > 0.95,
         "Itanium generators produce symbols the reference rejects \
@@ -135,7 +158,7 @@ fn rust_generators_produce_symbols_the_reference_accepts() {
         state
     };
     let word = |n: &mut dyn FnMut() -> u64| -> String {
-        let len = (n() % 6 + 2) as usize;
+        let len = to_usize(n() % 6 + 2);
         (0..len)
             .map(|_| char::from(b'a' + u8::try_from(n() % 26).unwrap_or(0)))
             .collect()

@@ -11,13 +11,73 @@ use thiserror::Error;
 /// avoid repeated truncation-cast warnings at call sites).
 const U64_MAX_F64: f64 = 1.844_674_407_370_955_2e19_f64;
 
-/// Cast a non-negative, finite `f64` to `u64`, saturating to `u64::MAX`
-/// instead of invoking undefined behaviour.  Always call with a value that has
-/// already been checked to be `< U64_MAX_F64`.
+/// Convert a finite `f64` to `u64`, truncating toward zero and saturating at
+/// both ends, without a lossy `as` cast.
+///
+/// The conversion reads the IEEE-754 bit pattern rather than casting: the
+/// biased exponent and the explicit 53-bit significand are extracted and the
+/// significand is shifted into place. That is exactly the value `v as u64`
+/// yields for every in-range input, but stated in code instead of hidden behind
+/// a lint exemption. Out-of-range inputs are handled explicitly, so the
+/// function is total: `NaN` and anything below `1.0` (including every negative
+/// value) map to `0`, and anything at or above 2^64 maps to `u64::MAX`.
 #[inline]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-const fn f64_to_u64_checked(v: f64) -> u64 {
-    v as u64
+fn f64_to_u64_checked(v: f64) -> u64 {
+    /// Number of explicit significand bits in an IEEE-754 binary64.
+    const MANTISSA_BITS: i32 = 52;
+    /// Exponent bias of an IEEE-754 binary64.
+    const EXPONENT_BIAS: i32 = 1023;
+
+    if v.is_nan() || v < 1.0 {
+        return 0;
+    }
+    if v >= U64_MAX_F64 {
+        return u64::MAX;
+    }
+    let bits = v.to_bits();
+    // Cannot fail: the mask keeps 11 bits, so the value is at most 2047.
+    let biased = i32::try_from((bits >> MANTISSA_BITS) & 0x7FF).unwrap_or(0);
+    let exponent = biased - EXPONENT_BIAS;
+    // `v >= 1.0` above guarantees a normal number, so the implicit leading
+    // one-bit is restored explicitly here.
+    let significand = (bits & ((1_u64 << MANTISSA_BITS) - 1)) | (1_u64 << MANTISSA_BITS);
+    if exponent >= MANTISSA_BITS {
+        // `v < 2^64` bounds the shift below 12, so this cannot overflow.
+        significand << u32::try_from(exponent - MANTISSA_BITS).unwrap_or(0)
+    } else {
+        // Discards the fractional bits, i.e. truncation toward zero.
+        significand >> u32::try_from(MANTISSA_BITS - exponent).unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod float_to_int_tests {
+    use super::{f64_to_u64_checked, U64_MAX_F64};
+
+    /// Expected values are the exact mathematical truncations, which is also
+    /// what a correct `f64 as u64` produces for these inputs.
+    #[test]
+    fn truncates_toward_zero() {
+        assert_eq!(f64_to_u64_checked(0.5), 0);
+        assert_eq!(f64_to_u64_checked(1.0), 1);
+        assert_eq!(f64_to_u64_checked(1.9999), 1);
+        assert_eq!(f64_to_u64_checked(255.75), 255);
+        assert_eq!(f64_to_u64_checked(65_535.5), 65_535);
+        assert_eq!(f64_to_u64_checked(4_294_967_296.0), 4_294_967_296);
+        assert_eq!(f64_to_u64_checked(1e15), 1_000_000_000_000_000);
+        assert_eq!(
+            f64_to_u64_checked(9_007_199_254_740_992.0),
+            9_007_199_254_740_992
+        );
+    }
+
+    #[test]
+    fn saturates_and_floors_out_of_range_input() {
+        assert_eq!(f64_to_u64_checked(f64::NAN), 0);
+        assert_eq!(f64_to_u64_checked(-1.0), 0);
+        assert_eq!(f64_to_u64_checked(f64::INFINITY), u64::MAX);
+        assert_eq!(f64_to_u64_checked(U64_MAX_F64), u64::MAX);
+    }
 }
 
 // ── Error ────────────────────────────────────────────────────────────────────

@@ -8,7 +8,6 @@
 //! JvmDisassembler, JvmExceptionEntry, JvmTypeDesc, VerificationTypeFull,
 //! access_flags, newarray_type.
 
-#![allow(clippy::needless_range_loop)]
 
 use rustre_arch_jvm::*;
 use rustre_core::arch::Architecture;

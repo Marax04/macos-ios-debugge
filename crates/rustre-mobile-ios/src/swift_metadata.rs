@@ -562,8 +562,21 @@ impl SwiftTypeDescriptor {
         self.fields.len()
     }
 
-    // ── Mock constructors (for tests / stubs) ──────────────────────────────
+    // ── Synthetic fixtures (this crate's own tests only) ───────────────────
+    //
+    // NONE of the four constructors below parses anything. They take only a
+    // name and a module, which do not determine a type's fields, vtable or
+    // conformances, so there is no honest answer to compute from them: they are
+    // templates. The real producers, which DO read bytes, are
+    // `parse_types` / `parse_swift_metadata` (this module, over
+    // `__swift5_types`/`__swift5_fieldmd` section data) and
+    // `ios_swift_metadata_parser::parse_swift_types` (over a Mach-O image).
+    // Every identifier below is deliberately spelled `Synthetic…` so a value
+    // that leaks into a report is recognisable at a glance as a fixture.
 
+    /// Synthetic struct-shaped fixture. NOT analysis: nothing is parsed and the
+    /// contents are invented. Use `parse_types` / `parse_swift_metadata` for a
+    /// descriptor derived from real metadata.
     #[must_use]
     pub fn mock_struct(name: &str, module: &str) -> Self {
         Self {
@@ -572,14 +585,14 @@ impl SwiftTypeDescriptor {
             kind: SwiftTypeKind::Struct,
             fields: vec![
                 SwiftField {
-                    name: "id".to_string(),
+                    name: "syntheticFieldA".to_string(),
                     type_name: "$sSiD".to_string(),
                     type_display: "Int".to_string(),
                     flags: FieldRecordFlags(0x02),
                     offset: Some(0),
                 },
                 SwiftField {
-                    name: "name".to_string(),
+                    name: "syntheticFieldB".to_string(),
                     type_name: "$sSSD".to_string(),
                     type_display: "String".to_string(),
                     flags: FieldRecordFlags(0x02),
@@ -588,10 +601,13 @@ impl SwiftTypeDescriptor {
             ],
             generic_params: vec![],
             generic_requirements: vec![],
-            conformances: vec!["Codable".to_string(), "Equatable".to_string()],
+            conformances: vec![
+                "SyntheticProtocolA".to_string(),
+                "SyntheticProtocolB".to_string(),
+            ],
             vtable: vec![],
             protocol_requirements: vec![],
-            descriptor_offset: 0x1001_0000,
+            descriptor_offset: 0,
             module_name: Some(module.to_string()),
             superclass: None,
             num_empty_cases: 0,
@@ -600,6 +616,9 @@ impl SwiftTypeDescriptor {
         }
     }
 
+    /// Synthetic class-shaped fixture. NOT analysis: nothing is parsed and the
+    /// contents are invented. Use `parse_types` / `parse_swift_metadata` for a
+    /// descriptor derived from real metadata.
     #[must_use]
     pub fn mock_class(name: &str, module: &str) -> Self {
         Self {
@@ -607,9 +626,9 @@ impl SwiftTypeDescriptor {
             mangled_name: format!("$s{}{}C", module.len(), name),
             kind: SwiftTypeKind::Class,
             fields: vec![SwiftField {
-                name: "delegate".to_string(),
-                type_name: "$sSQySo12UIViewControllerCGD".to_string(),
-                type_display: "UIViewController?".to_string(),
+                name: "syntheticDelegate".to_string(),
+                type_name: "$sSQySo17SyntheticBaseClassCGD".to_string(),
+                type_display: "SyntheticBaseClass?".to_string(),
                 flags: FieldRecordFlags(0x02),
                 offset: Some(16),
             }],
@@ -621,21 +640,24 @@ impl SwiftTypeDescriptor {
                 SwiftVTableEntry::from_raw(0x01, 0x1000_0200),
             ],
             protocol_requirements: vec![],
-            descriptor_offset: 0x1002_0000,
+            descriptor_offset: 0,
             module_name: Some(module.to_string()),
-            superclass: Some("UIViewController".to_string()),
+            superclass: Some("SyntheticBaseClass".to_string()),
             num_empty_cases: 0,
             objc_bridged: true,
             objc_stubs: vec![ObjcMetadataStub {
                 class_name: name.to_string(),
                 swift_class_name: format!("{module}.{name}"),
                 is_root: false,
-                superclass_name: Some("UIViewController".to_string()),
-                selectors: vec!["viewDidLoad".to_string(), "init".to_string()],
+                superclass_name: Some("SyntheticBaseClass".to_string()),
+                selectors: vec!["syntheticSelector".to_string(), "init".to_string()],
             }],
         }
     }
 
+    /// Synthetic enum-shaped fixture. NOT analysis: nothing is parsed and the
+    /// contents are invented. Use `parse_types` / `parse_swift_metadata` for a
+    /// descriptor derived from real metadata.
     #[must_use]
     pub fn mock_enum(name: &str, module: &str) -> Self {
         Self {
@@ -644,14 +666,14 @@ impl SwiftTypeDescriptor {
             kind: SwiftTypeKind::Enum,
             fields: vec![
                 SwiftField {
-                    name: "success".to_string(),
+                    name: "syntheticCaseA".to_string(),
                     type_name: "$sSiD".to_string(),
                     type_display: "Int".to_string(),
                     flags: FieldRecordFlags(0x00),
                     offset: None,
                 },
                 SwiftField {
-                    name: "failure".to_string(),
+                    name: "syntheticCaseB".to_string(),
                     type_name: "$ss5ErrorPD".to_string(),
                     type_display: "Error".to_string(),
                     flags: FieldRecordFlags(0x01),
@@ -662,13 +684,13 @@ impl SwiftTypeDescriptor {
                 index: 0,
                 name: "T".to_string(),
                 kind: GenericParamKind::Type,
-                constraints: vec!["Sendable".to_string()],
+                constraints: vec!["SyntheticConstraint".to_string()],
             }],
             generic_requirements: vec![],
             conformances: vec![],
             vtable: vec![],
             protocol_requirements: vec![],
-            descriptor_offset: 0x1003_0000,
+            descriptor_offset: 0,
             module_name: Some(module.to_string()),
             superclass: None,
             num_empty_cases: 0,
@@ -677,6 +699,9 @@ impl SwiftTypeDescriptor {
         }
     }
 
+    /// Synthetic protocol-shaped fixture. NOT analysis: nothing is parsed and
+    /// the contents are invented. Use `parse_proto` / `parse_swift_metadata`
+    /// for a descriptor derived from real metadata.
     #[must_use]
     pub fn mock_protocol(name: &str, module: &str) -> Self {
         Self {
@@ -694,7 +719,7 @@ impl SwiftTypeDescriptor {
                 default_impl: None,
                 is_instance: true,
             }],
-            descriptor_offset: 0x1004_0000,
+            descriptor_offset: 0,
             module_name: Some(module.to_string()),
             superclass: None,
             num_empty_cases: 0,
@@ -2220,8 +2245,8 @@ mod tests {
         let t = SwiftTypeDescriptor::mock_struct("User", "MyApp");
         assert_eq!(t.field_count(), 2);
         assert!(!t.is_generic());
-        assert!(t.conforms_to("Codable"));
-        assert!(t.conforms_to("Equatable"));
+        assert!(t.conforms_to("SyntheticProtocolA"));
+        assert!(t.conforms_to("SyntheticProtocolB"));
         assert!(!t.conforms_to("Hashable"));
     }
 
@@ -2233,7 +2258,7 @@ mod tests {
         assert_eq!(t.objc_stubs.len(), 1);
         assert_eq!(
             t.objc_stubs[0].superclass_name,
-            Some("UIViewController".into())
+            Some("SyntheticBaseClass".into())
         );
     }
 
@@ -2519,9 +2544,9 @@ mod tests {
     #[test]
     fn test_parser_types_conforming_to() {
         let p = SwiftMetadataParser::mock();
-        let codable = p.types_conforming_to("Codable");
-        assert!(!codable.is_empty());
-        assert!(codable.iter().any(|t| t.name == "User"));
+        let conforming = p.types_conforming_to("SyntheticProtocolA");
+        assert!(!conforming.is_empty());
+        assert!(conforming.iter().any(|t| t.name == "User"));
     }
 
     #[test]

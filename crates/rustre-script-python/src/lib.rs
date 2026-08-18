@@ -11,7 +11,6 @@
 //!    `inject_module`.  Also exposes a `rustre` module inside the Python
 //!    interpreter with logging, version query, and a stub `BinaryView`.
 
-#![allow(clippy::missing_errors_doc)]
 
 pub mod ida_compat_api;
 pub mod pyo3_bindings;

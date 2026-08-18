@@ -27,11 +27,21 @@
 
 use rustre_flirt::{FlirtName, FlirtPattern, PatternByte, signature_matcher::PatternMatcher};
 
+/// Split a pattern index into its high and low byte.
+///
+/// Decides nothing but the seed pair: masking with `0xff` bounds each half to
+/// `0..=255`, so neither conversion can fail and the index is never silently
+/// truncated the way a bare `as u8` on the whole index would truncate it.
+fn index_bytes(i: usize) -> (u8, u8) {
+    let hi = u8::try_from((i >> 8) & 0xff).unwrap_or(0);
+    let lo = u8::try_from(i & 0xff).unwrap_or(0);
+    (hi, lo)
+}
+
 fn distinct_patterns(n: usize) -> Vec<FlirtPattern> {
     (0..n)
         .map(|i| {
-            #[allow(clippy::cast_possible_truncation)]
-            let (hi, lo) = ((i >> 8) as u8, i as u8);
+            let (hi, lo) = index_bytes(i);
             let bytes: Vec<PatternByte> = (0u8..24)
                 .map(|k| match k {
                     0 => PatternByte::Exact(hi),
@@ -56,9 +66,9 @@ fn distinct_patterns(n: usize) -> Vec<FlirtPattern> {
 fn haystack_with(pats: &[FlirtPattern]) -> Vec<u8> {
     let mut hay: Vec<u8> = (0..200_000u32)
         .map(|i| {
-            #[allow(clippy::cast_possible_truncation)]
-            let v = (i.wrapping_mul(2_654_435_761) >> 13) as u8;
-            v
+            // `to_le_bytes()[0]` IS the low byte — the same value the old
+            // `as u8` produced, obtained without a truncating cast.
+            (i.wrapping_mul(2_654_435_761) >> 13).to_le_bytes()[0]
         })
         .collect();
     for (i, p) in pats.iter().enumerate() {

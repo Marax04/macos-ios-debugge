@@ -458,18 +458,24 @@ fn parse_params(params_str: &str) -> Vec<JavaType> {
 // Mock DEX class builder (for tests)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Build a minimal mock `DexClass` for testing the conversion pipeline.
+/// Synthetic `DexClass` fixture for this crate's own tests.
+///
+/// NOT analysis. A class descriptor names a class but does not determine its
+/// methods, fields or bytecode, so there is nothing here to compute: the
+/// members below are invented and only the `descriptor` comes from the caller.
+/// The real producers, which decode actual DEX bytes, are
+/// [`crate::dex_project::project_from_dex_bytes`] (a bare `.dex`),
+/// [`crate::dex_project::project_from_bytes`] (`.dex` or an APK/zip) and
+/// `rustre_loader_android::dex`. Never report a value derived from this
+/// function as the analysis of a real APK.
 #[must_use]
-/// NOTE: a hand-written fixture for this crate's own tests. It is not
-/// derived from any input and is not reachable from the MCP tool surface;
-/// never report it to a user as the analysis of a real file.
 pub fn mock_dex_class(descriptor: &str) -> DexClass {
     DexClass {
         descriptor: descriptor.to_owned(),
         access_flags: 0x0001, // public
         superclass: Some("Ljava/lang/Object;".to_owned()),
         interfaces: vec![],
-        source_file: Some("Foo.java".to_owned()),
+        source_file: Some("SyntheticFixture.java".to_owned()),
         direct_methods: vec![DexMethod {
             name: "<init>".to_owned(),
             proto: "()V".to_owned(),
@@ -503,7 +509,7 @@ pub fn mock_dex_class(descriptor: &str) -> DexClass {
         }],
         virtual_methods: vec![],
         instance_fields: vec![DexField {
-            name: "value".to_owned(),
+            name: "syntheticValue".to_owned(),
             type_desc: "I".to_owned(),
             access_flags: 0x0002,
         }],

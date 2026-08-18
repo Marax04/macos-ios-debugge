@@ -94,7 +94,6 @@ impl fmt::Display for OperandType {
 
 /// Every `LuaJIT` 2.x opcode as a typed enum.  Numeric values match the
 /// canonical opcode byte used in `LuaJIT` 2.1 (git head as of 2024).
-#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LjOpcode {

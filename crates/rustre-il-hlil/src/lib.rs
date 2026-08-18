@@ -8159,6 +8159,37 @@ pub mod structuring {
     /// components with no self-loop are trivial (not loops); components with
     /// > 1 node, or a single node with a self-edge, represent cyclic regions.
     #[must_use]
+    /// DEFAULT-ON dal 2026-08-18 (#6760); si spegne con
+    /// `RUSTRE_HLIL_TOPTEST_BREAK=0`.
+    ///
+    /// E' rimasto OPT-IN un giro intero perche' perdeva 6 chiamate distinte in
+    /// 2 file su 11342 — poche, ma perse in SILENZIO, la classe di regressione
+    /// che CLAUDE.md documenta come capace di restare dentro per mesi (i 2233
+    /// parametri fantasma). La causa non era in questo codice: era
+    /// `remove_unreachable_after_terminator`, che cancellava un costrutto con
+    /// un'etichetta ANNIDATA (#6770). Chiusa quella, qui restano solo guadagni.
+    ///
+    /// Misurato sul corpus intero (11342 file per lato), con #6770 attivo:
+    ///   chiamate perse per difetto  1066 -> 423   (−60%)
+    ///   chiamate distinte perse     **0** in **0** file (erano 6 in 2)
+    ///   `JUMPOUT`                   0 -> 0
+    ///   dati materializzati         7943 -> 7943 (invariati)
+    ///   comportamento               15 AGREE / 4 LINK_FAIL, IDENTICO
+    ///                               funzione per funzione (19/19)
+    ///   costo: `goto` 8978 -> 9541 (+563), concentrati su C# e Go, cioe' dove
+    ///          il flusso e' gia' irriducibile; i cinque bucket C ne prendono
+    ///          uno a testa.
+    ///
+    /// Il compromesso e' esplicito e va nella direzione giusta: un `goto` e'
+    /// onesto e verificabile, del codice irraggiungibile e' silenziosamente
+    /// sbagliato.
+    fn top_test_break_enabled() -> bool {
+        !matches!(
+            std::env::var("RUSTRE_HLIL_TOPTEST_BREAK").as_deref(),
+            Ok("0") | Ok("false")
+        )
+    }
+
     pub fn tarjan_scc(cfg: &StructuringCfg) -> Vec<Vec<u32>> {
         struct State<'a> {
             cfg: &'a StructuringCfg,
@@ -8642,9 +8673,18 @@ pub mod structuring {
     /// measured independently.
     #[must_use]
     pub fn detect_natural_loops(cfg: &StructuringCfg) -> Vec<NaturalLoop> {
-        if matches!(
+        // DEFAULT-ON dal 2026-08-18 (#6790); si torna all'implementazione
+        // locale con `RUSTRE_HLIL_LOOPS_DELEGATE=0`.
+        //
+        // Misurato sul corpus intero: output **identico byte per byte**
+        // (`diff -rq`, 0 differenze su 11342 file `.hlil.c`), tutti i contatori
+        // invariati. Il che e' la cosa migliore che si potesse misurare: prova
+        // che la versione DELEGATA al crate di analisi concorda con quella
+        // locale, e permette di cablare quel crate a COSTO ZERO — che e'
+        // l'obiettivo «tutta la catena usata».
+        if !matches!(
             std::env::var("RUSTRE_HLIL_LOOPS_DELEGATE").as_deref(),
-            Ok("1") | Ok("true")
+            Ok("0") | Ok("false")
         ) {
             return detect_natural_loops_delegated(cfg);
         }
@@ -9091,6 +9131,93 @@ pub mod structuring {
             switch_depth: 0,
         };
         let mut body = s.emit_sequence(cfg.entry, None);
+        // ── #6760b: svuotamento FINALE delle uscite pendenti ─────────────────
+        //
+        // Con `RUSTRE_HLIL_TOPTEST_BREAK` le uscite secondarie di un loop a test
+        // in testa non vengono piu' emesse subito dopo il `while` — la' devono
+        // starci solo il bersaglio del `break` e nient'altro, o il `break`
+        // atterra nel posto sbagliato. Restano quindi in `pending_exits`.
+        //
+        // Se nessuno le emette, il `goto` verso di esse non trova etichetta e
+        // degrada a `JUMPOUT`: MISURATO, la prima stesura scambiava 12 chiamate
+        // perse per 15 `JUMPOUT`, che non e' un affare. Qui si emettono in coda
+        // alla funzione, dove un'etichetta e' sempre valida e nessun `break`
+        // dipende dall'adiacenza.
+        if top_test_break_enabled() {
+            let attesi = s.pending_exits.len();
+            let gia_emessi = s
+                .pending_exits
+                .iter()
+                .filter(|t| s.emitted.contains(t))
+                .count();
+            let mut coda = Vec::new();
+            s.emit_pending_exits(0, &mut coda);
+            // SONDA (`RUSTRE_DBG_PENDING=1`, effetto ZERO): distingue «non c'era
+            // nulla da emettere» da «c'era ed e' stato saltato perche' gia'
+            // marcato emesso» da «emesso davvero». Serve perche' leggere il
+            // codice ha gia' falsificato due ipotesi su questa regressione.
+            if std::env::var("RUSTRE_DBG_PENDING").is_ok_and(|v| v != "0") {
+                // ⚠ La prima stesura stampava `cfg.entry`, che e' un ID DI
+                // BLOCCO e non l'indirizzo: inutilizzabile per isolare una
+                // funzione. Qui si stampa l'indirizzo del blocco d'ingresso.
+                let fnaddr = cfg
+                    .blocks
+                    .get(&cfg.entry)
+                    .map_or(0, |b| b.address.as_u64());
+                eprintln!(
+                    "[pending] fn={fnaddr:x} attesi={attesi} gia_emessi={gia_emessi} stmt_emessi={}",
+                    coda.len()
+                );
+            }
+            body.extend(coda);
+        }
+        // SONDA #6770 (`RUSTRE_DBG_DISCARD=1`, effetto ZERO): blocchi marcati
+        // `emitted` il cui CODICE non e' finito nel corpo.
+        //
+        // `emit_block` emette SEMPRE un'etichetta `loc_<addr>` per il blocco che
+        // stampa. Quindi un id in `emitted` la cui etichetta NON compare fra gli
+        // statement finali e' un blocco i cui statement sono stati costruiti e
+        // poi SCARTATI — e nessuno lo riemettera' mai, perche' ogni via di
+        // recupero (`emit_pending_exits`, `emit_loop_body`) salta cio' che
+        // risulta gia' emesso.
+        //
+        // E' l'unico meccanismo rimasto compatibile con le quattro misure del
+        // §65: blocchi tutti emessi, nessun goto orfano, relooper identico,
+        // registrazione irrilevante.
+        if std::env::var("RUSTRE_DBG_DISCARD").is_ok_and(|v| v != "0") {
+            fn etichette(stmts: &[HlilStatement], out: &mut HashSet<String>) {
+                for s in stmts {
+                    if let HlilStatement::Label(l) = s {
+                        out.insert(l.clone());
+                    }
+                    for b in crate::hlil_structuring::stmt_bodies_pub(s) {
+                        etichette(b, out);
+                    }
+                }
+            }
+            let mut viste = HashSet::new();
+            etichette(&body, &mut viste);
+            let fnaddr = cfg
+                .blocks
+                .get(&cfg.entry)
+                .map_or(0, |b| b.address.as_u64());
+            let mut scartati = 0usize;
+            let mut righe_scartate = 0usize;
+            for &id in &s.emitted {
+                let Some(b) = cfg.blocks.get(&id) else { continue };
+                if id == cfg.entry {
+                    continue; // l'ingresso non porta etichetta
+                }
+                if !viste.contains(&format!("loc_{:x}", b.address.as_u64())) {
+                    scartati += 1;
+                    righe_scartate += b.body.len();
+                }
+            }
+            eprintln!(
+                "[discard] fn={fnaddr:x} emessi={} scartati={scartati} righe_scartate={righe_scartate}",
+                s.emitted.len()
+            );
+        }
         // Sonda (`RUSTRE_HLIL_DEBUG=1`, effetto ZERO): quali blocchi del CFG NON
         // sono MAI stati emessi. #2570 ha provato che un `JUMPOUT` e' esattamente
         // questo — un `goto` verso un blocco la cui etichetta non esiste perche'
@@ -10191,6 +10318,29 @@ pub mod structuring {
                     (else_blk, then_blk, HlilExpr::LogicalNot(Box::new(cond)))
                 };
                 self.emitted.insert(header);
+                // ── #6760: in questa forma il bersaglio del `break` e'
+                // `outside`, DIMOSTRABILMENTE ────────────────────────────────
+                //
+                // `break_exit` viene da `ipdom(header)` quando le uscite sono
+                // piu' d'una. Ma qui il ramo del test in testa che lascia il
+                // ciclo va per costruzione a `outside`, e il `break` emesso
+                // sotto atterra su cio' che SEGUE il costrutto — che e'
+                // `outside`, perche' e' quello che si restituisce al chiamante.
+                //
+                // Quando i due divergono, `emit_pending_exits` infila il blocco
+                // di `break_exit` FRA il `while` e `outside`: il `break` atterra
+                // sul blocco sbagliato e `outside` finisce dopo un `return`,
+                // irraggiungibile. MISURATO su `__dyn_tls_init` e `_initterm_e`:
+                // il blocco che INVOCA il puntatore a funzione finiva li' dentro,
+                // e le due funzioni emesse non chiamavano mai nulla. Sui 3
+                // bucket la classe vale 41 file su 143 e 57 chiamate perse.
+                //
+                // Gate `RUSTRE_HLIL_TOPTEST_BREAK`, opt-in.
+                if top_test_break_enabled()
+                    && let Some(last) = self.loop_ctx.last_mut()
+                {
+                    last.1 = Some(outside);
+                }
                 // The header block's own statements execute BEFORE its
                 // branch test on every iteration — dropping them (the old
                 // behaviour) silently deleted the body of every
@@ -10231,8 +10381,27 @@ pub mod structuring {
                     body,
                 });
                 self.loop_ctx.pop();
-                self.queue_break_exit(break_exit, Some(outside));
-                self.emit_pending_exits(mark, out);
+                if top_test_break_enabled() {
+                    // NIENTE fra il `while` e `outside`: e' l'invariante da cui
+                    // dipende la correttezza del `break` emesso sopra.
+                    //
+                    // ⚠ Ma REGISTRARE l'uscita secondaria e' comunque
+                    // obbligatorio: la prima stesura saltava anche
+                    // `queue_break_exit`, cosi' il blocco di `break_exit` non
+                    // finiva in `pending_exits` e, se nessun altro lo emetteva,
+                    // il suo codice SPARIVA. MISURATO su
+                    // `sample4_go/sub_14001fa32`: 530 righe -> 394 e 10 chiamate
+                    // di runtime perse (`runtime_scanConservative`,
+                    // `runtime_putempty`, …). Si registra qui e lo svuota
+                    // `structure_function` in coda alla funzione (#6760b), dove
+                    // l'etichetta e' valida e nessun `break` dipende
+                    // dall'adiacenza.
+                    self.queue_break_exit(break_exit, Some(outside));
+                    let _ = mark;
+                } else {
+                    self.queue_break_exit(break_exit, Some(outside));
+                    self.emit_pending_exits(mark, out);
+                }
                 return Some(outside);
             }
 

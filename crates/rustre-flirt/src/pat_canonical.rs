@@ -75,9 +75,18 @@ fn parse_pattern(field: &str, line: usize) -> Result<Vec<PatternByte>, PatCanoni
         let lo = (pair[1] as char).to_digit(16);
         match (hi, lo) {
             (Some(h), Some(l)) => {
-                // Both digits valid: a concrete byte.
-                #[allow(clippy::cast_possible_truncation)]
-                out.push(PatternByte::Exact((h * 16 + l) as u8));
+                // Both digits valid: a concrete byte. `to_digit(16)` yields
+                // 0..=15, so `h * 16 + l` is 0..=255 and the conversion cannot
+                // fail; the error arm is propagated rather than unwrapped so a
+                // future change to the digit parser cannot turn into a panic on
+                // attacker-supplied .pat input.
+                let Ok(byte) = u8::try_from(h * 16 + l) else {
+                    return Err(PatCanonicalError::BadPattern {
+                        line,
+                        field: field.to_string(),
+                    });
+                };
+                out.push(PatternByte::Exact(byte));
             }
             _ => {
                 return Err(PatCanonicalError::BadPattern {

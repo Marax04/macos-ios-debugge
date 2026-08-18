@@ -15,8 +15,28 @@ use crate::rename_propagator::{FunctionSignature, TypeDescriptor};
 
 /// All prototypes extracted from the installed mingw-w64 / libgcc headers.
 #[must_use]
-#[allow(clippy::too_many_lines)]
 pub fn runtime_prototypes() -> Vec<FunctionSignature> {
+    let mut all = Vec::new();
+    all.extend(runtime_prototypes_part_0());
+    all.extend(runtime_prototypes_part_1());
+    all.extend(runtime_prototypes_part_2());
+    all.extend(runtime_prototypes_part_3());
+    all.extend(runtime_prototypes_part_4());
+    all.extend(runtime_prototypes_part_5());
+    all.extend(runtime_prototypes_part_6());
+    all.extend(runtime_prototypes_part_7());
+    all.extend(runtime_prototypes_part_8());
+    all.extend(runtime_prototypes_part_9());
+    all.extend(runtime_prototypes_part_10());
+    all.extend(runtime_prototypes_part_11());
+    all
+}
+
+/// Prototypes 0..12 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_0() -> Vec<FunctionSignature> {
     vec![
         // unwind.h:120
         FunctionSignature {
@@ -114,6 +134,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 12..24 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_1() -> Vec<FunctionSignature> {
+    vec![
         // unwind.h:182
         FunctionSignature {
             name: "_Unwind_GetTextRelBase".into(),
@@ -210,6 +239,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 24..36 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_2() -> Vec<FunctionSignature> {
+    vec![
         // wchar.h:55
         FunctionSignature {
             name: "__acrt_iob_func".into(),
@@ -306,6 +344,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 36..48 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_3() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:308
         FunctionSignature {
             name: "pthread_attr_getdetachstate".into(),
@@ -402,6 +449,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 48..60 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_4() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:168
         FunctionSignature {
             name: "pthread_attr_setschedpolicy".into(),
@@ -498,6 +554,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 60..72 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_5() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:258
         FunctionSignature {
             name: "pthread_cond_timedwait64".into(),
@@ -594,6 +659,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 72..84 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_6() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:220
         FunctionSignature {
             name: "pthread_detach".into(),
@@ -690,6 +764,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 84..96 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_7() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:197
         FunctionSignature {
             name: "pthread_key_delete".into(),
@@ -786,6 +869,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 96..108 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_8() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:324
         FunctionSignature {
             name: "pthread_mutexattr_getpshared".into(),
@@ -882,6 +974,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 108..120 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_9() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:238
         FunctionSignature {
             name: "pthread_rwlock_timedrdlock64".into(),
@@ -978,6 +1079,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 120..132 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_10() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:208
         FunctionSignature {
             name: "pthread_set_concurrency".into(),
@@ -1074,6 +1184,15 @@ pub fn runtime_prototypes() -> Vec<FunctionSignature> {
             variadic: false,
             calling_convention: "ms_x64".into(),
         },
+    ]
+}
+
+/// Prototypes 132..139 of the extracted table.
+///
+/// Decides nothing: it is one slice of a single generated list, split so no
+/// one function has to carry the whole table.
+fn runtime_prototypes_part_11() -> Vec<FunctionSignature> {
+    vec![
         // pthread.h:203
         FunctionSignature {
             name: "pthread_testcancel".into(),

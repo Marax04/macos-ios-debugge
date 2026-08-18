@@ -179,6 +179,20 @@ pub mod leaf {
 
 // ── Numeric leaf reader ───────────────────────────────────────────────────────
 
+/// Reinterpret a signed value's two's-complement bit pattern as `u64`.
+///
+/// CodeView signed numeric leaves (`LF_CHAR`, `LF_SHORT`, `LF_LONG`) are
+/// sign-extended to 64 bits and then handed back in the `u64` channel that
+/// [`read_numeric_leaf`] uses for every leaf kind, so that a caller converting
+/// back with `i64` recovers `-1` rather than `255`. This is a bit-pattern
+/// reinterpretation, not a numeric conversion: going through `to_ne_bytes` /
+/// `from_ne_bytes` makes that explicit and total, where an `as` cast merely
+/// hid the intent behind a lint exemption.
+#[inline]
+const fn sign_extended_bits(v: i64) -> u64 {
+    u64::from_ne_bytes(v.to_ne_bytes())
+}
+
 /// Read a numeric leaf value from `data[pos..]`.
 ///
 /// Returns `(value_as_u64, bytes_consumed)`.
@@ -210,15 +224,16 @@ pub fn read_numeric_leaf(data: &[u8], pos: usize) -> Result<(u64, usize), TpiErr
         // LF_CHAR is a *signed* 8-bit value.
         leaf::LF_CHAR => {
             need(data, pos + 2, 1)?;
-            #[allow(clippy::cast_sign_loss)]
-            Ok((i64::from(data[pos + 2] as i8) as u64, 3))
+            Ok((
+                sign_extended_bits(i64::from(i8::from_le_bytes([data[pos + 2]]))),
+                3,
+            ))
         }
         // LF_SHORT is signed 16-bit, LF_USHORT unsigned.
         leaf::LF_SHORT => {
             need(data, pos + 2, 2)?;
             let v = i16::from_le_bytes([data[pos + 2], data[pos + 3]]);
-            #[allow(clippy::cast_sign_loss)]
-            Ok((i64::from(v) as u64, 4))
+            Ok((sign_extended_bits(i64::from(v)), 4))
         }
         leaf::LF_USHORT => {
             need(data, pos + 2, 2)?;
@@ -236,8 +251,7 @@ pub fn read_numeric_leaf(data: &[u8], pos: usize) -> Result<(u64, usize), TpiErr
                 data[pos + 4],
                 data[pos + 5],
             ]);
-            #[allow(clippy::cast_sign_loss)]
-            Ok((i64::from(v) as u64, 6))
+            Ok((sign_extended_bits(i64::from(v)), 6))
         }
         leaf::LF_ULONG => {
             need(data, pos + 2, 4)?;

@@ -86,18 +86,54 @@ impl SandboxBehaviorRecordMockSummaryTool {
     pub fn definition() -> ToolDefinition {
         ToolDefinition {
             name: "sandbox_behavior_record_mock_summary".to_string(),
-            description: "Return summary counts and threat score for the mock BehaviorRecord \
-                          (rustre_sandbox::BehaviorRecord::mock)."
+            description: "Summary counts and threat score for a BehaviorRecord from a real \
+                          sandbox run, supplied as the `record` argument."
                 .to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "record": {
+                        "type": "object",
+                        "description": "A BehaviorRecord from a real sandbox run"
+                    },
+                    "use_synthetic_fixture": {
+                        "type": "boolean",
+                        "description": "Summarise the built-in fixture instead. The response is labelled is_synthetic_fixture and its threat score is NOT an observation."
+                    }
+                },
+                "required": ["record"]
+            }),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxBehaviorRecordMockSummaryTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let rec = rustre_sandbox::BehaviorRecord::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // ⚠ This declared no arguments and summarised `BehaviorRecord::mock()`,
+        // so a client asking for a run's threat score, flagged syscalls and
+        // persistence operations received the fixture's — numbers that describe
+        // nothing that was ever executed.
+        //
+        // `BehaviorRecord` is `Deserialize`, so a caller that ran an analysis
+        // hands the record straight back and gets a summary of its own run.
+        let (rec, is_synthetic_fixture) =
+            if args.get("use_synthetic_fixture").and_then(Value::as_bool) == Some(true) {
+                (rustre_sandbox::BehaviorRecord::mock(), true)
+            } else {
+                let raw = args.get("record").ok_or_else(|| {
+                    McpError::InvalidParams(
+                        "'record' is required: a BehaviorRecord from a real run. Pass \
+                         \"use_synthetic_fixture\": true for the built-in fixture."
+                            .to_string(),
+                    )
+                })?;
+                let parsed: rustre_sandbox::BehaviorRecord = serde_json::from_value(raw.clone())
+                    .map_err(|e| {
+                        McpError::ToolError(format!("'record' is not a BehaviorRecord: {e}"))
+                    })?;
+                (parsed, false)
+            };
         Ok(ToolResult::text(json!({
             "syscall_count": rec.syscalls.len(),
             "flagged_syscalls": rec.flagged_syscall_count(),
@@ -107,7 +143,8 @@ impl ToolHandler for SandboxBehaviorRecordMockSummaryTool {
             "process_count": rec.process_tree.process_count(),
             "threat_score": rec.flags.threat_score(),
             "behaviors": rec.flags.describe(),
-            "source": "rustre_sandbox::BehaviorRecord::mock",
+            "is_synthetic_fixture": is_synthetic_fixture,
+            "source": "rustre_sandbox::BehaviorRecord (supplied by the caller)",
         }).to_string()))
     }
 }

@@ -274,11 +274,13 @@ impl JavaClass {
         self.source.lines().count()
     }
 
-    /// Create a mock class for testing.
+    /// Synthetic `JavaClass` fixture for this crate's own tests.
+    ///
+    /// NOT analysis: a package and a name do not determine fields or methods,
+    /// so everything but those two strings is invented. Use
+    /// [`crate::dex_project::project_from_bytes`] for a class decoded from real
+    /// DEX bytes.
     #[must_use]
-    /// NOTE: a hand-written fixture for this crate's own tests. It is not
-    /// derived from any input and is not reachable from the MCP tool surface;
-    /// never report it to a user as the analysis of a real file.
     pub fn mock(package: &str, name: &str) -> Self {
         Self {
             class_name: name.to_string(),
@@ -674,11 +676,17 @@ impl JavaDecompiler {
         Self::new(DecompileConfig::default())
     }
 
-    /// Decompile a mock class (used for testing without real DEX data).
+    /// Format the synthetic [`JavaClass::mock`] fixture through the real
+    /// formatter.
+    ///
+    /// NOT analysis. A package and a class name do not determine a class body,
+    /// so the members it prints are invented; only the formatting step is real.
+    /// To decompile actual bytes use
+    /// [`crate::dex_project::project_from_dex_bytes`] or
+    /// [`crate::dex_project::project_from_bytes`], which decode a `.dex` / APK
+    /// and return a [`crate::DecompiledProject`]. Never report this output as
+    /// the decompilation of a real class.
     #[must_use]
-    /// NOTE: a hand-written fixture for this crate's own tests. It is not
-    /// derived from any input and is not reachable from the MCP tool surface;
-    /// never report it to a user as the analysis of a real file.
     pub fn decompile_mock(&mut self, package: &str, name: &str) -> JavaClass {
         let mut cls = JavaClass::mock(package, name);
         let formatter = JavaFormatter::new(self.config.clone());

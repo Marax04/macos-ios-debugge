@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 // ── DNS constants ─────────────────────────────────────────────────────────────
 
 /// DNS record types.
-#[allow(non_camel_case_types)]
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DnsQType {

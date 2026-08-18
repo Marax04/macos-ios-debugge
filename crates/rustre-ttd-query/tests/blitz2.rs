@@ -1,5 +1,4 @@
 //! Deep adversarial blitz2 tests for rustre-ttd-query.
-#![allow(clippy::too_many_lines)]
 
 use std::sync::Arc;
 

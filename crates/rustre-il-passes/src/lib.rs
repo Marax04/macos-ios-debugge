@@ -553,10 +553,10 @@ impl ConstantFoldingPass {
                 if bits_u64 == 0 || bits_u64 > 64 {
                     return None;
                 }
-                #[allow(clippy::cast_possible_truncation)]
-                let bits = bits_u64 as u32;
-                #[allow(clippy::cast_possible_truncation)]
-                let shift = (right % bits_u64) as u32;
+                // Guarded above to 1..=64, so both conversions are exact; the
+                // `?` propagates instead of truncating if that guard ever moves.
+                let bits = u32::try_from(bits_u64).ok()?;
+                let shift = u32::try_from(right % bits_u64).ok()?;
                 let v = left & mask;
                 if shift == 0 {
                     v

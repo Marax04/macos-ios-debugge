@@ -558,11 +558,18 @@ fn zf_only_on_temp(cond: &HlilExpr, temp: &str) -> Option<HlilExpr> {
     }
 }
 
-/// #4200 — gate OPT-IN del recupero ZF sui rifiuti.
+/// #4200 — recupero ZF sui rifiuti. DEFAULT-ON dal 2026-08-18 (#6790);
+/// si spegne con `RUSTRE_HLIL_ZFTEMP=0`.
+///
+/// Isolato sul corpus intero (11342 file, unico gate acceso oltre a
+/// `RUSTRE_HLIL`): `flag_` 42039 -> 37760 (**−4279, −10,2%**), righe −1601.
+/// Costo: `var_tmp*` +1446 (+3,2%) e 12 `var_sp` che riaffiorano.
+/// Non e' un guadagno puro ma uno SCAMBIO, e il saldo sui nomi cattivi e'
+/// −2833. path A invariato (`diff -rq`, 0 differenze).
 fn zf_temp_enabled() -> bool {
-    matches!(
+    !matches!(
         std::env::var("RUSTRE_HLIL_ZFTEMP").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("0") | Ok("false")
     )
 }
 
@@ -622,11 +629,16 @@ fn class_b_enabled() -> bool {
     )
 }
 
-/// #3900 — gate OPT-IN della CLASSE C (il `cmov`/ternario).
+/// #3900 — CLASSE C (il `cmov`/ternario). DEFAULT-ON dal 2026-08-18 (#6790);
+/// si spegne con `RUSTRE_HLIL_CMOVFOLD=0`.
+///
+/// Isolato sul corpus intero: `flag_` 42039 -> 40676 (−1363), `var_tmp*` −28,
+/// righe −651, tutto il resto identico. Guadagno PURO, nessun contatore
+/// peggiora. path A invariato.
 fn cmov_fold_enabled() -> bool {
-    matches!(
+    !matches!(
         std::env::var("RUSTRE_HLIL_CMOVFOLD").as_deref(),
-        Ok("1") | Ok("true")
+        Ok("0") | Ok("false")
     )
 }
 
@@ -2069,7 +2081,25 @@ fn stmt_terminates(stmt: &HlilStatement) -> bool {
 /// `goto Y;` / dead tail the structurer leaves after an `if/else` in which both
 /// branches already `return`/`goto` — a common HLIL noise source. Returns the
 /// number of statements removed.
+/// `stmt` contiene un'etichetta in un corpo annidato? Allora e' un possibile
+/// bersaglio di `goto` e non si puo' cancellare come irraggiungibile.
+fn contiene_etichetta(stmt: &HlilStatement) -> bool {
+    stmt_bodies(stmt).iter().any(|b| {
+        b.iter()
+            .any(|s| matches!(s, HlilStatement::Label(_)) || contiene_etichetta(s))
+    })
+}
+
 pub fn remove_unreachable_after_terminator(stmts: &mut Vec<HlilStatement>) -> usize {
+    // Interruttore DIAGNOSTICO `RUSTRE_HLIL_NOUNREACH=1` (default: passata
+    // attiva). Serve a rispondere per esperimento, non per lettura, alla
+    // domanda «e' QUESTA passata a cancellare il codice che
+    // `RUSTRE_HLIL_TOPTEST_BREAK` perde?» — le cinque ipotesi del §65 sono
+    // state tutte falsificate a monte, quindi la perdita e' a valle
+    // dell'emettitore.
+    if std::env::var("RUSTRE_HLIL_NOUNREACH").is_ok_and(|v| v != "0") {
+        return 0;
+    }
     let mut removed = 0;
     // Recurse first so nested branch bodies are cleaned and the termination
     // check on this level sees each branch's real final statement.
@@ -2081,8 +2111,27 @@ pub fn remove_unreachable_after_terminator(stmts: &mut Vec<HlilStatement>) -> us
     let mut out = Vec::with_capacity(stmts.len());
     let mut dead = false;
     for s in std::mem::take(stmts) {
-        if matches!(s, HlilStatement::Label(_)) {
-            dead = false; // a label is a potential jump target — reachable
+        // ⚠ #6770 — un'etichetta ANNIDATA vale quanto una allo stesso livello.
+        //
+        // La versione precedente azzerava `dead` solo su
+        // `HlilStatement::Label` in TESTA alla lista. Ma un `goto` puo'
+        // saltare DENTRO un costrutto: se un `while`/`if` contiene
+        // un'etichetta nel proprio corpo, quel costrutto e' raggiungibile
+        // anche quando lo precede un terminatore, e cancellarlo distrugge
+        // codice VIVO.
+        //
+        // MISURATO su `sample4_go/sub_14001fa32`: questa passata cancellava un
+        // `while (1)` intero — 119 righe, 2 chiamate a `runtime_scanConservative`
+        // e una a `runtime_putempty` — perche' seguiva un `goto` mentre le sue
+        // etichette (`loc_14001fede`, `loc_14001feef`) erano nel corpo.
+        // Provato per esperimento con l'interruttore `RUSTRE_HLIL_NOUNREACH`:
+        // spegnendo la passata il codice tornava.
+        //
+        // Il difetto NON e' di `RUSTRE_HLIL_TOPTEST_BREAK`: quel gate produce
+        // solo la disposizione che lo espone. Le cinque ipotesi a monte (§65)
+        // erano tutte false proprio perche' l'emettitore e' innocente.
+        if matches!(s, HlilStatement::Label(_)) || contiene_etichetta(&s) {
+            dead = false; // etichetta (anche annidata) = possibile bersaglio
         }
         if dead {
             removed += 1;
@@ -2247,6 +2296,501 @@ fn remove_dead_stores_in(stmts: &mut Vec<HlilStatement>, dead: &dyn Fn(&str) -> 
 
 /// Remove pure assignments to variables that are never read anywhere in the
 /// function (post-structuring dead store elimination). Runs to fixpoint.
+// -- Dead flag stores: liveness ALL'INDIETRO, non conteggio di letture -------
+//
+// `eliminate_dead_stores` decide con `count_reads_stmts(body, n) == 0`, cioe'
+// sul TOTALE delle letture nella funzione. Per un `var_...` normale va bene;
+// per un flag no: `flag_zf` viene riscritto decine di volte nello stesso corpo
+// e una sola lettura in fondo tiene in vita TUTTI i suoi store.
+//
+// Misurato sul corpus (path B, 143 funzioni, configurazione estesa): 257 store
+// su `flag_*` sopravvivono all'emissione e ZERO risulta morto al
+// conteggio-letture -- mentre la forma dominante nel testo emesso e'
+//
+//     var_tmp0 = ((uint32_t)v8 - 1);
+//     flag_zf  = (var_tmp0 == 0);      // <- nessuno la legge
+//     if (var_tmp0 == 0) { ... }       // <- il ramo usa il temporaneo
+//
+// cioe' proprio uno store morto. La fusione dei flag ha gia' riscritto la
+// condizione del salto sull'espressione; e' la fusione a CREARE la morte, e la
+// DCE sul MLIL (`eliminate_dead_flag_writes_cfg`) gira PRIMA di lei, quando il
+// flag e' ancora genuinamente letto dal salto. Nessuno ripassa dopo.
+//
+// Questa passata e' quel ripasso, con la liveness fatta dove si decide.
+// Conservativa per costruzione:
+// * un `Goto`/`Label` sospende l'ottimizzazione sull'intera funzione -- con
+//   flusso non strutturato l'ordine testuale non e' l'ordine d'esecuzione;
+// * `Break`/`Continue` rendono vivi TUTTI i flag (il salto esce dalla lista);
+// * un ciclo assume vivo tutto cio' che il suo corpo legge (approssimazione dal
+//   lato sicuro dell'arco all'indietro, senza punto fisso);
+// * si cancella solo un RHS senza `Call`: togliere una lettura di memoria e'
+//   lecito, togliere una chiamata no.
+//
+// Cancellare uno store non e' il solo effetto voluto: `var_tmp0` sopravvive
+// perche' ha DUE letture (la riga morta e l'`if`). Tolta la riga morta ne resta
+// una, e `inline_adjacent_hlil_temps` -- gia' cablata a valle e in attesa
+// esattamente di quel caso -- la assorbe da se'.
+
+/// Le pseudo-variabili di flag che il lifter materializza.
+const FLAG_NAMES: [&str; 6] = [
+    "flag_zf", "flag_cf", "flag_sf", "flag_of", "flag_pf", "flag_af",
+];
+
+/// DEFAULT-ON dal 2026-08-18; si spegne con `RUSTRE_HLIL_FLAGDCE=0`.
+///
+/// Misurata sul corpus INTERO (11342 file per lato, non i 3 bucket dei primi
+/// giri) insieme a `propagate_pure_temps`, che e' la sua meta' complementare:
+///   `flag_*`     51397 -> 36713  (−28,6%)
+///   `var_tmp*`   59619 -> 36943  (−38,0%)
+///   righe        946284 -> 924787
+///   `goto`       8913 -> 8912    (−1: nessun costo)
+///   `JUMPOUT`    7 -> 7          (invariato)
+///   dati materializzati 7937 -> 7937 (invariato)
+///   chiamate distinte perse: **0** in **0** file
+///   comportamento: 15 AGREE / 4 LINK_FAIL, IDENTICO funzione per funzione
+///                  su tutte e 19 le funzioni confrontabili
+/// Nessun contatore peggiorato: e' il motivo per cui e' default-ON.
+fn flag_dce_enabled() -> bool {
+    !matches!(
+        std::env::var("RUSTRE_HLIL_FLAGDCE").as_deref(),
+        Ok("0") | Ok("false")
+    )
+}
+
+fn flag_reads_expr(e: &HlilExpr, live: &mut std::collections::BTreeSet<String>) {
+    for f in FLAG_NAMES {
+        if count_reads_expr(e, f) > 0 {
+            live.insert(f.to_string());
+        }
+    }
+}
+
+fn flag_reads_stmts(stmts: &[HlilStatement], live: &mut std::collections::BTreeSet<String>) {
+    for f in FLAG_NAMES {
+        if count_reads_stmts(stmts, f) > 0 {
+            live.insert(f.to_string());
+        }
+    }
+}
+
+fn all_flags_live(live: &mut std::collections::BTreeSet<String>) {
+    for f in FLAG_NAMES {
+        live.insert(f.to_string());
+    }
+}
+
+/// Un `Goto` o una `Label` in qualunque punto sospende la passata.
+fn has_goto_or_label(stmts: &[HlilStatement]) -> bool {
+    stmts.iter().any(|s| {
+        matches!(s, HlilStatement::Goto(_) | HlilStatement::Label(_))
+            || stmt_bodies(s).iter().any(|b| has_goto_or_label(b))
+    })
+}
+
+// -- Copy propagation dei temporanei PURI, a piu' usi ------------------------
+//
+// `propagate_expressions` propaga solo un'assegnazione a USO SINGOLO e solo
+// nello statement IMMEDIATAMENTE successivo. Sul caso che conta rinuncia per
+// costruzione: l'abbassamento di un `cmp` produce un temporaneo con TRE
+// letture, una per flag.
+//
+//     var_tmp0 = (a - b);
+//     flag_zf  = (var_tmp0 == 0);
+//     flag_sf  = ((__int64)var_tmp0 < 0);
+//     flag_of  = (...var_tmp0...);
+//     if ((flag_zf == 1) | (flag_sf != flag_of)) { ... }     // <= con segno
+//
+// MISURATO dopo la DCE sui flag (§57): i 237 `flag_*` sopravvissuti sono ora
+// genuinamente VIVI e in buona parte COMBINAZIONI come quella sopra, che
+// `fold_flag_combos` sa chiudere -- ma solo se vede gli operandi veri. Una riga
+// emessa mostra la fusione ferma a meta' strada:
+//
+//     if (((var_tmp0 == 0) == 1) | (flag_sf != flag_of))
+//
+// `zf` e' stato assorbito (dopo la DCE era a uso singolo), `sf` e `of` no. Il
+// temporaneo non e' piu' un difetto cosmetico: e' il collo di bottiglia.
+//
+// Duplicare un'espressione PURA in piu' usi e' lecito -- non ha effetti, e il
+// solo rischio e' che i suoi operandi cambino nel frattempo. Le condizioni,
+// tutte verificate prima di toccare qualcosa:
+// * il RHS non contiene `Call`;
+// * nella finestra fra definizione e ridefinizione nessuno SCRIVE una delle
+//   variabili lette dal RHS (controllo profondo, corpi annidati compresi);
+// * la finestra non contiene `Goto`/`Label` -- il flusso potrebbe entrarci in
+//   mezzo, e allora la definizione non l'ha preceduta;
+// * nessun CICLO nella finestra legge il temporaneo: la' l'espressione sarebbe
+//   rivalutata a ogni giro.
+
+/// DEFAULT-ON dal 2026-08-18; si spegne con `RUSTRE_HLIL_TEMPPROP=0`.
+/// Numeri e verifiche: vedi `flag_dce_enabled`, misurate insieme.
+/// ⚠ L'ORDINE resta vincolante: questa passata gira DOPO `fold_flag_combos`,
+/// mai prima — vedi il commento sul sito di chiamata.
+fn temp_prop_enabled() -> bool {
+    !matches!(
+        std::env::var("RUSTRE_HLIL_TEMPPROP").as_deref(),
+        Ok("0") | Ok("false")
+    )
+}
+
+/// Nomi di variabile letti da `e`.
+fn vars_read_in_expr(e: &HlilExpr, out: &mut std::collections::HashSet<String>) {
+    if let HlilExpr::Var { var } = e {
+        out.insert(var.name.clone());
+    }
+    crate::hlil_optimization::for_each_child_pub(e, &mut |c| vars_read_in_expr(c, out));
+}
+
+/// `stmt` ridefinisce la variabile `name`?
+fn ridefinisce(stmt: &HlilStatement, name: &str) -> bool {
+    matches!(
+        stmt,
+        HlilStatement::Assign { dest: HlilExpr::Var { var }, .. }
+            | HlilStatement::VarDeclare { var, .. }
+            | HlilStatement::VarDecl { var, .. }
+        if var.name == name
+    )
+}
+
+/// `Goto`/`Label` in qualunque punto di `stmt`.
+fn contiene_salto(stmt: &HlilStatement) -> bool {
+    matches!(stmt, HlilStatement::Goto(_) | HlilStatement::Label(_))
+        || stmt_bodies(stmt).iter().any(|b| b.iter().any(contiene_salto))
+}
+
+/// `stmt` e' (o contiene) un ciclo che legge `name`?
+fn ciclo_che_legge(stmt: &HlilStatement, name: &str) -> bool {
+    use HlilStatement as S;
+    let e_ciclo = matches!(stmt, S::While { .. } | S::DoWhile { .. } | S::For { .. });
+    if e_ciclo && count_reads_stmt(stmt, name) > 0 {
+        return true;
+    }
+    stmt_bodies(stmt)
+        .iter()
+        .any(|b| b.iter().any(|s| ciclo_che_legge(s, name)))
+}
+
+/// Sostituisce `name` con `rep` in `stmt` e in TUTTI i suoi corpi annidati.
+fn subst_in_stmt_deep(stmt: &mut HlilStatement, name: &str, rep: &HlilExpr) {
+    subst_in_stmt(stmt, name, rep);
+    for body in stmt_bodies_mut(stmt) {
+        for s in body.iter_mut() {
+            subst_in_stmt_deep(s, name, rep);
+        }
+    }
+}
+
+/// Propaga i temporanei `var_tmp*` con RHS puro in tutti gli usi del loro live
+/// range, poi ne cancella la definizione. Ritorna quante ne ha propagate.
+pub fn propagate_pure_temps(stmts: &mut Vec<HlilStatement>) -> usize {
+    if !temp_prop_enabled() {
+        return 0;
+    }
+    propagate_pure_temps_in(stmts)
+}
+
+fn propagate_pure_temps_in(stmts: &mut Vec<HlilStatement>) -> usize {
+    let mut changed = 0usize;
+    // Prima i corpi annidati, cosi' il livello esterno lavora su un albero gia'
+    // semplificato.
+    for s in stmts.iter_mut() {
+        for body in stmt_bodies_mut(s) {
+            changed += propagate_pure_temps_in(body);
+        }
+    }
+    let mut i = 0usize;
+    while i < stmts.len() {
+        let (name, src) = match &stmts[i] {
+            HlilStatement::Assign {
+                dest: HlilExpr::Var { var },
+                src,
+            } if var.name.starts_with("var_tmp")
+                && !crate::hlil_optimization::expr_contains_call(src) =>
+            {
+                (var.name.clone(), src.clone())
+            }
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+        // Fine del live range: la prossima ridefinizione, esclusa.
+        let mut end = stmts.len();
+        for j in (i + 1)..stmts.len() {
+            if ridefinisce(&stmts[j], &name) {
+                end = j;
+                break;
+            }
+        }
+        let mut operandi = std::collections::HashSet::new();
+        vars_read_in_expr(&src, &mut operandi);
+        let finestra = &stmts[(i + 1)..end];
+        let usi: usize = finestra.iter().map(|s| count_reads_stmt(s, &name)).sum();
+        let sicuro = usi > 0
+            && !finestra.iter().any(contiene_salto)
+            && !finestra.iter().any(|s| ciclo_che_legge(s, &name))
+            && !operandi
+                .iter()
+                .any(|o| writes_var(finestra, o));
+        if !sicuro {
+            i += 1;
+            continue;
+        }
+        for j in (i + 1)..end {
+            subst_in_stmt_deep(&mut stmts[j], &name, &src);
+        }
+        stmts.remove(i);
+        changed += 1;
+        // `i` non avanza: lo statement in posizione `i` e' ora quello dopo.
+    }
+    changed
+}
+
+/// Stato dell'analisi fra un giro e l'altro del punto fisso.
+///
+/// MISURATO: trattare `Goto`/`Label` come barriere «tutto vivo» era sano ma
+/// inerte -- 43 funzioni su 43 arrivano qui ancora piene di goto (li tolgono le
+/// passate testuali a valle, quando l'AST non c'e' piu'), e su 143 store se ne
+/// cancellavano 3. L'unico punto in cui questa analisi puo' girare e' questo,
+/// quindi le etichette vanno trattate davvero.
+///
+/// `label_live` porta, per ogni etichetta, l'unione degli insiemi vivi
+/// osservati in ingresso a essa; un `Goto` legge quell'insieme invece di
+/// arrendersi. Si parte OTTIMISTI (insieme vuoto) e si itera finche' nessun
+/// insieme cresce -- l'ordine standard per un'analisi all'indietro con archi
+/// non strutturati. Le cancellazioni avvengono SOLO nel giro finale, quando il
+/// punto fisso e' raggiunto: cancellare durante i giri ottimisti userebbe
+/// informazione non ancora sana.
+struct FlagCtx {
+    /// Etichette presenti nella funzione. Un `Goto` verso un bersaglio che non
+    /// c'e' esce dalla funzione: la' e' vivo tutto.
+    labels: std::collections::HashSet<String>,
+    label_live: HashMap<String, std::collections::BTreeSet<String>>,
+    changed: bool,
+    apply: bool,
+}
+
+impl FlagCtx {
+    fn record(&mut self, label: &str, live: &std::collections::BTreeSet<String>) {
+        let e = self.label_live.entry(label.to_string()).or_default();
+        let before = e.len();
+        e.extend(live.iter().cloned());
+        if e.len() != before {
+            self.changed = true;
+        }
+    }
+}
+
+fn raccogli_etichette(stmts: &[HlilStatement], out: &mut std::collections::HashSet<String>) {
+    for s in stmts {
+        if let HlilStatement::Label(l) = s {
+            out.insert(l.clone());
+        }
+        for b in stmt_bodies(s) {
+            raccogli_etichette(b, out);
+        }
+    }
+}
+
+/// Percorre `stmts` a RITROSO. `live` entra come insieme vivo in USCITA dalla
+/// lista ed esce come insieme vivo in INGRESSO.
+fn dead_flag_stores_in(
+    stmts: &mut Vec<HlilStatement>,
+    live: &mut std::collections::BTreeSet<String>,
+    ctx: &mut FlagCtx,
+) -> usize {
+    use HlilStatement as S;
+    let mut removed = 0usize;
+    let mut i = stmts.len();
+    while i > 0 {
+        i -= 1;
+        let mut drop_it = false;
+        match &mut stmts[i] {
+            S::Assign {
+                dest: HlilExpr::Var { var },
+                src,
+            } if var.name.starts_with("flag_") => {
+                let name = var.name.clone();
+                if !live.contains(&name) && !crate::hlil_optimization::expr_contains_call(src) {
+                    if ctx.apply {
+                        drop_it = true;
+                    }
+                    // Anche nei giri non-applicativi lo store e' morto: non
+                    // rende vivo cio' che legge, altrimenti il punto fisso
+                    // convergerebbe su un'informazione piu' grossolana di
+                    // quella che il giro finale usera'.
+                    live.remove(&name);
+                } else {
+                    live.remove(&name);
+                    flag_reads_expr(src, live);
+                }
+            }
+            S::If {
+                cond,
+                then_body,
+                else_body,
+            } => {
+                let mut l1 = live.clone();
+                removed += dead_flag_stores_in(then_body, &mut l1, ctx);
+                let mut l2 = live.clone();
+                removed += dead_flag_stores_in(else_body, &mut l2, ctx);
+                *live = l1.union(&l2).cloned().collect();
+                flag_reads_expr(cond, live);
+            }
+            S::Switch {
+                value,
+                cases,
+                default,
+            } => {
+                let mut acc = live.clone();
+                for c in cases.iter_mut() {
+                    let mut l = live.clone();
+                    removed += dead_flag_stores_in(&mut c.body, &mut l, ctx);
+                    acc.extend(l);
+                }
+                let mut l = live.clone();
+                removed += dead_flag_stores_in(default, &mut l, ctx);
+                acc.extend(l);
+                *live = acc;
+                flag_reads_expr(value, live);
+            }
+            S::While { cond, body } | S::DoWhile { body, cond } => {
+                // Arco all'indietro: tutto cio' che il corpo o la condizione
+                // leggono e' vivo all'ingresso di ogni iterazione.
+                let mut lb = live.clone();
+                flag_reads_expr(cond, &mut lb);
+                flag_reads_stmts(body, &mut lb);
+                removed += dead_flag_stores_in(body, &mut lb, ctx);
+                *live = lb;
+                flag_reads_expr(cond, live);
+            }
+            S::For {
+                init,
+                cond,
+                step,
+                body,
+            } => {
+                let mut lb = live.clone();
+                if let Some(c) = cond {
+                    flag_reads_expr(c, &mut lb);
+                }
+                if let Some(s) = step {
+                    flag_reads_expr(s, &mut lb);
+                }
+                flag_reads_stmts(body, &mut lb);
+                removed += dead_flag_stores_in(body, &mut lb, ctx);
+                *live = lb;
+                if let Some(c) = cond {
+                    flag_reads_expr(c, live);
+                }
+                if let Some(ini) = init {
+                    let mut one = vec![(**ini).clone()];
+                    removed += dead_flag_stores_in(&mut one, live, ctx);
+                    **ini = one.into_iter().next().unwrap_or(S::Nop);
+                }
+            }
+            S::Block(b) => {
+                removed += dead_flag_stores_in(b, live, ctx);
+            }
+            S::Return(exprs) => {
+                // Niente segue un `return`.
+                live.clear();
+                for e in exprs.iter() {
+                    flag_reads_expr(e, live);
+                }
+            }
+            S::Goto(a) => {
+                // Vivo dopo un salto = vivo all'ingresso della destinazione.
+                let l = format!("loc_{:x}", a.as_u64());
+                if ctx.labels.contains(&l) {
+                    *live = ctx.label_live.get(&l).cloned().unwrap_or_default();
+                } else {
+                    // Bersaglio fuori dalla funzione: la' e' vivo tutto.
+                    all_flags_live(live);
+                }
+            }
+            S::Label(l) => {
+                // `live` e' l'insieme vivo in INGRESSO all'etichetta: e' cio'
+                // che ogni `goto` che la punta deve vedere.
+                let l = l.clone();
+                ctx.record(&l, live);
+            }
+            S::Break | S::Continue => {
+                all_flags_live(live);
+            }
+            other => {
+                for e in stmt_exprs(other) {
+                    flag_reads_expr(e, live);
+                }
+            }
+        }
+        if drop_it {
+            stmts.remove(i);
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Elimina gli store su `flag_*` che nessun percorso legge.
+///
+/// Ritorna quanti ne ha tolti. A vuoto (0) quando il gate e' spento.
+pub fn eliminate_dead_flag_stores(func: &mut HlilFunction) -> usize {
+    if !flag_dce_enabled() {
+        return 0;
+    }
+    let dbg = std::env::var("RUSTRE_DBG_FLAGDCE").is_ok();
+    let mut labels = std::collections::HashSet::new();
+    raccogli_etichette(&func.body, &mut labels);
+    let mut ctx = FlagCtx {
+        labels,
+        label_live: HashMap::new(),
+        changed: false,
+        apply: false,
+    };
+    // Punto fisso: gli insiemi possono solo crescere e sono limitati da
+    // 6 flag x numero di etichette, quindi termina; il tetto e' una rete.
+    let mut giri = 0usize;
+    for _ in 0..16 {
+        giri += 1;
+        ctx.changed = false;
+        // Nessun flag e' vivo all'uscita: in questo IR i flag non sono un
+        // valore di ritorno.
+        let mut live = std::collections::BTreeSet::new();
+        dead_flag_stores_in(&mut func.body, &mut live, &mut ctx);
+        if !ctx.changed {
+            break;
+        }
+    }
+    ctx.apply = true;
+    let mut store = 0usize;
+    conta_store_flag(&func.body, &mut store);
+    let mut live = std::collections::BTreeSet::new();
+    let n = dead_flag_stores_in(&mut func.body, &mut live, &mut ctx);
+    if dbg {
+        eprintln!(
+            "[flagdce] addr={:#x} store_flag={store} rimossi={n} giri={giri} etichette={} strutturata={}",
+            func.address.0,
+            ctx.labels.len(),
+            !has_goto_or_label(&func.body)
+        );
+    }
+    n
+}
+
+/// Conta gli store su `flag_*`, sonde comprese le liste annidate.
+fn conta_store_flag(stmts: &[HlilStatement], n: &mut usize) {
+    for s in stmts {
+        if let HlilStatement::Assign { dest: HlilExpr::Var { var }, .. } = s
+            && var.name.starts_with("flag_")
+        {
+            *n += 1;
+        }
+        for b in stmt_bodies(s) {
+            conta_store_flag(b, n);
+        }
+    }
+}
+
 pub fn eliminate_dead_stores(func: &mut HlilFunction) -> usize {
     let mut total = 0;
     loop {
@@ -2755,7 +3299,23 @@ impl StructuringPipeline {
         // couldn't see yet.
         r.flags_folded += simplify_flag_conditions(&mut func.body);
         r.loops_converted = detect_induction_vars(&mut func.body);
-        r.dead_stores_removed = eliminate_dead_stores(func);
+        // MISURATO, e l'ordine e' l'intera lezione: messa PRIMA di
+        // `fold_flag_combos`, questa passata la SABOTA. Il folder riconosce la
+        // forma CON il temporaneo (`tmp = (a - b)` piu' i flag che lo leggono) e
+        // stava gia' chiudendo quei confronti:
+        //     flag_zf = ((v8 - 65535) == 0);
+        //     if (v8 > 0xFFFF) { ...            <- fusione riuscita
+        // propagando prima si distrugge il motivo che cerca:
+        //     if (((v8 == 0xFFFF) == 0) & (flag_sf == flag_of)) { ...
+        // Sui 3 bucket: `flag_` 237 -> 315 (+33%) e la DCE che scendeva da 82 a
+        // 65 rimozioni. Qui invece, DOPO le fusioni, raccoglie solo cio' che
+        // quelle non hanno preso.
+        r.exprs_propagated += propagate_pure_temps(&mut func.body);
+        // Prima della dead-store generica: quella decide col conteggio delle
+        // letture sull'intera funzione e per i flag non discrimina (vedi il
+        // commento su `eliminate_dead_flag_stores`).
+        r.dead_stores_removed = eliminate_dead_flag_stores(func);
+        r.dead_stores_removed += eliminate_dead_stores(func);
         // `propagate_expressions`/`eliminate_dead_stores` can EMPTY a then-body
         // (its only statements were inlined flag defs / dead stores) after the
         // first flip already ran, leaving `if (C) { } else { B }` to reach the
@@ -3217,6 +3777,253 @@ mod tests {
             "entrare nel mezzo di un ciclo non e' riscrivibile: {s4:?}"
         );
     }
+    /// `flag_x = (var_tmp0 <op> k)` — la forma che l'abbassamento di `cmp`
+    /// produce tre volte, una per flag.
+    fn legge_tmp(flag: &str) -> HlilStatement {
+        assign(
+            flag,
+            HlilExpr::CmpEq(Box::new(v("var_tmp0")), Box::new(c(0))),
+        )
+    }
+
+    #[test]
+    fn temporaneo_puro_a_tre_usi_viene_propagato() {
+        let mut body = vec![
+            assign("var_tmp0", sub("a", 1)),
+            legge_tmp("flag_zf"),
+            legge_tmp("flag_sf"),
+            legge_tmp("flag_of"),
+        ];
+        assert_eq!(propagate_pure_temps_in(&mut body), 1, "{body:?}");
+        // La definizione sparisce e nessuno legge piu' il temporaneo.
+        assert_eq!(body.len(), 3);
+        assert_eq!(count_reads_stmts(&body, "var_tmp0"), 0, "{body:?}");
+        // L'espressione e' finita in tutti e tre gli usi.
+        assert_eq!(count_reads_stmts(&body, "a"), 3, "{body:?}");
+    }
+
+    #[test]
+    fn non_si_propaga_se_un_operando_viene_riscritto() {
+        let mut body = vec![
+            assign("var_tmp0", sub("a", 1)),
+            assign("a", c(99)), // riscrive l'operando
+            legge_tmp("flag_zf"),
+        ];
+        assert_eq!(propagate_pure_temps_in(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn non_si_propaga_dentro_un_ciclo_che_legge_il_temporaneo() {
+        // La' l'espressione sarebbe rivalutata a ogni giro.
+        let mut body = vec![
+            assign("var_tmp0", sub("a", 1)),
+            HlilStatement::While {
+                cond: c(1),
+                body: vec![legge_tmp("flag_zf")],
+            },
+        ];
+        assert_eq!(propagate_pure_temps_in(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn non_si_propaga_attraverso_un_salto() {
+        // Il flusso potrebbe entrare in mezzo: la definizione non l'ha preceduta.
+        let mut body = vec![
+            assign("var_tmp0", sub("a", 1)),
+            HlilStatement::Label("loc_10".to_string()),
+            legge_tmp("flag_zf"),
+        ];
+        assert_eq!(propagate_pure_temps_in(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn non_si_duplica_mai_una_chiamata() {
+        let mut body = vec![
+            assign(
+                "var_tmp0",
+                HlilExpr::Call {
+                    func: Box::new(v("effetto")),
+                    args: vec![],
+                    ret_ty: HlilType::i64(),
+                },
+            ),
+            legge_tmp("flag_zf"),
+            legge_tmp("flag_sf"),
+        ];
+        assert_eq!(propagate_pure_temps_in(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn il_live_range_si_ferma_alla_ridefinizione() {
+        // Il secondo uso appartiene al live range successivo e non deve
+        // ricevere l'espressione del primo.
+        let mut body = vec![
+            assign("var_tmp0", sub("a", 1)),
+            legge_tmp("flag_zf"),
+            assign("var_tmp0", sub("b", 2)), // ridefinizione
+            legge_tmp("flag_sf"),
+        ];
+        let n = propagate_pure_temps_in(&mut body);
+        assert!(n >= 1, "{body:?}");
+        // `a` compare una sola volta: non e' colato oltre la ridefinizione.
+        assert_eq!(count_reads_stmts(&body, "a"), 1, "{body:?}");
+    }
+
+    #[test]
+    fn non_si_cancella_un_costrutto_che_contiene_unetichetta_annidata() {
+        // #6770. `goto X; while (1) { X: ... }` — il `while` segue un
+        // terminatore ma un `goto` puo' saltare DENTRO il suo corpo, quindi
+        // cancellarlo distrugge codice VIVO.
+        //
+        // Misurato su `sample4_go/sub_14001fa32`: la versione precedente
+        // cancellava 119 righe e 3 chiamate di runtime per questo motivo.
+        let mut stmts = vec![
+            HlilStatement::Goto(Address(0x10)),
+            HlilStatement::While {
+                cond: c(1),
+                body: vec![
+                    HlilStatement::Label("loc_10".to_string()),
+                    assign("x", c(1)),
+                ],
+            },
+        ];
+        assert_eq!(remove_unreachable_after_terminator(&mut stmts), 0, "{stmts:?}");
+        assert_eq!(stmts.len(), 2);
+    }
+
+    #[test]
+    fn si_cancella_ancora_un_costrutto_senza_etichette() {
+        // Il controaltare: senza etichette dentro, il costrutto e' davvero
+        // irraggiungibile e va tolto. Senza questo test la correzione #6770
+        // potrebbe disattivare del tutto la passata senza che nulla protesti.
+        let mut stmts = vec![
+            HlilStatement::Return(vec![]),
+            HlilStatement::While {
+                cond: c(1),
+                body: vec![assign("x", c(1))],
+            },
+        ];
+        assert_eq!(remove_unreachable_after_terminator(&mut stmts), 1, "{stmts:?}");
+        assert_eq!(stmts.len(), 1);
+    }
+
+    /// Aiutante: gira la liveness sui flag senza passare dal gate d'ambiente
+    /// (che e' globale al processo e i test girano in parallelo).
+    fn flagdce(body: &mut Vec<HlilStatement>) -> usize {
+        let mut labels = std::collections::HashSet::new();
+        raccogli_etichette(body, &mut labels);
+        let mut ctx = FlagCtx {
+            labels,
+            label_live: HashMap::new(),
+            changed: false,
+            apply: false,
+        };
+        for _ in 0..16 {
+            ctx.changed = false;
+            let mut live = std::collections::BTreeSet::new();
+            dead_flag_stores_in(body, &mut live, &mut ctx);
+            if !ctx.changed {
+                break;
+            }
+        }
+        ctx.apply = true;
+        let mut live = std::collections::BTreeSet::new();
+        dead_flag_stores_in(body, &mut live, &mut ctx)
+    }
+
+    #[test]
+    fn flag_store_mai_letto_viene_tolto() {
+        // La forma dominante misurata sul corpus: la fusione ha gia' portato il
+        // confronto dentro l'`if`, e lo store sul flag non lo legge nessuno.
+        let mut body = vec![
+            assign("var_tmp0", sub("v8", 1)),
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("var_tmp0")), Box::new(c(0)))),
+            HlilStatement::If {
+                cond: HlilExpr::CmpEq(Box::new(v("var_tmp0")), Box::new(c(0))),
+                then_body: vec![HlilStatement::Return(vec![])],
+                else_body: vec![],
+            },
+        ];
+        assert_eq!(flagdce(&mut body), 1, "{body:?}");
+        assert_eq!(body.len(), 2);
+    }
+
+    #[test]
+    fn flag_store_letto_da_una_condizione_resta() {
+        let mut body = vec![
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("a")), Box::new(c(0)))),
+            HlilStatement::If {
+                cond: v("flag_zf"),
+                then_body: vec![HlilStatement::Return(vec![])],
+                else_body: vec![],
+            },
+        ];
+        assert_eq!(flagdce(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn una_lettura_lontana_non_salva_uno_store_riscritto_dopo() {
+        // E' il caso che `eliminate_dead_stores` sbaglia: decide col conteggio
+        // delle letture sull'INTERA funzione, quindi la lettura in coda tiene
+        // in vita anche il primo store, che invece e' sovrascritto prima.
+        let mut body = vec![
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("a")), Box::new(c(0)))), // morto
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("b")), Box::new(c(0)))), // vivo
+            HlilStatement::If {
+                cond: v("flag_zf"),
+                then_body: vec![HlilStatement::Return(vec![])],
+                else_body: vec![],
+            },
+        ];
+        assert_eq!(flagdce(&mut body), 1, "{body:?}");
+        // Sopravvive quello che confronta `b`.
+        assert_eq!(body.len(), 2);
+        assert!(
+            count_reads_stmts(&body[..1], "b") == 1,
+            "deve restare lo store su `b`: {body:?}"
+        );
+    }
+
+    #[test]
+    fn un_goto_propaga_la_liveness_dalla_sua_etichetta() {
+        // Senza il punto fisso sulle etichette questo store sembrerebbe morto
+        // (dopo il `goto` non c'e' nulla nella lista), e cancellarlo sarebbe
+        // SBAGLIATO: `loc_10` legge il flag.
+        let mut body = vec![
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("a")), Box::new(c(0)))),
+            HlilStatement::Goto(Address(0x10)),
+            HlilStatement::Label("loc_10".to_string()),
+            HlilStatement::If {
+                cond: v("flag_zf"),
+                then_body: vec![HlilStatement::Return(vec![])],
+                else_body: vec![],
+            },
+        ];
+        assert_eq!(flagdce(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn un_goto_fuori_funzione_rende_vivo_tutto() {
+        let mut body = vec![
+            assign("flag_zf", HlilExpr::CmpEq(Box::new(v("a")), Box::new(c(0)))),
+            HlilStatement::Goto(Address(0x9999)), // etichetta assente
+        ];
+        assert_eq!(flagdce(&mut body), 0, "{body:?}");
+    }
+
+    #[test]
+    fn uno_store_con_chiamata_non_si_cancella_mai() {
+        let mut body = vec![assign(
+            "flag_zf",
+            HlilExpr::Call {
+                func: Box::new(v("effetto")),
+                args: vec![],
+                ret_ty: HlilType::i64(),
+            },
+        )];
+        assert_eq!(flagdce(&mut body), 0, "{body:?}");
+    }
+
     fn v(name: &str) -> HlilExpr {
         HlilExpr::Var { var: var(name) }
     }

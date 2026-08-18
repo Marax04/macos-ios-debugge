@@ -8411,7 +8411,7 @@ impl MobileDyldMockImageCountTool {
             description:
                 "Return image count from a mock dyld shared cache via rustre_mobile_dyld::DyldCache::mock."
                     .to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: artefact_schema("dyld shared cache"),
             parameters: Value::Null,
         }
     }
@@ -8419,13 +8419,28 @@ impl MobileDyldMockImageCountTool {
 
 #[async_trait]
 impl ToolHandler for MobileDyldMockImageCountTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let cache = rustre_mobile_dyld::DyldCache::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (mut cache, is_reference_fixture) =
+            match artefact_bytes(&args, "dyld shared cache")? {
+                Some(bytes) => (
+                    rustre_mobile_dyld::DyldCache::parse(&bytes).map_err(|e| {
+                        McpError::ToolError(format!("not a parsable dyld shared cache: {e}"))
+                    })?,
+                    false,
+                ),
+                None => (rustre_mobile_dyld::DyldCache::mock(), true),
+            };
+        // `parse` deliberately leaves `symbols` empty — walking every image of a
+        // multi-gigabyte cache is not something a parse should do implicitly —
+        // so the opt-in walk is performed here, where the caller asked for it.
+        cache.load_symbols_from_images();
+        let cache = cache;
         Ok(ToolResult::text(
             json!({
                 "image_count": cache.image_count(),
                 "symbol_count": cache.symbol_count(),
-                "source": "rustre_mobile_dyld::DyldCache::mock",
+                "is_reference_fixture": is_reference_fixture,
+                "source": "rustre_mobile_dyld::DyldCache (supplied by the caller)",
             })
             .to_string(),
         ))
@@ -8891,7 +8906,7 @@ impl MobileIpaMockPackageTool {
             description:
                 "Return a canned mock IpaPackage useful for schema/regression testing."
                     .to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: artefact_schema(".ipa"),
             parameters: Value::Null,
         }
     }
@@ -8899,12 +8914,20 @@ impl MobileIpaMockPackageTool {
 
 #[async_trait]
 impl ToolHandler for MobileIpaMockPackageTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let pkg = rustre_mobile_ipa::IpaPackage::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (pkg, is_reference_fixture) = match artefact_bytes(&args, ".ipa")? {
+            Some(bytes) => (
+                rustre_mobile_ipa::IpaPackage::parse(&bytes)
+                    .map_err(|e| McpError::ToolError(format!("not a parsable IPA: {e}")))?,
+                false,
+            ),
+            None => (rustre_mobile_ipa::IpaPackage::mock(), true),
+        };
         Ok(ToolResult::text(
             json!({
                 "package": pkg,
-                "source": "rustre_mobile_ipa::IpaPackage::mock",
+                "is_reference_fixture": is_reference_fixture,
+                "source": "rustre_mobile_ipa::IpaPackage (supplied by the caller)",
             })
             .to_string(),
         ))
@@ -25751,16 +25774,16 @@ impl ToolHandler for ThreatintelThreatIocNewTool {
             .ok_or_else(|| McpError::InvalidParams("missing 'value'".into()))?;
         let threat_name = args.get("threat_name").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'threat_name'".into()))?;
-        let confidence = args.get("confidence").and_then(Value::as_f64)
-            .ok_or_else(|| McpError::InvalidParams("missing 'confidence'".into()))?;
+        // The confidence is read and range-checked by `crate::confidence_arg`
+        // at the construction site below; binding it here as a bare f64 would
+        // reintroduce the unchecked value this tool used to pass through.
         let source = args.get("source").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'source'".into()))?;
-        #[allow(clippy::cast_possible_truncation)]
         let ioc = rustre_threatintel::ThreatIoc::new(
             rustre_threatintel::IocType::Sha256,
             value,
             threat_name,
-            confidence as f32,
+            crate::confidence_arg(&args, "confidence")?,
             source,
         );
         Ok(ToolResult::text(
@@ -26249,7 +26272,7 @@ impl MobileApktoolMockSuccessTool {
         ToolDefinition {
             name: "mobile_apktool_mock_success".to_string(),
             description:
-                "Return the default fields of rustre_mobile_apktool::MockApktoolRunner::success()."
+                "Report the CONFIGURATION of MockApktoolRunner::success() — which operations it                  is set to attempt, and its smali-directory filter. This performs NO decode and                  analyses NO file: it inspects constructor defaults. Real decoding is                  mobile_apktool_mock_decode / mobile_apktool_impl_build, which run the apktool on                  PATH against a file that must exist."
                     .to_string(),
             input_schema: json!({ "type": "object", "properties": {} }),
             parameters: Value::Null,
@@ -26855,7 +26878,7 @@ impl MobileIpaMockSummaryTool {
                 "Build a mock IpaPackage and return its entry count, framework count \
                  and executable path (deterministic, useful for smoke tests)."
                     .to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: artefact_schema(".ipa"),
             parameters: Value::Null,
         }
     }
@@ -26863,15 +26886,23 @@ impl MobileIpaMockSummaryTool {
 
 #[async_trait]
 impl ToolHandler for MobileIpaMockSummaryTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let pkg = rustre_mobile_ipa::IpaPackage::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (pkg, is_reference_fixture) = match artefact_bytes(&args, ".ipa")? {
+            Some(bytes) => (
+                rustre_mobile_ipa::IpaPackage::parse(&bytes)
+                    .map_err(|e| McpError::ToolError(format!("not a parsable IPA: {e}")))?,
+                false,
+            ),
+            None => (rustre_mobile_ipa::IpaPackage::mock(), true),
+        };
         Ok(ToolResult::text(
             json!({
                 "entry_count":     pkg.entry_count(),
                 "framework_count": pkg.framework_count(),
                 "executable_path": pkg.executable_path,
                 "bundle_id":       pkg.info_plist.bundle_id,
-                "source": "rustre_mobile_ipa::IpaPackage::mock",
+                "is_reference_fixture": is_reference_fixture,
+                "source": "rustre_mobile_ipa::IpaPackage (supplied by the caller)",
             })
             .to_string(),
         ))
@@ -34464,9 +34495,23 @@ macro_rules! rhai_cast_tool {
         impl ToolHandler for $name {
             async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
                 let raw = args.get("n").ok_or_else(|| McpError::InvalidParams("missing n".into()))?;
-                let v = raw.as_f64().ok_or_else(|| McpError::InvalidParams("n not number".into()))?;
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss, clippy::cast_lossless)]
-                let $arg: $ty = v as $ty;
+                // ⚠ This used to be `raw.as_f64()? as $ty` behind an allow for
+                // four cast lints. That cast is ARGUMENT MARSHALLING, not the
+                // conversion these tools exist to demonstrate — the lossy part
+                // happens inside `rustre_script_rhai::*`. Truncating here meant
+                // `script_rhai_trunc_i64_to_u8` with `n: 1e30` fed garbage INTO
+                // the function under test, so the truncation it reported came
+                // from the wrapper rather than from the thing being measured.
+                //
+                // serde converts a JSON number into the exact target type and
+                // fails when it does not fit, so the argument now arrives
+                // unchanged or the caller is told why it cannot.
+                let $arg: $ty = serde_json::from_value(raw.clone()).map_err(|e| {
+                    McpError::InvalidParams(format!(
+                        "'n' does not fit {}: {e}",
+                        std::any::type_name::<$ty>()
+                    ))
+                })?;
                 let out = $call;
                 Ok(ToolResult::text(json!({"input": raw, "result": out, "source": $tool_name}).to_string()))
             }
@@ -34485,9 +34530,9 @@ rhai_cast_tool!(ScriptRhaiTruncF64ToI64Tool, "script_rhai_trunc_f64_to_i64",
 rhai_cast_tool!(ScriptRhaiSatUsizeToI64Tool, "script_rhai_sat_usize_to_i64",
     "rustre_script_rhai::sat_usize_to_i64", n: usize, rustre_script_rhai::sat_usize_to_i64(n));
 rhai_cast_tool!(ScriptRhaiSatU64ToUsizeWireTool, "script_rhai_sat_u64_to_usize_wire",
-    "rustre_script_rhai::sat_u64_to_usize", n: u64, rustre_script_rhai::sat_u64_to_usize(n) as u64);
+    "rustre_script_rhai::sat_u64_to_usize", n: u64, u64::try_from(rustre_script_rhai::sat_u64_to_usize(n)).unwrap_or(u64::MAX));
 rhai_cast_tool!(ScriptRhaiSatI64ToUsizeWireTool, "script_rhai_sat_i64_to_usize_wire",
-    "rustre_script_rhai::sat_i64_to_usize", n: i64, rustre_script_rhai::sat_i64_to_usize(n) as u64);
+    "rustre_script_rhai::sat_i64_to_usize", n: i64, u64::try_from(rustre_script_rhai::sat_i64_to_usize(n)).unwrap_or(u64::MAX));
 rhai_cast_tool!(ScriptRhaiTruncI64ToU8Tool, "script_rhai_trunc_i64_to_u8",
     "rustre_script_rhai::trunc_i64_to_u8", n: i64, rustre_script_rhai::trunc_i64_to_u8(n));
 rhai_cast_tool!(ScriptRhaiTruncI64ToU32Tool, "script_rhai_trunc_i64_to_u32",
@@ -34574,6 +34619,56 @@ fn sparc_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
         (SparcSynthSetWireTool::definition(), Box::new(SparcSynthSetWireTool) as Box<dyn ToolHandler>),
         (SparcSynthTstWireTool::definition(), Box::new(SparcSynthTstWireTool) as Box<dyn ToolHandler>),
     ]
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Real artefact input for the mobile tools defined in this file
+//
+// ⚠ Why this exists. `mobile_dyld_mock_image_count`, `mobile_ipa_mock_package`
+// and `mobile_ipa_mock_summary` declared `input_schema: {"properties": {}}` —
+// no arguments at all — built a fixture and reported its contents. A client
+// asking how many images a shared cache holds got the count of a cache this
+// crate had just assembled in memory.
+//
+// Same contract as the forensics and IPA tools already converted: `path` is
+// required, the fixture stays reachable behind an explicit opt-in that LABELS
+// its output.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Schema for a tool that analyses one file.
+fn artefact_schema(what: &str) -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": format!("Path to the {what} to analyse")},
+            "use_reference_fixture": {"type": "boolean", "description": "Analyse the built-in reference artefact instead. Output is labelled is_reference_fixture and describes nothing real."}
+        },
+        "required": ["path"]
+    })
+}
+
+/// Read the file named by `args["path"]`, or signal that the caller asked for
+/// the built-in fixture.
+///
+/// Returns `None` when the fixture was explicitly requested, so the caller can
+/// take its own fixture path and label the answer.
+///
+/// # Errors
+/// `InvalidParams` when neither `path` nor the opt-in is present; `ToolError`
+/// when the file cannot be read. Never falls back to the fixture silently.
+fn artefact_bytes(args: &Value, what: &str) -> Result<Option<Vec<u8>>, McpError> {
+    if args.get("use_reference_fixture").and_then(Value::as_bool) == Some(true) {
+        return Ok(None);
+    }
+    let path = args.get("path").and_then(Value::as_str).ok_or_else(|| {
+        McpError::InvalidParams(format!(
+            "'path' is required: the {what} to analyse. Pass \"use_reference_fixture\": true              to inspect the built-in reference artefact instead."
+        ))
+    })?;
+    std::fs::read(path)
+        .map(Some)
+        .map_err(|e| McpError::ToolError(format!("cannot read '{path}': {e}")))
 }
 
 pub fn all_wire_handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
@@ -36427,13 +36522,19 @@ impl ToolHandler for DbBaseMigrationsAvgSqlBytesTool {
         let migs = rustre_db::base_migrations();
         let count = migs.len();
         let total: usize = migs.iter().map(|m| m.up_sql.len()).sum();
-        #[allow(clippy::cast_precision_loss)]
-        let avg = if count == 0 { 0.0 } else { total as f64 / count as f64 };
+        // Integer arithmetic rather than `total as f64 / count as f64`: these
+        // are byte counts, so an exact quotient plus remainder is both more
+        // precise and more useful than a float that silently loses precision
+        // above 2^53. The float form needed an allow for `cast_precision_loss`
+        // and could not answer "how many bytes are left over".
+        let avg = if count == 0 { 0 } else { total / count };
+        let avg_remainder = if count == 0 { 0 } else { total % count };
         Ok(ToolResult::text(
             json!({
                 "count":       count,
                 "total_bytes": total,
                 "avg_bytes":   avg,
+                "avg_remainder_bytes": avg_remainder,
                 "source":      "rustre_db::base_migrations",
             })
             .to_string(),

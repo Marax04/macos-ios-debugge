@@ -535,9 +535,8 @@ mod tests {
     use super::*;
     use crate::ProcessStatus;
 
-    #[allow(clippy::similar_names)]
-    fn make_process(pid: u32, ppid: u32, name: &str) -> ProcessInfo {
-        let mut p = ProcessInfo::new(pid, ppid, name);
+    fn make_process(pid: u32, parent_pid: u32, name: &str) -> ProcessInfo {
+        let mut p = ProcessInfo::new(pid, parent_pid, name);
         p.exe_path = format!(r"C:\Windows\System32\{name}");
         p.status = ProcessStatus::Running;
         p

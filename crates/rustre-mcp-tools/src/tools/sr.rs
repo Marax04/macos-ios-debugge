@@ -6,8 +6,70 @@ use serde_json::{json, Value};
 use async_trait::async_trait;
 
 pub struct SrIocCollectionMockV4Tool;
-impl SrIocCollectionMockV4Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "sandbox_report_ioc_collection_mock_v4".to_string(), description: "rustre_sandbox_report::IocCollection::mock: total, is_empty, per-kind counts.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait::async_trait] impl ToolHandler for SrIocCollectionMockV4Tool { async fn call(&self, _args: Value) -> Result<ToolResult, rustre_mcp_server::McpError> { let c = rustre_sandbox_report::IocCollection::mock(); Ok(ToolResult::text(json!({"total":c.total(),"is_empty":c.is_empty(),"ips":c.ips.len(),"domains":c.domains.len(),"urls":c.urls.len(),"hashes":c.hashes.len(),"source":"rustre_sandbox_report::IocCollection::mock"}).to_string())) } }
+impl SrIocCollectionMockV4Tool {
+    #[must_use]
+    pub fn definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "sandbox_report_ioc_collection_mock_v4".to_string(),
+            description: "Counts over an IocCollection from a real analysis, supplied as the \
+                          `iocs` argument: total, is_empty, and per-kind (ips, domains, urls, \
+                          hashes)."
+                .to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "iocs": {
+                        "type": "object",
+                        "description": "An IocCollection from a real analysis"
+                    },
+                    "use_synthetic_fixture": {
+                        "type": "boolean",
+                        "description": "Count the built-in fixture instead. The response is labelled is_synthetic_fixture and its IOCs were extracted from nothing."
+                    }
+                },
+                "required": ["iocs"]
+            }),
+            parameters: Value::Null,
+        }
+    }
+}
+#[async_trait::async_trait]
+impl ToolHandler for SrIocCollectionMockV4Tool {
+    async fn call(&self, args: Value) -> Result<ToolResult, rustre_mcp_server::McpError> {
+        // ⚠ This took no arguments and counted `IocCollection::mock()`, so the
+        // per-kind totals it reported were the fixture's — IOCs extracted from
+        // nothing, presented as though something had been analysed.
+        let (c, is_synthetic_fixture) =
+            if args.get("use_synthetic_fixture").and_then(Value::as_bool) == Some(true) {
+                (rustre_sandbox_report::IocCollection::mock(), true)
+            } else {
+                let raw = args.get("iocs").ok_or_else(|| {
+                    rustre_mcp_server::McpError::InvalidParams(
+                        "'iocs' is required: an IocCollection from a real analysis. Pass \
+                         \"use_synthetic_fixture\": true for the built-in fixture."
+                            .to_string(),
+                    )
+                })?;
+                let parsed: rustre_sandbox_report::IocCollection =
+                    serde_json::from_value(raw.clone()).map_err(|e| {
+                        rustre_mcp_server::McpError::ToolError(format!(
+                            "'iocs' is not an IocCollection: {e}"
+                        ))
+                    })?;
+                (parsed, false)
+            };
+        Ok(ToolResult::text(json!({
+            "total": c.total(),
+            "is_empty": c.is_empty(),
+            "ips": c.ips.len(),
+            "domains": c.domains.len(),
+            "urls": c.urls.len(),
+            "hashes": c.hashes.len(),
+            "is_synthetic_fixture": is_synthetic_fixture,
+            "source": "rustre_sandbox_report::IocCollection (supplied by the caller)"
+        }).to_string()))
+    }
+}
 
 pub struct SrIocCollectionSummaryTextV4Tool;
 impl SrIocCollectionSummaryTextV4Tool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "sandbox_report_ioc_collection_summary_text_v4".to_string(), description: "IocCollection::mock().summary_text length + preview.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }

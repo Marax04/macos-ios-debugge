@@ -44,10 +44,7 @@ impl ThreatintelIocIsConfidentW3Tool {
 #[async_trait]
 impl ToolHandler for ThreatintelIocIsConfidentW3Tool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
-        let c = args.get("confidence").and_then(Value::as_f64)
-            .ok_or_else(|| McpError::InvalidParams("missing 'confidence'".into()))?;
-        #[allow(clippy::cast_possible_truncation)]
-        let c32 = c as f32;
+        let c32 = crate::confidence_arg(&args, "confidence")?;
         let ioc = rustre_threatintel::ThreatIoc::new(rustre_threatintel::IocType::Md5, "x", "n", c32, "s");
         Ok(ToolResult::text(json!({"confidence": ioc.confidence,
             "is_confident": ioc.confidence >= 0.8,

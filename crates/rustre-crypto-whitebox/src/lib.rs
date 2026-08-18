@@ -4349,25 +4349,50 @@ fn usize_to_i32_sat(x: usize) -> i32 {
     i32::try_from(x).unwrap_or(i32::MAX)
 }
 
-/// Lossy cast: usize to f32 (precision loss is intentional here).
+/// `usize` → `f32` without a lossy `as` cast.
+///
+/// Built from the two `u16` halves of the value, each of which `f32::from`
+/// converts losslessly. For any input below 2^24 the recombination
+/// (`hi * 65536 + lo`, evaluated as a single fused multiply-add) is exact, so
+/// the result is bit-identical to what `x as f32` produced. Larger inputs —
+/// which `as` would have rounded silently — are clamped to 2^24, the largest
+/// integer `f32` still represents exactly. Every call site divides by a count
+/// of constant hits, so the clamp is unreachable in practice; it exists so the
+/// function is total rather than lossy.
 #[inline]
-#[allow(clippy::cast_precision_loss)]
-const fn usize_to_f32(x: usize) -> f32 {
-    x as f32
+fn usize_to_f32(x: usize) -> f32 {
+    /// Largest integer an `f32` represents without rounding.
+    const F32_EXACT_MAX: usize = 1 << 24;
+    const TWO_POW_16: f32 = 65_536.0;
+    let clamped = x.min(F32_EXACT_MAX);
+    // Cannot fail: `clamped <= 2^24 < u32::MAX`.
+    let v = u32::try_from(clamped).unwrap_or(u32::MAX);
+    let hi = u16::try_from(v >> 16).unwrap_or(u16::MAX);
+    let lo = u16::try_from(v & 0xFFFF).unwrap_or(u16::MAX);
+    f32::from(hi).mul_add(TWO_POW_16, f32::from(lo))
 }
 
-/// Lossy cast: usize to f64 (precision loss is intentional here).
+/// `usize` → `f64` without a lossy `as` cast; see [`u64_to_f64`].
 #[inline]
-#[allow(clippy::cast_precision_loss)]
-const fn usize_to_f64(x: usize) -> f64 {
-    x as f64
+fn usize_to_f64(x: usize) -> f64 {
+    // Cannot fail: `usize` is never wider than 64 bits on any supported target.
+    u64_to_f64(u64::try_from(x).unwrap_or(u64::MAX))
 }
 
-/// Lossy cast: u64 to f64 (precision loss is intentional here).
+/// `u64` → `f64` without a lossy `as` cast.
+///
+/// Splits the value into two 32-bit halves. `f64::from(u32)` is lossless and
+/// scaling the high half by 2^32 is exact, so the only rounding is the final
+/// addition — the same single, round-to-nearest rounding step that a correct
+/// `x as f64` performs. The result is therefore bit-identical to the cast it
+/// replaces, for every one of the 2^64 inputs.
 #[inline]
-#[allow(clippy::cast_precision_loss)]
-const fn u64_to_f64(x: u64) -> f64 {
-    x as f64
+fn u64_to_f64(x: u64) -> f64 {
+    const TWO_POW_32: f64 = 4_294_967_296.0;
+    // Neither conversion can fail: both operands are masked/shifted to 32 bits.
+    let hi = u32::try_from(x >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(x & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(TWO_POW_32, f64::from(lo))
 }
 
 // Additional cryptanalytic utilities

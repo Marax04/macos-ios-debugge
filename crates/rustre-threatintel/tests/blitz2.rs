@@ -209,7 +209,7 @@ fn t20_empty_string_value_in_ioc() {
 // ─── Round-trips on 50 LCG-generated inputs ────────────────────────────────
 
 #[test]
-fn t21_iocType_as_str_from_key_roundtrip_50() {
+fn t21_ioc_type_as_str_from_key_roundtrip_50() {
     let mut lcg = Lcg::new();
     for _ in 0..50 {
         let ty = ioc_type_at(lcg.next());
@@ -342,7 +342,7 @@ fn t32_ioctype_eq_implies_hash_30() {
 }
 
 #[test]
-fn t33_iocId_eq_hash_consistency_30() {
+fn t33_ioc_id_eq_hash_consistency_30() {
     for i in 0..30u64 {
         let a = IocId(i);
         let b = IocId(i);

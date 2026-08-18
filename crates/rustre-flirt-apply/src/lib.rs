@@ -423,19 +423,47 @@ impl FlirtSigDb {
     ///
     /// Call [`FlirtSigDb::merge`] to combine with [`load_demo_sigs`].
     #[must_use]
-    #[allow(clippy::too_many_lines)]
     pub fn load_extended_sigs() -> Self {
         let mut db = Self::new();
 
-        let mut add = |name: &str, lib: &str, pattern: &str| {
-            if let Ok(p) =
-                FlirtPattern::from_pattern_str(pattern, name.to_string(), lib.to_string())
-            {
-                db.add_pattern(p);
-            }
-        };
+        Self::add_x64_import_thunks_jmp_rip_rel32(&mut db);
+        Self::add_ntdll_thunks(&mut db);
+        Self::add_ucrt_msvcrt_x64(&mut db);
+        Self::add_windows_crt_security_stack_check_init(&mut db);
+        Self::add_math_x64_msvcrt_ucrt(&mut db);
+        Self::add_time_misc_crt(&mut db);
+        Self::add_wide_char_unicode(&mut db);
+        Self::add_io_low_level(&mut db);
+        Self::add_string_util_variations(&mut db);
+        Self::add_rust_stdlib_x64(&mut db);
+        Self::add_ucrt_additional_misc(&mut db);
+        Self::add_vcruntime_compiler_intrinsics(&mut db);
+        Self::add_seh_exception_handling(&mut db);
+        Self::add_additional_crt_helpers(&mut db);
+        Self::add_common_small_function_patterns_x64(&mut db);
+        Self::add_rust_specific_runtime_helpers(&mut db);
+        Self::add_common_rust_msvc_linker_helpers(&mut db);
+        Self::add_windows_api_non_kernel32(&mut db);
 
-        // ── x64 import thunks (JMP [RIP+rel32]) ─────────────────────────────
+        db
+    }
+
+    /// Record one signature, ignoring patterns that fail to parse.
+    ///
+    /// Decides nothing beyond that: a malformed literal in the built-in table
+    /// is skipped rather than aborting the whole database.
+    fn add_sig(&mut self, name: &str, lib: &str, pattern: &str) {
+        if let Ok(p) = FlirtPattern::from_pattern_str(pattern, name.to_string(), lib.to_string()) {
+            self.add_pattern(p);
+        }
+    }
+
+    /// Register the x64 import thunks (JMP [RIP+rel32]) signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_x64_import_thunks_jmp_rip_rel32(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         // These 6-byte thunks are identical in layout; the wildcard covers the
         // 4-byte RIP-relative displacement.  Padding bytes distinguish them.
         add("HeapAlloc",              "kernel32", "FF 25 ?? ?? ?? ?? CC CC CC CC 48 8B C1");
@@ -508,8 +536,13 @@ impl FlirtSigDb {
         add("TlsGetValue",            "kernel32", "FF 25 ?? ?? ?? ?? CC CC CC CC 65 48 8B 04 25 58 00");
         add("TlsSetValue",            "kernel32", "FF 25 ?? ?? ?? ?? CC CC CC CC 65 48 8B 04 25 58 00 00 00");
         add("TerminateProcess",       "kernel32", "FF 25 ?? ?? ?? ?? CC CC CC CC 48 83 EC 28 FF 15");
-
-        // ── ntdll thunks ─────────────────────────────────────────────────────
+    }
+    /// Register the ntdll thunks signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_ntdll_thunks(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("RtlAllocateHeap",        "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08 48 89 74");
         add("RtlFreeHeap",            "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08 48 85");
         add("RtlReAllocateHeap",      "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08 57 48 83 EC 20");
@@ -528,8 +561,13 @@ impl FlirtSigDb {
         add("RtlRaiseException",      "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08 57 48 81 EC");
         add("RtlLookupFunctionEntry", "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 53 48 83 EC 20 45");
         add("RtlVirtualUnwind",       "ntdll",    "FF 25 ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08 48 89 74 24 18 57");
-
-        // ── ucrt / msvcrt x64 ─────────────────────────────────────────────────
+    }
+    /// Register the ucrt / msvcrt x64 signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_ucrt_msvcrt_x64(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         // memcpy x64 UCRT
         add("memcpy",    "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B F2");
         add("memcpy",    "ucrt", "4C 8B D9 4C 8B D1 4D 03 D0 49 8B C0 F3 A4 4D 8B C3");
@@ -647,8 +685,13 @@ impl FlirtSigDb {
         add("abort",     "ucrt", "40 53 48 83 EC 20 E8 ?? ?? ?? ?? 33 C9 E8 ?? ?? ?? ?? 33 DB");
         add("raise",     "ucrt", "48 83 EC 28 85 C9 74 ?? E8 ?? ?? ?? ?? 48 83 C4 28");
         add("terminate", "ucrt", "48 83 EC 28 E8 ?? ?? ?? ?? 85 C0 74 ?? 8B C8 E8 ?? ?? ?? ?? 48 83 C4 28");
-
-        // ── Windows CRT security / stack-check / init ─────────────────────────
+    }
+    /// Register the Windows CRT security / stack-check / init signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_windows_crt_security_stack_check_init(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         // __security_check_cookie x64
         add("__security_check_cookie",     "msvcrt", "48 3B 0D ?? ?? ?? ?? 75 ?? F3 C3");
         add("__security_check_cookie",     "msvcrt", "65 48 8B 04 25 28 00 00 00 48 3B 01 75 ?? C3");
@@ -679,8 +722,13 @@ impl FlirtSigDb {
         add("_invalid_parameter_noinfo",   "ucrt",   "48 83 EC 28 48 C7 44 24 20 00 00 00 00 4C 8D 0D ?? ?? ?? ??");
         add("__report_gsfailure",          "msvcrt", "48 83 EC 28 48 89 4C 24 30 E8 ?? ?? ?? ?? 48 8B 4C 24 30");
         add("__report_rangecheckfailure",  "msvcrt", "48 83 EC 28 E8 ?? ?? ?? ?? 48 83 C4 28 CC");
-
-        // ── math x64 (msvcrt/ucrt) ───────────────────────────────────────────
+    }
+    /// Register the math x64 (msvcrt/ucrt) signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_math_x64_msvcrt_ucrt(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("sin",       "ucrt", "48 83 EC 28 F2 0F 10 0D ?? ?? ?? ?? F2 0F 58 C1 E8 ?? ?? ?? ??");
         add("cos",       "ucrt", "48 83 EC 28 F2 0F 10 0D ?? ?? ?? ?? F2 0F 58 C1 E8 ?? ?? ?? ??");
         add("tan",       "ucrt", "48 83 EC 28 F2 0F 10 0D ?? ?? ?? ?? F2 0F 58 C1 E8 ?? ?? ?? ??");
@@ -720,8 +768,13 @@ impl FlirtSigDb {
         add("expf",      "ucrt", "F3 0F 10 C8 E8 ?? ?? ?? ?? F3 0F 10 C0 C3");
         add("logf",      "ucrt", "F3 0F 10 C8 E8 ?? ?? ?? ?? F3 0F 10 C0 C3");
         add("log10f",    "ucrt", "F3 0F 10 C8 E8 ?? ?? ?? ?? F3 0F 10 C0 C3");
-
-        // ── time / misc CRT ──────────────────────────────────────────────────
+    }
+    /// Register the time / misc CRT signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_time_misc_crt(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("time",      "ucrt", "48 83 EC 28 48 85 C9 74 ?? E8 ?? ?? ?? ?? 48 89 01 48 8B C0 48 83 C4 28 C3");
         add("clock",     "ucrt", "48 83 EC 28 FF 15 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("localtime", "ucrt", "48 83 EC 28 48 8B C8 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
@@ -738,8 +791,13 @@ impl FlirtSigDb {
         add("system",    "ucrt", "48 83 EC 28 48 8B C8 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("_dupenv_s", "ucrt", "48 89 5C 24 08 48 89 6C 24 10 57 48 83 EC 20 48 8B FA 48 8B E9");
         add("_putenv_s", "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B DA 48 8B F9");
-
-        // ── wide char / unicode ───────────────────────────────────────────────
+    }
+    /// Register the wide char / unicode signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_wide_char_unicode(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("wcslen",    "ucrt", "48 85 C9 74 ?? 48 8B C1 0F 1F 40 00 66 83 38 00 48 FF C0 75 ??");
         add("wcsncpy",   "ucrt", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 4C 8B CA");
         add("wcscat",    "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ??");
@@ -758,8 +816,13 @@ impl FlirtSigDb {
         add("vwprintf",  "ucrt", "48 89 5C 24 08 57 48 83 EC 20 48 8B FA 4C 8D 05 ?? ?? ?? ??");
         add("swscanf",   "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 49 8B F8 48 8B F1 49");
         add("_wcsdup",   "ucrt", "48 85 C9 74 ?? 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 85 C0");
-
-        // ── io low-level ─────────────────────────────────────────────────────
+    }
+    /// Register the io low-level signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_io_low_level(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("_open",     "ucrt", "48 89 5C 24 08 57 48 83 EC 30 48 8B D9 8B FA");
         add("_close",    "ucrt", "48 83 EC 28 85 C9 78 ?? E8 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("_read",     "ucrt", "48 89 5C 24 08 57 48 83 EC 20 44 8B D2 8B FA");
@@ -773,8 +836,13 @@ impl FlirtSigDb {
         add("_get_osfhandle","ucrt","48 83 EC 28 85 C9 78 ?? E8 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("_open_osfhandle","ucrt","48 89 5C 24 08 57 48 83 EC 20 48 8B DA 8B FA");
         add("_setmode",  "ucrt", "48 83 EC 28 8B D2 8B C9 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
-
-        // ── string util variations ────────────────────────────────────────────
+    }
+    /// Register the string util variations signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_string_util_variations(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("_strlwr",   "ucrt", "48 85 C9 74 ?? 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 83 C4 20 5B C3");
         add("_strupr",   "ucrt", "48 85 C9 74 ?? 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 83 C4 20 5B C3");
         add("_strdup",   "ucrt", "48 85 C9 74 ?? 53 48 83 EC 20 48 8B D9 E8 ?? ?? ?? ?? 48 85 C0");
@@ -783,8 +851,13 @@ impl FlirtSigDb {
         add("_ultoa",    "ucrt", "48 89 5C 24 08 48 89 6C 24 10 57 48 83 EC 20 8B EA 44 8B FA");
         add("_i64toa",   "ucrt", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 44 8B F2");
         add("_gcvt",     "ucrt", "48 83 EC 28 44 8B C2 48 8B CA F2 0F 10 01 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
-
-        // ── Rust stdlib x64 ──────────────────────────────────────────────────
+    }
+    /// Register the Rust stdlib x64 signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_rust_stdlib_x64(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         // __rust_alloc — calls HeapAlloc with process heap
         add("__rust_alloc",            "rust_alloc", "48 89 5C 24 08 57 48 83 EC 20 48 8B 1D ?? ?? ?? ?? 48 85 DB 74 ??");
         add("__rust_alloc",            "rust_alloc", "48 83 EC 28 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 83 C4 28 C3");
@@ -887,8 +960,13 @@ impl FlirtSigDb {
         add("core::clone::Clone::clone",   "rust_core","48 8B 01 C3");
         // hash
         add("core::hash::BuildHasher::build_hasher","rust_core","48 8B 01 C3");
-
-        // ── ucrt additional misc ─────────────────────────────────────────────
+    }
+    /// Register the ucrt additional misc signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_ucrt_additional_misc(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("_beginthread",        "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 4C 8B C9 45");
         add("_beginthreadex",      "ucrt", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 30");
         add("_endthread",          "ucrt", "40 53 48 83 EC 20 33 DB E8 ?? ?? ?? ?? E8 ?? ?? ?? ??");
@@ -900,8 +978,13 @@ impl FlirtSigDb {
         add("_assert",             "ucrt", "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 4C 8B CA 49 8B F0");
         add("__cdecl_wrapper",     "crt",  "48 83 EC 28 FF D0 48 83 C4 28 C3");
         add("__fastfail",          "crt",  "CD 29");
-
-        // ── vcruntime / compiler intrinsics ──────────────────────────────────
+    }
+    /// Register the vcruntime / compiler intrinsics signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_vcruntime_compiler_intrinsics(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("__stosb",     "vcruntime", "F3 AA C3");
         add("__stosd",     "vcruntime", "F3 AB C3");
         add("__stosq",     "vcruntime", "F3 48 AB C3");
@@ -936,8 +1019,13 @@ impl FlirtSigDb {
         add("_lzcnt_u64","vcruntime","F3 48 0F BD C1 48 8B C0 C3");
         add("_tzcnt_u32","vcruntime","F3 0F BC C1 8B C0 C3");
         add("_tzcnt_u64","vcruntime","F3 48 0F BC C1 48 8B C0 C3");
-
-        // ── SEH / exception handling ──────────────────────────────────────────
+    }
+    /// Register the SEH / exception handling signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_seh_exception_handling(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("_except_handler3",    "msvcrt","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 54");
         add("_except_handler4",    "msvcrt","48 89 5C 24 08 48 89 74 24 10 57 48 81 EC 80 00 00 00 48 8B 59 08");
         add("__CxxFrameHandler3",  "vcruntime","48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 4C 24 20 41 54 41 56 41 57 48 83 EC 40");
@@ -949,8 +1037,13 @@ impl FlirtSigDb {
         add("std::unexpected",      "vcruntime","48 83 EC 28 FF 15 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("__current_exception",  "vcruntime","65 48 8B 04 25 30 00 00 00 48 8B 80 F8 00 00 00 C3");
         add("__current_exception_context","vcruntime","65 48 8B 04 25 30 00 00 00 48 8B 80 00 01 00 00 C3");
-
-        // ── additional CRT helpers ────────────────────────────────────────────
+    }
+    /// Register the additional CRT helpers signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_additional_crt_helpers(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("__std_terminate",      "vcruntime","48 83 EC 28 FF 15 ?? ?? ?? ?? CC");
         add("__std_exception_copy", "vcruntime","48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B F2 48 8B F9");
         add("__std_exception_destroy","vcruntime","48 85 C9 74 ?? 48 8B 01 48 85 C0 74 ?? FF D0 C3");
@@ -972,8 +1065,13 @@ impl FlirtSigDb {
         add("__stdio_common_vfprintf","ucrt","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 30");
         add("__stdio_common_vsprintf","ucrt","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 30");
         add("__stdio_common_vsscanf","ucrt","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 30");
-
-        // ── common small-function patterns (x64) ──────────────────────────────
+    }
+    /// Register the common small-function patterns (x64) signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_common_small_function_patterns_x64(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         // Many trivial wrappers / accessors
         add("__acrt_get_locale_data_prefix","ucrt","65 48 8B 04 25 30 00 00 00 48 8B 80 ?? 00 00 00 C3");
         add("_isatty",    "ucrt", "48 83 EC 28 8B C9 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
@@ -991,15 +1089,25 @@ impl FlirtSigDb {
         add("_toupper",   "ucrt", "48 83 EC 28 0F BE C1 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("_tolower",   "ucrt", "48 83 EC 28 0F BE C1 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
         add("_toascii",   "ucrt", "83 E1 7F 8B C1 C3");
-
-        // ── Rust-specific runtime helpers ─────────────────────────────────────
+    }
+    /// Register the Rust-specific runtime helpers signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_rust_specific_runtime_helpers(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("std::rt::lang_start",         "rust_std","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 30");
         add("std::rt::lang_start_internal","rust_std","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 40");
         add("rust_eh_personality",         "rust_std","33 C0 C3");
         add("__rust_start_panic",          "rust_std","48 83 EC 28 E8 ?? ?? ?? ?? CC");
         add("__rust_panic_cleanup",        "rust_std","48 83 EC 28 E8 ?? ?? ?? ?? CC");
-
-        // ── common Rust MSVC linker helpers ───────────────────────────────────
+    }
+    /// Register the common Rust MSVC linker helpers signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_common_rust_msvc_linker_helpers(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("__CxxCallUnwindDtor",         "vcruntime","48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 FF D1");
         add("__CxxCallUnwindVecDtor",      "vcruntime","48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 30");
         add("__CxxCallUnwindDelDtor",      "vcruntime","48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 FF D1 48");
@@ -1007,8 +1115,13 @@ impl FlirtSigDb {
         add("??3@YAXPEAX@Z",              "vcruntime","48 85 C9 74 ?? E9 ?? ?? ?? ?? C3");
         add("??_V@YAXPEAX@Z",             "vcruntime","48 85 C9 74 ?? E9 ?? ?? ?? ?? C3");
         add("??_U@YAPEAX_K@Z",            "vcruntime","48 83 EC 28 E8 ?? ?? ?? ?? 48 83 C4 28 C3");
-
-        // ── Windows API (non-kernel32) ────────────────────────────────────────
+    }
+    /// Register the Windows API (non-kernel32) signatures.
+    ///
+    /// Decides which byte patterns stand for this family of functions; kept as
+    /// its own helper so the table stays readable one family at a time.
+    fn add_windows_api_non_kernel32(db: &mut Self) {
+        let mut add = |name: &str, lib: &str, pattern: &str| db.add_sig(name, lib, pattern);
         add("GetTickCount",       "kernel32","FF 25 ?? ?? ?? ?? CC CC CC CC 65 8B 04 25 64 00 00 00");
         add("GetTickCount64",     "kernel32","FF 25 ?? ?? ?? ?? CC CC CC CC 65 48 8B 04 25 64 00 00 00");
         add("GetEnvironmentVariableA","kernel32","FF 25 ?? ?? ?? ?? CC CC CC CC 45 85 C0 74 ??");
@@ -1058,8 +1171,6 @@ impl FlirtSigDb {
         add("CryptReleaseContext","advapi32","FF 25 ?? ?? ?? ?? CC CC CC CC 48 85 C9 74 ??");
         add("CryptGenRandom",     "advapi32","FF 25 ?? ?? ?? ?? CC CC CC CC 8B D2 48 85 C9");
         add("BCryptGenRandom",    "bcrypt",  "FF 25 ?? ?? ?? ?? CC CC CC CC 4D 85 C0 48 85 D2");
-
-        db
     }
 
     /// Merge all patterns from `other` into `self`, consuming `other`.

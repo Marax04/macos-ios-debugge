@@ -14,9 +14,10 @@
 
 use std::time::Instant;
 
+use rustre_flirt_apply::usize_to_f64;
+
 fn human(bytes: usize) -> String {
-    #[allow(clippy::cast_precision_loss)]
-    let b = bytes as f64;
+    let b = usize_to_f64(bytes);
     if b >= 1024.0 * 1024.0 {
         format!("{:.1} MB", b / (1024.0 * 1024.0))
     } else if b >= 1024.0 {
@@ -71,8 +72,7 @@ fn main() {
         }
         let secs = t.elapsed().as_secs_f64();
 
-        #[allow(clippy::cast_precision_loss)]
-        let mbs = (scanned as f64 / (1024.0 * 1024.0)) / secs.max(1e-9);
+        let mbs = (usize_to_f64(scanned) / (1024.0 * 1024.0)) / secs.max(1e-9);
         let name = std::path::Path::new(path)
             .file_name()
             .map_or_else(|| path.clone(), |s| s.to_string_lossy().into_owned());

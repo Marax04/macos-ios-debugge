@@ -5,10 +5,6 @@
 //! whether a change actually removed allocations rather than moving them.
 //!
 //! Run: cargo run --release -p rustre-demangle --example `alloc_profile`
-#![allow(
-    clippy::cast_precision_loss,
-    reason = "profiling harness: the reported averages are display-only"
-)]
 // The library itself is unsafe-free (the workspace sets `unsafe_code = "warn"`).
 // This diagnostic harness is the sole exception: a counting global allocator
 // cannot be written in safe Rust, since `GlobalAlloc` is an unsafe trait. Every
@@ -56,6 +52,23 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static A: Counting = Counting;
 
+/// `usize` → `f64` for the display-only ratios below, without a lossy cast.
+///
+/// The value is split into two 32-bit halves, each of which `f64::from`
+/// converts exactly; scaling the high half by 2^32 is exact, so the single
+/// rounding in the final addition is the same rounding a correct `x as f64`
+/// would perform. The result is therefore bit-identical to the cast it
+/// replaces, for every input, and the function is total.
+fn to_f64(x: usize) -> f64 {
+    const TWO_POW_32: f64 = 4_294_967_296.0;
+    // None of these conversions can fail: `usize` is at most 64 bits, and both
+    // halves are masked/shifted down to 32.
+    let wide = u64::try_from(x).unwrap_or(u64::MAX);
+    let hi = u32::try_from(wide >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(wide & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(TWO_POW_32, f64::from(lo))
+}
+
 fn measure(label: &str, sym: &str, iters: usize) {
     // Warm up any lazily-initialised state so it is not attributed per call.
     let _ = rustre_demangle::demangle(sym);
@@ -70,8 +83,8 @@ fn measure(label: &str, sym: &str, iters: usize) {
 
     println!(
         "{label:<14} {:>7.1} allocs/call {:>9.1} bytes/call   [{sym}]",
-        allocs as f64 / iters as f64,
-        bytes as f64 / iters as f64,
+        to_f64(allocs) / to_f64(iters),
+        to_f64(bytes) / to_f64(iters),
     );
 }
 
@@ -88,8 +101,8 @@ fn measure_fn<T>(label: &str, iters: usize, mut f: impl FnMut() -> T) {
     let bytes = BYTES.load(Ordering::Relaxed) - b0;
     println!(
         "{label:<24} {:>7.1} allocs/call {:>9.1} bytes/call",
-        allocs as f64 / iters as f64,
-        bytes as f64 / iters as f64,
+        to_f64(allocs) / to_f64(iters),
+        to_f64(bytes) / to_f64(iters),
     );
 }
 

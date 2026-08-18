@@ -1201,7 +1201,12 @@ impl<'a> DwarfParser<'a> {
     }
 
     /// Decode one attribute value according to its DWARF form.
-    #[allow(clippy::too_many_lines)]
+    ///
+    /// The form families that need no access to `self` are delegated to
+    /// [`read_constant_form`], [`read_reference_form`], [`read_block_form`] and
+    /// [`read_indexed_form`]; only the address, string and flag forms — the ones
+    /// that resolve against `self.sections` or carry the abbreviation's
+    /// `implicit_const` — are decoded here.
     fn read_form_value(
         &self,
         data: &[u8],
@@ -1209,124 +1214,51 @@ impl<'a> DwarfParser<'a> {
         attr: &DwarfAbbrevAttr,
         addr_size: u8,
     ) -> Result<DwarfAttrValue> {
-        let trunc = |p: usize| DwarfError::ParseError {
-            offset: p,
-            msg: "truncated attribute value".into(),
-        };
-        let take = |pos: &mut usize, n: usize| -> Result<&[u8]> {
-            let s = data.get(*pos..*pos + n).ok_or_else(|| trunc(*pos))?;
-            *pos += n;
-            Ok(s)
-        };
         let mut form = attr.form;
         if form == DW_FORM_INDIRECT {
-            form = read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?;
+            form = read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?;
         }
         Ok(match form {
             DW_FORM_ADDR => {
                 let n = usize::from(addr_size.clamp(1, 8));
-                let bytes = take(pos, n)?;
+                let bytes = take_bytes(data, pos, n)?;
                 let mut buf = [0u8; 8];
                 buf[..n].copy_from_slice(bytes);
                 DwarfAttrValue::Address(u64::from_le_bytes(buf))
             }
-            DW_FORM_DATA1 => DwarfAttrValue::Udata(u64::from(take(pos, 1)?[0])),
-            DW_FORM_DATA2 => DwarfAttrValue::Udata(u64::from(u16::from_le_bytes(
-                take(pos, 2)?.try_into().unwrap(),
-            ))),
-            DW_FORM_DATA4 => DwarfAttrValue::Udata(u64::from(u32::from_le_bytes(
-                take(pos, 4)?.try_into().unwrap(),
-            ))),
-            DW_FORM_DATA8 => {
-                DwarfAttrValue::Udata(u64::from_le_bytes(take(pos, 8)?.try_into().unwrap()))
-            }
-            DW_FORM_UDATA => DwarfAttrValue::Udata(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?),
-            DW_FORM_SDATA => DwarfAttrValue::Sdata(read_sleb128(data, pos).ok_or_else(|| trunc(*pos))?),
+            DW_FORM_DATA1 | DW_FORM_DATA2 | DW_FORM_DATA4 | DW_FORM_DATA8 | DW_FORM_UDATA
+            | DW_FORM_SDATA => read_constant_form(data, pos, form)?,
             DW_FORM_STRING => {
                 let start = *pos;
-                let nul = data[start..]
-                    .iter()
-                    .position(|&b| b == 0)
-                    .ok_or_else(|| trunc(start))?;
+                let nul = data
+                    .get(start..)
+                    .and_then(|rest| rest.iter().position(|&b| b == 0))
+                    .ok_or_else(|| truncated_at(start))?;
                 *pos = start + nul + 1;
                 DwarfAttrValue::String(
                     String::from_utf8_lossy(&data[start..start + nul]).into_owned(),
                 )
             }
             DW_FORM_STRP | DW_FORM_LINE_STRP | DW_FORM_STRP_SUP => {
-                let off = u32::from_le_bytes(take(pos, 4)?.try_into().unwrap());
+                let off = u32::try_from(read_le_uint(data, pos, 4)?).unwrap_or(u32::MAX);
                 // Resolve eagerly against .debug_str where possible.
                 self.sections
                     .resolve_strp(off)
                     .map_or(DwarfAttrValue::Strp(off), DwarfAttrValue::String)
             }
-            DW_FORM_FLAG => DwarfAttrValue::Flag(take(pos, 1)?[0] != 0),
+            DW_FORM_FLAG => DwarfAttrValue::Flag(take_bytes(data, pos, 1)?[0] != 0),
             DW_FORM_FLAG_PRESENT => DwarfAttrValue::Flag(true),
-            DW_FORM_REF1 => DwarfAttrValue::Ref(u64::from(take(pos, 1)?[0])),
-            DW_FORM_REF2 => DwarfAttrValue::Ref(u64::from(u16::from_le_bytes(
-                take(pos, 2)?.try_into().unwrap(),
-            ))),
-            DW_FORM_REF4 | DW_FORM_REF_ADDR | DW_FORM_REF_SUP4 | DW_FORM_SEC_OFFSET => {
-                DwarfAttrValue::Ref(u64::from(u32::from_le_bytes(
-                    take(pos, 4)?.try_into().unwrap(),
-                )))
-            }
-            DW_FORM_REF8 | DW_FORM_REF_SIG8 | DW_FORM_REF_SUP8 => {
-                DwarfAttrValue::Ref(u64::from_le_bytes(take(pos, 8)?.try_into().unwrap()))
-            }
-            DW_FORM_REF_UDATA => {
-                DwarfAttrValue::Ref(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?)
-            }
-            DW_FORM_BLOCK1 => {
-                let n = usize::from(take(pos, 1)?[0]);
-                DwarfAttrValue::Block(take(pos, n)?.to_vec())
-            }
-            DW_FORM_BLOCK2 => {
-                let n = usize::from(u16::from_le_bytes(take(pos, 2)?.try_into().unwrap()));
-                DwarfAttrValue::Block(take(pos, n)?.to_vec())
-            }
-            DW_FORM_BLOCK4 => {
-                let n = u32::from_le_bytes(take(pos, 4)?.try_into().unwrap()) as usize;
-                DwarfAttrValue::Block(take(pos, n)?.to_vec())
-            }
-            DW_FORM_BLOCK | DW_FORM_EXPRLOC => {
-                let n = usize::try_from(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?)
-                    .map_err(|_| trunc(*pos))?;
-                DwarfAttrValue::Block(take(pos, n)?.to_vec())
-            }
-            DW_FORM_DATA16 => DwarfAttrValue::Block(take(pos, 16)?.to_vec()),
+            DW_FORM_REF1 | DW_FORM_REF2 | DW_FORM_REF4 | DW_FORM_REF_ADDR | DW_FORM_REF_SUP4
+            | DW_FORM_SEC_OFFSET | DW_FORM_REF8 | DW_FORM_REF_SIG8 | DW_FORM_REF_SUP8
+            | DW_FORM_REF_UDATA => read_reference_form(data, pos, form)?,
+            DW_FORM_BLOCK1 | DW_FORM_BLOCK2 | DW_FORM_BLOCK4 | DW_FORM_BLOCK | DW_FORM_EXPRLOC
+            | DW_FORM_DATA16 => read_block_form(data, pos, form)?,
             DW_FORM_IMPLICIT_CONST => DwarfAttrValue::Sdata(attr.implicit_const),
-            // Indexed forms. STRX/ADDRX keep their own variants so an index is
-            // never mistaken for a constant or an address; `resolve_indexed_forms`
-            // rewrites them once the CU's str_offsets/addr bases are known.
-            DW_FORM_STRX => DwarfAttrValue::Strx(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?),
-            DW_FORM_ADDRX => DwarfAttrValue::Addrx(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?),
-            DW_FORM_LOCLISTX | DW_FORM_RNGLISTX => {
-                DwarfAttrValue::Udata(read_uleb128(data, pos).ok_or_else(|| trunc(*pos))?)
+            DW_FORM_STRX | DW_FORM_ADDRX | DW_FORM_LOCLISTX | DW_FORM_RNGLISTX | DW_FORM_STRX1
+            | DW_FORM_ADDRX1 | DW_FORM_STRX2 | DW_FORM_ADDRX2 | DW_FORM_STRX3
+            | DW_FORM_ADDRX3 | DW_FORM_STRX4 | DW_FORM_ADDRX4 => {
+                read_indexed_form(data, pos, form)?
             }
-            DW_FORM_STRX1 => DwarfAttrValue::Strx(u64::from(take(pos, 1)?[0])),
-            DW_FORM_ADDRX1 => DwarfAttrValue::Addrx(u64::from(take(pos, 1)?[0])),
-            DW_FORM_STRX2 => DwarfAttrValue::Strx(u64::from(u16::from_le_bytes(
-                take(pos, 2)?.try_into().unwrap(),
-            ))),
-            DW_FORM_ADDRX2 => DwarfAttrValue::Addrx(u64::from(u16::from_le_bytes(
-                take(pos, 2)?.try_into().unwrap(),
-            ))),
-            DW_FORM_STRX3 | DW_FORM_ADDRX3 => {
-                let b = take(pos, 3)?;
-                let v = u64::from(b[0]) | (u64::from(b[1]) << 8) | (u64::from(b[2]) << 16);
-                if form == DW_FORM_STRX3 {
-                    DwarfAttrValue::Strx(v)
-                } else {
-                    DwarfAttrValue::Addrx(v)
-                }
-            }
-            DW_FORM_STRX4 => DwarfAttrValue::Strx(u64::from(u32::from_le_bytes(
-                take(pos, 4)?.try_into().unwrap(),
-            ))),
-            DW_FORM_ADDRX4 => DwarfAttrValue::Addrx(u64::from(u32::from_le_bytes(
-                take(pos, 4)?.try_into().unwrap(),
-            ))),
             other => return Err(DwarfError::UnsupportedForm(other)),
         })
     }
@@ -1407,8 +1339,31 @@ impl<'a> DwarfParser<'a> {
 
     /// Decode a DWARF 2–4 line-number program. Returns `None` on any
     /// structural problem (caller falls back to the heuristic scan).
-    #[allow(clippy::too_many_lines)]
+    ///
+    /// Split in two: [`Self::parse_line_program_header`] decodes the fixed
+    /// header plus the file-name table, and [`Self::run_line_program`] executes
+    /// the opcode stream against the state machine those values configure.
     fn parse_line_program(data: &[u8]) -> Option<DwarfLineTable> {
+        let (header, mut table, pos) = Self::parse_line_program_header(data)?;
+        // The program proper starts after the header; a header_length that
+        // disagrees with what was consumed is tolerated as long as it stays
+        // inside the unit.
+        let program_start = 10 + header.header_length;
+        if program_start > header.end {
+            return None;
+        }
+        let pc = program_start.max(pos);
+        Self::run_line_program(data, &header, &mut table, pc);
+        Some(table)
+    }
+
+    /// Decode the DWARF 2–4 line-program header and its file-name table.
+    ///
+    /// Returns the decoded header, a table pre-populated with the file names,
+    /// and the offset just past the last header byte consumed.
+    fn parse_line_program_header(
+        data: &[u8],
+    ) -> Option<(LineProgramHeader, DwarfLineTable, usize)> {
         if data.len() < 15 {
             return None;
         }
@@ -1430,8 +1385,10 @@ impl<'a> DwarfParser<'a> {
         }
         let default_is_stmt = *data.get(pos)? != 0;
         pos += 1;
-        #[allow(clippy::cast_possible_wrap)]
-        let line_base = *data.get(pos)? as i8;
+        // `line_base` is a *signed* byte: reinterpreting the byte's bit pattern
+        // is the specified decoding, so it is spelled as a byte-level decode
+        // rather than a wrapping `as i8` cast.
+        let line_base = i8::from_le_bytes([*data.get(pos)?]);
         pos += 1;
         let line_range = *data.get(pos)?;
         pos += 1;
@@ -1470,120 +1427,138 @@ impl<'a> DwarfParser<'a> {
             table.add_file(name);
         }
 
-        // The program proper starts after the header.
-        let program_start = 10 + header_length;
-        if program_start > end || program_start < pos {
-            // header_length inconsistent with what we consumed
-            if program_start > end {
-                return None;
-            }
-        }
-        let mut pc = program_start.max(pos);
+        Some((
+            LineProgramHeader {
+                end,
+                header_length,
+                min_inst_length,
+                default_is_stmt,
+                line_base,
+                line_range,
+                opcode_base,
+                std_lengths,
+            },
+            table,
+            pos,
+        ))
+    }
 
-        // State machine registers.
-        let mut address: u64 = 0;
-        let mut file: u64 = 1;
-        let mut line: i64 = 1;
-        let mut column: u64 = 0;
-        let mut is_stmt = default_is_stmt;
-
-        let emit = |table: &mut DwarfLineTable,
-                    address: u64,
-                    file: u64,
-                    line: i64,
-                    column: u64,
-                    is_stmt: bool,
-                    end_sequence: bool| {
-            table.add_entry(DwarfLineEntry {
-                address,
-                // DWARF file numbering is 1-based in v2–4; our table is 0-based.
-                file_index: u32::try_from(file.saturating_sub(1)).unwrap_or(u32::MAX),
-                line: u32::try_from(line.max(0)).unwrap_or(u32::MAX),
-                column: u32::try_from(column).unwrap_or(u32::MAX),
-                is_stmt,
-                end_sequence,
-            });
-        };
-
-        while pc < end {
-            let opcode = data[pc];
+    /// Execute the line-number opcode stream from `pc` to the end of the unit,
+    /// appending every emitted row to `table`.
+    ///
+    /// Runs to the end of the program on well-formed input and stops early —
+    /// leaving the rows decoded so far in place — on a malformed operand, which
+    /// is the same tolerance the surrounding parser applies elsewhere.
+    fn run_line_program(
+        data: &[u8],
+        header: &LineProgramHeader,
+        table: &mut DwarfLineTable,
+        mut pc: usize,
+    ) {
+        let mut state = LineMachine::new(header.default_is_stmt);
+        while pc < header.end {
+            let Some(&opcode) = data.get(pc) else { return };
             pc += 1;
-            if opcode >= opcode_base {
-                // Special opcode
-                let adj = u64::from(opcode - opcode_base);
-                address = address
-                    .wrapping_add((adj / u64::from(line_range)) * u64::from(min_inst_length));
-                line += i64::from(line_base) + i64::try_from(adj % u64::from(line_range)).ok()?;
-                emit(&mut table, address, file, line, column, is_stmt, false);
+            if opcode >= header.opcode_base {
+                state.apply_special(header, opcode - header.opcode_base);
+                state.emit(table, false);
             } else if opcode == 0 {
-                // Extended opcode
-                let len = usize::try_from(read_uleb128(data, &mut pc)?).ok()?;
-                if len == 0 || pc + len > data.len() {
-                    return None;
-                }
-                let sub = data[pc];
-                match sub {
-                    1 => {
-                        // DW_LNE_end_sequence
-                        emit(&mut table, address, file, line, column, is_stmt, true);
-                        address = 0;
-                        file = 1;
-                        line = 1;
-                        column = 0;
-                        is_stmt = default_is_stmt;
-                    }
-                    2 => {
-                        // DW_LNE_set_address: address size = len - 1
-                        let n = (len - 1).min(8);
-                        let mut buf = [0u8; 8];
-                        buf[..n].copy_from_slice(&data[pc + 1..pc + 1 + n]);
-                        address = u64::from_le_bytes(buf);
-                    }
-                    _ => {} // DW_LNE_define_file and vendor opcodes: skip
-                }
-                pc += len;
+                let Some(next) = Self::run_extended_opcode(data, header, table, &mut state, pc)
+                else {
+                    return;
+                };
+                pc = next;
             } else {
-                match opcode {
-                    1 => emit(&mut table, address, file, line, column, is_stmt, false), // copy
-                    2 => {
-                        let adv = read_uleb128(data, &mut pc)?;
-                        address = address.wrapping_add(adv * u64::from(min_inst_length));
-                    }
-                    3 => line += read_sleb128(data, &mut pc)?,
-                    4 => file = read_uleb128(data, &mut pc)?,
-                    5 => column = read_uleb128(data, &mut pc)?,
-                    6 => is_stmt = !is_stmt,
-                    7 => {} // basic_block
-                    8 => {
-                        // const_add_pc: like special opcode 255 address advance
-                        let adj = u64::from(255 - opcode_base);
-                        address = address.wrapping_add(
-                            (adj / u64::from(line_range)) * u64::from(min_inst_length),
-                        );
-                    }
-                    9 => {
-                        let adv = u16::from_le_bytes(data.get(pc..pc + 2)?.try_into().ok()?);
-                        pc += 2;
-                        address = address.wrapping_add(u64::from(adv));
-                    }
-                    10 | 11 => {} // prologue_end / epilogue_begin
-                    12 => {
-                        let _isa = read_uleb128(data, &mut pc)?;
-                    }
-                    other => {
-                        // Unknown standard opcode: skip its uleb operands.
-                        let n_args = std_lengths
-                            .get(usize::from(other) - 1)
-                            .copied()
-                            .unwrap_or(0);
-                        for _ in 0..n_args {
-                            let _ = read_uleb128(data, &mut pc)?;
-                        }
-                    }
+                let Some(next) = Self::run_standard_opcode(data, header, table, &mut state, opcode, pc)
+                else {
+                    return;
+                };
+                pc = next;
+            }
+        }
+    }
+
+    /// Execute one extended (`opcode 0`) instruction, returning the offset of
+    /// the next instruction, or `None` if the operand is malformed.
+    fn run_extended_opcode(
+        data: &[u8],
+        header: &LineProgramHeader,
+        table: &mut DwarfLineTable,
+        state: &mut LineMachine,
+        mut pc: usize,
+    ) -> Option<usize> {
+        let len = usize::try_from(read_uleb128(data, &mut pc)?).ok()?;
+        if len == 0 || pc + len > data.len() {
+            return None;
+        }
+        match *data.get(pc)? {
+            1 => {
+                // DW_LNE_end_sequence
+                state.emit(table, true);
+                state.reset(header.default_is_stmt);
+            }
+            2 => {
+                // DW_LNE_set_address: address size = len - 1
+                let n = (len - 1).min(8);
+                let mut buf = [0u8; 8];
+                buf[..n].copy_from_slice(data.get(pc + 1..pc + 1 + n)?);
+                state.address = u64::from_le_bytes(buf);
+            }
+            _ => {} // DW_LNE_define_file and vendor opcodes: skip
+        }
+        Some(pc + len)
+    }
+
+    /// Execute one standard opcode, returning the offset of the next
+    /// instruction, or `None` if an operand is malformed.
+    fn run_standard_opcode(
+        data: &[u8],
+        header: &LineProgramHeader,
+        table: &mut DwarfLineTable,
+        state: &mut LineMachine,
+        opcode: u8,
+        mut pc: usize,
+    ) -> Option<usize> {
+        match opcode {
+            1 => state.emit(table, false), // DW_LNS_copy
+            2 => {
+                let adv = read_uleb128(data, &mut pc)?;
+                state.advance_address(adv, header.min_inst_length);
+            }
+            3 => state.line += read_sleb128(data, &mut pc)?,
+            4 => state.file = read_uleb128(data, &mut pc)?,
+            5 => state.column = read_uleb128(data, &mut pc)?,
+            6 => state.is_stmt = !state.is_stmt,
+            8 => {
+                // const_add_pc: like special opcode 255 address advance
+                let adj = u64::from(255 - header.opcode_base);
+                state.advance_address(adj / u64::from(header.line_range), header.min_inst_length);
+            }
+            9 => {
+                let adv = u16::from_le_bytes(data.get(pc..pc + 2)?.try_into().ok()?);
+                pc += 2;
+                state.address = state.address.wrapping_add(u64::from(adv));
+            }
+            // `DW_LNS_set_basic_block` (7), `DW_LNS_set_prologue_end` (10) and
+            // `DW_LNS_set_epilogue_begin` (11) all set flags this table does not
+            // carry, so each is a no-op with no operands to skip.
+            7 | 10 | 11 => {}
+            12 => {
+                let _isa = read_uleb128(data, &mut pc)?;
+            }
+            other => {
+                // Unknown standard opcode: skip its uleb operands.
+                let n_args = header
+                    .std_lengths
+                    .get(usize::from(other) - 1)
+                    .copied()
+                    .unwrap_or(0);
+                for _ in 0..n_args {
+                    let _ = read_uleb128(data, &mut pc)?;
                 }
             }
         }
-        Some(table)
+        Some(pc)
     }
 
     /// Heuristic fallback: scan `.debug_line` for file-name-looking strings.
@@ -3036,4 +3011,206 @@ mod tests {
         );
     }
 
+}
+
+// ── Form decoding helpers ─────────────────────────────────────────────────────
+
+/// The error reported when an attribute value runs past the end of the section.
+fn truncated_at(offset: usize) -> DwarfError {
+    DwarfError::ParseError {
+        offset,
+        msg: "truncated attribute value".into(),
+    }
+}
+
+/// Consume `n` bytes at `*pos`, advancing the cursor, or report truncation.
+fn take_bytes<'a>(data: &'a [u8], pos: &mut usize, n: usize) -> Result<&'a [u8]> {
+    let end = pos.checked_add(n).ok_or_else(|| truncated_at(*pos))?;
+    let slice = data.get(*pos..end).ok_or_else(|| truncated_at(*pos))?;
+    *pos = end;
+    Ok(slice)
+}
+
+/// Read a little-endian fixed-width unsigned integer of `n` bytes (`n <= 8`)
+/// and widen it to `u64` without loss.
+fn read_le_uint(data: &[u8], pos: &mut usize, n: usize) -> Result<u64> {
+    let bytes = take_bytes(data, pos, n.min(8))?;
+    let mut buf = [0u8; 8];
+    buf[..bytes.len()].copy_from_slice(bytes);
+    Ok(u64::from_le_bytes(buf))
+}
+
+/// Decode the constant forms: `DW_FORM_DATA1/2/4/8`, `DW_FORM_UDATA` and
+/// `DW_FORM_SDATA`.
+fn read_constant_form(data: &[u8], pos: &mut usize, form: u64) -> Result<DwarfAttrValue> {
+    Ok(match form {
+        DW_FORM_DATA1 => DwarfAttrValue::Udata(read_le_uint(data, pos, 1)?),
+        DW_FORM_DATA2 => DwarfAttrValue::Udata(read_le_uint(data, pos, 2)?),
+        DW_FORM_DATA4 => DwarfAttrValue::Udata(read_le_uint(data, pos, 4)?),
+        DW_FORM_DATA8 => DwarfAttrValue::Udata(read_le_uint(data, pos, 8)?),
+        DW_FORM_UDATA => {
+            DwarfAttrValue::Udata(read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        DW_FORM_SDATA => {
+            DwarfAttrValue::Sdata(read_sleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        other => return Err(DwarfError::UnsupportedForm(other)),
+    })
+}
+
+/// Decode the reference forms: `DW_FORM_REF1/2/4/8`, `DW_FORM_REF_ADDR`,
+/// `DW_FORM_REF_SUP4/8`, `DW_FORM_REF_SIG8`, `DW_FORM_SEC_OFFSET` and
+/// `DW_FORM_REF_UDATA`.
+fn read_reference_form(data: &[u8], pos: &mut usize, form: u64) -> Result<DwarfAttrValue> {
+    Ok(match form {
+        DW_FORM_REF1 => DwarfAttrValue::Ref(read_le_uint(data, pos, 1)?),
+        DW_FORM_REF2 => DwarfAttrValue::Ref(read_le_uint(data, pos, 2)?),
+        DW_FORM_REF4 | DW_FORM_REF_ADDR | DW_FORM_REF_SUP4 | DW_FORM_SEC_OFFSET => {
+            DwarfAttrValue::Ref(read_le_uint(data, pos, 4)?)
+        }
+        DW_FORM_REF8 | DW_FORM_REF_SIG8 | DW_FORM_REF_SUP8 => {
+            DwarfAttrValue::Ref(read_le_uint(data, pos, 8)?)
+        }
+        DW_FORM_REF_UDATA => {
+            DwarfAttrValue::Ref(read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        other => return Err(DwarfError::UnsupportedForm(other)),
+    })
+}
+
+/// Decode the block forms: `DW_FORM_BLOCK1/2/4`, `DW_FORM_BLOCK`,
+/// `DW_FORM_EXPRLOC` and the fixed 16-byte `DW_FORM_DATA16`.
+///
+/// Each length prefix is widened to `u64` and then converted to `usize` with a
+/// checked conversion, so a hostile 4-byte or LEB128 length can only produce a
+/// truncation error, never a wrapped-around slice bound.
+fn read_block_form(data: &[u8], pos: &mut usize, form: u64) -> Result<DwarfAttrValue> {
+    let len = match form {
+        DW_FORM_BLOCK1 => read_le_uint(data, pos, 1)?,
+        DW_FORM_BLOCK2 => read_le_uint(data, pos, 2)?,
+        DW_FORM_BLOCK4 => read_le_uint(data, pos, 4)?,
+        DW_FORM_BLOCK | DW_FORM_EXPRLOC => {
+            read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?
+        }
+        DW_FORM_DATA16 => 16,
+        other => return Err(DwarfError::UnsupportedForm(other)),
+    };
+    let n = usize::try_from(len).map_err(|_| truncated_at(*pos))?;
+    Ok(DwarfAttrValue::Block(take_bytes(data, pos, n)?.to_vec()))
+}
+
+/// Decode the DWARF 5 indexed forms: `DW_FORM_STRX*`, `DW_FORM_ADDRX*`,
+/// `DW_FORM_LOCLISTX` and `DW_FORM_RNGLISTX`.
+///
+/// `Strx`/`Addrx` keep their own value variants so an index is never mistaken
+/// for a constant or an address before the CU's `str_offsets`/`addr` bases are
+/// known.
+fn read_indexed_form(data: &[u8], pos: &mut usize, form: u64) -> Result<DwarfAttrValue> {
+    Ok(match form {
+        DW_FORM_STRX => {
+            DwarfAttrValue::Strx(read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        DW_FORM_ADDRX => {
+            DwarfAttrValue::Addrx(read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        DW_FORM_LOCLISTX | DW_FORM_RNGLISTX => {
+            DwarfAttrValue::Udata(read_uleb128(data, pos).ok_or_else(|| truncated_at(*pos))?)
+        }
+        DW_FORM_STRX1 => DwarfAttrValue::Strx(read_le_uint(data, pos, 1)?),
+        DW_FORM_ADDRX1 => DwarfAttrValue::Addrx(read_le_uint(data, pos, 1)?),
+        DW_FORM_STRX2 => DwarfAttrValue::Strx(read_le_uint(data, pos, 2)?),
+        DW_FORM_ADDRX2 => DwarfAttrValue::Addrx(read_le_uint(data, pos, 2)?),
+        DW_FORM_STRX3 => DwarfAttrValue::Strx(read_le_uint(data, pos, 3)?),
+        DW_FORM_ADDRX3 => DwarfAttrValue::Addrx(read_le_uint(data, pos, 3)?),
+        DW_FORM_STRX4 => DwarfAttrValue::Strx(read_le_uint(data, pos, 4)?),
+        DW_FORM_ADDRX4 => DwarfAttrValue::Addrx(read_le_uint(data, pos, 4)?),
+        other => return Err(DwarfError::UnsupportedForm(other)),
+    })
+}
+
+// ── Line-number program state ─────────────────────────────────────────────────
+
+/// The decoded fixed header of a DWARF 2–4 line-number program.
+///
+/// Bundling these eight values keeps every opcode helper to a small parameter
+/// list and gives the header a single name to pass around.
+#[derive(Debug, Clone)]
+struct LineProgramHeader {
+    /// Offset one byte past the end of this unit.
+    end: usize,
+    /// `header_length` field, i.e. bytes from after that field to the program.
+    header_length: usize,
+    /// `minimum_instruction_length`, the address advance quantum.
+    min_inst_length: u8,
+    /// Initial value of the `is_stmt` register.
+    default_is_stmt: bool,
+    /// `line_base`, the signed line advance of the smallest special opcode.
+    line_base: i8,
+    /// `line_range`, the number of line values a special opcode spans.
+    line_range: u8,
+    /// First opcode value treated as a special opcode.
+    opcode_base: u8,
+    /// Operand counts of the standard opcodes, used to skip unknown ones.
+    std_lengths: Vec<u8>,
+}
+
+/// The DWARF line-number state machine registers this decoder tracks.
+#[derive(Debug, Clone, Copy)]
+struct LineMachine {
+    /// Current program-counter value of the row being built.
+    address: u64,
+    /// Current file number (1-based, as DWARF 2–4 defines it).
+    file: u64,
+    /// Current source line; signed because `DW_LNS_advance_line` may go back.
+    line: i64,
+    /// Current source column.
+    column: u64,
+    /// Whether the row is a recommended breakpoint location.
+    is_stmt: bool,
+}
+
+impl LineMachine {
+    /// The register values a sequence starts (and restarts) from.
+    const fn new(default_is_stmt: bool) -> Self {
+        Self {
+            address: 0,
+            file: 1,
+            line: 1,
+            column: 0,
+            is_stmt: default_is_stmt,
+        }
+    }
+
+    /// Reset to the initial register values after `DW_LNE_end_sequence`.
+    const fn reset(&mut self, default_is_stmt: bool) {
+        *self = Self::new(default_is_stmt);
+    }
+
+    /// Advance the address register by `operation_advance` quanta.
+    fn advance_address(&mut self, operation_advance: u64, min_inst_length: u8) {
+        self.address = self
+            .address
+            .wrapping_add(operation_advance.wrapping_mul(u64::from(min_inst_length)));
+    }
+
+    /// Apply a special opcode's combined address and line advance.
+    fn apply_special(&mut self, header: &LineProgramHeader, adjusted: u8) {
+        let adj = u64::from(adjusted);
+        self.advance_address(adj / u64::from(header.line_range), header.min_inst_length);
+        let line_advance = i64::try_from(adj % u64::from(header.line_range)).unwrap_or(0);
+        self.line += i64::from(header.line_base) + line_advance;
+    }
+
+    /// Append the current registers to `table` as one row.
+    fn emit(&self, table: &mut DwarfLineTable, end_sequence: bool) {
+        table.add_entry(DwarfLineEntry {
+            address: self.address,
+            // DWARF file numbering is 1-based in v2–4; our table is 0-based.
+            file_index: u32::try_from(self.file.saturating_sub(1)).unwrap_or(u32::MAX),
+            line: u32::try_from(self.line.max(0)).unwrap_or(u32::MAX),
+            column: u32::try_from(self.column).unwrap_or(u32::MAX),
+            is_stmt: self.is_stmt,
+            end_sequence,
+        });
+    }
 }

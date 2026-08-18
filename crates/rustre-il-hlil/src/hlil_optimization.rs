@@ -462,7 +462,7 @@ impl CommonSubexprElim {
 
 /// True if `expr` contains a `Call` anywhere in its tree — such an expression
 /// has observable side effects and must never be deleted as dead code.
-fn expr_contains_call(expr: &HlilExpr) -> bool {
+pub(crate) fn expr_contains_call(expr: &HlilExpr) -> bool {
     if matches!(expr, HlilExpr::Call { .. }) {
         return true;
     }
@@ -491,6 +491,11 @@ fn expr_contains_call_or_deref(expr: &HlilExpr) -> bool {
 }
 
 /// Invoke `f` on each direct child expression of `expr`.
+/// Accessore per gli altri moduli del crate (vedi `propagate_pure_temps`).
+pub(crate) fn for_each_child_pub(expr: &HlilExpr, f: &mut impl FnMut(&HlilExpr)) {
+    for_each_child(expr, f);
+}
+
 fn for_each_child(expr: &HlilExpr, f: &mut impl FnMut(&HlilExpr)) {
     match expr {
         HlilExpr::Const { .. }

@@ -28,7 +28,8 @@ use std::collections::HashMap;
 
 use rustre_il_llil::{LlilExpr, LlilFunction, LlilInstruction, LlilRegister, Size};
 
-use crate::ssa::{SsaFunction, rewrite_instr_uses};
+use crate::dominators::DomTree;
+use crate::ssa::{SsaBlock, SsaFunction, rewrite_instr_uses};
 
 /// A value number.
 pub type ValueId = usize;
@@ -118,27 +119,24 @@ const fn sext(v: u64, size: Size) -> i64 {
 
 /// Folds a binary integer op over constants. Returns `None` for division by
 /// zero or non-integer ops.
-#[allow(clippy::too_many_lines)]
+///
+/// Decides only the dispatch: which family of arms can fold this opcode. Each
+/// family lives in its own helper so a rule change (notably the shift-count
+/// masking) is read and edited in one place.
 fn fold_binop(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
-    let bits = size.bits().min(64) as u32;
-    // SHL/SHR/SAR: x86 masks the count with a FIXED 5 bits for every operand
-    // width below 64 (6 bits at 64), NOT mod-width — AMD APM vol.3 SHL/SHR/SAR.
-    // `shl bl, 12` keeps the count 12 and shifts an 8-bit value clean out
-    // (result 0); reducing it mod 8 to a shift-by-4 is the exact defect that
-    // `ConstantFoldingPass::shift_count_mask` was introduced to remove. This
-    // folder is a SECOND, independent constant folder that kept the old rule.
-    // The trailing `mask(r, size)` makes the wide shift collapse correctly:
-    // `a << 12` masked back to a byte is 0, matching hardware.
-    let shift_amt =
-        (b & crate::ConstantFoldingPass::shift_count_mask(size)).min(u64::from(u32::MAX)) as u32;
-    // ROL/ROR need a DIFFERENT amount: the rotate below computes
-    // `(m << amt) | (m >> (bits - amt))`, which underflows if `amt >= bits`.
-    // Rotates are genuinely mod-width, and applying the 5-/6-bit mask first is
-    // equivalent to plain mod-width here (32 is a multiple of 8, 16 and 32; 64
-    // of itself), so this stays as it was — deliberately NOT unified with
-    // `shift_amt`, which would make the rotate arms panic on `bits - amt`.
-    let rot_amt = (b % u64::from(bits.max(1))) as u32;
-    let r = match op {
+    let r = fold_arith(op, a, b, size)
+        .or_else(|| fold_bitwise(op, a, b))
+        .or_else(|| fold_shift_rotate(op, a, b, size))
+        .or_else(|| fold_compare(op, a, b, size))?;
+    Some(mask(r, size))
+}
+
+/// Folds add/sub/mul and the four division opcodes.
+///
+/// Decides when a division cannot be folded: `None` for a zero divisor (in the
+/// operand width), which is what keeps a trap out of the folded IL.
+fn fold_arith(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
+    Some(match op {
         "add" => a.wrapping_add(b),
         "sub" => a.wrapping_sub(b),
         "mul" => a.wrapping_mul(b),
@@ -153,7 +151,7 @@ fn fold_binop(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
             if sb == 0 {
                 return None;
             }
-            sa.wrapping_div(sb) as u64
+            sa.wrapping_div(sb).cast_unsigned()
         }
         "modu" => {
             if mask(b, size) == 0 {
@@ -166,14 +164,53 @@ fn fold_binop(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
             if sb == 0 {
                 return None;
             }
-            sa.wrapping_rem(sb) as u64
+            sa.wrapping_rem(sb).cast_unsigned()
         }
+        _ => return None,
+    })
+}
+
+/// Folds the width-independent bitwise opcodes.
+///
+/// Decides nothing about width: and/or/xor commute with the final `mask`, so
+/// the raw 64-bit operands are used and the caller masks the result.
+fn fold_bitwise(op: &str, a: u64, b: u64) -> Option<u64> {
+    Some(match op {
         "and" => a & b,
         "or" => a | b,
         "xor" => a ^ b,
+        _ => return None,
+    })
+}
+
+/// Folds shifts and rotates.
+///
+/// Decides the shift count, which is the whole subtlety here: shifts take the
+/// x86 FIXED-width mask, rotates take mod-width, and the two must not be
+/// unified (see the comments inside).
+fn fold_shift_rotate(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
+    let bits = size.bits().min(64) as u32;
+    // SHL/SHR/SAR: x86 masks the count with a FIXED 5 bits for every operand
+    // width below 64 (6 bits at 64), NOT mod-width — AMD APM vol.3 SHL/SHR/SAR.
+    // `shl bl, 12` keeps the count 12 and shifts an 8-bit value clean out
+    // (result 0); reducing it mod 8 to a shift-by-4 is the exact defect that
+    // `ConstantFoldingPass::shift_count_mask` was introduced to remove. This
+    // folder is a SECOND, independent constant folder that kept the old rule.
+    // The trailing `mask(r, size)` in the caller makes the wide shift collapse
+    // correctly: `a << 12` masked back to a byte is 0, matching hardware.
+    let shift_amt =
+        (b & crate::ConstantFoldingPass::shift_count_mask(size)).min(u64::from(u32::MAX)) as u32;
+    // ROL/ROR need a DIFFERENT amount: the rotate below computes
+    // `(m << amt) | (m >> (bits - amt))`, which underflows if `amt >= bits`.
+    // Rotates are genuinely mod-width, and applying the 5-/6-bit mask first is
+    // equivalent to plain mod-width here (32 is a multiple of 8, 16 and 32; 64
+    // of itself), so this stays as it was — deliberately NOT unified with
+    // `shift_amt`, which would make the rotate arms panic on `bits - amt`.
+    let rot_amt = (b % u64::from(bits.max(1))) as u32;
+    Some(match op {
         "shl" => mask(a, size).checked_shl(shift_amt).unwrap_or(0),
         "shr" => mask(a, size).checked_shr(shift_amt).unwrap_or(0),
-        "sar" => (sext(a, size) >> shift_amt.min(63)) as u64,
+        "sar" => (sext(a, size) >> shift_amt.min(63)).cast_unsigned(),
         "rol" => {
             let m = mask(a, size);
             if rot_amt == 0 {
@@ -190,6 +227,16 @@ fn fold_binop(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
                 (m >> rot_amt) | (m << (bits - rot_amt))
             }
         }
+        _ => return None,
+    })
+}
+
+/// Folds the comparison opcodes to 0 or 1.
+///
+/// Decides signedness: the `cmps*` arms sign-extend from the operand width
+/// first, the `cmpu*` arms compare the masked values.
+fn fold_compare(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
+    Some(match op {
         "cmpeq" => u64::from(mask(a, size) == mask(b, size)),
         "cmpne" => u64::from(mask(a, size) != mask(b, size)),
         "cmpslt" => u64::from(sext(a, size) < sext(b, size)),
@@ -201,8 +248,7 @@ fn fold_binop(op: &str, a: u64, b: u64, size: Size) -> Option<u64> {
         "cmpsge" => u64::from(sext(a, size) >= sext(b, size)),
         "cmpuge" => u64::from(mask(a, size) >= mask(b, size)),
         _ => return None,
-    };
-    Some(mask(r, size))
+    })
 }
 
 const COMMUTATIVE: &[&str] = &["add", "mul", "and", "or", "xor", "cmpeq", "cmpne"];
@@ -331,8 +377,11 @@ fn ssa_defs(instr: &LlilInstruction) -> Vec<(String, Size)> {
 }
 
 /// Runs GVN (with constant folding, copy propagation, and CSE) over `func`.
+///
+/// Decides the traversal order only: blocks in reverse post-order, phis before
+/// instructions, so a leader is always numbered before any block it dominates.
+/// The per-construct decisions live in the helpers below.
 #[must_use]
-#[allow(clippy::too_many_lines)]
 pub fn run_gvn2(func: &LlilFunction) -> Gvn2Result {
     let mut ssa = SsaFunction::build(func);
     let mut t = ValueTable::default();
@@ -340,140 +389,204 @@ pub fn run_gvn2(func: &LlilFunction) -> Gvn2Result {
 
     let rpo = ssa.dom.rpo.clone();
     for &b in &rpo {
-        // Phis first: collapse if all (known) args agree.
-        for pi in 0..ssa.blocks[b].phis.len() {
-            let phi = &ssa.blocks[b].phis[pi];
-            let dest_name = phi.dest_name();
-            let arg_vns: Vec<Option<ValueId>> = phi
-                .args
-                .iter()
-                .map(|&(_, ver)| {
-                    let n = crate::ssa::ssa_name(&phi.var, ver);
-                    t.of_name.get(&n).copied()
-                })
-                .collect();
-            let vn = if !arg_vns.is_empty()
-                && arg_vns.iter().all(|v| v.is_some() && *v == arg_vns[0])
-            {
-                stats.phis_collapsed += 1;
-                arg_vns[0].unwrap()
-            } else {
-                t.fresh()
-            };
-            t.of_name.insert(dest_name.clone(), vn);
-            if t.leaders[vn].is_none() {
-                t.leaders[vn] = Some((dest_name, b, ssa.blocks[b].phis[pi].size));
-            }
-        }
+        number_phis(&ssa.blocks[b], b, &mut t, &mut stats);
 
         for ii in 0..ssa.blocks[b].instrs.len() {
             let instr = ssa.blocks[b].instrs[ii].instr.clone();
-
-            // Rewrite uses: constant values become Const; other values with a
-            // dominating leader of a different name become a read of the leader.
-            let dom = &ssa.dom;
-            let rewritten = rewrite_instr_uses(&instr, &mut |reg, size| {
-                let name = reg.name();
-                let orig = LlilExpr::RegisterRef {
-                    reg: reg.clone(),
-                    size,
-                };
-                let Some(&vn) = t.of_name.get(&name) else {
-                    return orig;
-                };
-                if let Some((c, _)) = t.consts[vn] {
-                    stats.const_folded += 1;
-                    return LlilExpr::Const {
-                        value: mask(c, size),
-                        size,
-                    };
-                }
-                if let Some((leader, lb, _)) = &t.leaders[vn]
-                    && *leader != name
-                    && dom.dominates(*lb, b)
-                {
-                    stats.replaced_uses += 1;
-                    return LlilExpr::RegisterRef {
-                        reg: LlilRegister::Concrete(leader.clone()),
-                        size,
-                    };
-                }
-                orig
-            });
-
-            // Value-number and possibly simplify the defining expression.
-            let final_instr = if let LlilInstruction::SetReg { dest, size, value } = &rewritten {
-                let vn = vn_expr(&mut t, value);
-                let dest_name = dest.name();
-                t.of_name.insert(dest_name.clone(), vn);
-                // A live-on-entry source (version 0) is the natural leader
-                // for its value: its "definition" is the function entry,
-                // which dominates every block.
-                if t.leaders[vn].is_none()
-                    && let LlilExpr::RegisterRef { reg, .. } = value
-                    && reg.name().ends_with("#0")
-                {
-                    t.leaders[vn] = Some((reg.name(), ssa.dom.entry, *size));
-                }
-                let new_value = if let Some((c, _)) = t.consts[vn] {
-                    let cexpr = LlilExpr::Const {
-                        value: mask(c, *size),
-                        size: *size,
-                    };
-                    if *value != cexpr {
-                        stats.const_folded += 1;
-                    }
-                    cexpr
-                } else if let Some((leader, lb, _)) = &t.leaders[vn] {
-                    // CSE: reuse the dominating leader if this is a real
-                    // recomputation (not already a plain copy of it).
-                    let leader_read = LlilExpr::RegisterRef {
-                        reg: LlilRegister::Concrete(leader.clone()),
-                        size: *size,
-                    };
-                    if *leader != dest_name && ssa.dom.dominates(*lb, b) && *value != leader_read {
-                        stats.replaced_uses += 1;
-                        leader_read
-                    } else {
-                        value.clone()
-                    }
-                } else {
-                    value.clone()
-                };
-                if t.leaders[vn].is_none() {
-                    t.leaders[vn] = Some((dest_name, b, *size));
-                }
-                LlilInstruction::SetReg {
-                    dest: dest.clone(),
-                    size: *size,
-                    value: new_value,
-                }
-            } else {
-                // Other defs (Load/Pop/SetRegSplit) produce opaque values.
-                for (name, size) in ssa_defs(&rewritten) {
-                    let vn = t.fresh();
-                    t.of_name.insert(name.clone(), vn);
-                    t.leaders[vn] = Some((name, b, size));
-                }
-                rewritten
-            };
+            let rewritten = rewrite_uses_by_value(&instr, b, &ssa.dom, &mut t, &mut stats);
+            let final_instr = number_definition(&rewritten, b, &ssa.dom, &mut t, &mut stats);
             ssa.blocks[b].instrs[ii].instr = final_instr;
         }
     }
 
-    // Export SSA-name -> constant map.
+    Gvn2Result {
+        constants: export_constants(&t),
+        ssa,
+        stats,
+    }
+}
+
+/// Value-numbers the phis of one block.
+///
+/// Decides whether a phi is redundant: if every incoming argument is already
+/// numbered and they all share one value number, the phi takes that number and
+/// is counted as collapsed; otherwise it gets a fresh, opaque one.
+fn number_phis(block: &SsaBlock, b: usize, t: &mut ValueTable, stats: &mut Gvn2Stats) {
+    for pi in 0..block.phis.len() {
+        let phi = &block.phis[pi];
+        let dest_name = phi.dest_name();
+        let arg_vns: Vec<Option<ValueId>> = phi
+            .args
+            .iter()
+            .map(|&(_, ver)| {
+                let n = crate::ssa::ssa_name(&phi.var, ver);
+                t.of_name.get(&n).copied()
+            })
+            .collect();
+        let vn = if !arg_vns.is_empty() && arg_vns.iter().all(|v| v.is_some() && *v == arg_vns[0]) {
+            stats.phis_collapsed += 1;
+            arg_vns[0].unwrap_or_else(|| t.fresh())
+        } else {
+            t.fresh()
+        };
+        t.of_name.insert(dest_name.clone(), vn);
+        if t.leaders[vn].is_none() {
+            t.leaders[vn] = Some((dest_name, b, block.phis[pi].size));
+        }
+    }
+}
+
+/// Rewrites the register READS of one instruction.
+///
+/// Decides, per use: a value proven constant becomes a `Const`; a value whose
+/// leader is defined under a different name in a dominating block becomes a
+/// read of that leader; anything else is left alone.
+fn rewrite_uses_by_value(
+    instr: &LlilInstruction,
+    b: usize,
+    dom: &DomTree,
+    t: &mut ValueTable,
+    stats: &mut Gvn2Stats,
+) -> LlilInstruction {
+    rewrite_instr_uses(instr, &mut |reg, size| {
+        let name = reg.name();
+        let orig = LlilExpr::RegisterRef {
+            reg: reg.clone(),
+            size,
+        };
+        let Some(&vn) = t.of_name.get(&name) else {
+            return orig;
+        };
+        if let Some((c, _)) = t.consts[vn] {
+            stats.const_folded += 1;
+            return LlilExpr::Const {
+                value: mask(c, size),
+                size,
+            };
+        }
+        if let Some((leader, lb, _)) = &t.leaders[vn]
+            && *leader != name
+            && dom.dominates(*lb, b)
+        {
+            stats.replaced_uses += 1;
+            return LlilExpr::RegisterRef {
+                reg: LlilRegister::Concrete(leader.clone()),
+                size,
+            };
+        }
+        orig
+    })
+}
+
+/// Value-numbers the DEFINITION of one instruction and simplifies its value.
+///
+/// Decides what the defining expression becomes: the proven constant, a read of
+/// a dominating leader that already computes the same value (CSE), or the
+/// expression unchanged. Non-`SetReg` definitions (Load/Pop/SetRegSplit) are
+/// opaque and get fresh value numbers.
+fn number_definition(
+    rewritten: &LlilInstruction,
+    b: usize,
+    dom: &DomTree,
+    t: &mut ValueTable,
+    stats: &mut Gvn2Stats,
+) -> LlilInstruction {
+    let LlilInstruction::SetReg { dest, size, value } = rewritten else {
+        for (name, size) in ssa_defs(rewritten) {
+            let vn = t.fresh();
+            t.of_name.insert(name.clone(), vn);
+            t.leaders[vn] = Some((name, b, size));
+        }
+        return rewritten.clone();
+    };
+    let vn = vn_expr(t, value);
+    let dest_name = dest.name();
+    t.of_name.insert(dest_name.clone(), vn);
+    // A live-on-entry source (version 0) is the natural leader for its value:
+    // its "definition" is the function entry, which dominates every block.
+    if t.leaders[vn].is_none()
+        && let LlilExpr::RegisterRef { reg, .. } = value
+        && reg.name().ends_with("#0")
+    {
+        t.leaders[vn] = Some((reg.name(), dom.entry, *size));
+    }
+    let site = DefSite {
+        dest_name: &dest_name,
+        size: *size,
+        vn,
+        block: b,
+    };
+    let new_value = simplified_value(value, &site, dom, t, stats);
+    if t.leaders[vn].is_none() {
+        t.leaders[vn] = Some((dest_name, b, *size));
+    }
+    LlilInstruction::SetReg {
+        dest: dest.clone(),
+        size: *size,
+        value: new_value,
+    }
+}
+
+/// The definition currently being simplified: the SSA name it defines, its
+/// width, its value number, and the block it lives in.
+#[derive(Clone, Copy)]
+struct DefSite<'a> {
+    dest_name: &'a str,
+    size: Size,
+    vn: ValueId,
+    block: usize,
+}
+
+/// Chooses the replacement expression for a `SetReg` value.
+///
+/// Decides between three outcomes: the folded constant, the dominating leader's
+/// read (only when this is a genuine recomputation, not already a copy of it),
+/// or the original expression.
+fn simplified_value(
+    value: &LlilExpr,
+    site: &DefSite<'_>,
+    dom: &DomTree,
+    t: &ValueTable,
+    stats: &mut Gvn2Stats,
+) -> LlilExpr {
+    let DefSite {
+        dest_name,
+        size,
+        vn,
+        block: b,
+    } = *site;
+    if let Some((c, _)) = t.consts[vn] {
+        let cexpr = LlilExpr::Const {
+            value: mask(c, size),
+            size,
+        };
+        if *value != cexpr {
+            stats.const_folded += 1;
+        }
+        return cexpr;
+    }
+    if let Some((leader, lb, _)) = &t.leaders[vn] {
+        let leader_read = LlilExpr::RegisterRef {
+            reg: LlilRegister::Concrete(leader.clone()),
+            size,
+        };
+        if leader != dest_name && dom.dominates(*lb, b) && *value != leader_read {
+            stats.replaced_uses += 1;
+            return leader_read;
+        }
+    }
+    value.clone()
+}
+
+/// Exports the SSA-name to constant map GVN proved.
+fn export_constants(t: &ValueTable) -> HashMap<String, (u64, Size)> {
     let mut constants = HashMap::new();
     for (name, &vn) in &t.of_name {
         if let Some((c, s)) = t.consts[vn] {
             constants.insert(name.clone(), (c, s));
         }
     }
-
-    Gvn2Result {
-        ssa,
-        constants,
-        stats,
-    }
+    constants
 }
 
 /// Applies GVN's constant results back onto the original (non-SSA) function:

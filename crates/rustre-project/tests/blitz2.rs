@@ -1,5 +1,4 @@
 //! blitz2: deep adversarial tests for rustre-project public API.
-#![allow(clippy::bool_assert_comparison)]
 
 use std::fs;
 use std::path::Path;

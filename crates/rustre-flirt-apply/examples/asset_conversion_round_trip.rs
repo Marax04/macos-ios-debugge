@@ -9,6 +9,8 @@
 
 use std::collections::HashSet;
 
+use rustre_flirt_apply::usize_to_f64;
+
 fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| {
         r"C:\Users\Fra\AppData\Local\Temp\conv\rust-stdlib-ida.sig".to_string()
@@ -44,10 +46,8 @@ fn main() {
     let avg: f64 = if named.is_empty() {
         0.0
     } else {
-        #[allow(clippy::cast_precision_loss)]
-        let t = named.iter().map(|s| s.bytes.len()).sum::<usize>() as f64;
-        #[allow(clippy::cast_precision_loss)]
-        let n = named.len() as f64;
+        let t = usize_to_f64(named.iter().map(|s| s.bytes.len()).sum::<usize>());
+        let n = usize_to_f64(named.len());
         t / n
     };
     println!("  lunghezza media    : {avg:.1} byte");

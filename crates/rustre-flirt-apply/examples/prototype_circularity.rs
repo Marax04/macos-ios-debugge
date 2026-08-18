@@ -11,6 +11,8 @@
 
 use std::collections::HashSet;
 
+use rustre_flirt_apply::usize_to_f64;
+
 fn main() {
     let path = std::path::Path::new("tests/decompiler_corpus/prototypes.json");
     let Ok(text) = std::fs::read_to_string(path) else {
@@ -38,8 +40,7 @@ fn main() {
     println!("prototypes.json (ground truth) : {}", ground.len());
     println!("prototipi pubblicati dal ponte  : {}", ours.len());
     println!("  in comune                     : {shared}");
-    #[allow(clippy::cast_precision_loss)]
-    let pct = shared as f64 * 100.0 / ground.len().max(1) as f64;
+    let pct = usize_to_f64(shared) * 100.0 / usize_to_f64(ground.len().max(1));
     println!("  quota della ground truth      : {pct:.1}%");
     println!();
     println!("Sui nomi in comune l'arieta' emessa e' confrontata con la stessa");

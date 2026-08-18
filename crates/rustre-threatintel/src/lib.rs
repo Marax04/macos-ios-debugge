@@ -9,7 +9,6 @@
 // ahash, thiserror, core-foundation, etc. that conflict with newer workspace deps.
 // These duplicate versions are transitive and cannot be resolved without upstream
 // crate updates.
-#![allow(clippy::multiple_crate_versions)]
 
 pub mod casts;
 pub use casts::*;

@@ -1,6 +1,5 @@
 //! Deep adversarial integration tests for rustre-plugin-host.
 
-#![allow(clippy::pedantic)]
 
 use rustre_plugin_host::{
     DependencyGraph, ExtensionPoint, FilePluginRegistry, HostError, HostEvent,
@@ -71,8 +70,8 @@ impl Lcg {
     fn next(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
 }
@@ -81,11 +80,11 @@ impl Lcg {
 
 #[test]
 fn host_error_display_variants() {
-    assert!(HostError::Load("x".into()).to_string().contains("x"));
-    assert!(HostError::SymbolNotFound("s".into()).to_string().contains("s"));
-    assert!(HostError::Ipc("i".into()).to_string().contains("i"));
+    assert!(HostError::Load("x".into()).to_string().contains('x'));
+    assert!(HostError::SymbolNotFound("s".into()).to_string().contains('s'));
+    assert!(HostError::Ipc("i".into()).to_string().contains('i'));
     assert!(HostError::Timeout.to_string().contains("timeout"));
-    assert!(HostError::Other("o".into()).to_string().contains("o"));
+    assert!(HostError::Other("o".into()).to_string().contains('o'));
 }
 
 #[test]
@@ -215,7 +214,7 @@ fn dependency_graph_dependencies_of_listing() {
     g.add_dependency("x", "y");
     g.add_dependency("x", "z");
     let mut deps = g.dependencies_of("x");
-    deps.sort();
+    deps.sort_unstable();
     assert_eq!(deps, vec!["y", "z"]);
 }
 
@@ -542,11 +541,15 @@ fn ipc_dispatcher_unknown_returns_err() {
 fn ipc_dispatcher_register_and_dispatch_many() {
     let d = InProcessIpcDispatcher::new();
     for i in 0..50u64 {
-        d.register(format!("m{i}"), move |_| Ok(PluginValue::Int(i as i64)));
+        let signed = i64::try_from(i).expect("loop bound 50 fits in i64");
+        d.register(format!("m{i}"), move |_| Ok(PluginValue::Int(signed)));
     }
     for i in 0..50u64 {
         let r = d.dispatch(&format!("m{i}"), PluginValue::Null).unwrap();
-        assert_eq!(r, PluginValue::Int(i as i64));
+        assert_eq!(
+            r,
+            PluginValue::Int(i64::try_from(i).expect("loop bound 50 fits in i64"))
+        );
     }
     assert_eq!(d.method_names().len(), 50);
 }

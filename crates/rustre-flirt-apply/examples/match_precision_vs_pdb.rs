@@ -31,6 +31,8 @@
 
 use std::collections::BTreeMap;
 
+use rustre_flirt_apply::usize_to_f64;
+
 /// Strip the parts of a Rust symbol that differ between builds, so two
 /// spellings of the same function compare equal.
 ///
@@ -188,8 +190,7 @@ fn main() {
     println!("  UNKNOWN   (PDB non sa)      : {unknown}");
     println!("  NOME VUOTO (difetto a se')  : {empty_names}");
     if decided > 0 {
-        #[allow(clippy::cast_precision_loss)]
-        let pct = agree as f64 * 100.0 / decided as f64;
+        let pct = usize_to_f64(agree) * 100.0 / usize_to_f64(decided);
         println!("  precisione sui decidibili   : {pct:.1}%  ({agree}/{decided})");
     } else {
         println!("  precisione                  : non misurabile (0 indirizzi decidibili)");

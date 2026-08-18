@@ -4,7 +4,6 @@
 //! hash/Eq consistency, threaded Send+Sync stress, integer-boundary cases,
 //! and additional state-machine coverage.
 
-#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;

@@ -9,12 +9,24 @@
 //! guard asserts the generators overwhelmingly produce *accepted* symbols
 //! (a drifted generator would otherwise pass while testing nothing).
 
-#![allow(
-    clippy::cast_possible_truncation,
-    reason = "test harness: RNG values are bounded by % before use"
-)]
-
 use proptest::prelude::*;
+
+/// Convert an RNG value the caller has already reduced with `%` to `usize`.
+///
+/// The reduction happens in `u64`, so the value reaching this function is small
+/// by construction; `try_from` states that in code rather than leaving a
+/// truncating `as usize` cast to be trusted.
+fn to_usize(v: u64) -> usize {
+    usize::try_from(v).unwrap_or(usize::MAX)
+}
+
+/// Pick an index into a `len`-element table from an RNG value, reducing in
+/// `u64` so no value is ever truncated on the way to `usize`.
+fn pick(v: u64, len: usize) -> usize {
+    let modulus = u64::try_from(len).unwrap_or(u64::MAX).max(1);
+    to_usize(v % modulus)
+}
+
 
 /// Builtin Itanium type codes usable as array elements / function args.
 const TYPE_CODES: &[&str] = &[
@@ -109,11 +121,11 @@ fn ext_generators_produce_symbols_the_reference_accepts() {
     let mut accepted = 0usize;
     let mut total = 0usize;
     for _ in 0..500 {
-        let len = (next() % 6 + 3) as usize;
+        let len = to_usize(next() % 6 + 3);
         let name: String = (0..len)
             .map(|_| char::from(b'a' + u8::try_from(next() % 26).unwrap_or(0)))
             .collect();
-        let ty = TYPE_CODES[next() as usize % TYPE_CODES.len()];
+        let ty = TYPE_CODES[pick(next(), TYPE_CODES.len())];
         let n = next() % 32 + 1;
         for sym in [
             format!("_Z{}{name}RA{n}_{ty}", name.len()),

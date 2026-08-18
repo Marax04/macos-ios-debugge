@@ -22,6 +22,8 @@
 
 use std::collections::HashSet;
 
+use rustre_flirt_apply::usize_to_f64;
+
 use rustre_flirt::PatternByte;
 
 fn main() {
@@ -73,8 +75,7 @@ fn main() {
             .filter_map(rustre_flirt::FlirtPattern::primary_name)
             .collect();
         let found = expected.intersection(&names).count();
-        #[allow(clippy::cast_precision_loss)]
-        let pct = found as f64 * 100.0 / expected.len().max(1) as f64;
+        let pct = usize_to_f64(found) * 100.0 / usize_to_f64(expected.len().max(1));
         println!(
             "{label:<22} attesi {:<5} ritrovati {:<5} ({pct:.1}%)",
             expected.len(),

@@ -485,17 +485,15 @@ impl ProcExpDumpAnalyzer {
 mod tests {
     use super::*;
 
-    #[allow(clippy::similar_names)]
-    fn make_process(pid: u32, ppid: u32, name: &str) -> ProcessEntry {
-        let mut p = ProcessEntry::new(pid, ppid, name);
+    fn make_process(pid: u32, parent_pid: u32, name: &str) -> ProcessEntry {
+        let mut p = ProcessEntry::new(pid, parent_pid, name);
         p.is_verified = true;
         p.integrity = IntegrityLevel::Medium;
         p
     }
 
-    #[allow(clippy::similar_names)]
-    fn make_suspicious_process(pid: u32, ppid: u32) -> ProcessEntry {
-        let mut p = ProcessEntry::new(pid, ppid, "evil.exe");
+    fn make_suspicious_process(pid: u32, parent_pid: u32) -> ProcessEntry {
+        let mut p = ProcessEntry::new(pid, parent_pid, "evil.exe");
         p.is_verified = false;
         p.dlls.push(DllEntry {
             base_address: 0x1_0000_0000,

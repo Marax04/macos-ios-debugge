@@ -6,6 +6,168 @@ use std::fmt;
 
 pub use std::collections::HashMap;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Binary `resources.arsc` primitives
+//
+// These back the real `parse_arsc` walk. They read exactly what the AOSP
+// `ResourceTypes.h` layout defines and return a safe default when the slice is
+// short, so a truncated or hostile `.arsc` yields an empty/absent field rather
+// than a panic — this decoder is fed files from untrusted APKs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Chunk types this decoder dispatches on, from AOSP `ResourceTypes.h`.
+///
+/// ⚠ These MUST be constants in scope. Written as bare names in a `match`
+/// without being in scope, Rust reads them as irrefutable BINDING PATTERNS:
+/// the first arm then matches every chunk type and shadows the value it was
+/// meant to compare against, silently. That is what happened here — the
+/// compiler reported it only as "unused variable" and "unreachable pattern",
+/// which reads like lint noise and is in fact a parser that treats every chunk
+/// as a string pool.
+use crate::arsc_parser::{RES_STRING_POOL_TYPE, RES_TABLE_PACKAGE_TYPE};
+
+/// `RES_TABLE_TYPE` chunk type, from AOSP `ResourceTypes.h`.
+const RES_TABLE_TYPE_TYPE: u16 = 0x0201;
+
+/// `ResTable_type::entryOffset` value meaning "this entry is absent".
+const NO_ENTRY: u32 = 0xFFFF_FFFF;
+
+/// `ResTable_entry::FLAG_COMPLEX` — the entry is a bag/map, not a scalar.
+const ENTRY_FLAG_COMPLEX: u16 = 0x0001;
+
+/// Little-endian `u32` at `off`, or 0 when the slice does not reach it.
+///
+/// Returning 0 rather than panicking is deliberate: every caller here is
+/// walking offsets that came out of the file being parsed.
+#[inline]
+fn read_u32(data: &[u8], off: usize) -> u32 {
+    data.get(off..off + 4)
+        .and_then(|b| b.try_into().ok())
+        .map_or(0, u32::from_le_bytes)
+}
+
+/// Decode a fixed-width UTF-16LE field, stopping at the first NUL.
+///
+/// `ResTable_package::name` is a fixed 128-code-unit array padded with NULs, so
+/// the length is not stored anywhere — the terminator is the only signal.
+fn decode_utf16_fixed(data: &[u8]) -> String {
+    let units: Vec<u16> = data
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .take_while(|&u| u != 0)
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
+/// Parse the string pool that starts at `off` inside `chunk`.
+///
+/// A missing or unparsable pool yields an empty pool rather than an error: a
+/// package can legitimately carry no type or key strings, and a caller that
+/// cannot resolve an index already falls back to `""`.
+fn pool_at(chunk: &[u8], off: usize) -> StringPoolDecoder {
+    chunk
+        .get(off..)
+        .and_then(|slice| StringPoolDecoder::parse(slice).ok())
+        .unwrap_or_default()
+}
+
+/// Decode the `ResTable_config` fields this crate reports.
+///
+/// Only the five fields [`ResConfig`] carries are read; the rest of the 56-byte
+/// structure is skipped rather than guessed at. A zeroed field means "any", the
+/// AOSP default, and is reported as `None` — not as a value.
+fn decode_config(cfg: &[u8]) -> ResConfig {
+    /// Two packed ASCII bytes as a language/region code, `None` when zeroed.
+    fn code(b: &[u8]) -> Option<String> {
+        let (a, z) = (*b.first()?, *b.get(1)?);
+        if a == 0 && z == 0 {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&[a, z]).to_string())
+    }
+
+    // ResTable_config: imsi(8) language(2) region(2) screenType{orientation(1)
+    // touchscreen(1) density(2)} input{...} screenSize{...} version{sdk(2) minor(2)}
+    let language = cfg.get(8..10).and_then(code);
+    let region = cfg.get(10..12).and_then(code);
+    let orientation = match cfg.get(12) {
+        Some(1) => Some("port".to_string()),
+        Some(2) => Some("land".to_string()),
+        Some(3) => Some("square".to_string()),
+        _ => None,
+    };
+    let density = cfg
+        .get(14..16)
+        .and_then(|b| b.try_into().ok())
+        .map(u16::from_le_bytes)
+        .and_then(|d| match d {
+            0 => None,
+            120 => Some("ldpi".to_string()),
+            160 => Some("mdpi".to_string()),
+            213 => Some("tvdpi".to_string()),
+            240 => Some("hdpi".to_string()),
+            320 => Some("xhdpi".to_string()),
+            480 => Some("xxhdpi".to_string()),
+            640 => Some("xxxhdpi".to_string()),
+            0xFFFE => Some("anydpi".to_string()),
+            0xFFFF => Some("nodpi".to_string()),
+            other => Some(format!("{other}dpi")),
+        });
+    let sdk_version = cfg
+        .get(24..26)
+        .and_then(|b| b.try_into().ok())
+        .map(u16::from_le_bytes)
+        .and_then(|v| (v != 0).then(|| u32::from(v)));
+
+    ResConfig { language, region, density, orientation, sdk_version }
+}
+
+/// Decode a `Res_value` at `off` into the typed value it represents.
+///
+/// The `dataType` codes are AOSP's. An unmodelled type is reported as
+/// [`ResValue::Raw`] with its hex payload rather than being coerced into one of
+/// the modelled variants — a wrong type is worse than an unparsed one.
+fn decode_res_value(data: &[u8], off: usize, pool: &StringPoolDecoder) -> ResValue {
+    // Res_value: size(2) res0(1) dataType(1) data(4)
+    let Some(dt) = data.get(off + 3).copied() else {
+        return ResValue::Raw(String::new());
+    };
+    let raw = read_u32(data, off + 4);
+    match dt {
+        0x00 => ResValue::Raw("@null".to_string()),
+        0x01 => ResValue::Reference(format!("@0x{raw:08x}")),
+        0x02 => ResValue::Reference(format!("?0x{raw:08x}")),
+        0x03 => pool
+            .get(raw as usize)
+            .map_or_else(|| ResValue::Raw(format!("0x{raw:08x}")), |s| ResValue::String(s.to_string())),
+        0x05 => ResValue::Dimen(format_complex_dimension(raw)),
+        0x10 => ResValue::Integer(i32::from_le_bytes(raw.to_le_bytes())),
+        0x12 => ResValue::Bool(raw != 0),
+        0x1c..=0x1f => ResValue::Color(format!("#{raw:08x}")),
+        _ => ResValue::Raw(format!("0x{raw:08x}")),
+    }
+}
+
+/// Render a `TYPE_DIMENSION` payload as the `12dp`-style string AOSP defines.
+fn format_complex_dimension(raw: u32) -> String {
+    const UNITS: [&str; 8] = ["px", "dip", "sp", "pt", "in", "mm", "", ""];
+    let unit = UNITS[(raw & 0x0F) as usize % UNITS.len()];
+    let radix = (raw >> 4) & 0x03;
+    let mantissa = raw >> 8;
+    let shift = match radix {
+        0 => 23.0_f32,
+        1 => 16.0_f32,
+        2 => 8.0_f32,
+        _ => 0.0_f32,
+    };
+    let value = u32_to_f32_lossy(mantissa) / 2.0_f32.powf(shift);
+    if (value.fract()).abs() < f32::EPSILON {
+        format!("{}{unit}", value.trunc())
+    } else {
+        format!("{value}{unit}")
+    }
+}
+
 #[inline]
 const fn u32_to_f32_lossy(x: u32) -> f32 {
     // Deliberate boundary: complex dimension mantissas exceed f32 precision but the
@@ -456,23 +618,173 @@ impl ResDecompiler {
 
     /// Parse a compiled `resources.arsc` blob into a [`ResPackage`].
     ///
+    /// This walks the real chunk structure of the file: the `RES_TABLE` header,
+    /// the global string pool, the `RES_TABLE_PACKAGE` chunk with its type- and
+    /// key-string pools, and each `RES_TABLE_TYPE` chunk's entry table.  Every
+    /// field of the returned [`ResPackage`] is decoded from `data`; nothing is
+    /// supplied by this function.
+    ///
     /// # Errors
-    /// Returns a [`ResDecompilerError`] when the data is truncated or has bad magic.
+    /// Returns a [`ResDecompilerError`] when the data is truncated, has bad
+    /// magic, or contains no package chunk to describe.
     pub fn parse_arsc(data: &[u8]) -> Result<ResPackage, ResDecompilerError> {
-        if data.len() < 8 {
+        // ResTable_header: type u16, headerSize u16, size u32, packageCount u32.
+        if data.len() < 12 {
             return Err(ResDecompilerError::Truncated(0));
         }
         let magic = u16::from_le_bytes([data[0], data[1]]);
         if magic != 0x0002 {
             return Err(ResDecompilerError::InvalidMagic(u32::from(magic)));
         }
-        let pkg = ResPackage {
-            package_name: "com.example.app".into(),
-            package_id: 0x7F,
-            entries: Self::mock_entries(),
-            ..Default::default()
+        let header_size = (u16::from_le_bytes([data[2], data[3]]) as usize).max(12);
+        let declared = read_u32(data, 4) as usize;
+        // Trust whichever bound is smaller: a declared size larger than the
+        // buffer would let a crafted file walk off the end.
+        let end = if declared == 0 {
+            data.len()
+        } else {
+            declared.min(data.len())
         };
+
+        let mut global_pool = StringPoolDecoder::default();
+        let mut package: Option<ResPackage> = None;
+        let mut off = header_size;
+        while off + 8 <= end {
+            let ctype = u16::from_le_bytes([data[off], data[off + 1]]);
+            let csize = read_u32(data, off + 4) as usize;
+            if csize < 8 || off + csize > end {
+                break;
+            }
+            let chunk = &data[off..off + csize];
+            match ctype {
+                RES_STRING_POOL_TYPE => global_pool = StringPoolDecoder::parse(chunk)?,
+                RES_TABLE_PACKAGE_TYPE => package = Some(Self::parse_package_chunk(chunk, &global_pool)?),
+                _ => {}
+            }
+            off += csize;
+        }
+
+        let mut pkg = package.ok_or_else(|| {
+            ResDecompilerError::Parse(
+                "no RES_TABLE_PACKAGE (0x0200) chunk found; nothing in this blob describes a package"
+                    .to_string(),
+            )
+        })?;
+        pkg.string_pool = global_pool;
         Ok(pkg)
+    }
+
+    /// Decode one `RES_TABLE_PACKAGE` chunk into a [`ResPackage`].
+    fn parse_package_chunk(
+        chunk: &[u8],
+        global: &StringPoolDecoder,
+    ) -> Result<ResPackage, ResDecompilerError> {
+        // type u16 | headerSize u16 | size u32 | id u32 | name u16[128]
+        // | typeStrings u32 | lastPublicType u32 | keyStrings u32 | lastPublicKey u32
+        const PKG_HEADER_MIN: usize = 284;
+        if chunk.len() < PKG_HEADER_MIN {
+            return Err(ResDecompilerError::Truncated(chunk.len()));
+        }
+        let header_size = (u16::from_le_bytes([chunk[2], chunk[3]]) as usize).max(PKG_HEADER_MIN);
+        let package_id = read_u32(chunk, 8);
+        let package_name = decode_utf16_fixed(&chunk[12..268]);
+        let type_strings_off = read_u32(chunk, 268) as usize;
+        let key_strings_off = read_u32(chunk, 276) as usize;
+
+        let type_strings = pool_at(chunk, type_strings_off);
+        let key_strings = pool_at(chunk, key_strings_off);
+
+        let mut entries = Vec::new();
+        let mut off = header_size;
+        while off + 8 <= chunk.len() {
+            let ctype = u16::from_le_bytes([chunk[off], chunk[off + 1]]);
+            let csize = read_u32(chunk, off + 4) as usize;
+            if csize < 8 || off + csize > chunk.len() {
+                break;
+            }
+            if ctype == RES_TABLE_TYPE_TYPE {
+                entries.extend(Self::parse_type_chunk(
+                    &chunk[off..off + csize],
+                    package_id,
+                    &type_strings,
+                    &key_strings,
+                    global,
+                ));
+            }
+            off += csize;
+        }
+
+        Ok(ResPackage {
+            package_name,
+            package_id,
+            entries,
+            string_pool: StringPoolDecoder::default(),
+        })
+    }
+
+    /// Decode one `RES_TABLE_TYPE` chunk into the resource entries it holds.
+    fn parse_type_chunk(
+        tc: &[u8],
+        package_id: u32,
+        type_strings: &StringPoolDecoder,
+        key_strings: &StringPoolDecoder,
+        global: &StringPoolDecoder,
+    ) -> Vec<ResEntry> {
+        // type u16 | headerSize u16 | size u32 | id u8 | flags u8 | reserved u16
+        // | entryCount u32 | entriesStart u32 | config
+        if tc.len() < 20 {
+            return Vec::new();
+        }
+        let header_size = u16::from_le_bytes([tc[2], tc[3]]) as usize;
+        let type_id = u32::from(tc[8]);
+        let entry_count = read_u32(tc, 12) as usize;
+        let entries_start = read_u32(tc, 16) as usize;
+        if header_size < 20 || header_size > tc.len() {
+            return Vec::new();
+        }
+
+        let type_name = type_id
+            .checked_sub(1)
+            .and_then(|i| type_strings.get(i as usize))
+            .unwrap_or("")
+            .to_string();
+        let res_type = type_name.parse::<ResType>().unwrap_or(ResType::Unknown);
+        let config = decode_config(&tc[20..header_size]);
+
+        // Cap the file-supplied count against what the offset table can hold.
+        let entry_count = entry_count.min(tc.len().saturating_sub(header_size) / 4);
+        let mut out = Vec::with_capacity(entry_count);
+        for i in 0..entry_count {
+            let off_pos = header_size + i * 4;
+            let entry_off = read_u32(tc, off_pos);
+            if entry_off == NO_ENTRY {
+                continue;
+            }
+            let ep = entries_start.saturating_add(entry_off as usize);
+            if ep + 8 > tc.len() {
+                continue;
+            }
+            let entry_size = u16::from_le_bytes([tc[ep], tc[ep + 1]]) as usize;
+            let entry_flags = u16::from_le_bytes([tc[ep + 2], tc[ep + 3]]);
+            let key_index = read_u32(tc, ep + 4) as usize;
+            let name = key_strings.get(key_index).unwrap_or("").to_string();
+            let value = if entry_flags & ENTRY_FLAG_COMPLEX != 0 {
+                // A bag/map entry: its members live in a separate table this
+                // decoder does not walk, so name the bag rather than invent a
+                // scalar for it.
+                ResValue::Reference(format!("{type_name}/{name}"))
+            } else {
+                decode_res_value(tc, ep + entry_size.max(8), global)
+            };
+            out.push(ResEntry {
+                name,
+                res_id: (package_id << 24) | (type_id << 16) | (i as u32),
+                res_type,
+                value,
+                config: config.clone(),
+            });
+        }
+        out
     }
 
     fn mock_entries() -> Vec<ResEntry> {
@@ -674,11 +986,22 @@ mod tests {
         assert!(r.is_err());
     }
     #[test]
-    fn test_res_decompiler_parse_arsc_ok() {
+    fn test_res_decompiler_parse_arsc_header_without_package_is_an_error() {
+        // ⚠ This asserted `is_ok()`. It passed only because `parse_arsc` used to
+        // INVENT a package: 64 zero bytes carrying nothing but a RES_TABLE type
+        // word describe no package name, no types and no entries, so "ok" was a
+        // fabricated answer and the test was pinning the fabrication.
+        //
+        // The real walk reports what is missing instead.
         let mut data = vec![0u8; 64];
         data[0..2].copy_from_slice(&0x0002u16.to_le_bytes());
-        let r = ResDecompiler::parse_arsc(&data);
-        assert!(r.is_ok());
+        let err = ResDecompiler::parse_arsc(&data)
+            .expect_err("a table header with no RES_TABLE_PACKAGE chunk describes no package");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("RES_TABLE_PACKAGE"),
+            "the error must name the missing chunk, got: {msg}"
+        );
     }
     #[test]
     fn test_res_decompiler_mock_package_has_entries() {

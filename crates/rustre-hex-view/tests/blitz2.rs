@@ -1,5 +1,4 @@
 //! Y072 deep adversarial coverage for rustre-hex-view public API.
-#![allow(clippy::needless_range_loop)]
 
 use rustre_hex::HexBuffer;
 use rustre_hex_view::*;

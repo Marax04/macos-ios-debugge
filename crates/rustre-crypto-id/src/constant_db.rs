@@ -370,7 +370,6 @@ pub const GHASH_POLY: u128 = (1u128 << 7) | (1 << 2) | (1 << 1) | 1;
 /// Search for a byte sequence in the known constant tables.
 /// Returns a list of matching constant names with their algorithm.
 #[must_use]
-#[allow(clippy::items_after_statements)]
 pub fn search_constants(needle: &[u8]) -> Vec<(&'static str, &'static str)> {
     let mut results = Vec::new();
     if needle.len() < 4 { return results; }

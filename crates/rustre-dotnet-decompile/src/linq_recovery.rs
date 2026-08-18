@@ -1038,9 +1038,22 @@ pub fn recover_linq_summary(
     }
 }
 
-// ─── Mock helpers ─────────────────────────────────────────────────────────────
+// ─── Synthetic fixtures (this crate's own tests only) ─────────────────────────
+//
+// Both constructors below assemble a struct from their arguments and INVENT the
+// rest: the closure class is always spelled `<>c` (Roslyn's static-lambda cache
+// class — a lambda that captures locals lives on a `<>c__DisplayClass…`
+// instead), captures are always empty, the delegate type is always unknown, and
+// the call site always has two arguments with a single scalar `source`. Nothing
+// is read from an assembly. The real producer is `recover_method_linq` /
+// `analyze_lambda` in this module over IL lifted from real metadata.
 
-/// Build a simple lambda `x => <body>` for tests.
+/// Synthetic lambda fixture: `param => body_expr`.
+///
+/// NOT analysis. The parameter, body and return type come from the caller;
+/// `class_name` (`<>c`), the empty capture list, `delegate_type: None` and
+/// `is_static_lambda: true` are invented and are NOT inferred from anything.
+/// Never report it as a recovered lambda.
 #[must_use] 
 pub fn mock_lambda(param: &str, body_expr: LambdaExprNode, return_type: &str) -> LambdaExpr {
     LambdaExpr {
@@ -1059,7 +1072,11 @@ pub fn mock_lambda(param: &str, body_expr: LambdaExprNode, return_type: &str) ->
     }
 }
 
-/// Build a mock call site for a LINQ operator.
+/// Synthetic LINQ call-site fixture.
+///
+/// NOT analysis: only `method`, the lambda and `return_type` come from the
+/// caller; `il_offset: 0`, `arg_count: 2` and the single scalar argument
+/// `"source"` are invented. Never report it as a recovered call site.
 #[must_use] 
 pub fn mock_linq_call(method: &str, lambda: LambdaExpr, return_type: &str) -> CallSite {
     CallSite {

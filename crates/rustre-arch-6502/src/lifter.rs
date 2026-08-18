@@ -448,7 +448,6 @@ fn lift_common_compute(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<
 }
 
 /// Lifting for arithmetic/bitwise/shift/compare/inc-dec/transfer instructions.
-#[allow(clippy::too_many_lines)]
 fn lift_common_alu(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp> {
     use IlExpr as E;
     use IlOp as O;

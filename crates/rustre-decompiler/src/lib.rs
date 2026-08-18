@@ -1569,7 +1569,400 @@ fn alu_base(mnem: &str) -> Option<(&'static str, Option<u8>)> {
 /// a recognised scalar-integer op so the caller falls through to the
 /// flag-setting (`cmp`/`test`) and honest-comment paths. Never fabricates
 /// semantics: side-effect-only ops (`bt`) and non-C ops fall back to comments.
-#[allow(clippy::too_many_lines)]
+/// `CMPXCHG dst, src` — the two data effects, as one packed statement.
+///
+/// Returns `None` when `base` is not `cmpxchg`, so the dispatcher can go on.
+///
+/// ⚠ Extracted from [`lift_alu_stmt`], which was 308 lines and carried an
+/// `#[allow(clippy::too_many_lines)]`. This block alone was 97 of them, and it
+/// is the one that most needs to be read on its own: `InstrLift::Handled` can
+/// carry only ONE `CfsStatement`, while CMPXCHG has TWO conditional writes that
+/// both depend on `dst` BEFORE either happens — hence the packed `;`-separated
+/// form and the `__cmpxchg_old` temporary.
+/// Multiply: the 3-, 2- and 1-operand forms of `mul`/`imul`.
+///
+/// The 1-operand form writes a 128-bit product across `rdx:rax`, which one
+/// `CfsStatement` cannot express, so it is emitted as a `Raw` note.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_multiply(
+    base: &str,
+    ops: &str,
+    two: Option<(&str, &str)>,
+) -> InstrLift {
+    let parts = split_ops_toplevel(ops);
+    if parts.len() == 3 {
+        // 3-operand `imul`: `dst = src * imm`. AT&T lists the immediate
+        // first (`$imm, src, dst`); Intel lists it last (`dst, src, imm`).
+        let (dst, src, imm) = if parts[0].starts_with('$') {
+            (parts[2], parts[1], parts[0])
+        } else {
+            (parts[0], parts[1], parts[2])
+        };
+        let d = clean_operand(dst);
+        return InstrLift::Handled(Some(CfsStatement::Assign {
+            lhs: d,
+            rhs: format!("{} * {}", clean_operand(src), clean_operand(imm)),
+        }));
+    }
+    if let Some((dst, src)) = two {
+        // 2-operand `imul`: `dst = dst * src`.
+        let d = clean_operand(dst);
+        return InstrLift::Handled(Some(CfsStatement::Assign {
+            lhs: d.clone(),
+            rhs: format!("{d} * {}", clean_operand(src)),
+        }));
+    }
+    // 1-operand `mul`/`imul`: 128-bit product, low half in rax, high in rdx.
+    let src = clean_operand(ops);
+    let note = if base == "imul" { "signed" } else { "unsigned" };
+    return InstrLift::Handled(Some(CfsStatement::Raw(format!(
+        "rax = rax * {src}; /* {note}; high half in rdx */"
+    ))));
+}
+
+/// Divide: `div`/`idiv`, quotient in `rax` and remainder in `rdx`.
+///
+/// `__rdx_rax` names the dividend so both results reference the SAME
+/// pre-division value rather than a clobbered `rax`.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_divide(
+    base: &str,
+    ops: &str,
+) -> InstrLift {
+    // 1-operand divide: quotient in rax, remainder in rdx. `__rdx_rax` names
+    // the 128/64-bit dividend so both results reference the *same*
+    // pre-division value rather than a clobbered rax.
+    let src = clean_operand(ops);
+    let note = if base == "idiv" { "signed" } else { "unsigned" };
+    // Capture the dividend BEFORE the divide clobbers rax. Compiler
+    // output always sets rdx to the sign/zero extension of rax right
+    // before a divide (`cdq`/`cqo`/`xor edx,edx` — all lifted silently),
+    // so the effective dividend IS rax; without this capture `__rdx_rax`
+    // was used but never defined (uninitialised-read wrong code).
+    return InstrLift::Handled(Some(CfsStatement::Raw(format!(
+        "__rdx_rax = rax; rdx = __rdx_rax % {src}; rax = __rdx_rax / {src}; /* {note} */"
+    ))));
+}
+
+/// Rotates: `rol`/`ror` as width-tagged IDA-style intrinsics.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_rotate(
+    base: &str,
+    ops: &str,
+    two: Option<(&str, &str)>,
+    suffix_w: Option<u8>,
+) -> InstrLift {
+    let (dst, count) = match two {
+        Some((d, c)) => (clean_operand(d), clean_operand(c)),
+        None => (clean_operand(ops), "1".to_string()),
+    };
+    let w = suffix_w
+        .or_else(|| x86_register_width::register_width_bytes(&dst))
+        .unwrap_or(4);
+    let name = if base == "rol" { "__ROL" } else { "__ROR" };
+    return InstrLift::Handled(Some(CfsStatement::Assign {
+        lhs: dst.clone(),
+        rhs: format!("{name}{w}__({dst}, {count})"),
+    }));
+}
+
+/// Bit test family: `bt`, `bts`, `btr`, `btc`.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_bit_test(
+    base: &str,
+    two: Option<(&str, &str)>,
+) -> InstrLift {
+    let Some((dst, n)) = two else {
+        return InstrLift::Skip;
+    };
+    let d = clean_operand(dst);
+    let n = clean_operand(n);
+    return match base {
+        // `bt` writes no destination: it only copies bit `n` into CF.
+        "bt" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
+            "/* bit test: ({d} >> {n}) & 1 */"
+        )))),
+        // bts/btr/btc set CF from the OLD bit and do NOT set ZF/SF from
+        // the result. Emit as Raw (not Assign) so the flag-fusion passes
+        // never mistake them for a self-referential ALU op and rewrite a
+        // following CF-consuming `jc`/`jb` into a bogus `x REL 0`.
+        "bts" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
+            "{d} = {d} | 1 << {n}; /* bts: CF = old bit */"
+        )))),
+        "btr" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
+            "{d} = {d} & ~(1 << {n}); /* btr: CF = old bit */"
+        )))),
+        _ => InstrLift::Handled(Some(CfsStatement::Raw(format!(
+            "{d} = {d} ^ 1 << {n}; /* btc: CF = old bit */"
+        )))),
+    };
+}
+
+/// Bit scan and population count: `bsf`, `bsr`, `tzcnt`, `lzcnt`, `popcnt`.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_bit_scan(
+    base: &str,
+    two: Option<(&str, &str)>,
+    suffix_w: Option<u8>,
+) -> InstrLift {
+    let Some((dst, src)) = two else {
+        return InstrLift::Skip;
+    };
+    let d = clean_operand(dst);
+    let s = clean_operand(src);
+    let w = suffix_w
+        .or_else(|| x86_register_width::register_width_bytes(&s))
+        .unwrap_or(4);
+    let ll = if w == 8 { "ll" } else { "" };
+    let rhs = match base {
+        "bsf" | "tzcnt" => format!("__builtin_ctz{ll}({s})"),
+        "lzcnt" => format!("__builtin_clz{ll}({s})"),
+        "popcnt" => format!("__builtin_popcount{ll}({s})"),
+        // `bsr` = index of the highest set bit = (bits - 1) - clz.
+        _ => format!("{} - __builtin_clz{ll}({s})", u32::from(w) * 8 - 1),
+    };
+    return InstrLift::Handled(Some(CfsStatement::Assign { lhs: d, rhs }));
+}
+
+/// Byte swap: `bswap`.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_bswap(
+    ops: &str,
+    suffix_w: Option<u8>,
+) -> InstrLift {
+    let d = clean_operand(ops);
+    let w = suffix_w
+        .or_else(|| x86_register_width::register_width_bytes(&d))
+        .unwrap_or(4);
+    let bits = u32::from(w) * 8;
+    return InstrLift::Handled(Some(CfsStatement::Assign {
+        lhs: d.clone(),
+        rhs: format!("__builtin_bswap{bits}({d})"),
+    }));
+}
+
+/// The plain two-operand ALU operations that map onto a C binary operator.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_binop(
+    base: &str,
+    two: Option<(&str, &str)>,
+    op: &str,
+) -> InstrLift {
+    if let Some((dst, src)) = two {
+        let d = clean_operand(dst);
+        let s = clean_operand(src);
+        // A SHIFT whose destination is a 1/2-byte sub-register shifts only
+        // that narrow field: `shr $5,%cx` is a LOGICAL shift of the low 16
+        // bits, with the upper bits of the parent untouched. The plain
+        // `d >>= 5` lift both dropped the truncation (upper bits leaked
+        // into the result) and made the shift signed — the exact defect
+        // behind `(uint16_t)(u>>5)` coming out 3362959405758 instead of
+        // 12990 (the two differ by exactly a 0xFFFF mask).
+        if let Some(m) = subreg_value_mask(&d)
+            && matches!(base, "shr" | "shl" | "sal")
+        {
+            let field = if base == "shr" {
+                format!("(({d} & {m}) >> {s})")
+            } else {
+                format!("((({d} & {m}) << {s}) & {m})")
+            };
+            return InstrLift::Handled(Some(CfsStatement::Assign {
+                lhs: d.clone(),
+                rhs: format!("({d} & ~{m}) | {field}"),
+            }));
+        }
+        return InstrLift::Handled(Some(CfsStatement::Assign {
+            lhs: d.clone(),
+            rhs: format!("{d} {op} {s}"),
+        }));
+    }
+    return InstrLift::Skip;
+}
+
+/// Increment and decrement.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_inc_dec(
+    base: &str,
+    ops: &str,
+) -> InstrLift {
+    let sign = if base == "inc" { "+" } else { "-" };
+    let v = clean_operand(ops);
+    return InstrLift::Handled(Some(CfsStatement::Assign {
+        lhs: v.clone(),
+        rhs: format!("{v} {sign} 1"),
+    }));
+}
+
+/// Arithmetic negation.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_neg(
+    ops: &str,
+) -> InstrLift {
+    let v = clean_operand(ops);
+    return InstrLift::Handled(Some(CfsStatement::Assign {
+        lhs: v.clone(),
+        rhs: format!("-{v}"),
+    }));
+}
+
+/// Bitwise complement.
+///
+/// Extracted verbatim from [`lift_alu_stmt`], which was 308 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The guard stays at the call site and the
+/// body is unchanged, so the dispatch order and every returned value are the
+/// same — the existing tests are the check on that.
+fn lift_alu_not(
+    ops: &str,
+) -> InstrLift {
+    let v = clean_operand(ops);
+    return InstrLift::Handled(Some(CfsStatement::Assign {
+        lhs: v.clone(),
+        rhs: format!("~{v}"),
+    }));
+}
+
+fn lift_alu_cmpxchg(
+    base: &str,
+    two: Option<(&str, &str)>,
+    suffix_w: Option<u8>,
+) -> Option<InstrLift> {
+    if base != "cmpxchg" {
+        return None;
+    }
+    // `CMPXCHG dst, src` (SDM): compare the accumulator (al/ax/eax/rax,
+    // width-matched to the operand) with `dst`; on equality store `src`
+    // into `dst`; otherwise load `dst` into the accumulator. Flags are
+    // set as if by `cmp acc, dst` — left to the existing cmp-placeholder
+    // + fusion machinery (this lift only carries the two data effects).
+    //
+    // This function can only return ONE `CfsStatement` per instruction
+    // (`InstrLift::Handled(Option<CfsStatement>)`), yet CMPXCHG has TWO
+    // real effects (conditional dst write on success, conditional
+    // accumulator write on failure) that both depend on `dst`'s value
+    // BEFORE either write happens. The `div`/`idiv` case just above
+    // establishes the idiom this reuses: pack multiple `;`-separated C
+    // statements into one `Raw`, capturing the pre-instruction value in
+    // a synthetic variable (`__rdx_rax` there, `__cmpxchg_old` here) so
+    // later statements read the ORIGINAL value regardless of what the
+    // earlier statements in the same Raw already overwrote. A GNU
+    // statement-expression (`({ ... })`) was considered and rejected:
+    // it would need a correctly-typed temp declared inline, but this
+    // pipeline runs BEFORE type recovery, so the width is only a
+    // best-effort guess — the semicolon-chain idiom needs no type at
+    // the use site (the temp's declaration is `__int64`, added once,
+    // globally, by `declare_bare_frame_regs`, matching `__rdx_rax`).
+    let Some((dst, src)) = two else {
+        return Some(InstrLift::Skip);
+    };
+    let d = clean_operand(dst);
+    let s = clean_operand(src);
+    // `dst` is very often a memory operand (`(%rax)` → `*rax`), which
+    // `register_width_bytes` can't size — but `src` is ALWAYS a register
+    // (CMPXCHG's second operand is architecturally a GPR, never memory
+    // or an immediate), so it is width-decisive whenever the mnemonic
+    // itself carries no suffix and `dst` doesn't resolve.
+    let w = suffix_w
+        .or_else(|| x86_register_width::register_width_bytes(&d))
+        .or_else(|| x86_register_width::register_width_bytes(&s))
+        .unwrap_or(4);
+    let acc = match w {
+        1 => "al",
+        2 => "ax",
+        4 => "eax",
+        _ => "rax",
+    };
+    // An `if`/`else` (not a `?:` ternary) is required here, not just
+    // stylistic: `dst` can be a struct-typed dereference once a later
+    // type-recovery pass promotes it (`*ptr2` where `ptr2: struct X *`),
+    // while `src` is a plain register/pointer value — a ternary needs
+    // its two branches to share ONE type (C: "type mismatch in
+    // conditional expression", a REAL corpus regression this exact
+    // shape hit: `*ptr2 = (result == old) ? ptr : *ptr2` on
+    // sample4_go/runtime_notetsleep_internal). Each `if`/`else` arm
+    // type-checks its OWN assignment independently — `{d} = {s};` needs
+    // only the ordinary implicit conversion `mov`-style assignments
+    // already rely on everywhere else in this emitter, not branch-vs-
+    // branch unification.
+    // The dst write is only safe when `d` is a PLAIN REGISTER. When
+    // `dst` is a memory dereference (`*rax`, the far more common form —
+    // CMPXCHG's whole reason for existing is atomic memory RMW), a
+    // LATER type-recovery pass can promote it into a struct-typed
+    // access (`*ptr2` -> a full aggregate, not a scalar). That later
+    // pass rewrites `CfsStatement::Assign` targets AND simple-expression
+    // reads it recognizes, but does NOT reach inside this opaque `Raw`
+    // blob's embedded `{d} = {s};` assignment — so `{s}` (always a
+    // scalar/pointer register) ends up assigned into what the compiler
+    // now sees as a whole `struct Foo`, a real corpus regression
+    // ("incompatible types when assigning to type 'struct Foo' from
+    // 'struct Foo *'/'long long int'" — sample4_go
+    // runtime_notetsleep_internal, found and reverted 2026-07-20).
+    // Register destinations can't hit this (register locals stay
+    // scalar in this emitter's convention), so keep the FULL two-effect
+    // fix for those, and fall back to accumulator-only — no `{d}`
+    // write at all — whenever `dst` is a memory operand, trading dst
+    // fidelity for guaranteed type-safety until the struct-field
+    // promotion pass can be taught to see inside a multi-clause Raw.
+    if let Some(addr) = d.strip_prefix('*') {
+        // Memory destination: emit BOTH accesses through a scalar-
+        // pinning `__intN *` cast of the bare address, so a later
+        // struct promotion of the pointee can never turn either the
+        // load or the conditional store into an aggregate assignment
+        // (the sample4_go regression class) — while restoring the
+        // atomic write that the accumulator-only fallback dropped.
+        let bits = w * 8;
+        let addr = if addr.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            addr.to_string()
+        } else {
+            format!("({addr})")
+        };
+        return Some(InstrLift::Handled(Some(CfsStatement::Raw(format!(
+            "__cmpxchg_old = *(__int{bits} *){addr}; \
+             if ({acc} == __cmpxchg_old) {{ *(__int{bits} *){addr} = (__int{bits}){s}; }} \
+             else {{ {acc} = __cmpxchg_old; }}"
+        )))));
+    }
+    return Some(InstrLift::Handled(Some(CfsStatement::Raw(format!(
+        "__cmpxchg_old = {d}; \
+         if ({acc} == __cmpxchg_old) {{ {d} = {s}; }} else {{ {acc} = __cmpxchg_old; }}"
+    )))));
+}
+
 fn lift_alu_stmt(mnem: &str, ops: &str) -> InstrLift {
     let Some((base, suffix_w)) = alu_base(mnem) else {
         return InstrLift::Skip;
@@ -1578,228 +1971,35 @@ fn lift_alu_stmt(mnem: &str, ops: &str) -> InstrLift {
 
     // ── Multiply (implicit rdx:rax for the 1-operand form) ───────
     if matches!(base, "mul" | "imul") {
-        let parts = split_ops_toplevel(ops);
-        if parts.len() == 3 {
-            // 3-operand `imul`: `dst = src * imm`. AT&T lists the immediate
-            // first (`$imm, src, dst`); Intel lists it last (`dst, src, imm`).
-            let (dst, src, imm) = if parts[0].starts_with('$') {
-                (parts[2], parts[1], parts[0])
-            } else {
-                (parts[0], parts[1], parts[2])
-            };
-            let d = clean_operand(dst);
-            return InstrLift::Handled(Some(CfsStatement::Assign {
-                lhs: d,
-                rhs: format!("{} * {}", clean_operand(src), clean_operand(imm)),
-            }));
-        }
-        if let Some((dst, src)) = two {
-            // 2-operand `imul`: `dst = dst * src`.
-            let d = clean_operand(dst);
-            return InstrLift::Handled(Some(CfsStatement::Assign {
-                lhs: d.clone(),
-                rhs: format!("{d} * {}", clean_operand(src)),
-            }));
-        }
-        // 1-operand `mul`/`imul`: 128-bit product, low half in rax, high in rdx.
-        let src = clean_operand(ops);
-        let note = if base == "imul" { "signed" } else { "unsigned" };
-        return InstrLift::Handled(Some(CfsStatement::Raw(format!(
-            "rax = rax * {src}; /* {note}; high half in rdx */"
-        ))));
+        return lift_alu_multiply(base, ops, two);
     }
     if matches!(base, "div" | "idiv") {
-        // 1-operand divide: quotient in rax, remainder in rdx. `__rdx_rax` names
-        // the 128/64-bit dividend so both results reference the *same*
-        // pre-division value rather than a clobbered rax.
-        let src = clean_operand(ops);
-        let note = if base == "idiv" { "signed" } else { "unsigned" };
-        // Capture the dividend BEFORE the divide clobbers rax. Compiler
-        // output always sets rdx to the sign/zero extension of rax right
-        // before a divide (`cdq`/`cqo`/`xor edx,edx` — all lifted silently),
-        // so the effective dividend IS rax; without this capture `__rdx_rax`
-        // was used but never defined (uninitialised-read wrong code).
-        return InstrLift::Handled(Some(CfsStatement::Raw(format!(
-            "__rdx_rax = rax; rdx = __rdx_rax % {src}; rax = __rdx_rax / {src}; /* {note} */"
-        ))));
+        return lift_alu_divide(base, ops);
     }
 
     // ── CMPXCHG: full atomic compare-and-exchange, both effects ──
-    if base == "cmpxchg" {
-        // `CMPXCHG dst, src` (SDM): compare the accumulator (al/ax/eax/rax,
-        // width-matched to the operand) with `dst`; on equality store `src`
-        // into `dst`; otherwise load `dst` into the accumulator. Flags are
-        // set as if by `cmp acc, dst` — left to the existing cmp-placeholder
-        // + fusion machinery (this lift only carries the two data effects).
-        //
-        // This function can only return ONE `CfsStatement` per instruction
-        // (`InstrLift::Handled(Option<CfsStatement>)`), yet CMPXCHG has TWO
-        // real effects (conditional dst write on success, conditional
-        // accumulator write on failure) that both depend on `dst`'s value
-        // BEFORE either write happens. The `div`/`idiv` case just above
-        // establishes the idiom this reuses: pack multiple `;`-separated C
-        // statements into one `Raw`, capturing the pre-instruction value in
-        // a synthetic variable (`__rdx_rax` there, `__cmpxchg_old` here) so
-        // later statements read the ORIGINAL value regardless of what the
-        // earlier statements in the same Raw already overwrote. A GNU
-        // statement-expression (`({ ... })`) was considered and rejected:
-        // it would need a correctly-typed temp declared inline, but this
-        // pipeline runs BEFORE type recovery, so the width is only a
-        // best-effort guess — the semicolon-chain idiom needs no type at
-        // the use site (the temp's declaration is `__int64`, added once,
-        // globally, by `declare_bare_frame_regs`, matching `__rdx_rax`).
-        let Some((dst, src)) = two else {
-            return InstrLift::Skip;
-        };
-        let d = clean_operand(dst);
-        let s = clean_operand(src);
-        // `dst` is very often a memory operand (`(%rax)` → `*rax`), which
-        // `register_width_bytes` can't size — but `src` is ALWAYS a register
-        // (CMPXCHG's second operand is architecturally a GPR, never memory
-        // or an immediate), so it is width-decisive whenever the mnemonic
-        // itself carries no suffix and `dst` doesn't resolve.
-        let w = suffix_w
-            .or_else(|| x86_register_width::register_width_bytes(&d))
-            .or_else(|| x86_register_width::register_width_bytes(&s))
-            .unwrap_or(4);
-        let acc = match w {
-            1 => "al",
-            2 => "ax",
-            4 => "eax",
-            _ => "rax",
-        };
-        // An `if`/`else` (not a `?:` ternary) is required here, not just
-        // stylistic: `dst` can be a struct-typed dereference once a later
-        // type-recovery pass promotes it (`*ptr2` where `ptr2: struct X *`),
-        // while `src` is a plain register/pointer value — a ternary needs
-        // its two branches to share ONE type (C: "type mismatch in
-        // conditional expression", a REAL corpus regression this exact
-        // shape hit: `*ptr2 = (result == old) ? ptr : *ptr2` on
-        // sample4_go/runtime_notetsleep_internal). Each `if`/`else` arm
-        // type-checks its OWN assignment independently — `{d} = {s};` needs
-        // only the ordinary implicit conversion `mov`-style assignments
-        // already rely on everywhere else in this emitter, not branch-vs-
-        // branch unification.
-        // The dst write is only safe when `d` is a PLAIN REGISTER. When
-        // `dst` is a memory dereference (`*rax`, the far more common form —
-        // CMPXCHG's whole reason for existing is atomic memory RMW), a
-        // LATER type-recovery pass can promote it into a struct-typed
-        // access (`*ptr2` -> a full aggregate, not a scalar). That later
-        // pass rewrites `CfsStatement::Assign` targets AND simple-expression
-        // reads it recognizes, but does NOT reach inside this opaque `Raw`
-        // blob's embedded `{d} = {s};` assignment — so `{s}` (always a
-        // scalar/pointer register) ends up assigned into what the compiler
-        // now sees as a whole `struct Foo`, a real corpus regression
-        // ("incompatible types when assigning to type 'struct Foo' from
-        // 'struct Foo *'/'long long int'" — sample4_go
-        // runtime_notetsleep_internal, found and reverted 2026-07-20).
-        // Register destinations can't hit this (register locals stay
-        // scalar in this emitter's convention), so keep the FULL two-effect
-        // fix for those, and fall back to accumulator-only — no `{d}`
-        // write at all — whenever `dst` is a memory operand, trading dst
-        // fidelity for guaranteed type-safety until the struct-field
-        // promotion pass can be taught to see inside a multi-clause Raw.
-        if let Some(addr) = d.strip_prefix('*') {
-            // Memory destination: emit BOTH accesses through a scalar-
-            // pinning `__intN *` cast of the bare address, so a later
-            // struct promotion of the pointee can never turn either the
-            // load or the conditional store into an aggregate assignment
-            // (the sample4_go regression class) — while restoring the
-            // atomic write that the accumulator-only fallback dropped.
-            let bits = w * 8;
-            let addr = if addr.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                addr.to_string()
-            } else {
-                format!("({addr})")
-            };
-            return InstrLift::Handled(Some(CfsStatement::Raw(format!(
-                "__cmpxchg_old = *(__int{bits} *){addr}; \
-                 if ({acc} == __cmpxchg_old) {{ *(__int{bits} *){addr} = (__int{bits}){s}; }} \
-                 else {{ {acc} = __cmpxchg_old; }}"
-            ))));
-        }
-        return InstrLift::Handled(Some(CfsStatement::Raw(format!(
-            "__cmpxchg_old = {d}; \
-             if ({acc} == __cmpxchg_old) {{ {d} = {s}; }} else {{ {acc} = __cmpxchg_old; }}"
-        ))));
+    if let Some(lift) = lift_alu_cmpxchg(base, two, suffix_w) {
+        return lift;
     }
 
     // ── Rotates → IDA-style width-tagged intrinsics ──────────────
     if matches!(base, "rol" | "ror") {
-        let (dst, count) = match two {
-            Some((d, c)) => (clean_operand(d), clean_operand(c)),
-            None => (clean_operand(ops), "1".to_string()),
-        };
-        let w = suffix_w
-            .or_else(|| x86_register_width::register_width_bytes(&dst))
-            .unwrap_or(4);
-        let name = if base == "rol" { "__ROL" } else { "__ROR" };
-        return InstrLift::Handled(Some(CfsStatement::Assign {
-            lhs: dst.clone(),
-            rhs: format!("{name}{w}__({dst}, {count})"),
-        }));
+        return lift_alu_rotate(base, ops, two, suffix_w);
     }
 
     // ── Bit test / set / reset / complement ──────────────────────
     if matches!(base, "bt" | "bts" | "btr" | "btc") {
-        let Some((dst, n)) = two else {
-            return InstrLift::Skip;
-        };
-        let d = clean_operand(dst);
-        let n = clean_operand(n);
-        return match base {
-            // `bt` writes no destination: it only copies bit `n` into CF.
-            "bt" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
-                "/* bit test: ({d} >> {n}) & 1 */"
-            )))),
-            // bts/btr/btc set CF from the OLD bit and do NOT set ZF/SF from
-            // the result. Emit as Raw (not Assign) so the flag-fusion passes
-            // never mistake them for a self-referential ALU op and rewrite a
-            // following CF-consuming `jc`/`jb` into a bogus `x REL 0`.
-            "bts" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
-                "{d} = {d} | 1 << {n}; /* bts: CF = old bit */"
-            )))),
-            "btr" => InstrLift::Handled(Some(CfsStatement::Raw(format!(
-                "{d} = {d} & ~(1 << {n}); /* btr: CF = old bit */"
-            )))),
-            _ => InstrLift::Handled(Some(CfsStatement::Raw(format!(
-                "{d} = {d} ^ 1 << {n}; /* btc: CF = old bit */"
-            )))),
-        };
+        return lift_alu_bit_test(base, two);
     }
 
     // ── Bit scan / population count → IDA-style intrinsics ───────
     if matches!(base, "bsf" | "bsr" | "tzcnt" | "lzcnt" | "popcnt") {
-        let Some((dst, src)) = two else {
-            return InstrLift::Skip;
-        };
-        let d = clean_operand(dst);
-        let s = clean_operand(src);
-        let w = suffix_w
-            .or_else(|| x86_register_width::register_width_bytes(&s))
-            .unwrap_or(4);
-        let ll = if w == 8 { "ll" } else { "" };
-        let rhs = match base {
-            "bsf" | "tzcnt" => format!("__builtin_ctz{ll}({s})"),
-            "lzcnt" => format!("__builtin_clz{ll}({s})"),
-            "popcnt" => format!("__builtin_popcount{ll}({s})"),
-            // `bsr` = index of the highest set bit = (bits - 1) - clz.
-            _ => format!("{} - __builtin_clz{ll}({s})", u32::from(w) * 8 - 1),
-        };
-        return InstrLift::Handled(Some(CfsStatement::Assign { lhs: d, rhs }));
+        return lift_alu_bit_scan(base, two, suffix_w);
     }
 
     // ── Byte swap ────────────────────────────────────────────────
     if base == "bswap" {
-        let d = clean_operand(ops);
-        let w = suffix_w
-            .or_else(|| x86_register_width::register_width_bytes(&d))
-            .unwrap_or(4);
-        let bits = u32::from(w) * 8;
-        return InstrLift::Handled(Some(CfsStatement::Assign {
-            lhs: d.clone(),
-            rhs: format!("__builtin_bswap{bits}({d})"),
-        }));
+        return lift_alu_bswap(ops, suffix_w);
     }
 
     // ── sbb/adc: the carry is a real input (dst = dst ∓ src ∓ CF). Emit a
@@ -1821,59 +2021,18 @@ fn lift_alu_stmt(mnem: &str, ops: &str) -> InstrLift {
 
     // ── Generic two-operand ALU (add/sub/and/or/xor/shl/sal/shr/sar) ─
     if let Some(op) = binop_of(base) {
-        if let Some((dst, src)) = two {
-            let d = clean_operand(dst);
-            let s = clean_operand(src);
-            // A SHIFT whose destination is a 1/2-byte sub-register shifts only
-            // that narrow field: `shr $5,%cx` is a LOGICAL shift of the low 16
-            // bits, with the upper bits of the parent untouched. The plain
-            // `d >>= 5` lift both dropped the truncation (upper bits leaked
-            // into the result) and made the shift signed — the exact defect
-            // behind `(uint16_t)(u>>5)` coming out 3362959405758 instead of
-            // 12990 (the two differ by exactly a 0xFFFF mask).
-            if let Some(m) = subreg_value_mask(&d)
-                && matches!(base, "shr" | "shl" | "sal")
-            {
-                let field = if base == "shr" {
-                    format!("(({d} & {m}) >> {s})")
-                } else {
-                    format!("((({d} & {m}) << {s}) & {m})")
-                };
-                return InstrLift::Handled(Some(CfsStatement::Assign {
-                    lhs: d.clone(),
-                    rhs: format!("({d} & ~{m}) | {field}"),
-                }));
-            }
-            return InstrLift::Handled(Some(CfsStatement::Assign {
-                lhs: d.clone(),
-                rhs: format!("{d} {op} {s}"),
-            }));
-        }
-        return InstrLift::Skip;
+        return lift_alu_binop(base, two, op);
     }
 
     // ── Unary increment / decrement / negate / bitwise-not ───────
     if matches!(base, "inc" | "dec") {
-        let sign = if base == "inc" { "+" } else { "-" };
-        let v = clean_operand(ops);
-        return InstrLift::Handled(Some(CfsStatement::Assign {
-            lhs: v.clone(),
-            rhs: format!("{v} {sign} 1"),
-        }));
+        return lift_alu_inc_dec(base, ops);
     }
     if base == "neg" {
-        let v = clean_operand(ops);
-        return InstrLift::Handled(Some(CfsStatement::Assign {
-            lhs: v.clone(),
-            rhs: format!("-{v}"),
-        }));
+        return lift_alu_neg(ops);
     }
     if base == "not" {
-        let v = clean_operand(ops);
-        return InstrLift::Handled(Some(CfsStatement::Assign {
-            lhs: v.clone(),
-            rhs: format!("~{v}"),
-        }));
+        return lift_alu_not(ops);
     }
 
     InstrLift::Skip
@@ -15954,21 +16113,38 @@ fn cmp_cond_expr(op: &str, lhs: &str, rhs: &str, is_test: bool) -> Option<String
     }
 }
 
-#[allow(clippy::too_many_lines)]
+/// The `(lhs, rhs, is_test)` a flag-producing marker carries, if the statement
+/// is one.
+///
+/// The lifter emits `/* cmp A , B */` and `/* test A , B */` markers so a later
+/// pass can fuse the comparison into the branch that consumes its flags. This
+/// recognises exactly those two spellings and nothing else: a `Raw` statement
+/// that is not a marker, or a marker whose operands do not split on `" , "`,
+/// yields `None` and the caller moves on.
+///
+/// Extracted from [`fuse_cmp_branch`], which was 141 lines and needed an
+/// `#[allow(clippy::too_many_lines)]`. The recognition and the fusion are two
+/// separate decisions and now read as two.
+fn cmp_marker_operands(stmt: &CfsStatement) -> Option<(String, String, bool)> {
+    let CfsStatement::Raw(s) = stmt else { return None };
+    let (rest, is_test) = if let Some(r) = s.strip_prefix("/* cmp ").and_then(|t| t.strip_suffix(" */")) {
+        (r, false)
+    } else if let Some(r) = s.strip_prefix("/* test ").and_then(|t| t.strip_suffix(" */")) {
+        (r, true)
+    } else {
+        return None;
+    };
+    let (a, b) = rest.split_once(" , ")?;
+    Some((a.trim().to_string(), b.trim().to_string(), is_test))
+}
+
 fn fuse_cmp_branch(stmts: &mut Vec<CfsStatement>) {
     let mut i = 0;
     while i + 1 < stmts.len() {
-        let (lhs, rhs, is_test) = if let CfsStatement::Raw(s) = &stmts[i] {
-            if let Some(rest) = s.strip_prefix("/* cmp ").and_then(|t| t.strip_suffix(" */")) {
-                if let Some((a, b)) = rest.split_once(" , ") {
-                    (a.trim().to_string(), b.trim().to_string(), false)
-                } else { i += 1; continue; }
-            } else if let Some(rest) = s.strip_prefix("/* test ").and_then(|t| t.strip_suffix(" */")) {
-                if let Some((a, b)) = rest.split_once(" , ") {
-                    (a.trim().to_string(), b.trim().to_string(), true)
-                } else { i += 1; continue; }
-            } else { i += 1; continue; }
-        } else { i += 1; continue; };
+        let Some((lhs, rhs, is_test)) = cmp_marker_operands(&stmts[i]) else {
+            i += 1;
+            continue;
+        };
         let cond_expr = |op: &str| -> Option<String> { cmp_cond_expr(op, &lhs, &rhs, is_test) };
         // Writes performed by skipped (flag-preserving) statements. Once
         // one of them overwrites a cmp operand, later consumers would
@@ -21359,9 +21535,14 @@ fn c_goto_removal_pass(source: &str, enabled: bool) -> String {
     GotoRemover::new().process(source).0
 }
 
-/// Gate opt-in `RUSTRE_C_GOTO_REMOVAL` (default OFF).
+/// `RUSTRE_C_GOTO_REMOVAL`. DEFAULT-ON dal 2026-08-18 (#6790); si spegne con `=0`.
+///
+/// Isolato sul corpus intero: `goto` 11266 -> 11003 (−263), righe −221, ogni
+/// altro contatore identico, e **path A invariato** (`diff -rq`, 0 differenze
+/// sui `.c` di produzione) — che era la preoccupazione esplicita del test
+/// `c_crate_gates_default_off_in_this_process`.
 fn c_goto_removal_enabled() -> bool {
-    matches!(std::env::var("RUSTRE_C_GOTO_REMOVAL").as_deref(), Ok("1") | Ok("true"))
+    !matches!(std::env::var("RUSTRE_C_GOTO_REMOVAL").as_deref(), Ok("0") | Ok("false"))
 }
 
 /// Rete testuale (AssignmentCollapser/CastNormalizer/DeadCodeRemover/
@@ -29203,6 +29384,58 @@ impl DecompilerPass for IlAnalysisPass {
                 // if/else/while instead of the flat `if (c) goto X;` stream
                 // the plain `lift` linearisation produced (audit quick-win #3:
                 // 100+ gotos per function on the MCP HLIL path).
+                // ── #6730: elisione del PROLOGO/EPILOGO su path B ────────────
+                //
+                // GATE `RUSTRE_HLIL_PROLOGUE`, opt-in.
+                //
+                // Il lift LLIL→MLIL espande `push`/`pop` nelle loro due meta'
+                // (`rustre-il-mlil/src/lib.rs:448-489`):
+                //     push src -> [ Assign{sp, sp - size}, Store{[sp], src} ]
+                //     pop dest -> [ Assign{dest, Load[sp]}, Assign{sp, sp + size} ]
+                // Path B le stampa tutte, e il risultato e' un prologo SIMULATO
+                // a mano in testa a ogni funzione:
+                //     var_sp = (var_sp - 8);
+                //     *(__int64 *)var_sp = v1;
+                //     ... x8
+                //
+                // MISURATO sui 3 bucket rigenerati (143 funzioni): **1575
+                // occorrenze di `var_sp`** contro **0** su path A — il divario
+                // piu' grande fra i due percorsi su questo corpus, tre volte i
+                // temporanei (492) e quattro volte i flag (442).
+                //
+                // Path A lo risolve con `collapse_stack_frame` (filtro su
+                // `rsp = rsp ± N`); qui si fa la cosa equivalente sul MLIL, che
+                // e' dove l'informazione e' ancora strutturata invece che
+                // testuale.
+                //
+                // Si eliminano SOLO le tre forme sopra, riconosciute per
+                // struttura: un'assegnazione a `sp` la cui sorgente e'
+                // `sp ± costante`, e le Store/Load a un `StackPointer` NUDO
+                // (senza offset) — che e' esattamente cio' che `push`/`pop`
+                // producono, mentre gli accessi a variabili locali passano da
+                // `sp + K` e restano.
+                // ⛔ #6730 RITIRATA — vedi STATUS §51. Qui c'era un filtro sui
+                // blocchi MLIL che rimuoveva le forme di `push`/`pop`
+                // (`Assign{sp, sp±K}`, `Store{[sp],reg}`, `Assign{reg,Load[sp]}`).
+                //
+                // Due ragioni per ritirarla, entrambe MISURATE:
+                //
+                // 1. **Esisteva già**: `drop_stack_pointer_traffic`, gate
+                //    `RUSTRE_HLIL_NOPROLOGUE` (piu' sotto in questo file), fa lo
+                //    stesso lavoro. Non l'avevo trovata perche' e' un gate dentro
+                //    il monolite e non un modulo di crate — e i gate
+                //    `RUSTRE_HLIL_*` sono QUARANTOTTO.
+                // 2. **Faceva peggio**. Su 143 funzioni, a parita' di `var_sp`
+                //    azzerati: dati materializzati (`static uint8_t off_…[]`)
+                //    125 -> **104** (ne perdeva 21, fra cui le stringhe di errore
+                //    di `_matherr`), e `sp` nudi 676 -> **691**. Il filtro
+                //    rimuoveva anche `Store`/`Load` a stack pointer nudo che NON
+                //    sono `push`/`pop`, e con essi i riferimenti ai dati.
+                //
+                // La lezione, per chi legge: prima di implementare, ENUMERARE i
+                // gate esistenti (`grep -o 'RUSTRE_[A-Z_]*'`). In questo repo la
+                // funzionalita' vive spesso come gate spento dentro `lib.rs`, non
+                // come modulo separato.
                 let mut hlil_func =
                     rustre_il_hlil::MlilToHlilLifter::default().lift_structured(&mlil_func);
 
@@ -29636,12 +29869,26 @@ impl DecompilerPass for IlAnalysisPass {
                     let hlil_pseudo_code = cast_hlil_integer_derefs(&hlil_pseudo_code);
                     // #5250: via il traffico di prologo/epilogo su `var_sp`
                     // (difetto di CORRETTEZZA: scrittura attraverso un
-                    // puntatore mai inizializzato, 57% del corpus). Opt-in.
+                    // puntatore mai inizializzato, 57% del corpus).
+                    //
+                    // DEFAULT-ON dal 2026-08-18 (#6780); si spegne con
+                    // `RUSTRE_HLIL_NOPROLOGUE=0`.
+                    //
+                    // E' rimasta opt-in mentre il difetto che ripara era gia'
+                    // descritto qui come «di CORRETTEZZA». Misurato in
+                    // ISOLAMENTO sul corpus intero (11342 file per lato, unico
+                    // gate acceso oltre a `RUSTRE_HLIL`):
+                    //   `var_sp`   134462 -> **0**
+                    //   righe      1028886 -> 929656  (−99230, −9,6%)
+                    //   goto / JUMPOUT / `var_tmp*` / `flag_` / dati: IDENTICI
+                    //   comportamento: 15 AGREE / 4 LINK_FAIL, identico
+                    //                  funzione per funzione (19/19)
+                    // Un solo contatore si muove, va a zero, e nulla peggiora.
                     let hlil_pseudo_code = drop_stack_pointer_traffic(
                         &hlil_pseudo_code,
-                        matches!(
+                        !matches!(
                             std::env::var("RUSTRE_HLIL_NOPROLOGUE").as_deref(),
-                            Ok("1") | Ok("true")
+                            Ok("0") | Ok("false")
                         ),
                     );
                     // #5180: subito DOPO il cast a puntatore, perche' e' quello
@@ -29779,11 +30026,20 @@ impl DecompilerPass for IlAnalysisPass {
                     // Un salto a una coda lineare che finisce in `return` prende
                     // una COPIA della coda. PRIMA di `drop_unused_hlil_labels`,
                     // che raccoglie le etichette rimaste senza ingressi.
+                    // DEFAULT-ON dal 2026-08-18 (#6790); si spegne con
+                    // `RUSTRE_HLIL_TAILDUP=0`.
+                    //
+                    // Isolato sul corpus intero: `goto` 11266 -> **9566**
+                    // (−1700, −15,1%), il piu' grande calo di salti misurato su
+                    // un singolo gate. Costo: righe +4666, cioe' **2,7 righe per
+                    // goto rimosso** — coerente con il rapporto 3,1 documentato
+                    // come il migliore su questo fronte. Dati, `JUMPOUT` e
+                    // `var_sp` invariati; path A invariato.
                     let hlil_pseudo_code = duplicate_return_tails(
                         &hlil_pseudo_code,
-                        matches!(
+                        !matches!(
                             std::env::var("RUSTRE_HLIL_TAILDUP").as_deref(),
-                            Ok("1") | Ok("true")
+                            Ok("0") | Ok("false")
                         ),
                     );
                     // Labels the dropped jumps were the last reference to.
@@ -35513,17 +35769,34 @@ mod tests {
     }
 
     #[test]
-    fn indirect_jumpout_raised_to_tail_call_only_for_plain_identifiers() {
+    fn indirect_jumpout_raised_to_tail_call_for_identifiers_and_memory() {
+        // Questo test asseriva che la forma di MEMORIA restasse grezza, e
+        // contraddiceva il codice di #6620, che la solleva (`plain || mem`).
+        // Contraddizione interna a HEAD, non introdotta da una modifica: il
+        // test codificava l'intento piu' stretto della prima stesura.
+        //
+        // Vince il codice, per due ragioni:
+        // * semantica — `jmp [rax]` E' una chiamata di coda indiretta, e
+        //   `return (*rax)();` ne e' la resa esatta: si salta alla funzione il
+        //   cui indirizzo sta in memoria all'indirizzo in `rax`;
+        // * misura — il ramo di memoria e' cio' che porta i `JUMPOUT` emessi
+        //   da 18 a 0. Toglierlo li rifa' comparire.
+        //
+        // Resta grezzo `off_…`: la' l'operando e' un simbolo di DATO, e
+        // chiamarlo produrrebbe una dichiarazione implicita.
         use std::collections::HashSet;
         let labels = HashSet::new();
         let mut stmts = vec![
-            CfsStatement::Raw("JUMPOUT(v1);".into()),    // register/local → call
-            CfsStatement::Raw("JUMPOUT(*rax);".into()),  // memory → untouched
-            CfsStatement::Raw("JUMPOUT(off_140003000);".into()), // thunk path
+            CfsStatement::Raw("JUMPOUT(v1);".into()),    // registro/locale → chiamata
+            CfsStatement::Raw("JUMPOUT(*rax);".into()),  // memoria → chiamata indiretta
+            CfsStatement::Raw("JUMPOUT(off_140003000);".into()), // simbolo di dato → intatto
         ];
         rewrite_tail_call(&mut stmts, &labels);
         assert!(matches!(&stmts[0], CfsStatement::Return(Some(s)) if s == "v1()"), "{stmts:?}");
-        assert!(matches!(&stmts[1], CfsStatement::Raw(s) if s == "JUMPOUT(*rax);"));
+        assert!(
+            matches!(&stmts[1], CfsStatement::Return(Some(s)) if s == "(*rax)()"),
+            "{stmts:?}"
+        );
         assert!(matches!(&stmts[2], CfsStatement::Raw(s) if s == "JUMPOUT(off_140003000);"));
     }
 
@@ -44779,13 +45052,27 @@ mod c_crate_wiring_tests {
     /// Con la variabile NON impostata (stato di questo processo di test, salvo
     /// che qualcuno la esporti) i wrapper devono leggere OFF: e' la garanzia
     /// che il default non cambia ne' il path B ne' il path A.
+    /// ⚠ #6790 — questo test asseriva che `RUSTRE_C_GOTO_REMOVAL` fosse SPENTO
+    /// per difetto. Il commento sopra dice pero' che cio' che si vuole garantire
+    /// e' un altro: «il default non cambia ne' il path B ne' il path A».
+    ///
+    /// Sono due cose diverse, e la seconda e' quella che conta. Misurato sul
+    /// corpus intero, accendere il gate lascia path A **identico byte per byte**
+    /// (`diff -rq`, 0 differenze sui `.c`) e migliora solo path B
+    /// (`goto` −263). Il gate e' quindi ora DEFAULT-ON e il test asserisce la
+    /// garanzia vera invece della sua vecchia approssimazione.
+    ///
+    /// `RUSTRE_C_POSTPROCESS` resta opt-in e continua a essere verificato.
     #[test]
-    fn c_crate_gates_default_off_in_this_process() {
+    fn c_crate_gates_hanno_il_default_misurato() {
         if std::env::var("RUSTRE_C_GOTO_REMOVAL").is_err() {
-            assert!(!c_goto_removal_enabled());
+            assert!(
+                c_goto_removal_enabled(),
+                "default-ON dal 2026-08-18: path A invariato, path B -263 goto"
+            );
         }
         if std::env::var("RUSTRE_C_POSTPROCESS").is_err() {
-            assert!(!c_postprocess_enabled());
+            assert!(!c_postprocess_enabled(), "non ancora misurato: resta opt-in");
         }
     }
 }

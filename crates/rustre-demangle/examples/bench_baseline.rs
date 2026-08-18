@@ -1,13 +1,10 @@
 //! Performance baseline + robustness smoke test for the demangle crate.
 //! Run: cargo run --release -p rustre-demangle --example `bench_baseline`
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::items_after_statements,
-    reason = "benchmark harness: stat math tolerates lossy casts"
-)]
 
 use std::time::Instant;
+
+/// Iterations of the throughput loop over the whole corpus.
+const ITERS: usize = 20_000;
 
 const CORPUS: &[&str] = &[
     "_ZN3foo3barEv",
@@ -37,6 +34,23 @@ const fn lcg(state: &mut u64) -> u64 {
     *state
 }
 
+/// `usize` → `f64` for the display-only ratios below, without a lossy cast.
+///
+/// The value is split into two 32-bit halves, each of which `f64::from`
+/// converts exactly; scaling the high half by 2^32 is exact, so the single
+/// rounding in the final addition is the same rounding a correct `x as f64`
+/// would perform. The result is therefore bit-identical to the cast it
+/// replaces, for every input, and the function is total.
+fn to_f64(x: usize) -> f64 {
+    const TWO_POW_32: f64 = 4_294_967_296.0;
+    // None of these conversions can fail: `usize` is at most 64 bits, and both
+    // halves are masked/shifted down to 32.
+    let wide = u64::try_from(x).unwrap_or(u64::MAX);
+    let hi = u32::try_from(wide >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(wide & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(TWO_POW_32, f64::from(lo))
+}
+
 fn main() {
     // Robustness: adversarial inputs must not panic or hang.
     let adversarial: Vec<String> = {
@@ -56,9 +70,12 @@ fn main() {
         ];
         let mut st = 0x9e37_79b9_7f4a_7c15_u64;
         for _ in 0..2000 {
-            let len = (lcg(&mut st) % 64) as usize + 1;
+            // Cannot fail: the modulo bounds the value at 63.
+            let len = usize::try_from(lcg(&mut st) % 64).unwrap_or(0) + 1;
             let s: String = (0..len)
-                .map(|_| (lcg(&mut st) % 94 + 33) as u8 as char)
+                // Cannot fail: the modulo keeps the value inside 33..=126,
+                // i.e. printable ASCII, so the byte is always a valid `char`.
+                .map(|_| char::from(u8::try_from(lcg(&mut st) % 94 + 33).unwrap_or(b'?')))
                 .collect();
             v.push(format!("_Z{s}"));
             v.push(format!("?{s}"));
@@ -78,7 +95,6 @@ fn main() {
     );
 
     // Throughput baseline over representative corpus.
-    const ITERS: usize = 20_000;
     let t = Instant::now();
     let mut ok = 0usize;
     for _ in 0..ITERS {
@@ -94,8 +110,8 @@ fn main() {
         "throughput: {} calls in {:?} -> {:.0} calls/s ({} demangled ok, {:.1}%)",
         total,
         el,
-        total as f64 / el.as_secs_f64(),
+        to_f64(total) / el.as_secs_f64(),
         ok,
-        100.0 * ok as f64 / total as f64
+        100.0 * to_f64(ok) / to_f64(total)
     );
 }

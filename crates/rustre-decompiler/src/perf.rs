@@ -52,11 +52,16 @@ pub const NAMES: [&str; N_STAGES] = [
     "emit_outputs(io)",
 ];
 
-static COUNTERS: [AtomicU64; N_STAGES] = {
-    #[allow(clippy::declare_interior_mutable_const)]
-    const Z: AtomicU64 = AtomicU64::new(0);
-    [Z; N_STAGES]
-};
+/// Per-stage counters.
+///
+/// ⚠ Built with an inline `const` block rather than the older
+/// `const Z: AtomicU64 = ...; [Z; N]` trick, which needed an
+/// `#[allow(clippy::declare_interior_mutable_const)]`. That lint is not
+/// pedantry: a `const` holding an `AtomicU64` is *copied* at every use site, so
+/// a reader who reached for `Z` elsewhere would get a fresh, unshared counter
+/// and increments would silently vanish. `[const { .. }; N]` evaluates the
+/// initialiser per element with no reusable name to misuse.
+static COUNTERS: [AtomicU64; N_STAGES] = [const { AtomicU64::new(0) }; N_STAGES];
 
 static ENABLED: OnceLock<bool> = OnceLock::new();
 static PASS_ENABLED: AtomicBool = AtomicBool::new(false);

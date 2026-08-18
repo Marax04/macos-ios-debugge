@@ -27,6 +27,8 @@
 //! the actual numbers; this only asserts they have not collapsed.
 
 use std::path::{Path, PathBuf};
+
+use rustre_flirt_apply::usize_to_f64;
 use std::time::{Duration, Instant};
 
 fn repo_root() -> PathBuf {
@@ -97,8 +99,7 @@ fn scanning_throughput_has_not_collapsed() {
 
     assert!(scanned > 100_000, "solo {scanned} byte scansionati: test vacuo");
 
-    #[allow(clippy::cast_precision_loss)]
-    let mbs = (scanned as f64 / (1024.0 * 1024.0)) / elapsed.as_secs_f64().max(1e-9);
+    let mbs = (usize_to_f64(scanned) / (1024.0 * 1024.0)) / elapsed.as_secs_f64().max(1e-9);
     eprintln!("scan: {scanned} byte in {elapsed:?} = {mbs:.1} MB/s");
 
     // Measured at 235 MB/s. 10 MB/s is ~23x slower: reachable only by a

@@ -59,8 +59,41 @@ impl IosClassDumperSwiftTool { #[must_use] pub fn definition() -> ToolDefinition
 #[async_trait] impl ToolHandler for IosClassDumperSwiftTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let h = args.get("hex").and_then(Value::as_str).ok_or_else(|| McpError::InvalidParams("missing 'hex'".into()))?; let b = __ios_hex_decode(h)?; let r = rustre_mobile_ios::IosClassDumper::extract_swift_types(&b); Ok(ToolResult::text(json!({"swift_types":r,"source":"rustre_mobile_ios::IosClassDumper::extract_swift_types"}).to_string())) } }
 
 pub struct IosIpaBundleMockTool;
-impl IosIpaBundleMockTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "ios_ipa_bundle_mock_wire".to_string(), description: "rustre_mobile_ios::IpaBundle::mock summary".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for IosIpaBundleMockTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let b = rustre_mobile_ios::IpaBundle::mock(); Ok(ToolResult::text(json!({"bundle_id":b.info.bundle_id,"framework_count":b.framework_count(),"is_debuggable":b.is_debuggable(),"system_frameworks":b.system_frameworks().len(),"source":"rustre_mobile_ios::IpaBundle::mock"}).to_string())) } }
+impl IosIpaBundleMockTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "ios_ipa_bundle_mock_wire".to_string(), description: "Summarise a real .ipa: bundle id, framework count, debuggable flag, system frameworks from the executable's LC_LOAD_DYLIB commands.".to_string(), input_schema: json!({"type":"object","properties":{"path":{"type":"string","description":"Path to the .ipa to analyse"},"use_reference_fixture":{"type":"boolean","description":"Summarise the built-in reference bundle instead. Output is labelled is_reference_fixture."}},"required":["path"]}), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for IosIpaBundleMockTool {
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        // ⚠ This declared no arguments and reported `IpaBundle::mock()`, so a
+        // client asking for an app's bundle id, framework count and debuggable
+        // flag received the built-in reference bundle's. The crate gained
+        // `from_ipa_bytes`, which parses the real Info.plist, the real
+        // Frameworks/ members and the executable's LC_LOAD_DYLIB commands, so
+        // the tool now answers about the caller's file.
+        let (b, is_reference_fixture) =
+            if args.get("use_reference_fixture").and_then(Value::as_bool) == Some(true) {
+                (rustre_mobile_ios::IpaBundle::mock(), true)
+            } else {
+                let path = args.get("path").and_then(Value::as_str).ok_or_else(|| {
+                    McpError::InvalidParams(
+                        "'path' is required: the .ipa to summarise. Pass                          \"use_reference_fixture\": true for the built-in bundle."
+                            .to_string(),
+                    )
+                })?;
+                let bytes = std::fs::read(path)
+                    .map_err(|e| McpError::ToolError(format!("cannot read '{path}': {e}")))?;
+                let bundle = rustre_mobile_ios::IpaBundle::from_ipa_bytes(&bytes)
+                    .map_err(|e| McpError::ToolError(format!("'{path}' is not a parsable IPA: {e}")))?;
+                (bundle, false)
+            };
+        Ok(ToolResult::text(json!({
+            "bundle_id": b.info.bundle_id,
+            "framework_count": b.framework_count(),
+            "is_debuggable": b.is_debuggable(),
+            "system_frameworks": b.system_frameworks().len(),
+            "is_reference_fixture": is_reference_fixture,
+            "source": "rustre_mobile_ios::IpaBundle (supplied by the caller)"
+        }).to_string()))
+    }
+}
 
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     vec![

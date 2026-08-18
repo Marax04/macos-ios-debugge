@@ -14,7 +14,7 @@
 //! suite cannot silently become vacuous.
 
 mod msvc_oracle;
-use msvc_oracle::{normalise, reference};
+use msvc_oracle::{compare, normalise, reference};
 
 /// MSVC symbols spanning free functions, member functions with access
 /// specifiers and cv-qualifiers, ctors/dtors, operators, data symbols,
@@ -122,5 +122,23 @@ fn corpus_is_accepted_by_the_reference() {
         accepted * 100 >= MSVC_CORPUS.len() * 95,
         "only {accepted}/{} corpus symbols accepted by msvc-demangler — the differential suite is going vacuous",
         MSVC_CORPUS.len()
+    );
+}
+
+/// The oracle's one-shot [`compare`] must reach the same verdict as the
+/// explicit `reference`/`normalise` comparison above.
+///
+/// Running it here also keeps every item of the shared oracle module exercised
+/// by this target and not only by the generative suite, which is what the
+/// module's former blanket `dead_code` exemption was standing in for.
+#[test]
+fn shared_compare_helper_agrees_on_the_fixed_corpus() {
+    let failures: Vec<String> = MSVC_CORPUS.iter().filter_map(|s| compare(s).err()).collect();
+    assert!(
+        failures.is_empty(),
+        "{} of {} corpus symbols diverge from the reference via `compare`:\n{}",
+        failures.len(),
+        MSVC_CORPUS.len(),
+        failures.join("\n")
     );
 }

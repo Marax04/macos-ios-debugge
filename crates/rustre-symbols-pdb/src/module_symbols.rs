@@ -303,17 +303,53 @@ impl ModuleSymbols {
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
+/// The framing of one CodeView symbol record, as read from its 4-byte header.
+///
+/// Grouping these four values keeps [`dispatch_record`] to three parameters and
+/// makes the framing a single, nameable unit that can be logged or asserted on
+/// as a whole.
+#[derive(Debug, Clone, Copy)]
+struct RecordFrame {
+    /// `S_*` record kind from the record header.
+    rec_type: u16,
+    /// Length of the record payload, i.e. the record length minus its kind field.
+    payload_len: usize,
+    /// Absolute offset of the record header within the module stream.
+    rec_start: usize,
+    /// Absolute offset one byte past the end of this record.
+    payload_end: usize,
+}
+
+/// The mutable state a module-symbol parse threads through every record.
+///
+/// `proc_stack` and `block_stack` model CodeView's `S_*`/`S_END` nesting;
+/// `result` accumulates everything already closed.
+#[derive(Debug, Default)]
+struct ParseState {
+    /// Symbols closed so far.
+    result: ModuleSymbols,
+    /// Procedures opened but not yet terminated by `S_END`.
+    proc_stack: Vec<ProcSymbol>,
+    /// Lexical blocks opened but not yet terminated by `S_END`.
+    block_stack: Vec<LexicalBlock>,
+}
+
 fn dispatch_record(
     rdr: &mut StreamReader<'_>,
-    rec_type: u16,
-    payload_len: usize,
-    rec_start: usize,
-    payload_end: usize,
-    result: &mut ModuleSymbols,
-    proc_stack: &mut Vec<ProcSymbol>,
-    block_stack: &mut Vec<LexicalBlock>,
+    frame: RecordFrame,
+    state: &mut ParseState,
 ) -> Result<()> {
+    let RecordFrame {
+        rec_type,
+        payload_len,
+        rec_start,
+        payload_end,
+    } = frame;
+    let ParseState {
+        result,
+        proc_stack,
+        block_stack,
+    } = state;
     match rec_type {
         S_GPROC32 | S_LPROC32 | S_GPROC32_DPC | S_LPROC32_DPC => {
             let sym = parse_proc_record(rdr, rec_type, payload_len)?;
@@ -401,9 +437,11 @@ fn dispatch_record(
 /// Returns an error if parsing/reading fails.
 pub fn parse_module_symbols(data: &[u8]) -> Result<ModuleSymbols> {
     let mut rdr = StreamReader::new(data);
-    let mut result = ModuleSymbols::new();
-    let mut proc_stack: Vec<ProcSymbol> = Vec::new();
-    let mut block_stack: Vec<LexicalBlock> = Vec::new();
+    let mut state = ParseState {
+        result: ModuleSymbols::new(),
+        proc_stack: Vec::new(),
+        block_stack: Vec::new(),
+    };
 
     while rdr.remaining() >= 4 {
         let rec_start = rdr.pos();
@@ -417,13 +455,13 @@ pub fn parse_module_symbols(data: &[u8]) -> Result<ModuleSymbols> {
 
         dispatch_record(
             &mut rdr,
-            rec_type,
-            payload_len,
-            rec_start,
-            payload_end,
-            &mut result,
-            &mut proc_stack,
-            &mut block_stack,
+            RecordFrame {
+                rec_type,
+                payload_len,
+                rec_start,
+                payload_end,
+            },
+            &mut state,
         )?;
 
         // Advance to the next 4-byte aligned record boundary.
@@ -437,6 +475,11 @@ pub fn parse_module_symbols(data: &[u8]) -> Result<ModuleSymbols> {
     }
 
     // Drain any unclosed procedures (malformed stream resilience).
+    let ParseState {
+        mut result,
+        proc_stack,
+        block_stack: _,
+    } = state;
     for proc_sym in proc_stack {
         result.procedures.push(proc_sym);
     }

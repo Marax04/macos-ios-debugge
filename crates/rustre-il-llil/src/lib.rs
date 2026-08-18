@@ -2241,9 +2241,8 @@ fn fold_expr_unmasked(expr: LlilExpr) -> (LlilExpr, u32) {
             if let (Some(vv), Some(sv)) = (v2.is_const(), s2.is_const()) {
                 // Same `& 63` reduction the tuple-form `ShlT` arm applies, so the
                 // two spellings cannot disagree on out-of-range counts either.
-                #[allow(clippy::cast_possible_truncation)]
                 return (
-                    LlilExpr::Const { value: vv.wrapping_shl((sv & 63) as u32), size },
+                    LlilExpr::Const { value: vv.wrapping_shl(shift_count64(sv)), size },
                     c1 + c2 + 1,
                 );
             }
@@ -2355,8 +2354,7 @@ fn fold_expr_unmasked(expr: LlilExpr) -> (LlilExpr, u32) {
                         // `u32::try_from(rv).unwrap_or(u32::MAX)` fallback
                         // turned counts >= 2^32 into a shift by 63 instead —
                         // folding must not change what execution computes.
-                        #[allow(clippy::cast_possible_truncation)]
-                        value: lv.wrapping_shl((rv & 63) as u32),
+                        value: lv.wrapping_shl(shift_count64(rv)),
                         size: s,
                     },
                     c1 + c2 + 1,
@@ -2371,8 +2369,7 @@ fn fold_expr_unmasked(expr: LlilExpr) -> (LlilExpr, u32) {
                 return (
                     LlilExpr::Const {
                         // Count `& 63` to match the interpreter (see ShlT).
-                        #[allow(clippy::cast_possible_truncation)]
-                        value: lv.wrapping_shr((rv & 63) as u32),
+                        value: lv.wrapping_shr(shift_count64(rv)),
                         size: s,
                     },
                     c1 + c2 + 1,
@@ -2390,8 +2387,7 @@ fn fold_expr_unmasked(expr: LlilExpr) -> (LlilExpr, u32) {
                 return (
                     LlilExpr::Const {
                         // Count `& 63` to match the interpreter (see ShlT).
-                        #[allow(clippy::cast_possible_truncation)]
-                        value: signed.wrapping_shr((rv & 63) as u32).cast_unsigned(),
+                        value: signed.wrapping_shr(shift_count64(rv)).cast_unsigned(),
                         size: s,
                     },
                     c1 + c2 + 1,
@@ -3313,16 +3309,13 @@ impl LlilInterpreter {
             // `llil_interpreter::eval_shift_inner` (the crate's executable
             // semantics). The previous `u32::try_from(..).unwrap_or(u32::MAX)`
             // fallback evaluated counts >= 2^32 as a shift by 63 instead.
-            #[allow(clippy::cast_possible_truncation)]
             LlilExpr::ShlT(l, r, s) => {
                 let mask = size_mask(*s);
-                Ok(self.eval_expr(l)?.wrapping_shl((self.eval_expr(r)? & 63) as u32) & mask)
+                Ok(self.eval_expr(l)?.wrapping_shl(shift_count64(self.eval_expr(r)?)) & mask)
             }
-            #[allow(clippy::cast_possible_truncation)]
             LlilExpr::Shr(l, r, _) => {
-                Ok(self.eval_expr(l)?.wrapping_shr((self.eval_expr(r)? & 63) as u32))
+                Ok(self.eval_expr(l)?.wrapping_shr(shift_count64(self.eval_expr(r)?)))
             }
-            #[allow(clippy::cast_possible_truncation)]
             LlilExpr::Sar(l, r, s) => {
                 // Sign-extend from the OPERAND width first: a sub-64-bit
                 // negative (0x8000_0000 as i32) must shift in ones, not the
@@ -4622,6 +4615,19 @@ impl LlilConcreteInterpreter {
 
 // ── eval_concrete and its sub-helpers ────────────────────────────────────────
 
+/// Reduce a shift count to the 0..=63 range the x86 shift instructions use.
+///
+/// Decides what a shift by an out-of-range count means: the count is masked
+/// `& 63` exactly as `llil_interpreter::eval_shift_inner` masks it, so constant
+/// folding and execution cannot disagree. The masked value is at most 63, so
+/// the conversion to `u32` is exact and no shift count is ever silently
+/// truncated from a 64-bit value.
+#[inline]
+#[must_use]
+pub fn shift_count64(count: u64) -> u32 {
+    u32::try_from(count & 63).unwrap_or(63)
+}
+
 /// Sign-extend a `u64` value from `size` bits to 64 bits.
 fn sign_extend64(value: u64, size: Size) -> i64 {
     // `Size` includes OWord/YWord/ZWord (128/256/512 bits), so `size.bits()`
@@ -4641,8 +4647,13 @@ fn sign_extend64(value: u64, size: Size) -> i64 {
         // sign bit to propagate into — reinterpret it as-is.
         return value.cast_signed();
     }
-    #[allow(clippy::cast_possible_truncation)]
-    let shift = 64u32 - bits as u32;
+    // `bits < 64` is proven by the early return above, so the conversion is
+    // exact; if it ever failed, the value is passed through unchanged rather
+    // than shifted by a truncated count.
+    let Ok(bits32) = u32::try_from(bits) else {
+        return value.cast_signed();
+    };
+    let shift = 64u32 - bits32;
     (value.cast_signed() << shift) >> shift
 }
 

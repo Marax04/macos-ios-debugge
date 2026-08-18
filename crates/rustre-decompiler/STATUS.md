@@ -3688,4 +3688,2078 @@ viene sottoposto alla metrica comportamentale.
 
 ---
 
+# Round 46 — 2026-08-18 — ⭐⭐ DUE SU DUE: path B calcola giusto anche `count_set_flags`
+
+## 46.1 Il secondo DIVERGE, verificato leggendo il codice
+
+**PATH A** (§11): `a1` promosso a `__int64 *`, poi
+```c
+v3 = *(a1 + count*4);   // a1 e' __int64* -> offset = count*4*8 = count*32 BYTE
+```
+Doppio scalamento ×32, e lettura di 8 byte dove il sorgente ne legge 4.
+Esiti: atteso 3/0/12, emesso 2/4/4. **DIVERGE.**
+
+**PATH B**:
+```c
+v3 = (uint64_t)(uint32_t)*(uint32_t *)(a1 + (v1 * 4));
+```
+- `*(uint32_t *)` — legge **4 byte**, tipizzato;
+- `a1` e' un **intero** (`uint64_t`), quindi `a1 + v1*4` e' aritmetica in **byte**:
+  offset = i×4. **Corretto.**
+
+Anche la logica dei flag regge: `v2 - (-1 + flag_cf)` con
+`flag_cf = ((uint32_t)v4 < 1)`, cioe' `v2 + 1 - (v4 == 0)` = `v2 + (v4 != 0)`.
+È esattamente `if (v & FLAG) total++`.
+
+## 46.2 Bilancio sui DIVERGE con causa dimostrata
+
+| funzione | causa (path A) | path A | path B |
+|---|---|---|---|
+| `my_strlen` (§8) | elemento puntatore 8 invece di 1 | DIVERGE | **corretta** |
+| `count_set_flags` (§11) | elemento 8 invece di 4, ×32 | DIVERGE | **corretta** |
+
+**Due su due.** Verificati leggendo il codice emesso, senza attendere l'harness.
+
+## 46.3 La ragione è STRUTTURALE, non fortuita
+
+**Path B non promuove mai a puntatore tipizzato.** Tiene l'indirizzo come intero
+e mette il cast sull'**accesso**, con la larghezza che il MLIL ha già tipizzata.
+Non esiste uno scalamento implicito da sbagliare.
+
+Path A invece deve *indovinare* il tipo dell'elemento, e quando sbaglia ogni
+`++`/`+K` successivo viene scalato di conseguenza. È lo stesso difetto in due
+casi diversi, e ce ne saranno altri: la classe è «puntatore promosso con tipo
+sbagliato», e path A la produce per costruzione.
+
+## 46.4 Ciò che rende il confronto onesto
+
+Path B è **peggiore sulla forma** e va detto: `var_tmp0` ovunque, flag esposti
+(`flag_cf`), nessun `char *`, nomi di variabile anonimi. Su `count_set_flags`
+emette 12 righe dove path A ne emette 8.
+
+Ma la leggibilita' si recupera cablando i crate (propagazione delle copie,
+fusione dei flag, structuring, nomi) — è la lista di §1.4. La **correttezza** di
+path A su questa classe non si recupera: l'informazione è distrutta prima
+(§43.4).
+
+## 46.5 Conclusione operativa
+
+L'obiettivo dell'utente («path B unico») ha ora due prove indipendenti su
+comportamenti misurati, non su ispezione architetturale. La domanda non è più
+*se* commutare, ma *quando*: cioè quando path B avra' recuperato la forma.
+
+E la forma è esattamente ciò che si ottiene cablando i crate inutilizzati — che è
+l'altra metà della stessa direttiva.
+
+---
+
+# Round 47 — 2026-08-18 — 🔬 PRIMA misura comportamentale di PATH B
+
+## 47.1 I numeri grezzi
+
+Stesso snapshot (3 bucket rigenerati con `RUSTRE_HLIL=1`), stesso harness,
+stessa specifica:
+
+| | path A | path B |
+|---|---|---|
+| funzioni testate | 53 | 53 |
+| AGREE | 11 (20,8%) | **10 (18,9%)** |
+| **CRASH** | **12** | **0** |
+| **DIVERGE** | **10** | **0** |
+| LINK_FAIL | 17 | **2** |
+| COMPILE_FAIL | 3 | 0 |
+| NOT_EMITTED | 0 | **41** |
+
+## 47.2 ⚠ Perché questo confronto NON è alla pari — dirlo prima dei numeri
+
+I **41 `NOT_EMITTED`** sono un artefatto dell'esperimento: ho rigenerato con
+`RUSTRE_HLIL=1` solo `sample11_c`, `sample6_c` e `sample1`. I bucket restanti
+(quelli con `out_dir` proprio in `behav/out`, cioè le varianti O0/O2 di Go, Rust
+e C++) **non hanno `.hlil.c`**, quindi path B non poteva che riportare
+`NOT_EMITTED`.
+
+Peggio: i tre bucket rigenerati sono i **C semplici**, mentre i 53 di path A
+includono Go, Rust e C++ — che sono i casi duri. **Il sottoinsieme su cui path B
+è stato valutato è più facile**, e leggere «zero DIVERGE» come una vittoria
+sarebbe esattamente l'errore che questo STATUS documenta otto volte.
+
+## 47.3 Cosa si può dire onestamente ORA
+
+Sul sottoinsieme che path B ha emesso (53 − 41 = **12 funzioni**):
+**10 AGREE, 2 LINK_FAIL, zero CRASH, zero DIVERGE.**
+
+Questo è coerente — ma non equivalente — con la verifica per lettura dei §44 e
+§46, dove path B calcolava correttamente `my_strlen` e `count_set_flags`, i due
+DIVERGE di path A con causa dimostrata.
+
+## 47.4 La misura corretta, in corso
+
+Rilanciate entrambe con `--json-out` per avere lo **stato per funzione**, così il
+confronto si fa **sull'intersezione** — le stesse funzioni, emesse da entrambi i
+percorsi. È l'unico confronto che significhi qualcosa.
+
+Da riportare quando disponibile:
+- per ciascuna delle 12 funzioni comuni: stato A vs stato B;
+- in particolare `my_strlen` e `count_set_flags`, dove path A ha DIVERGE
+  dimostrati e path B dovrebbe avere AGREE.
+
+## 47.5 Nota di metodo
+
+Questa misura non esisteva prima di oggi: `behavior.py` leggeva solo path A per
+costruzione (§45.1). Il primo dato è incoraggiante ma **non conclusivo**, e la
+differenza fra le due cose va tenuta esplicita — soprattutto quando il dato va
+nella direzione che si sperava.
+
+---
+
+# Round 48 — 2026-08-18 — Baseline FRESCA del divario path B, su corpus controllato
+
+## 48.1 La misura
+
+Tre bucket rigenerati con `RUSTRE_HLIL=1` (`sample11_c`, `sample6_c`,
+`sample1`), 143 funzioni, **stesso binario del decompilatore per entrambi i
+percorsi** — quindi il confronto è pulito.
+
+| difetto | path B | path A |
+|---|---|---|
+| **`var_sp`** (prologo/epilogo simulato) | **1575** | 0 |
+| `var_tmp0` (temporanei non propagati) | 492 | 0 |
+| `flag_*` (flag esposti) | 442 | 0 |
+| `goto` | 76 | 0 |
+| `JUMPOUT` | **0** | 0 |
+
+## 48.2 Due letture
+
+**`JUMPOUT` è già a zero anche su path B.** La correzione #6620 (§20.2) agisce su
+entrambi i percorsi — non era scontato, e vale la pena saperlo prima di
+riaffrontare quel fronte.
+
+**Il divario maggiore non è dove il §1.4 lo collocava.** Sulla scala di questo
+corpus, `var_sp` (1575) è **tre volte** i temporanei e **quattro volte** i flag.
+Il §1.4, misurato sullo snapshot 07-23 dell'intero corpus, dava un ordine
+diverso (`var_tmp0` 9497 > `goto` 7447 > `var_sp` 6382): le proporzioni cambiano
+col campione, e su questi tre bucket il prologo domina.
+
+⚠ Nota: i due campioni non sono confrontabili in assoluto (143 funzioni contro
+11144). Ciò che conta qui è l'**ordine relativo** su un corpus misurato ORA con
+il binario ORA.
+
+## 48.3 Priorità per la parità di path B
+
+| # | intervento | bersaglio | crate |
+|---|---|---|---|
+| 1 | elisione prologo/epilogo | **1575 `var_sp`** | `analysis-fn::analyze_stack_frame` (mai chiamato) |
+| 2 | propagazione delle copie | 492 `var_tmp0` | `il-passes::CopyPropagationPass` (mai eseguito) |
+| 3 | fusione dei flag | 442 `flag_*` | SSA MLIL (`into_ssa`, spenta) + `DeadStoreElimination` |
+| 4 | structuring | 76 `goto` | `hlil_structuring`, `LoopStructurer` |
+
+La voce 1 è anche quella con il design già chiuso dal §1.8: `Push`/`Pop` sono
+istruzioni LLIL di prima classe, `calling_convention_db` ha già la lista dei
+callee-saved per win64, e il punto d'aggancio è prima di `build_mlil_cfg`.
+
+## 48.4 Perché questa baseline vale
+
+È la prima misura del divario path B fatta con il binario corrente e su un
+corpus che controllo, quindi è utilizzabile come **"before"** per il lavoro di
+cablaggio — a differenza dei numeri del §1.4, che vengono da uno snapshot di
+luglio e da un albero diverso.
+
+---
+
+# Round 49 — 2026-08-18 — ⭐⭐⭐ PATH B RADDOPPIA GLI AGREE, ZERO REGRESSIONI
+
+## 49.1 Il confronto, sull'INTERSEZIONE
+
+Le 12 funzioni emesse da **entrambi** i percorsi, stesso binario del
+decompilatore, stessa specifica, stesso harness:
+
+| | path A | path B |
+|---|---|---|
+| **AGREE** | 5 | **10** |
+| DIVERGE | 3 | **0** |
+| CRASH | 1 | **0** |
+| COMPILE_FAIL | 1 | **0** |
+| LINK_FAIL | 2 | 2 |
+
+**5 migliorate, 0 peggiorate, 7 identiche.**
+
+```
+sample11_c:my_strlen        DIVERGE       -> AGREE
+sample6_c:count_set_flags   DIVERGE       -> AGREE
+sample6_c:apply             DIVERGE       -> AGREE
+sample1:find_max            CRASH         -> AGREE
+sample11_c:punned_bits      COMPILE_FAIL  -> AGREE
+```
+
+## 49.2 Perché è la misura che chiude la questione
+
+I **tre DIVERGE di cui questo STATUS ha dimostrato la causa** diventano tutti
+corretti su path B:
+
+| funzione | causa su path A | §  |
+|---|---|---|
+| `my_strlen` | elemento puntatore 8 byte invece di 1 | §8 |
+| `count_set_flags` | elemento 8 invece di 4, doppio scalamento ×32 | §11 |
+| `apply` | versione sbagliata del registro alla tail call (SSA assente) | §9 |
+
+Più `find_max` (CRASH → AGREE) e `punned_bits` (COMPILE_FAIL → AGREE), due casi
+di cui non avevo indagato la causa.
+
+Non è una coincidenza favorevole: sono esattamente le classi che i §43-§46
+avevano previsto, perché path B **non promuove a puntatore tipizzato** e riceve
+il MLIL con le larghezze già tipizzate.
+
+## 49.3 Cosa NON dice questa misura
+
+- **Campione piccolo**: 12 funzioni. Non è il corpus.
+- **`LINK_FAIL` identico (2 vs 2)**: la debolezza nota di path B è la
+  COMPLETEZZA, e su questo campione non migliora né peggiora.
+- **Non dice che path B sia pronto**: resta indietro sulla forma (§48: 1575
+  `var_sp`, 492 `var_tmp0`, 442 `flag_*`, 76 `goto` contro 0 di path A).
+- I bucket rigenerati sono i **C semplici**; su Go/Rust/C++ path B non è ancora
+  stato misurato perché non li ho rigenerati con `RUSTRE_HLIL=1`.
+
+## 49.4 Cosa dice, e basta
+
+Sullo stesso insieme di funzioni, con lo stesso strumento, **path B è corretto
+dove path A sbaglia, e non sbaglia dove path A è corretto.** Zero regressioni su
+12 casi.
+
+L'obiettivo «path B unico» smette di essere una scelta architetturale e diventa
+la conclusione di una misura sulla metrica che misura l'obiettivo dichiarato.
+
+Il lavoro che resta è **recuperare la forma**, ed è esattamente la lista dei
+crate inutilizzati (§48.3):
+1. prologo/epilogo — 1575 `var_sp` — `analysis-fn` *(in corso, #6730)*
+2. propagazione copie — 492 `var_tmp0` — `il-passes::CopyPropagationPass`
+3. fusione flag — 442 `flag_*` — SSA MLIL + `DeadStoreElimination`
+4. structuring — 76 `goto` — `hlil_structuring`, `LoopStructurer`
+
+## 49.5 Come riprodurlo
+
+```
+RUSTRE_HLIL=1 dump_decompile.exe bin/<bucket>.exe <dir>/<bucket>
+python behavior.py <dir>              --json-out a.json     # path A
+python behavior.py <dir> --path-b     --json-out b.json     # path B
+python cmp_paths.py a.json b.json                            # intersezione
+```
+`cmp_paths.py` confronta **solo** le funzioni emesse da entrambi: i
+`NOT_EMITTED` di path B sono un artefatto dei bucket non rigenerati e non
+dicono nulla sulla sua qualita'.
+
+---
+
+# Round 50 — 2026-08-18 — ✅ PROLOGO ELISO SU PATH B: `var_sp` 1575 → 0
+
+## 50.1 Cosa ho cablato (#6730)
+
+`e_movimento_di_prologo` — riconosce per STRUTTURA le tre forme che il lift
+LLIL→MLIL produce da `push`/`pop`
+(`rustre-il-mlil/src/lib.rs:448-489`):
+
+| forma | origine |
+|---|---|
+| `Assign{sp, sp ± K}` | aggiustamento del puntatore di stack |
+| `Store{[sp], reg}` | il payload del `push` |
+| `Assign{reg, Load[sp]}` | il payload del `pop` |
+
+Applicata ai blocchi MLIL prima di `lift_structured`, gate
+`RUSTRE_HLIL_PROLOGUE` (opt-in).
+
+La discriminante di sicurezza è **«sp NUDO»**: gli accessi alle variabili locali
+passano da `sp + K` (un `Add`) e restano; solo `push`/`pop` indirizzano il
+puntatore di stack senza offset.
+
+## 50.2 Un difetto mio, trovato con la sonda
+
+Prima versione: cercavo solo `MlilExpr::StackPointer`. Il filtro girava su 49
+funzioni e **non rimuoveva nulla**, nemmeno su corpi da 322 istruzioni.
+
+Causa: passate successive riscrivono `StackPointer` nella variabile `sp`
+versionata — il crate lo documenta («SSA versions instead of all aliasing a bare
+`StackPointer` address»). Aggiunto il riconoscimento di
+`MlilExpr::Var { var.name == "sp" }`.
+
+Senza la sonda `[HLIL-PROLOGUE]` che stampa `prima -> dopo`, avrei concluso che
+la regola era sbagliata invece che incompleta.
+
+## 50.3 Il risultato
+
+Tre bucket, 143 funzioni:
+
+| difetto | prima | dopo |
+|---|---|---|
+| **`var_sp`** | **1575** | **0** |
+| `var_tmp0` | 492 | 492 |
+| `flag_*` | 442 | 442 |
+| `goto` | 76 | 76 |
+| file `.hlil.c` | 143 | 143 |
+
+**Il divario più grande fra path A e path B su questo corpus è chiuso**, e
+nient'altro si è mosso: il cambiamento è isolato e non ha perso file.
+
+`my_strlen` resta invariata e corretta (non aveva prologo).
+
+## 50.4 Stato della parità path B
+
+| # | voce | prima | ora |
+|---|---|---|---|
+| 1 | prologo/epilogo (`var_sp`) | 1575 | **0** ✅ |
+| 2 | temporanei (`var_tmp0`) | 492 | 492 |
+| 3 | flag esposti (`flag_*`) | 442 | 442 |
+| 4 | `goto` | 76 | 76 |
+| — | `JUMPOUT` | 0 | 0 ✅ (§48.2) |
+
+Due voci su cinque chiuse.
+
+## 50.5 Verifica in corso
+
+`behavior.py --path-b` sul nuovo output, per confermare che i 10 AGREE del §49
+non siano regrediti. **Il conteggio testuale non basta**: togliere istruzioni
+può cambiare il comportamento, ed è esattamente il tipo di cosa che solo
+l'esecuzione rivela.
+
+---
+
+# Round 51 — 2026-08-18 — ⛔ #6730 RITIRATA: duplicava una feature esistente E faceva peggio
+
+## 51.1 Correzione al §50: quel round era sbagliato su due punti
+
+**(a) La funzionalità esisteva già.** `drop_stack_pointer_traffic`, gate
+`RUSTRE_HLIL_NOPROLOGUE` (`lib.rs:29741`), fa lo stesso lavoro sul TESTO.
+Non l'avevo trovata perché è un **gate dentro il monolite**, non un modulo di
+crate — e i gate `RUSTRE_HLIL_*` sono **48**.
+
+**(b) Il mio conteggio era fuorviante.** «`var_sp` 1575 → 0» era vero ma non
+significava «prologo eliso»: il traffico di stack restava, reso con il nome `sp`
+invece di `var_sp`. Contando entrambe le forme:
+
+| | `var_sp` | `sp` nudo | `switch` | dati materializzati |
+|---|---|---|---|---|
+| nessun gate | 1495 | 676 | 19 | 125 |
+| **`HLIL_NOPROLOGUE`** (esistente) | **0** | 676 | 19 | **125** |
+| `HLIL_PROLOGUE` (#6730, mio) | 0 | **691** | 19 | **104** |
+
+**Il mio filtro perdeva 21 definizioni di dati materializzati**
+(`static uint8_t off_…[]` — fra cui le stringhe di errore di `_matherr`) **e
+aumentava** gli `sp` nudi da 676 a 691.
+
+Le «24 righe in meno» del §50.3, che avevo letto come output più pulito, erano
+**codice perso**.
+
+## 51.2 Perché la verifica comportamentale non l'ha visto
+
+`behavior.py --path-b` dava 10 AGREE identici prima e dopo (§50.5). Corretto e
+inutile: **nessuna delle 12 funzioni del campione è fra quelle danneggiate**.
+`_matherr` non è nel `behavior_spec.json`.
+
+Un verde su un campione che non contiene il caso non è una conferma — è
+[[feedback-verde-non-significa-verificato]] applicato al mio stesso lavoro.
+
+## 51.3 Cosa ho fatto
+
+Rimossi il filtro e la funzione `e_movimento_di_prologo`. Al loro posto un
+commento che registra: la feature esiste già, il mio tentativo faceva peggio, e i
+numeri per cui.
+
+Da usare per la parità di path B: **`RUSTRE_HLIL_NOPROLOGUE=1`**, che azzera i
+`var_sp` senza perdere dati.
+
+## 51.4 L'errore di metodo, che è il risultato più utile del round
+
+Prima di implementare avrei dovuto **enumerare i gate esistenti**:
+```
+grep -rho 'RUSTRE_[A-Z_]*' crates/rustre-decompiler/src crates/rustre-il-hlil/src | sort -u
+```
+Trenta secondi. Ho invece cercato il *componente* nei crate, e in questo repo la
+funzionalità vive spesso come **gate spento dentro `lib.rs`** — che è
+esattamente la struttura che questo STATUS documenta dal §1.1.
+
+Ho passato la sessione a dimostrare che il progetto ha capacità nascoste dietro
+gate spenti, e poi ne ho riscritta una senza controllare.
+
+## 51.5 Stato reale della parità path B
+
+| # | voce | prima | ora | come |
+|---|---|---|---|---|
+| 1 | prologo (`var_sp`) | 1495 | **0** | `RUSTRE_HLIL_NOPROLOGUE` (già esistente) |
+| 2 | temporanei (`var_tmp0`) | 492 | 492 | serve copy propagation |
+| 3 | flag (`flag_*`) | 442 | 442 | serve SSA MLIL |
+| 4 | `goto` | 76 | 76 | serve structuring |
+| — | `JUMPOUT` | 0 | 0 | chiuso (#6620) |
+
+Il guadagno del §50 resta — ma è merito di un gate che c'era già, non mio.
+
+## 51.6 Sui `var_tmp0`: diagnosi corretta, dalla sonda
+
+`RUSTRE_DBG_DEADSTORE=1` mostra che i `var_tmp0` hanno **letture > 0** (1, 5, 6,
+11 a seconda della funzione): **non sono dead store**. La passata di rimozione
+esiste, funziona, e li toglie correttamente solo quando le letture sono zero.
+
+Servono quindi due cose diverse:
+- **copy propagation** (`var_tmp0 = X; … usa(var_tmp0)` → `usa(X)`), che è la
+  voce `il-passes::CopyPropagationPass` della lista utente;
+- non l'eliminazione dei dead store, che è già cablata e già fa il suo lavoro.
+
+⚠ `mlil_dead_store_eliminator` lavora su `MlilStatement`, un tipo **diverso** da
+`MlilInstruction` usato dal decompilatore: è il caso ORFANO (serve un ponte di
+tipi), non INERTE. Distinzione del workflow §28.
+
+---
+
+# Round 52 — 2026-08-18 — 🎯 `RUSTRE_HLIL_CFS`: un solo gate porta path B quasi alla parità
+
+## 52.1 Metodo: prima ENUMERARE, poi implementare (lezione del §51.4)
+
+```
+grep -rhoE "RUSTRE_[A-Z_0-9]+" rustre-decompiler/src rustre-il-hlil/src \
+    rustre-il-mlil/src rustre-il-passes/src | sort -u
+```
+**186 gate.** Candidati espliciti per tutti e tre i difetti rimasti:
+
+| difetto | gate esistenti |
+|---|---|
+| temporanei | `HLIL_EXPR_SIMPLIFY`, `HLIL_DEADTMP`, `HLIL_ZFTEMP`, `HLIL_CMOVFOLD`, `HLIL_DEDUPCAST` |
+| flag | `HLIL_TESTFLAGS`, `HLIL_SFEXPR` |
+| goto | `HLIL_RELOOP`, `HLIL_BAREGOTO`, `HLIL_LOOPWRAP`, `HLIL_SELFLOOP`, `HLIL_CFS` |
+
+Nessuno da implementare: tutti da **accendere e misurare**.
+
+## 52.2 Bisezione, su `sample1`
+
+| configurazione | `var_tmp0` | `flag_` | `goto` | dati | `sp` |
+|---|---|---|---|---|---|
+| base (`NOPROLOGUE`) | 162 | 157 | 26 | 42 | 222 |
+| + gruppo temporanei | 149 | 128 | 26 | 42 | 222 |
+| + gruppo flag | **167** | **158** | 26 | 42 | 222 |
+| + gruppo goto | 48 | 285 | 3 | 20 | 52 |
+
+Poi dentro il gruppo goto, uno per uno:
+
+| gate | `var_tmp0` | `flag_` | `goto` | dati | `sp` |
+|---|---|---|---|---|---|
+| base | 162 | 157 | 26 | 42 | 222 |
+| **`HLIL_CFS`** | **48** | **290** | **3** | **20** | **52** |
+| `HLIL_RELOOP` | 162 | 157 | 26 | 42 | 222 |
+| `HLIL_BAREGOTO` | 162 | 157 | 26 | 42 | 222 |
+| `HLIL_LOOPWRAP` | 162 | 157 | 26 | 42 | 222 |
+| `HLIL_SELFLOOP` | 162 | 157 | 26 | 42 | 222 |
+
+**`RUSTRE_HLIL_CFS` è responsabile di TUTTO** — guadagni e danni. Gli altri
+quattro hanno effetto **zero** da soli: sono sotto-gate che richiedono CFS acceso.
+
+## 52.3 Il bilancio di `HLIL_CFS`
+
+**Guadagni** (tre dei quattro difetti di parità quasi chiusi):
+- `var_tmp0` −70% · `goto` −88% · `sp` nudo −77%
+
+**Danni**:
+- `flag_` +85% (157 → 290)
+- **dati materializzati −52%** (42 → 20)
+
+La perdita di dati è la **stessa classe** per cui ho scartato #6730 (§51.1). È il
+bloccante: un `static uint8_t off_…[]` che sparisce è una stringa che il
+programma ricostruito non ha più.
+
+## 52.4 Il gruppo «flag» è inutile o dannoso
+
+`HLIL_TESTFLAGS` + `HLIL_SFEXPR` peggiorano entrambe le metriche che dovrebbero
+migliorare (`var_tmp0` 162→167, `flag_` 157→158). **Non accenderli.**
+
+## 52.5 Prossimo passo, ben delimitato
+
+Trovare perché `HLIL_CFS` perde i dati materializzati. È un difetto singolo, con
+un guadagno enorme dietro: chiuderlo porterebbe path B da
+`tmp 492 / goto 76 / sp 676` a circa `tmp 150 / goto 8 / sp 154` — cioè **vicino
+alla parità** — mantenendo il vantaggio semantico già dimostrato (§49: 10 AGREE
+contro 5, zero regressioni).
+
+⚠ Da misurare anche l'effetto sui **flag**: +85% è un peggioramento reale, non
+solo un artefatto del conteggio (i flag potrebbero riapparire perche' lo
+structuring li espone invece di fonderli).
+
+## 52.6 Nota
+
+Questo round non ha scritto una riga di codice del decompilatore, e ha portato
+path B più vicino alla parità di tutti i precedenti messi insieme. È la tesi di
+questo STATUS nella sua forma più pura: **la capacità c'è, è spenta**.
+
+---
+
+# Round 53 — 2026-08-18 — ⛔ ANNULLATO il §52: `HLIL_CFS` non migliora, PEGGIORA
+
+## 53.1 La metrica che mancava
+
+Il §52 misurava `var_tmp0`, `goto`, `sp`, `flag_`, dati. **Mancava di contare
+cosa compare AL POSTO** dei nomi spariti:
+
+| | `var_tmp0` | **registri grezzi** (`var_rax`…) | **parametri** `a1..a4` | `switch` | dati |
+|---|---|---|---|---|---|
+| base (`NOPROLOGUE`) | 162 | **0** | **367** | **6** | **42** |
+| `HLIL_CFS` | 48 | **852** | 68 | **0** | 20 |
+
+`HLIL_CFS` **sostituisce 162 temporanei con 852 nomi di registro grezzi**, perde
+**299** usi di parametro, azzera i **6 `switch`** e dimezza i dati materializzati.
+
+## 53.2 Cosa produce davvero
+
+```c
+void _matherr(__int64 a1) {
+    *var_sp = var_rsi;
+    var_rsp = (var_rsp - 120);
+    var_tmp0 = (*(uint32_t *)var_rcx - 6);
+    var_flag_cf = (*(uint32_t *)var_rcx < 6);
+```
+Il parametro `a1` e' dichiarato e **mai usato**: il corpo lavora su `var_rcx`.
+Nessuna mappatura registro→variabile, nessun recupero di `switch`.
+
+`RUSTRE_HLIL_CFS` delega lo structuring a `rustre-decompiler-cfs` **al posto**
+dello structurer HLIL interno, e quel percorso non ha la raffinatura di
+variabili/parametri che l'altro applica. Non e' un miglioramento, e' un
+**percorso alternativo meno maturo**.
+
+## 53.3 Il §52 e' ANNULLATO
+
+I «guadagni» riportati (`var_tmp0` −70%, `goto` −88%, `sp` −77%) erano
+**artefatti del conteggio**: quei nomi sparivano perche' ne comparivano altri,
+peggiori, che non stavo contando.
+
+Restano validi del §52 solo:
+- il metodo (enumerare i 186 gate prima di implementare);
+- il fatto che `HLIL_TESTFLAGS`/`HLIL_SFEXPR` peggiorano (§52.4);
+- il fatto che `RELOOP`/`BAREGOTO`/`LOOPWRAP`/`SELFLOOP` non fanno **nulla** da
+  soli;
+- il gruppo temporanei (`EXPR_SIMPLIFY`+`DEADTMP`+`ZFTEMP`+`CMOVFOLD`+`DEDUPCAST`)
+  migliora modestamente e **senza danni**: `var_tmp0` 162→149, `flag_` 157→128,
+  dati invariati a 42. **Questo si puo' accendere.**
+
+## 53.4 Lezione: una metrica di conteggio va accoppiata al suo complemento
+
+Contare le occorrenze di un nome sbagliato misura il miglioramento **solo se si
+conta anche cosa lo sostituisce**. Qui `var_tmp0 → var_rcx` e' un
+peggioramento che appariva come −70%.
+
+Regola: per ogni metrica «quanti X brutti», serve la metrica gemella «quanti Y
+buoni» (qui: usi di parametro, `switch` recuperati, dati materializzati).
+Altrimenti si ottimizza la sparizione del sintomo.
+
+E' lo stesso errore del §50.3, dove «`var_sp` 1575 → 0» nascondeva che il
+traffico di stack era solo stato rinominato `sp`. Due volte lo stesso schema in
+tre round.
+
+## 53.5 Stato reale della parità path B (invariato dal §51.5)
+
+| # | voce | valore | strumento |
+|---|---|---|---|
+| 1 | prologo (`var_sp`) | **0** ✅ | `RUSTRE_HLIL_NOPROLOGUE` |
+| 2 | temporanei | 492 → ~450 | gruppo temporanei (guadagno modesto, sicuro) |
+| 3 | flag | 442 | **nessuno strumento esistente aiuta** |
+| 4 | `goto` | 76 | **nessuno strumento esistente aiuta** |
+| — | `JUMPOUT` | 0 ✅ | #6620 |
+
+Per le voci 3 e 4 servono davvero i crate della lista utente
+(SSA MLIL, `hlil_structuring`/`LoopStructurer`) cablati **dentro** il percorso
+HLIL esistente — non un percorso alternativo che li sostituisce.
+
+---
+
+# Round 54 — 2026-08-18 — ✅ CONFIGURAZIONE SICURA di path B, verificata su entrambe le famiglie di metriche
+
+## 54.1 La configurazione
+
+```
+RUSTRE_HLIL=1
+RUSTRE_HLIL_NOPROLOGUE=1
+RUSTRE_HLIL_EXPR_SIMPLIFY=1
+RUSTRE_HLIL_DEADTMP=1
+RUSTRE_HLIL_ZFTEMP=1
+RUSTRE_HLIL_CMOVFOLD=1
+RUSTRE_HLIL_DEDUPCAST=1
+```
+Tutti gate **già esistenti**. Nessuna riga di codice scritta.
+
+## 54.2 Misura su ENTRAMBE le famiglie (lezione del §53.4)
+
+| | `var_sp` | `tmp0` | `flag_` | `goto` | **reg grezzi** | **param** | **switch** | **dati** | file |
+|---|---|---|---|---|---|---|---|---|---|
+| nessun gate | 1495 | 492 | 442 | 76 | **0** | 1157 | 19 | 125 | 143 |
+| `NOPROLOGUE` | 0 | 492 | 442 | 76 | 0 | 1151 | 19 | 125 | 143 |
+| **sicura** | **0** | **439** | **389** | 76 | **0** | 1113 | **19** | **125** | 143 |
+
+Guadagni: `var_sp` −100%, `tmp0` −11%, `flag_` −12%.
+**Nessun danno**: zero registri grezzi, `switch` intatti (19), dati intatti
+(125), stesso numero di file.
+
+## 54.3 Verifica comportamentale: NESSUNA regressione
+
+`behavior.py --path-b` sull'output della configurazione sicura:
+**10 AGREE, 2 LINK_FAIL, 5 migliorate contro path A, 0 peggiorate** — identico
+al §49.
+
+Quindi il calo di `param` (1151 → 1113) era **semplificazione legittima**, non
+perdita: le espressioni ridondanti spariscono e con esse alcuni usi del
+parametro. Il comportamento lo conferma.
+
+## 54.4 Stato consolidato della parità path B
+
+| # | voce | valore | strumento | stato |
+|---|---|---|---|---|
+| 1 | prologo (`var_sp`) | 1495 → **0** | `RUSTRE_HLIL_NOPROLOGUE` | ✅ chiuso |
+| — | `JUMPOUT` | 0 | #6620 | ✅ chiuso |
+| 2 | temporanei (`tmp0`) | 492 → **439** | gruppo temporanei | ⚠ parziale (−11%) |
+| 3 | flag (`flag_`) | 442 → **389** | gruppo temporanei | ⚠ parziale (−12%) |
+| 4 | `goto` | 76 → 76 | **nessuno** | ❌ aperto |
+
+## 54.5 Cosa serve DAVVERO adesso (e non esiste come gate)
+
+Per chiudere le voci 2, 3 e 4 servono i crate della lista utente, cablati
+**dentro** il percorso HLIL esistente — non un percorso alternativo che lo
+sostituisce (§53.2 mostra cosa succede altrimenti):
+
+| voce | crate |
+|---|---|
+| temporanei residui (439) | `il-passes::CopyPropagationPass` / `GlobalValueNumberingPass` |
+| flag residui (389) | SSA MLIL (`into_ssa`) + `DeadStoreEliminationPass` |
+| `goto` (76) | `hlil_structuring` / `decompiler-cfs::LoopStructurer` **come pass aggiuntivo**, non come sostituto |
+
+⚠ Vincolo emerso dal §53: `rustre-decompiler-cfs` **sostituisce** lo structurer
+HLIL quando delegato via `RUSTRE_HLIL_CFS`, e perde variabili/parametri/switch.
+Cablarlo come *rimpiazzo* e' una regressione misurata; come *pass aggiuntivo*
+sull'AST gia' strutturato e' un lavoro diverso e non ancora tentato.
+
+---
+
+# Round 55 — 2026-08-18 — ✅ CONFIGURAZIONE ESTESA: `goto` −24%, `switch` +6, comportamento invariato
+
+## 55.1 La configurazione (tutti gate ESISTENTI, zero codice scritto)
+
+```
+RUSTRE_HLIL=1                     RUSTRE_HLIL_NOPROLOGUE=1
+RUSTRE_HLIL_EXPR_SIMPLIFY=1       RUSTRE_HLIL_DEADTMP=1
+RUSTRE_HLIL_ZFTEMP=1              RUSTRE_HLIL_CMOVFOLD=1
+RUSTRE_HLIL_DEDUPCAST=1           RUSTRE_C_GOTO_REMOVAL=1
+RUSTRE_GOTO_BREAK=1               RUSTRE_HLIL_TAILDUP=1
+RUSTRE_HLIL_SPLIT=1               RUSTRE_HLIL_TOPO=1
+RUSTRE_HLIL_PDOM=1                RUSTRE_HLIL_RELOOP_MIN=1
+RUSTRE_HLIL_RELOOP_MULTIEXIT=1    RUSTRE_HLIL_LOOPS_DELEGATE=1
+RUSTRE_HLIL_CFGLOOP=1             RUSTRE_HLIL_NESTED_REDEF_GUARD=1
+```
+
+## 55.2 Misura (143 funzioni, entrambe le famiglie)
+
+| | `goto` | `tmp0` | `flag_` | reg grezzi | param | **`switch`** | dati | file |
+|---|---|---|---|---|---|---|---|---|
+| nessun gate | 76 | 492 | 442 | 0 | 1157 | 19 | 125 | 143 |
+| sicura (§54) | 76 | 439 | 389 | 0 | 1113 | 19 | 125 | 143 |
+| +`GOTO_REMOVAL`+`GOTO_BREAK` | 70 | 439 | 389 | 0 | 1113 | 19 | 125 | 143 |
+| **estesa** | **58** | 487 | 386 | **0** | 1119 | **25** | **125** | 143 |
+
+- `goto` **76 → 58** (−24%);
+- **`switch` 19 → 25**: sei costrutti IN PIU' ricostruiti — non solo goto
+  rimossi, ma struttura recuperata;
+- `param` 1113 → 1119, `flag_` 389 → 386: piccoli guadagni;
+- **nessun danno**: 0 registri grezzi, 125 dati, 143 file.
+- unico costo: `tmp0` 439 → **487** (+48).
+
+## 55.3 Verifica comportamentale
+
+`behavior.py --path-b`: **10 AGREE, 2 LINK_FAIL, 5 migliori di path A, 0
+peggiori** — identico a §49 e §54. La configurazione estesa **non costa nulla
+sul comportamento**.
+
+## 55.4 Stato aggiornato della parità path B
+
+| voce | senza gate | con configurazione estesa | Δ |
+|---|---|---|---|
+| prologo `var_sp` | 1495 | **0** | −100% |
+| `JUMPOUT` | 0 | 0 | già chiuso |
+| `goto` | 76 | **58** | −24% |
+| `flag_` | 442 | **386** | −13% |
+| `tmp0` | 492 | 487 | −1% |
+| `switch` recuperati | 19 | **25** | **+32%** |
+
+## 55.5 Quanto vale, e cosa manca
+
+**Tutto ottenuto senza scrivere una riga**: solo accendendo gate esistenti e
+misurando quali fanno bene, quali fanno male (`HLIL_CFS`, `TESTFLAGS`, `SFEXPR`)
+e quali non fanno nulla (`RELOOP`, `BAREGOTO`, `LOOPWRAP`, `SELFLOOP` da soli).
+
+Restano aperte due voci, e per entrambe **nessun gate esistente aiuta**:
+- **temporanei (487)** → serve `il-passes::CopyPropagationPass`/`GVN`;
+- **flag (386)** → serve la SSA MLIL (`into_ssa`) + `DeadStoreEliminationPass`.
+
+Quelle sono le due voci della lista utente che richiedono davvero cablaggio, non
+un interruttore.
+
+---
+
+# Round 56 — 2026-08-18 — SSA MLIL: pareggio. `MLIL_OPT`: regressione netta
+
+## 56.1 La misura
+
+Sulla configurazione estesa del §55, aggiungendo i due gate della voce «SSA MLIL
+per i flag» della lista utente:
+
+| | `goto` | `tmp0` | `flag_` | reg grezzi | **param** | `switch` | **dati** |
+|---|---|---|---|---|---|---|---|
+| estesa (§55) | **58** | **487** | **386** | 0 | 1119 | 25 | **125** |
+| `+MLIL_SSA` | 61 | 487 | 398 | 0 | **1161** | 25 | 125 |
+| `+MLIL_SSA+MLIL_OPT` | 61 | **1152** | **571** | 0 | **672** | 25 | **101** |
+
+## 56.2 `RUSTRE_MLIL_SSA` da sola: pareggio
+
+- **meglio**: `param` 1119 → 1161 (+42);
+- **peggio**: `flag_` 386 → 398 (+12), `goto` 58 → 61 (+3);
+- invariati: temporanei, switch, dati, registri grezzi.
+
+**Non fonde i flag**, che era la ragione per cui la voce era in lista. La forma
+SSA arriva a path B (§12.1) ma il printer HLIL continua a materializzare
+`flag_zf`/`flag_cf` come variabili.
+
+Per fondere i flag serve una passata che li CONSUMI — riconoscere
+`flag_zf = (x - y == 0)` seguito da `if (flag_zf)` e riscriverlo `if (x == y)`.
+La SSA e' un prerequisito, non il rimedio.
+
+## 56.3 `RUSTRE_MLIL_OPT`: da NON accendere
+
+- `tmp0` 487 → **1152** (+137%)
+- `flag_` 386 → **571** (+48%)
+- `param` 1161 → **672** (−42%)
+- **dati 125 → 101** (perdita, stessa classe di §51.1 e §53.2)
+
+Peggiora tutto. Il commento in-source (`lib.rs:28653`) avvertiva che `ConstantProp`
+non controlla la dominanza; qui la SSA e' accesa e degrada lo stesso, quindi il
+problema non e' solo quello.
+
+## 56.4 Riepilogo dei 186 gate, dopo averli misurati
+
+| esito | gate |
+|---|---|
+| **fanno bene** | `HLIL_NOPROLOGUE`, `EXPR_SIMPLIFY`, `DEADTMP`, `ZFTEMP`, `CMOVFOLD`, `DEDUPCAST`, `C_GOTO_REMOVAL`, `GOTO_BREAK`, `TAILDUP`, `SPLIT`, `TOPO`, `PDOM`, `RELOOP_MIN`, `RELOOP_MULTIEXIT`, `LOOPS_DELEGATE`, `CFGLOOP`, `NESTED_REDEF_GUARD` |
+| **pareggio** | `MLIL_SSA` (param +42, flag +12, goto +3) |
+| **fanno male** | `HLIL_CFS` (852 reg grezzi, switch azzerati), `TESTFLAGS`, `SFEXPR`, **`MLIL_OPT`** |
+| **inerti da soli** | `RELOOP`, `BAREGOTO`, `LOOPWRAP`, `SELFLOOP` |
+
+## 56.5 Conclusione operativa
+
+**La configurazione del §55 resta la migliore**, e non e' migliorabile con altri
+gate: li ho provati tutti.
+
+Per le due voci rimaste servono passate che **non esistono** nel percorso HLIL:
+- **temporanei (487)**: copy propagation vera (`var_tmp0 = X; usa(var_tmp0)` →
+  `usa(X)`), che `il-passes::CopyPropagationPass` implementa ma su un IR diverso;
+- **flag (386)**: fusione flag→condizione, che path A ha
+  (`cmp/test→branch fusion`, CLAUDE.md «Flag recovery») e path B **no**.
+
+Quest'ultima e' notevole: **path A ha gia' la fusione dei flag e path B no**. Non
+serve un crate esterno — serve portare su path B una capacita' che il monolite
+ha gia'.
+
+---
+
+# Round 57 — 2026-08-18 — I flag NON erano da fondere: erano store MORTI
+
+## 57.1 La lettura che ha cambiato la diagnosi
+
+Distribuzione delle 386 occorrenze `flag_*` nel testo emesso (path B, config del
+§55), normalizzando costanti e nomi di variabile:
+
+```
+     98  flag_zf = (var_tmp0 == 0)        <-- prima in classifica
+     21  flag_sf = ((__int64)var_tmp0 < 0)
+     15  flag_of = 0
+      6  flag_zf = ((v3 - 0x40) == 0)     <-- fusione RIUSCITA (sottrazione inline)
+```
+
+Il contesto reale di una sopravvissuta (`sample1/sub_140001010.hlil.c:116`):
+
+```c
+var_tmp0 = ((uint32_t)v8 - 1);
+flag_zf  = (var_tmp0 == 0);      // <- nessuno la legge
+if (var_tmp0 == 0) { ... }       // <- il ramo usa il TEMPORANEO, non il flag
+```
+
+**La fusione dei flag aveva gia' funzionato.** La condizione del salto e' gia'
+riscritta sull'espressione; quello che resta e' uno STORE MORTO. La voce «SSA
+MLIL per i flag» della lista puntava al rimedio sbagliato — il §56 lo aveva gia'
+mostrato di lato (la SSA non fonde nulla), qui si vede perche': non c'era niente
+da fondere.
+
+## 57.2 Perche' nessuna delle DCE esistenti lo prendeva
+
+Due DCE erano gia' cablate, e nessuna delle due poteva vederlo:
+
+| passata | dove | perche' fallisce |
+|---|---|---|
+| `eliminate_dead_flag_writes_cfg` (`lib.rs:27260`) | sul **MLIL** | gira PRIMA della fusione, quando il salto legge ancora il flag: li' e' genuinamente vivo |
+| `eliminate_dead_stores` (`hlil_structuring.rs`) | sull'**HLIL** | decide con `count_reads_stmts(body, n) == 0`, cioe' sul TOTALE delle letture nella funzione |
+
+E' la fusione a CREARE la morte, e dopo di lei non ripassa nessuno. Il secondo
+criterio non discrimina sui flag: `flag_zf` viene riscritto decine di volte nello
+stesso corpo e **una sola** lettura in fondo tiene in vita TUTTI i suoi store.
+
+⚠ Il mio primo script di misura ha commesso lo stesso errore — contava le
+letture per-file e per-nome e rispondeva «0% morti», in contraddizione con il
+codice che avevo appena letto. E' l'errore contro cui il commento su `var_tmp0`
+in `lib.rs:23153` mette in guardia da mesi. La liveness va fatta sul grafo.
+
+## 57.3 La passata: `eliminate_dead_flag_stores`
+
+`crates/rustre-il-hlil/src/hlil_structuring.rs`, gate **`RUSTRE_HLIL_FLAGDCE`**
+(opt-in), innestata subito PRIMA di `eliminate_dead_stores`. Liveness
+all'indietro sugli statement, non conteggio di letture:
+
+* `If`/`Switch`: unione dei rami; `While`/`DoWhile`/`For`: si assume vivo tutto
+  cio' che il corpo legge (approssimazione dal lato sicuro dell'arco
+  all'indietro, senza punto fisso);
+* si cancella solo un RHS senza `Call`;
+* **punto fisso su `Label -> insieme vivo`**, propagato a ogni `Goto` che la
+  punta (`Goto(a)` <-> `Label("loc_{a:x}")`); si parte ottimisti e si cancella
+  SOLO nel giro finale. Converge in **3 giri**.
+
+### Due passi falsi, entrambi misurati e non dedotti
+
+1. **Binario stantio.** `cargo build --release -p rustre-decompiler` NON
+   ricostruisce gli examples: serve `--examples`. La prima misura girava col
+   binario di 20 minuti prima e dava «effetto zero». E' la trappola che
+   CLAUDE.md segnala, e l'indizio che l'ha smascherata e' che il lato di
+   controllo risultava identico al giro precedente byte per byte.
+2. **Veto globale troppo forte.** Con `has_goto_or_label` che sospendeva
+   l'intera funzione: **43 funzioni su 43 rinunciavano** (tutti i 143 store),
+   perche' a quel punto della pipeline i goto ci sono ancora tutti — li tolgono
+   le passate testuali a valle, quando l'AST non esiste piu'. Quel punto e'
+   l'unico disponibile, quindi le etichette vanno trattate davvero. Rimosso il
+   veto e messo il punto fisso: **rimossi 3 -> 82 su 143**.
+
+## 57.4 Misura (3 bucket, 143 funzioni, stesso binario sui due lati)
+
+| | `flag_` | `var_tmp0` | righe | goto | switch | dati | file |
+|---|---|---|---|---|---|---|---|
+| estesa (§55) | 386 | 487 | 7875 | 58 | 25 | 125 | 143 |
+| **+`FLAGDCE`** | **237** (−38,6%) | **375** (−23,0%) | 7712 (−163) | 58 | 25 | 125 | 143 |
+
+**La cascata prevista si e' verificata**: `var_tmp0` sopravviveva perche' aveva
+DUE letture (la riga morta e l'`if`); tolta la riga morta ne resta una, e
+`inline_adjacent_hlil_temps` — gia' cablata a valle e in attesa esattamente di
+quel caso — lo assorbe da se'. Un solo intervento chiude due voci della lista.
+
+`param` cala 1119 -> 1110: e' un conteggio di OCCORRENZE di `a1..a4`, e togliere
+codice morto che le nominava lo riduce senza perdere nulla. Verificato dove
+conta: le **140 firme sono identiche byte per byte** fra i due lati.
+
+## 57.5 Verifiche
+
+* **Comportamento** (`behavior.py --path-b`): **10 AGREE, 2 LINK_FAIL** —
+  identico al riferimento di path B del §54. Zero regressioni, zero guadagni:
+  la passata toglie codice morto, e il codice morto non cambia il comportamento.
+  E' l'esito atteso, ed e' il motivo per cui va misurato lo stesso.
+* **Test**: 6 unitari nuovi (469 vs 463 nel crate HLIL), fra cui il caso che
+  `eliminate_dead_stores` sbaglia (lettura lontana che salverebbe uno store
+  sovrascritto prima) e i due sulle etichette.
+* `cargo test -p rustre-decompiler --lib`: **1337 passati, 0 falliti**.
+
+## 57.6 Un test committato che contraddiceva il codice committato
+
+`indirect_jumpout_raised_to_tail_call_only_for_plain_identifiers` falliva **gia'
+prima** di questa modifica — verificato mettendo da parte le mie modifiche e
+rieseguendolo. Contraddizione interna a HEAD: il codice di #6620 solleva anche
+la forma di memoria (`plain || mem`), il test asseriva che `JUMPOUT(*rax)`
+restasse grezzo, codificando l'intento piu' stretto della prima stesura.
+
+Ha ragione il codice: `jmp [rax]` E' una chiamata di coda indiretta e
+`return (*rax)();` ne e' la resa esatta; ed e' quel ramo a portare i `JUMPOUT`
+emessi da 18 a 0. Test riallineato e rinominato
+`indirect_jumpout_raised_to_tail_call_for_identifiers_and_memory`, con il
+perche' scritto dentro. `off_…` resta intatto: la' l'operando e' un simbolo di
+DATO e chiamarlo produrrebbe una dichiarazione implicita.
+
+## 57.7 Dove siamo
+
+`RUSTRE_HLIL_FLAGDCE` e' opt-in. Prima di accenderlo per difetto manca la
+verifica su tutti e 12 i bucket con `measure.sh --compare`; sui 3 rigenerati e'
+neutro sul comportamento e migliora due contatori su due.
+
+Restano: i 237 `flag_` vivi (in buona parte combinazioni vere,
+`if ((flag_zf == 1) | (flag_sf != flag_of))`, che `fold_flag_combos` non chiude),
+i 375 `var_tmp0` con piu' di una lettura reale, e i 58 `goto`.
+
+---
+
+# Round 58 — 2026-08-18 — Copy propagation dei temporanei, e l'ORDINE che decide tutto
+
+## 58.1 Il fronte, dopo la DCE del §57
+
+Dopo `FLAGDCE` i 237 `flag_*` sopravvissuti sono genuinamente VIVI, e in buona
+parte COMBINAZIONI:
+
+```
+  6  if ((flag_zf == 1) | (flag_sf != flag_of))       <-- <= con segno
+  6  if ((flag_cf == 0) & (flag_zf == 0))             <-- > senza segno
+  6  if (((var_tmp0 == 0) == 1) | (flag_sf != flag_of))
+```
+
+La terza riga e' la fusione ferma a meta' strada: `zf` e' stato assorbito (dopo
+la DCE era a uso singolo), `sf` e `of` no. Il collo di bottiglia non e' piu'
+cosmetico — e' il temporaneo.
+
+`propagate_expressions`, gia' cablata, rinuncia per costruzione: propaga solo
+assegnazioni a **uso singolo** e solo nello statement **immediatamente
+successivo**. L'abbassamento di un `cmp` produce un temporaneo con TRE letture.
+
+## 58.2 `propagate_pure_temps`
+
+`crates/rustre-il-hlil/src/hlil_structuring.rs`, gate **`RUSTRE_HLIL_TEMPPROP`**
+(opt-in). Duplica un RHS PURO in tutti gli usi del live range e cancella la
+definizione. Duplicare un'espressione senza effetti e' lecito; il solo rischio e'
+che gli operandi cambino. Condizioni, tutte verificate prima di toccare qualcosa:
+
+* RHS senza `Call`;
+* nella finestra fra definizione e ridefinizione nessuno SCRIVE una variabile
+  letta dal RHS (controllo profondo, corpi annidati compresi);
+* nessun `Goto`/`Label` nella finestra — il flusso potrebbe entrarci in mezzo;
+* nessun CICLO nella finestra legge il temporaneo — la' l'espressione sarebbe
+  rivalutata a ogni giro.
+
+## 58.3 ⚠ L'ORDINE era tutto, e la prima collocazione era SBAGLIATA
+
+Messa PRIMA di `fold_flag_combos` — che sembrava ovvio, visto che il folder
+"vuole gli operandi veri" — la passata **sabota il folder**. Il folder riconosce
+la forma CON il temporaneo, e stava gia' chiudendo quei confronti:
+
+```c
+flag_zf = ((v8 - 65535) == 0);
+if (v8 > 0xFFFF) {                                   // <- fusione RIUSCITA
+```
+
+Propagando prima si distrugge il motivo che cerca:
+
+```c
+flag_of = (((__int64)v8 < 0) != (0xFFFF < 0)) & ...;
+flag_sf = ((v8 - 65535) < 0);
+if (((v8 == 0xFFFF) == 0) & (flag_sf == flag_of)) {  // <- fusione FALLITA
+```
+
+Misurato: `flag_` 237 -> **315** (+33%) e la DCE del §57 che scende da 82 a 65
+rimozioni. Spostata DOPO le fusioni, raccoglie solo cio' che quelle non hanno
+preso, e il danno sparisce.
+
+E' la stessa forma della regola gia' in CLAUDE.md («una passata di riparazione
+sintattica deve girare per ULTIMA»): qui il vincolo e' l'opposto — una passata
+che NORMALIZZA deve girare DOPO chi riconosce le forme non normalizzate.
+Generalizzando: **prima chi fa pattern matching su una forma grezza, poi chi
+quella forma la distrugge.**
+
+## 58.4 Misura (3 bucket, 143 funzioni, stesso binario su tutti i lati)
+
+| | `goto` | `var_tmp0` | `flag_` | param | switch | dati | file | righe |
+|---|---|---|---|---|---|---|---|---|
+| estesa (§55) | 58 | 487 | 386 | 1119 | 25 | 125 | 143 | 7875 |
+| +`FLAGDCE` (§57) | 58 | 375 | 237 | 1110 | 25 | 125 | 143 | 7712 |
+| +`TEMPPROP` **prima** | 58 | 313 | **315** ✗ | 1115 | 25 | 125 | 143 | 7697 |
+| **+`TEMPPROP` dopo** | 58 | **281** | **237** | 1108 | 25 | 125 | 143 | **7653** |
+
+Cumulativo sulle due passate: temporanei **−42,3%**, flag **−38,6%**, **−222
+righe**. Nessun contatore peggiorato.
+
+## 58.5 Verifiche
+
+* **140 firme identiche byte per byte** al riferimento.
+* **Zero `var_tmp*` usati-e-mai-definiti** — il rischio specifico del cancellare
+  una definizione, controllato esplicitamente sull'intero albero emesso.
+* **Comportamento**: 10 AGREE / 2 LINK_FAIL, identico al riferimento di path B.
+* **Test**: 6 unitari nuovi (475 vs 469 nel crate HLIL), uno per ciascuna delle
+  quattro condizioni di sicurezza piu' il caso base e la ridefinizione.
+  `cargo test -p rustre-decompiler --lib`: 1337 passati, 0 falliti.
+
+## 58.6 Dove siamo
+
+Due gate opt-in nuovi, `RUSTRE_HLIL_FLAGDCE` e `RUSTRE_HLIL_TEMPPROP`, che vanno
+accesi INSIEME e in quest'ordine. Manca la verifica su tutti e 12 i bucket con
+`measure.sh --compare` prima di renderli default.
+
+Restano: 237 `flag_` (combinazioni che `fold_flag_combos` non chiude), 281
+`var_tmp0` (con piu' di una lettura reale o bloccati da una delle quattro
+guardie), e i 58 `goto`.
+
+---
+
+# Round 59 — 2026-08-18 — Path B PERDE 57 CHIAMATE. Il difetto piu' grave trovato finora
+
+## 59.1 Come e' saltato fuori
+
+Cercando i 58 `goto` residui. Il primo esaminato (`_initterm_e`, un solo goto)
+non era un problema di leggibilita':
+
+```c
+while (1) {
+    v3 = *(__int64 *)v2;
+    if (!((v3 == 0) == 1)) break;      // se il puntatore NON e' nullo, ESCE
+loc_1400027ae:
+    v2 = (v2 + 8);
+    ...
+}
+return;
+v3 = ((__int64 (*)())v3)();            // <- la chiamata vera, DOPO il return
+if (((uint32_t)v3) == 0) goto loc_1400027ae;
+```
+
+`_initterm_e` deve invocare i puntatori a funzione dell'array. Nel codice emesso
+la chiamata sta **dopo il `return`**, irraggiungibile, e il `goto` che la
+ricollegherebbe al ciclo vive anch'esso nel tratto morto. **La funzione emessa
+non chiama mai nulla.** Stessa forma esatta in `__dyn_tls_init`, che quindi non
+invoca mai i callback TLS.
+
+## 59.2 La misura
+
+`codamorta.py` (nuovo, in scratchpad): dentro un blocco, dopo un terminatore
+(`return`/`break`/`continue`/`goto`) allo stesso livello di graffa, tutto cio'
+che segue fino alla chiusura e' irraggiungibile — salvo un'ETICHETTA, che
+riapre un ingresso.
+
+Sui 3 bucket (143 funzioni di path B):
+
+| | valore |
+|---|---|
+| file con coda irraggiungibile | **41 su 143 (28,7%)** |
+| righe morte | ~1240 |
+| **chiamate mai eseguite** | **57** |
+| goto in coda morta | 6 su 58 |
+
+I `goto` erano il sintomo minore: **6 su 58**. Il fronte e' la coda morta.
+
+## 59.3 Le quattro verifiche che rendono il dato usabile
+
+1. **Non l'ho causato io.** Identico su `base_min` (solo `RUSTRE_HLIL=1`), su
+   `gt4` (config estesa) e su `tp2` (con i due gate nuovi): 41 file, 57 chiamate,
+   sempre. Le passate dei §57-58 non c'entrano.
+2. **Non e' `CFGLOOP`.** Con `RUSTRE_HLIL_CFGLOOP=0` il conto non si muove.
+3. **Path A e' CORRETTO sulla stessa funzione.** Su `__dyn_tls_init` path A
+   emette la chiamata DENTRO il ciclo, dov'e' il suo posto:
+   ```c
+   do {
+       result = *iter;
+       if (result != 0) { ((__int64 (*)())result)(a1, a2); }
+       iter += 8;
+   } while (iter != v3);
+   ```
+   E' quindi un difetto di **path B soltanto** — un divario di parita', il piu'
+   grave misurato finora, perche' e' di CORRETTEZZA e non di leggibilita'.
+4. **Verificato a mano** su un caso piccolo (`__dyn_tls_init`, 2 righe morte) e
+   uno grande, non solo contato dallo script.
+
+## 59.4 La causa, dalla forma del CFG
+
+CFG originale: `A` (carica + testa) -> se zero salta a `L`; altrimenti `B`
+(la chiamata) -> cade su `L`; `L` = `C` (incremento, test, arco all'indietro su
+`A` oppure uscita su `D`).
+
+Il ciclo naturale dell'arco all'indietro `C->A` contiene **A, B e C**. Path B ne
+ha preso solo **A e C**, ed ha esiliato `B` fuori dal ciclo *e* dopo il blocco
+di uscita `D`. Da qui tutto: il `break` al posto della chiamata, la coda morta,
+il `goto` all'indietro.
+
+## 59.5 ⚠ Il calcolo corretto ESISTE NELLA CATENA ED E' SPENTO
+
+`crates/rustre-il-hlil/src/hlil_control_flow_recovery.rs` — **981 righe, 7
+test, `pub mod`** — contiene `natural_loop_body`, e la sua implementazione e'
+quella giusta: raggiungibilita' all'indietro dal sorgente dell'arco, fermandosi
+all'header. **Includerebbe `B`.**
+
+**Zero chiamanti fuori dal proprio file.** Verificato con grep su tutti i crate:
+le sole occorrenze altrove sono un `ControlFlowRecovery` omonimo e scorrelato in
+`rustre-arch-wasm`.
+
+Espone anche, tutto inutilizzato:
+* `cfg_from_hlil` / `cfg_from_hlil_level` — costruisce un CFG DAGLI statement HLIL;
+* `recover_loops`, `innermost_loops`, `nesting_depth_of`;
+* **`reachable_blocks_petgraph`** — cioe' esattamente lo strumento che direbbe
+  quali statement sono irraggiungibili, che e' il difetto di questo round.
+
+E' il caso da manuale della diagnosi generale di questa sessione: la capacita'
+non manca, e' **spenta**. Vedi il §12 e
+`project_decompiler_catena_2026-08-18` in memoria.
+
+Nota metodologica: `find_loop_exit`, nello stesso file, itera un `HashSet` e
+ritorna la PRIMA uscita trovata — con piu' uscite l'esito dipende dall'ordine di
+hash, quindi non e' deterministico. Da sistemare quando lo si cabla, non dopo.
+
+## 59.6 Perche' nessuna metrica lo aveva visto
+
+* `check.sh` no: il codice morto **compila** perfettamente.
+* `behavior.py` no: nessuna delle 41 funzioni colpite e' nel campione delle 12
+  comuni, e sulle campionate path B resta 10 AGREE contro 5 di path A.
+* Il punteggio di confidenza no.
+
+E' esattamente la classe «sicuro di se' e sbagliato» contro cui CLAUDE.md mette
+in guardia, e la stessa forma del difetto di `count_set_flags`. **Una metrica
+nuova l'ha trovata al primo colpo**, come da nota in memoria: ogni misura nuova
+rivela prima un difetto che le misure esistenti erano strutturalmente cieche a
+vedere.
+
+## 59.7 Conseguenza sull'obiettivo
+
+«Path B unico» **non e' raggiungibile finche' path B perde chiamate**. Questo
+difetto viene prima dei goto, dei flag e dei temporanei: quelli sono
+leggibilita', questo e' correttezza. E' il prossimo lavoro.
+
+---
+
+# Round 60 — 2026-08-18 — Chiamate perse: causa TROVATA e in parte chiusa
+
+## 60.0 ⚠ CORREZIONE al §59.5
+
+Il §59.5 attribuiva il difetto al fatto che il `natural_loop_body` corretto vive
+solo nel modulo inutilizzato `hlil_control_flow_recovery`. **E' sbagliato, e
+l'errore e' stato mio: avevo letto la riga 8678 del `lib.rs` di
+`rustre-decompiler` invece che di `rustre-il-hlil`** — stesso numero, file
+diverso, e li' c'e' `retype_scalar_only_xmm`.
+
+Il modulo `structuring` che path B USA DAVVERO ha il suo `natural_loop_body`
+(`rustre-il-hlil/src/lib.rs:8678`) ed e' **corretto** anch'esso: raggiungibilita'
+all'indietro dal latch fermandosi all'header. Il corpo del ciclo NON e' il
+difetto.
+
+Resta vero, e verificato, che `hlil_control_flow_recovery` (981 righe, 7 test,
+`pub mod`) non ha alcun chiamante: e' capacita' spenta, ma non e' questa la
+causa. Il §59 va letto con questa correzione.
+
+## 60.1 La causa vera
+
+In `emit_loop`, forma «header con statement E test in testa»
+(`rustre-il-hlil/src/lib.rs:10216`), si emette:
+
+```rust
+body.push(If { cond: !guard, then_body: [Break] });   // il break deve cadere su `outside`
+out.push(While { cond: 1, body });
+self.queue_break_exit(break_exit, Some(outside));
+self.emit_pending_exits(mark, out);                   // <- inserisce un blocco QUI
+return Some(outside);                                 // <- e `outside` arriva DOPO
+```
+
+Un `break` atterra su cio' che SEGUE il costrutto. Due valori diversi si
+contendono quel posto:
+
+* `outside` = il ramo del test in testa che lascia il ciclo — **dimostrabilmente**
+  dove va il controllo quando la guardia fallisce;
+* `break_exit` = `ipdom(header)` quando le uscite sono piu' d'una.
+
+Su `__dyn_tls_init` le uscite sono DUE, quindi `break_exit` = il blocco di
+`return` e `outside` = il blocco della CHIAMATA. `emit_pending_exits` infila il
+primo fra il `while` e il secondo: il `break` atterra sul `return` (la funzione
+esce senza chiamare) e il blocco della chiamata finisce dopo un `return`,
+irraggiungibile.
+
+## 60.2 Un commento nel sorgente che dice il falso
+
+Sopra `queue_break_exit` c'e' scritto che la correzione «e' RITIRATA dietro
+l'opt-in `RUSTRE_HLIL_BREAKFIX=1`» e che «il gate resta spento». Il codice dice
+il contrario:
+
+```rust
+let break_ok = env("RUSTRE_HLIL_BREAKFIX") == "0" || "false"
+            || self.loop_ctx.last().is_some_and(|&(_, e)| e == Some(c));
+```
+
+Con la variabile NON impostata `is_ok_and` e' falso, quindi la correzione e'
+**attiva per difetto** e la si spegne mettendo il gate a `0`. Misurato su
+sample6_c:
+
+| | goto | file con coda morta | chiamate perse |
+|---|---|---|---|
+| `BREAKFIX=0` | 22 | 7 | **15** |
+| `BREAKFIX=1` | 25 | 14 | 19 |
+| **non impostato** | 25 | 14 | **19** |
+
+Cioe': non solo il gate e' acceso quando il commento lo dice spento, ma nella
+configurazione attiva perde PIU' chiamate. E' il terzo commento falso trovato in
+questa sessione (cfr. [[feedback_difetto_nella_frase]] in memoria).
+
+## 60.3 #6760 — il bersaglio del `break` e' `outside`
+
+Gate **`RUSTRE_HLIL_TOPTEST_BREAK`** (opt-in). In questa forma si registra
+`outside` come bersaglio del `break` e non si emette NULLA fra il `while` e lui:
+e' l'invariante da cui dipende la correttezza del `break`.
+
+Prima stesura, misurata: chiamate perse 57 -> 45, file con coda morta 41 -> 20,
+goto in coda morta 6 -> **0** — ma **JUMPOUT 0 -> 15**, perche' le uscite
+secondarie restavano in `pending_exits` senza che nessuno le emettesse, e un
+`goto` senza etichetta degrada a `JUMPOUT`. Scambiare 12 chiamate perse per 15
+`JUMPOUT` non e' un affare.
+
+## 60.4 #6760b — svuotamento finale delle uscite pendenti
+
+Le uscite secondarie si emettono in coda alla FUNZIONE
+(`structure_function`, dopo `emit_sequence(entry)`), dove un'etichetta e' sempre
+valida e nessun `break` dipende dall'adiacenza.
+
+| config minima | goto | JUMPOUT | file coda morta | chiamate perse | righe morte |
+|---|---|---|---|---|---|
+| prima | 76 | 0 | 41 | 57 | 1234 |
+| #6760 | 88 | **15** ✗ | 20 | 45 | 1129 |
+| **#6760 + b** | 109 | **0** | **20** | **45** | **1129** |
+
+`__dyn_tls_init` verificato a mano: la chiamata al puntatore a funzione e' ora
+RAGGIUNGIBILE, il `break` ci atterra e il `goto loc_X` richiude il ciclo.
+
+## 60.5 Con la configurazione completa il costo quasi sparisce
+
+Gli altri gate riassorbono i salti:
+
+| | goto | JUMPOUT | chiamate perse | file coda morta | `tmp0` | flag | dati | file |
+|---|---|---|---|---|---|---|---|---|
+| §58 (`tp2`) | 58 | 0 | 57 | 41 | 281 | 237 | 125 | 143 |
+| **+#6760/b** | 61 (+3) | **0** | **48** (−9) | **35** | 290 (+9) | 237 | 125 | 143 |
+
+* **140 firme identiche byte per byte**;
+* **comportamento invariato**: 10 AGREE / 2 LINK_FAIL;
+* test: 475 nel crate HLIL, 1337 nel decompilatore, 0 falliti.
+
+Nota onesta: il guadagno e' PIU' PICCOLO nella configurazione completa (48
+chiamate perse contro le 45 della minima, 35 file contro 20). I gate
+interagiscono, e non ho ancora isolato quale riduca l'efficacia della correzione.
+Non e' una regressione — e' un guadagno minore di quanto la misura isolata
+prometteva, e va detto.
+
+## 60.6 Dove siamo
+
+Chiamate perse **57 -> 48**. La classe non e' chiusa: restano 48 chiamate in 35
+file, che sono altre forme di loop (non quella a test in testa). Il metodo per
+trovarle ora c'e' (`codamorta.py`) e la causa di questa e' capita fino in fondo.
+
+Tre gate opt-in nuovi in due round, da accendere INSIEME:
+`RUSTRE_HLIL_FLAGDCE`, `RUSTRE_HLIL_TEMPPROP`, `RUSTRE_HLIL_TOPTEST_BREAK`.
+
+---
+
+# Round 61 — 2026-08-18 — ⚠ CORREZIONE ai §59-60: i numeri erano gonfiati 5x, e la correzione e' COMPLETA
+
+## 61.1 Il difetto nella misura
+
+`codamorta.py` riconosceva come punto d'ingresso solo `etichetta:`
+(`^\s*\w+:\s*$`). **`case 52:` e `default:` non passano quel filtro** — sono due
+token. Quindi dopo il primo `break;` dichiarava morto tutto il resto di ogni
+`switch`, e la macchina a stati del relooper e' fatta esattamente cosi'.
+
+Falso positivo isolato leggendo il file peggiore (`sub_140001a00`, 190 righe
+«morte»): erano i `case` di un dispatch loop, tutti raggiungibili.
+
+E' la terza volta in questa sessione che una misura nuova rivela per prima un
+difetto in se stessa — vedi `feedback_misurare_non_dedurre` in memoria. La
+lezione qui e' specifica: **un riconoscitore di punti d'ingresso deve conoscere
+TUTTE le forme di etichetta del linguaggio**, e in C sono tre.
+
+## 61.2 I numeri corretti
+
+| snapshot | file con coda morta | **chiamate perse** | righe morte |
+|---|---|---|---|
+| minima, prima (`tt0`) | 28 | **12** | 124 |
+| minima, #6760 (`tt1`) | 1 | **0** | 19 |
+| minima, #6760+b (`tt2`) | 1 | **0** | 19 |
+| completa, prima (`tp2`) | 25 | **9** | 103 |
+| **completa, dopo (`full`)** | 13 | **0** | 43 |
+
+### Cosa cambia rispetto a quanto scritto nei §59-60
+
+* **Il difetto era 5 volte piu' piccolo**: 12 chiamate perse, non 57. Il §59
+  titolava «path B PERDE 57 CHIAMATE»: la cifra e' sbagliata, la classe no.
+* **La correzione e' COMPLETA, non parziale**: 12 -> **0** (minima) e 9 -> **0**
+  (completa). Il §60 riportava «57 -> 48», cioe' sottostimava il rimedio mentre
+  sovrastimava il problema. Entrambi gli errori vengono dallo stesso bug di
+  misura.
+* **Sparisce l'anomalia del §60.5**, dove il guadagno sembrava minore nella
+  configurazione completa che nella minima: era un artefatto: 9->0 e 12->0 sono
+  entrambe chiusure totali. Non c'e' nessuna interazione fra gate da isolare.
+* **Restano VERI**: i due casi letti a mano (`_initterm_e`, `__dyn_tls_init` non
+  chiamavano nulla), la causa (`break_exit` != `outside`), il fatto che path A
+  fosse corretto sulle stesse funzioni, e che il commento su
+  `RUSTRE_HLIL_BREAKFIX` dica il falso.
+
+## 61.3 Verifica finale sulle due funzioni d'origine
+
+`_initterm_e`, config completa:
+
+```c
+while (1) {
+    v3 = *(__int64 *)v2;
+    if (!((v3 == 0) == 1)) { break; }     // puntatore non nullo -> esce
+loc_X:
+    v2 = (v2 + 8);
+    if (v2 < v1) { continue; } else { v3 = 0; }
+    sp = (sp + 40); return;
+}
+v3 = ((__int64 (*)())v3)();               // LO CHIAMA
+if (((uint32_t)v3) == 0) { goto loc_X; }  // se ok, riprende il ciclo
+```
+
+E' la semantica vera della funzione. Idem `__dyn_tls_init`.
+
+## 61.4 Le 13 code residue non sono un difetto di correttezza
+
+Ispezionate: sono epiloghi DUPLICATI dopo un `return`
+(`sp = (sp + 40); return v3;` ripetuto), 43 righe in tutto, **zero chiamate**.
+Codice morto innocuo, non codice sbagliato. Vale la pena toglierlo per pulizia,
+non per fedelta'.
+
+## 61.5 Stato consolidato dei tre gate nuovi
+
+Da accendere INSIEME, nell'ordine in cui la pipeline li applica:
+`RUSTRE_HLIL_FLAGDCE`, `RUSTRE_HLIL_TEMPPROP`, `RUSTRE_HLIL_TOPTEST_BREAK`.
+
+| | goto | JUMPOUT | `tmp0` | `flag_` | chiamate perse | dati | file | firme |
+|---|---|---|---|---|---|---|---|---|
+| §55 estesa | 58 | 0 | 487 | 386 | 12 | 125 | 143 | 140 |
+| **tutti e tre** | 61 | **0** | **290** | **237** | **0** | 125 | 143 | 140 identiche |
+
+Temporanei **−40,5%**, flag **−38,6%**, chiamate perse **azzerate**, JUMPOUT a
+zero, comportamento invariato (10 AGREE / 2 LINK_FAIL), 475 + 1337 test verdi.
+Costo: **+3 goto**.
+
+---
+
+# Round 62 — 2026-08-18 — Verifica su TUTTI E 12 i bucket: 11342 file per lato
+
+## 62.1 Perche' i 3 bucket non bastavano
+
+I §57-61 misuravano su 3 bucket (143 funzioni di path B). Sono i programmi C
+piccoli del corpus: NON rappresentativi. Sull'intero corpus la stessa classe di
+difetto e' venti volte piu' grande, e un gate che li' sembrava neutro non lo e'.
+
+Rigenerati **11342 file per lato** con la stessa build, `all_before` (config
+estesa del §55) contro `all_after` (+ i tre gate nuovi).
+
+## 62.2 Contatori, corpus intero
+
+| | goto | JUMPOUT | `var_tmp*` | `flag_` | switch | dati | righe |
+|---|---|---|---|---|---|---|---|
+| prima | 8913 | 7 | 59619 | 51397 | 725 | 7937 | 946284 |
+| **dopo** | 9468 (+555) | **2** | **37022** (−37,9%) | **36352** (−29,3%) | 726 | 7935 (−2) | 921593 (−2,6%) |
+
+## 62.3 Code irraggiungibili, corpus intero
+
+| | file con coda morta | **chiamate perse** | righe morte |
+|---|---|---|---|
+| prima | 1780 | **2556** | 19644 |
+| **dopo** | 984 (−44,7%) | **1862** (−694, −27%) | 10611 (−46,0%) |
+
+Sui 3 bucket la classe valeva 12 chiamate; sui 12 ne vale **2556**. La misura
+ristretta non sbagliava di segno, sbagliava di due ordini di grandezza.
+
+## 62.4 ⚠ Il `-2` sui dati era il sintomo di una regressione VERA
+
+Due file su 11342 perdevano un `static uint8_t`. Inseguito invece di
+archiviarlo, perche' e' la classe che ha gia' ingannato due volte questa
+sessione (§51.1, §53.2):
+
+`sample4_go/sub_14001fa32`: 530 righe -> 394, e **3 chiamate DISTINTE sparite**
+(`runtime_scanConservative`, `runtime_putempty`,
+`runtime___stackScanState__getPtr`).
+
+**Bisezione**: `FLAGDCE` e `TEMPPROP` lasciano il file identico
+(530 righe, 11 dati, 84 chiamate). Il colpevole e' **`TOPTEST_BREAK`**.
+
+**Prima ipotesi, falsificata**: avevo saltato anche `queue_break_exit`, quindi
+l'uscita secondaria non veniva REGISTRATA. Rimessa (#6760c): **nessun cambio**.
+Non era quello.
+
+**Dove sta davvero**: la sonda gia' esistente `RUSTRE_HLIL_DEBUG` riporta
+**936 blocchi mai emessi in ENTRAMBE le configurazioni, zero raggiungibili** —
+quindi l'emettitore produce lo stesso insieme di blocchi. Le chiamate spariscono
+DOPO: emesse in coda alla funzione (#6760b) finiscono dietro un `return`, e una
+passata a valle le rimuove come irraggiungibili. Lo svuotamento finale mette i
+blocchi in un posto valido per l'ETICHETTA ma non per la RAGGIUNGIBILITA'.
+
+**Costo misurato**: **2 file su 11342**, 6 chiamate distinte, zero guadagnate.
+
+## 62.5 Il bilancio
+
+| | |
+|---|---|
+| chiamate recuperate | **+694** |
+| chiamate perse | **−6** (2 file) |
+| rapporto | **116:1** |
+| costo in `goto` | +555 (+6,2%) |
+| `JUMPOUT` | 7 -> **2** (migliora) |
+
+Il rapporto e' schiacciante, ma le 6 perse sono una regressione vera e va
+scritto: non e' un guadagno netto puro, e' un guadagno con un costo noto,
+localizzato e riproducibile. Il difetto residuo ha una causa capita — un blocco
+emesso in coda non e' raggiungibile — e la riparazione giusta e' emetterlo
+DOVE un `goto` lo raggiunge, non dove l'etichetta e' comoda.
+
+## 62.6 Metodo
+
+Tre cose che questo round conferma:
+1. **misurare sul corpus intero prima di dichiarare chiuso qualcosa**: 12 contro
+   2556 sulla stessa classe;
+2. **inseguire anche un delta di 2**: quel `-2` nascondeva la sola regressione
+   dei tre gate;
+3. **la sonda giusta esisteva gia'** (`RUSTRE_HLIL_DEBUG`) e ha falsificato in
+   un colpo l'ipotesi «blocchi persi», che avrei altrimenti inseguito a lungo.
+
+---
+
+# Round 63 — 2026-08-18 — Separare l'OVER-SCAN dal difetto: il numero onesto e' 1041 -> 381
+
+## 63.1 Il residuo Go/C# non era tutto un difetto
+
+Il §62 lasciava 1862 «chiamate perse» concentrate in Go (1220) e C# (416).
+Aperta una: `sample9_go/sub_140001fea`, coda morta con la forma classica
+dell'epilogo di crescita dello stack di Go:
+
+```c
+sp = (sp + 32);
+return;
+*(__int64 *)(sp + 8) = v2;                       // salva gli argomenti
+v2 = runtime_morestack_noctxt_abi0();            // chiama morestack
+v2 = *(__int64 *)(sp + 8);                       // li ripristina
+return type_descriptor_for__eq__7_internal_cpu_option();   // rientra
+```
+
+**Disassemblata la funzione** (`disasm_dump`, intervallo
+`0x140001fea..=0x140002258`): contiene **due sole `call`, entrambe a
+`0x1400026A0`** (`runtime_memequal`). **Nessuna chiamata a `morestack`.** Quelle
+istruzioni vengono da OLTRE l'estensione della funzione.
+
+E' l'over-scan di `.pdata` che CLAUDE.md documenta come deliberato («senza, le
+funzioni vengono troncate») e il cui costo dichiarato e' esattamente questo: «le
+analisi senza filtro di raggiungibilita' vedono istruzioni estranee». La mia
+misura era una di quelle analisi.
+
+## 63.2 Il criterio che separa le due cose
+
+Una regione morta che arriva alla FINE del corpo puo' essere over-scan. Una
+regione morta **seguita da altro codice VIVO** non puo' esserlo: e' codice della
+funzione che l'emettitore ha messo dove non ci si arriva.
+
+`codamorta2.py` classifica su questo criterio.
+
+| | regioni | righe | **chiamate** |
+|---|---|---|---|
+| **IN MEZZO (difetto)** prima | 2991 | 13025 | **1041** |
+| **IN MEZZO (difetto)** dopo | 572 (−80,9%) | 4120 (−68,4%) | **381 (−63,4%)** |
+| in coda (over-scan) prima | 922 | 6619 | 1515 |
+| in coda (over-scan) dopo | 882 | 6491 | 1481 |
+
+L'over-scan resta **praticamente invariato** (−4%), come dev'essere: non e' il
+bersaglio di questa correzione. Che i due gruppi si muovano in modo cosi' diverso
+e' la prova che il criterio separa davvero due popolazioni, e non taglia a caso.
+
+## 63.3 Il numero da citare
+
+**Chiamate perse per difetto dell'emettitore: 1041 -> 381, −63,4%.**
+
+Non «2556 -> 1862» del §62, che sommava l'over-scan e sottostimava quindi
+l'effetto (−27% invece di −63%). E non «12 -> 0» dei §57-61, che misurava tre
+bucket C non rappresentativi.
+
+E' la terza revisione dello stesso numero in questa sessione. Tutte e tre sono
+andate nella stessa direzione: **la misura grezza sbagliava, e ogni raffinamento
+ha reso il difetto piu' piccolo e la correzione piu' efficace**.
+
+## 63.4 Distribuzione per bucket (chiamate perse totali, §62)
+
+| bucket | prima | dopo |
+|---|---|---|
+| i cinque bucket C | 3 ciascuno | **0 ciascuno** |
+| sample9_go / sample4_go | 816 / 806 | 613 / 607 |
+| sample10_cs / sample5_cs | 345 / 325 | 216 / 200 |
+| sample7_cpp | 135 | 126 |
+| sample3_rust / sample8_rust | 57 / 57 | 50 / 50 |
+
+I bucket C vanno a ZERO. Il residuo e' Go (65%) e C#, dove l'over-scan e' piu'
+pesante — coerente con il §63.1.
+
+## 63.5 Dove va a finire il costo in `goto`
+
+I +555 netti non sono distribuiti: **515 su C# (sample10 258, sample5 257)** e
+111 su Go. I cinque bucket C ne prendono **uno a testa**. E 87 file ne PERDONO
+136.
+
+Cioe': il costo cade dove il flusso e' gia' irriducibile (macchine a stati C#,
+Go), e il guadagno cade dove il codice e' leggibile. E' un compromesso
+accettabile ma va detto per intero.
+
+---
+
+# Round 64 — 2026-08-18 — Comportamento verificato sul corpus intero; DUE GATE DIVENTANO PREDEFINITI
+
+## 64.1 Comportamento: identico, funzione per funzione
+
+`behavior.py --path-b` su ENTRAMBI i lati del corpus intero:
+
+| | funzioni | AGREE | LINK_FAIL | NOT_EMITTED |
+|---|---|---|---|---|
+| prima | 63 | **15** (23,8%) | 4 | 44 |
+| dopo | 63 | **15** (23,8%) | 4 | 44 |
+
+`cmp_paths.py`: 19 funzioni confrontabili, **19 identiche, 0 migliorate, 0
+peggiorate**. Non solo i totali coincidono — coincide ogni singolo verdetto.
+E' l'esito atteso (togliere codice morto e propagare espressioni pure non cambia
+la semantica) ed e' il motivo per cui va misurato lo stesso.
+
+## 64.2 Isolato il costo: e' TUTTO di `TOPTEST_BREAK`
+
+Rigenerato un terzo lato con i soli `FLAGDCE` + `TEMPPROP`:
+
+| | goto | JUMPOUT | `var_tmp*` | `flag_` | dati | righe |
+|---|---|---|---|---|---|---|
+| prima | 8913 | 7 | 59619 | 51397 | 7937 | 946284 |
+| **FLAGDCE+TEMPPROP** | **8912** (−1) | 7 | **36943** (−38,0%) | **36713** (−28,6%) | **7937** | 924787 |
+| + `TOPTEST_BREAK` | 9468 | 2 | 37022 | 36352 | 7935 | 921593 |
+
+* i due gate «dei nomi» portano **tutto il guadagno sui nomi** con **zero costo**:
+  −1 goto, JUMPOUT invariato, dati invariati, **0 chiamate distinte perse in 0
+  file**;
+* `TOPTEST_BREAK` porta **tutto il guadagno sulle chiamate** (1041 -> 381,
+  −63,4%) e **tutto il costo**: +556 goto, −2 dati, 6 chiamate distinte perse in
+  2 file, JUMPOUT 7 -> 2 (questo in meglio).
+
+Le due correzioni sono ortogonali, e la misura lo dimostra invece di assumerlo:
+`FLAGDCE`+`TEMPPROP` lasciano il difetto delle chiamate a 1039 su 1041, cioe' non
+lo toccano affatto.
+
+## 64.3 Decisione
+
+* **`RUSTRE_HLIL_FLAGDCE` e `RUSTRE_HLIL_TEMPPROP` -> DEFAULT-ON.** Si spengono
+  con `=0`. Nessun contatore peggiorato su 11342 file, comportamento identico.
+* **`RUSTRE_HLIL_TOPTEST_BREAK` resta OPT-IN.** Il bilancio e' fortemente
+  positivo (116:1 sulle chiamate) ma include una regressione VERA di 6 chiamate,
+  con causa nota: un blocco emesso in coda alla funzione ha un'etichetta valida
+  ma non e' RAGGIUNGIBILE. Si accende per difetto quando quella e' riparata.
+
+Non accendere un gate con un guadagno 116:1 puo' sembrare eccessivo. La ragione
+e' la lezione di CLAUDE.md sui 2233 parametri fantasma: una regressione di
+correttezza che compila e non muove il comportamento e' esattamente quella che
+resta dentro per mesi. Sei chiamate perse sono poche, ma sono perse in silenzio.
+
+## 64.4 Le due prove, fatte per DIFFERENZA e non per argomento
+
+Rigenerati tutti e 12 i bucket col binario nuovo e NESSUN gate impostato:
+
+1. **`diff -rq` path B (predefiniti) contro path B (gate espliciti):
+   0 differenze su 11342 file.** Il passaggio a default-ON e' esattamente
+   equivalente, non «dovrebbe esserlo».
+2. **`diff -rq` path A prima/dopo: 0 differenze sui `.c` di produzione.** Le
+   modifiche sono davvero solo path B.
+
+E' l'argomento che CLAUDE.md indica come l'unico che sopravvive alle modifiche
+concorrenti di altri agenti: un confronto fra due miei snapshot, non una cifra
+assoluta.
+
+Test: 475 (HLIL) + 1337 (decompiler), 0 falliti.
+
+## 64.5 Stato di path B
+
+| metrica | §55 (config estesa) | oggi (predefiniti) | con `TOPTEST_BREAK` |
+|---|---|---|---|
+| `var_tmp*` | 59619 | **36943** | 37022 |
+| `flag_` | 51397 | **36713** | 36352 |
+| chiamate perse (difetto) | 1041 | 1039 | **381** |
+| `goto` | 8913 | **8912** | 9468 |
+| `JUMPOUT` | 7 | 7 | **2** |
+| dati | 7937 | **7937** | 7935 |
+| comportamento | 15/63 | **15/63** | **15/63** |
+
+Due voci della lista utente sono chiuse e attive per difetto: «il-passes
+CopyPropagation per i `var_tmp0`» e «SSA MLIL per i flag» (quest'ultima con la
+diagnosi corretta: non serviva la SSA, servivano DCE e propagazione).
+
+---
+
+# Round 65 — 2026-08-18 — La regressione di `TOPTEST_BREAK`: quattro ipotesi, tre falsificate
+
+Obiettivo del giro: chiudere le 6 chiamate perse da `RUSTRE_HLIL_TOPTEST_BREAK`,
+che e' l'unica cosa che gli impedisce di diventare predefinito — e vale
+**1041 -> 381** sulle chiamate perse per difetto (§63).
+
+Non e' chiusa. Ma il campo si e' ristretto molto, e ogni esclusione e' misurata.
+
+## 65.1 Ipotesi 1 — «l'uscita secondaria non viene REGISTRATA». FALSA
+
+Nella prima stesura avevo tolto anche `queue_break_exit`, non solo lo
+svuotamento. Rimessa (#6760c): **output identico**, nessuna chiamata recuperata.
+
+## 65.2 Ipotesi 2 — «i blocchi non vengono EMESSI». FALSA
+
+Sonda gia' esistente `RUSTRE_HLIL_DEBUG`: **936 blocchi mai emessi in ENTRAMBE
+le configurazioni, ZERO raggiungibili**. L'emettitore produce lo stesso insieme
+di blocchi con e senza il gate.
+
+## 65.3 Ipotesi 3 — «un `goto` resta orfano e degrada a JUMPOUT». FALSA
+
+Su `sample4_go/sub_14001fa32`:
+* prima: 9 goto, 9 etichette, **0 orfani**;
+* dopo: 8 goto, 8 etichette, **0 orfani**.
+
+Nessun salto senza destinazione. (Il singolo `JUMPOUT` del bucket e' altrove.)
+
+## 65.4 Ipotesi 4 — «il relooper ripiega e scarta il suo lavoro». FALSA
+
+`structure_improper_scc` costruisce statement, marca i blocchi come emessi e —
+se torna `None` — il chiamante ripiega sui `goto`: un percorso di SCARTO
+plausibile. Misurato invece sui due file:
+
+| | `state_` | `switch` | `while` | `if` | righe |
+|---|---|---|---|---|---|
+| prima | 8 | 1 | **7** | **39** | 530 |
+| dopo | 8 | 1 | **2** | **24** | 394 |
+
+Il dispatch del relooper e' **identico** (8 e 1). Spariscono **cinque cicli
+annidati e quindici `if`**, col loro contenuto. La perdita e' dentro `emit_loop`,
+non nel relooper.
+
+## 65.5 Cosa resta
+
+Sappiamo che: i blocchi sono emessi (65.2), i salti hanno destinazione (65.3),
+il relooper non c'entra (65.4), e la registrazione non c'entra (65.1). Eppure
+cinque cicli annidati scompaiono.
+
+L'unico meccanismo compatibile con tutte e quattro le misure e' un blocco
+**marcato `emitted` il cui vettore di statement viene poi scartato**: cosi'
+nessuno lo emette piu' (`emit_pending_exits` lo salta con
+`if self.emitted.contains(&t) { continue; }`) e la sonda LOST non lo vede,
+perche' guarda `emitted`, non l'output.
+
+Sonda `RUSTRE_DBG_PENDING` aggiunta (effetto ZERO, verificato: `diff -rq` su
+sample4_go dà differenze solo in `summary.json`). Su sample4_go: **281 uscite
+pendenti, 191 gia' marcate emesse e quindi SALTATE, 90 emesse davvero**.
+Quel `191` e' il numero da guardare al prossimo giro: se anche solo una di
+quelle e' stata marcata dentro un vettore scartato, il suo codice e' perso.
+
+⚠ La sonda stampa `cfg.entry`, che e' un ID DI BLOCCO e non l'indirizzo della
+funzione: non permette di isolare la funzione incriminata. Da correggere prima
+di riusarla.
+
+## 65.6 Stato invariato e sicuro
+
+`TOPTEST_BREAK` resta OPT-IN, quindi la regressione **non e' in nessun output
+predefinito**. I due gate resi predefiniti nel §64 non sono toccati: 475 test
+HLIL verdi, emissione identica.
+
+---
+
+# Round 66 — 2026-08-18 — #6770: una passata cancellava CODICE VIVO. JUMPOUT a ZERO
+
+## 66.1 Le ultime due ipotesi, e la sesta che ha retto
+
+Il §65 ne aveva falsificate quattro. Questo giro ne ha aggiunta una quinta e
+trovata la vera.
+
+**Ipotesi 5 — «i blocchi sono marcati emessi ma il loro vettore viene
+SCARTATO».** Sonda nuova `RUSTRE_DBG_DISCARD` (effetto ZERO, verificato con
+`diff -rq`): `emit_block` emette SEMPRE un'etichetta `loc_<addr>`, quindi un id
+in `emitted` la cui etichetta manca dal corpo finale e' un vettore scartato.
+Misurato: **0 scartati in ENTRAMBE le configurazioni**, `emessi=121` identico.
+**FALSA.** L'emettitore e' innocente: la perdita e' a VALLE.
+
+**Ipotesi 6 — una passata a valle cancella.** Aggiunto l'interruttore
+diagnostico `RUSTRE_HLIL_NOUNREACH=1` che spegne
+`remove_unreachable_after_terminator`, e chiesto per ESPERIMENTO:
+
+| `sample4_go/sub_14001fa32` | righe | `runtime_scanConservative` |
+|---|---|---|
+| senza `TOPTEST_BREAK` | 530 | 3 |
+| con `TOPTEST_BREAK` | 394 | **0** |
+| con `TOPTEST_BREAK` + `NOUNREACH` | **513** | **2** |
+
+Spegnendo la passata il codice torna. Confermata.
+
+## 66.2 Il difetto, e non e' di `TOPTEST_BREAK`
+
+Il codice cancellato:
+
+```c
+    goto loc_14001fce9;
+}
+while (1) {                 // <- cancellato: segue un terminatore...
+    var_tmp0 = ...;
+    if (var_tmp0 != 0) {
+loc_14001fede:              // <- ...ma contiene un'ETICHETTA, annidata
+```
+
+`remove_unreachable_after_terminator` azzerava lo stato «morto» solo su un
+`HlilStatement::Label` **allo stesso livello**. Un `goto` pero' puo' saltare
+DENTRO un costrutto: se un `while`/`if` ha un'etichetta nel corpo, quel
+costrutto e' raggiungibile anche quando lo precede un terminatore.
+
+**Il difetto e' GENERALE e preesistente.** `RUSTRE_HLIL_TOPTEST_BREAK` non lo
+causa: produce solo la disposizione che lo espone. E' il motivo per cui tutte e
+cinque le ipotesi a monte erano false.
+
+Riparazione (#6770): non cancellare uno statement che contenga un'etichetta a
+QUALUNQUE profondita'.
+
+## 66.3 Misura, corpus intero (11342 file per lato)
+
+| | goto | **JUMPOUT** | `var_tmp*` | `flag_` | **dati** | righe |
+|---|---|---|---|---|---|---|
+| predefinito (§64) | 8912 | 7 | 36943 | 36713 | 7937 | 924787 |
+| **+#6770** | 8978 (+66) | **0** | 37112 | 36782 | **7943** (+6) | 925929 |
+| +`TOPTEST` (§62) | 9468 | 2 | 37022 | 36352 | 7935 | 921593 |
+| **+#6770+`TOPTEST`** | 9541 | **0** | 37203 | 36428 | **7943** (+8) | 922900 |
+
+* **`JUMPOUT` va a ZERO** in entrambe le configurazioni. E' la richiesta esplicita
+  dell'utente, e arriva da una riparazione di correttezza, non da una
+  soppressione cosmetica.
+* **+6 simboli di dato materializzati** ricompaiono.
+* **+18 chiamate DISTINTE recuperate**, 0 perse (confronto insiemistico per file).
+
+## 66.4 La regressione del §64 e' CHIUSA
+
+`TOPTEST_BREAK` dopo #6770: **0 chiamate distinte perse in 0 file** (erano 6 in
+2 file). Era l'unica cosa che ne impediva l'accensione per difetto.
+
+Difetto «code irraggiungibili in mezzo»: **1066 -> 423 chiamate (−60%)**.
+
+## 66.5 ⚠ La stessa svista era anche nella MISURA
+
+`codamorta2.py` azzerava lo stato morto solo al livello corrente: contava come
+morta esattamente la classe che #6770 salva. Corretto (un'etichetta a qualunque
+profondita' azzera tutto). Prima della correzione i numeri erano 1039/1088;
+dopo, 1017/1066.
+
+Terza volta in questa sessione che lo stesso difetto concettuale sta sia nel
+codice sia nello strumento che lo misura. Vale la pena dirlo come regola: **dopo
+aver corretto un difetto di ragionamento nel codice, controllare se la misura lo
+condivide.**
+
+## 66.6 Test
+
+Due unitari nuovi (477 vs 475): il caso che deve sopravvivere (etichetta
+annidata) e il suo controaltare (nessuna etichetta ⇒ si cancella ancora), perche'
+senza il secondo la correzione potrebbe aver disattivato la passata senza che
+nulla protesti. `cargo test -p rustre-decompiler --lib`: 1337, 0 falliti.
+
+---
+
+# Round 67 — 2026-08-18 — `TOPTEST_BREAK` diventa predefinito. Bilancio della serie 57-67
+
+## 67.1 Comportamento, entrambe le configurazioni
+
+| | funzioni | AGREE | LINK_FAIL |
+|---|---|---|---|
+| #6770 solo | 63 | 15 (23,8%) | 4 |
+| #6770 + `TOPTEST_BREAK` | 63 | 15 (23,8%) | 4 |
+
+`cmp_paths.py`: **19 su 19 identiche**, 0 migliorate, 0 peggiorate, in entrambe.
+
+## 67.2 `RUSTRE_HLIL_TOPTEST_BREAK` -> DEFAULT-ON
+
+E' rimasto opt-in un giro intero per 6 chiamate perse in 2 file su 11342. La
+causa non era in quel codice ma in `remove_unreachable_after_terminator`
+(#6770); chiusa quella, restano solo guadagni:
+
+* chiamate perse per difetto **1066 -> 423** (−60%);
+* chiamate distinte perse **0** in **0** file (erano 6 in 2);
+* `JUMPOUT` 0 -> 0, dati 7943 -> 7943, comportamento identico;
+* costo: `goto` 8978 -> 9541 (+563), concentrati su C# e Go — i cinque bucket C
+  ne prendono uno a testa.
+
+Il compromesso e' esplicito: un `goto` e' onesto e verificabile, del codice
+irraggiungibile e' silenziosamente sbagliato.
+
+## 67.3 Le due prove finali, per differenza
+
+* `diff -rq` predefiniti contro gate espliciti: **0 differenze** su 11342 file;
+* `diff -rq` path A dall'INIZIO della serie (`all_before`) a oggi: **0
+  differenze** sui `.c` di produzione.
+
+Tutto il lavoro dei round 57-67 e' path B, dimostrato e non argomentato.
+Test: 477 (HLIL) + 1337 (decompiler), 0 falliti.
+
+## 67.4 Bilancio della serie 57-67, corpus intero
+
+| metrica | inizio (§55) | fine (§67) | |
+|---|---|---|---|
+| `var_tmp*` | 59619 | **37203** | **−37,6%** |
+| `flag_` | 51397 | **36428** | **−29,1%** |
+| `JUMPOUT` | 7 | **0** | **azzerati** |
+| chiamate perse per difetto | ~1017 | **423** | **−58%** |
+| dati materializzati | 7937 | **7943** | +6 |
+| `goto` | 8913 | 9541 | +628 (C#/Go) |
+| righe | 946284 | 922900 | −2,5% |
+| comportamento | 15/63 | **15/63** | identico 19/19 |
+| firme | — | — | identiche |
+| path A | — | — | **invariato** |
+
+### Le quattro passate, tutte attive per difetto
+
+1. **`eliminate_dead_flag_stores`** (§57) — liveness all'indietro con punto fisso
+   sulle etichette. I flag non erano da fondere: erano store morti.
+2. **`propagate_pure_temps`** (§58) — copy propagation a piu' usi di RHS puri.
+   ⚠ va DOPO `fold_flag_combos`, non prima: prima la sabota (+33% flag).
+3. **#6760 `top_test_break`** (§60) — il bersaglio del `break` in un loop a test
+   in testa e' `outside`, non `ipdom(header)`.
+4. **#6770** (§66) — non cancellare un costrutto che contiene un'etichetta
+   annidata: cancellava CODICE VIVO.
+
+### Cosa ha trovato la sessione, oltre alle correzioni
+
+* tre commenti nel sorgente che dicevano il falso (fra cui un gate dichiarato
+  spento che era acceso);
+* un test committato che contraddiceva il codice committato;
+* quattro difetti nelle MIE misure, ognuno dei quali aveva prima prodotto un
+  numero sbagliato pubblicato in chiaro.
+
+## 67.5 Fronti aperti
+
+* **423 chiamate in regioni irraggiungibili**, ora concentrate in Go e C#, in
+  parte over-scan di `.pdata` (§63) e in parte difetto vero;
+* **+628 `goto`** da riassorbire: l'obiettivo dichiarato e' ZERO;
+* `var_tmp*` e `flag_` residui, che richiedono GVN e fusione di combinazioni;
+* le voci della lista utente ancora intatte: `analysis-fn` per prologo/epilogo,
+  `MlilCallAnalysis`/`ParameterTypeInference` per le firme, `flirt-apply` per i
+  nomi.
+
+---
+
+# Round 68 — 2026-08-18 — Tre fronti chiusi come GIA' VINTI, e una scoperta che cambia le priorita'
+
+## 68.1 `goto`: gia' all'ottimo misurato, non e' un fronte aperto
+
+Sonda `RUSTRE_DBG_GOTO` su sample10_cs (4758 salti):
+
+| classe | n | |
+|---|---|---|
+| `backward_plain` | 2399 | 50% |
+| `forward_plain` | 2199 | 46% |
+| `loop_backedge` | 144 | |
+| `irreducible` | 13 | |
+
+Solo **276 hanno `preds=1`** (bersaglio a un solo predecessore, quindi
+riordinabile); 1615 hanno un bersaglio di 1-2 statement, quindi duplicabile.
+
+Sonda `RUSTRE_DBG_DUP` sui rifiuti della duplicazione (le due voci
+`branch_other_*` sono propagazioni ricorsive, le foglie sono le altre):
+
+| causa | n |
+|---|---|
+| **`budget`** | **1247** |
+| `loop_header` | 1169 |
+| `scc` / `switch` / `cycle` | 47 |
+
+`budget` NON e' un difetto: il cap e' gia' tarato su una curva misurata da una
+sessione precedente — 2 e' il ginocchio (3,1 righe per goto rimosso), a 4 il
+costo marginale e' 26,3, peggio dello structuring. `loop_header` e' un rifiuto
+di CORRETTEZZA (copiare un header biforca il ciclo).
+
+**Conclusione: la duplicazione di coda ha gia' dato tutto.** I 4600 salti
+«semplici» residui hanno bersagli a piu' predecessori e richiedono structuring
+per regioni, non duplicazione. Non e' un intervento da un round.
+
+## 68.2 Nomi: path B e' AVANTI, e `flirt-apply` e' GIA' CABLATO
+
+| | nomi veri | anonimi |
+|---|---|---|
+| path B | **5238** | 6104 (`fn_HEX`) |
+| path A | 5124 | 6218 (`sub_HEX`) |
+
+Path B ne ha **114 in piu'**. E `rustre-flirt-apply` risulta gia' usato da
+`binary_entry.rs` (`FlirtScanner`, `flirt_pairs_for_load`,
+`baseline_flirt_scanner`, `non_rust_flirt_scanner`, caricamento dei `.sig`).
+La voce «flirt-apply per i nomi» della lista utente **e' chiusa**.
+
+## 68.3 Riferimenti pendenti: path B e' AVANTI di piu' del doppio
+
+| | nomi HEX usati | mai definiti | |
+|---|---|---|---|
+| path A | 8798 | **2900** | 33% |
+| path B | 6718 | **931** | **14%** |
+
+Di quei 931, solo **11** sono pura incoerenza di grafia (`sub_X` chiamato,
+`fn_X` definito allo stesso indirizzo); i restanti 756 `sub_` e 164 `fn_` sono
+bersagli genuinamente non emessi (import, thunk). Difetto reale ma piccolo.
+
+## 68.4 ⚠ LA SCOPERTA: misuravo una configurazione che nessuno usa
+
+Verificato lo stato di default dei 18 gate della «configurazione estesa» usata
+dal §55 in poi: **la maggior parte e' OPT-IN.** Solo `EXPR_SIMPLIFY`,
+`GOTO_BREAK`, `RELOOP_MULTIEXIT` e `CFGLOOP` sono predefiniti.
+
+Path B PREDEFINITO contro configurazione estesa, corpus intero:
+
+| | goto | JUMPOUT | `var_tmp*` | `flag_` | **`var_sp`** | dati | righe |
+|---|---|---|---|---|---|---|---|
+| **vero predefinito** | 11266 | 1 | 45395 | 42039 | **134462** | 7943 | 1028886 |
+| configurazione estesa | 9541 | 0 | 37203 | 36428 | **12** | 7943 | 922900 |
+
+**`var_sp` 134462 contro 12.** Per difetto path B stampa ancora il prologo
+simulato a mano (`var_sp = var_sp - 8; *(__int64 *)var_sp = …` ×8 per funzione),
+che `RUSTRE_HLIL_NOPROLOGUE` — opt-in — elimina. E' la voce «analysis-fn per
+prologo/epilogo» della lista utente: la capacita' c'e', e' spenta.
+
+**Ogni contatore e' migliore o uguale** nella configurazione estesa; i dati
+materializzati sono identici (7943).
+
+### Perche' conta per l'obiettivo
+
+«Path B unico» significa che il suo comportamento PREDEFINITO diventa la
+produzione. Tutte le misure dei round 57-67 valgono per una configurazione che
+va ATTIVATA. Il lavoro che segue e' promuovere i gate misurati buoni, uno
+scaglione alla volta e con la stessa disciplina: `diff -rq` fra due miei
+snapshot, comportamento, e nessun contatore peggiorato.
+
+Comportamento del vero predefinito: misura lanciata, esito al prossimo giro.
+
+---
+
+# Round 69 — 2026-08-18 — `NOPROLOGUE` predefinito: −99230 righe. E un'interruzione da modifiche concorrenti
+
+## 69.1 Comportamento del vero predefinito: identico
+
+| | funzioni | AGREE | LINK_FAIL |
+|---|---|---|---|
+| vero predefinito | 63 | 15 (23,8%) | 4 |
+| configurazione estesa | 63 | 15 (23,8%) | 4 |
+
+`cmp_paths.py`: **19 su 19 identiche**. Promuovere i gate e' quindi neutro sul
+comportamento e migliora ogni contatore testuale — la condizione che serviva
+per procedere.
+
+## 69.2 `RUSTRE_HLIL_NOPROLOGUE` -> DEFAULT-ON (#6780)
+
+Misurato in **isolamento** (unico gate acceso oltre a `RUSTRE_HLIL`, corpus
+intero, 11342 file per lato):
+
+| | `var_sp` | righe | goto | JUMPOUT | `var_tmp*` | `flag_` | dati |
+|---|---|---|---|---|---|---|---|
+| vero predefinito | 134462 | 1028886 | 11266 | 1 | 45395 | 42039 | 7943 |
+| **+`NOPROLOGUE`** | **0** | **929656** | 11266 | 1 | 45395 | 42039 | 7943 |
+
+**Un solo contatore si muove, e va a ZERO.** −99230 righe (−9,6%), tutto il
+resto identico byte per byte.
+
+Il commento sul sito di chiamata descriveva gia' il difetto come «di
+CORRETTEZZA: scrittura attraverso un puntatore mai inizializzato, 57% del
+corpus» — e la passata che lo ripara era **opt-in**. E' la voce «analysis-fn per
+prologo/epilogo» della lista utente.
+
+Prove per differenza: `diff -rq` nuovo predefinito contro gate esplicito
+**0 differenze**; `diff -rq` path A **0 differenze**.
+
+Quattro gate ora predefiniti: `FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`,
+`NOPROLOGUE`.
+
+## 69.3 ⚠ Interruzione: `lib.rs` modificato da un altro agente durante il giro
+
+A meta' round `cargo test` ha smesso di compilare:
+
+```
+error: mismatched closing delimiter: `}`
+  --> crates
+ustre-decompiler\src\lib.rs:1678:20
+```
+
+Non e' codice mio: e' il lifting di `cmpxchg`, e il diff non committato di
+`lib.rs` era passato da 52 righe (i miei commenti) a **239 inserimenti**.
+`Some(InstrLift::Handled(Some(CfsStatement::Raw(format!(` apre cinque
+delimitatori e `))));` ne chiudeva quattro.
+
+Ho seguito la regola di CLAUDE.md («riprovare, poi applicare la correzione
+banale se stabile-rotto»): riprovato, confermato rotto anche per la lib, e
+tentata la parentesi mancante. **Le mie due sostituzioni non hanno agganciato
+perche' il file cambiava a ogni tentativo** — fra una lettura e la successiva le
+stringhe erano gia' diverse (era sparito un `)` spurio dentro il testo emesso).
+Alla verifica successiva la build passava: l'ha chiusa l'altro agente.
+
+Stato finale verificato: lib compila (1 warning, `ops` non usato, non mio), i
+**quattro gate sono ancora default-ON**, `cargo test -p rustre-decompiler --lib`
+**1337 passati, 0 falliti**.
+
+### Conseguenza sui numeri
+
+Gli snapshot `all_*`, `final`, `vero_def`, `solo_nopro` sono stati generati
+PRIMA di quelle modifiche. Le cifre dei §68-69 restano valide come confronti
+fra due miei snapshot coetanei — che e' l'unico uso che CLAUDE.md considera
+lecito — ma **non descrivono piu' l'emissione corrente**. Vanno rigenerati
+prima di pubblicare qualunque assoluto.
+
+## 69.4 Il resto dei gate opt-in, da promuovere a scaglioni
+
+Ancora opt-in e misurati buoni dentro la configurazione estesa: `ZFTEMP`,
+`CMOVFOLD`, `C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`, `NESTED_REDEF_GUARD`,
+piu' `DEADTMP` e `DEDUPCAST` (default-ON gia' verificati come `!env(...)`).
+Nessuno e' stato ancora isolato singolarmente: `NOPROLOGUE` lo e' stato, ed e'
+il motivo per cui e' stato promosso per primo.
+
+---
+
+# Round 70 — 2026-08-18 — Firme: path B ha il 65% in meno di argomenti fantasma
+
+## 70.1 `MlilCallAnalysis` e `ParameterTypeInference`: ZERO chiamanti
+
+Le due voci «argomenti e firme» della lista utente:
+
+| | dove | righe | test | chiamanti fuori dal proprio file |
+|---|---|---|---|---|
+| `MlilCallAnalysis` | `rustre-il-mlil/src/mlil_call_analysis.rs` | 947 | 17 | **0** |
+| `ParameterTypeInference` | `rustre-analysis-type/src/type_propagation.rs` | — | — | **0** |
+
+`mlil_call_analysis` e' `pub mod` e offre `CallSite` (con gli argomenti per
+sito), `ArgumentMapping`, `ReturnValueTracking`, `IndirectCallResolver`,
+`VirtualCallResolver`. Capacita' spenta, terza del suo genere in questa
+sessione dopo `hlil_control_flow_recovery` e i 17 gate opt-in.
+
+## 70.2 Prima di cablarla: quanto vale il premio?
+
+`callsite_consistency.py` misura il difetto che quella crate indirizza — la
+contraddizione fra l'arieta' con cui una funzione e' DEFINITA e quella con cui
+e' CHIAMATA, dentro lo stesso progetto emesso, senza verita' esterna.
+
+### ⚠ Due difetti nella misura, corretti prima di usarla
+
+1. **Mescolava i due percorsi.** Raccoglieva tutti i `.c`, quindi confrontava la
+   definizione di path A con le chiamate di path B. Mescolato dava
+   **11903 OVER / 11490 UNDER**; filtrato su path A da' **9756 / 6041**, che
+   combacia esattamente con la baseline in CLAUDE.md. Il numero mescolato era
+   gonfiato del 22%.
+2. **Non riconosceva le firme di path B.** `DEF_RE` esigeva `) {` sulla STESSA
+   riga; path B mette la graffa su quella dopo. Su path B contava **0
+   definizioni** — taceva invece di sbagliare, il che e' meglio, ma la rendeva
+   inutilizzabile. Reso opzionale il `{`.
+
+Controprova del rilassamento: i numeri di path A restano **identici**
+(10330 / 9756 / 6041), quindi non ha introdotto falsi positivi.
+
+## 70.3 Il risultato: parita' a favore di path B
+
+| | definizioni | **OVER** | UNDER |
+|---|---|---|---|
+| path A | 10330 | **9756** | 6041 |
+| path B | **11300** | **3421** | 6478 |
+
+* **OVER −65%.** E' la classe PERICOLOSA: un argomento in piu' a un sito di
+  chiamata compila pulito sotto le regole non prototipate di `gnu89` — la stessa
+  cecita' che lasciava leggere 11143/11144 con 2233 parametri fantasma.
+* UNDER +7%, cioe' path B manca qualche argomento in piu'. Meno grave: un
+  argomento mancante e' un difetto visibile, uno di troppo e' silenzioso.
+* Path B ispeziona **970 definizioni in piu'**.
+
+### Conseguenza sulla priorita'
+
+Cablare `MlilCallAnalysis` per «migliorare le firme di path B» avrebbe avuto
+senso se path B fosse indietro. **Non lo e': e' avanti di due terzi sulla classe
+peggiore.** Il premio non e' dove la lista lo colloca. Se quella crate va
+cablata, il bersaglio giusto e' l'`UNDER` (6478) e la risoluzione delle chiamate
+indirette, non l'`OVER`.
+
+## 70.4 Quinta capacita' spenta trovata, e un bilancio
+
+Fin qui, in questa sessione: `hlil_control_flow_recovery` (981 righe, 7 test, 0
+chiamanti), `MlilCallAnalysis` (947, 17, 0), `ParameterTypeInference` (0
+chiamanti), 17 gate opt-in fra cui uno che valeva 99230 righe, e
+`published_lib_arity` dietro un gate spento (gia' noto da CLAUDE.md).
+
+Il quadro e' coerente con la diagnosi generale: **il decompilatore non manca di
+capacita', le tiene spente.**
+
+## 70.5 In corso
+
+Isolamento dei sei gate opt-in rimasti (`ZFTEMP`, `CMOVFOLD`, `C_GOTO_REMOVAL`,
+`TAILDUP`, `LOOPS_DELEGATE`, `NESTED_REDEF_GUARD`), uno alla volta sul corpus
+intero contro una base rigenerata col binario corrente. Tre su sette snapshot
+pronti.
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->

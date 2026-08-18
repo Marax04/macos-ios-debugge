@@ -1,5 +1,4 @@
 //! Exhaustive blitz tests for rustre-ttd-query (lib.rs surface).
-#![allow(clippy::too_many_lines)]
 
 use std::sync::Arc;
 

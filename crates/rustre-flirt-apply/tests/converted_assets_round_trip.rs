@@ -28,6 +28,8 @@
 //! `examples/asset_conversion_round_trip.rs`, which takes any of them.
 
 use std::collections::HashSet;
+
+use rustre_flirt_apply::usize_to_f64;
 use std::path::{Path, PathBuf};
 
 fn repo_root() -> PathBuf {
@@ -117,8 +119,8 @@ fn wildcards_survive_and_patterns_stay_long() {
          troncare al primo wildcard, e con esso tornerebbero i falsi positivi"
     );
 
-    #[allow(clippy::cast_precision_loss)]
-    let mean = sigs.iter().map(|s| s.bytes.len()).sum::<usize>() as f64 / sigs.len() as f64;
+    let mean =
+        usize_to_f64(sigs.iter().map(|s| s.bytes.len()).sum::<usize>()) / usize_to_f64(sigs.len());
     assert!(
         mean > 20.0,
         "lunghezza media {mean:.1} byte: i pattern arrivano troncati, ed erano \

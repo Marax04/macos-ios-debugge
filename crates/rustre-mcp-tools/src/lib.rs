@@ -623,6 +623,40 @@ pub fn detect_packers(data: &[u8]) -> Vec<String> {
     found
 }
 
+/// Read a confidence argument as the `f32` the threat-intel types take.
+///
+/// ⚠ Why this exists. Three tools did `args["confidence"].as_f64()? as f32`
+/// behind an `#[allow(clippy::cast_possible_truncation)]`. The cast itself is
+/// harmless for a value in 0..=1, and `ThreatIoc::new` clamps — but
+/// `f32::clamp` returns NaN for a NaN input, so a client sending
+/// `{"confidence": NaN}` (or a value outside the range, or an infinity) got an
+/// IOC carrying that value with no complaint. A confidence is a probability:
+/// anything that is not a finite number in 0..=1 is a caller error and is now
+/// reported as one, instead of being converted quietly.
+///
+/// # Errors
+/// `InvalidParams` when the field is absent, not a number, not finite, or
+/// outside 0..=1 — naming which.
+pub(crate) fn confidence_arg(args: &Value, key: &str) -> Result<f32, McpError> {
+    let raw = args
+        .get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| McpError::InvalidParams(format!("missing '{key}' (number 0.0..=1.0)")))?;
+    if !raw.is_finite() {
+        return Err(McpError::InvalidParams(format!(
+            "'{key}' must be a finite number, got {raw}"
+        )));
+    }
+    if !(0.0..=1.0).contains(&raw) {
+        return Err(McpError::InvalidParams(format!(
+            "'{key}' is a probability and must be within 0.0..=1.0, got {raw}"
+        )));
+    }
+    // Lossless in magnitude for this range: every f64 in 0..=1 is within f32
+    // range, so the conversion rounds precision and cannot truncate or wrap.
+    Ok(raw as f32)
+}
+
 pub(crate) fn args_to_bytes_named(args: &Value, key: &str) -> Result<Vec<u8>, McpError> {
     if let Some(arr) = args.get(key).and_then(Value::as_array) {
         return arr

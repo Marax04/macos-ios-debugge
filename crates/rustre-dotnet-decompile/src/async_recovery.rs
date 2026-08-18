@@ -1023,9 +1023,29 @@ pub fn recover_all_async_methods(
     }).collect()
 }
 
-// ─── Mocks / test helpers ─────────────────────────────────────────────────────
+// ─── Synthetic fixtures (this crate's own tests only) ─────────────────────────
+//
+// Neither constructor below reads any assembly. They are templates: a method
+// name and an await count do not determine IL, so there is nothing to compute
+// from them. The real producers are `decompile_async` / `recover_all_async_methods`
+// in this module, fed by `MethodDef`s lifted from a real assembly's metadata
+// and IL (see `crate::metadata_bridge`).
+//
+// ⚠ On the STATE-DISPATCH SHAPE, which an earlier pass got wrong here: this
+// fixture emits an IL `switch` table for the `<>1__state` dispatch. Real
+// compilers do not always do that — Roslyn emits a chain of `brfalse` /
+// `bne.un` comparisons for a state machine with few states, and only switches
+// to a `switch` table once the state count makes a jump table worthwhile;
+// Mono/mcs and the F# compiler differ again. So the `switch` form below is ONE
+// producer's shape at ONE size, not the canonical one, and a recovery pass that
+// passes only against this fixture has not been shown to handle the common
+// small-machine case. Test the branch-chain shape against real IL, not here.
 
-/// Build a minimal `TypeDef` that looks like a compiler-generated async SM.
+/// Synthetic async-state-machine-shaped `TypeDef` fixture.
+///
+/// NOT analysis: nothing is parsed, the IL below is hand-written, and the
+/// dispatch is a `switch` table (see the note above — Roslyn emits `brfalse` /
+/// `bne.un` for a small machine). Never report it as a recovered state machine.
 #[must_use] 
 pub fn mock_state_machine(original_method: &str, num_awaits: usize) -> TypeDef {
     let sm_name = format!("<{original_method}>d__0");
@@ -1129,7 +1149,12 @@ pub fn mock_state_machine(original_method: &str, num_awaits: usize) -> TypeDef {
     }
 }
 
-/// Build a minimal async `MethodDef` for `original_method`.
+/// Synthetic async `MethodDef` fixture.
+///
+/// NOT analysis: the body is two hand-written instructions (`nop; ret`) and the
+/// `AsyncStateMachine` attribute is fabricated from `name`. A real one comes
+/// from metadata via `crate::metadata_bridge`. Never report it as a recovered
+/// method.
 #[must_use] 
 pub fn mock_async_method(name: &str, return_type: &str) -> MethodDef {
     let sm_name = format!("<{name}>d__0");
