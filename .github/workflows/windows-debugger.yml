@@ -1,0 +1,154 @@
+name: Windows debugger
+
+# Why this exists
+# ---------------
+# Windows had NO CI at all — measured 2026-08-16: `.github/workflows/` held
+# `linux-debugger.yml` and `macos-debugger.yml` and nothing else.
+#
+# That is the same hole `linux-debugger.yml` was created to close, and its
+# opening comment describes it exactly: a backend "verified only on the
+# maintainer's machine" is one machine, one OS build, one architecture. The
+# Windows backend is the one this project is developed on, which makes the gap
+# easy to miss and no smaller: every green it has ever reported comes from a
+# single host.
+#
+# The second row is the one nobody has ever measured. `windows_debugger.rs`
+# refuses hardware watchpoints off x86 —
+#
+#   "hardware watchpoints on this backend program the x86 debug registers,
+#    which this host architecture does not have"
+#
+# — while the Linux backend now translates them through NT_ARM_HW_WATCH (570)
+# and the macOS one through ARM_DEBUG_STATE64. Windows-on-ARM is a real
+# platform with `Bcr`/`Bvr`/`Wcr`/`Wvr` in its ARM64 CONTEXT, so the same
+# capability is reachable there too.
+#
+# It is NOT implemented here, deliberately. Iteration 569 was written to lift
+# a refusal on the strength of a prediction and had to be corrected; the rule
+# that came out of it is that a defence is removed when a machine can answer,
+# not before. This workflow is that machine. Measuring first, implementing
+# second.
+#
+# Measured while writing this: `cargo check --target aarch64-pc-windows-msvc`
+# cannot run on the development host at all — `libsqlite3-sys` needs a C
+# cross-compiler that is not installed, the same wall that blocks
+# aarch64-unknown-linux-gnu. So there is no local substitute for this row.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  windows:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # 90, matching the Linux workflow and for the reason recorded there: a cold
+    # release build of this workspace plus two test runs does not fit in 45, and
+    # a job killed by its own ceiling reads as a failure of the code — the most
+    # expensive kind of false signal.
+    timeout-minutes: 90
+    continue-on-error: ${{ matrix.expected_to_fail }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows x86_64
+            expected_to_fail: false
+          # ── The measurement ────────────────────────────────────────────────
+          #
+          # Whether this backend even BUILDS for ARM64 Windows is unknown. Not
+          # "believed to work" and not "believed to fail" — unmeasured, which is
+          # the state this repo has learned to treat as a defect of its own.
+          #
+          # `continue-on-error` because an unknown answer must not turn the
+          # whole workflow red on its first run. The summary below prints the
+          # row's real result either way, so it cannot fail in silence — the
+          # hole that let a cancelled job (556) and a tolerated failure (572,
+          # 578) all be signed off as passing.
+          #
+          # DELETE the flag once the row is green. If it is still here after
+          # that, this row has stopped being a measurement.
+          - os: windows-11-arm
+            name: Windows ARM64 (mai misurato)
+            expected_to_fail: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Same pin as the other two workflows: pyo3 0.23 caps at Python 3.13 and
+      # rustre-mcp-tools pulls it in through two crates, so whichever Python the
+      # runner image happens to ship would otherwise decide whether the
+      # workspace builds.
+      - name: Pin Python to a version PyO3 0.23 supports
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ matrix.os }}-cargo-
+
+      - name: Show host facts
+        shell: bash
+        run: |
+          echo "arch:  $PROCESSOR_ARCHITECTURE"
+          echo "rustc: $(rustc -vV | tr '\n' ' ')"
+
+      - name: Build (release)
+        run: cargo build --release -p rustre-debug
+
+      # `--test-threads=1` for the same reason the other two need it: several
+      # tests drive a real debuggee, and two of those at once fight over the
+      # same debug registers and wait queues.
+      - name: Test (release, serial)
+        run: cargo test --release -p rustre-debug --lib -- --test-threads=1
+
+      - name: Test rustre-mcp-tools
+        run: cargo test --release -p rustre-mcp-tools --lib
+
+      - name: Clippy (informational)
+        continue-on-error: true
+        run: cargo clippy --release -p rustre-debug -- -W clippy::all
+
+  summary:
+    name: Windows verified
+    runs-on: ubuntu-latest
+    needs: windows
+    if: always()
+    steps:
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "windows job result: ${{ needs.windows.result }}"
+          echo ""
+          echo "PER-ROW, because the job result cannot see a tolerated failure:"
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" \
+            --jq '.jobs[] | select(.name | startswith("Windows ")) | "  \(.name): \(.conclusion)"'
+          echo ""
+          echo "The ARM64 row is allowed to fail while it is still unmeasured."
+          echo "It is NOT allowed to fail unreported, which is why it is printed"
+          echo "above rather than left to the aggregate."
+          #
+          # `= success`, not `!= failure`: measured on the Linux twin, where a
+          # CANCELLED job was reported as passing because "cancelled" is not
+          # "failure". The absence of a failure is not the presence of a pass.
+          test "${{ needs.windows.result }}" = "success"

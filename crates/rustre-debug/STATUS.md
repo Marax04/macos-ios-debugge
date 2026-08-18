@@ -65,6 +65,43 @@ dove prima c'era un rifiuto.
 | **iOS su hardware** | infrastruttura | non ottenibile su Actions |
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
+## 4-quinquies. 595-597 — una capacità dichiarata falsa, e la CI che mancava
+
+**595 — macOS PUÒ riportare l'indirizzo di fault, e io avevo scritto di no.**
+Il 577 pubblicava `fault_address: supported: false` motivando che *«verrebbe da
+`__far` via `thread_get_state`, che `mach2` non espone»*. La premessa è vera, la
+conclusione no: questo backend **dichiara già a mano** ciò che `mach2` omette —
+`ArmDebugState64` è lì per quel motivo, con size-assert a compile time. La
+capacità era raggiungibile col pattern del file stesso.
+
+Una dichiarazione falsa in `backend_capabilities()` è peggio di una funzione non
+implementata: quella lista esiste perché un chiamante possa fidarsi. Prima macOS
+rispondeva «è crashato» e mai «dove».
+
+**596 — il job iOS device ora LINKA i binari di test.** I runner ospitati non
+hanno iPhone fisici, e nessuno ne ha: solo un self-hosted con device via USB
+esegue `aarch64-apple-ios`. Ora è scritto nel workflow perché nessuno ci perda un
+giro. Ma `cargo test --no-run` compila E linka tutti i test per il device —
+tutto tranne l'esecuzione. Da registrare: il simulatore gira su `macos-14`
+(Apple Silicon) con `aarch64-apple-ios-sim`, quindi quei 1930 test eseguono
+**codice arm64 iOS reale** contro il `debugserver` di Apple. Non è un mock.
+
+**597 — Windows non aveva NESSUNA CI.** Misurato: `.github/workflows/` conteneva
+solo Linux e macOS. È lo stesso buco che `linux-debugger.yml` fu creato per
+chiudere, ed è più facile da non vedere proprio perché Windows è la macchina di
+sviluppo: ogni verde che ha mai riportato viene da un host solo.
+
+La riga ARM64 è quella mai misurata. `windows_debugger.rs` rifiuta ancora i
+watchpoint hardware fuori da x86 mentre Linux (570) e macOS traducono, e
+Windows-on-ARM ha `Bcr`/`Bvr`/`Wcr`/`Wvr` nel suo CONTEXT — quindi la capacità è
+raggiungibile lì come altrove. **Non implementata di proposito**: il 569 lifted
+una difesa su una previsione e andò corretto; la regola che ne è uscita è che si
+rimuove quando una macchina può rispondere. Questo workflow è quella macchina.
+
+Misurato mentre lo scrivevo: `cargo check --target aarch64-pc-windows-msvc` non
+gira sull'host di sviluppo — `libsqlite3-sys` vuole un cross-compiler C, lo
+stesso muro di `aarch64-unknown-linux-gnu`. Non c'è surrogato locale.
+
 ## 4-ter. Il primo run ARM che risponde davvero (593-594)
 
 `193c7c0` ha chiuso l'`ENOSPC`: **1993/6 → 1997/5**, e nessun «No space left on
