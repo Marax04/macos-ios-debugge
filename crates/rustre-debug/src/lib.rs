@@ -997,6 +997,47 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
+/// What a register set can tell us about the hardware debug registers.
+///
+/// The three desktop backends all decided this with `regs.get("dr7").unwrap_or(0)`
+/// and then treated `0` as "nothing is armed, skip this thread". Three lines
+/// above, the same loops get the neighbouring case right — a thread whose
+/// registers cannot be READ is pushed onto `still_armed` with the comment "a
+/// thread whose registers cannot be read is UNVERIFIED, not clean". A register
+/// set that was read but does not CONTAIN `dr7` is exactly as unverified, and
+/// `unwrap_or(0)` threw that distinction away.
+///
+/// It is not hypothetical on either side of the ARM64 port:
+///
+/// * The Windows AArch64 `context_to_register_set` publishes no `dr7` at all —
+///   AArch64 has `Bcr`/`Bvr`/`Wcr`/`Wvr`, not debug registers 0..7. Every one
+///   of these sites therefore read `0` and concluded "clean" unconditionally.
+/// * On Linux ARM `dr7` is synthesised from `NT_ARM_HW_WATCH`, and
+///   `merge_debug_state` returns early when that regset cannot be read — the
+///   very failure this crate has open against the ARM CI runner. Absent means
+///   "the kernel would not say", and the answer that must not be given is
+///   "clean".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugRegisterState {
+    /// `dr7` was read and no slot is enabled.
+    Clean,
+    /// `dr7` was read and at least one slot is enabled; the value is carried.
+    Armed(u64),
+    /// The set does not carry `dr7`. Nothing may be concluded from that, and in
+    /// particular not that the thread is clean.
+    Unverifiable,
+}
+
+/// Classify a register set's hardware debug state without collapsing absence.
+#[must_use]
+pub fn debug_register_state(regs: &RegisterSet) -> DebugRegisterState {
+    match regs.get("dr7") {
+        None => DebugRegisterState::Unverifiable,
+        Some(0) => DebugRegisterState::Clean,
+        Some(v) => DebugRegisterState::Armed(v),
+    }
+}
+
 /// Pick the value a caller MEANT when a register has two accepted spellings.
 ///
 /// AArch64's frame pointer and link register have an architectural name (`x29`,
@@ -10809,6 +10850,50 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// An absent `dr7` must not read as a disarmed thread.
+    ///
+    /// The disarm loops treat `dr7 == 0` as "nothing armed here, skip", and
+    /// reached that `0` through `unwrap_or`. Three lines earlier the same loops
+    /// push a thread whose registers cannot be READ onto `still_armed`, calling
+    /// it "UNVERIFIED, not clean". A set that was read and carries no `dr7` is
+    /// the same situation and got the opposite answer.
+    ///
+    /// Both ARM64 ports produce exactly that set: the Windows AArch64 reader
+    /// publishes no `dr7`, and the Linux one omits it whenever the
+    /// `NT_ARM_HW_WATCH` regset cannot be read.
+    #[test]
+    fn an_absent_dr7_is_not_a_disarmed_thread() {
+        use crate::{debug_register_state as state, DebugRegisterState as S};
+
+        // Read and clean.
+        let mut clean = RegisterSet::default();
+        clean.set("dr7", 0);
+        assert_eq!(state(&clean), S::Clean);
+
+        // Read and armed, value carried so the caller need not re-read it.
+        let mut armed = RegisterSet::default();
+        armed.set("dr7", 0b11);
+        assert_eq!(state(&armed), S::Armed(0b11));
+
+        // Never read. This is the case `unwrap_or(0)` turned into `Clean`, and
+        // it is the one an AArch64 register set always presents.
+        let arm_like = RegisterSet::default();
+        assert_eq!(
+            state(&arm_like),
+            S::Unverifiable,
+            "a set with no dr7 says nothing about the debug registers;              reporting it as clean is the failure this crate condemns most"
+        );
+
+        // A set rich in other registers is still unverifiable: it is the
+        // PRESENCE of dr7 that decides, not how much else was read.
+        let mut arm_real = RegisterSet::default();
+        for i in 0..31 {
+            arm_real.set(&format!("x{i}"), 0);
+        }
+        arm_real.set("pc", 0x1000);
+        assert_eq!(state(&arm_real), S::Unverifiable);
     }
 
     /// Every name the crate can RESOLVE must be offered to condition contexts.

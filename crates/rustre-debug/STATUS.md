@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 614. Questa: **618**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **619**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -16,8 +16,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2058 / 0** |
-| Linux x86_64 | WSL, `--test-threads=1` | **2041 / 0** |
+| Windows x86_64 | suite locale, worktree isolato | **2059 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2042 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
@@ -50,6 +50,23 @@ fatto tacere alzando il soffitto.
 
 ## 3. Chiuso di recente, con la misura
 
+- **Un `dr7` assente non è più un thread disarmato** (619). I tre backend
+  decidevano con `regs.get("dr7").unwrap_or(0)` e trattavano lo `0` come «nulla
+  armato, salta questo thread» — mentre **tre righe sopra** gli stessi cicli
+  gestiscono bene il caso vicino: un thread i cui registri non si riescono a
+  LEGGERE finisce in `still_armed` col commento «UNVERIFIED, not clean». Un set
+  letto che non CONTIENE `dr7` è la stessa situazione e riceveva la risposta
+  opposta. Non è ipotetico su nessuno dei due fronti ARM64: il lettore AArch64
+  di Windows **non pubblica affatto** `dr7` (AArch64 ha `Bcr`/`Bvr`/`Wcr`/`Wvr`),
+  quindi lì ogni thread risultava pulito sempre; e su Linux ARM `dr7` è
+  sintetizzato da `NT_ARM_HW_WATCH`, che `merge_debug_state` abbandona quando
+  non riesce a leggerlo — cioè proprio il guasto che questo file ha aperto
+  contro il runner ARM. Ora `debug_register_state` distingue
+  `Clean`/`Armed`/`Unverifiable`. Dove si può riportare, l'assenza va in
+  `still_armed`; nel percorso di `Drop`, dove non c'è nulla a cui rispondere,
+  l'assenza fa **eseguire** il disarmo invece di saltarlo: scrivere zeri a un
+  thread che non ne aveva costa una scrittura, saltarne uno che ne aveva lascia
+  una trappola armata in un processo che stiamo abbandonando.
 - **Condizioni sui breakpoint: cinque nomi di registro non erano offerti** (618).
   `SUB_REGISTER_NAMES` è ciò che i tre backend desktop iterano per popolare il
   contesto di valutazione. Mancavano `sil`, `dil`, `bpl`, `spl` ed `eip` — tutti
@@ -90,10 +107,15 @@ fatto tacere alzando il soffitto.
 | 6 | 77 | 9 | **9** |
 | 7 | 68 | 12 | **12** |
 | 8 | 74 | 15 | **2** |
+| 8 (retry) | 64 | 5 | **5** |
 
 Il giro 8 non è stato fermato dal codice: **13 agenti di fix sono morti su errori
-server** (529 Overloaded, un 521, un 500). I 13 difetti confermati restano aperti
-e il retry va rifatto quando l'API regge. I 2 chiusi sono reali: una maschera di
+server** (529 Overloaded, un 521, un 500). Il retry dalla cache ne ha recuperati
+**5 su 5, zero errori**: fra questi, un `E0D` (EACCES da `task_for_pid`: SIP,
+entitlement mancante, o un altro debugger già collegato) riportato come
+`ProcessNotFound`, cioè un processo vivo e visibile in `ps` diagnosticato come
+inesistente; e un id di thread a 64 bit troncato a `ThreadId(0)`, che è il
+carattere jolly «lascia stare la selezione dello stub». I 2 chiusi sono reali: una maschera di
 preservazione fissa a 64 bit che distruggeva i bit alti scrivendo `s3`/`h3`/`b3`,
 e una sign-extension a 60 bit invece di 56 che rendeva `-(1<<40)` un positivo
 enorme.
@@ -168,5 +190,13 @@ enorme.
 20. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è disfarlo.
 21. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.
-22. **Un agente fallito per errore di server non è un difetto assente**: va
+22. **Una perturbazione va SEMPRE ripristinata** (giro 8, retry): un agente ha
+    trovato una riga di produzione lasciata perturbata da un round precedente,
+    con un marcatore `//PERTURB` ancora attaccato e il test che la copriva
+    rosso. La tecnica che dimostra un rosso diventa il difetto se ci si ferma a
+    metà. Verificato al 619: **zero** marcatori residui nel crate.
+23. **Distinguere «non lo so» da «no» vale anche a tre righe di distanza** (619):
+    lo stesso ciclo trattava «non ho potuto leggere» come non verificato e «non
+    c'è» come pulito.
+24. **Un agente fallito per errore di server non è un difetto assente**: va
     rilanciato, e finché non lo è va dichiarato aperto (giro 8).

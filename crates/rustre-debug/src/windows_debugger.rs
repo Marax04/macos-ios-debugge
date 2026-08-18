@@ -400,9 +400,22 @@ impl WindowsDebugger {
                 still_armed.push(tid.0);
                 continue;
             };
-            if regs.get("dr7").unwrap_or(0) == 0 {
-                continue;
+            // An absent `dr7` is not a clean one. Three lines above, a thread
+            // whose registers cannot be READ is called UNVERIFIED rather than
+            // clean; a set that was read and carries no `dr7` is the same
+            // situation, and `unwrap_or(0)` answered the opposite. Both ARM64
+            // ports produce exactly that set — the Windows AArch64 reader
+            // publishes no `dr7` at all, and the Linux one omits it whenever
+            // the `NT_ARM_HW_WATCH` regset cannot be read.
+            match crate::debug_register_state(&regs) {
+                crate::DebugRegisterState::Clean => continue,
+                crate::DebugRegisterState::Unverifiable => {
+                    still_armed.push(tid.0);
+                    continue;
+                }
+                crate::DebugRegisterState::Armed(_) => {}
             }
+
             regs.set("dr0", 0);
             regs.set("dr1", 0);
             regs.set("dr2", 0);
@@ -1326,7 +1339,16 @@ impl Drop for WindowsDebugger {
                     else {
                         continue;
                     };
-                    if regs.get("dr7").unwrap_or(0) == 0 {
+                    // Same distinction as the reporting loop, but there is no
+                    // `still_armed` to answer into here. So an unverifiable set
+                    // is handled by DOING the work instead of skipping it:
+                    // writing zeros to a thread that had none costs a register
+                    // write, while skipping one that had some leaves a trap
+                    // armed in a process we are walking away from.
+                    if matches!(
+                        crate::debug_register_state(&regs),
+                        crate::DebugRegisterState::Clean
+                    ) {
                         continue;
                     }
                     for name in ["dr0", "dr1", "dr2", "dr3", "dr6", "dr7"] {
