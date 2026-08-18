@@ -138,6 +138,42 @@ fn opt_u64(args: &Value, key: &str, default: u64) -> u64 {
     args.get(key).and_then(coerce_u64).unwrap_or(default)
 }
 
+/// Read an integer under the first name present, trying documented synonyms.
+///
+/// Measured across this file: the ADDRESS is spelled consistently — `addr`,
+/// twelve times — but the QUANTITY is not. `size` twice, `len` once, `n` once,
+/// for the same concept in adjacent tools: `read_memory` takes `len` while
+/// `set_watchpoint` next to it takes `size`. A live audit of 16 tools had three
+/// fail on the first attempt for exactly this, one wasted round-trip each.
+///
+/// Renaming would break every existing caller, so the synonyms are ACCEPTED
+/// instead. The schema still documents one name per tool — this changes nothing
+/// a caller reads — but a request that guessed the neighbour's spelling is
+/// answered rather than bounced.
+///
+/// Order matters and the tool's OWN name is always first: if a caller sends
+/// both, the documented one wins, so adding a synonym can never change what an
+/// already-correct request means.
+fn u64_arg_aliased(args: &Value, primary: &str, default: u64) -> u64 {
+    // Same concept, different spellings across this file's own tools. Kept as
+    // one list rather than per-tool: the point is that a caller should not have
+    // to know which neighbour they are talking to.
+    const QUANTITY: &[&str] = &["len", "size", "count", "n"];
+    if let Some(v) = args.get(primary).and_then(coerce_u64) {
+        return v;
+    }
+    if QUANTITY.contains(&primary) {
+        for alias in QUANTITY {
+            if alias != &primary
+                && let Some(v) = args.get(*alias).and_then(coerce_u64)
+            {
+                return v;
+            }
+        }
+    }
+    default
+}
+
 fn opt_str<'a>(args: &'a Value, key: &str, default: &'a str) -> &'a str {
     args.get(key).and_then(Value::as_str).unwrap_or(default)
 }
@@ -1246,7 +1282,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
-                let len = opt_u64(&args, "len", 16).min(4096) as usize;
+                let len = u64_arg_aliased(&args, "len", 16).min(4096) as usize;
 
                 // Live path: read from the real process address space.
                 if let Some(sess) = get_session(&session_id) {
@@ -2600,7 +2636,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 use rustre_debug::watchpoint_engine::WatchpointType;
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
-                let size = opt_u64(&args, "size", 8) as u8;
+                let size = u64_arg_aliased(&args, "size", 8) as u8;
                 let kind = match opt_str(&args, "kind", "write") {
                     "read" => WatchpointType::Read,
                     "access" | "readwrite" | "read|write" => WatchpointType::Access,

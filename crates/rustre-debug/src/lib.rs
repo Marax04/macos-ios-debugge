@@ -10525,6 +10525,35 @@ mod tests_extra {
         );
     }
 
+    /// One concept, one name — and where two names exist, both must work.
+    ///
+    /// From a live audit of 16 debug tools: three failed on the first attempt
+    /// purely on parameter naming, costing a round-trip each.
+    ///
+    /// Measured across `tools/debug.rs`: the ADDRESS is consistent — `addr`,
+    /// twelve times, no exceptions. The QUANTITY is not: `size` twice, `len`
+    /// once, `n` once, for the same concept in adjacent tools. `read_memory`
+    /// wants `len` while `set_watchpoint` beside it wants `size`, and nothing
+    /// tells a caller which is which except failing.
+    ///
+    /// Renaming them would break every existing caller, so the fix is to ACCEPT
+    /// the synonyms. A tool that understands what was meant and answers is
+    /// better than one that is right about its schema and useless — and this
+    /// costs a caller nothing, since a request that was already correct takes
+    /// the same path.
+    ///
+    /// Guarded here rather than in `rustre-mcp-tools` because that crate cannot
+    /// currently be built in this tree — two unrelated crates are mid-edit by
+    /// other actors — and the property is a source fact either way.
+    #[test]
+    fn the_mcp_accepts_the_synonyms_its_own_tools_disagree_on() {
+        let src = include_str!("../../rustre-mcp-tools/src/tools/debug.rs");
+        assert!(
+            src.contains("fn u64_arg_aliased("),
+            "mcp: `len`, `size` and `n` all name the same quantity across adjacent debug tools,              and a caller who picks the wrong one is simply refused. Accept the synonyms: the              schema stays as documented, and a request that guessed the neighbour's spelling              is answered instead of bounced"
+        );
+    }
+
     /// A `LibraryLoad` reaching a HUMAN must name the library.
     ///
     /// From a live audit of the Windows backend on `notepad.exe`:
