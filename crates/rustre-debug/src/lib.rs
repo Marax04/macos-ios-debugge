@@ -872,6 +872,40 @@ pub(crate) fn arm64_watchpoint_from_dr_slot(
     Some((arm64_watchpoint_wvr(addr), wcr))
 }
 
+/// Decode a `DBGWCR`'s `LSC` and `BAS` into x86 `DR7` `R/W` and `LEN` bits.
+///
+/// ONE copy, because iteration 608 made a second one. The staged-slot reader it
+/// added carried a byte-for-byte duplicate of the armed reader's decode — the
+/// same match arms, the same refusal for a load-only watch — and two copies of
+/// a bit layout is precisely how this crate's shared logic has drifted before.
+/// They were identical when written, which is exactly when they are cheapest to
+/// merge and hardest to notice.
+///
+/// `None` for a load-only watchpoint: `DR7`'s `R/W` offers write-only and
+/// read-or-write, never read-only, so reporting one as read/write would be a
+/// lie the engine then acts on. And `None` for a `BAS` that names no bytes,
+/// which is an untouched pair rather than a described one.
+#[must_use]
+fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
+    let bas = (wcr >> 5) & 0xff;
+    if bas == 0 {
+        return None;
+    }
+    let len = match bas.count_ones() {
+        1 => 0b00u64,
+        2 => 0b01,
+        4 => 0b11,
+        8 => 0b10,
+        _ => return None,
+    };
+    let rw = match (wcr >> 3) & 0b11 {
+        0b10 => 0b01u64,
+        0b11 => 0b11,
+        _ => return None,
+    };
+    Some((rw, len))
+}
+
 /// Encode the control word of a DISABLED data slot, preserving its fields.
 ///
 /// On x86 the `R/W` and `LEN` fields of a slot whose `L` bit is clear are plain
@@ -936,24 +970,11 @@ pub(crate) fn dr_slot_from_arm64_watchpoint_staged(
         // Armed: the ordinary reader owns this case.
         return None;
     }
-    let bas = (wcr >> 5) & 0xff;
-    if bas == 0 {
-        // Nothing staged: an untouched pair, not a slot with fields in it.
-        return None;
-    }
-    let size = bas.count_ones();
-    let len_bits: u64 = match size {
-        1 => 0b00,
-        2 => 0b01,
-        4 => 0b11,
-        8 => 0b10,
-        _ => return None,
-    };
-    let rw_bits: u64 = match (wcr >> 3) & 0b11 {
-        0b10 => 0b01,
-        0b11 => 0b11,
-        _ => return None,
-    };
+    // Shared with the armed reader: see `arm64_wcr_to_dr7_fields`. A staged pair
+    // and an armed one describe the same fields and must decode identically —
+    // the only difference between them is the enable bit, which is the caller's
+    // business and not the layout's.
+    let (rw_bits, len_bits) = arm64_wcr_to_dr7_fields(wcr)?;
     let shift = 16 + 4 * u32::from(slot);
     Some((wvr, (rw_bits << shift) | (len_bits << (shift + 2))))
 }
@@ -969,15 +990,15 @@ pub(crate) fn dr_slot_from_arm64_watchpoint(wvr: u64, wcr: u64, slot: u8) -> Opt
         return None;
     }
     let bas = (wcr >> 5) & 0xff;
-    let size = bas.count_ones();
     let offset = bas.trailing_zeros();
-    let len: u64 = match size {
-        1 => 0b00,
-        2 => 0b01,
-        4 => 0b11,
-        8 => 0b10,
-        _ => return None,
-    };
+    // Field layout decoded ONCE, shared with the staged reader added in 608.
+    // Two byte-identical copies of a bit layout is how this crate's shared
+    // logic has drifted before, and they are cheapest to merge while they still
+    // agree.
+    let (rw, len) = arm64_wcr_to_dr7_fields(wcr)?;
+    // The width the caller staged, recovered from the same BAS the decoder
+    // read, so the contiguity checks below stay expressed in bytes.
+    let size = bas.count_ones();
     // This register came from the HARDWARE, not from us.
     //
     // `count_ones` and `trailing_zeros` describe ANY bit pattern, and a
@@ -1002,14 +1023,6 @@ pub(crate) fn dr_slot_from_arm64_watchpoint(wvr: u64, wcr: u64, slot: u8) -> Opt
     if offset % size != 0 {
         return None;
     }
-    let rw: u64 = match (wcr >> 3) & 0b11 {
-        0b10 => 0b01,
-        0b11 => 0b11,
-        // A load-only watchpoint has no x86 spelling: `DR7`'s `RW` offers
-        // write-only and read-or-write, never read-only. Reporting it as
-        // read/write would be a lie the engine then acts on.
-        _ => return None,
-    };
     let shift = 16 + 4 * u32::from(slot);
     let bits = (1u64 << (2 * u32::from(slot))) | (rw << shift) | (len << (shift + 2));
     Some((wvr | u64::from(offset), bits))
