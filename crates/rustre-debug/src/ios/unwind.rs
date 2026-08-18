@@ -1177,9 +1177,27 @@ impl AppleUnwinder {
         if next.pc == 0 {
             return Err(UnwindError::ImplausibleFrame("null return address (end of stack)"));
         }
-        if next.sp <= prev.sp {
-            return Err(UnwindError::ImplausibleFrame("stack pointer did not grow upward"));
+        // The stack may not SHRINK. It is allowed to stay put, and refusing
+        // that was rejecting a shape the compiler emits constantly: a frameless
+        // leaf with stack-size 0 allocates nothing, so the caller's `sp` equals
+        // the callee's and the return address is in `lr`. libunwind does
+        // `sp += stackSize * 16` and demands no growth for exactly this reason.
+        // Any backtrace taken inside such a leaf stopped at depth 1.
+        //
+        // The check's real purpose — refusing a step that makes no progress, so
+        // the walk cannot spin — is kept by requiring the pc to move when `sp`
+        // does not. A frame with the same pc AND the same sp is the loop this
+        // guard was written against; `backtrace` also caps the walk at
+        // `max_depth`, so an alternating pair is bounded too.
+        if next.sp < prev.sp {
+            return Err(UnwindError::ImplausibleFrame("stack pointer moved downward"));
         }
+        if next.sp == prev.sp && next.pc == prev.pc {
+            return Err(UnwindError::ImplausibleFrame(
+                "frame makes no progress: same pc and same stack pointer",
+            ));
+        }
+
         if !self.images.is_empty() && self.image_for(next.pc).is_none() {
             return Err(UnwindError::ImplausibleFrame("return address in no known image"));
         }

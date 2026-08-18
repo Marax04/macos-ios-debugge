@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **622**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **623**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -17,7 +17,7 @@
 | Dove | Verificato come | Esito |
 |---|---|---|
 | Windows x86_64 | worktree isolato, prima del merge | **2062 / 0** |
-| Windows x86_64 | dopo il merge col lavoro del giro 9 | **2093 / 2** — i 2 sono iOS, non miei (sotto) |
+| Windows x86_64 | dopo il merge col lavoro del giro 9 | **2094 / 1** — il rosso rimasto è iOS, non mio (sotto) |
 | Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
@@ -50,11 +50,30 @@ lo STATUS. La causa è il rischio già annotato al 617: **l'albero condiviso non
 uno stage**. Chi committa con `git add` ampio prende il lavoro a metà di tutti
 gli altri.
 
-I **2 rossi** residui sono `ios::apple_debugger::…step_out_leaves_the_frame…` e
-`ios::unwind::…a_frameless_leaf…`. Provato che non sono miei: **nessuno dei due
-esiste** in `944bca0f4`, il mio ultimo verde, e sono arrivati con le 2439 righe
-di lavoro iOS del giro 9 contenute in quel commit. Il mio 622 non tocca
-`src/ios/`.
+I **2 rossi** che ne sono seguiti non erano miei — **nessuno dei due esiste** in
+`944bca0f4`, il mio ultimo verde — ma erano su `main`, quindi al 623 li ho presi
+in carico invece di cercare un difetto nuovo. **Uno chiuso**, uno dichiarato con
+l'analisi fatta:
+
+- **CHIUSO — `ios::unwind::a_frameless_leaf_with_a_zero_sized_frame_still_has_a_caller`.**
+  `validate` rifiutava ogni frame in cui `sp` non **crescesse strettamente**. Ma
+  una foglia frameless con stack-size 0 non alloca nulla: l'`sp` del chiamante è
+  uguale a quello del chiamato e l'indirizzo di ritorno sta in `lr` — è ciò che
+  il compilatore emette per ogni foglia banale, e libunwind fa `sp += stackSize
+  * 16` senza pretendere crescita. Qualunque backtrace preso dentro una funzione
+  così si fermava a profondità 1, con tutte e tre le strategie che fallivano.
+  Ora lo stack non può **calare**, e può restare fermo: lo scopo vero del
+  controllo — rifiutare un passo che non fa progresso, così la camminata non
+  gira a vuoto — è conservato richiedendo che il pc si muova quando `sp` non lo
+  fa, e `backtrace` limita comunque a `max_depth`.
+- **APERTO — `ios::apple_debugger::step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`.**
+  Non è, come sembrava dal messaggio, solo «l'uscita chiamata ritorno»: il test
+  pretende che `step_out` **arrivi** al sito di ritorno (`pc == TEXT_BASE+0x0C`),
+  e invece il target corre fino all'uscita. Il criterio è `pc == target && sp >=
+  min_sp` con `target` letto da `[fp+8]` e `min_sp = fp+16`; una delle due metà
+  non si verifica mai in questo scenario. Da guardare lì, non in
+  `run_to_return_step`, che su un'uscita reale fa bene a fermarsi. Lasciato al
+  giro 9, che sta riscrivendo quel file adesso.
 
 ## 2. Le tre famiglie di difetti che questo crate produce
 
