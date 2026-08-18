@@ -69,6 +69,35 @@ verde dei suoi test.** Su questo repo si leggono i LOG.
 | **`continue-on-error`** | CI ×3 | da togliere riga per riga quando diventa verde |
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
+## 4-bis. L'audit Windows, e cosa ha insegnato (601-604)
+
+Tre difetti segnalati, tutti reali, **e due non erano dove l'audit li metteva**.
+
+| # | Segnalato | Realtà misurata |
+|---|---|---|
+| 1 | `LibraryLoad { path: "" }`, da risolvere nell'evento | Risolverlo lì **rompe i watchpoint hardware** (guard stabilito per bisezione). La risoluzione esiste già, condizionata di proposito: costa un `modules()` a ogni DLL. Spostata alla superficie MCP, dove la paga chi guarda |
+| 2 | `address`/`addr`, `size`/`len` incoerenti | L'indirizzo è **consistente** (`addr` ×12): il tentativo con `address` era il chiamante che indovinava. A divergere è la QUANTITÀ — `size`, `len`, `n` in tool adiacenti. Sinonimi ora accettati, col nome documentato che vince |
+| 3 | `resolve_symbol` senza fallback EAT | Confermato in pieno. Quattro pezzi già presenti e nessuno collegato: la dipendenza `rustre-loader-pe`, `export_by_name`, `debug.modules` coi path, e `symbol_resolver.rs` che cita «PE exports» nella propria doc |
+
+Sul 604 il dettaglio che separa una risposta corretta da una plausibile:
+l'indirizzo nella export table è relativo alla **base preferita del file**,
+mentre il modulo è caricato dove l'OS l'ha messo. Senza sommare la base runtime
+e sottrarre quella del file, il numero è verosimile e non punta a nulla.
+
+## 4-ter. Windows ARM64: la riga che non era mai stata eseguita (602)
+
+Il primo run della riga creata al 597 ha risposto in modo più netto di quanto il
+codice raccontasse: non «i watchpoint sono rifiutati su ARM», ma **il file non
+era compilabile** per quel target — `ctx.Dr6` unknown field, più `Rip`,
+`EFlags` e ventuno altri nomi x86, nessuno protetto.
+
+Port scritto leggendo i nomi dei campi dal `winnt.rs` di winapi nel registry,
+non indovinandoli. Tre scelte che evitano altrettanti difetti di famiglia 1:
+niente `dr0`-`dr7` pubblicati su ARM (il motore crederebbe di avere quattro slot
+su una CPU che ne espone **due**), entrambe le grafie `fp`/`x29` accettate (una
+sola ignorerebbe in silenzio metà dei chiamanti), e `watchpoint_hit` che
+risponde `None` come misura, non come segnaposto.
+
 ## 5. Lezioni di metodo
 
 1. **Misurare il rosso PRIMA del fix.** Un test che passa senza aver mai fallito

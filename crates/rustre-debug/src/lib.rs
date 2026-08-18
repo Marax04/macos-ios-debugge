@@ -10525,6 +10525,41 @@ mod tests_extra {
         );
     }
 
+    /// `resolve_symbol` refuses while the answer is already mapped.
+    ///
+    /// From the live audit: asking for a symbol before `debug.load_symbols`
+    /// gives
+    ///
+    /// ```text
+    /// no symbols loaded; call debug.load_symbols first
+    /// ```
+    ///
+    /// The message is honest about what it did, and the tool is useless cold
+    /// for a class of names that needs no PDB at all. `RtlUserThreadStart` —
+    /// the symbol that appears in this backend's own backtraces — lives in
+    /// `ntdll.dll`'s EXPORT table, which is mapped into every Windows process
+    /// and readable without any symbol server.
+    ///
+    /// Nothing new has to be written to use it. `rustre-mcp-tools` already
+    /// depends on `rustre-loader-pe`, that crate already parses export
+    /// directories and exposes `export_by_name`, `debug.modules` already
+    /// reports every loaded module with its path, and `symbol_resolver.rs`
+    /// already names "PE exports" as a legitimate `SymbolTable` source in its
+    /// own documentation. Four pieces present and not joined.
+    ///
+    /// A PDB still answers more — statics, locals, line numbers, anything not
+    /// exported — so this is a FALLBACK and not a replacement. The refusal was
+    /// right that it had no symbols; it was wrong that there was nothing to
+    /// say.
+    #[test]
+    fn resolve_symbol_falls_back_to_the_exports_already_mapped() {
+        let src = include_str!("../../rustre-mcp-tools/src/tools/debug.rs");
+        assert!(
+            src.contains("resolve_via_module_exports"),
+            "mcp: `resolve_symbol` refuses cold while every loaded module's export table is on              disk and rustre-loader-pe is already a dependency that parses it. A name like              RtlUserThreadStart needs no PDB, and this backend prints it in its own backtraces"
+        );
+    }
+
     /// One concept, one name — and where two names exist, both must work.
     ///
     /// From a live audit of 16 debug tools: three failed on the first attempt

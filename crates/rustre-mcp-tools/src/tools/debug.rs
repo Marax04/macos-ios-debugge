@@ -11,6 +11,44 @@ use anyhow::{Result as AnyhowResult, anyhow};
 // Helper functions (mirrors those in lib.rs register_debug_group callers)
 // ---------------------------------------------------------------------------
 
+/// Resolve a symbol from a loaded module's EXPORT table, with no PDB.
+///
+/// From a live audit: `debug.resolve_symbol` answers "no symbols loaded; call
+/// debug.load_symbols first" for every name, including ones that need no symbol
+/// server at all. `RtlUserThreadStart` — which this backend prints in its own
+/// backtraces — is an `ntdll.dll` export, mapped into every Windows process.
+///
+/// Every piece was already here and none were joined: `rustre-loader-pe` is a
+/// dependency and parses export directories, `debug.modules` reports each
+/// module with its path, and `symbol_resolver.rs` documents "PE exports" as a
+/// legitimate `SymbolTable` source.
+///
+/// The export ADDRESS in the file is an RVA relative to the preferred image
+/// base; the module is loaded wherever the OS put it. Adding the runtime base
+/// and subtracting the file's own is what makes the answer an address in THIS
+/// process rather than in a hypothetical one — get that wrong and the number
+/// looks perfectly plausible and points nowhere.
+///
+/// A PDB still answers far more — statics, locals, line numbers, anything not
+/// exported — so this is a fallback and not a replacement. The refusal was right
+/// that it had no symbols; it was wrong that there was nothing to say.
+fn resolve_via_module_exports(sess: &mut LiveSession, name: &str) -> Option<(String, u64)> {
+    let mods = block_on(sess.dbg.modules()).ok()?;
+    for m in &mods {
+        if m.path.is_empty() {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&m.path) else { continue };
+        let Ok(pe) = rustre_loader_pe::PeInfo::parse(&bytes) else { continue };
+        if let Some(e) = pe.export_by_name(name) {
+            // `e.address` is expressed against the file's preferred base.
+            let rva = e.address.saturating_sub(pe.image_base);
+            return Some((m.name.clone(), m.base.as_u64().saturating_add(rva)));
+        }
+    }
+    None
+}
+
 /// Name the library a `LibraryLoad` stop is about, when the backend left it blank.
 ///
 /// The Windows backend fills this path only when a pending breakpoint is
@@ -3211,6 +3249,23 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 let addr = args.get("addr").and_then(coerce_u64);
 
                 if let Some(r) = with_live(&session_id, |sess| {
+                    // Try the exports BEFORE refusing. A cold session can still
+                    // answer for anything a module exports, and refusing while
+                    // the answer is mapped in the target is the difference
+                    // between "no symbols" and "no answer".
+                    if sess.symbols.is_none()
+                        && let Some(n) = &name
+                        && let Some((module, addr)) = resolve_via_module_exports(sess, n)
+                    {
+                        return Ok(json!({
+                            "session_id": session_id,
+                            "query": "name",
+                            "name": n,
+                            "address": addr,
+                            "module": module,
+                            "source": "PE export table (no PDB loaded); call debug.load_symbols                                        for statics, locals and line numbers",
+                        }));
+                    }
                     let provider = sess.symbols.as_deref()
                         .ok_or_else(|| anyhow!("no symbols loaded; call debug.load_symbols first"))?;
                     if let Some(n) = &name {
