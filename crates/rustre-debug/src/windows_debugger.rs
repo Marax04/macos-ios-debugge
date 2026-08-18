@@ -1730,6 +1730,14 @@ fn wide_to_string(buf: &[u16]) -> String {
 /// `DR6` is sticky: the CPU sets a `B` bit and never clears it, so leaving it
 /// set makes every subsequent single step look like the same watchpoint hit
 /// forever. Clearing it here is part of reading it correctly, not an extra.
+/// Which hardware watchpoint fired, from the x86 debug registers.
+///
+/// Gated in 602: `DR6`/`DR7` do not exist in the AArch64 `CONTEXT`, whose debug
+/// state is `Bcr`/`Bvr`/`Wcr`/`Wvr` — a different subsystem this backend does
+/// not program. The ARM64 counterpart below answers `None`, which is true
+/// rather than convenient: nothing armed a watchpoint there, so none can have
+/// fired.
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 fn watchpoint_hit(tid: DWORD) -> Option<(Address, BreakpointKind)> {
     unsafe {
         let handle = OpenThread(THREAD_ALL_ACCESS, FALSE, tid);
@@ -1775,6 +1783,18 @@ fn watchpoint_hit(tid: DWORD) -> Option<(Address, BreakpointKind)> {
 /// debugger attached. Answering `DBG_CONTINUE` there told the target the fault
 /// had been dealt with, so its `__try` block never ran and the faulting
 /// instruction re-executed unchanged.
+/// The AArch64 counterpart: nothing armed, so nothing fired.
+///
+/// `None` here is a MEASUREMENT, not a placeholder. `set_watchpoint_sized`
+/// refuses on this architecture, so no watchpoint can be armed through this
+/// backend, so no hit can be attributable to one. Reporting a hit would be
+/// inventing an event; reporting an error would be claiming a failure that did
+/// not happen.
+#[cfg(target_arch = "aarch64")]
+fn watchpoint_hit(_tid: DWORD) -> Option<(Address, BreakpointKind)> {
+    None
+}
+
 fn continue_status_for(ev: &DEBUG_EVENT) -> DWORD {
     if ev.dwDebugEventCode != EXCEPTION_DEBUG_EVENT {
         return DBG_CONTINUE;
@@ -1973,6 +1993,14 @@ fn write_context(tid: DWORD, ctx: &CONTEXT) -> bool {
 }
 
 #[cfg(target_arch = "x86_64")]
+/// Read the x86-64 `CONTEXT` into the crate's register vocabulary.
+///
+/// Gated in iteration 602. Measured on `windows-11-arm`, the first run of the
+/// CI row added in 597: this backend did NOT COMPILE for ARM64 at all —
+/// `ctx.Dr6` is an "unknown field" there, and so are `Rip`, `EFlags` and the
+/// twenty-one other x86 names below. Not "watchpoints are refused on ARM",
+/// which is what the code said: the whole file was unbuildable for the target.
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 fn context_to_register_set(ctx: &CONTEXT) -> RegisterSet {
     let mut regs = RegisterSet::new();
     regs.set("rax", ctx.Rax);
@@ -2009,6 +2037,72 @@ fn context_to_register_set(ctx: &CONTEXT) -> RegisterSet {
     regs
 }
 
+/// The same, for the AArch64 `CONTEXT`.
+///
+/// Field names are READ from `winapi`'s own definition, not guessed: the union
+/// `CONTEXT_u` holds `X0`-`X28`, `Fp` and `Lr`, with `Sp`, `Pc` and `Cpsr`
+/// beside it. Guessing them would have been predicting where measuring was
+/// available, which is the mistake this repo keeps paying for.
+///
+/// NO `dr0`-`dr7` here, and that is not an omission. AArch64 has no such
+/// register file: its debug state is `Bcr`/`Bvr`/`Wcr`/`Wvr`, a different
+/// subsystem this backend does not yet program, and `set_watchpoint_sized`
+/// already refuses accordingly. Publishing zeroed `dr` entries would let the
+/// shared watchpoint engine believe it had four free slots on a CPU that
+/// exposes `ARM64_MAX_WATCHPOINTS = 2` and none through this path.
+#[cfg(target_arch = "aarch64")]
+fn context_to_register_set(ctx: &CONTEXT) -> RegisterSet {
+    let mut regs = RegisterSet::new();
+    // SAFETY: `CONTEXT_u` is a union of `[u64; 31]` and the named-register
+    // struct; both members are plain integers of the same size, so reading the
+    // named view of a kernel-filled context is always initialised.
+    let x = unsafe { ctx.u.s() };
+    regs.set("x0", x.X0);
+    regs.set("x1", x.X1);
+    regs.set("x2", x.X2);
+    regs.set("x3", x.X3);
+    regs.set("x4", x.X4);
+    regs.set("x5", x.X5);
+    regs.set("x6", x.X6);
+    regs.set("x7", x.X7);
+    regs.set("x8", x.X8);
+    regs.set("x9", x.X9);
+    regs.set("x10", x.X10);
+    regs.set("x11", x.X11);
+    regs.set("x12", x.X12);
+    regs.set("x13", x.X13);
+    regs.set("x14", x.X14);
+    regs.set("x15", x.X15);
+    regs.set("x16", x.X16);
+    regs.set("x17", x.X17);
+    regs.set("x18", x.X18);
+    regs.set("x19", x.X19);
+    regs.set("x20", x.X20);
+    regs.set("x21", x.X21);
+    regs.set("x22", x.X22);
+    regs.set("x23", x.X23);
+    regs.set("x24", x.X24);
+    regs.set("x25", x.X25);
+    regs.set("x26", x.X26);
+    regs.set("x27", x.X27);
+    regs.set("x28", x.X28);
+    // `x29`/`x30` are the architectural names for the frame pointer and link
+    // register; BOTH spellings are published because the crate has an open
+    // question about which is canonical and answering it silently here would
+    // decide it for everyone. Same choice the Linux port made in 552.
+    regs.set("fp", x.Fp);
+    regs.set("x29", x.Fp);
+    regs.set("lr", x.Lr);
+    regs.set("x30", x.Lr);
+    regs.set("sp", ctx.Sp);
+    regs.set("pc", ctx.Pc);
+    regs.set("cpsr", u64::from(ctx.Cpsr));
+    regs.pc = ctx.Pc;
+    regs.sp = ctx.Sp;
+    regs.fp = Some(x.Fp);
+    regs
+}
+
 #[cfg(target_arch = "x86_64")]
 fn apply_register_set(ctx: &mut CONTEXT, regs: &RegisterSet) {
     if let Some(v) = regs.get("rax") { ctx.Rax = v; }
@@ -2035,6 +2129,45 @@ fn apply_register_set(ctx: &mut CONTEXT, regs: &RegisterSet) {
     if let Some(v) = regs.get("dr3") { ctx.Dr3 = v; }
     if let Some(v) = regs.get("dr6") { ctx.Dr6 = v; }
     if let Some(v) = regs.get("dr7") { ctx.Dr7 = v; }
+}
+
+/// Write the crate's register vocabulary back into an AArch64 `CONTEXT`.
+///
+/// Accepts both spellings of the frame pointer and link register for the same
+/// reason the reader publishes both: the crate has not decided whether `x29` or
+/// `fp` is canonical, and a writer that took only one would quietly ignore a
+/// caller who used the other — a set that reports success and changes nothing.
+///
+/// `dr0`-`dr7` are deliberately NOT accepted. They do not exist on this CPU,
+/// and silently dropping them would be exactly that same failure: the shared
+/// engine computes a `DR7` word, hands it over, and is told nothing went wrong.
+/// `set_watchpoint_sized` refuses the request before it can get here.
+#[cfg(target_arch = "aarch64")]
+fn apply_register_set(ctx: &mut CONTEXT, regs: &RegisterSet) {
+    // SAFETY: as `context_to_register_set` — both union members are plain
+    // integer storage of the same size, and this writes the named view of a
+    // context the kernel filled.
+    let x = unsafe { ctx.u.s_mut() };
+    macro_rules! set_x {
+        ($($n:literal => $f:ident),* $(,)?) => {
+            $( if let Some(v) = regs.get($n) { x.$f = v; } )*
+        };
+    }
+    set_x! {
+        "x0" => X0, "x1" => X1, "x2" => X2, "x3" => X3, "x4" => X4,
+        "x5" => X5, "x6" => X6, "x7" => X7, "x8" => X8, "x9" => X9,
+        "x10" => X10, "x11" => X11, "x12" => X12, "x13" => X13, "x14" => X14,
+        "x15" => X15, "x16" => X16, "x17" => X17, "x18" => X18, "x19" => X19,
+        "x20" => X20, "x21" => X21, "x22" => X22, "x23" => X23, "x24" => X24,
+        "x25" => X25, "x26" => X26, "x27" => X27, "x28" => X28,
+    }
+    if let Some(v) = regs.get("fp").or_else(|| regs.get("x29")) { x.Fp = v; }
+    if let Some(v) = regs.get("lr").or_else(|| regs.get("x30")) { x.Lr = v; }
+    if let Some(v) = regs.get("sp") { ctx.Sp = v; }
+    if let Some(v) = regs.get("pc") { ctx.Pc = v; }
+    if let Some(v) = regs.get("cpsr") {
+        ctx.Cpsr = u32::try_from(v & 0xFFFF_FFFF).unwrap_or(ctx.Cpsr);
+    }
 }
 
 /// Extract a PE64 image's entry-point RVA from its `IMAGE_DOS_HEADER` (must
