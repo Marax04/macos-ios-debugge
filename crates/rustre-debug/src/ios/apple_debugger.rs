@@ -422,6 +422,31 @@ impl RegisterMap {
             let name = r.name.clone();
             apply(&name, set.sp, &mut dropped);
         }
+        // `fp` and `lr` were missing here, and their absence was silent in the
+        // worst way. `decode` fills both typed fields on EVERY read, so a
+        // read-modify-write carries the caller's edit in them; `encode_into`
+        // then replayed the stale value from `set.regs` over the top and left
+        // `dropped` empty, so `set_registers` answered `Ok(())` for a write the
+        // device never saw. On arm64 that is the frame pointer and the return
+        // address — the two registers a backtrace is built from.
+        //
+        // Resolved through `role_or_name` for the same reason `pc`/`sp` are: a
+        // target that names them differently is still served, and one that has
+        // no such register is not reported as a failure of a request the caller
+        // never explicitly made — the typed fields are populated by every read,
+        // so `Some` does not mean "the caller asked for this".
+        if let Some(fp) = set.fp {
+            if let Some(r) = self.role_or_name(GenericRole::Fp, "fp") {
+                let name = r.name.clone();
+                apply(&name, fp, &mut dropped);
+            }
+        }
+        if let Some(lr) = set.lr {
+            if let Some(r) = self.role_or_name(GenericRole::Ra, "lr") {
+                let name = r.name.clone();
+                apply(&name, lr, &mut dropped);
+            }
+        }
         dropped
     }
 }

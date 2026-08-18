@@ -13609,10 +13609,15 @@ fn ";
     /// The iOS backend closes the same hole by a different route, so it needs
     /// its own guard.
     ///
-    /// `AppleDebugger` does not go through `sync_map_from_special()` — that
-    /// helper keys off `native_arch()`, which on a Windows host yields
-    /// `rip`/`rsp`/`rbp`, none of which a remote arm64 debugserver has, and it
-    /// has no notion of `lr` at all. `RegisterMap::encode_into` instead
+    /// `AppleDebugger` does not go through `sync_map_from_special()`, and it
+    /// still should not — but not for the reason this paragraph used to give.
+    /// It said that helper "keys off `native_arch()`, which on a Windows host
+    /// yields `rip`/`rsp`/`rbp`, none of which a remote arm64 debugserver has".
+    /// That was true when it was written and iteration 616 fixed it: the helper
+    /// now takes the spelling the TARGET published rather than the host's. The
+    /// half of the reason that survives is the decisive one — it has no notion
+    /// of `lr` at all, and on arm64 the return address is not optional.
+    /// `RegisterMap::encode_into` instead
     /// resolves each typed field through `role_or_name`, the way it already did
     /// for `pc`/`sp`. `fp` and `lr` were missing: `decode` fills them on every
     /// read, so a read-modify-write carried the caller's edit in them, and the

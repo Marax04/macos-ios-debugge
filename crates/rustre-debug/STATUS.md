@@ -2,7 +2,7 @@
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
 > non un registro. Precedente riscrittura: 608. Questa: **614** — con una
-> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **616**.
+> iterazione di ritardo, annotata invece che nascosta. Aggiornata al **617**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -13,9 +13,9 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2056 / 1** |
+| Windows x86_64 | suite locale, worktree isolato | **2057 / 0** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
-| Linux x86_64 | WSL, `--test-threads=1` | **2039 / 1** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2040 / 0** |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; i fix 607/608/609 non ancora rimisurati |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
@@ -23,13 +23,13 @@
 | iOS device | CI | compila e **linka** i test; non esegue (serve hardware) |
 | MCP | Windows + Linux | **396 / 1** e 367 / 1 |
 
-L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sotto.
+**Il rosso del debugger è chiuso al 617** (era iOS `encode_into`). Resta l'**1**
+dell'MCP, noto e **non mio**, sotto.
 
 ## 2. I due rossi aperti, entrambi con proprietario
 
 | Rosso | Prova che non è mio | Chi lo possiede |
 |---|---|---|
-| `the_ios_backend_encodes_the_typed_fp_and_lr_fields` — `encode_into` non scrive `GenericRole::Fp`, quindi il campo tipizzato cade in scrittura e `set_registers` risponde `Ok(())` lo stesso | eseguito su un worktree a HEAD **senza nessuna mia modifica**: fallisce identico. Fallisce su Windows E su Linux, quindi non dipende dal target | lavoro iOS; il giro 7 lo ha già preso in carico |
 | `no_new_wire_tool_answers_without_its_required_params` — **172 tool** rispondono senza i parametri che il loro schema dichiara obbligatori, soffitto 168 | dei 172, **zero** hanno prefisso `debug_`/`linux_`/`macos_`/`ios_`/`win_`: sono `il_*`, `pe_editor_*`, `trace_*`, `symb_*`, `sandbox_*`. Era 170 al 605, 172 al 612: sale sotto altri attori | altri crate. **Non** si chiude alzando il soffitto |
 
 ## 3. Le tre famiglie di difetti che questo crate produce
@@ -46,6 +46,16 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
    allineamento, nomi dei registri, PC al trap, PAC, numero di slot, trap flag.
 
 ## 4. Chiuso di recente, con la misura
+
+- **iOS: `fp` e `lr` non arrivavano mai al device** (617). `RegisterMap::encode_into`
+  piazzava `GenericRole::Pc` e `Sp` e **non** `Fp` né `Ra`, e non leggeva mai
+  `set.fp`/`set.lr`. Poiché `decode` riempie entrambi i campi tipizzati a OGNI
+  lettura, un leggi-modifica-riscrivi portava l'edit del chiamante lì dentro;
+  `encode_into` ci riscriveva sopra il valore stantio da `set.regs` e lasciava
+  `dropped` vuoto, quindi `set_registers` rispondeva `Ok(())` per una scrittura
+  che il device non ha mai visto. Su arm64 quelli sono il frame pointer e
+  l'indirizzo di ritorno: i due registri con cui si costruisce un backtrace.
+  Era rosso da tre round e attribuito con prova a HEAD ogni volta.
 
 - **I nomi di registro stretti funzionano in lettura E in scrittura** (613, 614).
   `eax` non si leggeva affatto (il fallback prependeva `r` e cercava `reax`),
@@ -176,5 +186,15 @@ L'**1** del debugger e l'**1** dell'MCP sono due rossi noti e **non miei**, sott
 24. **Un difetto risolto in una direzione va cercato nell'altra** (615→616):
     mappa→tipizzato e tipizzato→mappa avevano lo STESSO difetto, e la seconda
     metà era rimasta in piedi con la doc che dichiarava di averla chiusa.
-25. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
+25. **Non copiare un FILE intero da un albero condiviso per misurare** (617):
+    due volte ho importato in un worktree pulito il lavoro non committato di
+    altri insieme al mio — la prima volta un riferimento a una funzione che a
+    HEAD non esiste, la seconda un test nuovo il cui codice di produzione non
+    avevo copiato. Entrambe le volte il rosso sembrava mio e non lo era.
+    Si applica il proprio HUNK sulla versione a HEAD, non si copia il file.
+26. **Un mio fix può rendere FALSA la frase di un altro** (617): il 616 ha
+    corretto `sync_map_from_special`, e la doc di un guard iOS continuava a
+    citarne il difetto come motivo della propria esistenza. Metà del motivo
+    regge ancora (`lr` non è previsto lì), metà no: corretta, non cancellata.
+27. **Anche il mio contratto va riletto**: al 614 il mio test asseriva `true`
     dove la doc che avevo scritto tre righe sopra prometteva `false`.
