@@ -65,6 +65,37 @@ dove prima c'era un rifiuto.
 | **iOS su hardware** | infrastruttura | non ottenibile su Actions |
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
+## 4-ter. Il primo run ARM che risponde davvero (593-594)
+
+`193c7c0` ha chiuso l'`ENOSPC`: **1993/6 → 1997/5**, e nessun «No space left on
+device». I test ora superano la scrittura e falliscono più a valle, che è
+progresso vero e non spostamento del problema.
+
+| difetto | round |
+|---|---|
+| `ah` e `eax` cablati x86 — 575 aveva migrato solo `al`, **terza** mezza migrazione nello stesso test | 593 |
+| un indirizzo messo in `DR0` senza abilitarlo spariva alla rilettura | 594 |
+
+Il 594 è il più interessante. Su x86 si può mettere un indirizzo in `DR0` e
+abilitarlo dopo in `DR7`: il registro indirizzo è indipendente dal bit di
+enable. La mia traduzione azzerava lo slot disabilitato, quindi **una scrittura
+riuscita restituiva un valore svanito**. AArch64 esprime esattamente lo stesso
+stato — `DBGWVR` con l'indirizzo, `DBGWCR` con `E=0` — quindi ora l'indirizzo si
+conserva e il controllo resta azzerato: niente è armato, e ciò che il chiamante
+ha scritto si rilegge.
+
+Sul 593 la sfumatura decide il fix: `ah` **non è una lacuna del backend**, è un
+registro che su AArch64 non esiste. Quindi non si salta il test: su x86 si
+asserisce che le tre grafie derivino dal registro vivo, su ARM che i nomi x86
+siano RIFIUTATI invece che inventati.
+
+## 4-quater. Workflow iOS, giro 4
+
+66 agenti, **4 difetti confermati e 4 chiusi, 0 falsi**. Tutti della famiglia
+«risposta inventata»: un offset ivar non risolto riportato come `0` (che è lo
+slot dell'isa, un valore legittimo e sbagliato), un `E.` di errore RSP trattato
+come payload valido, una reply `p` troncata restituita come `Ok(0)`.
+
 ## 4-bis. Un difetto reso impossibile da reintrodurre (592)
 
 `ptrace` è valido SOLO dal thread che ha fatto l'attach — regola già scritta in
