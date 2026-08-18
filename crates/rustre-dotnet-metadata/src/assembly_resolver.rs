@@ -400,7 +400,7 @@ impl StrongNameVerifier {
         let mut hash = [0u8; 20];
         let mut state: u32 = 0xDEADBEEF;
         for (i, &b) in public_key.iter().enumerate() {
-            state = state.wrapping_add(b as u32).rotate_left((i % 29) as u32);
+            state = state.wrapping_add(u32::from(b)).rotate_left((i % 29) as u32);
             hash[i % 20] ^= (state & 0xFF) as u8;
         }
         let mut token = [0u8; 8];

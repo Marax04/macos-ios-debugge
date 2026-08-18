@@ -26,7 +26,7 @@ pub enum TrimStrategy {
 impl TrimStrategy {
     /// Human-readable name of the strategy.
     #[must_use]
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Binary => "binary",
             Self::Linear => "linear",
@@ -36,7 +36,7 @@ impl TrimStrategy {
 
     /// All defined trim strategies.
     #[must_use]
-    pub fn all() -> &'static [Self] {
+    pub const fn all() -> &'static [Self] {
         &[Self::Binary, Self::Linear, Self::Byte]
     }
 }
@@ -60,7 +60,7 @@ pub struct SeedDiff {
     pub removed_indices: Vec<usize>,
     /// Indices of bytes that were zeroed (for byte-granularity strategy).
     pub zeroed_indices: Vec<usize>,
-    /// Reduction ratio: 1 - (minimized_len / original_len).
+    /// Reduction ratio: 1 - (`minimized_len` / `original_len`).
     pub reduction_ratio: f64,
 }
 
@@ -112,13 +112,13 @@ impl SeedDiff {
 
     /// Number of bytes removed.
     #[must_use]
-    pub fn bytes_removed(&self) -> usize {
+    pub const fn bytes_removed(&self) -> usize {
         self.original_len.saturating_sub(self.minimized_len)
     }
 
     /// Whether any reduction was achieved.
     #[must_use]
-    pub fn any_reduction(&self) -> bool {
+    pub const fn any_reduction(&self) -> bool {
         self.minimized_len < self.original_len
     }
 }
@@ -169,13 +169,13 @@ impl MinimizedSeed {
 
     /// Length of the minimized seed in bytes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
     /// True when the minimized seed is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }
@@ -270,7 +270,7 @@ pub struct DeltaDebugging {
 impl DeltaDebugging {
     /// Create a new delta-debugger with default limits.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             max_oracle_calls: 0,
             min_size: 1,
@@ -279,7 +279,7 @@ impl DeltaDebugging {
 
     /// Create with explicit oracle-call limit.
     #[must_use]
-    pub fn with_limit(max_oracle_calls: u32) -> Self {
+    pub const fn with_limit(max_oracle_calls: u32) -> Self {
         Self {
             max_oracle_calls,
             min_size: 1,
@@ -419,7 +419,7 @@ impl MinimizationReport {
 
     /// Bytes removed from the original.
     #[must_use]
-    pub fn bytes_removed(&self) -> usize {
+    pub const fn bytes_removed(&self) -> usize {
         self.original_len.saturating_sub(self.final_len)
     }
 }
@@ -469,7 +469,7 @@ impl SeedMinimizer {
 
     /// Set the oracle-call limit per strategy pass.
     #[must_use]
-    pub fn with_limit(mut self, limit: u32) -> Self {
+    pub const fn with_limit(mut self, limit: u32) -> Self {
         self.max_oracle_calls = limit;
         self
     }
@@ -842,7 +842,7 @@ mod tests {
     fn ddmin_removes_unnecessary_bytes() {
         let dd = DeltaDebugging::new();
         let input = vec![0u8; 8];
-        let mut modified = input.clone();
+        let mut modified = input;
         modified[3] = 0xff;
         // Oracle: interesting iff contains 0xff.
         let (result, _) = dd.ddmin(&modified, |c| c.contains(&0xff));
@@ -984,7 +984,7 @@ mod tests {
             oracle_calls: 50,
             elapsed: Duration::from_millis(10),
             coverage_preserved: true,
-            diff: SeedDiff::compute(&vec![0u8; 100], &vec![0u8; 30]),
+            diff: SeedDiff::compute(&[0u8; 100], &[0u8; 30]),
             strategy_results: HashMap::new(),
             completed_at: SystemTime::now(),
         };

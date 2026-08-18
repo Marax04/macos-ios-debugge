@@ -4,13 +4,14 @@ use std::collections::HashMap;
 
 // ─── CoverageMap ──────────────────────────────────────────────────────────────
 
-/// Tracks execution edges (from_addr, to_addr) and their hit counts.
+/// Tracks execution edges (`from_addr`, `to_addr`) and their hit counts.
 #[derive(Debug, Clone, Default)]
 pub struct CoverageMap {
     pub edges: HashMap<(u64, u64), u64>,
 }
 
 impl CoverageMap {
+    #[must_use]
     pub fn new() -> Self {
         Self { edges: HashMap::new() }
     }
@@ -19,6 +20,7 @@ impl CoverageMap {
         *self.edges.entry((from, to)).or_insert(0) += 1;
     }
 
+    #[must_use]
     pub fn edge_count(&self) -> usize {
         self.edges.len()
     }
@@ -30,18 +32,22 @@ impl CoverageMap {
     }
 
     /// Returns the set of edges not present in `other`.
+    #[must_use]
     pub fn new_edges_vs(&self, other: &Self) -> Vec<(u64, u64)> {
         self.edges.keys().filter(|e| !other.edges.contains_key(e)).copied().collect()
     }
 
+    #[must_use]
     pub fn total_hits(&self) -> u64 {
         self.edges.values().sum()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.edges.is_empty()
     }
 
+    #[must_use]
     pub fn coverage_percent(&self, total_known_edges: usize) -> f64 {
         if total_known_edges == 0 {
             return 0.0;
@@ -60,12 +66,14 @@ pub struct CrashInfo {
 }
 
 impl CrashInfo {
-    pub fn new(signal: u32, fault_addr: u64, backtrace: Vec<u64>) -> Self {
+    #[must_use]
+    pub const fn new(signal: u32, fault_addr: u64, backtrace: Vec<u64>) -> Self {
         Self { signal, fault_addr, backtrace }
     }
 
+    #[must_use]
     pub fn crash_hash(&self) -> u64 {
-        let mut h: u64 = self.fault_addr ^ (self.signal as u64).wrapping_mul(0x9e3779b97f4a7c15);
+        let mut h: u64 = self.fault_addr ^ u64::from(self.signal).wrapping_mul(0x9e3779b97f4a7c15);
         for &addr in &self.backtrace {
             h = h.wrapping_mul(6364136223846793005).wrapping_add(addr);
         }
@@ -84,6 +92,7 @@ pub struct FuzzerInput {
 }
 
 impl FuzzerInput {
+    #[must_use]
     pub fn new(data: Vec<u8>) -> Self {
         Self {
             data,
@@ -93,15 +102,18 @@ impl FuzzerInput {
         }
     }
 
-    pub fn is_crash(&self) -> bool {
+    #[must_use]
+    pub const fn is_crash(&self) -> bool {
         self.crash.is_some()
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }
@@ -141,6 +153,7 @@ pub struct CorpusEntry {
 }
 
 impl CorpusEntry {
+    #[must_use]
     pub fn new(input: Vec<u8>, coverage: CoverageMap, unique_edges: u32) -> Self {
         let priority = compute_priority(unique_edges, 1);
         Self {
@@ -158,10 +171,11 @@ impl CorpusEntry {
     }
 }
 
-/// Priority = rare_edges / log2(hit_count + 1)
+/// Priority = `rare_edges` / `log2(hit_count` + 1)
+#[must_use]
 pub fn compute_priority(unique_edges: u32, hit_count: u64) -> f64 {
     let denom = ((hit_count + 1) as f64).log2().max(1.0);
-    unique_edges as f64 / denom
+    f64::from(unique_edges) / denom
 }
 
 // ─── Corpus ───────────────────────────────────────────────────────────────────
@@ -173,6 +187,7 @@ pub struct Corpus {
 }
 
 impl Corpus {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -193,10 +208,12 @@ impl Corpus {
         true
     }
 
-    pub fn size(&self) -> usize {
+    #[must_use]
+    pub const fn size(&self) -> usize {
         self.entries.len()
     }
 
+    #[must_use]
     pub fn total_edges(&self) -> usize {
         self.total_coverage.edge_count()
     }
@@ -238,7 +255,7 @@ pub const INTERESTING_U32: &[u32] = &[
 
 // ─── xorshift64 ───────────────────────────────────────────────────────────────
 
-pub fn xorshift64(state: &mut u64) -> u64 {
+pub const fn xorshift64(state: &mut u64) -> u64 {
     let mut x = *state;
     x ^= x << 13;
     x ^= x >> 7;
@@ -256,7 +273,8 @@ pub struct HavocMutator {
 }
 
 impl HavocMutator {
-    pub fn new(seed: u64) -> Self {
+    #[must_use]
+    pub const fn new(seed: u64) -> Self {
         Self {
             rng_state: if seed == 0 { 0xdeadbeef_cafebabe } else { seed },
             dictionary: Vec::new(),
@@ -267,7 +285,7 @@ impl HavocMutator {
         self.dictionary.push(entry);
     }
 
-    fn rand_below(&mut self, n: u64) -> u64 {
+    const fn rand_below(&mut self, n: u64) -> u64 {
         if n == 0 {
             return 0;
         }
@@ -300,7 +318,7 @@ impl HavocMutator {
         }
         let idx = self.rand_below(data.len() as u64) as usize;
         let delta = self.rand_below(35) as i16 - 17;
-        data[idx] = ((data[idx] as i16).wrapping_add(delta) & 0xff) as u8;
+        data[idx] = (i16::from(data[idx]).wrapping_add(delta) & 0xff) as u8;
     }
 
     /// Replace a byte with an interesting value.
@@ -416,14 +434,14 @@ impl HavocMutator {
 
 // ─── Simulated execution ──────────────────────────────────────────────────────
 
-/// Simulate executing `data` against a pseudo-target and return a FuzzerInput.
+/// Simulate executing `data` against a pseudo-target and return a `FuzzerInput`.
 /// In real use, this would fork/exec the target with instrumentation.
 pub fn simulate_execution(data: &[u8], rng: &mut u64) -> FuzzerInput {
     let mut input = FuzzerInput::new(data.to_vec());
     // Simulate coverage: deterministic edges from data content
     let mut prev_pc: u64 = 0x1000;
     for (i, &b) in data.iter().enumerate().take(32) {
-        let pc = 0x1000 + (b as u64 * 17) + (i as u64 * 3);
+        let pc = 0x1000 + (u64::from(b) * 17) + (i as u64 * 3);
         input.coverage.record_edge(prev_pc, pc);
         prev_pc = pc;
     }
@@ -457,6 +475,7 @@ pub struct CoverageGuidedFuzzer {
 }
 
 impl CoverageGuidedFuzzer {
+    #[must_use]
     pub fn new(config: FuzzerConfig, seed: u64) -> Self {
         let mut fuzzer = Self {
             config: config.clone(),
@@ -470,7 +489,7 @@ impl CoverageGuidedFuzzer {
         for seed_data in &config.seed_inputs {
             let mut cov = CoverageMap::new();
             for (i, &b) in seed_data.iter().enumerate() {
-                cov.record_edge(i as u64, b as u64 + 0x1000);
+                cov.record_edge(i as u64, u64::from(b) + 0x1000);
             }
             fuzzer.corpus.add_to_corpus(seed_data.clone(), cov);
         }
@@ -509,6 +528,7 @@ impl CoverageGuidedFuzzer {
         }
     }
 
+    #[must_use]
     pub fn report(&self) -> FuzzReport {
         FuzzReport {
             iterations: self.iterations,
@@ -530,6 +550,7 @@ pub struct FuzzReport {
 }
 
 impl FuzzReport {
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "Iterations: {} | Corpus: {} | Crashes: {} | Coverage: {:.2}%",

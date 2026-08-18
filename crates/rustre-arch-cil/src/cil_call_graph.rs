@@ -278,28 +278,21 @@ impl CilCallGraph {
     /// Detect strongly connected components (Tarjan's SCC).
     pub fn sccs(&self) -> Vec<Vec<usize>> {
         let n = self.nodes.len();
-        let mut index_counter = 0u32;
-        let mut stack: Vec<usize> = Vec::new();
-        let mut on_stack = vec![false; n];
-        let mut index = vec![u32::MAX; n];
-        let mut lowlink = vec![0u32; n];
-        let mut result: Vec<Vec<usize>> = Vec::new();
+        let mut st = TarjanState {
+            counter: 0,
+            stack: Vec::new(),
+            on_stack: vec![false; n],
+            index: vec![u32::MAX; n],
+            lowlink: vec![0u32; n],
+            result: Vec::new(),
+        };
 
         for start in 0..n {
-            if index[start] == u32::MAX {
-                strongconnect(
-                    start,
-                    &self.nodes,
-                    &mut index_counter,
-                    &mut stack,
-                    &mut on_stack,
-                    &mut index,
-                    &mut lowlink,
-                    &mut result,
-                );
+            if st.index[start] == u32::MAX {
+                strongconnect(start, &self.nodes, &mut st);
             }
         }
-        result
+        st.result
     }
 
     /// Returns only SCCs with more than one node (i.e., mutually recursive groups).
@@ -337,43 +330,57 @@ impl Default for CilCallGraph {
 }
 
 // Tarjan helper.
-#[allow(clippy::too_many_arguments)]
-fn strongconnect(
-    v: usize,
-    nodes: &[CallGraphNode],
-    counter: &mut u32,
-    stack: &mut Vec<usize>,
-    on_stack: &mut Vec<bool>,
-    index: &mut Vec<u32>,
-    lowlink: &mut Vec<u32>,
-    result: &mut Vec<Vec<usize>>,
-) {
-    index[v] = *counter;
-    lowlink[v] = *counter;
-    *counter += 1;
-    stack.push(v);
-    on_stack[v] = true;
+/// The working state Tarjan's SCC algorithm threads through every recursive
+/// call: the DFS counter, the current stack and its membership flags, the
+/// per-node discovery index and lowlink, and the components found so far.
+///
+/// ⚠ Introduced because [`strongconnect`] took these six as separate `&mut`
+/// parameters and needed an `#[allow(clippy::too_many_arguments)]`. The lint is
+/// not pedantry here: six same-shaped `&mut Vec<..>` in a row is exactly the
+/// signature where transposing two arguments compiles and silently computes the
+/// wrong components. Named fields make that transposition impossible.
+struct TarjanState {
+    /// Monotonic DFS counter, assigned to `index` on first visit.
+    counter: u32,
+    /// Nodes on the current DFS stack, innermost last.
+    stack: Vec<usize>,
+    /// `on_stack[n]` — whether `n` is currently on `stack`.
+    on_stack: Vec<bool>,
+    /// Discovery index per node, `u32::MAX` while unvisited.
+    index: Vec<u32>,
+    /// Lowest index reachable from the node's subtree.
+    lowlink: Vec<u32>,
+    /// Completed strongly-connected components.
+    result: Vec<Vec<usize>>,
+}
+
+fn strongconnect(v: usize, nodes: &[CallGraphNode], st: &mut TarjanState) {
+    st.index[v] = st.counter;
+    st.lowlink[v] = st.counter;
+    st.counter += 1;
+    st.stack.push(v);
+    st.on_stack[v] = true;
 
     for &w in &nodes[v].callees {
-        if index[w] == u32::MAX {
-            strongconnect(w, nodes, counter, stack, on_stack, index, lowlink, result);
-            lowlink[v] = lowlink[v].min(lowlink[w]);
-        } else if on_stack[w] {
-            lowlink[v] = lowlink[v].min(index[w]);
+        if st.index[w] == u32::MAX {
+            strongconnect(w, nodes, st);
+            st.lowlink[v] = st.lowlink[v].min(st.lowlink[w]);
+        } else if st.on_stack[w] {
+            st.lowlink[v] = st.lowlink[v].min(st.index[w]);
         }
     }
 
-    if lowlink[v] == index[v] {
+    if st.lowlink[v] == st.index[v] {
         let mut scc = Vec::new();
         loop {
-            let w = stack.pop().unwrap();
-            on_stack[w] = false;
+            let w = st.stack.pop().unwrap();
+            st.on_stack[w] = false;
             scc.push(w);
             if w == v {
                 break;
             }
         }
-        result.push(scc);
+        st.result.push(scc);
     }
 }
 

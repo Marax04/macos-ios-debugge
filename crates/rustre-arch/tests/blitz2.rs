@@ -4,15 +4,6 @@
 //! property checks (round-trip, monotonicity), Send+Sync threaded stress on
 //! the global registry, hash/eq consistency, integer-overflow paths, and state
 //! machine walks on `LiftContext`.
-#![allow(
-    clippy::unreadable_literal,
-    clippy::unusual_byte_groupings,
-    clippy::many_single_char_names,
-    clippy::items_after_statements,
-    clippy::unnecessary_literal_bound,
-    clippy::float_cmp,
-    clippy::cast_possible_truncation
-)]
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
@@ -36,8 +27,8 @@ fn lcg(seed: u64) -> impl FnMut() -> u64 {
     let mut s = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -136,7 +127,7 @@ fn mk_instr(addr: u64, flags: InstrFlags) -> Instruction {
 fn fuzz_detect_arch_from_bytes_never_panics() {
     let mut g = lcg(0xDEAD_BEEF_CAFE_BABE);
     for _ in 0..500 {
-        let n = (g() as usize) % 64;
+        let n = usize::try_from(g()).expect("fits in usize") % 64;
         let mut buf = Vec::with_capacity(n);
         for _ in 0..n {
             buf.push((g() & 0xFF) as u8);
@@ -152,7 +143,7 @@ fn fuzz_detect_arch_from_bytes_never_panics() {
 fn fuzz_detect_with_elf_magic_never_panics() {
     let mut g = lcg(0x1234_5678_9ABC_DEF0);
     for _ in 0..200 {
-        let n = 4 + (g() as usize) % 100;
+        let n = 4 + usize::try_from(g()).expect("fits in usize") % 100;
         let mut buf = vec![0u8; n];
         buf[0] = 0x7f;
         buf[1] = b'E';
@@ -169,7 +160,7 @@ fn fuzz_detect_with_elf_magic_never_panics() {
 fn fuzz_detect_with_pe_magic_never_panics() {
     let mut g = lcg(0xAAAA_BBBB_CCCC_DDDD);
     for _ in 0..200 {
-        let n = 4 + (g() as usize) % 200;
+        let n = 4 + usize::try_from(g()).expect("fits in usize") % 200;
         let mut buf = vec![0u8; n];
         buf[0] = b'M';
         buf[1] = b'Z';
@@ -483,11 +474,13 @@ fn arch_registry_register_with_meta_lookup() {
 
 #[test]
 fn arch_registry_find_for_binary_pe_x86_64() {
-    let reg = ArchRegistry::new();
+            // The local type is declared BEFORE the first statement: an item
+        // after a statement is confusing because items exist from the start
+        // of the scope regardless of where they are written.
     #[derive(Debug)]
     struct A;
     impl Architecture for A {
-        fn name(&self) -> &str {
+        fn name(&self) -> &'static str {
             "x86_64"
         }
         fn pointer_size(&self) -> usize {
@@ -509,6 +502,7 @@ fn arch_registry_find_for_binary_pe_x86_64() {
             vec![]
         }
     }
+        let reg = ArchRegistry::new();
     reg.register(Arc::new(A));
     let buf = make_pe(0x8664);
     assert!(reg.find_for_binary(&buf).is_some());
@@ -546,7 +540,7 @@ fn global_registry_idempotent_register() {
 
 #[test]
 fn instr_stats_total_invariant() {
-    let mut g = lcg(0xC0FF_EE_C0FF_EE_42u64);
+    let mut g = lcg(0x00C0_FFEE_C0FF_EE42_u64);
     for n in [0usize, 1, 10, 100, 500] {
         let instrs: Vec<Instruction> = (0..n)
             .map(|i| {
@@ -568,7 +562,7 @@ fn instr_stats_total_invariant() {
 #[test]
 fn instr_stats_empty_density_zero() {
     let s = InstrStats::default();
-    assert_eq!(s.branch_density(), 0.0);
+    assert_eq!(s.branch_density().to_bits(), 0.0_f64.to_bits());
 }
 
 #[test]
@@ -685,7 +679,7 @@ fn linear_disasm_fuzz_random_bytes_no_panic() {
     let d = LinearDisassembler::new(stub());
     let mut g = lcg(0x7777_8888_9999_AAAA);
     for _ in 0..50 {
-        let n = (g() as usize) % 128;
+        let n = usize::try_from(g()).expect("fits in usize") % 128;
         let mut buf = Vec::with_capacity(n);
         for _ in 0..n {
             buf.push((g() & 0xFF) as u8);
@@ -977,11 +971,18 @@ fn address_hash_eq_consistency() {
 
 #[test]
 fn instr_stats_eq_clone_consistency() {
-    let mut g = lcg(0x9999_1111_2222_3333);
+    let mut next_rand = lcg(0x9999_1111_2222_3333);
     for _ in 0..30 {
-        let n = (g() & 0xF) as usize;
-        let instrs: Vec<Instruction> = (0..n)
-            .map(|i| mk_instr(i as u64, InstrFlags::from_bits_truncate((g() & 0xFF) as u32)))
+        let instr_count = usize::try_from(next_rand() & 0xF).expect("masked to 4 bits");
+        let instrs: Vec<Instruction> = (0..instr_count)
+            .map(|idx| {
+                mk_instr(
+                    idx as u64,
+                    InstrFlags::from_bits_truncate(
+                        u32::try_from(next_rand() & 0xFF).expect("masked to 8 bits"),
+                    ),
+                )
+            })
             .collect();
         let a = InstrStats::from_slice(&instrs);
         let b = a.clone();

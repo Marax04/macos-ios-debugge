@@ -16,7 +16,7 @@
 //! All functions operate on the current "active database" set by
 //! `set_active_database(path)`.
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, reason = "IDA Pro 7.x API compatibility: the names are the contract with existing IDA scripts")]
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};

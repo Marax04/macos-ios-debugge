@@ -1,51 +1,5 @@
 //! Fuzz orchestrator: multi-job scheduling, clustering, resource limiting, pipeline,
 //! and high-level campaign reporting for the `RustRE` fuzzing suite.
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::cast_possible_wrap,
-    clippy::too_many_lines,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::unreadable_literal,
-    clippy::format_push_string,
-    clippy::format_in_format_args,
-    clippy::case_sensitive_file_extension_comparisons,
-    clippy::similar_names,
-    clippy::items_after_statements,
-    clippy::match_same_arms,
-    clippy::needless_pass_by_value,
-    clippy::needless_raw_string_hashes,
-    clippy::option_if_let_else,
-    clippy::manual_let_else,
-    clippy::redundant_closure_for_method_calls,
-    clippy::unnecessary_wraps,
-    clippy::unused_self,
-    clippy::redundant_guards,
-    clippy::map_unwrap_or,
-    clippy::if_not_else,
-    clippy::struct_excessive_bools,
-    clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::missing_const_for_fn,
-    clippy::doc_markdown,
-    clippy::default_trait_access,
-    clippy::wildcard_imports,
-    clippy::single_match_else,
-    clippy::unnested_or_patterns,
-    clippy::needless_continue,
-    clippy::implicit_hasher,
-    clippy::ignored_unit_patterns,
-    clippy::semicolon_if_nothing_returned,
-    clippy::stable_sort_primitive,
-    clippy::trivially_copy_pass_by_ref,
-    clippy::ptr_as_ptr,
-    clippy::ref_option,
-    clippy::fn_params_excessive_bools,
-    clippy::assigning_clones
-)]
 //!
 //! # Structs
 //! - [`FuzzJob`]           — a unit of fuzzing work
@@ -546,12 +500,9 @@ impl JobScheduler {
         if self.queue.is_empty() {
             return None;
         }
-        let cluster_id = match self.pick_cluster() {
-            Some(id) => id,
-            None => {
-                self.total_rejections += 1;
-                return None;
-            }
+        let cluster_id = if let Some(id) = self.pick_cluster() { id } else {
+            self.total_rejections += 1;
+            return None;
         };
         let job_id = self.queue.pop_front()?;
         let cluster = self.clusters.get_mut(&cluster_id)?;
@@ -1660,7 +1611,7 @@ mod tests {
         j1.finish();
         let mut j2 = make_job("j2");
         j2.finish();
-        let report = OrchestratorReport::build("c", &[j1, j2], vec![], Duration::from_secs(60));
+        let report = OrchestratorReport::build("c", &[j1, j2], vec![], Duration::from_mins(1));
         assert!((report.success_rate() - 1.0).abs() < 1e-9);
     }
 
@@ -1670,7 +1621,7 @@ mod tests {
         j1.finish();
         let mut j2 = make_job("j2");
         j2.fail();
-        let report = OrchestratorReport::build("c", &[j1, j2], vec![], Duration::from_secs(60));
+        let report = OrchestratorReport::build("c", &[j1, j2], vec![], Duration::from_mins(1));
         assert!((report.success_rate() - 0.5).abs() < 1e-9);
     }
 

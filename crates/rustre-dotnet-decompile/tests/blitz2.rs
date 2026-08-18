@@ -1,5 +1,4 @@
 //! Deep adversarial test suite for rustre-dotnet-decompile (Y047).
-#![allow(clippy::approx_constant)]
 
 use rustre_dotnet::{CilInstruction, CilOperand};
 use rustre_dotnet_decompile::*;

@@ -169,11 +169,8 @@ impl TypeSig {
     /// Return true if this is a reference type.
     pub fn is_reference_type(&self) -> bool {
         match self {
-            Self::Primitive(ElementType::String)
-          | Self::Primitive(ElementType::Object)
-          | Self::Class(_)
-          | Self::SzArray(_)
-          | Self::Array(_, _) => true,
+            Self::Primitive(ElementType::String | ElementType::Object) | Self::Class(_) |
+Self::SzArray(_) | Self::Array(_, _) => true,
             Self::GenericInst(g) => g.is_class,
             _ => false,
         }
@@ -300,18 +297,18 @@ impl<'a> SigReader<'a> {
 
     /// ECMA-335 §II.23.2 compressed unsigned integer.
     pub fn read_compressed_u32(&mut self) -> Option<u32> {
-        let b0 = self.read_u8()? as u32;
+        let b0 = u32::from(self.read_u8()?);
         if b0 & 0x80 == 0 {
             return Some(b0);
         }
         if b0 & 0xC0 == 0x80 {
-            let b1 = self.read_u8()? as u32;
+            let b1 = u32::from(self.read_u8()?);
             return Some(((b0 & 0x3F) << 8) | b1);
         }
         if b0 & 0xE0 == 0xC0 {
-            let b1 = self.read_u8()? as u32;
-            let b2 = self.read_u8()? as u32;
-            let b3 = self.read_u8()? as u32;
+            let b1 = u32::from(self.read_u8()?);
+            let b2 = u32::from(self.read_u8()?);
+            let b3 = u32::from(self.read_u8()?);
             return Some(((b0 & 0x1F) << 24) | (b1 << 16) | (b2 << 8) | b3);
         }
         None

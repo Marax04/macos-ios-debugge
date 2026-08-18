@@ -327,11 +327,11 @@ impl IlInstruction {
         let base = self.offset + self.size;
         match &self.operand {
             IlOperand::BranchTarget(delta) => {
-                let target = (base as i64) + (*delta as i64);
+                let target = i64::from(base) + i64::from(*delta);
                 if target >= 0 { Some(target as u32) } else { None }
             }
             IlOperand::ShortBranchTarget(delta) => {
-                let target = (base as i64) + (*delta as i64);
+                let target = i64::from(base) + i64::from(*delta);
                 if target >= 0 { Some(target as u32) } else { None }
             }
             _ => None,
@@ -454,12 +454,12 @@ impl<'a> IlDisassembler<'a> {
             0x0B => (IlOpcode::Stloc1,  IlOperand::None, 0),
             0x0C => (IlOpcode::Stloc2,  IlOperand::None, 0),
             0x0D => (IlOpcode::Stloc3,  IlOperand::None, 0),
-            0x0E => (IlOpcode::LdargS,  IlOperand::ArgIndex(read_u8(d,pos)? as u16), 1),
-            0x0F => (IlOpcode::LdargaS, IlOperand::ArgIndex(read_u8(d,pos)? as u16), 1),
-            0x10 => (IlOpcode::StargS,  IlOperand::ArgIndex(read_u8(d,pos)? as u16), 1),
-            0x11 => (IlOpcode::LdlocS,  IlOperand::VarIndex(read_u8(d,pos)? as u16), 1),
-            0x12 => (IlOpcode::LdlocaS, IlOperand::VarIndex(read_u8(d,pos)? as u16), 1),
-            0x13 => (IlOpcode::StlocS,  IlOperand::VarIndex(read_u8(d,pos)? as u16), 1),
+            0x0E => (IlOpcode::LdargS,  IlOperand::ArgIndex(u16::from(read_u8(d,pos)?)), 1),
+            0x0F => (IlOpcode::LdargaS, IlOperand::ArgIndex(u16::from(read_u8(d,pos)?)), 1),
+            0x10 => (IlOpcode::StargS,  IlOperand::ArgIndex(u16::from(read_u8(d,pos)?)), 1),
+            0x11 => (IlOpcode::LdlocS,  IlOperand::VarIndex(u16::from(read_u8(d,pos)?)), 1),
+            0x12 => (IlOpcode::LdlocaS, IlOperand::VarIndex(u16::from(read_u8(d,pos)?)), 1),
+            0x13 => (IlOpcode::StlocS,  IlOperand::VarIndex(u16::from(read_u8(d,pos)?)), 1),
             0x14 => (IlOpcode::Ldnull,  IlOperand::None, 0),
             0x15 => (IlOpcode::LdcI4M1, IlOperand::None, 0),
             0x16 => (IlOpcode::LdcI40,  IlOperand::None, 0),

@@ -117,9 +117,10 @@ fn pseudo_random_streams_respect_every_documented_range() {
                 state = state
                     .wrapping_mul(6_364_136_223_846_793_005)
                     .wrapping_add(1_442_695_040_888_963_407);
-                #[allow(clippy::cast_possible_truncation)]
-                let b = (state >> 33) as u8;
-                b
+                // Taking the low 8 bits of the shifted LCG state is the point,
+                // not an accident, so the mask says so and the conversion is
+                // then exact rather than truncating.
+                u8::try_from((state >> 33) & 0xFF).expect("masked to 8 bits")
             })
             .collect();
         for bits in [32u32, 64] {

@@ -173,12 +173,12 @@ impl FuzzerInstance {
     }
 
     /// Mark the instance as done.
-    pub fn finish(&mut self) {
+    pub const fn finish(&mut self) {
         self.status = InstanceStatus::Done;
     }
 
     /// Mark the instance as failed.
-    pub fn fail(&mut self) {
+    pub const fn fail(&mut self) {
         self.status = InstanceStatus::Failed;
     }
 
@@ -235,10 +235,24 @@ impl FuzzerInstance {
     }
 
     /// Push locally-found interesting inputs to the shared corpus.
-    pub fn sync_to_shared(&self, shared: &SharedCorpus) {
-        for entry in &self.local_corpus.entries {
-            shared.add_entry(entry.clone());
-        }
+    ///
+    /// Returns how many entries the shared corpus ACCEPTED. `add_entry` rejects
+    /// an input that contributes no new coverage, so this is the count of finds
+    /// that were actually new to the fleet — not the count offered.
+    ///
+    /// ⚠ The return value used to be discarded. `add_entry`'s `bool` is the
+    /// only signal a worker gets about whether its finds were novel, and for a
+    /// fuzzer that is the number worth having: a worker syncing 500 inputs of
+    /// which 0 are accepted is doing no useful work, and looked identical to
+    /// one syncing 500 novel inputs. Surfaced when a `#[must_use]` on
+    /// `add_entry` turned the discard into a hard error under the workspace's
+    /// `unused_must_use = "deny"`.
+    pub fn sync_to_shared(&self, shared: &SharedCorpus) -> usize {
+        self.local_corpus
+            .entries
+            .iter()
+            .filter(|entry| shared.add_entry((*entry).clone()))
+            .count()
     }
 
     /// Pull new inputs from the shared corpus that the local corpus lacks.
@@ -303,7 +317,7 @@ impl SharedCorpus {
 
     /// Add a seed input to the corpus.
     pub fn add_seed(&self, data: Vec<u8>) {
-        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let id = guard.seeds.len() as u64;
         guard.seeds.push(FuzzInput::new(id, data));
     }
@@ -311,8 +325,9 @@ impl SharedCorpus {
     /// Add a corpus entry if its coverage hash is novel.
     ///
     /// Returns `true` if the entry was accepted.
+    #[must_use]
     pub fn add_entry(&self, entry: CorpusEntry) -> bool {
-        let mut guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let new_bits = guard.coverage.update(&entry.meta.hash.to_le_bytes());
         if new_bits > 0 || guard.entries.is_empty() {
             guard.entries.push(entry);
@@ -326,39 +341,39 @@ impl SharedCorpus {
     /// Return a snapshot of all seed inputs.
     #[must_use]
     pub fn snapshot_inputs(&self) -> Vec<FuzzInput> {
-        let guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.seeds.clone()
     }
 
     /// Return a snapshot of all corpus entries.
     #[must_use]
     pub fn snapshot_entries(&self) -> Vec<CorpusEntry> {
-        let guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.entries.clone()
     }
 
     /// Return the total number of entries ever added.
     #[must_use]
     pub fn total_added(&self) -> u64 {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).total_added
+        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner).total_added
     }
 
     /// Return the current entry count.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).entries.len()
+        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entries.len()
     }
 
     /// Return `true` if the corpus has no entries.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).entries.is_empty()
+        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entries.is_empty()
     }
 
     /// Return the number of coverage bits set in the shared map.
     #[must_use]
     pub fn coverage_bits(&self) -> u32 {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).coverage.total_bits_set()
+        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner).coverage.total_bits_set()
     }
 }
 
@@ -511,13 +526,13 @@ impl FuzzerCoordinator {
     /// newly-found seed) so that the same observable behaviour is reproducible
     /// across runs when the coordinator is seeded deterministically.
     #[inline]
-    pub fn next_rng_u64(&mut self) -> u64 {
+    pub const fn next_rng_u64(&mut self) -> u64 {
         self.rng.next_u64()
     }
 
     /// Pick a pseudo-random instance index in `[0, instances.len())`, or
     /// `None` if no instances are registered. Uses the coordinator RNG.
-    pub fn random_instance_index(&mut self) -> Option<usize> {
+    pub const fn random_instance_index(&mut self) -> Option<usize> {
         if self.instances.is_empty() {
             None
         } else {
@@ -809,7 +824,7 @@ mod tests {
     fn test_shared_corpus_clone_shares_state() {
         let sc = SharedCorpus::new(64);
         sc.add_seed(vec![1, 2, 3]);
-        let sc2 = sc.clone();
+        let sc2 = sc;
         assert_eq!(sc2.snapshot_inputs().len(), 1);
     }
 

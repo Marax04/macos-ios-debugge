@@ -706,18 +706,18 @@ impl<'a> BlobDecoder<'a> {
 
     /// Decode ECMA-335 compressed unsigned integer.
     pub fn read_compressed_uint(&mut self) -> Result<u32> {
-        let b0 = self.read_byte()? as u32;
+        let b0 = u32::from(self.read_byte()?);
         if b0 & 0x80 == 0 {
             return Ok(b0);
         }
         if b0 & 0xC0 == 0x80 {
-            let b1 = self.read_byte()? as u32;
+            let b1 = u32::from(self.read_byte()?);
             return Ok(((b0 & 0x3F) << 8) | b1);
         }
         if b0 & 0xE0 == 0xC0 {
-            let b1 = self.read_byte()? as u32;
-            let b2 = self.read_byte()? as u32;
-            let b3 = self.read_byte()? as u32;
+            let b1 = u32::from(self.read_byte()?);
+            let b2 = u32::from(self.read_byte()?);
+            let b3 = u32::from(self.read_byte()?);
             return Ok(((b0 & 0x1F) << 24) | (b1 << 16) | (b2 << 8) | b3);
         }
         bail!("BlobDecoder: invalid compressed uint first byte 0x{b0:02x}");

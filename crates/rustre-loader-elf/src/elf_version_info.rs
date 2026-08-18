@@ -442,29 +442,55 @@ pub fn parse_version_info(
     verdef_count:  usize,
 ) -> ElfVersionInfo {
     parse_version_info_endian(
+        &VersionSections {
+            versym_data,
+            verneed_data,
+            verdef_data,
+            dynstr,
+            verneed_count,
+            verdef_count,
+        },
+        true,
+    )
+}
+
+/// The four `.gnu.version*` sections a version-info parse reads, plus the entry
+/// counts the dynamic table reports for two of them.
+///
+/// ⚠ Introduced because `parse_version_info_endian` took these six separately
+/// and needed an `#[allow(clippy::too_many_arguments)]`. Four consecutive
+/// `&[u8]` parameters is precisely the signature where swapping `verneed_data`
+/// and `verdef_data` compiles and yields a plausible-looking wrong answer:
+/// both are `Elf_Verdaux`-shaped records read against the same `dynstr`.
+/// Named fields make the swap impossible to write.
+#[derive(Debug, Clone, Copy)]
+pub struct VersionSections<'a> {
+    /// `.gnu.version` — one `Elf_Versym` per dynamic symbol.
+    pub versym_data: &'a [u8],
+    /// `.gnu.version_r` — version requirements.
+    pub verneed_data: &'a [u8],
+    /// `.gnu.version_d` — version definitions.
+    pub verdef_data: &'a [u8],
+    /// `.dynstr`, against which every name offset above is resolved.
+    pub dynstr: &'a [u8],
+    /// `DT_VERNEEDNUM`.
+    pub verneed_count: usize,
+    /// `DT_VERDEFNUM`.
+    pub verdef_count: usize,
+}
+
+/// Endianness-aware variant of [`parse_version_info`]; pass `le = false` for
+/// big-endian ELF objects (the `le` flag comes from `EI_DATA` in the header).
+#[must_use]
+pub fn parse_version_info_endian(secs: &VersionSections<'_>, le: bool) -> ElfVersionInfo {
+    let VersionSections {
         versym_data,
         verneed_data,
         verdef_data,
         dynstr,
         verneed_count,
         verdef_count,
-        true,
-    )
-}
-
-/// Endianness-aware variant of [`parse_version_info`]; pass `le = false` for
-/// big-endian ELF objects (the `le` flag comes from `EI_DATA` in the header).
-#[must_use]
-#[allow(clippy::too_many_arguments)]
-pub fn parse_version_info_endian(
-    versym_data: &[u8],
-    verneed_data: &[u8],
-    verdef_data: &[u8],
-    dynstr: &[u8],
-    verneed_count: usize,
-    verdef_count: usize,
-    le: bool,
-) -> ElfVersionInfo {
+    } = *secs;
     let versyms = VerSym::parse_all_endian(versym_data, le);
     let verneed = parse_verneed_endian(verneed_data, dynstr, verneed_count, le);
     let verdef  = parse_verdef_endian(verdef_data, dynstr, verdef_count, le);
@@ -733,7 +759,17 @@ mod tests {
             VerSym::parse_all_endian(&versym, true)[1].version_index
         );
         let info_le = parse_version_info(&versym, &[], &[], &[], 0, 0);
-        let info_eq = parse_version_info_endian(&versym, &[], &[], &[], 0, 0, true);
+        let info_eq = parse_version_info_endian(
+            &VersionSections {
+                versym_data: &versym,
+                verneed_data: &[],
+                verdef_data: &[],
+                dynstr: &[],
+                verneed_count: 0,
+                verdef_count: 0,
+            },
+            true,
+        );
         assert_eq!(info_le.versyms.len(), info_eq.versyms.len());
     }
 

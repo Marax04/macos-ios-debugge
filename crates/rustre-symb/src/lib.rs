@@ -222,7 +222,7 @@ impl SymExpr {
     ///
     /// `width` is the bit-width and matches [`ConstBv::width`].
     #[must_use]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, reason = "variant-mirroring constructor: `SymExpr::Const(v, w)` is meant to read like the `ConstBv` variant it builds, and has 3979 call sites")]
     pub const fn Const(val: u64, width: u32) -> Self {
         Self::ConstBv { val, width }
     }
@@ -231,7 +231,7 @@ impl SymExpr {
     /// width. This is an ergonomic constructor used by callers that don't
     /// need to build a [`SymType`] explicitly.
     #[must_use]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, reason = "variant-mirroring constructor: `SymExpr::Const(v, w)` is meant to read like the `ConstBv` variant it builds, and has 3979 call sites")]
     pub fn Symbol(id: u64, width: u32, name: impl Into<String>) -> Self {
         let n = name.into();
         Self::Var {
@@ -242,7 +242,7 @@ impl SymExpr {
 
     /// Tuple-style constructor for the `Ite` struct variant.
     #[must_use]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, reason = "variant-mirroring constructor: `SymExpr::Const(v, w)` is meant to read like the `ConstBv` variant it builds, and has 3979 call sites")]
     pub const fn Ite(cond: Box<Self>, then_: Box<Self>, else_: Box<Self>) -> Self {
         Self::Ite { cond, then_, else_ }
     }

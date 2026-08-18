@@ -5762,4 +5762,615 @@ pronti.
 
 ---
 
+# Round 71 — 2026-08-18 — Sei gate isolati, cinque promossi: `goto` −15,3%, `flag_` −13,1%
+
+## 71.1 Isolamento, uno alla volta, corpus intero
+
+Ogni gate acceso DA SOLO oltre a `RUSTRE_HLIL`, contro una base rigenerata col
+binario corrente (11342 file per lato). La base ha gia' `var_sp` a 0 perche'
+`NOPROLOGUE` e' predefinito dal §69.
+
+| gate | goto | `var_tmp*` | `flag_` | `var_sp` | righe | esito |
+|---|---|---|---|---|---|---|
+| BASE | 11266 | 45395 | 42039 | 0 | 929656 | — |
+| `ZFTEMP` | = | **+1446** | **−4279** | 12 | −1601 | scambio |
+| `CMOVFOLD` | = | −28 | **−1363** | 0 | −651 | **puro** |
+| `C_GOTO_REMOVAL` | **−263** | = | = | 0 | −221 | **puro** |
+| `TAILDUP` | **−1700** | +33 | +86 | 0 | **+4666** | forte sui goto |
+| `LOOPS_DELEGATE` | = | = | = | = | = | **inerte** |
+| `NESTED_REDEF_GUARD` | = | **+3129** | = | 0 | +1669 | **regressione** |
+
+`dati` e `JUMPOUT` invariati ovunque; **path A invariato per tutti** (`diff -rq`,
+0 differenze sui `.c`).
+
+### Le tre letture che contano
+
+* **`TAILDUP`**: −1700 goto per +4666 righe = **2,7 righe per goto**, coerente
+  col rapporto 3,1 gia' documentato come il migliore su questo fronte. E' il
+  calo di salti piu' grande mai misurato su un singolo gate.
+* **`LOOPS_DELEGATE` e' inerte, ed e' la notizia migliore.** Output identico
+  byte per byte significa che il rilevamento cicli DELEGATO al crate di analisi
+  **concorda** con quello locale: si puo' cablare quel crate a costo zero, che e'
+  esattamente l'obiettivo «tutta la catena usata».
+* **`NESTED_REDEF_GUARD` NON promosso**: +3129 temporanei (+6,9%) e +1669 righe
+  senza alcun beneficio visibile nei contatori. E' una guardia di correttezza,
+  quindi il beneficio potrebbe esserci e non essere misurato da nessuna delle
+  metriche attuali — motivo in piu' per non accenderla al buio.
+
+## 71.2 Cinque promossi (#6790), effetto combinato
+
+| | goto | `var_tmp*` | `flag_` | `var_sp` | dati | righe |
+|---|---|---|---|---|---|---|
+| spenti | 11266 | 45395 | 42039 | 0 | 7943 | 929656 |
+| **predefiniti** | **9547** (−15,3%) | 46868 (+3,2%) | **36528** (−13,1%) | 12 | **7943** | +0,26% |
+
+* equivalenza predefiniti/gate espliciti: **0 differenze** su 11342 file;
+* **path A: 0 differenze**;
+* test: 1337 (decompiler) + 477 (HLIL), 0 falliti.
+
+Il costo e' tutto di `ZFTEMP` (+1473 temporanei) e `TAILDUP` (+4666 righe, poi
+in parte riassorbite dagli altri: il saldo e' +0,26%).
+
+## 71.3 Test aggiornato invece che aggirato
+
+`c_crate_gates_default_off_in_this_process` asseriva che
+`RUSTRE_C_GOTO_REMOVAL` fosse SPENTO. Ma il commento sopra di esso dichiara che
+la garanzia voluta e' un'altra: «il default non cambia ne' il path B ne' il path
+A». Sono due cose diverse, e la seconda e' quella che conta: misurato, accendere
+il gate lascia **path A identico byte per byte** e migliora solo path B.
+
+Il test ora asserisce la garanzia vera, rinominato
+`c_crate_gates_hanno_il_default_misurato`, col perche' scritto dentro.
+`RUSTRE_C_POSTPROCESS` resta opt-in e continua a essere verificato spento.
+
+## 71.4 ⚠ Seconda interruzione da modifiche concorrenti
+
+Durante il round `lib.rs` si e' rotto di nuovo, in un punto non mio:
+
+```
+error[E0061]: this function takes 3 arguments but 4 arguments were supplied
+  --> lib.rs:1981  lift_alu_cmpxchg(base, ops, two, suffix_w)
+```
+
+E' il refactor di `cmpxchg` in corso (il parametro `ops`, gia' segnalato come
+warning poco prima, era stato rimosso dalla firma ma non dal sito di chiamata).
+Applicata la regola di CLAUDE.md: riprovato dopo una pausa, e alla seconda
+verifica compilava — chiuso dall'altro agente. Nessun mio intervento necessario.
+
+Stato verificato dopo: build pulita, cinque gate promossi intatti, test verdi.
+
+## 71.5 Gate predefiniti dopo questa sessione
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE` — **nove**, di cui quattro sono
+passate nuove scritte in questa sessione e cinque erano capacita' gia' presenti
+e spente.
+
+Restano opt-in per misura: `NESTED_REDEF_GUARD` (regressione), `HLIL_CFS`,
+`TESTFLAGS`, `SFEXPR`, `MLIL_OPT` (tutti misurati peggiorativi), `MLIL_SSA`
+(pareggio), `C_POSTPROCESS` (mai misurato).
+
+Comportamento della combinazione: misura lanciata.
+
+---
+
+# Round 72 — 2026-08-18 — Due allarmi verificati e archiviati, entrambi benigni
+
+Mentre gira la misura di comportamento della combinazione (§71.2), ho controllato
+i due soli contatori che il round precedente aveva peggiorato. Nessuno dei due e'
+un difetto.
+
+## 72.1 I 12 `var_sp` reintrodotti da `ZFTEMP`: NON sono il difetto di correttezza
+
+Li avevo segnalati come appartenenti alla classe che il sorgente definisce
+«difetto di CORRETTEZZA: scrittura attraverso un puntatore mai inizializzato».
+**Caratterizzazione imprecisa, mia.** Letti: sono 12 occorrenze in 6 file, tutte
+di due sole forme:
+
+```c
+uint64_t var_sp = (uint64_t)(var_sp_frame + 256);   // dichiarazione CON array reale
+if (var_sp != 0) { ... }                            // test
+```
+
+C'e' un array di appoggio (`var_sp_frame`), quindi nessuna scrittura attraverso
+puntatore non inizializzato. Il difetto residuo e' minore e diverso: `var_sp`
+punta dentro un array vero, quindi `var_sp != 0` e' **sempre vero** — una
+condizione costante emessa come se fosse un test. Fedelta', non sicurezza.
+
+## 72.2 La coerenza delle firme peggiora di 53: sono siti DUPLICATI
+
+`callsite_consistency.py --path-b`: OVER 3371 -> 3424 (+53), UNDER 6450 -> 6478
+(+28).
+
+Ipotesi: e' `TAILDUP`, che duplicando code duplica anche i siti di chiamata gia'
+incoerenti, senza crearne di nuovi. **Verificata contando i siti**:
+
+| | siti di chiamata |
+|---|---|
+| `p_off` / `iso/BASE` | 178709 |
+| `iso/TAILDUP` (isolato) | 179545 (+836) |
+| `p_def` (i cinque) | 179557 (+848) |
+
+Rapporto OVER/siti: **1,886% -> 1,907%**, praticamente piatto. I +53 sono la
+stessa popolazione contata due volte, non incoerenze nuove.
+
+E' la stessa trappola dei conteggi assoluti che ha gia' morso tre volte in questa
+sessione: **quando una passata cambia la DIMENSIONE della popolazione, un
+contatore assoluto non e' confrontabile — va normalizzato.**
+
+## 72.3 Una correzione al §59 (impressione, non misura)
+
+Nel §59 avevo scritto, guardando `sample9_go/sub_140001fea`, che «il controllo di
+stack di Go non c'e' affatto». Vero per QUELLA funzione, falso in generale: la
+forma `var_tmp0 = (sp - *(__int64 *)(__thread_context + 16))` — il confronto col
+limite di stack via TEB — compare **1948 volte** nel corpus. Il controllo viene
+sollevato; quella funzione semplicemente non ne aveva uno (frame piccolo,
+Go lo omette).
+
+Era un'impressione presentata come osservazione. La misura la corregge.
+
+## 72.4 Cosa fa davvero `ZFTEMP`, in chiaro
+
+Distribuzione delle forme, prima e dopo:
+
+| forma | spento | acceso |
+|---|---|---|
+| `flag_zf = (var_tmp0 == 0)` | 3829 | **3179** |
+| `if (var_tmp0 != 0)` | (sotto soglia) | **1525** |
+
+Sostituisce `flag_zf = (tmp == 0); if (flag_zf …)` con `if (tmp != 0)` diretto.
+Il temporaneo resta perche' ha altri lettori, ma un flag sparisce: e' uno scambio
+sensato, non uno spreco — e spiega perche' i temporanei salgono mentre i flag
+scendono di tre volte tanto.
+
+---
+
+# Round 73 — 2026-08-18 — Le cinque promozioni confermate, e la forma del difetto sulle firme
+
+## 73.1 Comportamento della combinazione: identico
+
+| | funzioni | AGREE | LINK_FAIL |
+|---|---|---|---|
+| cinque gate spenti | 63 | 15 (23,8%) | 4 |
+| cinque gate predefiniti | 63 | 15 (23,8%) | 4 |
+
+`cmp_paths.py`: **19 su 19 identiche**, 0 migliorate, 0 peggiorate.
+Le promozioni del §71 sono confermate neutre sulla semantica, con
+`goto` −15,3% e `flag_` −13,1%.
+
+## 73.2 La forma del difetto sulle firme, per percorso
+
+Distribuzione delle incoerenze `definita con N -> chiamata con M`
+(`callsite_consistency.py`, corpus intero):
+
+### OVER (chiamata passa PIU' argomenti della definizione)
+
+| forma | path A | path B |
+|---|---|---|
+| `0 -> 1` | **4438** | 2506 |
+| `0 -> 2` | **3583** | 318 |
+| `0 -> 4` | 826 | 123 |
+| `0 -> 3` | 762 | — |
+| **totale** | **9756** | **3424** |
+
+Praticamente tutto l'OVER di path A e' la forma `0 -> N`: **funzioni definite
+`f()` e chiamate `f(a, b)`**. E' esattamente la cecita' che CLAUDE.md descrive —
+`gcc -std=gnu89` accetta `f(a,b,c,d)` contro `__int64 f();` perche' una lista
+vuota e' una dichiarazione NON prototipata, non una promessa di zero argomenti.
+Path A ne ha **quasi 9600**, path B **~2950**.
+
+### UNDER (definizione dichiara PIU' parametri di quanti i chiamanti passino)
+
+| forma | path A | path B |
+|---|---|---|
+| **`4 -> 0`** | **4106** | **4298** |
+| `4 -> 3` | 456 | 82 |
+| `2 -> 1` | 373 | 336 |
+| `2 -> 0` | 354 | 686 |
+| **totale** | **6041** | **6478** |
+
+## 73.3 La lettura, e sposta di nuovo la priorita'
+
+**Il `4 -> 0` e' un difetto CONDIVISO, non di path B**: 4106 contro 4298, uno
+scarto del 5%. E' la firma Win64 completa (`rcx/rdx/r8/r9`) promossa
+dall'analisi di live-in mentre NESSUN chiamante passa argomenti — la stessa
+famiglia dei 2233 parametri fantasma che CLAUDE.md documenta, e la piu' grande
+singola incoerenza di arieta' del corpus in ENTRAMBI i percorsi.
+
+Quindi:
+* la voce «`MlilCallAnalysis`/`ParameterTypeInference` per argomenti e firme»
+  non serve a colmare un divario fra i percorsi — non c'e';
+* serve a chiudere un difetto che i due percorsi CONDIVIDONO, ~4200 funzioni con
+  quattro parametri fantasma;
+* e il dato per farlo esiste gia' ed e' proprio quello che
+  `callsite_consistency.py` calcola senza verita' esterna: **se tutti i
+  chiamanti passano zero argomenti, i quattro parametri della definizione sono
+  probabilmente inventati.** E' un vincolo utilizzabile dall'inferenza, non solo
+  una metrica.
+
+## 73.4 Stato consolidato di path B
+
+| metrica | valore | contro path A |
+|---|---|---|
+| nomi veri | 5238 | 5124 (**B avanti**) |
+| riferimenti HEX pendenti | 931 (14%) | 2900 (33%) (**B avanti**) |
+| OVER (argomenti fantasma al sito) | 3424 | 9756 (**B avanti 2,8x**) |
+| UNDER (parametri fantasma in firma) | 6478 | 6041 (A avanti del 7%) |
+| definizioni emesse | 11300 | 10330 (**B avanti**) |
+| comportamento | 15/63 | 15/63 (pari) |
+
+Path B e' avanti su quattro metriche su sei, pari su una, indietro del 7% su
+una. **La «parita'» dell'obiettivo e' sostanzialmente raggiunta**; quello che
+resta non e' un divario fra percorsi ma un difetto comune.
+
+## 73.5 Gate predefiniti: nove
+
+`FLAGDCE`, `TEMPPROP`, `TOPTEST_BREAK`, `NOPROLOGUE`, `ZFTEMP`, `CMOVFOLD`,
+`C_GOTO_REMOVAL`, `TAILDUP`, `LOOPS_DELEGATE`.
+
+Quattro sono passate scritte in questa sessione; cinque erano capacita' gia'
+presenti e spente, fra cui `LOOPS_DELEGATE` che cabla il crate di analisi a
+costo zero.
+
+---
+
+# Round 74 — ⚠ CORREZIONE al §73: contate per FUNZIONE, le firme di path B sono 41% peggio, non 7%
+
+## 74.1 Il `4 -> 0` non sono 4298 funzioni: e' UNA funzione x2000
+
+Aperte le occorrenze della forma dominante:
+
+```
+UNDER sample4_go/runtime_callbackasm1_abi0: defined with 4, called with 0  x2000
+UNDER sample9_go/runtime_callbackasm1_abi0: defined with 4, called with 0  x2000
+UNDER sample4_go/runtime_spillArgs_abi0:    defined with 4, called with 0  x27
+```
+
+**Una sola funzione vale 4000 dei 4298** — il trampolino di callback di Go, una
+tabella di 2000 stub identici chiamati da altrettanti siti. Le funzioni
+DISTINTE con quella forma sono **105**.
+
+Il §73 diceva «~4200 funzioni con quattro parametri fantasma». **Falso**: sono
+105, e il numero era gonfiato dalla molteplicita' dei siti di chiamata di uno
+stub di runtime.
+
+## 74.2 Ricontato per FUNZIONE DISTINTA, il verdetto si rovescia
+
+| | OVER (funzioni distinte) | UNDER (funzioni distinte) |
+|---|---|---|
+| path A | **1036** | **474** |
+| path B | **413** | **667** |
+
+* **OVER**: path B resta molto avanti (413 contro 1036), coerente con le
+  occorrenze.
+* **UNDER**: path B non e' peggio del 7% — e' peggio del **41%**. Le occorrenze
+  lo SOTTOSTIMAVANO, perche' quelle di path A sono concentrate in meno funzioni
+  chiamate piu' volte.
+
+Le due viste rispondono a domande diverse ed entrambe sono legittime: le
+occorrenze dicono *quanto* codice e' sbagliato, le funzioni distinte dicono
+*quante firme* lo sono. **Per la correttezza di una firma l'unita' giusta e' la
+funzione**, ed e' quella che avrei dovuto usare dal principio.
+
+## 74.3 Correzione al quadro di parita' del §73.4
+
+| metrica | path B | path A | |
+|---|---|---|---|
+| nomi veri | 5238 | 5124 | B avanti |
+| riferimenti HEX pendenti | 931 (14%) | 2900 (33%) | B avanti |
+| OVER, funzioni distinte | **413** | 1036 | B avanti 2,5x |
+| **UNDER, funzioni distinte** | **667** | **474** | **A avanti del 41%** |
+| definizioni emesse | 11300 | 10330 | B avanti |
+| comportamento | 15/63 | 15/63 | pari |
+
+Il §73 concludeva «la parita' e' sostanzialmente raggiunta». **Va corretto**:
+lo e' su cinque metriche su sei, ma sulla sesta il divario e' sei volte piu'
+grande di quanto avessi scritto. **667 firme di path B dichiarano parametri che
+nessun chiamante passa.**
+
+## 74.4 Perche' e' la classe giusta su cui lavorare
+
+E' la stessa famiglia dei 2233 parametri fantasma di CLAUDE.md: **compila
+pulito, non muove il comportamento, ed e' silenziosamente sbagliata.** Nessuna
+delle metriche che questa sessione ha usato la vedrebbe se non fosse per
+`callsite_consistency.py`, e per due volte il suo conteggio grezzo ha portato
+fuori strada — prima mescolando i percorsi (§70), poi contando occorrenze
+invece di funzioni (qui).
+
+Il vincolo per attaccarla resta quello del §73, e non richiede verita' esterna:
+**se TUTTI i siti di chiamata di una funzione passano zero argomenti, i
+parametri della sua definizione sono probabilmente inventati.** Con 667
+funzioni identificate per nome, e' un elenco su cui si puo' lavorare.
+
+## 74.5 Metodo
+
+Terza volta in questa sessione che un contatore assoluto inganna perche' la
+POPOLAZIONE cambia sotto di esso: i `case` dello switch (§61), i siti duplicati
+da `TAILDUP` (§72), gli stub ripetuti di Go (qui). La regola generalizzata:
+**prima di confrontare due conteggi, chiedersi se contano la stessa cosa o solo
+lo stesso evento ripetuto un numero diverso di volte.**
+
+---
+
+# Round 75 — 2026-08-18 — La causa vera: path B PERDE ARGOMENTI ai siti di chiamata
+
+## 75.1 Il divario UNDER non e' copertura, e non e' sovra-promozione
+
+Due misure che sembravano contraddirsi:
+
+**(a)** Delle 720 voci UNDER di path B, solo 167 hanno la stessa funzione
+definita anche in path A. Su quelle: **159 stessa arieta'**, 8 dove *A* ne
+dichiara di piu', e **ZERO** dove B ne dichiara di piu'.
+⇒ path B non sovra-promuove MAI rispetto a path A.
+
+**(b)** Ristretto alle **1967 funzioni definite da ENTRAMBI**, l'UNDER resta
+**148 (B) contro 105 (A)**, lo stesso +41% del totale.
+⇒ il divario non e' spiegato dalla copertura (B emette 6860 funzioni che A non
+emette, A 6259 che B non emette).
+
+Stessa arieta' nelle definizioni, stesso insieme di funzioni, e nonostante cio'
+B ha piu' UNDER. Resta una sola variabile: i SITI DI CHIAMATA.
+
+## 75.2 Verificato: path B passa il 57% di argomenti in meno
+
+Contati gli argomenti a ogni sito di chiamata, sulle **2527 funzioni chiamate in
+entrambi i percorsi**:
+
+| | |
+|---|---|
+| funzioni dove **A** passa piu' argomenti | **1842** |
+| funzioni dove **B** passa piu' argomenti | **122** |
+| media argomenti/chiamata, path A | **0,685** |
+| media argomenti/chiamata, path B | **0,294** |
+
+**Path B perde gli argomenti alle chiamate.** Non e' un difetto delle firme: e'
+un difetto delle CHIAMATE.
+
+## 75.3 ⚠ Questo ridimensiona anche il vantaggio che avevo attribuito a path B
+
+Ho riportato per due round «OVER: path B avanti 2,5x (413 contro 1036 funzioni
+distinte)». **Va letto insieme a questo dato**: `OVER` significa «il sito passa
+PIU' argomenti della definizione». Un percorso che emette meno argomenti ha
+meccanicamente meno over-call.
+
+Le due metriche non sono indipendenti: **una sola causa le spiega entrambe**, e
+il segno del vantaggio dipende da quale si guarda. Non e' che path B inferisca
+meglio le firme — passa meno argomenti, il che lo fa sembrare migliore su OVER
+e peggiore su UNDER.
+
+Questa e' la quarta volta in questa sessione che un confronto fra percorsi va
+riletto; le prime tre erano errori di conteggio, questa e' un errore di
+INTERPRETAZIONE: due metriche correlate lette come indipendenti.
+
+## 75.4 Il quadro di parita', terza e piu' onesta versione
+
+| metrica | path B | path A | lettura |
+|---|---|---|---|
+| nomi veri | 5238 | 5124 | B avanti |
+| riferimenti HEX pendenti | 931 (14%) | 2900 (33%) | B avanti |
+| definizioni emesse | 11300 | 10330 | B avanti |
+| comportamento | 15/63 | 15/63 | pari |
+| **argomenti per chiamata** | **0,294** | **0,685** | **A avanti 2,3x** |
+| OVER / UNDER | 413 / 667 | 1036 / 474 | conseguenze del rigo sopra |
+
+Le prime quattro righe restano valide. Le ultime due sono **una sola cosa**:
+path B emette meno argomenti.
+
+## 75.5 Il fronte, ora nominato correttamente
+
+E' precisamente la voce «`MlilCallAnalysis` per argomenti» della lista utente, e
+quella crate esiste, ha 947 righe e 17 test, e ha **zero chiamanti**: `CallSite`
+porta gia' `args: Vec<CallArgument>` per ogni sito.
+
+Il bersaglio e' misurabile senza verita' esterna: portare la media argomenti di
+path B da 0,294 verso 0,685, e verificare che UNDER scenda SENZA che OVER salga
+piu' di quanto scende UNDER.
+
+---
+
+# Round 76 — 2026-08-18 — La passata ESISTE, clampa apposta, e il divario si decompone in tre
+
+## 76.1 `fill_mlil_call_args_with` c'e' gia' ed e' cablata
+
+`lib.rs:27974`, chiamata in produzione a `lib.rs:28543`, **senza gate**. Il
+difetto era gia' documentato nel sorgente in due punti (`lib.rs:634` e `:27522`)
+con le sue misure: «18128 di 18128 chiamate di path B passavano zero argomenti»
+prima della passata, «6017 riempite esatte, 195 sotto-riportate, 285 con troppi»
+dopo.
+
+La mia misura (0,294 argomenti per chiamata contro 0,685 di path A) fotografa
+quindi lo stato DOPO la riparazione, non prima.
+
+## 76.2 Perche' resta un divario: il clamp e' DELIBERATO
+
+La passata riempie solo se il registro e' stato PREPARATO prima di quella
+specifica chiamata. Il commento spiega perche', con la misura: senza clamp la
+mappa delle arieta' sovrastima e l'**11,7%** delle chiamate riempite passa piu'
+argomenti di quanti il callee ne dichiari.
+
+**Path A non clampa.** Ecco perche' passa piu' argomenti — e perche' ha 2,5
+volte piu' funzioni con argomenti fantasma (1036 contro 413). Sono le due facce
+dello stesso compromesso, gia' scelto e documentato: «missing information is the
+safer failure».
+
+⚠ Correzione al §75: avevo scritto «path A avanti 2,3x sugli argomenti». Lo e'
+in quantita', non in qualita'. Nessuno dei due percorsi e' semplicemente
+migliore: **A sovra-riporta, B sotto-riporta.**
+
+## 76.3 Il vincolo intra-progetto va letto nella direzione giusta
+
+Prima lettura, sbagliata e quasi presa: «3533 funzioni sono definite con
+parametri e chiamate con zero argomenti su 17542 siti ⇒ riempire le chiamate».
+Il caso di testa la falsifica: `runtime_callbackasm1_abi0` e' definita con 4
+parametri e chiamata a zero da **4002** siti. Non sono quattromila chiamate a
+sbagliare: e' la DEFINIZIONE.
+
+Direzione corretta: **se TUTTI i siti passano zero, i parametri della
+definizione sono sospetti.**
+
+| | funzioni con parametri e tutti i siti a zero | parametri implicati |
+|---|---|---|
+| path B | **681** | 1638 |
+| path A | **241** | 505 |
+
+## 76.4 Le 681 di path B si decompongono, con path A come controllo
+
+| | n | lettura |
+|---|---|---|
+| anche A passa **sempre** zero | **196** | **fantasma CONFERMATO** da due percorsi indipendenti |
+| A passa argomenti | **68** | **clamp di B**: gli argomenti esistono e B li perde |
+| non chiamata in A | 417 | nessun controllo disponibile |
+
+Due difetti diversi, con rimedi opposti, che il conteggio grezzo sommava:
+
+* i **196** sono firme da SFOLTIRE (parametri inventati), difetto condiviso;
+* i **68** sono chiamate da RIEMPIRE, difetto solo di B — e fra questi c'e'
+  **`_pei386_runtime_relocator`**, esattamente la funzione la cui regressione di
+  arieta' (0 -> 4 parametri fantasma) CLAUDE.md traccia come il difetto di
+  fedelta' 15/16 -> 14/16.
+
+## 76.5 Il bersaglio, ora dimensionato e senza verita' esterna
+
+Nessuno dei due gruppi richiede prototipi pubblicati: il progetto emesso
+contraddice se stesso e la contraddizione basta.
+
+* 196 firme, ~500 parametri fantasma da togliere;
+* 68 funzioni con argomenti recuperabili, con path A a dimostrare che
+  l'informazione esiste.
+
+I 417 senza controllo restano tali: nessuna delle due direzioni e' giustificabile
+per loro, e inventare sarebbe la classe «sicuro di se' e sbagliato».
+
+---
+
+# Round 77 — 2026-08-18 — #6800: la vista sui SITI DI CHIAMATA, costruita e validata
+
+## 77.1 Cosa mancava
+
+`callee_arities` deduce l'arieta' dal CORPO del callee (registri letti prima di
+essere scritti). Non esisteva la vista complementare: **quanti registri
+argomento i CHIAMANTI preparano davvero**. Senza quella non si puo' smentire un
+parametro fantasma, perche' l'unica evidenza disponibile e' quella che lo ha
+creato.
+
+## 77.2 `callsite_argc_from_bodies` (`binary_entry.rs`)
+
+Innestata dove i corpi sono gia' in memoria — dentro `arities_from_seeds`, che
+disassembla la chiusura transitiva del grafo delle chiamate — quindi **nessuna
+passata di disassemblaggio in piu'**.
+
+Per ogni `call` diretta conta il PREFISSO CONTIGUO di `rcx,rdx,r8,r9` preparati
+prima di quel sito, e tiene il MASSIMO su tutti i siti del bersaglio.
+
+Tre scelte deliberate, ognuna per non inventare:
+* **prefisso contiguo**: se un sito prepara `rcx` e `r8` ma non `rdx`, conta 1 —
+  un buco nella sequenza significa che `r8` e' scratch, non il terzo argomento;
+* **azzeramento dopo ogni chiamata**: una `call` consuma i registri argomento,
+  quindi il sito successivo deve prepararli di nuovo. Senza questo la prima
+  chiamata «insegnerebbe» i suoi argomenti a tutte quelle dopo;
+* **assenza dalla mappa = nessuna evidenza**, non «zero argomenti». Una funzione
+  mai chiamata nell'immagine (entry point, callback registrata, export) non
+  compare. E' la stessa disciplina delle guardie D9-THUNK e D9-NORETURN gia' nel
+  file: meglio nessuna evidenza di una falsa.
+
+Conta anche le meta' a 32 bit (`%ecx` prepara il primo argomento quanto `%rcx`).
+
+## 77.3 Validata con una sonda PRIMA di collegarla
+
+`RUSTRE_DBG_ARGC=1`, effetto zero. Vista sull'immagine intera:
+
+| bucket | bersagli | con siti osservati | **arieta > argc** | parametri smentiti | arieta < argc | senza siti |
+|---|---|---|---|---|---|---|
+| sample6_c | 51 | 39 | 1 | 1 | 8 | 29 |
+| sample7_cpp | 999 | 323 | **43** | **86** | 92 | 718 |
+| sample9_go | 2522 | 1145 | **99** | **196** | 657 | 1377 |
+
+Due letture:
+
+* **`arieta > argc`** — la definizione dichiara piu' parametri di quanti un
+  chiamante abbia mai preparato: sono i **parametri smentiti dal progetto
+  stesso**, senza verita' esterna. 143 bersagli nei tre bucket, 283 parametri.
+* **`arieta < argc`** (657 nel solo Go) — i chiamanti preparano PIU' di quanto
+  il corpo suggerisca: evidenza che la mappa delle arieta' SOTTOSTIMA. E' la
+  direzione opposta, e non l'avevo prevista.
+
+## 77.4 Stato: costruita, non ancora collegata
+
+La funzione e' compilata e la sonda gira, ma **nulla consuma ancora la mappa**:
+emissione verificata identica (`diff -rq` su sample6_c: 0 differenze), test
+1337 passati.
+
+E' deliberato. Collegarla significa CAMBIARE UNA FIRMA, cioe' la classe di
+modifica che in questo repo ha gia' prodotto due volte una regressione
+silenziosa (i 2233 parametri fantasma, e la fedelta' 15/16 -> 14/16). Prima
+serve decidere quale delle due direzioni usare, e misurarle separatamente:
+togliere parametri smentiti e aggiungere parametri sottostimati sono interventi
+diversi, con rischi diversi, e sommarli renderebbe illeggibile il risultato.
+
+## 77.5 Nota di metodo
+
+Questa e' la prima volta in questa sessione che scrivo l'infrastruttura di una
+misura PRIMA di usarla per decidere, invece di misurare col testo emesso e
+scoprire poi che il contatore mentiva. Le quattro correzioni dei §61, §72, §74 e
+§75 sono il motivo.
+
+---
+
+# Round 78 — 2026-08-18 — #6800 collegato: incoerenza delle firme −39%, `UNDER` −68%
+
+## 78.1 Cablaggio
+
+`callsite_argc_from_bodies` ora attraversa la pipeline:
+`ArityCache` diventa una tripla → `set_callsite_argc` →
+`DecompilerContext.callsite_argc` → clamp sull'arieta' di path B.
+
+Il clamp, gate **`RUSTRE_HLIL_ARGC_CLAMP`** (opt-in), scatta SOLO quando esiste
+evidenza (`ctx.callsite_argc.get(&ctx.address)`) e quella evidenza e' MINORE
+dell'arieta' dedotta dal corpo. Assenza dalla mappa non tocca nulla.
+
+## 78.2 Misura, corpus intero (11342 file per lato)
+
+| | UNDER | OVER | totale incoerenze | funzioni con param e tutti i siti a zero | parametri fantasma |
+|---|---|---|---|---|---|
+| spento | 6478 | 3424 | 9902 | 681 | 1638 |
+| **acceso** | **2059** (−68,2%) | 3957 (+15,6%) | **6016 (−39,2%)** | **540** | **1279** |
+
+* 310 file su 11342 cambiano;
+* **path A: 0 differenze**;
+* `goto` e dati materializzati invariati; righe +627 (un parametro rimosso
+  diventa una variabile locale dichiarata, quindi il corpo cresce di una riga).
+
+## 78.3 Il +533 su OVER ha una causa nota, non e' rumore
+
+Il riempimento degli argomenti (`fill_mlil_call_args_with`) usa ancora
+`callee_arities`, mentre la FIRMA ora usa `callsite_argc`. Le due evidenze
+divergono proprio dove il clamp morde: la definizione perde un parametro e il
+sito continua a passarne quanti la vecchia mappa ne prescriveva ⇒ over-call.
+
+E' un difetto di COERENZA fra due consumatori della stessa informazione, non un
+errore di inferenza, e ha un rimedio ovvio: far leggere a entrambi la stessa
+mappa. Non l'ho fatto in questo giro perche' sommerebbe due cambiamenti in una
+misura sola.
+
+Saldo: **−4419 UNDER contro +533 OVER**, cioe' 8 a 1.
+
+## 78.4 Nessun parametro orfano introdotto
+
+Il rischio specifico di togliere un parametro e' lasciare il corpo a leggerne
+uno non dichiarato. Contato: file con `aN` usato e mai dichiarato (ne' come
+parametro ne' come locale) **259 -> 246**. Il clamp non ne crea; ne toglie
+tredici.
+
+## 78.5 Cosa manca prima di accenderlo per difetto
+
+* il comportamento (misura lanciata) — obbligatorio: e' una modifica di FIRMA, e
+  in questo repo quella classe ha gia' prodotto due regressioni silenziose;
+* la coerenza col riempimento degli argomenti (§78.3);
+* l'altra direzione, ancora inesplorata: i **657 bersagli del solo Go dove i
+  chiamanti preparano PIU' argomenti** di quanti il corpo ne suggerisca. Il
+  clamp e' volutamente monodirezionale — aggiungere parametri e' l'operazione
+  che crea fantasmi, e va misurata separatamente.
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->

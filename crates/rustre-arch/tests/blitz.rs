@@ -3,7 +3,6 @@
 //! These tests exercise the public API via integration boundaries (no `super::`
 //! access), targeting boundaries, error paths, format detection, parser
 //! adversarial inputs, and dead-code public functions.
-#![allow(clippy::float_cmp)]
 
 use std::sync::Arc;
 
@@ -308,7 +307,7 @@ fn registry_debug_includes_count() {
 fn instr_stats_zero_total_density_zero() {
     let s = InstrStats::default();
     assert_eq!(s.total, 0);
-    assert_eq!(s.branch_density(), 0.0);
+    assert_eq!(s.branch_density().to_bits(), 0.0_f64.to_bits());
 }
 
 #[test]
@@ -366,11 +365,11 @@ fn extended_stats_all_categories() {
 #[test]
 fn extended_stats_densities_empty_safe() {
     let s = ExtendedInstrStats::default();
-    assert_eq!(s.call_density(), 0.0);
-    assert_eq!(s.branch_density(), 0.0);
-    assert_eq!(s.return_density(), 0.0);
-    assert_eq!(s.nop_density(), 0.0);
-    assert_eq!(s.memory_density(), 0.0);
+    assert_eq!(s.call_density().to_bits(), 0.0_f64.to_bits());
+    assert_eq!(s.branch_density().to_bits(), 0.0_f64.to_bits());
+    assert_eq!(s.return_density().to_bits(), 0.0_f64.to_bits());
+    assert_eq!(s.nop_density().to_bits(), 0.0_f64.to_bits());
+    assert_eq!(s.memory_density().to_bits(), 0.0_f64.to_bits());
 }
 
 #[test]

@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn art_bitmap_live_count() {
         // 8 words, first word = 0xFFFF_FFFF_FFFF_FFFF (all live)
-        let mut words_bytes = vec![0u8; 64];
+        let mut words_bytes = [0u8; 64];
         words_bytes[..8].fill(0xFF);
         let bm = ArtBitmap {
             heap_begin: 0x1000,

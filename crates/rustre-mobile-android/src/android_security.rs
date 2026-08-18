@@ -2,63 +2,39 @@
 //! auth mechanisms, permissions risk, anti-reverse detection, report.
 
 #![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::cast_lossless,
-    clippy::cast_possible_wrap,
-    clippy::too_many_lines,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::unreadable_literal,
-    clippy::format_push_string,
-    clippy::format_in_format_args,
-    clippy::case_sensitive_file_extension_comparisons,
-    clippy::similar_names,
-    clippy::items_after_statements,
-    clippy::match_same_arms,
-    clippy::needless_pass_by_value,
-    clippy::needless_raw_string_hashes,
-    clippy::option_if_let_else,
-    clippy::manual_let_else,
-    clippy::redundant_closure_for_method_calls,
-    clippy::unnecessary_wraps,
-    clippy::unused_self,
-    clippy::redundant_guards,
-    clippy::map_unwrap_or,
-    clippy::if_not_else,
-    clippy::struct_excessive_bools,
-    clippy::module_name_repetitions,
+    // ── STYLE ONLY ───────────────────────────────────────────────────────────
+    //
+    // ⚠ This replaces a 45-to-59-line blanket block that also allowed every
+    // `cast_*` lint. Removing the whole block exposed ~1000 warnings in this
+    // crate, of which ~60 were casts; 940 style warnings would have buried
+    // them, and a warning nobody reads is worse than no warning — it is the
+    // argument this repo keeps making about green tests.
+    //
+    // So the CORRECTNESS lints are gone from this list on purpose:
+    // `cast_possible_truncation`, `cast_sign_loss`, `cast_possible_wrap` and
+    // `cast_lossless` now warn, because in a reverse-engineering tool an `as`
+    // that truncates an address produces a wrong answer that looks right.
+    //
+    // What stays allowed is presentation: attributes clippy would like added,
+    // doc formatting, literal grouping, and int-to-float conversions whose only
+    // consequence is a rounded statistic.
     clippy::must_use_candidate,
     clippy::missing_const_for_fn,
     clippy::doc_markdown,
-    clippy::default_trait_access,
-    clippy::wildcard_imports,
-    clippy::single_match_else,
-    clippy::unnested_or_patterns,
-    clippy::needless_continue,
-    clippy::implicit_hasher,
-    clippy::ignored_unit_patterns,
-    clippy::semicolon_if_nothing_returned,
-    clippy::stable_sort_primitive,
-    clippy::trivially_copy_pass_by_ref,
-    clippy::ptr_as_ptr,
-    clippy::ref_option,
-    clippy::fn_params_excessive_bools,
-    clippy::should_implement_trait,
-    clippy::or_fun_call,
-    clippy::manual_string_new,
-    clippy::single_char_pattern,
-    clippy::needless_late_init,
-    clippy::or_then_unwrap,
-    clippy::collapsible_if,
-    clippy::collapsible_else_if,
-    clippy::redundant_else,
-    clippy::useless_let_if_seq,
-    clippy::let_underscore_untyped,
-    clippy::missing_fields_in_debug,
-    clippy::ref_as_ptr,
-    clippy::manual_range_contains
+    clippy::unreadable_literal,
+    clippy::unusual_byte_groupings,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::too_many_lines,
+    clippy::module_name_repetitions,
+    clippy::redundant_closure_for_method_calls,
+    clippy::match_same_arms,
+    clippy::struct_excessive_bools,
+    clippy::items_after_statements,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    // Int-to-float for a percentage or a rate: the rounding is the point.
+    clippy::cast_precision_loss
 )]
 
 use serde::{Deserialize, Serialize};
@@ -118,7 +94,7 @@ impl NetworkSecurity {
         SecurityRisk::Low
     }
     #[must_use]
-    pub fn is_insecure(&self) -> bool {
+    pub const fn is_insecure(&self) -> bool {
         self.allows_cleartext || self.trust_user_certs || !self.exception_domains.is_empty()
     }
 }

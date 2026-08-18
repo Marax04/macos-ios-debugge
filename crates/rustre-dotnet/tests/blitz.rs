@@ -21,7 +21,7 @@ fn cil_operand_display_int32() {
 }
 
 #[test]
-fn cil_operand_display_int64_has_L() {
+fn cil_operand_display_int64_has_l_suffix() {
     assert_eq!(format!("{}", CilOperand::Int64(7)), "7L");
 }
 
@@ -425,12 +425,12 @@ fn attribute_value_display_char() {
 }
 
 #[test]
-fn attribute_value_display_int64_with_L() {
+fn attribute_value_display_int64_with_l_suffix() {
     assert_eq!(AttributeValue::Int64(5).to_string(), "5L");
 }
 
 #[test]
-fn attribute_value_display_uint64_with_UL() {
+fn attribute_value_display_uint64_with_ul_suffix() {
     assert_eq!(AttributeValue::UInt64(5).to_string(), "5UL");
 }
 

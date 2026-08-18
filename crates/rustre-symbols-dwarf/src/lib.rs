@@ -45,7 +45,7 @@
 //! The workspace-wide `unsafe_code = "warn"` lint is acknowledged at crate
 //! scope below because both sites are inherent to the gimli integration,
 //! not incidental.
-#![allow(unsafe_code)]
+#![allow(unsafe_code, reason = "both unsafe sites are inherent to the gimli integration, not incidental; removing the allow would mean deleting the integration")]
 #![warn(missing_docs)]
 
 pub mod casts;

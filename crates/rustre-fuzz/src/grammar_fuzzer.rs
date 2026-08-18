@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 // ─── xorshift64 ───────────────────────────────────────────────────────────────
 
-fn xorshift64(state: &mut u64) -> u64 {
+const fn xorshift64(state: &mut u64) -> u64 {
     let mut x = *state;
     x ^= x << 13;
     x ^= x >> 7;
@@ -25,23 +25,28 @@ pub enum Term {
 }
 
 impl Term {
+    #[must_use]
     pub fn terminal(s: &str) -> Self {
         Self::Terminal(s.to_string())
     }
 
+    #[must_use]
     pub fn non_terminal(s: &str) -> Self {
         Self::NonTerminal(s.to_string())
     }
 
+    #[must_use]
     pub fn optional(t: Self) -> Self {
         Self::Optional(Box::new(t))
     }
 
+    #[must_use]
     pub fn repeat(t: Self, min: u32, max: u32) -> Self {
         Self::Repeat { term: Box::new(t), min, max }
     }
 
-    pub fn choice(terms: Vec<Self>) -> Self {
+    #[must_use]
+    pub const fn choice(terms: Vec<Self>) -> Self {
         Self::Choice(terms)
     }
 }
@@ -54,10 +59,12 @@ pub struct Expansion {
 }
 
 impl Expansion {
-    pub fn new(terms: Vec<Term>) -> Self {
+    #[must_use]
+    pub const fn new(terms: Vec<Term>) -> Self {
         Self { terms }
     }
 
+    #[must_use]
     pub fn single(t: Term) -> Self {
         Self { terms: vec![t] }
     }
@@ -71,6 +78,7 @@ pub struct Grammar {
 }
 
 impl Grammar {
+    #[must_use]
     pub fn new() -> Self {
         Self { rules: HashMap::new() }
     }
@@ -79,6 +87,7 @@ impl Grammar {
         self.rules.insert(name.to_string(), expansions);
     }
 
+    #[must_use]
     pub fn has_rule(&self, name: &str) -> bool {
         self.rules.contains_key(name)
     }
@@ -93,7 +102,8 @@ pub struct GrammarInstance {
 }
 
 impl GrammarInstance {
-    pub fn new(grammar: Grammar, seed: u64) -> Self {
+    #[must_use]
+    pub const fn new(grammar: Grammar, seed: u64) -> Self {
         Self {
             grammar,
             seed,
@@ -101,7 +111,7 @@ impl GrammarInstance {
         }
     }
 
-    fn rand_below(&mut self, n: usize) -> usize {
+    const fn rand_below(&mut self, n: usize) -> usize {
         if n == 0 {
             return 0;
         }
@@ -180,7 +190,7 @@ impl GrammarInstance {
     fn pick_shortest_expansion_idx(&self, expansions: &[Expansion]) -> usize {
         expansions.iter().enumerate().min_by_key(|(_, exp)| {
             exp.terms.iter().filter(|t| matches!(t, Term::NonTerminal(_))).count()
-        }).map(|(i, _)| i).unwrap_or(0)
+        }).map_or(0, |(i, _)| i)
     }
 }
 
@@ -190,6 +200,7 @@ impl GrammarInstance {
 /// Format: `rule-name ::= alt1 | alt2`
 /// Terminals are enclosed in double quotes.
 /// Non-terminals are bare identifiers.
+#[must_use]
 pub fn parse_bnf_grammar(text: &str) -> Grammar {
     let mut grammar = Grammar::new();
     for line in text.lines() {
@@ -254,6 +265,7 @@ fn parse_expansion_terms(alt: &str) -> Vec<Term> {
 
 // ─── Built-in grammars ────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn builtin_grammar_http11() -> Grammar {
     let mut g = Grammar::new();
     g.add_rule("request", vec![
@@ -287,6 +299,7 @@ pub fn builtin_grammar_http11() -> Grammar {
     g
 }
 
+#[must_use]
 pub fn builtin_grammar_json() -> Grammar {
     let mut g = Grammar::new();
     g.add_rule("value", vec![
@@ -337,6 +350,7 @@ pub fn builtin_grammar_json() -> Grammar {
     g
 }
 
+#[must_use]
 pub fn builtin_grammar_sql_select() -> Grammar {
     let mut g = Grammar::new();
     g.add_rule("query", vec![
@@ -373,6 +387,7 @@ pub fn builtin_grammar_sql_select() -> Grammar {
     g
 }
 
+#[must_use]
 pub fn builtin_grammar_xml() -> Grammar {
     let mut g = Grammar::new();
     g.add_rule("document", vec![
@@ -410,6 +425,7 @@ pub fn builtin_grammar_xml() -> Grammar {
     g
 }
 
+#[must_use]
 pub fn builtin_grammar_cmdline() -> Grammar {
     let mut g = Grammar::new();
     g.add_rule("cmdline", vec![
@@ -452,6 +468,7 @@ pub enum BuiltinGrammar {
     CommandLine,
 }
 
+#[must_use]
 pub fn get_builtin_grammar(name: BuiltinGrammar) -> Grammar {
     match name {
         BuiltinGrammar::Http11Request => builtin_grammar_http11(),
@@ -500,6 +517,7 @@ pub struct GrammarFuzzer {
 }
 
 impl GrammarFuzzer {
+    #[must_use]
     pub fn new(grammar: Grammar, start: &str, max_depth: u32, seed: u64) -> Self {
         Self {
             instance: GrammarInstance::new(grammar, seed),
@@ -518,6 +536,7 @@ impl GrammarFuzzer {
 }
 
 /// Generate a named corpus using a builtin grammar.
+#[must_use]
 pub fn generate_corpus(name: &str, count: u32, seed: u64) -> Vec<String> {
     let grammar = match name {
         "http" => builtin_grammar_http11(),

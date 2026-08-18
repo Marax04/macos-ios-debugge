@@ -77,11 +77,16 @@ fn reaches_exit_without(
 ///  - `None` outer = b cannot reach any exit (not in the post-dom tree);
 ///  - `Some(None)` = b's immediate post-dominator is the virtual exit;
 ///  - `Some(Some(m))` = m is b's immediate post-dominator.
-#[allow(clippy::type_complexity)]
-fn oracle_ipdom(
-    n: usize,
-    succ: &[Vec<usize>],
-) -> (Vec<HashSet<usize>>, Vec<Option<Option<usize>>>) {
+/// The oracle's answer: per-block post-dominator sets, and per-block immediate
+/// post-dominator where `None` means "block does not reach the exit" and
+/// `Some(None)` means "the immediate post-dominator is the virtual exit".
+///
+/// Named because the nested `Option<Option<usize>>` is exactly the shape that
+/// needed a `type_complexity` allow, and exactly the shape a reader must be
+/// told the meaning of.
+type IPostDomOracle = (Vec<HashSet<usize>>, Vec<Option<Option<usize>>>);
+
+fn oracle_ipdom(n: usize, succ: &[Vec<usize>]) -> IPostDomOracle {
     let exit_set: HashSet<usize> = exits(n, succ).into_iter().collect();
     let live: Vec<usize> = (0..n)
         .filter(|&b| reaches_exit_without(n, succ, &exit_set, b, usize::MAX))

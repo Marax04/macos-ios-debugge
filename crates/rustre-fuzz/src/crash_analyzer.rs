@@ -111,7 +111,7 @@ pub struct SanitizerHint {
     pub raw: String,
     /// Detected bug type keyword (e.g. "heap-buffer-overflow").
     pub bug_type: Option<String>,
-    /// Detected sanitizer (e.g. "AddressSanitizer").
+    /// Detected sanitizer (e.g. "`AddressSanitizer`").
     pub sanitizer: Option<String>,
     /// Extracted stack frames (function names).
     pub frames: Vec<String>,
@@ -440,7 +440,7 @@ impl CrashAnalyzer {
 
     /// Number of duplicates deduplicated out.
     #[must_use]
-    pub fn duplicate_count(&self) -> u64 {
+    pub const fn duplicate_count(&self) -> u64 {
         self.total_submitted.saturating_sub(self.next_id)
     }
 
@@ -477,7 +477,7 @@ impl CrashAnalyzer {
 
     /// Return the count of crashes per category.
     #[must_use]
-    pub fn category_counts(&self) -> &HashMap<CrashCategory, u64> {
+    pub const fn category_counts(&self) -> &HashMap<CrashCategory, u64> {
         &self.category_counts
     }
 
@@ -688,7 +688,7 @@ pub fn bucket_crashes(reports: &[&CrashReport]) -> Vec<CrashBucket> {
 /// Tracks when unique crashes were first seen over the course of a campaign.
 #[derive(Debug, Clone, Default)]
 pub struct CrashTimeline {
-    /// (timestamp, crash_report_id) pairs in chronological order.
+    /// (timestamp, `crash_report_id`) pairs in chronological order.
     pub events: Vec<(SystemTime, u64)>,
 }
 
@@ -706,7 +706,7 @@ impl CrashTimeline {
 
     /// Return the number of unique crashes found so far.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.events.len()
     }
 
@@ -781,7 +781,7 @@ mod tests {
         // SIGSEGV to heap = high exploitability
         analyzer.submit(make_record(11, Some(0x0000_7f10_0000_0000), 0x2));
         let triaged = analyzer.triaged_crashes();
-        assert_eq!(triaged[0].exploitability >= triaged[1].exploitability, true);
+        assert!(triaged[0].exploitability >= triaged[1].exploitability);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //!
 //! The mapping follows the IDA Pro 7.x naming convention.
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, reason = "IDA Pro 7.x API compatibility: existing IDA Python scripts call GetFunctionName/MakeCode by those exact names, so renaming would remove the only reason this module exists")]
 
 use std::collections::BTreeMap;
 

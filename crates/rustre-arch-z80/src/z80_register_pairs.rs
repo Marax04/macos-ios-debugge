@@ -196,7 +196,7 @@ pub const fn af_shadow() -> Z80RegisterPair {
 
 /// Alias with the capitalisation used in Z80 documentation.
 #[must_use]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, reason = "the capitalisation IS the feature: every Z80 datasheet writes AF', and this alias exists only to offer that spelling beside the snake_case af_shadow()")]
 pub const fn AF_shadow() -> Z80RegisterPair {
     af_shadow()
 }

@@ -360,10 +360,16 @@ pub fn fuse_switch_chain(node: StructuredNode) -> StructuredNode {
     }
 }
 
-#[allow(clippy::type_complexity)]
-fn collect_chain(
-    node: &StructuredNode,
-) -> Option<(Vec<(i64, StructuredNode)>, Option<StructuredNode>, String)> {
+/// What [`collect_chain`] recovers from an else-if ladder: the `(value, body)`
+/// pairs in source order, the trailing `else` body if there is one, and the
+/// scrutinee expression every arm compares against.
+///
+/// Named because the bare tuple needed an `#[allow(clippy::type_complexity)]`,
+/// and because a reader meeting `(Vec<(i64, _)>, Option<_>, String)` at a call
+/// site has no way to know which `String` it is.
+type SwitchChain = (Vec<(i64, StructuredNode)>, Option<StructuredNode>, String);
+
+fn collect_chain(node: &StructuredNode) -> Option<SwitchChain> {
     let mut current = node.clone();
     let mut cases: Vec<(i64, StructuredNode)> = Vec::new();
     let mut scrutinee: Option<String> = None;

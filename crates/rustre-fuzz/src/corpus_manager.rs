@@ -413,7 +413,7 @@ impl CorpusManager {
         self.entries.values().next_back()
     }
 
-    /// Record that an entry was selected for mutation (increments selected_count).
+    /// Record that an entry was selected for mutation (increments `selected_count`).
     pub fn record_selection(&mut self, id: u64) {
         if let Some(entry) = self.entries.get_mut(&id) {
             entry.selected_count = entry.selected_count.saturating_add(1);

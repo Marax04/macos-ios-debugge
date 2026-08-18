@@ -731,14 +731,13 @@ fn rank_perturbations_sorted_descending() {
 
 #[test]
 fn perturbation_effect_is_beneficial_threshold() {
-    let e = PerturbationEffect_helper(0.1);
+    let e = perturbation_effect_helper(0.1);
     assert!(e.is_beneficial());
-    let e0 = PerturbationEffect_helper(0.0);
+    let e0 = perturbation_effect_helper(0.0);
     assert!(!e0.is_beneficial());
 }
 
-#[allow(non_snake_case)]
-fn PerturbationEffect_helper(q: f64) -> rustre_deobf_iadl::perturbation::PerturbationEffect {
+fn perturbation_effect_helper(q: f64) -> rustre_deobf_iadl::perturbation::PerturbationEffect {
     use rustre_deobf_iadl::perturbation::PerturbationEffect;
     PerturbationEffect {
         kind: PerturbationType::NopElimination,

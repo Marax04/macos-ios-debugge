@@ -1,7 +1,7 @@
 //! Structured / grammar-based fuzzer.
 //!
 //! Generates type-aware inputs for common binary and text formats, applies
-//! format-specific interesting values, and implements a simplified LangFuzz-
+//! format-specific interesting values, and implements a simplified `LangFuzz`-
 //! style token recombination strategy.
 //!
 //! Supported formats:
@@ -411,7 +411,7 @@ impl ElfGenerator {
 
 // ── TokenBank ─────────────────────────────────────────────────────────────────
 
-/// A bank of tokens extracted from valid corpus samples, used for LangFuzz-
+/// A bank of tokens extracted from valid corpus samples, used for `LangFuzz`-
 /// style recombination mutations.
 #[derive(Debug, Clone, Default)]
 pub struct TokenBank {
@@ -424,7 +424,7 @@ pub struct TokenBank {
 impl TokenBank {
     /// Create an empty token bank with the given capacity.
     #[must_use]
-    pub fn new(capacity: usize) -> Self {
+    pub const fn new(capacity: usize) -> Self {
         Self {
             tokens: Vec::new(),
             capacity,
@@ -474,13 +474,13 @@ impl TokenBank {
 
     /// Number of tokens stored.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.tokens.len()
     }
 
     /// True when the bank is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
 }
@@ -559,7 +559,7 @@ impl StructuredFuzzer {
     ///
     /// Strategy mix:
     /// - 30% — generate a fresh structured input (ignores `input`).
-    /// - 30% — token recombination (LangFuzz).
+    /// - 30% — token recombination (`LangFuzz`).
     /// - 40% — base mutation engine on `input`.
     #[must_use]
     pub fn mutate(&mut self, input: &[u8]) -> Vec<u8> {
@@ -620,7 +620,7 @@ impl StructuredFuzzer {
 
     /// Statistics: number of tokens in the bank.
     #[must_use]
-    pub fn token_count(&self) -> usize {
+    pub const fn token_count(&self) -> usize {
         self.token_bank.len()
     }
 }

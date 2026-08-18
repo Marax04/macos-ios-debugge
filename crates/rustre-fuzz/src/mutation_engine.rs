@@ -10,7 +10,7 @@ pub const INTERESTING_U32: &[u32] = &[
 
 // ─── xorshift64 ───────────────────────────────────────────────────────────────
 
-pub fn xorshift64(state: &mut u64) -> u64 {
+pub const fn xorshift64(state: &mut u64) -> u64 {
     let mut x = *state;
     x ^= x << 13;
     x ^= x >> 7;
@@ -42,7 +42,8 @@ pub enum MutationType {
 }
 
 impl MutationType {
-    pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::BitFlip => "bit_flip",
             Self::ByteFlip => "byte_flip",
@@ -94,6 +95,7 @@ pub struct MutationHistory {
 }
 
 impl MutationHistory {
+    #[must_use]
     pub fn new(original_data: &[u8]) -> Self {
         Self {
             mutations_applied: Vec::new(),
@@ -105,11 +107,13 @@ impl MutationHistory {
         self.mutations_applied.push(m);
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.mutations_applied.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
         self.mutations_applied.is_empty()
     }
 }
@@ -117,7 +121,7 @@ impl MutationHistory {
 fn fnv64(data: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf29ce484222325;
     for &b in data {
-        hash ^= b as u64;
+        hash ^= u64::from(b);
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
@@ -200,7 +204,7 @@ pub fn apply_mutation(data: &[u8], mutation: MutationType, rng: &mut u64, max_si
         MutationType::Arithmetic { delta } => {
             let idx = (xorshift64(rng) % out.len().max(1) as u64) as usize;
             if idx < out.len() {
-                out[idx] = (out[idx] as i16).wrapping_add(delta as i16) as u8;
+                out[idx] = i16::from(out[idx]).wrapping_add(i16::from(delta)) as u8;
             }
         }
 
@@ -306,7 +310,7 @@ pub fn weighted_choice(weights: &[(MutationType, u32)], rng: &mut u64) -> Mutati
     if total == 0 {
         return MutationType::BitFlip;
     }
-    let r = (xorshift64(rng) % total as u64) as u32;
+    let r = (xorshift64(rng) % u64::from(total)) as u32;
     let mut acc = 0u32;
     for (mutation, weight) in weights {
         acc += weight;
@@ -314,7 +318,7 @@ pub fn weighted_choice(weights: &[(MutationType, u32)], rng: &mut u64) -> Mutati
             return mutation.clone();
         }
     }
-    weights.last().map(|(m, _)| m.clone()).unwrap_or(MutationType::BitFlip)
+    weights.last().map_or(MutationType::BitFlip, |(m, _)| m.clone())
 }
 
 // ─── MutationEngine ───────────────────────────────────────────────────────────
@@ -325,7 +329,8 @@ pub struct MutationEngine {
 }
 
 impl MutationEngine {
-    pub fn new(config: MutationConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: MutationConfig) -> Self {
         let seed = config.seed;
         Self {
             config,
@@ -333,18 +338,19 @@ impl MutationEngine {
         }
     }
 
-    pub fn rand_below(&mut self, n: u64) -> u64 {
+    pub const fn rand_below(&mut self, n: u64) -> u64 {
         if n == 0 { return 0; }
         xorshift64(&mut self.rng) % n
     }
 
     /// Generate a random delta for arithmetic mutations.
-    fn random_delta(&mut self) -> i8 {
+    const fn random_delta(&mut self) -> i8 {
         let v = self.rand_below(35) as i8;
         v - 17
     }
 
     /// Build a default weight table covering all mutation types.
+    #[must_use]
     pub fn default_weights(&self) -> Vec<(MutationType, u32)> {
         vec![
             (MutationType::BitFlip, 10),
@@ -369,7 +375,7 @@ impl MutationEngine {
         let weights = self.default_weights();
         // Inline weighted selection to avoid borrow issues
         let total: u32 = weights.iter().map(|(_, w)| w).sum();
-        let r = (xorshift64(&mut self.rng) % total as u64) as u32;
+        let r = (xorshift64(&mut self.rng) % u64::from(total)) as u32;
         let mut acc = 0u32;
         for (mutation, weight) in &weights {
             acc += weight;
@@ -388,11 +394,11 @@ impl MutationEngine {
     /// Apply a single randomly-chosen mutation.
     pub fn mutate_once(&mut self, data: &[u8]) -> (Vec<u8>, MutationType) {
         let mutation = self.pick_mutation();
-        let dict_entry = if !self.config.dictionary.is_empty() {
+        let dict_entry = if self.config.dictionary.is_empty() {
+            vec![0xde, 0xad]
+        } else {
             let i = (xorshift64(&mut self.rng) % self.config.dictionary.len() as u64) as usize;
             self.config.dictionary[i].clone()
-        } else {
-            vec![0xde, 0xad]
         };
         let effective_mutation = match &mutation {
             MutationType::DictionaryInsert(_) => MutationType::DictionaryInsert(dict_entry),
@@ -425,9 +431,9 @@ impl MutationEngine {
         current
     }
 
-    /// Run a full mutation round: pick 1..=max_mutations_per_round mutations.
+    /// Run a full mutation round: pick `1..=max_mutations_per_round` mutations.
     pub fn run_round(&mut self, data: &[u8]) -> Vec<u8> {
-        let n = 1 + self.rand_below(self.config.max_mutations_per_round as u64) as u32;
+        let n = 1 + self.rand_below(u64::from(self.config.max_mutations_per_round)) as u32;
         let (result, _) = self.mutate_with_history(data, n);
         result
     }
@@ -517,7 +523,7 @@ mod tests {
         let other = vec![0xFFu8; 8];
         let mut r = rng();
         let out = apply_mutation(&data, MutationType::Crossover(other), &mut r, 1024);
-        assert!(out.iter().any(|&b| b == 0xFF));
+        assert!(out.contains(&0xFF));
     }
 
     #[test]
@@ -604,9 +610,9 @@ mod tests {
         assert_eq!(out.len(), data.len());
         // Same multiset
         let mut a = data.clone();
-        let mut b = out.clone();
-        a.sort();
-        b.sort();
+        let mut b = out;
+        a.sort_unstable();
+        b.sort_unstable();
         assert_eq!(a, b);
     }
 }

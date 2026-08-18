@@ -637,6 +637,11 @@ pub struct DecompilerContext {
     /// never from a read-before-written heuristic — that shape invents PHANTOM
     /// arguments that compile clean and are silently wrong.
     pub callee_arities: Arc<HashMap<u64, usize>>,
+    /// #6800: quanti registri argomento i CHIAMANTI preparano per ciascun
+    /// bersaglio (`binary_entry::callsite_argc_from_bodies`). E' l'unica
+    /// evidenza che possa SMENTIRE un parametro dedotto dal corpo del callee.
+    /// ⚠ Assenza = nessuna evidenza, non zero.
+    pub callsite_argc: Arc<HashMap<u64, usize>>,
 }
 
 impl DecompilerContext {
@@ -656,6 +661,7 @@ impl DecompilerContext {
             data_oracle: None,
             jump_tables: Vec::new(),
             callee_arities: Arc::new(HashMap::new()),
+            callsite_argc: Arc::new(HashMap::new()),
             published_arity: Arc::new(std::collections::HashSet::new()),
         }
     }
@@ -19236,6 +19242,8 @@ pub struct DecompilerPipeline {
     /// can carry it without cloning ~11k times. Kept alongside rather than
     /// replacing the field above: every existing reader takes `&HashMap`.
     callee_arities_shared: Arc<HashMap<u64, usize>>,
+    /// #6800: vedi `set_callsite_argc`.
+    callsite_argc: Arc<HashMap<u64, usize>>,
     /// D18: VA → predicted return type of that callee, used to forward-declare
     /// a named callee with a prototype matching its definition.
     callee_return_types: HashMap<u64, String>,
@@ -19757,6 +19765,16 @@ impl DecompilerPipeline {
         }
     }
 
+    /// #6800: vista sui SITI DI CHIAMATA, per bersaglio.
+    ///
+    /// Complementare a `callee_arities`, che deduce l'arieta' dal CORPO del
+    /// callee. Assenza dalla mappa = NESSUNA EVIDENZA (funzione mai chiamata
+    /// nell'immagine), non «zero argomenti»: chi la consuma deve lasciarla
+    /// stare, non azzerare.
+    pub fn set_callsite_argc(&mut self, m: HashMap<u64, usize>) {
+        self.callsite_argc = Arc::new(m);
+    }
+
     pub fn set_callee_arities(&mut self, m: HashMap<u64, usize>) {
         self.callee_arities_shared = Arc::new(m.clone());
         self.callee_arities = m;
@@ -19813,6 +19831,7 @@ impl DecompilerPipeline {
         let mut ctx = DecompilerContext::new(address, func_name, self.options.clone());
         ctx.data_oracle = self.data_oracle.clone();
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
+        ctx.callsite_argc = Arc::clone(&self.callsite_argc);
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
 
@@ -20029,6 +20048,7 @@ impl DecompilerPipeline {
         // as soon as a pass depended on it.
         ctx.data_oracle = self.data_oracle.clone();
         ctx.callee_arities = Arc::clone(&self.callee_arities_shared);
+        ctx.callsite_argc = Arc::clone(&self.callsite_argc);
         self.seed_crt_arities(&mut ctx, instructions);
         ctx.jump_tables = self.jump_tables.clone();
         let perf_fn_start = crate::perf::enabled().then(Instant::now);
@@ -26427,6 +26447,7 @@ impl PipelineBuilder {
             data_oracle: None,
             callee_arities: HashMap::new(),
             callee_arities_shared: Arc::new(HashMap::new()),
+            callsite_argc: Arc::new(HashMap::new()),
             callee_return_types: HashMap::new(),
         }
     }
@@ -29525,6 +29546,63 @@ impl DecompilerPass for IlAnalysisPass {
                     if *live {
                         cc_arity = i + 1;
                     }
+                }
+                // ── #6800: SMENTITA dai siti di chiamata ─────────────────────
+                //
+                // `live_in` deduce i parametri dal CORPO (registri letti prima
+                // di essere scritti). E' la stessa evidenza che ha prodotto i
+                // 2233 parametri fantasma di CLAUDE.md: un registro usato come
+                // scratch prima di essere scritto e' indistinguibile da un
+                // argomento, guardando solo il corpo.
+                //
+                // `ctx.callsite_argc` porta l'evidenza opposta e indipendente:
+                // quanti registri argomento i CHIAMANTI preparano davvero.
+                // Se nessun chiamante ne prepara piu' di N, i parametri oltre
+                // l'N-esimo non li passa nessuno.
+                //
+                // MISURATO sul testo emesso PRIMA di scrivere questo codice:
+                // 681 funzioni di path B dichiarano parametri mentre TUTTI i
+                // loro siti passano zero argomenti; incrociando path A come
+                // controllo indipendente, **196 sono confermate** (anche A
+                // passa sempre zero) e 68 sono invece argomenti che B perde.
+                // La mappa vista dal lato disassemblato dice 143 bersagli e
+                // 283 parametri smentiti sui tre bucket sondati.
+                //
+                // ⚠ Assenza dalla mappa = NESSUNA EVIDENZA (funzione mai
+                // chiamata nell'immagine: entry point, callback registrata,
+                // export), NON «zero argomenti». In quel caso non si tocca
+                // nulla — la stessa disciplina delle guardie D9-THUNK e
+                // D9-NORETURN.
+                //
+                // Gate `RUSTRE_HLIL_ARGC_CLAMP`, opt-in: cambia una FIRMA, che
+                // e' la classe di modifica che in questo repo ha gia' prodotto
+                // due regressioni silenziose.
+                // MISURATO, e il costo va scritto: con il clamp PARZIALE
+                // (`4 -> 2` e simili) delle 42 funzioni che diventano over-call
+                // **10 sono funzioni a cui path A passa argomenti**, cioe' li'
+                // il clamp ha tolto parametri VERI. 31 non sono chiamate in A e
+                // restano senza controllo, 1 e' giustificata.
+                //
+                // Causa probabile: i corpi che `arities_from_seeds` disassembla
+                // sono TRONCATI (`CALLEE_SCAN_BYTES` = 4096, 2000 istruzioni),
+                // quindi un sito di chiamata oltre il taglio non entra nel
+                // massimo e la mappa sottostima. Piu' il bypass `published`
+                // nel riempimento, che ignora la clausola stretta.
+                //
+                // Modalita' `=2` (STRETTA): si clampa SOLO quando l'evidenza e'
+                // ZERO ASSOLUTO — nessun chiamante prepara mai nemmeno `rcx`.
+                // E' il segnale forte, quello che un troncamento puo' solo
+                // rendere piu' conservativo (se un sito sfugge, l'osservato
+                // resta 0 e si clampa lo stesso: il rischio non sparisce, ma la
+                // decisione non dipende piu' da un CONFRONTO fra due numeri
+                // entrambi incerti).
+                let modo = std::env::var("RUSTRE_HLIL_ARGC_CLAMP").unwrap_or_default();
+                if (modo == "1" || modo == "true" || modo == "2")
+                    && let Some(&osservato) = ctx.callsite_argc.get(&ctx.address)
+                    && osservato < cc_arity
+                    && (modo != "2" || osservato == 0)
+                {
+                    cc_arity = osservato;
                 }
                 const WIN64_ARG_REGS: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
                 // Win64 argument POSITIONS are shared between the integer file

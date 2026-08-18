@@ -731,8 +731,11 @@ impl StridedInterval {
                 if result_bits_wide > 64 {
                     return Self::top(64);
                 }
-                #[allow(clippy::cast_possible_truncation)]
-                let result_bits = result_bits_wide as u8;
+                // The `return Self::top(64)` guard above bounds this to 64, so
+                // the conversion cannot fail; `try_from` states that instead of
+                // asserting it in a comment, and falls back to the same 64 the
+                // guard would have produced if the bound ever moves.
+                let result_bits = u8::try_from(result_bits_wide).unwrap_or(64);
                 let lo = (alo << bb) | blo;
                 let hi = (ahi << bb) | bhi;
                 Self::range(lo.min(hi), lo.max(hi), result_bits)

@@ -349,6 +349,43 @@ pub struct LuaBytecodeAnalyzer {
     pub config: AnalyzerConfig,
 }
 
+
+/// One instruction's position in the bytecode stream, plus the two whole-chunk
+/// facts a classifier needs to bounds-check it.
+///
+/// ⚠ Introduced because `classify54` and `classify_legacy` each took eleven
+/// parameters and needed an `#[allow(clippy::too_many_arguments)]`. Four of
+/// them were `usize` in a row — `offset`, `word_count`, `declared_protos` — and
+/// transposing any two compiles and silently changes which jumps are reported
+/// out of bounds.
+#[derive(Debug, Clone, Copy)]
+struct InstrCtx {
+    /// Opcode byte, already extracted from `word`.
+    op: u8,
+    /// The raw 32-bit instruction word.
+    word: u32,
+    /// Index of this word in the chunk.
+    offset: usize,
+    /// Total words in the chunk, for jump-target bounds checks.
+    word_count: usize,
+    /// Prototype count the header declares, for closure-index checks.
+    declared_protos: usize,
+    /// Whether jump targets should be bounds-checked at all.
+    check_jumps: bool,
+}
+
+/// Everything a classifier accumulates as it walks the chunk.
+///
+/// Grouped rather than passed as five separate `&mut` parameters: five mutable
+/// out-params in a row is the shape where an argument swap type-checks.
+struct ClassifySink<'a> {
+    stats: &'a mut BytecodeStats,
+    patterns: &'a mut Vec<ObfuscationPattern>,
+    max_upval: &'a mut usize,
+    upval_refs: &'a mut usize,
+    string_table: &'a mut Vec<StringTableEntry>,
+}
+
 impl LuaBytecodeAnalyzer {
     /// Create an analyzer for the given Lua version with default configuration.
     #[must_use] 
@@ -422,30 +459,38 @@ impl LuaBytecodeAnalyzer {
             // Classify by opcode semantics.
             match self.version {
                 LuaVersion::Lua54 => self.classify54(
-                    op,
-                    word,
-                    offset,
-                    words.len(),
-                    &mut stats,
-                    &mut patterns,
-                    &mut max_upval_index,
-                    &mut upval_ref_count,
-                    &mut string_table,
-                    declared_protos,
-                    self.config.check_jump_bounds,
+                    InstrCtx {
+                        op,
+                        word,
+                        offset,
+                        word_count: words.len(),
+                        declared_protos,
+                        check_jumps: self.config.check_jump_bounds,
+                    },
+                    &mut ClassifySink {
+                        stats: &mut stats,
+                        patterns: &mut patterns,
+                        max_upval: &mut max_upval_index,
+                        upval_refs: &mut upval_ref_count,
+                        string_table: &mut string_table,
+                    },
                 ),
                 _ => self.classify_legacy(
-                    op,
-                    word,
-                    offset,
-                    words.len(),
-                    &mut stats,
-                    &mut patterns,
-                    &mut max_upval_index,
-                    &mut upval_ref_count,
-                    &mut string_table,
-                    declared_protos,
-                    self.config.check_jump_bounds,
+                    InstrCtx {
+                        op,
+                        word,
+                        offset,
+                        word_count: words.len(),
+                        declared_protos,
+                        check_jumps: self.config.check_jump_bounds,
+                    },
+                    &mut ClassifySink {
+                        stats: &mut stats,
+                        patterns: &mut patterns,
+                        max_upval: &mut max_upval_index,
+                        upval_refs: &mut upval_ref_count,
+                        string_table: &mut string_table,
+                    },
                 ),
             }
         }
@@ -489,21 +534,17 @@ impl LuaBytecodeAnalyzer {
 
     // ── Lua 5.4 opcode classifier ────────────────────────────────────────────
 
-    #[allow(clippy::too_many_arguments)]
-    fn classify54(
-        &self,
-        op: u8,
-        word: u32,
-        offset: usize,
-        word_count: usize,
-        stats: &mut BytecodeStats,
-        patterns: &mut Vec<ObfuscationPattern>,
-        max_upval: &mut usize,
-        upval_refs: &mut usize,
-        string_table: &mut Vec<StringTableEntry>,
-        declared_protos: usize,
-        check_jumps: bool,
-    ) {
+    fn classify54(&self, ctx: InstrCtx, sink: &mut ClassifySink<'_>) {
+        let InstrCtx { op, word, offset, word_count, declared_protos, check_jumps } = ctx;
+        // Reborrowed one by one so each binding has the same `&mut T` type the
+        // parameters used to have; destructuring the struct through `&mut`
+        // would give `&mut &mut T` and every `*x += 1` in the body would need
+        // an extra deref.
+        let stats = &mut *sink.stats;
+        let patterns = &mut *sink.patterns;
+        let max_upval = &mut *sink.max_upval;
+        let upval_refs = &mut *sink.upval_refs;
+        let string_table = &mut *sink.string_table;
         match op {
             // LOADK / LOADKX
             3 | 4 => {
@@ -582,21 +623,17 @@ impl LuaBytecodeAnalyzer {
 
     // ── Legacy (5.1–5.3) opcode classifier ───────────────────────────────────
 
-    #[allow(clippy::too_many_arguments)]
-    fn classify_legacy(
-        &self,
-        op: u8,
-        word: u32,
-        offset: usize,
-        word_count: usize,
-        stats: &mut BytecodeStats,
-        patterns: &mut Vec<ObfuscationPattern>,
-        max_upval: &mut usize,
-        upval_refs: &mut usize,
-        string_table: &mut Vec<StringTableEntry>,
-        declared_protos: usize,
-        check_jumps: bool,
-    ) {
+    fn classify_legacy(&self, ctx: InstrCtx, sink: &mut ClassifySink<'_>) {
+        let InstrCtx { op, word, offset, word_count, declared_protos, check_jumps } = ctx;
+        // Reborrowed one by one so each binding has the same `&mut T` type the
+        // parameters used to have; destructuring the struct through `&mut`
+        // would give `&mut &mut T` and every `*x += 1` in the body would need
+        // an extra deref.
+        let stats = &mut *sink.stats;
+        let patterns = &mut *sink.patterns;
+        let max_upval = &mut *sink.max_upval;
+        let upval_refs = &mut *sink.upval_refs;
+        let string_table = &mut *sink.string_table;
         // Extract legacy fields: bits 0..5 = op, 6..13 = A, 23..31 = B, 14..22 = C.
         let b = (word >> 23) & 0x1ff;
         let bx = word >> 14; // 18 bits

@@ -152,8 +152,8 @@ impl DecodedAttribute {
     pub fn positional_as_i32(&self, index: usize) -> Option<i32> {
         match self.positional_args.get(index) {
             Some(FixedArg::I4(v)) => Some(*v),
-            Some(FixedArg::I2(v)) => Some(*v as i32),
-            Some(FixedArg::I1(v)) => Some(*v as i32),
+            Some(FixedArg::I2(v)) => Some(i32::from(*v)),
+            Some(FixedArg::I1(v)) => Some(i32::from(*v)),
             _ => None,
         }
     }
@@ -223,22 +223,22 @@ impl<'a> AttributeBlobReader<'a> {
     }
 
     fn read_u16_le(&mut self) -> Result<u16> {
-        let lo = self.read_byte()? as u16;
-        let hi = self.read_byte()? as u16;
+        let lo = u16::from(self.read_byte()?);
+        let hi = u16::from(self.read_byte()?);
         Ok(lo | (hi << 8))
     }
 
     fn read_u32_le(&mut self) -> Result<u32> {
-        let b0 = self.read_byte()? as u32;
-        let b1 = self.read_byte()? as u32;
-        let b2 = self.read_byte()? as u32;
-        let b3 = self.read_byte()? as u32;
+        let b0 = u32::from(self.read_byte()?);
+        let b1 = u32::from(self.read_byte()?);
+        let b2 = u32::from(self.read_byte()?);
+        let b3 = u32::from(self.read_byte()?);
         Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
     }
 
     fn read_u64_le(&mut self) -> Result<u64> {
-        let lo = self.read_u32_le()? as u64;
-        let hi = self.read_u32_le()? as u64;
+        let lo = u64::from(self.read_u32_le()?);
+        let hi = u64::from(self.read_u32_le()?);
         Ok(lo | (hi << 32))
     }
 
@@ -295,14 +295,14 @@ impl<'a> AttributeBlobReader<'a> {
             FixedArgType::R8 => FixedArg::R8(self.read_f64()?),
             FixedArgType::Char => {
                 let v = self.read_u16_le()?;
-                let c = char::from_u32(v as u32).unwrap_or('\u{FFFD}');
+                let c = char::from_u32(u32::from(v)).unwrap_or('\u{FFFD}');
                 FixedArg::Char(c)
             }
             FixedArgType::String => FixedArg::String(self.read_ser_string()?),
             FixedArgType::Type => FixedArg::Type(self.read_ser_string()?),
             FixedArgType::Enum(type_name) => {
                 // Treat as I4 by default (most common underlying type)
-                let v = self.read_u32_le()? as i32 as i64;
+                let v = i64::from(self.read_u32_le()? as i32);
                 FixedArg::Enum(type_name.clone(), v)
             }
             FixedArgType::Object => {
@@ -377,7 +377,7 @@ impl<'a> AttributeBlobReader<'a> {
 // ─── Well-known attribute detectors ─────────────────────────────────────────
 
 pub mod well_known {
-    use super::*;
+    use super::DecodedAttribute;
 
     pub fn is_obsolete(attr: &DecodedAttribute) -> bool {
         attr.attribute_type.ends_with("ObsoleteAttribute")

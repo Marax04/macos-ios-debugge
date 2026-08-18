@@ -383,7 +383,7 @@ impl ObfuscatedCode {
     pub fn max_confidence(&self) -> Option<ObfuscationConfidence> {
         let mut max = None::<ObfuscationConfidence>;
         let update = |m: &mut Option<ObfuscationConfidence>, c: ObfuscationConfidence| {
-            *m = Some(m.map(|prev| prev.max(c)).unwrap_or(c));
+            *m = Some(m.map_or(c, |prev| prev.max(c)));
         };
         for f in &self.string_encryptions {
             update(&mut max, f.confidence);

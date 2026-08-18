@@ -34,10 +34,39 @@
 // Keeping these as per-site `#[allow]`s would add noise without adding safety;
 // the bounds are enforced by explicit length checks at each parse site.
 #![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
+    // ── STYLE ONLY ───────────────────────────────────────────────────────────
+    //
+    // ⚠ This replaces a 45-to-59-line blanket block that also allowed every
+    // `cast_*` lint. Removing the whole block exposed ~1000 warnings in this
+    // crate, of which ~60 were casts; 940 style warnings would have buried
+    // them, and a warning nobody reads is worse than no warning — it is the
+    // argument this repo keeps making about green tests.
+    //
+    // So the CORRECTNESS lints are gone from this list on purpose:
+    // `cast_possible_truncation`, `cast_sign_loss`, `cast_possible_wrap` and
+    // `cast_lossless` now warn, because in a reverse-engineering tool an `as`
+    // that truncates an address produces a wrong answer that looks right.
+    //
+    // What stays allowed is presentation: attributes clippy would like added,
+    // doc formatting, literal grouping, and int-to-float conversions whose only
+    // consequence is a rounded statistic.
+    clippy::must_use_candidate,
+    clippy::missing_const_for_fn,
+    clippy::doc_markdown,
+    clippy::unreadable_literal,
+    clippy::unusual_byte_groupings,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::too_many_lines,
+    clippy::module_name_repetitions,
+    clippy::redundant_closure_for_method_calls,
+    clippy::match_same_arms,
+    clippy::struct_excessive_bools,
+    clippy::items_after_statements,
+    clippy::many_single_char_names,
+    clippy::similar_names,
+    // Int-to-float for a percentage or a rate: the rounding is the point.
+    clippy::cast_precision_loss
 )]
 
 pub mod android_binary_loader;

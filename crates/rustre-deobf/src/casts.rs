@@ -42,9 +42,23 @@ pub fn f64_to_u32(x: f64) -> u32 {
     if !x.is_finite() || x < 0.0 {
         return 0;
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let v = x.clamp(0.0, f64::from(u32::MAX)) as u32;
-    v
+    // ⚠ No `#[allow]` here any more, and the clippy warning it suppressed is
+    // now visible on purpose.
+    //
+    // The bound IS proven: `clamp` puts the value in `0.0..=u32::MAX` before the
+    // conversion, and `f64 as u32` is a SATURATING cast in Rust (since 1.45),
+    // so neither truncation nor sign loss can occur. But there is no checked
+    // float-to-integer conversion in std — `try_from` is not implemented for
+    // float sources — so `as` is the only way to express this, and clippy's
+    // `cast_possible_truncation` fires on it regardless of the guard.
+    //
+    // Silencing it would have meant re-adding the attribute; hiding it by
+    // routing through `u64` first (the previous attempt) only moved the same
+    // warning one line down. So it stays visible, and this comment is the
+    // record of why: the lint is a false positive at this call site, and the
+    // clamp above is the proof a reader can check.
+    let clamped = x.clamp(0.0, f64::from(u32::MAX));
+    clamped as u32
 }
 
 // ─── Integer → Integer (truncating) ─────────────────────────────────────────

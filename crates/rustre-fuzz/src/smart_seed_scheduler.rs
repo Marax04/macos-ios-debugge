@@ -91,7 +91,7 @@ pub struct SeedEntry {
 impl SeedEntry {
     /// Create a new seed entry.
     #[must_use]
-    pub fn new(input: FuzzInput, meta: CorpusMeta) -> Self {
+    pub const fn new(input: FuzzInput, meta: CorpusMeta) -> Self {
         Self {
             input,
             meta,
@@ -161,7 +161,7 @@ impl SeedEntry {
         } else {
             1000.0 / (self.avg_exec_us as f64).max(1.0)
         };
-        let cov = self.meta.coverage_bits as f64;
+        let cov = f64::from(self.meta.coverage_bits);
         (1.0 + ir) * time_bonus.min(10.0) * cov.max(1.0)
     }
 }
@@ -247,7 +247,7 @@ pub struct EnergyCalculator {
 impl EnergyCalculator {
     /// Create a calculator with default parameters.
     #[must_use]
-    pub fn new(mode: PowerScheduleMode) -> Self {
+    pub const fn new(mode: PowerScheduleMode) -> Self {
         Self {
             mode,
             base_energy: 1,
@@ -263,9 +263,9 @@ impl EnergyCalculator {
         if seed.retired {
             return 0;
         }
-        let base = self.base_energy as f64;
-        let cov = seed.meta.coverage_bits as f64;
-        let global = self.global_bits.max(1) as f64;
+        let base = f64::from(self.base_energy);
+        let cov = f64::from(seed.meta.coverage_bits);
+        let global = f64::from(self.global_bits.max(1));
         let _exec_ms = (seed.avg_exec_us as f64 / 1000.0).max(0.001);
 
         let raw = match self.mode {
@@ -344,7 +344,7 @@ impl Default for RetirementPolicy {
 impl RetirementPolicy {
     /// Determine whether `seed` should be retired.
     #[must_use]
-    pub fn should_retire(&self, seed: &SeedEntry) -> bool {
+    pub const fn should_retire(&self, seed: &SeedEntry) -> bool {
         if seed.retired {
             return false; // already retired, don't re-evaluate
         }
@@ -446,7 +446,7 @@ impl SmartSeedScheduler {
                 }
                 let base = self.energy_calc.energy(seed);
                 let weight = self.dynamic_weights.get(&id).copied().unwrap_or(1.0);
-                let energy = ((base as f64) * weight).round() as u32;
+                let energy = (f64::from(base) * weight).round() as u32;
                 Some((id, energy.max(1)))
             })
             .collect();
@@ -456,7 +456,7 @@ impl SmartSeedScheduler {
         }
 
         // Weighted random selection using the cumulative energy cursor.
-        let total_energy: u64 = active.iter().map(|(_, e)| *e as u64).sum();
+        let total_energy: u64 = active.iter().map(|(_, e)| u64::from(*e)).sum();
         if total_energy == 0 {
             return None;
         }
@@ -467,7 +467,7 @@ impl SmartSeedScheduler {
         let mut acc: u64 = 0;
         let mut chosen_id = active[0].0;
         for &(id, energy) in &active {
-            acc += energy as u64;
+            acc += u64::from(energy);
             if pick < acc {
                 chosen_id = id;
                 break;
