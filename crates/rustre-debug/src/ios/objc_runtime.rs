@@ -707,11 +707,23 @@ impl ObjcMethod {
 pub struct ObjcIvar {
     /// Nome della ivar.
     pub name: String,
-    /// Type encoding.
-    pub type_encoding: String,
+    /// Type encoding, or `None` when the string cannot be read.
+    ///
+    /// An unreadable encoding is NOT an empty encoding. Collapsing the two with
+    /// `unwrap_or_default()` handed the caller `""` — a perfectly valid
+    /// encoding meaning "no type" — for a read that failed.
+    pub type_encoding: Option<String>,
     /// Offset dall'inizio dell'oggetto (letto tramite indirezione: il campo è
     /// un `int32_t *`, non un valore, perché dyld lo aggiorna a runtime).
-    pub offset: u32,
+    ///
+    /// `None` when dyld has not resolved the slot yet (a NULL pointer).
+    ///
+    /// The offset is UNKNOWN, and 0 is a legitimate offset — it is the `isa`
+    /// slot — so reporting 0 for "not resolved" is a precise wrong answer, not
+    /// a missing one. That is the failure shape this crate treats as worse than
+    /// an error, because the caller cannot tell it from a real reading, so
+    /// must not be degraded into a plausible value.
+    pub offset: Option<u32>,
     /// Dimensione in byte.
     pub size: u32,
 }
@@ -764,9 +776,14 @@ impl ObjcClass {
     /// Cerca la ivar che copre `offset`.
     #[must_use]
     pub fn ivar_at_offset(&self, offset: u32) -> Option<&ObjcIvar> {
-        self.ivars
-            .iter()
-            .find(|iv| offset >= iv.offset && offset < iv.offset + iv.size.max(1))
+        // An ivar whose offset is unknown covers nothing: it cannot be said
+        // to contain `offset`, and pretending otherwise would have it read at
+        // the address
+        // sbagliato.
+        self.ivars.iter().find(|iv| {
+            iv.offset
+                .is_some_and(|base| offset >= base && offset < base + iv.size.max(1))
+        })
     }
 }
 
@@ -1066,19 +1083,19 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
             let entry = list_ptr + 8 + i * entsize;
             // `offset` è un puntatore a int32: il valore vero lo scrive dyld.
             let offset_ptr = strip_pac(self.mem.read_u64(entry)?);
+            // NULL = dyld has not written the slot yet: offset UNKNOWN.
+            // Rispondere 0 sarebbe un offset reale e plausibile, cioè un errore
+            // silenzioso; qui si dichiara l'ignoto.
             let offset = if offset_ptr == 0 {
-                0
+                None
             } else {
-                self.mem.read_u32(offset_ptr)?
+                Some(self.mem.read_u32(offset_ptr)?)
             };
             let name_ptr = strip_pac(self.mem.read_u64(entry + 8)?);
             let type_ptr = strip_pac(self.mem.read_u64(entry + 16)?);
             out.push(ObjcIvar {
                 name: self.mem.read_cstring(name_ptr, MAX_NAME_LEN)?,
-                type_encoding: self
-                    .mem
-                    .read_cstring(type_ptr, MAX_NAME_LEN)
-                    .unwrap_or_default(),
+                type_encoding: self.mem.read_cstring(type_ptr, MAX_NAME_LEN).ok(),
                 offset,
                 size: self.mem.read_u32(entry + 28)?,
             });
@@ -1488,8 +1505,8 @@ mod tests {
         assert_eq!(c.methods[1].imp, 0x1_0000_9100);
         assert_eq!(c.ivars.len(), 1);
         assert_eq!(c.ivars[0].name, "_backing");
-        assert_eq!(c.ivars[0].offset, 16);
-        assert_eq!(c.ivars[0].type_encoding, "@\"NSString\"");
+        assert_eq!(c.ivars[0].offset, Some(16));
+        assert_eq!(c.ivars[0].type_encoding.as_deref(), Some("@\"NSString\""));
         assert_eq!(c.ivar_at_offset(20).unwrap().name, "_backing");
         assert!(c.ivar_at_offset(0).is_none());
         assert_eq!(
@@ -1960,6 +1977,38 @@ mod tests {
         let m = build_target();
         assert_eq!(rt(&m).base_protocols_ptr(CLASS).unwrap(), 0);
         assert_eq!(rt(&m).base_properties_ptr(CLASS).unwrap(), 0);
+    }
+
+    #[test]
+    fn unresolved_ivar_offset_is_not_reported_as_zero() {
+        // dyld has not written the slot yet: the `offset` field of the
+        // ivar_list_t is a NULL pointer, so the offset is UNKNOWN. Zero is a
+        // legitimate offset — the `isa` slot — so degrading it to 0 reads
+        // l'isa credendo di leggere la ivar.
+        let mut m = build_target();
+        // Stessa ivar_list_t del target, ma con il puntatore all'offset a NULL.
+        let mut il = Vec::new();
+        il.extend_from_slice(&32u32.to_le_bytes()); // entsize
+        il.extend_from_slice(&1u32.to_le_bytes()); // count
+        il.extend_from_slice(&0u64.to_le_bytes()); // offset ptr: NON risolto
+        il.extend_from_slice(&IVAR_NAME.to_le_bytes());
+        il.extend_from_slice(&IVAR_TYPE.to_le_bytes());
+        il.extend_from_slice(&8u32.to_le_bytes()); // alignment
+        il.extend_from_slice(&8u32.to_le_bytes()); // size
+        m.write(IVARS, il);
+        let ivars = rt(&m).read_ivar_list(IVARS).unwrap();
+        assert_eq!(ivars.len(), 1);
+        assert_eq!(ivars[0].name, "_backing");
+        assert_eq!(
+            ivars[0].offset, None,
+            "offset non risolto: deve restare sconosciuto, non diventare 0"
+        );
+        let c = rt(&m).read_class(CLASS).unwrap();
+        assert!(
+            c.ivar_at_offset(0).is_none(),
+            "un offset non risolto non deve rivendicare lo slot dell'isa: {:?}",
+            c.ivar_at_offset(0)
+        );
     }
 
     #[test]

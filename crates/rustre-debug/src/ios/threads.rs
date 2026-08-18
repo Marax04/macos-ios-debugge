@@ -105,12 +105,23 @@ pub fn parse_thread_extra_info(reply: &str) -> Result<Option<String>, DebugError
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
-/// `Exx` where `xx` are hex digits — a stub error, not a payload.
+/// A stub error reply, not a payload.
+///
+/// The protocol defines TWO shapes and both must be recognised here:
+/// * `Exx` — `xx` hex digits, the numeric form;
+/// * `E.errtext` — the textual form `rsp::RspPacket::error_text` already
+///   handles. Missing it turned a plain "packet unsupported" answer into a
+///   fatal `jThreadsInfo` parse error instead of the intended fallback.
+///
+/// `E.` cannot collide with a hex payload: `.` is not a hex digit.
 fn is_error_reply(reply: &str) -> bool {
     let rest = match reply.strip_prefix('E') {
         Some(r) => r,
         None => return false,
     };
+    if rest.starts_with('.') {
+        return true;
+    }
     !rest.is_empty() && rest.len() <= 2 && rest.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
@@ -711,6 +722,22 @@ mod tests {
         assert!(!is_error_reply("E0102"));
         assert!(!is_error_reply("E"));
         assert!(!is_error_reply("6d61696e"));
+    }
+
+    #[test]
+    fn error_reply_detection_covers_textual_form() {
+        // The protocol defines TWO error replies: `E NN` and `E.errtext`.
+        // `rsp::RspPacket::error_text` already handles the textual one; this
+        // predicate must agree, otherwise the jThreadsInfo fallback path turns
+        // a plain "unsupported" into a fatal parse error.
+        assert!(is_error_reply("E.unsupported packet"));
+        assert!(is_error_reply("E.thread id is bogus"));
+        assert!(is_error_reply("E."));
+        // `.` is not a hex digit, so a hex payload can never be mistaken for it.
+        assert!(!is_error_reply("6d61696e"));
+        assert!(!is_error_reply("Efoo"));
+        // The guard is anchored to the identifier under test, not to a string.
+        let _guard: fn(&str) -> bool = is_error_reply;
     }
 
     #[test]

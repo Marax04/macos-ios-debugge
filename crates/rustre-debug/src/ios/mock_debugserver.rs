@@ -792,6 +792,10 @@ pub struct FaultInjection {
     pub chunk_size: Option<usize>,
     /// Reply with run-length encoding wherever it shortens the payload.
     pub use_rle: bool,
+    /// Answer every `p` packet with only this many BYTES of the register value
+    /// (a stub that shortens its reply, or a different register set). The
+    /// client must not silently zero-fill the missing high bytes.
+    pub truncate_p_to_bytes: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1616,9 +1620,14 @@ impl MockDebugserver {
         }
         if let Some(rest) = pkt.strip_prefix('p') {
             let idx = hex_usize(rest).unwrap_or(usize::MAX);
+            let truncate = self.faults.truncate_p_to_bytes;
             return self
                 .thread(target_tid)
                 .and_then(|t| t.regs.read_indexed(idx))
+                .map(|v| match truncate {
+                    Some(n) if 2 * n < v.len() => v[..2 * n].to_string(),
+                    _ => v,
+                })
                 .map_or_else(|| ("E01".to_string(), false), |v| (v, false));
         }
         if let Some(rest) = pkt.strip_prefix('P') {

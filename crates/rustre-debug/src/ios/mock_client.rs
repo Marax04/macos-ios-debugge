@@ -322,10 +322,15 @@ impl<T: AppleTransport> RspClient<T> {
         if reply.is_empty() {
             return Err(ClientError::Unsupported(payload.to_string()));
         }
+        // Two error shapes exist on the wire: `Exx` and `E.errtext`. Only
+        // checking the first let a textual rejection through as a payload.
         if reply.len() == 3
             && reply.starts_with('E')
             && reply[1..].chars().all(|c| c.is_ascii_hexdigit())
         {
+            return Err(ClientError::Remote(reply));
+        }
+        if reply.starts_with("E.") {
             return Err(ClientError::Remote(reply));
         }
         Ok(reply)

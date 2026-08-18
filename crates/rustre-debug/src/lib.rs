@@ -1217,10 +1217,18 @@ pub fn backend_capabilities() -> &'static [BackendCapability] {
                 supported: true,
                 because: "",
             },
+            // CORRECTED IN 595. 577 published this as unsupported, reasoning
+            // that the struct "would come from __far via thread_get_state,
+            // which mach2 does not expose". The premise held; the conclusion
+            // did not — this backend already hand-declares what mach2 omits,
+            // `ArmDebugState64` being the precedent — so the capability was
+            // reachable by the file's own pattern and I had declared it absent.
+            // A false "unsupported" is worse than an unimplemented feature:
+            // this list exists so a caller can trust it.
             BackendCapability {
                 name: "fault_address",
-                supported: false,
-                because: "the faulting address would come from __far via thread_get_state,                           which mach2 does not expose; a guessed offset would report a                           plausible wrong address, which is worse than none.",
+                supported: true,
+                because: "",
             },
         ]
     }
@@ -10492,6 +10500,38 @@ mod tests_extra {
             code.contains("trap_bytes("),
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
+        );
+    }
+
+    /// macOS can report the faulting address, and said it could not.
+    ///
+    /// Iteration 577 published `fault_address: supported: false` for macOS with
+    /// the reason *"would come from __far via thread_get_state, which mach2
+    /// does not expose"*. The reason is TRUE and the conclusion does not follow:
+    /// this backend already hand-declares what `mach2` omits. `ArmDebugState64`
+    /// is written out by hand precisely because the crate lacks it, with a
+    /// compile-time size assert to catch drift, and `THREAD_STATE_FLAVOR` picks
+    /// the right flavour per architecture.
+    ///
+    /// So the capability was reachable by the file's own established pattern,
+    /// and I declared it absent. That is worse than an unimplemented feature:
+    /// `backend_capabilities()` exists so a caller can trust what it says, and
+    /// a false "unsupported" sends them looking for a workaround they do not
+    /// need.
+    ///
+    /// The flavours are `x86_EXCEPTION_STATE64` (5) with `faultvaddr`, and
+    /// `ARM_EXCEPTION_STATE64` (7) with `far` — sixteen bytes each, which is
+    /// four `natural_t`, the unit Mach counts in.
+    #[test]
+    fn macos_reads_the_faulting_address_it_can_actually_get() {
+        let src = include_str!("macos_debugger.rs");
+        assert!(
+            src.contains("EXCEPTION_STATE_FLAVOR"),
+            "macos: the backend never asks for the exception state, so a SIGSEGV is reported              with no address at all — while the file already hand-declares ArmDebugState64 for              exactly the reason this capability was declared unreachable"
+        );
+        assert!(
+            src.contains("fn faulting_address("),
+            "macos: nothing turns the exception state into an address, so reaching the flavour              would not by itself answer the caller's question"
         );
     }
 

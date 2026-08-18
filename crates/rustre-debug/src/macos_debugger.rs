@@ -169,6 +169,85 @@ const THREAD_STATE_FLAVOR: libc::c_int = 6;
 const THREAD_STATE_COUNT: mach_msg_type_number_t =
     (std::mem::size_of::<ThreadState>() / std::mem::size_of::<u32>()) as mach_msg_type_number_t;
 
+/// `thread_get_state` flavor carrying the FAULTING ADDRESS.
+///
+/// `x86_EXCEPTION_STATE64` (5) on Intel, `ARM_EXCEPTION_STATE64` (7) on Apple
+/// Silicon. Iteration 577 published this capability as UNSUPPORTED, reasoning
+/// that the struct "would come from __far via thread_get_state, which mach2
+/// does not expose". The premise is true and the conclusion was wrong: this
+/// file already hand-declares what `mach2` omits — `ArmDebugState64` exists a
+/// few hundred lines below for exactly that reason — so the capability was
+/// reachable by this file's own established pattern all along.
+#[cfg(target_arch = "x86_64")]
+const EXCEPTION_STATE_FLAVOR: libc::c_int = 5;
+#[cfg(target_arch = "aarch64")]
+const EXCEPTION_STATE_FLAVOR: libc::c_int = 7;
+
+/// `x86_exception_state64_t` — 16 bytes, hand-declared.
+#[cfg(target_arch = "x86_64")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct ExceptionState {
+    trapno: u16,
+    cpu: u16,
+    err: u32,
+    faultvaddr: u64,
+}
+
+/// `arm_exception_state64_t` — 16 bytes, hand-declared.
+///
+/// `far` is the Fault Address Register: the address the instruction tried to
+/// touch, which is the one a caller asks for after a crash.
+#[cfg(target_arch = "aarch64")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct ExceptionState {
+    far: u64,
+    esr: u32,
+    exception: u32,
+}
+
+/// Checked at COMPILE time, like `ARM_DEBUG_STATE64_COUNT` below and for the
+/// same reason: a hand-written struct measured against a kernel ABI, whose
+/// size feeds the `count` argument. A drifted layout would be read in silence
+/// and report a plausible wrong address — worse than reporting none, which is
+/// what this change is replacing.
+const EXCEPTION_STATE_COUNT: mach_msg_type_number_t =
+    (std::mem::size_of::<ExceptionState>() / std::mem::size_of::<u32>()) as mach_msg_type_number_t;
+const _: () = assert!(std::mem::size_of::<ExceptionState>() == 16);
+
+/// The address the thread faulted on, or `None` if it cannot be read.
+///
+/// `None` stays honest: a thread that did not fault, a port that cannot be
+/// reached, or a kernel that refuses the flavour all mean "not known", and this
+/// crate holds that a plausible wrong address is worse than an absent one.
+fn faulting_address(task: task_t, tid: ThreadId) -> Option<u64> {
+    let mut state = ExceptionState::default();
+    let mut count = EXCEPTION_STATE_COUNT;
+    // SAFETY: `state` is a valid repr(C) struct whose size is checked at
+    // compile time, and `count` describes it in the `natural_t` units Mach
+    // expects. `thread_get_state` writes at most that many words.
+    let kr = unsafe {
+        thread_get_state(
+            tid.0 as thread_act_t,
+            EXCEPTION_STATE_FLAVOR,
+            std::ptr::addr_of_mut!(state).cast(),
+            std::ptr::addr_of_mut!(count),
+        )
+    };
+    let _ = task;
+    if kr != KERN_SUCCESS {
+        return None;
+    }
+    #[cfg(target_arch = "x86_64")]
+    let addr = state.faultvaddr;
+    #[cfg(target_arch = "aarch64")]
+    let addr = state.far;
+    // Zero is not a fault address here: it is what an untouched state reads as,
+    // and reporting it would turn "no fault recorded" into "it touched NULL".
+    if addr == 0 { None } else { Some(addr) }
+}
+
 const VM_PROT_READ: i32 = 0x01;
 const VM_PROT_WRITE: i32 = 0x02;
 const VM_PROT_EXECUTE: i32 = 0x04;
@@ -2097,7 +2176,29 @@ fn wait_for_stop(pid: libc::pid_t, task: task_t) -> (DebugEvent, bool) {
                 },
             )
         } else {
-            StopReason::Signal { signum: sig, signame: signal_name(sig), address: None }
+            // A memory fault carries the address it faulted on, when the
+            // kernel recorded one.
+            //
+            // This used to be a flat `address: None` for EVERY signal, so a
+            // SIGSEGV on macOS answered "it crashed" and never "where" — the
+            // single most useful fact about a crash, discarded. Linux has
+            // reported it via `si_addr` since 552; macOS reported nothing while
+            // `backend_capabilities` DECLARED it unreachable.
+            //
+            // Asked only for the signals that HAVE a faulting address. For a
+            // SIGINT or a SIGSTOP the exception state holds whatever was left
+            // there, and reporting it would be inventing a fault out of an
+            // unrelated stop.
+            StopReason::Signal {
+                signum: sig,
+                signame: signal_name(sig),
+                address: match sig {
+                    libc::SIGSEGV | libc::SIGBUS => {
+                        faulting_address(task, tid).map(Address)
+                    }
+                    _ => None,
+                },
+            }
         };
         return (DebugEvent::new(process_id, tid, reason), false);
     }
@@ -3193,10 +3294,8 @@ fn mach_o_entry_point_at(task: task_t, base: u64) -> Option<u64> {
 /// Unlike `apple_debugger`, whose `read_memory` is async and therefore
 /// pre-reads in chunks, `self.send` here is synchronous: the read happens
 /// inline and no chunk cache is needed.
-#[allow(dead_code)]
 struct SendMemory<'a>(&'a MacosDebugger);
 
-#[allow(dead_code)]
 impl crate::ios::unwind::MemoryReader for SendMemory<'_> {
     fn read(&self, addr: u64, buf: &mut [u8]) -> Result<(), crate::ios::unwind::UnwindError> {
         let err = || crate::ios::unwind::UnwindError::MemoryRead { addr, len: buf.len() };

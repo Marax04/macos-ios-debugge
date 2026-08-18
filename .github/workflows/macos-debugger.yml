@@ -284,6 +284,30 @@ jobs:
       - name: Build for ${{ matrix.target }}
         run: cargo build --release -p rustre-debug --target ${{ matrix.target }}
 
+      # ── The most a hosted runner can prove about the DEVICE triple ─────────
+      #
+      # GitHub-hosted macOS runners have Xcode and simulators; they do NOT have
+      # a physical iPhone attached, and no hosted runner does. Only a
+      # self-hosted runner with a device on USB can execute `aarch64-apple-ios`
+      # binaries, so "run the suite on a real device" is not something this
+      # workflow can be made to do — it is a property of the infrastructure,
+      # stated here so nobody spends a round trying.
+      #
+      # What CAN be raised is how much of the code is proven to hold together
+      # for that triple, and `cargo build --lib` was leaving most of it
+      # unchecked. `cargo test --no-run` COMPILES AND LINKS every test binary
+      # for the device: it catches cfg mistakes that only bite on
+      # `target_os = "ios"`, test code that references simulator-only symbols,
+      # and link failures the library build never reaches. Everything short of
+      # execution.
+      #
+      # Not allowed to fail. A test binary that cannot even be linked for the
+      # device is a test that could never run there, and knowing that now is
+      # the difference between a gap and a surprise.
+      - name: Link the test binaries for ${{ matrix.target }} (no execution)
+        if: ${{ !matrix.simulator }}
+        run: cargo test --release -p rustre-debug --lib --target ${{ matrix.target }} --no-run
+
       # ── Boot FIRST. This ordering is not cosmetic ──────────────────────────
       #
       # The first run of this workflow put the test step before this one and

@@ -2019,7 +2019,6 @@ impl AppleDebugger {
     // address here can carry both a code trap and a data watchpoint.
 
 
-    /// Re-enable the one resource of `class` at `addr` — see [`Self::disable_one`].
     /// Target memory exactly as it stands, traps included.
     ///
     /// The twin of `read_memory`, which MASKS the traps this backend planted
@@ -2039,6 +2038,11 @@ impl AppleDebugger {
         })
     }
 
+    /// Re-enable the one resource of `class` at `addr` — see [`Self::disable_one`].
+    ///
+    /// The twin of `disable_one`: it re-arms whichever resource the record
+    /// names, and a hardware kind goes back through the slot table so the
+    /// debugger's accounting matches what the target actually has armed.
     async fn enable_one(&self, addr: Address, class: BpClass) -> Result<(), DebugError> {
         let a = addr.as_u64();
         let (kind, was_enabled, saved, hw_size) = {
@@ -2747,9 +2751,20 @@ impl Debugger for AppleDebugger {
             let text = s.text(&commands::read_register(regnum), "p")?;
             let bytes = crate::ios::rsp::hex_decode(text.as_bytes())
                 .map_err(|e| DebugError::RegisterError(format!("p{regnum:x} reply: {e}")))?;
+            // The reply must be EXACTLY the register's width. A short one was
+            // never sent in full, and zero-filling its high bytes returns a
+            // plausible wrong value as success (`pc` = 0x00000000deadbeef); a
+            // long one means this is not the register we asked about. Both are
+            // "unknown", and neither may be degraded to a default. The `g`
+            // path refuses the same mismatch against `qRegisterInfo`.
+            if bytes.len() != size {
+                return Err(DebugError::RegisterError(format!(
+                    "p{regnum:x} ({name}) returned {} bytes but qRegisterInfo describes {size}",
+                    bytes.len()
+                )));
+            }
             let mut buf = [0u8; 8];
-            let n = size.min(bytes.len());
-            buf[..n].copy_from_slice(&bytes[..n]);
+            buf[..size].copy_from_slice(&bytes);
             Ok(u64::from_le_bytes(buf))
         })
     }
@@ -3198,6 +3213,59 @@ impl Debugger for AppleDebugger {
 mod tests {
     use super::*;
     use crate::ios::mock_debugserver::MockDebugserver;
+
+    /// The doc block attached to a function must describe THAT function.
+    ///
+    /// `read_memory_raw` is an unmasked memory read: no `class`, no breakpoint
+    /// table, nothing re-enabled. A doc block whose first line describes
+    /// re-enabling a breakpoint resource belongs to `enable_one`, which sits
+    /// immediately below and must carry its own documentation.
+    #[test]
+    fn doc_blocks_describe_their_own_function() {
+        // Compile-anchored: these paths must resolve for the test to build, so
+        // a rename cannot leave the string search below silently matching
+        // nothing (or matching a comment).
+        let _anchor_raw = AppleDebugger::read_memory_raw;
+        let _anchor_enable = AppleDebugger::enable_one;
+
+        let src = include_str!("apple_debugger.rs");
+
+        /// Contiguous `///` lines immediately above `sig`.
+        fn doc_above(src: &str, sig: &str) -> String {
+            let at = src
+                .find(sig)
+                .unwrap_or_else(|| panic!("signature not found in source: {sig}"));
+            // `.rev().skip(1)` drops the partial line that holds `sig`
+            // itself, which would otherwise read as a blank separator.
+            let mut docs: Vec<&str> = Vec::new();
+            for line in src[..at].lines().rev().skip(1) {
+                let t = line.trim();
+                if t.starts_with("///") {
+                    docs.push(t);
+                } else {
+                    break;
+                }
+            }
+            docs.reverse();
+            docs.join(" ")
+        }
+
+        let enable_doc = doc_above(src, "async fn enable_one(&self, addr: Address, class: BpClass)");
+        assert!(
+            !enable_doc.is_empty(),
+            "`enable_one` has no doc comment: its description was left attached to the function above it"
+        );
+
+        let raw_doc = doc_above(src, "pub async fn read_memory_raw(&self, addr: Address, size: usize)");
+        assert!(
+            !raw_doc.contains("Re-enable"),
+            "the doc block on `read_memory_raw` describes re-enabling a breakpoint resource, which is `enable_one`'s behaviour, not an unmasked memory read: {raw_doc}"
+        );
+        assert!(
+            !raw_doc.contains("`class`"),
+            "the doc block on `read_memory_raw` mentions a `class` parameter it does not have: {raw_doc}"
+        );
+    }
 
     const TEXT_BASE: u64 = 0x1_0000_4000;
 
@@ -4865,6 +4933,28 @@ mod tests {
             dbg.get_register(tid, "nonexistent").await,
             Err(DebugError::RegisterError(_))
         ));
+    }
+
+    /// A `p` reply SHORTER than the register is not a value: the missing high
+    /// bytes were never sent. Zero-filling them turns a truncated packet into a
+    /// plausible, wrong register value returned as success — `pc` would read
+    /// `0x00000000deadbeef`. The `g` path already refuses this (it compares the
+    /// block against `qRegisterInfo`); the singular path must too.
+    #[tokio::test]
+    async fn short_p_reply_is_refused_not_zero_filled() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.faults_mut().truncate_p_to_bytes = Some(4);
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+
+        let err = dbg.get_register(tid, "x0").await.expect_err(
+            "a 4-byte reply for an 8-byte register must not be reported as a value",
+        );
+        let DebugError::RegisterError(msg) = err else {
+            panic!("expected RegisterError, got {err:?}");
+        };
+        assert!(msg.contains('4') && msg.contains('8'), "message must name both widths: {msg}");
     }
 
     #[tokio::test]
