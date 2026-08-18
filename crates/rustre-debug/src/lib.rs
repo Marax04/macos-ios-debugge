@@ -1017,10 +1017,44 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
 /// two from drifting: there is no second copy of the reason to update.
 #[must_use]
 pub fn capability_refusal(name: &str) -> Option<&'static str> {
-    backend_capabilities()
-        .iter()
-        .find(|c| c.name == name && !c.supported)
-        .map(|c| c.because)
+    match capability_status(name) {
+        CapabilityStatus::Unsupported(why) => Some(why),
+        // `Undeclared` cannot reach a real call site: every literal passed to
+        // this function is checked against the declaration by
+        // `every_capability_asked_about_is_actually_declared`. Without that
+        // guard this arm would be the defect — a mistyped name would answer
+        // "nothing to refuse" forever and in silence, which is the shape this
+        // crate condemns most and which the first version of this function had.
+        CapabilityStatus::Supported | CapabilityStatus::Undeclared => None,
+    }
+}
+
+/// What the capability list says about `name` — including that it says nothing.
+///
+/// Three states, not two, for the reason iteration 619 needed three: a lookup
+/// that answers `None` both for "declared and working" and for "never heard of
+/// it" cannot be used to enforce anything, because a typo is indistinguishable
+/// from a green light. The first version of `capability_refusal` had exactly
+/// that hole, one iteration after the round that added it to enforce a
+/// declaration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityStatus {
+    /// Declared, and working on this build.
+    Supported,
+    /// Declared as absent, carrying the reason the declaration gives.
+    Unsupported(&'static str),
+    /// Not in this build's list at all. Nothing may be concluded from that.
+    Undeclared,
+}
+
+/// Look `name` up in this build's capability list without collapsing absence.
+#[must_use]
+pub fn capability_status(name: &str) -> CapabilityStatus {
+    match backend_capabilities().iter().find(|c| c.name == name) {
+        None => CapabilityStatus::Undeclared,
+        Some(c) if c.supported => CapabilityStatus::Supported,
+        Some(c) => CapabilityStatus::Unsupported(c.because),
+    }
 }
 
 /// What a register set can tell us about the hardware debug registers.
@@ -10878,6 +10912,66 @@ mod tests_extra {
         );
     }
 
+    /// A capability name nobody declared must not read as a green light.
+    ///
+    /// Mine, from iteration 620, found by re-reading it. `capability_refusal`
+    /// answered `None` for "declared and supported" AND for "no such
+    /// capability", so a single mistyped literal at a call site —
+    /// `hardware_watchpoint` for `hardware_watchpoints` — would have disabled
+    /// the refusal permanently and silently. A guard whose failure mode is to
+    /// pass is worse than no guard, because it is also believed.
+    ///
+    /// Two halves, and both are needed. `capability_status` makes the runtime
+    /// answer honest, and the source scan below makes the dishonest case
+    /// unreachable: every literal this crate passes to `capability_refusal` is
+    /// checked against the names the declaration actually publishes, across
+    /// EVERY platform branch — the text of the list is scanned rather than the
+    /// compiled slice, because this build can only see its own `cfg`.
+    #[test]
+    fn every_capability_asked_about_is_actually_declared() {
+        let lib = code_only(include_str!("lib.rs"));
+
+        // Every `name: "..."` in the declaration, all cfg branches included.
+        let decl_start = lib
+            .find("pub fn backend_capabilities()")
+            .expect("the declaration is gone — guard misanchored");
+        let decl = &lib[decl_start..];
+        let decl_end = decl.find("
+pub ").unwrap_or(decl.len());
+        let decl = &decl[..decl_end];
+        let mut declared: Vec<&str> = Vec::new();
+        for part in decl.split("name: \"").skip(1) {
+            if let Some(end) = part.find('"') {
+                declared.push(&part[..end]);
+            }
+        }
+        assert!(
+            declared.len() > 8,
+            "only {} capability names found; the scan is not reading the list",
+            declared.len()
+        );
+
+        // Every literal any backend passes to the lookup.
+        let mut asked = 0usize;
+        for (name, src) in [
+            ("lib", lib.as_str()),
+            ("windows", &code_only(include_str!("windows_debugger.rs"))),
+            ("linux", &code_only(include_str!("linux_debugger.rs"))),
+            ("macos", &code_only(include_str!("macos_debugger.rs"))),
+        ] {
+            for part in src.split("capability_refusal(\"").skip(1) {
+                let Some(end) = part.find('"') else { continue };
+                let asked_name = &part[..end];
+                assert!(
+                    declared.contains(&asked_name),
+                    "{name}: asks about the capability {asked_name:?}, which the                      declaration never publishes — the refusal it guards can never                      fire, and nothing says so"
+                );
+                asked += 1;
+            }
+        }
+        assert!(asked >= 3, "the scan found only {asked} call sites; it is not reading them");
+    }
+
     /// A declared-unsupported capability must be REFUSED with the declared reason.
     ///
     /// `backend_capabilities()` says, on Windows-on-ARM, that hardware
@@ -10904,7 +10998,21 @@ mod tests_extra {
                 .any(|c| c.name == "hardware_watchpoints" && c.supported),
             "the lookup and the list must not disagree about the same capability"
         );
-        assert_eq!(crate::capability_refusal("not_a_capability"), None);
+        // A name nobody declares is UNDECLARED, not supported. The first draft
+        // of this test asserted `capability_refusal(...) == None` here, which
+        // pinned the very hole iteration 621 closes: it made "no such
+        // capability" and "works fine" the same answer, and a typo at a call
+        // site would have inherited that agreement.
+        assert_eq!(
+            crate::capability_status("not_a_capability"),
+            crate::CapabilityStatus::Undeclared
+        );
+        assert_eq!(
+            crate::capability_status("hardware_watchpoints"),
+            crate::CapabilityStatus::Supported,
+            "this build is x86, where the list declares it working"
+        );
+
 
         // And every backend that arms watchpoints must ask before arming.
         for (name, src) in [

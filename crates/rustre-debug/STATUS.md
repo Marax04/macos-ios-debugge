@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **620**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **621**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -16,8 +16,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2060 / 0** |
-| Linux x86_64 | WSL, `--test-threads=1` | **2043 / 0** |
+| Windows x86_64 | suite locale, worktree isolato | **2061 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
@@ -50,6 +50,20 @@ fatto tacere alzando il soffitto.
 
 ## 3. Chiuso di recente, con la misura
 
+- **Il rifiuto del 620 non poteva essere disattivato da un refuso** (621).
+  `capability_refusal` rispondeva `None` sia per «dichiarata e funzionante» sia
+  per «capacità inesistente»: un solo nome sbagliato a un call site —
+  `hardware_watchpoint` per `hardware_watchpoints` — avrebbe spento il rifiuto
+  per sempre e in silenzio. Un guard il cui modo di fallire è **passare** è
+  peggio di nessun guard, perché per giunta gli si crede. Mio, dal 620, trovato
+  rileggendolo. Due metà, entrambe necessarie: `capability_status` rende onesta
+  la risposta a runtime (`Supported` / `Unsupported(perché)` / `Undeclared`), e
+  una scansione del sorgente rende irraggiungibile il caso disonesto —
+  controlla ogni letterale passato alla funzione contro i nomi che la
+  dichiarazione pubblica, **su tutti i rami `cfg`**, perché questo build vede
+  solo il proprio. Il guard ha colto subito un caso vero: era il mio stesso test
+  del 620 ad asserire il buco. Perturbato con un refuso realistico in
+  produzione: morde.
 - **Una capacità dichiarata assente ora viene RIFIUTATA con la sua stessa
   ragione** (620). `backend_capabilities()` pubblica, per piattaforma e per
   architettura, se una cosa funziona **e perché no** — e il commento su quella
@@ -210,7 +224,16 @@ enorme.
     con un marcatore `//PERTURB` ancora attaccato e il test che la copriva
     rosso. La tecnica che dimostra un rosso diventa il difetto se ci si ferma a
     metà. Verificato al 619: **zero** marcatori residui nel crate.
-23. **Una capacità DICHIARATA va anche IMPOSTA** (620): la lista era accurata e
+23. **Un guard che può fallire PASSANDO è peggio di nessun guard** (621), perché
+    gli si crede. Ogni lookup che fa da fondamento a un rifiuto deve distinguere
+    «non supportato» da «non l'ho trovato», e il nome cercato va verificato
+    contro la dichiarazione: altrimenti un refuso è indistinguibile dal via
+    libera. Nel crate ci sono ora tre lookup a tre stati per questa ragione —
+    `DebugRegisterState`, `CapabilityStatus`, `capability_refusal`.
+24. **Il codice che asserisce il difetto va sostituito, non aggirato** (621): il
+    mio test del 620 fissava proprio il buco che il 621 chiude, e il guard nuovo
+    lo ha additato per primo.
+25. **Una capacità DICHIARATA va anche IMPOSTA** (620): la lista era accurata e
     dettagliata, e nessuna riga di codice la consultava. Fra dichiarare e
     imporre c'è la stessa distanza che fra un commento e un test. La ragione va
     LETTA dalla dichiarazione, non riscritta accanto: una seconda copia diverge.
