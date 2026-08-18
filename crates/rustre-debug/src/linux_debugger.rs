@@ -2936,7 +2936,33 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
     }
     regs.set("dr6", 0);
     regs.set("dr7", dr7);
+    // The PAC mask travels with the registers, and it MUST.
+    //
+    // Iteration 573 read `NT_ARM_PAC_MASK` by calling `libc::ptrace` directly
+    // from the async `backtrace`, and ptrace is only valid from the TRACER
+    // thread — the rule this file already states for `PTRACE_POKEUSER`. From
+    // any other thread it answers ESRCH, so `pac_insn_mask` returned `None`
+    // every time, nothing was stripped, and the fix never actually ran.
+    // Measured: `unwound frame pc 0x2daafdda4a5c0c should fall inside a loaded
+    // module` was STILL red on ubuntu-24.04-arm after 573.
+    //
+    // `merge_debug_state` runs ON the tracer thread, inside the command
+    // channel, so reading it here is the one place it can succeed. Publishing
+    // it as a register entry means the unwinder gets it from the `get_registers`
+    // it already performs — no new command, and no second way to be on the
+    // wrong thread.
+    if let Some(mask) = pac_insn_mask(pid) {
+        regs.set(PAC_INSN_MASK_KEY, mask);
+    }
 }
+
+/// Register-map key carrying the kernel's PAC instruction mask.
+///
+/// Not a CPU register: a fact about the process that only the tracer thread can
+/// ask for, carried alongside the registers because that is the one message
+/// that already crosses from that thread.
+#[cfg(target_arch = "aarch64")]
+const PAC_INSN_MASK_KEY: &str = "__pac_insn_mask";
 
 /// Program the AArch64 watchpoint pairs from a `dr`-flavoured register set.
 ///
@@ -4381,10 +4407,13 @@ impl crate::Debugger for LinuxDebugger {
                     // The mask is the KERNEL's, not a constant of ours -- see
                     // `pac_insn_mask`. No PAC on this host means nothing to
                     // strip, which is why `None` leaves the address untouched.
+                    // Read from the register set fetched at the top of this
+                    // function, which came through the command channel. Calling
+                    // ptrace here directly is what made 573 a no-op.
                     #[cfg(target_arch = "aarch64")]
-                    let ret_addr = match pac_insn_mask(tid.0 as libc::pid_t) {
-                        Some(m) => strip_pac_with(ret_addr, m),
-                        None => ret_addr,
+                    let ret_addr = match regs.get(PAC_INSN_MASK_KEY) {
+                        Some(m) if m != 0 => strip_pac_with(ret_addr, m),
+                        _ => ret_addr,
                     };
                     if ret_addr == 0 {
                         break;
@@ -5887,11 +5916,34 @@ int main(void) {
         }
         // The implant is what this line is about, and `read_memory` now
         // masks it — the raw view is the one that can see it.
-        let patched = dbg.read_memory_raw(addr, 1).await.expect("read_memory should succeed");
-        assert_eq!(patched[0], 0xCC, "byte at the breakpoint address should now be INT3");
+        //
+        // ITERATION 590: read the WHOLE trap, and compare it to the trap this
+        // host actually plants. This test was migrated HALF-WAY once already —
+        // `original` above is read with `trap_len` — while the check below
+        // still read one byte and demanded `0xCC`. On AArch64 the trap is the
+        // four-byte `BRK #0`, whose first byte is `0x00`, so ubuntu-24.04-arm
+        // reported `left: 0, right: 204`: the implant was CORRECT and the
+        // assertion was written for a different architecture.
+        //
+        // Correcting the save side and leaving the assert side is the
+        // one-copy-of-two mistake this crate keeps paying for.
+        let patched = dbg
+            .read_memory_raw(addr, trap_len)
+            .await
+            .expect("read_memory should succeed");
+        assert_eq!(
+            patched.as_slice(),
+            crate::host_trap_bytes(),
+            "the bytes at the breakpoint address should now be this host's trap"
+        );
 
         dbg.remove_breakpoint(addr).await.expect("remove_breakpoint should succeed");
-        let restored = dbg.read_memory(addr, 1).await.expect("read_memory should succeed");
+        // Same width on the restore side: reading one byte would call a
+        // three-byte remnant of `BRK` a success.
+        let restored = dbg
+            .read_memory(addr, trap_len)
+            .await
+            .expect("read_memory should succeed");
         assert_eq!(restored, original, "removing the breakpoint should restore the original byte");
 
         eprintln!("[test] single_step ok; killing");
