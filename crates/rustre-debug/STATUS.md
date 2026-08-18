@@ -92,7 +92,14 @@
     difetti reali otto volte (581, 583, 587, 588, 595, 598, 601, 607).
 14. **Chiedere al kernel invece di assumere**: maschera PAC, numero di slot,
     dimensione di pagina, nomi dei campi di `CONTEXT` letti da winapi.
-15. **Un fix può essere giusto e MORTO**: sul thread sbagliato (573), dietro
+15. **Un file `cfg`-gated non è verificato dalla suite che non lo compila**
+    (611): `linux_debugger.rs` è `#[cfg(target_os = "linux")]`, quindi ogni
+    «2033/0» su Windows non lo tocca. Il cablaggio del 609 aveva un errore di
+    TIPO — una tupla a 2 dove ce n'è una a 3 — e nessun compilatore l'aveva mai
+    visto: non Windows (file escluso), non l'harness ARM (estrae un altro
+    blocco), non Linux (non c'era stata una run riuscita dopo). **Per un file
+    solo-Linux, solo Linux verifica.**
+16. **Un fix può essere giusto e MORTO**: sul thread sbagliato (573), dietro
     un'uscita anticipata non correlata (591), dentro un `cfg` mai compilato.
     Verificare che sia stato ESEGUITO, non che sia presente.
 16. **Misurare un albero in movimento non è misurare**: `git worktree` e un

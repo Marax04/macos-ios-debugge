@@ -3004,7 +3004,12 @@ fn merge_debug_state(pid: libc::pid_t, regs: &mut RegisterSet) {
 /// Not a register: a fact about the hardware that only the tracer thread can
 /// ask for, carried with the registers because that is the message which
 /// already crosses from that thread.
-#[cfg(target_arch = "aarch64")]
+///
+/// Declared for every architecture this file is built for, because the READER
+/// is architecture-independent — it simply finds nothing on a host that has
+/// nothing to say, and falls back to the x86 four. Gating the name itself to
+/// aarch64 is what made iteration 609 fail to compile on x86_64 Linux while
+/// looking fine from a Windows suite that never builds this file at all.
 const WATCHPOINT_SLOTS_KEY: &str = "__watchpoint_slots";
 
 /// Register-map key carrying the kernel's PAC instruction mask.
@@ -3998,8 +4003,9 @@ impl crate::Debugger for LinuxDebugger {
                 combined_dr7,
                 per_thread
                     .first()
-                    .and_then(|(_, r): &(ThreadId, RegisterSet)| r.get(WATCHPOINT_SLOTS_KEY))
+                    .and_then(|(_, regs, _)| regs.get(WATCHPOINT_SLOTS_KEY))
                     .and_then(|v| u8::try_from(v).ok())
+                    .filter(|n| *n > 0)
                     .unwrap_or(4),
             )
             .ok_or_else(|| {
