@@ -2140,7 +2140,7 @@ impl TypeRecoveryPass {
                     (
                         f.address.as_u64(),
                         f.name.clone(),
-                        f.end_address.map(|e| e.as_u64()),
+                        f.end_address.map(rustre_core::Address::as_u64),
                         f.calling_convention.clone(),
                     )
                 })

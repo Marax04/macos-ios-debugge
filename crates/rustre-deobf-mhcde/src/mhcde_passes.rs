@@ -381,12 +381,12 @@ impl HandlerCfgPass {
             if data[off] == 0xC7 && (data[off + 1] & 0xF8 == 0x00 || data[off + 1] == 0x05) {
                 // MOV [rip+disp32], imm32 — 10 bytes total
                 if off + 10 < n {
-                    let imm = u32::from_le_bytes([
+                    let imm = u64::from(u32::from_le_bytes([
                         data[off + 6],
                         data[off + 7],
                         data[off + 8],
                         data[off + 9],
-                    ]) as u64;
+                    ]));
                     // Check if the next instruction jumps to the dispatcher.
                     let after = off + 10;
                     let jmp_to_disp = self.jumps_to(data, base, after, dispatcher);
@@ -420,14 +420,14 @@ impl HandlerCfgPass {
         }
         match data[off] {
             0xE9 if off + 4 < data.len() => {
-                let rel = i32::from_le_bytes([
+                let rel = i64::from(i32::from_le_bytes([
                     data[off + 1], data[off + 2], data[off + 3], data[off + 4],
-                ]) as i64;
+                ]));
                 let dst = (base as i64 + off as i64 + 5 + rel) as Addr;
                 dst == target
             }
             0xEB if off + 1 < data.len() => {
-                let rel = data[off + 1] as i8 as i64;
+                let rel = i64::from(data[off + 1] as i8);
                 let dst = (base as i64 + off as i64 + 2 + rel) as Addr;
                 dst == target
             }
@@ -602,21 +602,21 @@ impl ControlFlowUnflattener {
             let b = data[i];
             // MOV [mem], imm32: C7 05 ... or C7 00
             if b == 0xC7 && i + 9 < data.len() {
-                let imm = u32::from_le_bytes([
+                let imm = u64::from(u32::from_le_bytes([
                     data[i + 6], data[i + 7], data[i + 8], data[i + 9],
-                ]) as u64;
+                ]));
                 // Is there a conditional branch nearby?
                 if i + 10 < data.len() && matches!(data[i + 10], 0x74 | 0x75) {
                     is_branch = true;
                     let not_taken_off = i + 12;
                     // Look ahead for another MOV [mem], imm
                     if not_taken_off + 9 < data.len() && data[not_taken_off] == 0xC7 {
-                        not_taken_state = Some(u32::from_le_bytes([
+                        not_taken_state = Some(u64::from(u32::from_le_bytes([
                             data[not_taken_off + 6],
                             data[not_taken_off + 7],
                             data[not_taken_off + 8],
                             data[not_taken_off + 9],
-                        ]) as u64);
+                        ])));
                     }
                     taken_state = Some(imm);
                 } else {
@@ -651,13 +651,13 @@ impl ControlFlowUnflattener {
         }
         match data[off] {
             0xE9 if off + 4 < data.len() => {
-                let rel = i32::from_le_bytes([
+                let rel = i64::from(i32::from_le_bytes([
                     data[off + 1], data[off + 2], data[off + 3], data[off + 4],
-                ]) as i64;
+                ]));
                 (base as i64 + off as i64 + 5 + rel) as Addr == target
             }
             0xEB if off + 1 < data.len() => {
-                let rel = data[off + 1] as i8 as i64;
+                let rel = i64::from(data[off + 1] as i8);
                 (base as i64 + off as i64 + 2 + rel) as Addr == target
             }
             _ => false,

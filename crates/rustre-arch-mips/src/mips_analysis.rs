@@ -226,7 +226,7 @@ impl MipsInsn {
     /// Branch target address (PC-relative, i-type).
     #[must_use]
     pub fn branch_target(self, pc: u32) -> u32 {
-        let offset = (self.imm16() as i32) * 4;
+        let offset = i32::from(self.imm16()) * 4;
         (pc as i32 + 4 + offset) as u32
     }
 
@@ -517,7 +517,7 @@ impl GlobalPointerUsage {
     /// Resolve a GP-relative offset to an absolute address.
     #[must_use]
     pub fn resolve(&self, offset: i16) -> Option<u32> {
-        self.gp_value.map(|gp| (gp as i64 + offset as i64) as u32)
+        self.gp_value.map(|gp| (i64::from(gp) + i64::from(offset)) as u32)
     }
 
     #[must_use]

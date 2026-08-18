@@ -581,17 +581,28 @@ pub struct ThreadInfo {
 impl ThreadInfo {
     /// Decode a register value as a little-endian unsigned integer.
     ///
-    /// Returns `None` when the register is absent or wider than 64 bits (a
-    /// vector register), rather than silently truncating it.
+    /// Returns `None` when the register is absent, wider than 64 bits (a
+    /// vector register), or not ASCII hex, rather than silently truncating it
+    /// — and never panics on it.
+    ///
+    /// The payload is hostile input: `parse_threads_info` stores whatever the
+    /// JSON carried, and the JSON itself reached us through
+    /// `RspPacket::as_str`, i.e. `String::from_utf8_lossy`, so any non-UTF8
+    /// byte on the wire is already a 3-byte `U+FFFD` by the time it is seen.
+    /// Decoding therefore walks BYTES (like the twin decoder
+    /// `ios::threads::parse_thread_extra_info`), never byte-indexed slices of
+    /// a `String`, which would split a multi-byte char and panic.
     #[must_use]
     pub fn register_u64(&self, regnum: u32) -> Option<u64> {
-        let hex = self.registers.get(&regnum)?;
+        let hex = self.registers.get(&regnum)?.as_bytes();
         if hex.len() % 2 != 0 || hex.len() > 16 {
             return None;
         }
         let mut value = 0u64;
-        for (i, chunk) in (0..hex.len()).step_by(2).enumerate() {
-            let byte = u8::from_str_radix(&hex[chunk..chunk + 2], 16).ok()?;
+        for (i, pair) in hex.chunks_exact(2).enumerate() {
+            let hi = char::from(pair[0]).to_digit(16)?;
+            let lo = char::from(pair[1]).to_digit(16)?;
+            let byte = u8::try_from(hi * 16 + lo).ok()?;
             value |= u64::from(byte) << (8 * i);
         }
         Some(value)
@@ -1327,4 +1338,39 @@ mod launch_env_packet_tests {
         assert_eq!(build_environment("K", "a#b"), "QEnvironmentHexEncoded:4b3d612362");
     }
 }
+
+    /// `register_u64` promises `None` rather than truncation, and threads.rs
+    /// declares register payloads hostile input. A non-ASCII payload — which is
+    /// exactly what `RspPacket::as_str` produces via `from_utf8_lossy` for any
+    /// non-UTF8 byte on the wire — used to be sliced by BYTE index, splitting a
+    /// multi-byte char and panicking instead of returning `None`.
+    #[test]
+    fn register_u64_rejects_non_ascii_payload_instead_of_panicking() {
+        // Two U+FFFD = 6 bytes: passes an even-length, <=16 BYTE gate.
+        let json = "[{\"tid\":1,\"registers\":{\"0\":\"\u{FFFD}\u{FFFD}\"}}]";
+        let threads = parse_threads_info(json).expect("well-formed JSON array");
+        assert_eq!(threads.len(), 1);
+        assert_eq!(
+            threads[0].register_u64(0),
+            None,
+            "a non-hex payload is not a value"
+        );
+
+        // Odd-byte-count multi-byte payload: the old byte slicing cut inside
+        // the char here too.
+        let split = ThreadInfo {
+            registers: [(0u32, "\u{FFFD}0".to_string())].into_iter().collect(),
+            ..ThreadInfo::default()
+        };
+        assert_eq!(split.register_u64(0), None);
+
+        // The honest path is unchanged: real little-endian hex still decodes.
+        let ok = ThreadInfo {
+            registers: [(0u32, "0102000000000000".to_string())].into_iter().collect(),
+            ..ThreadInfo::default()
+        };
+        assert_eq!(ok.register_u64(0), Some(0x0201));
+        // An absent register is "don't know", not zero.
+        assert_eq!(ok.register_u64(9), None);
+    }
 }

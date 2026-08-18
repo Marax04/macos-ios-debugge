@@ -162,7 +162,7 @@ impl VmOpcode {
         is_branch: bool,
         confidence: f32,
     ) -> Self {
-        let total_bytes = 1 + operands.iter().filter(|o| !o.optional).map(|o| o.encoded_bytes()).sum::<usize>();
+        let total_bytes = 1 + operands.iter().filter(|o| !o.optional).map(VmOperand::encoded_bytes).sum::<usize>();
         Self {
             byte,
             mnemonic: mnemonic.into(),
@@ -383,7 +383,7 @@ impl VmCfg {
     /// Total instruction count across all blocks.
     #[must_use]
     pub fn total_instructions(&self) -> usize {
-        self.blocks.values().map(|b| b.len()).sum()
+        self.blocks.values().map(VmBasicBlock::len).sum()
     }
 
     /// Return the IDs of all blocks that have no predecessors (entry candidates).
@@ -480,7 +480,7 @@ impl VmFunctionList {
     /// Total instructions across all functions.
     #[must_use]
     pub fn total_instructions(&self) -> usize {
-        self.functions.iter().map(|f| f.instruction_count()).sum()
+        self.functions.iter().map(VmFunction::instruction_count).sum()
     }
 
     /// Look up a function by address.
@@ -622,7 +622,7 @@ impl VmIsaComplete {
             insn.operand_values = ops;
 
             // If this offset is a branch target, close current block and start new one.
-            if targets.contains(&pc) && !cfg.block(current_block).is_none_or(|b| b.is_empty()) {
+            if targets.contains(&pc) && !cfg.block(current_block).is_none_or(VmBasicBlock::is_empty) {
                 let new_id = cfg.new_block(pc);
                 cfg.add_edge(current_block, new_id);
                 current_block = new_id;
@@ -773,7 +773,7 @@ impl VmIsaComplete {
         let mut val = 0u64;
         let n = bytes.min(buf.len()).min(8);
         for i in 0..n {
-            val |= (buf[i] as u64) << (i * 8);
+            val |= u64::from(buf[i]) << (i * 8);
         }
         val
     }

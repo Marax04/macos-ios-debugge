@@ -359,7 +359,7 @@ impl CallDepthHistogram {
     #[must_use]
     pub fn mean_depth(&self) -> f64 {
         if self.total_samples == 0 { return 0.0; }
-        let sum: u64 = self.depths.iter().map(|(&d, &c)| d as u64 * c).sum();
+        let sum: u64 = self.depths.iter().map(|(&d, &c)| u64::from(d) * c).sum();
         sum as f64 / self.total_samples as f64
     }
 

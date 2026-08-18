@@ -321,7 +321,7 @@ impl VmDispatcherFinder {
         let mut result: Vec<(DispatchPattern, usize, u8)> = map
             .into_values()
             .map(|(pat, confs)| {
-                let avg = confs.iter().map(|&c| c as u32).sum::<u32>() / confs.len() as u32;
+                let avg = confs.iter().map(|&c| u32::from(c)).sum::<u32>() / confs.len() as u32;
                 (pat, confs.len(), avg as u8)
             })
             .collect();
@@ -344,7 +344,7 @@ impl VmDispatcherFinder {
                         return None;
                     }
                     let disp = scanner.read_u32(offset + 3)?;
-                    let table_va = disp as u64;
+                    let table_va = u64::from(disp);
                     let entries = extract_pointer_table(scanner.data, table_va, scanner.base, 8, 256);
                     let mut dt = DispatchTable::new(
                         offset,
@@ -569,7 +569,7 @@ fn extract_pointer_table(
         let addr: u64 = match entry_size {
             4 => {
                 let v = u32::from_le_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
-                v as u64
+                u64::from(v)
             }
             8 => u64::from_le_bytes([
                 data[off], data[off+1], data[off+2], data[off+3],

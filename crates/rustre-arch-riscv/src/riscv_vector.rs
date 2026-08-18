@@ -186,7 +186,7 @@ impl fmt::Display for VType {
         write!(
             f,
             "{},{},ta={},ma={}",
-            self.sew, self.lmul, self.ta as u8, self.ma as u8
+            self.sew, self.lmul, u8::from(self.ta), u8::from(self.ma)
         )
     }
 }
@@ -683,7 +683,7 @@ impl VectorDecoder {
             }
             // OPIVI: vd = op(vs2, imm5)
             3 => {
-                let imm = ((word >> 15) & 0x1F) as i8 as i64;
+                let imm = i64::from(((word >> 15) & 0x1F) as i8);
                 let op = Self::decode_opivi(funct6)?;
                 let mut insn = VectorInsn::new_vvx(op, vd, vs2, 0, vm, word);
                 insn.imm = Some(imm);

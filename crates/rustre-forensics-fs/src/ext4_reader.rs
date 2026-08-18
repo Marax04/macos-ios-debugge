@@ -179,9 +179,9 @@ impl Ext4Inode {
         };
         let m = self.mode;
         let bits = |shift: u16| -> String {
-            let r = if m & (0x100 >> (shift) as u32) as u16 != 0 { 'r' } else { '-' };
-            let w = if m & (0x080 >> (shift) as u32) as u16 != 0 { 'w' } else { '-' };
-            let x = if m & (0x040 >> (shift) as u32) as u16 != 0 { 'x' } else { '-' };
+            let r = if m & (0x100 >> u32::from(shift)) as u16 != 0 { 'r' } else { '-' };
+            let w = if m & (0x080 >> u32::from(shift)) as u16 != 0 { 'w' } else { '-' };
+            let x = if m & (0x040 >> u32::from(shift)) as u16 != 0 { 'x' } else { '-' };
             format!("{r}{w}{x}")
         };
         format!("{}{}{}{}", ft, bits(0), bits(3), bits(6))
@@ -329,8 +329,8 @@ impl<'a> Ext4Parser<'a> {
             u16::from_le_bytes([b[off], b[off+1]])
         };
         let inodes_count = r32(0);
-        let blocks_count_lo = r32(4) as u64;
-        let free_blocks_lo = r32(12) as u64;
+        let blocks_count_lo = u64::from(r32(4));
+        let free_blocks_lo = u64::from(r32(12));
         let free_inodes = r32(16);
         let first_data_block = r32(20);
         let log_block_size = r32(24);
@@ -355,9 +355,9 @@ impl<'a> Ext4Parser<'a> {
         let mnt_bytes: Vec<u8> = b[136..200].iter().take_while(|&&x| x != 0).copied().collect();
         let last_mounted = String::from_utf8_lossy(&mnt_bytes).to_string();
         let journal_inum = r32(232);
-        let blocks_count_hi = if b.len() >= 0x150 { r32(0x150) as u64 } else { 0 };
+        let blocks_count_hi = if b.len() >= 0x150 { u64::from(r32(0x150)) } else { 0 };
         let blocks_count = blocks_count_lo | (blocks_count_hi << 32);
-        let free_blocks_hi = if b.len() >= 0x168 { r32(0x168) as u64 } else { 0 };
+        let free_blocks_hi = if b.len() >= 0x168 { u64::from(r32(0x168)) } else { 0 };
         let free_blocks_count = free_blocks_lo | (free_blocks_hi << 32);
         let desc_size = if b.len() >= 0xFE { r16(0xFE) } else { 32 };
         Ok(Ext4Superblock {
@@ -388,7 +388,7 @@ impl<'a> Ext4Parser<'a> {
     pub fn parse_block_group_desc(&self, group: u64) -> Option<Ext4BlockGroupDesc> {
         let bs = self.sb.block_size();
         let gdt_block = if bs == 1024 { 2u64 } else { 1 };
-        let desc_size = (self.sb.desc_size) as u64;
+        let desc_size = u64::from(self.sb.desc_size);
         let off = self.block_offset(gdt_block) + (group * desc_size) as usize;
         if off + 32 > self.data.len() { return None; }
         let b = &self.data[off..];
@@ -412,37 +412,37 @@ impl<'a> Ext4Parser<'a> {
     #[must_use] 
     pub fn parse_inode(&self, inode_num: u32) -> Option<Ext4Inode> {
         if inode_num == 0 { return None; }
-        let idx = (inode_num - 1) as u64;
-        let group = idx / (self.sb.inodes_per_group) as u64;
-        let local_idx = idx % (self.sb.inodes_per_group) as u64;
+        let idx = u64::from(inode_num - 1);
+        let group = idx / u64::from(self.sb.inodes_per_group);
+        let local_idx = idx % u64::from(self.sb.inodes_per_group);
         let desc = self.parse_block_group_desc(group)?;
         let inode_table_block = desc.inode_table();
-        let inode_size = (self.sb.inode_size) as u64;
+        let inode_size = u64::from(self.sb.inode_size);
         let off = self.block_offset(inode_table_block) + (local_idx * inode_size) as usize;
         if off + 128 > self.data.len() { return None; }
         let b = &self.data[off..];
         let r32 = |o: usize| u32::from_le_bytes([b[o], b[o+1], b[o+2], b[o+3]]);
         let r16 = |o: usize| u16::from_le_bytes([b[o], b[o+1]]);
         let mode = r16(0);
-        let uid_lo = r16(2) as u32;
-        let size_lo = r32(4) as u64;
+        let uid_lo = u32::from(r16(2));
+        let size_lo = u64::from(r32(4));
         let atime = r32(8);
         let ctime = r32(12);
         let mtime = r32(16);
         let dtime = r32(20);
-        let gid_lo = r16(24) as u32;
+        let gid_lo = u32::from(r16(24));
         let links_count = r16(26);
-        let blocks_lo = r32(28) as u64;
+        let blocks_lo = u64::from(r32(28));
         let flags = r32(32);
         let mut block_data = [0u32; 15];
         for i in 0..15 { block_data[i] = r32(40 + i * 4); }
         let generation = r32(100);
-        let size_hi = r32(108) as u64;
+        let size_hi = u64::from(r32(108));
         let size = size_lo | (size_hi << 32);
-        let file_acl = r32(104) as u64;
+        let file_acl = u64::from(r32(104));
         let (uid, gid) = if inode_size >= 156 && off + 156 <= self.data.len() {
-            let uid_hi = r16(120) as u32;
-            let gid_hi = r16(122) as u32;
+            let uid_hi = u32::from(r16(120));
+            let gid_hi = u32::from(r16(122));
             (uid_lo | (uid_hi << 16), gid_lo | (gid_hi << 16))
         } else { (uid_lo, gid_lo) };
         let blocks = blocks_lo * 512 / self.sb.block_size();
@@ -496,7 +496,7 @@ impl<'a> Ext4Parser<'a> {
         let extents = self.parse_extents(inode);
         for ext in &extents {
             for blk in 0..ext.len() {
-                let block = ext.start_block() + (blk) as u64;
+                let block = ext.start_block() + u64::from(blk);
                 if let Some(data) = self.read_block(block) {
                     let mut off = 0;
                     while off + 8 <= data.len() {

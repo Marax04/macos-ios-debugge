@@ -477,7 +477,7 @@ impl SparcLifter {
                     let val = (*imm22) << 10;
                     vec![LlilOp::SetReg {
                         dest: rd,
-                        value: Expr::UConst(val as u64),
+                        value: Expr::UConst(u64::from(val)),
                     }]
                 } else {
                     vec![LlilOp::Nop]
@@ -613,10 +613,10 @@ impl SparcLifter {
                 }
             }
             Operand::FReg(r) => Expr::Reg(format!("%f{r}")),
-            Operand::Simm13(v) => Expr::Const(*v as i64),
-            Operand::Imm22(v) => Expr::UConst(*v as u64),
+            Operand::Simm13(v) => Expr::Const(i64::from(*v)),
+            Operand::Imm22(v) => Expr::UConst(u64::from(*v)),
             Operand::PcOff(v) => {
-                let target = (pc as i64) + (*v as i64) * 4;
+                let target = (pc as i64) + i64::from(*v) * 4;
                 Expr::UConst(target as u64)
             }
             Operand::MemReg(b, i) => {
@@ -638,7 +638,7 @@ impl SparcLifter {
                 } else {
                     Expr::Reg(reg_str(*b))
                 };
-                Expr::Add(Box::new(base), Box::new(Expr::Const(*v as i64)))
+                Expr::Add(Box::new(base), Box::new(Expr::Const(i64::from(*v))))
             }
         }
     }

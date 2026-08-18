@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **621**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -16,8 +16,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2061 / 0** |
-| Linux x86_64 | WSL, `--test-threads=1` | **2044 / 0** |
+| Windows x86_64 | suite locale, worktree isolato | **2058 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2041 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
@@ -50,52 +50,6 @@ fatto tacere alzando il soffitto.
 
 ## 3. Chiuso di recente, con la misura
 
-- **Il rifiuto del 620 non poteva essere disattivato da un refuso** (621).
-  `capability_refusal` rispondeva `None` sia per «dichiarata e funzionante» sia
-  per «capacità inesistente»: un solo nome sbagliato a un call site —
-  `hardware_watchpoint` per `hardware_watchpoints` — avrebbe spento il rifiuto
-  per sempre e in silenzio. Un guard il cui modo di fallire è **passare** è
-  peggio di nessun guard, perché per giunta gli si crede. Mio, dal 620, trovato
-  rileggendolo. Due metà, entrambe necessarie: `capability_status` rende onesta
-  la risposta a runtime (`Supported` / `Unsupported(perché)` / `Undeclared`), e
-  una scansione del sorgente rende irraggiungibile il caso disonesto —
-  controlla ogni letterale passato alla funzione contro i nomi che la
-  dichiarazione pubblica, **su tutti i rami `cfg`**, perché questo build vede
-  solo il proprio. Il guard ha colto subito un caso vero: era il mio stesso test
-  del 620 ad asserire il buco. Perturbato con un refuso realistico in
-  produzione: morde.
-- **Una capacità dichiarata assente ora viene RIFIUTATA con la sua stessa
-  ragione** (620). `backend_capabilities()` pubblica, per piattaforma e per
-  architettura, se una cosa funziona **e perché no** — e il commento su quella
-  lista dice che una risposta sbagliata è peggio di nessuna. Nessuno la
-  consultava. Su Windows-on-ARM la lista dice che i watchpoint hardware non ci
-  sono e spiega che questo backend programma i registri di debug x86, che quella
-  architettura non ha; `set_watchpoint_sized` non ne sapeva nulla, eseguiva
-  l'intero ciclo di arming contro `dr0..dr7` inesistenti, trovava `armed == 0` e
-  rispondeva **`NotAttached`** — una diagnosi che manda il chiamante a guardare
-  la propria sessione, che non era il problema. Ora `capability_refusal` legge la
-  ragione dalla stessa lista che la pubblica, così le due non possono divergere,
-  e un guard strutturale impone a tutti e tre i backend di chiedere prima di
-  armare. Verificato leggendo, non supponendo: Linux e macOS dichiarano
-  `supported: true` senza condizioni, quindi lì il guard è un **no-op stretto** e
-  i watchpoint ARM Linux del 570/608/609 non vengono toccati.
-- **Un `dr7` assente non è più un thread disarmato** (619). I tre backend
-  decidevano con `regs.get("dr7").unwrap_or(0)` e trattavano lo `0` come «nulla
-  armato, salta questo thread» — mentre **tre righe sopra** gli stessi cicli
-  gestiscono bene il caso vicino: un thread i cui registri non si riescono a
-  LEGGERE finisce in `still_armed` col commento «UNVERIFIED, not clean». Un set
-  letto che non CONTIENE `dr7` è la stessa situazione e riceveva la risposta
-  opposta. Non è ipotetico su nessuno dei due fronti ARM64: il lettore AArch64
-  di Windows **non pubblica affatto** `dr7` (AArch64 ha `Bcr`/`Bvr`/`Wcr`/`Wvr`),
-  quindi lì ogni thread risultava pulito sempre; e su Linux ARM `dr7` è
-  sintetizzato da `NT_ARM_HW_WATCH`, che `merge_debug_state` abbandona quando
-  non riesce a leggerlo — cioè proprio il guasto che questo file ha aperto
-  contro il runner ARM. Ora `debug_register_state` distingue
-  `Clean`/`Armed`/`Unverifiable`. Dove si può riportare, l'assenza va in
-  `still_armed`; nel percorso di `Drop`, dove non c'è nulla a cui rispondere,
-  l'assenza fa **eseguire** il disarmo invece di saltarlo: scrivere zeri a un
-  thread che non ne aveva costa una scrittura, saltarne uno che ne aveva lascia
-  una trappola armata in un processo che stiamo abbandonando.
 - **Condizioni sui breakpoint: cinque nomi di registro non erano offerti** (618).
   `SUB_REGISTER_NAMES` è ciò che i tre backend desktop iterano per popolare il
   contesto di valutazione. Mancavano `sil`, `dil`, `bpl`, `spl` ed `eip` — tutti
@@ -136,15 +90,10 @@ fatto tacere alzando il soffitto.
 | 6 | 77 | 9 | **9** |
 | 7 | 68 | 12 | **12** |
 | 8 | 74 | 15 | **2** |
-| 8 (retry) | 64 | 5 | **5** |
 
 Il giro 8 non è stato fermato dal codice: **13 agenti di fix sono morti su errori
-server** (529 Overloaded, un 521, un 500). Il retry dalla cache ne ha recuperati
-**5 su 5, zero errori**: fra questi, un `E0D` (EACCES da `task_for_pid`: SIP,
-entitlement mancante, o un altro debugger già collegato) riportato come
-`ProcessNotFound`, cioè un processo vivo e visibile in `ps` diagnosticato come
-inesistente; e un id di thread a 64 bit troncato a `ThreadId(0)`, che è il
-carattere jolly «lascia stare la selezione dello stub». I 2 chiusi sono reali: una maschera di
+server** (529 Overloaded, un 521, un 500). I 13 difetti confermati restano aperti
+e il retry va rifatto quando l'API regge. I 2 chiusi sono reali: una maschera di
 preservazione fissa a 64 bit che distruggeva i bit alti scrivendo `s3`/`h3`/`b3`,
 e una sign-extension a 60 bit invece di 56 che rendeva `-(1<<40)` un positivo
 enorme.
@@ -159,7 +108,7 @@ enorme.
 | **2 test sui registri di debug** | Linux ARM | `NT_ARM_HW_WATCH` sembra fallire su quel runner: da capire, non da indovinare |
 | **Cricchetto MCP 172/168** | tutti | non mio, misurato al 612 e al 618 |
 | **Single step su Windows ARM** | Windows | rifiutato esplicitamente (606): il meccanismo AArch64 non è implementato e inventarlo sarebbe peggio |
-| **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha `Bcr`/`Bvr`/`Wcr`/`Wvr` (**2 slot**, non 4). Capacità dichiarata assente (598) e ora anche **rifiutata a runtime con quella ragione** (620) |
+| **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha 2 slot, non 4. Capacità dichiarata assente (598) |
 | **Eventi di thread** | macOS, iOS | Mach e RSP non li consegnano. Dichiarati assenti col motivo |
 | **`task_for_pid` root** | macOS | ⚠️ **decisione dell'utente** |
 | **iOS su hardware** | infrastruttura | i runner ospitati non hanno iPhone. Il simulatore però è arm64 REALE |
@@ -219,29 +168,5 @@ enorme.
 20. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è disfarlo.
 21. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.
-22. **Una perturbazione va SEMPRE ripristinata** (giro 8, retry): un agente ha
-    trovato una riga di produzione lasciata perturbata da un round precedente,
-    con un marcatore `//PERTURB` ancora attaccato e il test che la copriva
-    rosso. La tecnica che dimostra un rosso diventa il difetto se ci si ferma a
-    metà. Verificato al 619: **zero** marcatori residui nel crate.
-23. **Un guard che può fallire PASSANDO è peggio di nessun guard** (621), perché
-    gli si crede. Ogni lookup che fa da fondamento a un rifiuto deve distinguere
-    «non supportato» da «non l'ho trovato», e il nome cercato va verificato
-    contro la dichiarazione: altrimenti un refuso è indistinguibile dal via
-    libera. Nel crate ci sono ora tre lookup a tre stati per questa ragione —
-    `DebugRegisterState`, `CapabilityStatus`, `capability_refusal`.
-24. **Il codice che asserisce il difetto va sostituito, non aggirato** (621): il
-    mio test del 620 fissava proprio il buco che il 621 chiude, e il guard nuovo
-    lo ha additato per primo.
-25. **Una capacità DICHIARATA va anche IMPOSTA** (620): la lista era accurata e
-    dettagliata, e nessuna riga di codice la consultava. Fra dichiarare e
-    imporre c'è la stessa distanza che fra un commento e un test. La ragione va
-    LETTA dalla dichiarazione, non riscritta accanto: una seconda copia diverge.
-24. **Verificare una propria dichiarazione trova difetti anche quando la
-    dichiarazione è giusta** (620): il 598 diceva il vero, ma il percorso a
-    runtime lo contraddiceva. Undicesima volta che questo controllo paga.
-25. **Distinguere «non lo so» da «no» vale anche a tre righe di distanza** (619):
-    lo stesso ciclo trattava «non ho potuto leggere» come non verificato e «non
-    c'è» come pulito.
-24. **Un agente fallito per errore di server non è un difetto assente**: va
+22. **Un agente fallito per errore di server non è un difetto assente**: va
     rilanciato, e finché non lo è va dichiarato aperto (giro 8).

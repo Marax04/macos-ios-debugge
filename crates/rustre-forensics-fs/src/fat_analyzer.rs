@@ -248,7 +248,7 @@ impl FatBootSector {
     #[must_use] 
     pub fn fat_size(&self) -> u32 {
         if self.fat_size_16 != 0 {
-            (self.fat_size_16) as u32
+            u32::from(self.fat_size_16)
         } else {
             self.fat_size_32.unwrap_or(0)
         }
@@ -281,7 +281,7 @@ impl FatBootSector {
         let data_sectors = self
             .total_sectors()
             .saturating_sub(self.first_data_sector());
-        data_sectors / (self.sectors_per_cluster) as u32
+        data_sectors / u32::from(self.sectors_per_cluster)
     }
 
     /// Detect FAT type from cluster count (per Microsoft spec).
@@ -369,7 +369,7 @@ impl DirectoryEntry {
 
         let cluster_hi = u16::from_le_bytes([raw[20], raw[21]]);
         let cluster_lo = u16::from_le_bytes([raw[26], raw[27]]);
-        let first_cluster = ((cluster_hi as u32) << 16) | (cluster_lo) as u32;
+        let first_cluster = (u32::from(cluster_hi) << 16) | u32::from(cluster_lo);
         let size = u32::from_le_bytes([raw[28], raw[29], raw[30], raw[31]]);
 
         Ok(Some(Self {
@@ -520,9 +520,9 @@ impl<'a> FatAnalyzer<'a> {
                 }
                 let word = u16::from_le_bytes([self.image[offset], self.image[offset + 1]]);
                 if cluster & 1 == 0 {
-                    (word & 0x0FFF) as u32
+                    u32::from(word & 0x0FFF)
                 } else {
-                    (word >> 4) as u32
+                    u32::from(word >> 4)
                 }
             }
             FatType::Fat16 => {
@@ -530,7 +530,7 @@ impl<'a> FatAnalyzer<'a> {
                 if offset + 1 >= self.image.len() {
                     return Err(FatError::ClusterOutOfRange(cluster));
                 }
-                u16::from_le_bytes([self.image[offset], self.image[offset + 1]]) as u32
+                u32::from(u16::from_le_bytes([self.image[offset], self.image[offset + 1]]))
             }
             FatType::Fat32 => {
                 let offset = self.fat_region_start + (cluster as usize * 4);
@@ -694,7 +694,7 @@ impl<'a> FatAnalyzer<'a> {
             if chunk[0] == 0xE5 && let Ok(Some(entry)) = DirectoryEntry::parse(chunk) {
                 let cluster = entry.first_cluster;
                 let data_ok =
-                    cluster >= 2 && (cluster as u64) < (self.boot.cluster_count() as u64) + 2;
+                    cluster >= 2 && u64::from(cluster) < u64::from(self.boot.cluster_count()) + 2;
                 recovered.push(DeletedEntry {
                     entry,
                     offset: (root_start + offset) as u64,
@@ -733,7 +733,7 @@ impl<'a> FatAnalyzer<'a> {
             fat_type: self.fat_type,
             total_clusters: total,
             bytes_per_cluster: bpc,
-            total_bytes: (total) as u64 * (bpc) as u64,
+            total_bytes: u64::from(total) * u64::from(bpc),
             volume_label: self.boot.volume_label.clone().unwrap_or_default(),
         }
     }

@@ -231,7 +231,7 @@ impl IrBlock {
 
     #[must_use]
     pub fn live_defs(&self) -> HashSet<VReg> {
-        self.insns.iter().filter_map(|i| i.dst()).collect()
+        self.insns.iter().filter_map(IrInsn::dst).collect()
     }
 }
 

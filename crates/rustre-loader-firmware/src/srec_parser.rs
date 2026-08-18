@@ -227,7 +227,7 @@ impl SrecRecord {
         // Decode address
         let mut address = 0u64;
         for i in 0..addr_bytes {
-            address = (address << 8) | hex2(hex, 2 + i * 2)? as u64;
+            address = (address << 8) | u64::from(hex2(hex, 2 + i * 2)?);
         }
 
         // Decode data bytes
@@ -244,12 +244,12 @@ impl SrecRecord {
         let checksum = hex2(hex, data_hex_end)?;
 
         // Verify checksum: one's-complement of (byte_count + address_bytes + data_bytes) & 0xFF
-        let mut sum: u32 = byte_count as u32;
+        let mut sum: u32 = u32::from(byte_count);
         for i in 0..addr_bytes {
-            sum += hex2(hex, 2 + i * 2)? as u32;
+            sum += u32::from(hex2(hex, 2 + i * 2)?);
         }
         for &b in &data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let expected = (!(sum & 0xFF)) as u8;
         if expected != checksum {
@@ -279,10 +279,10 @@ impl SrecRecord {
         for i in (0..addr_bytes).rev() {
             let b = ((self.address >> (i * 8)) & 0xFF) as u8;
             addr_vec.push(b);
-            sum += b as u32;
+            sum += u32::from(b);
         }
         for &b in &self.data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
 
@@ -464,7 +464,7 @@ impl SrecFile {
         let end = self
             .regions
             .iter()
-            .map(|r| r.end_addr())
+            .map(SrecRegion::end_addr)
             .max()
             .unwrap_or(base);
         if end <= base {
@@ -495,7 +495,7 @@ impl SrecFile {
     /// Total data bytes across all regions.
     #[must_use]
     pub fn total_data_bytes(&self) -> usize {
-        self.regions.iter().map(|r| r.size()).sum()
+        self.regions.iter().map(SrecRegion::size).sum()
     }
 
     /// Lowest start address.
@@ -507,7 +507,7 @@ impl SrecFile {
     /// Highest end address.
     #[must_use]
     pub fn max_address(&self) -> Option<u64> {
-        self.regions.iter().map(|r| r.end_addr()).max()
+        self.regions.iter().map(SrecRegion::end_addr).max()
     }
 
     /// Number of address-space gaps.
@@ -585,10 +585,10 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
         let mut sum: u32 = byte_count as u32;
         // address = 0x0000
         for b in &[0u8, 0] {
-            sum += *b as u32;
+            sum += u32::from(*b);
         }
         for &b in hdr_data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
         out.push_str(&format!("S0{byte_count:02X}0000"));
@@ -600,7 +600,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
 
     // S3 data records
     for (chunk_idx, chunk) in data.chunks(bpr).enumerate() {
-        let addr = base_address as u64 + (chunk_idx as u64).saturating_mul(bpr as u64);
+        let addr = u64::from(base_address) + (chunk_idx as u64).saturating_mul(bpr as u64);
         let addr_bytes = 4usize;
         let byte_count = addr_bytes + chunk.len() + 1;
         let mut sum: u32 = byte_count as u32;
@@ -611,10 +611,10 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             addr as u8,
         ];
         for &b in &addr_be {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         for &b in chunk {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
         out.push_str(&format!("S3{byte_count:02X}"));
@@ -631,10 +631,10 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
     // S5 record count record
     {
         let byte_count = 3u8;
-        let mut sum: u32 = byte_count as u32;
+        let mut sum: u32 = u32::from(byte_count);
         let rc_hi = (record_count >> 8) as u8;
         let rc_lo = (record_count & 0xFF) as u8;
-        sum += rc_hi as u32 + rc_lo as u32;
+        sum += u32::from(rc_hi) + u32::from(rc_lo);
         let cs = (!(sum & 0xFF)) as u8;
         out.push_str(&format!(
             "S5{byte_count:02X}{record_count:04X}{cs:02X}\r\n"
@@ -644,7 +644,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
     // S7 terminator (entry point = base_address)
     {
         let byte_count = 5u8;
-        let mut sum: u32 = byte_count as u32;
+        let mut sum: u32 = u32::from(byte_count);
         let ep_be = [
             (base_address >> 24) as u8,
             (base_address >> 16) as u8,
@@ -652,7 +652,7 @@ pub fn encode_to_srec(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
             base_address as u8,
         ];
         for &b in &ep_be {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let cs = (!(sum & 0xFF)) as u8;
         out.push_str(&format!("S7{byte_count:02X}"));

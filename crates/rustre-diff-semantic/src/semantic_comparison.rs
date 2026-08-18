@@ -81,7 +81,7 @@ pub struct NormalizedStmt {
 impl NormalizedStmt {
     /// All tokens that make up this statement.
     pub fn tokens(&self) -> impl Iterator<Item = &str> {
-        std::iter::once(self.kind.as_str()).chain(self.operands.iter().map(|s| s.as_str()))
+        std::iter::once(self.kind.as_str()).chain(self.operands.iter().map(std::string::String::as_str))
     }
 }
 

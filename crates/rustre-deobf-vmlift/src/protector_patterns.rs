@@ -795,7 +795,7 @@ impl ProtectorDetector {
     /// Return `true` if any protector is detected with sufficient confidence.
     #[must_use]
     pub fn is_protected(&self, data: &[u8]) -> bool {
-        self.detect(data).iter().any(|d| d.is_confident())
+        self.detect(data).iter().any(DetectedProtector::is_confident)
     }
 
     /// Return the single highest-confidence detection, if any.

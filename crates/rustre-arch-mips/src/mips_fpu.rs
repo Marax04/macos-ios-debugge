@@ -597,7 +597,7 @@ impl MipsFpuInsn {
                 fpu.set_single(fd as usize, r);
             }
             Self::CvtDS { fd, fs } => {
-                let r = fpu.get_single(fs as usize) as f64;
+                let r = f64::from(fpu.get_single(fs as usize));
                 fpu.set_double(fd as usize, r);
             }
             Self::CvtWS { fd, fs } => {
@@ -605,7 +605,7 @@ impl MipsFpuInsn {
                 fpu.set_single(fd as usize, r);
             }
             Self::CvtWD { fd, fs } => {
-                let r = fpu.get_double(fs as usize) as i32 as f64;
+                let r = f64::from(fpu.get_double(fs as usize) as i32);
                 fpu.set_double(fd as usize, r);
             }
             Self::CvtLs { fd, fs } => {
@@ -622,7 +622,7 @@ impl MipsFpuInsn {
             }
             Self::CvtDW { fd, fs } => {
                 let i = fpu.get_double(fs as usize) as i32;
-                fpu.set_double(fd as usize, i as f64);
+                fpu.set_double(fd as usize, f64::from(i));
             }
             // ── Rounding ─────────────────────────────────────────────────────
             Self::RoundWS { fd, fs } => {
@@ -669,8 +669,8 @@ impl MipsFpuInsn {
                     cond.evaluate_d(fpu.get_double(fs as usize), fpu.get_double(ft as usize))
                 } else {
                     cond.evaluate_d(
-                        fpu.get_single(fs as usize) as f64,
-                        fpu.get_single(ft as usize) as f64,
+                        f64::from(fpu.get_single(fs as usize)),
+                        f64::from(fpu.get_single(ft as usize)),
                     )
                 };
                 fpu.set_fcc(cc, result);
@@ -727,31 +727,31 @@ impl MipsFpuInsn {
             }
             // ── Load/Store ───────────────────────────────────────────────────
             Self::Lwc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + offset as i64) as u64;
-                let b0 = *memory.get(&addr).unwrap_or(&0) as u32;
-                let b1 = *memory.get(&(addr + 1)).unwrap_or(&0) as u32;
-                let b2 = *memory.get(&(addr + 2)).unwrap_or(&0) as u32;
-                let b3 = *memory.get(&(addr + 3)).unwrap_or(&0) as u32;
+                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
+                let b0 = u32::from(*memory.get(&addr).unwrap_or(&0));
+                let b1 = u32::from(*memory.get(&(addr + 1)).unwrap_or(&0));
+                let b2 = u32::from(*memory.get(&(addr + 2)).unwrap_or(&0));
+                let b3 = u32::from(*memory.get(&(addr + 3)).unwrap_or(&0));
                 let bits = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-                fpu.fpr[ft as usize] = f32::from_bits(bits) as f64;
+                fpu.fpr[ft as usize] = f64::from(f32::from_bits(bits));
             }
             Self::Ldc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + offset as i64) as u64;
+                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
                 let mut bits = 0u64;
                 for i in 0..8u64 {
-                    bits |= (*memory.get(&(addr + i)).unwrap_or(&0) as u64) << (i * 8);
+                    bits |= u64::from(*memory.get(&(addr + i)).unwrap_or(&0)) << (i * 8);
                 }
                 fpu.fpr[ft as usize] = f64::from_bits(bits);
             }
             Self::Swc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + offset as i64) as u64;
+                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
                 let bits = (fpu.fpr[ft as usize] as f32).to_bits();
                 for i in 0..4u64 {
                     memory.insert(addr + i, ((bits >> (i * 8)) & 0xFF) as u8);
                 }
             }
             Self::Sdc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + offset as i64) as u64;
+                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
                 let bits = fpu.fpr[ft as usize].to_bits();
                 for i in 0..8u64 {
                     memory.insert(addr + i, ((bits >> (i * 8)) & 0xFF) as u8);
@@ -759,11 +759,11 @@ impl MipsFpuInsn {
             }
             // ── Move to/from GP ───────────────────────────────────────────────
             Self::MfC1 { rt, fs } => {
-                gpr[rt as usize] = (fpu.fpr[fs as usize] as f32).to_bits() as u64;
+                gpr[rt as usize] = u64::from((fpu.fpr[fs as usize] as f32).to_bits());
             }
             Self::MtC1 { rt, fs } => {
                 let bits = gpr[rt as usize] as u32;
-                fpu.fpr[fs as usize] = f32::from_bits(bits) as f64;
+                fpu.fpr[fs as usize] = f64::from(f32::from_bits(bits));
             }
             Self::DmfC1 { rt, fs } => {
                 gpr[rt as usize] = fpu.fpr[fs as usize].to_bits();
@@ -773,9 +773,9 @@ impl MipsFpuInsn {
             }
             Self::CfC1 { rt, fs } => {
                 gpr[rt as usize] = if fs == 31 {
-                    fpu.fcsr as u64
+                    u64::from(fpu.fcsr)
                 } else {
-                    fpu.fir as u64
+                    u64::from(fpu.fir)
                 };
             }
             Self::CtC1 { rt, fs } => {
@@ -786,22 +786,22 @@ impl MipsFpuInsn {
             // ── Branches ─────────────────────────────────────────────────────
             Self::Bc1t { cc, offset } => {
                 if fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + (offset as i64) * 4) as u64;
+                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
                 }
             }
             Self::Bc1f { cc, offset } => {
                 if !fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + (offset as i64) * 4) as u64;
+                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
                 }
             }
             Self::Bc1tl { cc, offset } => {
                 if fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + (offset as i64) * 4) as u64;
+                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
                 }
             }
             Self::Bc1fl { cc, offset } => {
                 if !fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + (offset as i64) * 4) as u64;
+                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
                 }
             }
         }

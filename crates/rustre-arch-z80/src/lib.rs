@@ -1621,7 +1621,7 @@ fn extract_hex_target(operands: &str) -> Option<u64> {
         Some(i) => &operands[i + 1..],
         None => return None,
     };
-    let hex: String = s.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+    let hex: String = s.chars().take_while(char::is_ascii_hexdigit).collect();
     if hex.is_empty() {
         return None;
     }

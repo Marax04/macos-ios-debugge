@@ -480,17 +480,17 @@ impl VmEmulator {
 
     fn mem_read(&mut self, address: u64, width: u8) -> u64 {
         let mut value = 0u64;
-        for i in 0..width as u64 {
+        for i in 0..u64::from(width) {
             let addr = address.saturating_add(i);
             let byte = self.memory.get(&addr).copied().unwrap_or(0xCC);
-            value |= (byte as u64) << (i * 8);
+            value |= u64::from(byte) << (i * 8);
         }
         self.trace.push(SemanticOp::MemRead { address, value, width });
         value
     }
 
     fn mem_write(&mut self, address: u64, value: u64, width: u8) {
-        for i in 0..width as u64 {
+        for i in 0..u64::from(width) {
             let addr = address.saturating_add(i);
             self.memory.insert(addr, ((value >> (i * 8)) & 0xFF) as u8);
         }
@@ -547,7 +547,7 @@ impl VmEmulator {
             })
         } else {
             bytecode.get(ip).map(|&b| {
-                let raw = b as u16;
+                let raw = u16::from(b);
                 if self.isa.encrypted {
                     raw ^ (self.isa.xor_key as u16 & 0xFF)
                 } else {
@@ -561,7 +561,7 @@ impl VmEmulator {
         let mut v = 0u64;
         for i in 0..width as usize {
             if let Some(&b) = bytecode.get(ip + i) {
-                v |= (b as u64) << (i * 8);
+                v |= u64::from(b) << (i * 8);
             }
         }
         v
@@ -747,7 +747,7 @@ fn find_repeated_subsequences(
     let mut results: Vec<(Vec<String>, usize)> = counts
         .into_iter()
         .filter(|(_, c)| *c >= min_count)
-        .map(|(k, c)| (k.into_iter().map(|s| s.to_string()).collect(), c))
+        .map(|(k, c)| (k.into_iter().map(std::string::ToString::to_string).collect(), c))
         .collect();
 
     results.sort_by(|a, b| b.1.cmp(&a.1));

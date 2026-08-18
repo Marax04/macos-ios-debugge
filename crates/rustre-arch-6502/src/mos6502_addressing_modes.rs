@@ -133,7 +133,7 @@ pub fn effective_address_ind_x(mem: &[u8], zp: u8, x: u8) -> u16 {
 pub fn effective_address_ind_y(mem: &[u8], zp: u8, y: u8) -> u16 {
     let lo = mem[zp as usize];
     let hi = mem[zp.wrapping_add(1) as usize];
-    u16::from_le_bytes([lo, hi]).wrapping_add(y as u16)
+    u16::from_le_bytes([lo, hi]).wrapping_add(u16::from(y))
 }
 
 /// Detect whether adding `index` to `base` crosses a 256-byte page boundary.
@@ -169,8 +169,8 @@ pub fn decode_address(
         Mos6502Operand::ZeroPageX(zp) => zero_page_wrap(effective_address_zp_x(zp, x)),
         Mos6502Operand::ZeroPageY(zp) => zero_page_wrap(effective_address_zp_y(zp, y)),
         Mos6502Operand::Absolute(a) => a,
-        Mos6502Operand::AbsoluteX(a) => a.wrapping_add(x as u16),
-        Mos6502Operand::AbsoluteY(a) => a.wrapping_add(y as u16),
+        Mos6502Operand::AbsoluteX(a) => a.wrapping_add(u16::from(x)),
+        Mos6502Operand::AbsoluteY(a) => a.wrapping_add(u16::from(y)),
         Mos6502Operand::Indirect(ptr) => {
             // 6502 page-wrap bug: if ptr == $xxFF, high byte is read from $xx00
             let lo = mem[ptr as usize];
@@ -182,7 +182,7 @@ pub fn decode_address(
         Mos6502Operand::IndirectY(zp) => effective_address_ind_y(mem, zp, y),
         Mos6502Operand::Relative(off) => {
             // Branch offset is relative to next instruction (PC + 2).
-            pc.wrapping_add(2).wrapping_add(off as i16 as u16)
+            pc.wrapping_add(2).wrapping_add(i16::from(off) as u16)
         }
     }
 }
@@ -248,7 +248,7 @@ impl Mos6502MemoryModel {
 
     /// Push a byte onto the hardware stack at $01xx; SP decrements.
     pub fn stack_push(&mut self, val: u8) {
-        let addr = 0x0100u16 | self.sp as u16;
+        let addr = 0x0100u16 | u16::from(self.sp);
         self.write(addr, val);
         self.sp = self.sp.wrapping_sub(1);
     }
@@ -256,7 +256,7 @@ impl Mos6502MemoryModel {
     /// Pop a byte from the hardware stack; SP increments first (pre-increment).
     pub fn stack_pop(&mut self) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        let addr = 0x0100u16 | self.sp as u16;
+        let addr = 0x0100u16 | u16::from(self.sp);
         self.read(addr)
     }
 
@@ -283,7 +283,7 @@ impl Mos6502MemoryModel {
     /// Peek at the top-of-stack without changing SP.
     #[must_use]
     pub fn stack_peek(&self) -> u8 {
-        let addr = 0x0100u16 | self.sp.wrapping_add(1) as u16;
+        let addr = 0x0100u16 | u16::from(self.sp.wrapping_add(1));
         self.read(addr)
     }
 

@@ -46,7 +46,7 @@ impl Bitness {
         match self {
             Self::B32 => {
                 let end = off.checked_add(4)?;
-                Some(u32::from_le_bytes(data.get(off..end)?.try_into().ok()?) as u64)
+                Some(u64::from(u32::from_le_bytes(data.get(off..end)?.try_into().ok()?)))
             }
             Self::B64 => {
                 let end = off.checked_add(8)?;
@@ -424,7 +424,7 @@ impl MultiImageScanner {
 
     #[must_use]
     pub fn total_candidates(&self) -> usize {
-        self.results.values().map(|v| v.len()).sum()
+        self.results.values().map(std::vec::Vec::len).sum()
     }
 }
 

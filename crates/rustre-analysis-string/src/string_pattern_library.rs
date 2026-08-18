@@ -629,7 +629,7 @@ fn try_parse_ipv4(bytes: &[u8], start: usize) -> Option<(String, usize)> {
         let mut val = 0u16;
         let mut digits = 0;
         while pos < bytes.len() && bytes[pos].is_ascii_digit() && digits < 3 {
-            val = val * 10 + (bytes[pos] - b'0') as u16;
+            val = val * 10 + u16::from(bytes[pos] - b'0');
             pos += 1;
             digits += 1;
         }

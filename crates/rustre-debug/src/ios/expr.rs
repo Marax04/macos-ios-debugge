@@ -44,7 +44,7 @@ use crate::expression_evaluator::{
 };
 use crate::expression_evaluator::error::{DebugError, DebugResult};
 
-use crate::ios::arm64::{Arm64RegisterFile, NUM_GENERAL, lookup_register};
+use crate::ios::arm64::{Arm64RegisterFile, NUM_GENERAL, RegClass, lookup_register};
 
 // ---------------------------------------------------------------------------
 // Limits
@@ -102,13 +102,134 @@ pub fn is_arm64_register(name: &str) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct Arm64RegisterView {
     file: Arm64RegisterFile,
+    /// Whether the `v` file of `file` was actually read from the target.
+    ///
+    /// [`Arm64RegisterFile::new`] starts `v` at all-zero, so without this flag
+    /// a view built from a source that cannot carry 128-bit registers (the
+    /// [`crate::RegisterSet`] path: `RegisterMap::decode` skips every register
+    /// wider than 8 bytes by design) answers `$d0` with a fabricated `0` that
+    /// no caller can tell from a real zero. `false` makes every vector view
+    /// (`v`/`q`/`d`/`s`/`h`/`b`) *unreadable* instead, which the evaluator
+    /// reports as `UndefinedRegister` — the same refusal
+    /// `AppleDebugger::get_register("v0")` already emits.
+    vectors_read: bool,
+    /// Whether `file.fpsr` was actually read from the target.
+    ///
+    /// Same reasoning as [`Self::vectors_read`], applied to the class the
+    /// [`crate::RegisterSet`] path CAN carry: `fpsr`/`fpcr` are 32-bit, so
+    /// `RegisterMap::decode` does report them — but a stub that omits them
+    /// would otherwise be answered with `Arm64RegisterFile::new`'s zero, which
+    /// reads exactly like a real "no FP exception raised".
+    fpsr_read: bool,
+    /// Whether `file.fpcr` was actually read from the target. See
+    /// [`Self::fpsr_read`]; the two are tracked separately because a stub may
+    /// report one and not the other.
+    fpcr_read: bool,
+    /// Per-register witness for the general file: `general_read[i]` is true iff
+    /// `x{i}` came from the target. Same fabrication rule as
+    /// [`Self::vectors_read`]: `RegisterMap::decode` skips a register whose
+    /// `RegisterInfo.offset` is `None`, so a stub can leave holes, and a hole
+    /// answered with `Arm64RegisterFile::new`'s zero is indistinguishable from
+    /// a real zero.
+    general_read: [bool; NUM_GENERAL],
+    /// Whether `cpsr`/`nzcv` came from the target. See [`Self::general_read`].
+    cpsr_read: bool,
 }
 
 impl Arm64RegisterView {
-    /// Wrap a register file read from the target.
+    /// Wrap a register file whose whole contents — vector file included — was
+    /// read from the target.
+    ///
+    /// Use [`Self::without_vectors`] when the source could not carry `v`.
     #[must_use]
     pub const fn new(file: Arm64RegisterFile) -> Self {
-        Self { file }
+        Self { file, vectors_read: true, fpsr_read: true, fpcr_read: true, general_read: [true; NUM_GENERAL], cpsr_read: true }
+    }
+
+    /// Wrap a register file whose `v` registers were NEVER read.
+    ///
+    /// The general registers read normally; every vector view is refused
+    /// rather than answered with the zero `Arm64RegisterFile::new` left there.
+    #[must_use]
+    pub const fn without_vectors(file: Arm64RegisterFile) -> Self {
+        Self { file, vectors_read: false, fpsr_read: false, fpcr_read: false, general_read: [true; NUM_GENERAL], cpsr_read: true }
+    }
+
+    /// Mark `fpsr` / `fpcr` as having come from the target.
+    ///
+    /// A `None` leaves that register refused rather than answered with a zero
+    /// the caller could not tell from a real one.
+    #[must_use]
+    pub fn with_fp_control(mut self, fpsr: Option<u32>, fpcr: Option<u32>) -> Self {
+        if let Some(v) = fpsr {
+            self.file.fpsr = v;
+            self.fpsr_read = true;
+        }
+        if let Some(v) = fpcr {
+            self.file.fpcr = v;
+            self.fpcr_read = true;
+        }
+        self
+    }
+
+    /// Record which general registers, and whether `cpsr`, came from the
+    /// target.
+    ///
+    /// A `false` entry makes that register *unreadable* (`UndefinedRegister`)
+    /// instead of answering the zero `Arm64RegisterFile::new` left there.
+    #[must_use]
+    pub const fn with_read_mask(mut self, general: [bool; NUM_GENERAL], cpsr: bool) -> Self {
+        self.general_read = general;
+        self.cpsr_read = cpsr;
+        self
+    }
+
+    /// Whether `x{index}` of this view came from the target.
+    #[must_use]
+    pub fn general_read(&self, index: usize) -> bool {
+        self.general_read.get(index).copied().unwrap_or(true)
+    }
+
+    /// Whether `cpsr` of this view came from the target.
+    #[must_use]
+    pub const fn cpsr_read(&self) -> bool {
+        self.cpsr_read
+    }
+
+    /// Whether `fpsr` of this view came from the target.
+    #[must_use]
+    pub const fn fpsr_read(&self) -> bool {
+        self.fpsr_read
+    }
+
+    /// Whether `fpcr` of this view came from the target.
+    #[must_use]
+    pub const fn fpcr_read(&self) -> bool {
+        self.fpcr_read
+    }
+
+    /// Whether the vector file of this view came from the target.
+    #[must_use]
+    pub const fn vectors_read(&self) -> bool {
+        self.vectors_read
+    }
+
+    /// The full 128 bits of a vector register, when they were read.
+    ///
+    /// This is the accessor the 64-bit [`RegisterState`] API cannot serve:
+    /// `Arm64RegisterFile::get` can only hand back the low half of a `q`/`v`,
+    /// and silently halving a 128-bit value is the same class of defect as
+    /// fabricating a zero.
+    #[must_use]
+    pub fn vector(&self, name: &str) -> Option<u128> {
+        if !self.vectors_read {
+            return None;
+        }
+        let spec = lookup_register(name)?;
+        if !matches!(spec.class, RegClass::Vector) {
+            return None;
+        }
+        self.file.v.get(spec.index as usize).copied()
     }
 
     /// The underlying register file.
@@ -137,7 +258,8 @@ impl Arm64RegisterView {
         file.v = regs.v;
         file.fpsr = regs.fpsr;
         file.fpcr = regs.fpcr;
-        Self { file }
+        // The mock's block carries the whole `v` file, so vectors are real here.
+        Self { file, vectors_read: true, fpsr_read: true, fpcr_read: true, general_read: [true; NUM_GENERAL], cpsr_read: true }
     }
 }
 
@@ -145,13 +267,46 @@ impl RegisterState for Arm64RegisterView {
     fn read_register(&self, name: &str) -> Option<u64> {
         // `Arm64RegisterFile::get` already truncates to the width of the *view*
         // that was named, so `$w0` on `x0 = 0x1_0000_0001` is 1, not garbage.
+        // Vector views are the exception in two ways, and both end in `None`
+        // (which the evaluator turns into `UndefinedRegister`) rather than in a
+        // number the caller cannot audit:
+        //  * `vectors_read == false` means the `v` file was never read, so any
+        //    answer would be `Arm64RegisterFile::new`'s zero;
+        //  * a `v`/`q` view is 128 bits and does not fit this u64-shaped API —
+        //    `truncate` is a no-op at >= 64 bits, so `get` would hand back the
+        //    LOW HALF as if it were the whole register.
+        if let Some(spec) = lookup_register(name) {
+            if matches!(spec.class, RegClass::Vector) && (!self.vectors_read || spec.bits > 64) {
+                return None;
+            }
+            // The FP control class is fabricated in exactly the same way when
+            // it was never read: `Arm64RegisterFile::new` leaves both at 0, and
+            // 0 is a perfectly plausible `fpsr` ("no exception raised").
+            // A general register or `cpsr` the stub never reported is refused
+            // for the same reason. `xzr`/`wzr` carry index 31, outside the
+            // mask, and stay architecturally zero.
+            if matches!(spec.class, RegClass::General)
+                && !self.general_read(spec.index as usize)
+            {
+                return None;
+            }
+            if matches!(spec.class, RegClass::Flags) && !self.cpsr_read {
+                return None;
+            }
+            if matches!(spec.class, RegClass::FpControl) {
+                let read = if spec.index == 0 { self.fpsr_read } else { self.fpcr_read };
+                if !read {
+                    return None;
+                }
+            }
+        }
         self.file.get(name).ok()
     }
 
     fn all_registers(&self) -> Vec<(String, u64)> {
         arm64_register_names()
             .into_iter()
-            .filter_map(|n| self.file.get(&n).ok().map(|v| (n, v)))
+            .filter_map(|n| self.read_register(&n).map(|v| (n, v)))
             .collect()
     }
 }
@@ -167,10 +322,12 @@ impl RegisterState for Arm64RegisterView {
 #[must_use]
 pub fn register_view_from_set(set: &crate::RegisterSet) -> Arm64RegisterView {
     let mut file = Arm64RegisterFile::new();
+    let mut general_read = [false; NUM_GENERAL];
     for i in 0..NUM_GENERAL {
         if let Some(v) = set.get(&format!("x{i}")) {
             if let Some(slot) = file.x.get_mut(i) {
                 *slot = v;
+                general_read[i] = true;
             }
         }
     }
@@ -178,17 +335,31 @@ pub fn register_view_from_set(set: &crate::RegisterSet) -> Arm64RegisterView {
     if set.get("x29").is_none() {
         if let (Some(fp), Some(slot)) = (set.fp, file.x.get_mut(29)) {
             *slot = fp;
+            general_read[29] = true;
         }
     }
     if set.get("x30").is_none() {
         if let (Some(lr), Some(slot)) = (set.lr, file.x.get_mut(30)) {
             *slot = lr;
+            general_read[30] = true;
         }
     }
     file.sp = set.sp;
     file.pc = set.pc;
-    file.cpsr = u32::try_from(set.get("cpsr").unwrap_or(0) & 0xFFFF_FFFF).unwrap_or(0);
-    Arm64RegisterView::new(file)
+    let cpsr = set.get("cpsr");
+    file.cpsr = u32::try_from(cpsr.unwrap_or(0) & 0xFFFF_FFFF).unwrap_or(0);
+    // A `RegisterSet` is a map of u64: `RegisterMap::decode` skips every
+    // register wider than 8 bytes, so `v` was NOT read and must not be
+    // answered. See `Arm64RegisterView::without_vectors`.
+    // `fpsr`/`fpcr` are 32-bit, so `RegisterMap::decode` DOES carry them: they
+    // are read here rather than left at `Arm64RegisterFile::new`'s zero, and a
+    // set that lacks them leaves them refused (see `with_fp_control`).
+    let narrow = |name: &str| -> Option<u32> {
+        set.get(name).map(|v| u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0))
+    };
+    Arm64RegisterView::without_vectors(file)
+        .with_read_mask(general_read, cpsr.is_some())
+        .with_fp_control(narrow("fpsr"), narrow("fpcr"))
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +714,7 @@ pub type LiveExprSession<R> = AppleExprSession<TargetMemory<R>>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ios::arm64::RegClass;
+
     use crate::ios::mock_client::{LoopbackTransport, RspClient as MockRspClient};
     use crate::ios::mock_debugserver::{MemoryRegion, MockDebugserver, Perms};
 
@@ -602,6 +773,140 @@ mod tests {
         assert_eq!(view.read_register("lr"), Some(0xBBBB));
         assert_eq!(view.read_register("x30"), Some(0xBBBB));
         assert_eq!(view.read_register("nope"), None);
+    }
+
+    /// `fpsr`/`fpcr` are 32-bit, so `RegisterMap::decode` DOES carry them in a
+    /// [`crate::RegisterSet`]. They must reach the evaluator with the target's
+    /// value, and — when the stub did not report them — must be refused rather
+    /// than answered with `Arm64RegisterFile::new`'s zero.
+    #[test]
+    fn a_view_from_a_register_set_carries_fpsr_and_fpcr() {
+        let mut set = crate::RegisterSet::new();
+        set.set("x0", 1);
+        set.set("fpsr", 0x0000_0010);
+        set.set("fpcr", 0x0008_0000);
+        let view = register_view_from_set(&set);
+        assert_eq!(view.read_register("fpsr"), Some(0x0000_0010), "fpsr thrown away");
+        assert_eq!(view.read_register("fpcr"), Some(0x0008_0000), "fpcr thrown away");
+
+        // Not reported by the stub => refused, not fabricated.
+        let mut bare = crate::RegisterSet::new();
+        bare.set("x0", 1);
+        let bare_view = register_view_from_set(&bare);
+        assert_eq!(bare_view.read_register("fpsr"), None, "fabricated fpsr zero");
+        assert_eq!(bare_view.read_register("fpcr"), None, "fabricated fpcr zero");
+    }
+
+    /// The general file and `cpsr` get the same treatment as the vector file:
+    /// a register the stub never reported must be REFUSED, not answered with
+    /// `Arm64RegisterFile::new`'s zero.
+    ///
+    /// This case is not hypothetical: `RegisterInfo.offset` is `Option<u32>`
+    /// and `RegisterMap::decode` skips a register that has none, so a stub whose
+    /// `qRegisterInfo` describes `cpsr` without an `offset:` produces exactly
+    /// this `RegisterSet`. Answering `p $nzcv` with 0 there reads as "the last
+    /// compare was not equal" when the truth is "the flags were never read".
+    #[test]
+    fn a_view_from_a_register_set_refuses_general_and_flag_registers_the_stub_omitted() {
+        let mut set = crate::RegisterSet::new();
+        set.set("x0", 0xABCD);
+        set.set("x5", 0x1234);
+        set.set("cpsr", 0x6000_0000);
+        set.pc = 0x4000;
+        set.sp = 0x8000;
+        let view = register_view_from_set(&set);
+        assert_eq!(view.read_register("x0"), Some(0xABCD));
+        assert_eq!(view.read_register("x5"), Some(0x1234));
+        assert_eq!(view.read_register("w5"), Some(0x1234));
+        assert_eq!(view.read_register("cpsr"), Some(0x6000_0000));
+        assert_eq!(view.read_register("nzcv"), Some(0x6000_0000));
+
+        // Reported by the stub for neither name.
+        let mut bare = crate::RegisterSet::new();
+        bare.set("x0", 7);
+        bare.pc = 0x4000;
+        bare.sp = 0x8000;
+        let bare_view = register_view_from_set(&bare);
+        assert_eq!(bare_view.read_register("x0"), Some(7));
+        for n in ["x5", "w5", "x1", "x28"] {
+            assert_eq!(bare_view.read_register(n), None, "{n} was never read from the target");
+        }
+        for n in ["cpsr", "nzcv"] {
+            assert_eq!(bare_view.read_register(n), None, "{n} was never read from the target");
+        }
+        // `xzr`/`wzr` are architecturally zero, not unreported.
+        assert_eq!(bare_view.read_register("xzr"), Some(0));
+        // sp/pc are carried by dedicated fields, not by the name map.
+        assert_eq!(bare_view.read_register("sp"), Some(0x8000));
+        assert_eq!(bare_view.read_register("pc"), Some(0x4000));
+        let all = bare_view.all_registers();
+        assert!(all.iter().all(|(n, _)| n != "x5" && n != "cpsr"), "{all:?}");
+    }
+
+    /// A view built from a [`crate::RegisterSet`] has no vector data, and says
+    /// so instead of handing back `Arm64RegisterFile::new`'s zero.
+    #[test]
+    fn a_view_from_a_register_set_refuses_vector_registers() {
+        let mut set = crate::RegisterSet::new();
+        set.set("x0", 0xABCD);
+        set.pc = 0x4000;
+        set.sp = 0x8000;
+        let view = register_view_from_set(&set);
+        assert!(!view.vectors_read());
+        assert_eq!(view.read_register("x0"), Some(0xABCD));
+        for n in ["v0", "q0", "d0", "s0", "h0", "b0", "d7"] {
+            assert_eq!(view.read_register(n), None, "{n} was never read from the target");
+            assert_eq!(view.vector(n), None, "{n}");
+        }
+        assert!(view.all_registers().iter().all(|(n, _)| !n.starts_with('d')));
+    }
+
+    /// End to end, through the live `AppleDebugger` API: `evaluate("$d0")` must
+    /// not answer `Ok(0)` for a vector register the register-set decode never
+    /// read. The mock's thread really holds the bits of `100.0f64`, so a `0`
+    /// here is fabricated, not observed — and `get_register("v0")` already
+    /// refuses the same register, so answering would make the two API doors
+    /// contradict each other.
+    ///
+    /// This test lives here rather than beside `evaluate` because
+    /// [`crate::ios::apple_debugger::LoopbackFactory`] is public API.
+    #[tokio::test]
+    async fn evaluate_refuses_a_vector_register_instead_of_answering_zero() {
+        use crate::ios::apple_debugger::{AppleDebugger, LoopbackFactory};
+        use crate::{DebugError, Debugger, ProcessId};
+        use std::sync::Arc;
+
+        let mut srv = MockDebugserver::new(4242);
+        srv.threads_mut()[0].regs.v[0] = 0x4059_0000_0000_0000; // 100.0f64
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let tid = dbg.current_thread().await.expect("current thread");
+
+        for expr in ["$d0", "$q0", "$v0", "$s0"] {
+            match dbg.evaluate(tid, expr).await {
+                Ok(v) => panic!(
+                    "{expr} evaluated to {:#x}: a vector register that was never read from the target must not answer at all",
+                    v.value
+                ),
+                Err(DebugError::RegisterError(_) | DebugError::Unsupported(_)) => {}
+                Err(other) => panic!("{expr}: expected a register refusal, got {other:?}"),
+            }
+        }
+        // The refusal is specific: general registers still evaluate.
+        dbg.evaluate(tid, "$x0 + 1").await.expect("general registers still evaluate");
+    }
+
+    /// Even with the vector file read, the 64-bit `RegisterState` API refuses
+    /// the 128-bit views rather than silently returning their low half.
+    #[test]
+    fn a_128_bit_vector_view_is_refused_not_halved() {
+        let mut f = Arm64RegisterFile::new();
+        f.v[2] = 0x1111_2222_3333_4444_5555_6666_7777_8888;
+        let view = Arm64RegisterView::new(f);
+        assert_eq!(view.read_register("d2"), Some(0x5555_6666_7777_8888));
+        assert_eq!(view.read_register("q2"), None);
+        assert_eq!(view.read_register("v2"), None);
+        assert_eq!(view.vector("q2"), Some(0x1111_2222_3333_4444_5555_6666_7777_8888));
     }
 
     #[test]

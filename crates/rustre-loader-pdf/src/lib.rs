@@ -469,7 +469,7 @@ impl Loader for PdfLoader {
     }
 
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
-        let base = input.hints.base_address().map_or(0_u64, |a| a.as_u64());
+        let base = input.hints.base_address().map_or(0_u64, rustre_core::Address::as_u64);
 
         let mut mem = Memory::new();
         let size = input.data.len() as u64;
@@ -1634,7 +1634,7 @@ impl PdfParser {
             .get_array("W")
             .map(|a| {
                 a.iter()
-                    .filter_map(|o| o.as_int())
+                    .filter_map(PdfObject::as_int)
                     .map(|n| n as usize)
                     .collect()
             })
@@ -1647,7 +1647,7 @@ impl PdfParser {
             .get_array("Index")
             .map(|a| {
                 a.iter()
-                    .filter_map(|o| o.as_int())
+                    .filter_map(PdfObject::as_int)
                     .map(|n| n as u32)
                     .collect()
             })
@@ -2112,7 +2112,7 @@ impl PdfParser {
                     }
                     let mut val: u32 = 0;
                     for &b in &group {
-                        val = val * 85 + (b - 33) as u32;
+                        val = val * 85 + u32::from(b - 33);
                     }
                     let bytes = val.to_be_bytes();
                     out.extend_from_slice(&bytes[..group_len - 1]);
@@ -2134,7 +2134,7 @@ impl PdfParser {
             if group_len == 5 {
                 let mut val: u32 = 0;
                 for &b in &group {
-                    val = val * 85 + (b - 33) as u32;
+                    val = val * 85 + u32::from(b - 33);
                 }
                 out.extend_from_slice(&val.to_be_bytes());
                 group_len = 0;
@@ -2230,7 +2230,7 @@ impl PdfParser {
                             PdfObject::Stream { data, .. } => {
                                 Some(String::from_utf8_lossy(data).into_owned())
                             }
-                            _ => r.as_str_lossy().map(|s| s.into_owned()),
+                            _ => r.as_str_lossy().map(std::borrow::Cow::into_owned),
                         };
                         if let Some(s) = src {
                             out.push((path.to_string(), s));
@@ -2315,7 +2315,7 @@ impl PdfParser {
                 {
                     let name = d
                         .get("F")
-                        .and_then(|o| self.resolve(o).as_str_lossy().map(|s| s.into_owned()))
+                        .and_then(|o| self.resolve(o).as_str_lossy().map(std::borrow::Cow::into_owned))
                         .unwrap_or_else(|| "unknown".into());
                     if let Some(ef_obj) = d.get("EF")
                         && let Some(ef_dict) = self.resolve(ef_obj).as_dict().cloned()
@@ -2413,7 +2413,7 @@ const fn hex_nibble_p(b: u8) -> u8 {
 fn read_be_uint(data: &[u8], offset: usize, width: usize) -> u64 {
     let mut val = 0u64;
     for i in 0..width {
-        val = (val << 8) | data.get(offset + i).copied().unwrap_or(0) as u64;
+        val = (val << 8) | u64::from(data.get(offset + i).copied().unwrap_or(0));
     }
     val
 }
@@ -2459,7 +2459,7 @@ fn parser_png_predictor(
                 0 => raw,
                 1 => raw.wrapping_add(a),
                 2 => raw.wrapping_add(b),
-                3 => raw.wrapping_add(((a as u16 + b as u16) / 2) as u8),
+                3 => raw.wrapping_add(((u16::from(a) + u16::from(b)) / 2) as u8),
                 4 => raw.wrapping_add(paeth_p(a, b, c)),
                 _ => raw,
             };
@@ -2498,7 +2498,7 @@ fn parser_lzw_decompress(data: &[u8], early_change: bool) -> Result<Vec<u8>, Pdf
     let mut prev: Option<u16> = None;
     loop {
         while bits < code_size && bi < data.len() {
-            bit_buf = (bit_buf << 8) | data[bi] as u32;
+            bit_buf = (bit_buf << 8) | u32::from(data[bi]);
             bits += 8;
             bi += 1;
         }
@@ -2719,7 +2719,7 @@ impl PdfMalwareReport {
                     3 => ObfuscationLevel::Heavy,
                     _ => ObfuscationLevel::Extreme,
                 })
-                .max_by_key(|o| o.score())
+                .max_by_key(ObfuscationLevel::score)
                 .unwrap_or(ObfuscationLevel::None)
         };
 
@@ -3016,7 +3016,7 @@ impl PdfMalwareReport {
             score += (js.analysis.network_urls.len() as u32) * 3;
         }
         score += (report.suspicious_streams.len() as u32) * 5;
-        score += report.obfuscation_level.score() as u32;
+        score += u32::from(report.obfuscation_level.score());
         score.min(100) as u8
     }
 }

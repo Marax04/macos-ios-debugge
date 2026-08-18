@@ -262,7 +262,7 @@ fn unescape_unicode(s: &str) -> String {
         {
             let hex = &s[i + 2..i + 6];
             if let Ok(cp) = u16::from_str_radix(hex, 16) {
-                if let Some(ch) = char::from_u32(cp as u32) {
+                if let Some(ch) = char::from_u32(u32::from(cp)) {
                     result.push(ch);
                     i += 6;
                     continue;
@@ -528,7 +528,7 @@ impl PdfJavaScriptExtractor {
     pub fn summarize(entries: &[ScriptEntry]) -> ExtractionSummary {
         let total_scripts = entries.len();
         let malicious_scripts = entries.iter().filter(|e| e.any_malicious).count();
-        let total_script_bytes = entries.iter().map(|e| e.combined_len()).sum();
+        let total_script_bytes = entries.iter().map(ScriptEntry::combined_len).sum();
         let open_action_present = entries.iter().any(|e| {
             e.actions.iter().any(|a| matches!(a.trigger, JsTrigger::OpenAction))
         });
@@ -734,14 +734,14 @@ fn memmem(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
 
 /// Decode a hex-encoded PDF string (pairs of hex digits).
 fn hex_decode_str(s: &str) -> String {
-    let clean: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    let clean: String = s.chars().filter(char::is_ascii_hexdigit).collect();
     clean
         .as_bytes()
         .chunks(2)
         .filter_map(|chunk| {
             let pair = std::str::from_utf8(chunk).ok()?;
             let byte = u8::from_str_radix(pair, 16).ok()?;
-            char::from_u32(byte as u32)
+            char::from_u32(u32::from(byte))
         })
         .collect()
 }
@@ -766,11 +766,11 @@ fn read_pdf_literal_string(data: &[u8], start: usize) -> Option<String> {
                     b')'  => result.push(b')'),
                     d @ b'0'..=b'7' => {
                         // Octal escape (up to 3 digits).
-                        let mut octal = (d - b'0') as u16;
+                        let mut octal = u16::from(d - b'0');
                         for _ in 0..2 {
                             if i + 1 < data.len() && data[i + 1].is_ascii_octdigit() {
                                 i += 1;
-                                octal = octal * 8 + (data[i] - b'0') as u16;
+                                octal = octal * 8 + u16::from(data[i] - b'0');
                             } else {
                                 break;
                             }

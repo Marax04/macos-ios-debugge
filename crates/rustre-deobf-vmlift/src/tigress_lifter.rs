@@ -456,7 +456,7 @@ impl TigressLifter {
                             let disp = i32::from_le_bytes(disp_bytes);
                             // RIP-relative: compute absolute address
                             let rip = base_address + (i + 3 + 7) as u64;
-                            let table_addr = (rip as i64 + disp as i64) as u64;
+                            let table_addr = (rip as i64 + i64::from(disp)) as u64;
                             return Some(table_addr);
                         }
                     }
@@ -504,7 +504,7 @@ impl TigressLifter {
         for handler in handlers {
             for window in handler.body.windows(4) {
                 if window[0] == 0x48 && window[1] == 0x8B && (window[2] & 0x40) != 0 {
-                    let offset = window[3] as i32;
+                    let offset = i32::from(window[3]);
                     max_offset = max_offset.max(offset);
                 }
             }

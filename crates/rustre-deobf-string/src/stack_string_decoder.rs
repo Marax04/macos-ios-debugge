@@ -81,7 +81,7 @@ impl StackString {
             return None;
         }
         let base_offset = pushes[0].offset;
-        let null_terminated = pushes.last().map_or(false, |p| p.is_null_terminator());
+        let null_terminated = pushes.last().map_or(false, CharPush::is_null_terminator);
         let raw: Vec<u8> = pushes
             .iter()
             .filter(|p| !p.is_null_terminator())

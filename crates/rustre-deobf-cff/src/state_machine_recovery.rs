@@ -260,7 +260,7 @@ impl TransitionMap {
     pub fn get(&self, state_id: u64) -> &[Transition] {
         self.inner
             .get(&state_id)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
     }
 
@@ -272,7 +272,7 @@ impl TransitionMap {
     /// Total transition count.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner.values().map(|v| v.len()).sum()
+        self.inner.values().map(std::vec::Vec::len).sum()
     }
 
     #[must_use]

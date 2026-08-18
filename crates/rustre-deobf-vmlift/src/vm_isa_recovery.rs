@@ -244,7 +244,7 @@ impl DispatchTable {
                 break;
             }
             let addr = match ptr {
-                4 => u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as u64,
+                4 => u64::from(u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap())),
                 8 => u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap()),
                 _ => break,
             };

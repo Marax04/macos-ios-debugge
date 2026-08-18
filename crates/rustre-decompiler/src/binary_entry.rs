@@ -1440,6 +1440,33 @@ fn callsite_argc_from_bodies(
                 pronto = [false; 4];
                 continue;
             }
+            // ⚠ #6870 — NON ogni istruzione SCRIVE il proprio operando di
+            // destinazione. `cmp %rax, %rcx` e `test %rcx, %rcx` leggono
+            // soltanto, e contarli come preparazione di un argomento gonfia il
+            // minimo osservato. E' il difetto che ha fatto fallire la direzione
+            // «alza» (§83.2): la mappa affermava che ogni sito preparava almeno
+            // N registri quando non era vero, e le firme alzate a quel N
+            // producevano incoerenze.
+            //
+            // Lista in POSITIVO (solo istruzioni che scrivono davvero), non in
+            // negativo: un elenco di esclusioni dimentica sempre qualcosa, e
+            // qui sbagliare per difetto e' sicuro — un'evidenza in meno non
+            // inventa nulla.
+            let mn = ins.mnemonic.to_ascii_lowercase();
+            let m = crate::att_mnemonic_stem(&mn);
+            let scrive = matches!(
+                m,
+                "mov" | "movz" | "movs" | "movzx" | "movsx" | "movabs" | "lea"
+                    | "add" | "sub" | "and" | "or" | "xor" | "imul" | "mul"
+                    | "shl" | "shr" | "sar" | "neg" | "not" | "inc" | "dec"
+                    | "pop" | "cmov" | "sete" | "setne" | "xchg" | "adc" | "sbb"
+            ) || m.starts_with("cmov")
+                || m.starts_with("set")
+                || m.starts_with("movz")
+                || m.starts_with("movs");
+            if !scrive {
+                continue;
+            }
             let o = ins.operands.to_ascii_lowercase();
             // `split_two` restituisce (destinazione, sorgente) gestendo gia'
             // l'ordine AT&T, dove la destinazione e' l'ULTIMO operando.

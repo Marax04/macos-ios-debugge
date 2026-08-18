@@ -603,7 +603,9 @@ pub fn decode_tagged_number(tp: &TaggedPointer) -> ObjcResult<TaggedNumber> {
         1 => Ok(TaggedNumber::Int(sext(8))),
         2 => Ok(TaggedNumber::Int(sext(16))),
         3 => Ok(TaggedNumber::Int(sext(32))),
-        4 => Ok(TaggedNumber::Int(sext(60))),
+        // Il payload è di 60 bit e 4 se ne vanno nel nibble di tipo: `value`
+        // ha 56 bit utili, quindi il bit di segno è il 55, non il 59.
+        4 => Ok(TaggedNumber::Int(sext(56))),
         5 => Ok(TaggedNumber::Float(f32::from_bits(
             u32::try_from(value & 0xffff_ffff).unwrap_or(0),
         ))),
@@ -1994,6 +1996,24 @@ mod tests {
             decode_tagged_number(&mk(1, 9)),
             Err(ObjcError::Unsupported(_))
         ));
+    }
+
+    /// Tipo 4 (long long): il payload ha 56 bit utili, non 60. L'estensione del
+    /// segno deve partire dal bit 55, altrimenti un negativo grande diventa un
+    /// enorme positivo.
+    #[test]
+    fn tagged_nsnumber_type4_sign_extends_from_payload_width() {
+        let negative: i64 = -(1i64 << 40);
+        let value = (negative as u64) & 0x00FF_FFFF_FFFF_FFFF;
+        let tp = decode_tagged_pointer(
+            (1u64 << 63) | (3 << 60) | (value << 4) | 4,
+            ObjcAbi::Arm64,
+        )
+        .unwrap();
+        assert_eq!(
+            decode_tagged_number(&tp).unwrap(),
+            TaggedNumber::Int(negative)
+        );
     }
 
     #[test]

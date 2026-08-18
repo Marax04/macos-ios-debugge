@@ -396,7 +396,7 @@ impl TraceSerializer {
                     ));
                 }
                 let event = decode_event(data, &mut pos)?;
-                for i in 0..repeat as u64 {
+                for i in 0..u64::from(repeat) {
                     session.push(event.clone(), thread_id, timestamp_ns + i * 100);
                 }
             }

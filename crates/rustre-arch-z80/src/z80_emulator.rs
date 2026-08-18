@@ -442,7 +442,7 @@ impl Z80State {
         };
         let _ = pc0;
 
-        match op as u16 {
+        match u16::from(op) {
             // NOP
             0x00 => Ok(4),
             // LD rp,nn

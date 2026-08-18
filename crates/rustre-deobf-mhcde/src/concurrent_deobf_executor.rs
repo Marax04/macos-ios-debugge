@@ -352,7 +352,7 @@ impl ConcurrentDeobfExecutor {
         // prefer to surface whatever partial results were collected rather than
         // silently discarding them.
         let all_results = Arc::try_unwrap(results)
-            .map(|m| m.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner()))
+            .map(|m| m.into_inner().unwrap_or_else(std::sync::PoisonError::into_inner))
             .unwrap_or_default();
 
         let viable_count = all_results.iter().filter(|r| r.viable).count();

@@ -80,7 +80,7 @@ impl StrategyFeature {
             StrategyFeature::JumpOverJunkRatio(v)  => *v,
             StrategyFeature::CodeBloatFactor(v)    => (*v).min(10.0) / 10.0,
             StrategyFeature::HasVirtualisation(b)  => if *b { 1.0 } else { 0.0 },
-            StrategyFeature::ObfPatternCount(n)    => (*n as f64 / 20.0).min(1.0),
+            StrategyFeature::ObfPatternCount(n)    => (f64::from(*n) / 20.0).min(1.0),
             StrategyFeature::CurrentScore(v)       => *v,
             StrategyFeature::CurrentComplexity(c)  => (*c as f64 / 1_000_000.0).min(1.0),
             StrategyFeature::PlateauDetected(b)    => if *b { 1.0 } else { 0.0 },
@@ -113,7 +113,7 @@ impl FeatureVector {
     /// Look up the first feature of a given name and return its f64 value.
     #[must_use]
     pub fn get_f64(&self, name: &str) -> Option<f64> {
-        self.features.iter().find(|f| f.name() == name).map(|f| f.as_f64())
+        self.features.iter().find(|f| f.name() == name).map(StrategyFeature::as_f64)
     }
 
     /// Iterate over all features.
@@ -314,7 +314,7 @@ impl DeobfStrategySelector {
         // Blend in history-based scores.
         for (&strat, &acc) in &self.success {
             let uses = self.use_count.get(&strat).copied().unwrap_or(1).max(1);
-            let history_score = acc / uses as f64;
+            let history_score = acc / f64::from(uses);
             let entry = scores.entry(strat).or_default();
             let hist_contribution = history_score * (1.0 - self.rule_weight);
             entry.0 += hist_contribution;
@@ -374,7 +374,7 @@ impl DeobfStrategySelector {
         if uses == 0 {
             return 0.0;
         }
-        self.success.get(&strategy).copied().unwrap_or(0.0) / uses as f64
+        self.success.get(&strategy).copied().unwrap_or(0.0) / f64::from(uses)
     }
 
     /// Reset history and success scores.

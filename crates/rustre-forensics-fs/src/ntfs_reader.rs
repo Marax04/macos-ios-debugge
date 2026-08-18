@@ -119,8 +119,8 @@ impl PartitionEntry {
         }
         let _status = data[0];
         let part_type = data[4];
-        let start_lba = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as u64;
-        let size_sectors = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as u64;
+        let start_lba = u64::from(u32::from_le_bytes([data[8], data[9], data[10], data[11]]));
+        let size_sectors = u64::from(u32::from_le_bytes([data[12], data[13], data[14], data[15]]));
         if size_sectors == 0 {
             return None;
         }

@@ -64,7 +64,7 @@ impl PdfString {
         if self.bytes.starts_with(&[0xFE, 0xFF]) {
             // UTF-16 BE
             let words: Vec<u16> = self.bytes[2..].chunks(2)
-                .map(|c| if c.len() == 2 { ((c[0] as u16) << 8) | c[1] as u16 } else { 0 })
+                .map(|c| if c.len() == 2 { (u16::from(c[0]) << 8) | u16::from(c[1]) } else { 0 })
                 .collect();
             String::from_utf16_lossy(&words).to_string()
         } else {
@@ -494,10 +494,10 @@ impl PdfParser {
                         b'\\' => bytes.push(b'\\'),
                         b'\n' | b'\r' => {} // line continuation
                         b'0'..=b'7' => {
-                            let mut oct = (esc - b'0') as u32;
+                            let mut oct = u32::from(esc - b'0');
                             for _ in 0..2 {
                                 if matches!(self.peek(), Some(b'0'..=b'7')) {
-                                    oct = oct * 8 + (self.data[self.pos] - b'0') as u32;
+                                    oct = oct * 8 + u32::from(self.data[self.pos] - b'0');
                                     self.pos += 1;
                                 } else { break; }
                             }
@@ -650,7 +650,7 @@ impl PdfParser {
 fn read_be_uint(bytes: &[u8], width: usize) -> u64 {
     let mut result = 0u64;
     for i in 0..width.min(bytes.len()) {
-        result = (result << 8) | bytes[i] as u64;
+        result = (result << 8) | u64::from(bytes[i]);
     }
     result
 }
@@ -723,7 +723,7 @@ fn decode_ascii85(data: &[u8]) -> Result<Vec<u8>> {
             b'~' => break,
             b'z' if count == 0 => { out.extend_from_slice(&[0u8; 4]); }
             b'!'..=b'u' => {
-                buf[count] = (b - b'!') as u32;
+                buf[count] = u32::from(b - b'!');
                 count += 1;
                 if count == 5 {
                     let v = buf[0]*85u32.pow(4) + buf[1]*85u32.pow(3) + buf[2]*85*85 + buf[3]*85 + buf[4];
@@ -748,7 +748,7 @@ fn decode_rle(data: &[u8]) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < data.len() {
-        let run = data[i] as i32;
+        let run = i32::from(data[i]);
         i += 1;
         if run == 128 { break; }
         if run >= 0 {

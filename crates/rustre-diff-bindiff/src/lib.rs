@@ -1347,14 +1347,14 @@ fn md_index_from_features(f: &FunctionFeatures) -> u64 {
     const PRIMES: [u64; 8] = [2, 3, 5, 7, 11, 13, 17, 19];
 
     let vals = [
-        f.basic_block_count as u64,
-        f.edge_count as u64,
-        f.instruction_count as u64,
-        f.caller_count as u64,
-        f.callee_count as u64,
-        f.loop_count as u64,
-        f.cyclomatic_complexity as u64,
-        f.strongly_connected_components as u64,
+        u64::from(f.basic_block_count),
+        u64::from(f.edge_count),
+        u64::from(f.instruction_count),
+        u64::from(f.caller_count),
+        u64::from(f.callee_count),
+        u64::from(f.loop_count),
+        u64::from(f.cyclomatic_complexity),
+        u64::from(f.strongly_connected_components),
     ];
 
     let mut result: u64 = 1;
@@ -1439,7 +1439,7 @@ fn ratio_proximity_f64(x: u32, y: u32) -> f64 {
     if hi == 0 {
         return 1.0;
     }
-    lo as f64 / hi as f64
+    f64::from(lo) / f64::from(hi)
 }
 
 /// Similarity between two MD-index values.
@@ -1945,7 +1945,7 @@ impl BinDiff {
             match_functions_hungarian(
                 &unmatched_feats_a,
                 &unmatched_feats_b,
-                self.differ.min_similarity as f64,
+                f64::from(self.differ.min_similarity),
             )
         } else {
             // Fall back to greedy for large binaries.
@@ -5173,7 +5173,7 @@ fn count_ratio(a: u32, b: u32) -> f64 {
     if hi == 0 {
         return 1.0;
     }
-    lo as f64 / hi as f64
+    f64::from(lo) / f64::from(hi)
 }
 
 /// Exponential-decay similarity between two prime-product hashes.

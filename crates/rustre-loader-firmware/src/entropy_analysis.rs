@@ -303,7 +303,7 @@ impl EntropyAnalyzer {
             .iter()
             .filter(|&&c| c > 0)
             .map(|&c| {
-                let p = c as f64 / n;
+                let p = f64::from(c) / n;
                 -p * p.log2()
             })
             .sum()

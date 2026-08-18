@@ -83,7 +83,7 @@ impl EvalResult {
         match self {
             Self::UInt(v) => Ok(*v),
             Self::SInt(v) => Ok(*v as u64),
-            Self::Bool(b) => Ok(*b as u64),
+            Self::Bool(b) => Ok(u64::from(*b)),
             Self::Float(f) => Ok(*f as u64),
             _ => Err(EvalError::TypeMismatch {
                 expected: "integer".to_string(),
@@ -101,7 +101,7 @@ impl EvalResult {
         match self {
             Self::UInt(v) => Ok(*v as i64),
             Self::SInt(v) => Ok(*v),
-            Self::Bool(b) => Ok(*b as i64),
+            Self::Bool(b) => Ok(i64::from(*b)),
             Self::Float(f) => Ok(*f as i64),
             _ => Err(EvalError::TypeMismatch {
                 expected: "signed integer".to_string(),
@@ -134,7 +134,7 @@ impl EvalResult {
         match self {
             Self::UInt(v) => Ok(*v as f64),
             Self::SInt(v) => Ok(*v as f64),
-            Self::Bool(b) => Ok(*b as u8 as f64),
+            Self::Bool(b) => Ok(f64::from(u8::from(*b))),
             Self::Float(f) => Ok(*f),
             _ => Err(EvalError::TypeMismatch {
                 expected: "float".to_string(),
@@ -740,7 +740,7 @@ impl<'a> TemplateExprEval<'a> {
                 if n == 0 {
                     return Ok(EvalResult::UInt(0));
                 }
-                Ok(EvalResult::UInt(63 - n.leading_zeros() as u64))
+                Ok(EvalResult::UInt(63 - u64::from(n.leading_zeros())))
             }
             _ => Err(EvalError::UnknownFunction(name.to_string())),
         }

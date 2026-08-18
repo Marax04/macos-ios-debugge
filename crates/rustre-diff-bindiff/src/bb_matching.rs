@@ -114,7 +114,7 @@ impl BlockSimilarity {
         if a.pred_count == b.pred_count {
             matches += 1;
         }
-        matches as f64 / total as f64
+        f64::from(matches) / f64::from(total)
     }
 
     fn content_sim(a: &BlockFeature, b: &BlockFeature) -> f64 {

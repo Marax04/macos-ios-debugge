@@ -336,9 +336,9 @@ fn read_u64_le(bytes: &[u8], off: usize, size: usize) -> Option<u64> {
         return None;
     }
     Some(match size {
-        1 => bytes[off] as u64,
-        2 => u16::from_le_bytes(bytes[off..off + 2].try_into().ok()?) as u64,
-        4 => u32::from_le_bytes(bytes[off..off + 4].try_into().ok()?) as u64,
+        1 => u64::from(bytes[off]),
+        2 => u64::from(u16::from_le_bytes(bytes[off..off + 2].try_into().ok()?)),
+        4 => u64::from(u32::from_le_bytes(bytes[off..off + 4].try_into().ok()?)),
         8 => u64::from_le_bytes(bytes[off..off + 8].try_into().ok()?),
         _ => return None,
     })
@@ -840,7 +840,7 @@ impl ElfTemplate {
             )
         } else {
             (
-                read_u32_le(bytes, 28).unwrap_or(0) as u64,
+                u64::from(read_u32_le(bytes, 28).unwrap_or(0)),
                 read_u16_le(bytes, 42).unwrap_or(32) as usize,
                 read_u16_le(bytes, 44).unwrap_or(0) as usize,
             )
@@ -856,7 +856,7 @@ impl ElfTemplate {
             )
         } else {
             (
-                read_u32_le(bytes, 32).unwrap_or(0) as u64,
+                u64::from(read_u32_le(bytes, 32).unwrap_or(0)),
                 read_u16_le(bytes, 46).unwrap_or(40) as usize,
                 read_u16_le(bytes, 48).unwrap_or(0) as usize,
             )
@@ -978,17 +978,17 @@ impl ElfTemplate {
             let p_offset = if is_64 {
                 read_u64_le(bytes, ph_off + 8, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, ph_off + 4).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, ph_off + 4).unwrap_or(0))
             };
             let p_vaddr = if is_64 {
                 read_u64_le(bytes, ph_off + 16, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, ph_off + 8).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, ph_off + 8).unwrap_or(0))
             };
             let p_filesz = if is_64 {
                 read_u64_le(bytes, ph_off + 32, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, ph_off + 16).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, ph_off + 16).unwrap_or(0))
             };
             let p_flags = if is_64 {
                 read_u32_le(bytes, ph_off + 4).unwrap_or(0)
@@ -1072,17 +1072,17 @@ impl ElfTemplate {
             let sh_flags = if is_64 {
                 read_u64_le(bytes, sh_off + 8, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, sh_off + 8).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, sh_off + 8).unwrap_or(0))
             };
             let sh_addr = if is_64 {
                 read_u64_le(bytes, sh_off + 16, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, sh_off + 12).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, sh_off + 12).unwrap_or(0))
             };
             let sh_size = if is_64 {
                 read_u64_le(bytes, sh_off + 32, 8).unwrap_or(0)
             } else {
-                read_u32_le(bytes, sh_off + 20).unwrap_or(0) as u64
+                u64::from(read_u32_le(bytes, sh_off + 20).unwrap_or(0))
             };
 
             let children = vec![

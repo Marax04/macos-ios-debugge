@@ -175,7 +175,7 @@ impl<'a> EaFormatter<'a> {
             M68kEa::DispPc(d) => {
                 if self.resolve_pcrel {
                     // PC at end of instruction word = instr_pc + 2
-                    let target = (self.instr_pc as i64 + 2 + *d as i64) as u32;
+                    let target = (i64::from(self.instr_pc) + 2 + i64::from(*d)) as u32;
                     self.format_addr(target, "")
                 } else {
                     format!("({d},PC)")
@@ -184,7 +184,7 @@ impl<'a> EaFormatter<'a> {
             M68kEa::IdxPc { xn, xn_is_addr, xn_size, disp } => {
                 let xreg = if *xn_is_addr { self.case(format!("A{xn}")) } else { self.case(format!("D{xn}")) };
                 if self.resolve_pcrel {
-                    let base = (self.instr_pc as i64 + 2 + *disp as i64) as u32;
+                    let base = (i64::from(self.instr_pc) + 2 + i64::from(*disp)) as u32;
                     format!("({},{},PC)", self.format_addr(base, ""), xreg)
                 } else {
                     format!("({},PC,{}.{})", disp, xreg,

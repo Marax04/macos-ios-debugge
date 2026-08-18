@@ -289,8 +289,8 @@ impl DirectoryEntry {
         let attributes = data[11];
         let is_directory = attributes & 0x10 != 0;
 
-        let hi_cluster = u16::from_le_bytes([data[20], data[21]]) as u32;
-        let lo_cluster = u16::from_le_bytes([data[26], data[27]]) as u32;
+        let hi_cluster = u32::from(u16::from_le_bytes([data[20], data[21]]));
+        let lo_cluster = u32::from(u16::from_le_bytes([data[26], data[27]]));
         let first_cluster = (hi_cluster << 16) | lo_cluster;
         let file_size = u32::from_le_bytes([data[28], data[29], data[30], data[31]]);
 
@@ -742,7 +742,7 @@ impl Fat32Deep {
     /// Compute free space in bytes.
     #[must_use]
     pub fn free_space_bytes(&self) -> u64 {
-        self.fat.free_count() as u64 * (self.boot_sector.bytes_per_cluster() as u64)
+        self.fat.free_count() as u64 * u64::from(self.boot_sector.bytes_per_cluster())
     }
 
     /// Follow a cluster chain starting at `start`.

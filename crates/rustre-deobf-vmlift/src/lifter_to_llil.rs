@@ -116,8 +116,8 @@ impl VirtualInstruction {
     /// Return a disassembly-style string.
     #[must_use]
     pub fn disasm(&self) -> String {
-        let dst: Vec<String> = self.dst.iter().map(|o| o.to_string()).collect();
-        let src: Vec<String> = self.src.iter().map(|o| o.to_string()).collect();
+        let dst: Vec<String> = self.dst.iter().map(std::string::ToString::to_string).collect();
+        let src: Vec<String> = self.src.iter().map(std::string::ToString::to_string).collect();
         match (dst.is_empty(), src.is_empty()) {
             (true, true) => format!("{}", self.kind),
             (false, true) => format!("{} {}", self.kind, dst.join(", ")),
@@ -432,7 +432,7 @@ impl VmToLlilLifter {
                 return Err(LiftError::BudgetExceeded(instr_count));
             }
 
-            let opcode_id = bytecode[offset] as u16;
+            let opcode_id = u16::from(bytecode[offset]);
             let virt_addr = entry_address + offset as u64;
 
             let vop = self.isa.get_opcode(opcode_id);
@@ -498,9 +498,9 @@ impl VmToLlilLifter {
         }
         let bytes = &bytecode[imm_offset..imm_offset + size];
         let val = match size {
-            1 => bytes[0] as u64,
-            2 => u16::from_le_bytes(bytes.try_into().ok()?) as u64,
-            4 => u32::from_le_bytes(bytes.try_into().ok()?) as u64,
+            1 => u64::from(bytes[0]),
+            2 => u64::from(u16::from_le_bytes(bytes.try_into().ok()?)),
+            4 => u64::from(u32::from_le_bytes(bytes.try_into().ok()?)),
             8 => u64::from_le_bytes(bytes.try_into().ok()?),
             _ => return None,
         };

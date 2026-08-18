@@ -601,7 +601,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
         // JR e — 0x18
         0x18 => {
             let e = bytes.get(1).copied().unwrap_or(0) as i8;
-            let target = (pc as i32 + 2 + e as i32) as u16;
+            let target = (i32::from(pc) + 2 + i32::from(e)) as u16;
             GbDecoded { mnemonic: "JR".into(), operands: format!("${target:04X}"), size: 2 }
         }
         // JR cc,e — 0x20/0x28/0x30/0x38
@@ -610,7 +610,7 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
                 0x20 => "NZ", 0x28 => "Z", 0x30 => "NC", _ => "C",
             };
             let e = bytes.get(1).copied().unwrap_or(0) as i8;
-            let target = (pc as i32 + 2 + e as i32) as u16;
+            let target = (i32::from(pc) + 2 + i32::from(e)) as u16;
             GbDecoded {
                 mnemonic: "JR".into(),
                 operands: format!("{cc},${target:04X}"),

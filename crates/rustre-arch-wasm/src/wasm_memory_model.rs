@@ -197,8 +197,8 @@ impl WasmMemory {
     pub fn read_u16_le(&mut self, addr: u32) -> Option<u16> {
         self.check_bounds(addr, 2).ok()?;
         self.stats.reads += 1;
-        let lo = self.data[addr as usize] as u16;
-        let hi = self.data[(addr + 1) as usize] as u16;
+        let lo = u16::from(self.data[addr as usize]);
+        let hi = u16::from(self.data[(addr + 1) as usize]);
         Some(lo | (hi << 8))
     }
 

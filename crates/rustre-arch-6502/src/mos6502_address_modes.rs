@@ -325,7 +325,7 @@ pub fn resolve_effective_address(
             // PC points at the opcode; branch target = pc + 2 + offset.
             let target = pc
                 .wrapping_add(2)
-                .wrapping_add(offset as i16 as u16);
+                .wrapping_add(i16::from(offset) as u16);
             EffectiveAddress::BranchTarget(target)
         }
         Mos6502AddressMode::RelativeLong(offset) => {

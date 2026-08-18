@@ -449,7 +449,7 @@ impl Z80Decoder {
                     .op0(Z80Operand::A).op1(Z80Operand::Imm8(bytes[1])).raw(bytes)
             }
             (3, t, 7) => { // RST
-                let target = (t as u16) * 8;
+                let target = u16::from(t) * 8;
                 Z80Instr::new(Z80Prefix::None, "RST", 1)
                     .op0(Z80Operand::RstTarget(t * 8)).call().target(target)
             }
@@ -737,7 +737,7 @@ impl<'a> Iterator for Z80DecoderIter<'a> {
         let instr = self.decoder.decode(self.pc, &self.bytes[self.offset..])?;
         let pc = self.pc;
         self.offset += instr.len as usize;
-        self.pc = self.pc.wrapping_add(instr.len as u16);
+        self.pc = self.pc.wrapping_add(u16::from(instr.len));
         Some((pc, instr))
     }
 }

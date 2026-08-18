@@ -507,7 +507,7 @@ pub fn result_to_candidate(result: &BruteforceResult) -> KeyCandidate {
     KeyCandidate::new(
         result.key.clone(),
         result.algorithm.to_string_algorithm(),
-        result.confidence as f64 / 100.0,
+        f64::from(result.confidence) / 100.0,
     )
     .with_decrypted(result.plaintext.clone())
 }

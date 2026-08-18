@@ -157,7 +157,7 @@ impl KernelVersion {
         let patch_str = parts.get(2).copied().unwrap_or("0");
         let patch = patch_str
             .chars()
-            .take_while(|c| c.is_ascii_digit())
+            .take_while(char::is_ascii_digit)
             .collect::<String>()
             .parse()
             .unwrap_or(0);
@@ -616,7 +616,7 @@ impl FirmwareReport {
             self.embedded_os,
             self.kernel_version
                 .as_ref()
-                .map(|k| k.to_string())
+                .map(std::string::ToString::to_string)
                 .unwrap_or_else(|| "N/A".into()),
             self.risk_score,
             self.credentials.len(),

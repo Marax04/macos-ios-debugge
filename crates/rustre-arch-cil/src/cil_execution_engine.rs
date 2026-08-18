@@ -291,7 +291,7 @@ impl CilExecutionEngine {
 
                 // ldc.i4.s <int8>
                 0x1F => {
-                    let v = *opcodes.get(pc + 1)? as i8 as i32;
+                    let v = i32::from(*opcodes.get(pc + 1)? as i8);
                     stack.push(CilValue::I32(v));
                     pc += 2;
                 }
@@ -319,7 +319,7 @@ impl CilExecutionEngine {
                 0x22 => {
                     if pc + 4 >= opcodes.len() { break; }
                     let bytes = [opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]];
-                    let f = f32::from_le_bytes(bytes) as f64;
+                    let f = f64::from(f32::from_le_bytes(bytes));
                     stack.push(CilValue::F64(f));
                     pc += 5;
                 }
@@ -353,7 +353,7 @@ impl CilExecutionEngine {
                     let off = i32::from_le_bytes([
                         opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
                     ]);
-                    let next = (pc + 5) as i64 + off as i64;
+                    let next = (pc + 5) as i64 + i64::from(off);
                     if next < 0 || next as usize >= opcodes.len() { break; }
                     pc = next as usize;
                     continue;
@@ -361,7 +361,7 @@ impl CilExecutionEngine {
 
                 // br.s (short branch)
                 0x2B => {
-                    let off = *opcodes.get(pc + 1)? as i8 as i64;
+                    let off = i64::from(*opcodes.get(pc + 1)? as i8);
                     let next = (pc + 2) as i64 + off;
                     if next < 0 || next as usize >= opcodes.len() { break; }
                     pc = next as usize;
@@ -370,7 +370,7 @@ impl CilExecutionEngine {
 
                 // ── conditional branches (short) ──────────────────────────
                 0x2C..=0x37 => {
-                    let off = *opcodes.get(pc + 1)? as i8 as i64;
+                    let off = i64::from(*opcodes.get(pc + 1)? as i8);
                     let taken_pc = (pc + 2) as i64 + off;
                     let fallthrough = pc + 2;
                     let cond = self.eval_branch_short(op, &mut stack);
@@ -403,9 +403,9 @@ impl CilExecutionEngine {
                 // ── conditional branches (long) ───────────────────────────
                 0x39..=0x44 | 0x46 => {
                     if pc + 4 >= opcodes.len() { break; }
-                    let off = i32::from_le_bytes([
+                    let off = i64::from(i32::from_le_bytes([
                         opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
-                    ]) as i64;
+                    ]));
                     let taken_pc = (pc + 5) as i64 + off;
                     let fallthrough = pc + 5;
                     let cond = self.eval_branch_long(op, &mut stack);
@@ -418,9 +418,9 @@ impl CilExecutionEngine {
                 }
 
                 // ── arithmetic ───────────────────────────────────────────
-                0x58 => { self.bin_op_i32(&mut stack, |a, b| a.wrapping_add(b)); pc += 1; } // add
-                0x59 => { self.bin_op_i32(&mut stack, |a, b| a.wrapping_sub(b)); pc += 1; } // sub
-                0x5A => { self.bin_op_i32(&mut stack, |a, b| a.wrapping_mul(b)); pc += 1; } // mul
+                0x58 => { self.bin_op_i32(&mut stack, i32::wrapping_add); pc += 1; } // add
+                0x59 => { self.bin_op_i32(&mut stack, i32::wrapping_sub); pc += 1; } // sub
+                0x5A => { self.bin_op_i32(&mut stack, i32::wrapping_mul); pc += 1; } // mul
                 0x5B => { // div
                     let b = stack.pop();
                     let a = stack.pop();
@@ -489,13 +489,13 @@ impl CilExecutionEngine {
                 }
 
                 // ── conv variants ─────────────────────────────────────────
-                0x67 => { self.conv_i(&mut stack, |v| v as i8 as i64); pc += 1; }  // conv.i1
-                0x68 => { self.conv_i(&mut stack, |v| v as i16 as i64); pc += 1; } // conv.i2
-                0x69 => { self.conv_i(&mut stack, |v| v as i32 as i64); pc += 1; } // conv.i4
+                0x67 => { self.conv_i(&mut stack, |v| i64::from(v as i8)); pc += 1; }  // conv.i1
+                0x68 => { self.conv_i(&mut stack, |v| i64::from(v as i16)); pc += 1; } // conv.i2
+                0x69 => { self.conv_i(&mut stack, |v| i64::from(v as i32)); pc += 1; } // conv.i4
                 0x6A => { pc += 1; } // conv.i8 (already i64 in abstract)
                 0x6B => { // conv.r4
                     let a = stack.pop();
-                    let v = a.to_f64().unwrap_or(0.0) as f32 as f64;
+                    let v = f64::from(a.to_f64().unwrap_or(0.0) as f32);
                     stack.push(CilValue::F64(v));
                     pc += 1;
                 }
@@ -505,7 +505,7 @@ impl CilExecutionEngine {
                     stack.push(CilValue::F64(v));
                     pc += 1;
                 }
-                0x6D => { self.conv_i(&mut stack, |v| v as u32 as i64); pc += 1; } // conv.u4
+                0x6D => { self.conv_i(&mut stack, |v| i64::from(v as u32)); pc += 1; } // conv.u4
                 0x6E => { self.conv_i(&mut stack, |v| v as u64 as i64); pc += 1; } // conv.u8
 
                 // ── two-byte prefix opcodes (0xFE) ────────────────────────

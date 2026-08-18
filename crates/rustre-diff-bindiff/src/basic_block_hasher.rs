@@ -121,19 +121,19 @@ impl NormalisedBlock {
     /// Returns `true` if the block ends in a call.
     #[must_use]
     pub fn ends_with_call(&self) -> bool {
-        self.instructions.last().map_or(false, |i| i.is_call())
+        self.instructions.last().map_or(false, NormalisedInstruction::is_call)
     }
 
     /// Returns `true` if the block ends with a conditional branch.
     #[must_use]
     pub fn ends_with_conditional_branch(&self) -> bool {
-        self.instructions.last().map_or(false, |i| i.is_conditional_branch())
+        self.instructions.last().map_or(false, NormalisedInstruction::is_conditional_branch)
     }
 
     /// Returns `true` if the block ends with a terminator.
     #[must_use]
     pub fn ends_with_terminator(&self) -> bool {
-        self.instructions.last().map_or(false, |i| i.is_terminator())
+        self.instructions.last().map_or(false, NormalisedInstruction::is_terminator)
     }
 
     /// Call count within the block.

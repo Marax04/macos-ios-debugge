@@ -542,7 +542,13 @@ impl DwarfSections {
                     "__debug_line" => Some(&mut out.debug_line),
                     "__debug_str" => Some(&mut out.debug_str),
                     "__debug_line_str" => Some(&mut out.debug_line_str),
-                    "__debug_str_offsets" => Some(&mut out.debug_str_offsets),
+                    // A Mach-O `sectname` is a 16-byte field, so the 19-char
+                    // DWARF name cannot survive intact: the assembler emits the
+                    // truncated spelling and that is the only form a real dSYM
+                    // ever contains. The long form is kept for hand-built maps.
+                    "__debug_str_offs" | "__debug_str_offsets" => {
+                        Some(&mut out.debug_str_offsets)
+                    }
                     "__debug_ranges" => Some(&mut out.debug_ranges),
                     "__debug_addr" => Some(&mut out.debug_addr),
                     _ => None,
@@ -1573,20 +1579,55 @@ impl DsymBundle {
     /// is honoured); otherwise every line program in `__debug_line` is used
     /// with the header's own directory 0 as the compilation directory.
     pub fn build_source_index(&self, mapper: &SourceRootMapper) -> DsymResult<SourceMapIndex> {
+        Ok(self.build_source_index_reporting(mapper)?.index)
+    }
+
+    /// Same as [`Self::build_source_index`], but the units that could NOT be
+    /// decoded come back with the index instead of vanishing.
+    ///
+    /// The loop below used to be written with `let Ok(..) else { continue }`
+    /// and still returned `Ok(index)`. A dSYM with a handful of unreadable
+    /// line tables therefore reported total success, and every address of
+    /// those units answered `None` — which in this module means "no line
+    /// information exists for this address", not "we failed to read it". The
+    /// user reads that as a file compiled without `-g` and goes off to change
+    /// build settings while the line table was there all along. It is exactly
+    /// the confusion `find_dsym_by_uuid` closed one level up with
+    /// `matched_but_unusable`, and it stayed open here.
+    ///
+    /// Skipping is still the right behaviour — one bad unit must not blind the
+    /// other five hundred — but it is now *counted and named*.
+    pub fn build_source_index_reporting(
+        &self,
+        mapper: &SourceRootMapper,
+    ) -> DsymResult<SourceIndexBuild> {
         if self.sections.debug_line.is_empty() {
             return Err(DsymError::MissingSection("__debug_line"));
         }
         let mut index = SourceMapIndex::new();
         let no_functions: HashMap<u64, String> = HashMap::new();
         let mut used_offsets: Vec<u64> = Vec::new();
+        let mut skipped: Vec<SkippedUnit> = Vec::new();
 
         for cu in self.compile_units() {
             let Some(stmt) = cu.stmt_list else { continue };
             if used_offsets.contains(&stmt) {
                 continue;
             }
-            let Ok(program) = parse_line_program(&self.sections, stmt) else { continue };
-            let Ok(rows) = run_line_program(&self.sections, &program) else { continue };
+            let program = match parse_line_program(&self.sections, stmt) {
+                Ok(p) => p,
+                Err(error) => {
+                    skipped.push(SkippedUnit { stmt_list: stmt, name: cu.name.clone(), error });
+                    continue;
+                }
+            };
+            let rows = match run_line_program(&self.sections, &program) {
+                Ok(r) => r,
+                Err(error) => {
+                    skipped.push(SkippedUnit { stmt_list: stmt, name: cu.name.clone(), error });
+                    continue;
+                }
+            };
             let comp_dir = comp_dir_for(&cu, &program);
             index.add(SourceMap::from_line_table(
                 &rows,
@@ -1598,8 +1639,17 @@ impl DsymBundle {
             used_offsets.push(stmt);
         }
 
-        if used_offsets.is_empty() {
+        // The sequential walk of `__debug_line` used to run only when NOTHING
+        // had been indexed, so one good compile unit was enough to deny the
+        // failed ones their second chance. It now also runs when a unit was
+        // skipped, and any program it recovers at an offset that failed above
+        // clears that entry.
+        if used_offsets.is_empty() || !skipped.is_empty() {
             for program in self.line_programs() {
+                let offset = program.offset;
+                if used_offsets.contains(&offset) {
+                    continue;
+                }
                 let Ok(rows) = run_line_program(&self.sections, &program) else { continue };
                 let comp_dir = program
                     .header_comp_dir
@@ -1612,10 +1662,48 @@ impl DsymBundle {
                     mapper.clone(),
                     &no_functions,
                 ));
+                used_offsets.push(offset);
+                skipped.retain(|s| s.stmt_list != offset);
             }
         }
 
-        Ok(index)
+        Ok(SourceIndexBuild { index, skipped })
+    }
+}
+
+/// A compile unit that `build_source_index_reporting` could not decode.
+///
+/// Carried out of the build so that "we have no line information for this
+/// address" and "we failed to read the line information for this address"
+/// stay different answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedUnit {
+    /// `DW_AT_stmt_list` of the unit, i.e. its offset into `__debug_line`.
+    pub stmt_list: u64,
+    /// `DW_AT_name` of the unit, when the DIE carried one.
+    pub name: Option<String>,
+    /// Why it was skipped.
+    pub error: DsymError,
+}
+
+/// Result of building a source index: the index, plus what did not make it in.
+pub struct SourceIndexBuild {
+    /// The units that decoded.
+    pub index: SourceMapIndex,
+    /// The units that did not, never empty-by-omission.
+    pub skipped: Vec<SkippedUnit>,
+}
+
+// `SourceMapIndex` is not `Debug` (it holds `Arc<SourceMap>` with a file
+// cache), so the impl is written by hand rather than dropping `Debug` from a
+// type that appears in debugger diagnostics — the same reasoning as
+// `DsymLineMapper`.
+impl std::fmt::Debug for SourceIndexBuild {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceIndexBuild")
+            .field("entries", &self.index.total_entries())
+            .field("skipped", &self.skipped)
+            .finish()
     }
 }
 
@@ -1655,15 +1743,34 @@ pub fn find_dsym_for_binary(binary_path: &Path) -> DsymResult<DsymBundle> {
     // `?`: an unreadable or unparseable binary is reported as what it is.
     let binary_uuids = uuids_of_macho_file(binary_path)?;
     let mut unproven: Option<DsymError> = None;
+    // Why a candidate that EXISTS was discarded before its UUID could even be
+    // compared. Both steps below used to drop their error with
+    // `let Ok(..) else { continue }`, so a bundle beside the binary whose
+    // payload carries no `__DWARF` (compiled without `-g`, truncated) or cannot
+    // be read at all ended the search in `NotFound(binary)` — the strictly
+    // stronger and false claim that no dSYM exists for this image. Kept apart
+    // from `unproven` so a real UUID mismatch, which names the actual pairing
+    // problem, still wins when both happened.
+    let mut present_but_unusable: Option<DsymError> = None;
 
     for bundle in candidate_bundle_paths(binary_path) {
         if !bundle.is_dir() {
             continue;
         }
-        let Ok(payloads) = dwarf_payloads_in_bundle(&bundle) else { continue };
-        for payload in payloads {
-            let Ok(dsym) = DsymBundle::open_payload_for_uuids(&payload, &binary_uuids) else {
+        let payloads = match dwarf_payloads_in_bundle(&bundle) {
+            Ok(p) => p,
+            Err(e) => {
+                present_but_unusable.get_or_insert(e);
                 continue;
+            }
+        };
+        for payload in payloads {
+            let dsym = match DsymBundle::open_payload_for_uuids(&payload, &binary_uuids) {
+                Ok(d) => d,
+                Err(e) => {
+                    present_but_unusable.get_or_insert(e);
+                    continue;
+                }
             };
             let Some(&first_binary_uuid) = binary_uuids.first() else {
                 // The binary parsed but carries no LC_UUID. A candidate is
@@ -1689,7 +1796,9 @@ pub fn find_dsym_for_binary(binary_path: &Path) -> DsymResult<DsymBundle> {
         }
     }
 
-    Err(unproven.unwrap_or_else(|| DsymError::NotFound(binary_path.display().to_string())))
+    Err(unproven.or(present_but_unusable).unwrap_or_else(|| {
+        DsymError::NotFound(binary_path.display().to_string())
+    }))
 }
 
 /// Search `root` recursively (up to `max_depth` directory levels) for a dSYM
@@ -1774,6 +1883,11 @@ pub struct DsymLineMapper {
     index: SourceMapIndex,
     slide: u64,
     uuid: Option<[u8; 16]>,
+    /// Compile units whose line table did not decode. A lookup that misses an
+    /// address of one of these is a READ FAILURE, not an absence of debug
+    /// information, and the caller can only tell the two apart if the list
+    /// travels with the mapper.
+    skipped: Vec<SkippedUnit>,
 }
 
 // `SourceMapIndex` is not `Debug` (it holds `Arc<SourceMap>` with a file
@@ -1785,6 +1899,7 @@ impl std::fmt::Debug for DsymLineMapper {
             .field("entries", &self.index.total_entries())
             .field("slide", &format_args!("0x{:x}", self.slide))
             .field("uuid", &self.uuid.as_ref().map(format_uuid))
+            .field("skipped_units", &self.skipped.len())
             .finish()
     }
 }
@@ -1792,11 +1907,24 @@ impl std::fmt::Debug for DsymLineMapper {
 impl DsymLineMapper {
     /// Build a mapper from an opened bundle.
     pub fn from_bundle(bundle: &DsymBundle, mapper: &SourceRootMapper) -> DsymResult<Self> {
-        Ok(Self {
-            index: bundle.build_source_index(mapper)?,
-            slide: 0,
-            uuid: bundle.uuid,
-        })
+        let built = bundle.build_source_index_reporting(mapper)?;
+        Ok(Self { index: built.index, slide: 0, uuid: bundle.uuid, skipped: built.skipped })
+    }
+
+    /// Compile units that could not be decoded into this mapper.
+    #[must_use]
+    pub fn skipped_units(&self) -> &[SkippedUnit] {
+        &self.skipped
+    }
+
+    /// `true` when every compile unit of the dSYM made it into the index.
+    ///
+    /// A `None` from [`Self::runtime_addr_to_source`] means "no line info for
+    /// this address" only when this is `true`; otherwise it may mean "the unit
+    /// holding this address failed to decode".
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.skipped.is_empty()
     }
 
     /// Set the ASLR slide reported by the target.
@@ -2003,8 +2131,6 @@ mod tests {
     const LC_UUID: u32 = 0x1B;
     const LC_SEGMENT_64: u32 = 0x19;
 
-    /// Build a little-endian 64-bit Mach-O of file type `MH_DSYM` holding a
-    /// `__DWARF` segment with the given sections.
     /// Truncation + mutation sweep over the DWARF parsers.
     ///
     /// A `.dSYM` is an untrusted file: it is whatever the user points us at.
@@ -2051,6 +2177,50 @@ mod tests {
         }
     }
 
+    /// A compile unit whose line table does not decode must be COUNTED, not
+    /// silently dropped.
+    ///
+    /// `build_source_index` used to `continue` past a failing unit and still
+    /// return `Ok(index)`. The caller then saw a full success while
+    /// `runtime_addr_to_source` answered `None` for every address of that unit
+    /// — a decode failure re-presented as "this file has no debug info", the
+    /// exact diagnostic confusion `find_dsym_by_uuid` closed one level above
+    /// with `matched_but_unusable`.
+    #[test]
+    fn skipped_compile_units_are_reported_not_swallowed() {
+        let line = build_debug_line_v4();
+        // Second unit points into the middle of the last line program: an
+        // offset inside `__debug_line` that `parse_line_program` rejects.
+        let bogus = (line.len() - 2) as u32;
+        let mut info = build_debug_info(0);
+        info.extend_from_slice(&build_debug_info(bogus));
+        let macho = build_dsym_macho(TEST_UUID, &[
+            ("__debug_line", line),
+            ("__debug_abbrev", build_debug_abbrev()),
+            ("__debug_info", info),
+            ("__debug_str", b"\0".to_vec()),
+        ]);
+        let bundle =
+            DsymBundle::from_payload_bytes(Path::new("t.dSYM"), &macho).expect("bundle opens");
+        assert_eq!(bundle.compile_units().len(), 2, "fixture must have two CUs");
+
+        let mapper = SourceRootMapper::new();
+        let built = bundle.build_source_index_reporting(&mapper).expect("index builds");
+        // The good unit is still indexed...
+        assert!(built.index.addr_to_source(0x1000).is_some(), "good CU must map");
+        // ...and the bad one is named, not silently absent.
+        assert_eq!(built.skipped.len(), 1, "the undecodable unit must be counted");
+        assert_eq!(built.skipped[0].stmt_list, u64::from(bogus));
+        assert!(matches!(built.skipped[0].error, DsymError::MalformedDwarf(_)));
+
+        // The failure survives to the caller that actually answers questions.
+        let lm = DsymLineMapper::from_bundle(&bundle, &mapper).expect("mapper");
+        assert!(!lm.is_complete(), "a mapper missing a unit is not complete");
+        assert_eq!(lm.skipped_units().len(), 1);
+    }
+
+    /// Build a little-endian 64-bit Mach-O of file type `MH_DSYM` holding a
+    /// `__DWARF` segment with the given sections.
     fn build_dsym_macho(uuid: [u8; 16], sections: &[(&str, Vec<u8>)]) -> Vec<u8> {
         let seg_cmd_size = 72 + 80 * sections.len();
         let uuid_cmd_size = 24usize;
@@ -2719,6 +2889,39 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 
+    /// A dSYM sitting beside the binary that cannot be OPENED must not be
+    /// reported as "no dSYM exists for this binary".
+    ///
+    /// `find_dsym_for_binary` discarded both `dwarf_payloads_in_bundle` and
+    /// `open_payload_for_uuids` errors with `let Ok(..) else { continue }`, so a
+    /// payload without `__DWARF` (built without `-g`, truncated, or unreadable)
+    /// ended the search in `NotFound(binary)` — the strictly stronger and false
+    /// claim that the file is not on disk. The sister function
+    /// `find_dsym_by_uuid` already forbids exactly this (see
+    /// `a_matching_dsym_that_cannot_be_opened_is_not_reported_as_missing`).
+    #[test]
+    fn a_dsym_beside_the_binary_that_cannot_be_opened_is_not_reported_as_missing() {
+        let root = scratch("beside_unusable");
+        let binary = root.join("MyApp");
+        std::fs::write(&binary, build_dsym_macho(TEST_UUID, &[("__text", vec![0u8; 8])]))
+            .expect("binary");
+        // Right UUID, zero DWARF sections: `from_thin_payload_bytes` returns
+        // MissingSection("__DWARF") — found, but unusable.
+        write_bundle(&root, "MyApp", &build_dsym_macho(TEST_UUID, &[]));
+
+        let err = find_dsym_for_binary(&binary).expect_err("the only candidate is unusable");
+        assert!(
+            !matches!(err, DsymError::NotFound(_)),
+            "a dSYM present beside the binary was reported as absent: {err}"
+        );
+        assert!(
+            matches!(err, DsymError::MissingSection("__DWARF")),
+            "expected the real reason to survive, got {err:?}"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
     #[test]
     fn missing_bundle_reports_not_found() {
         let root = scratch("missing");
@@ -3075,6 +3278,49 @@ mod tests {
         assert!(
             loc.file.to_string_lossy().replace('\\', "/").ends_with("sub/gen.c"),
             "indexed path lost: {}",
+            loc.file.display()
+        );
+    }
+
+    /// End-to-end: a real Mach-O carries the section name in a 16-byte
+    /// `sectname` field, so the linker-truncated spelling `__debug_str_offs` is
+    /// what an actual dSYM contains. Matching only the untruncated 19-character
+    /// name could never fire, leaving `strx()` reading an empty slice and every
+    /// DWARF 5 path empty.
+    #[test]
+    fn strx_paths_resolve_through_a_real_macho_with_a_truncated_sectname() {
+        let (debug_str, debug_str_offsets) = strx_string_sections();
+        let macho = build_dsym_macho(
+            TEST_UUID,
+            &[
+                ("__debug_line", build_debug_line_v5_strx()),
+                ("__debug_str", debug_str),
+                ("__debug_str_offsets", debug_str_offsets),
+                ("__debug_abbrev", build_debug_abbrev()),
+                ("__debug_info", build_debug_info(0)),
+            ],
+        );
+        let s = DwarfSections::from_macho(&macho).expect("sections");
+        assert!(
+            !s.debug_str_offsets.is_empty(),
+            "__debug_str_offsets never extracted from the Mach-O; present: {:?}",
+            s.present_sections()
+        );
+
+        let p = parse_line_program(&s, 0).expect("v5 strx header");
+        let rows = run_line_program(&s, &p).expect("rows");
+        let map = SourceMap::from_line_table(
+            &rows,
+            &p.header,
+            Path::new("/build/strx"),
+            SourceRootMapper::new(),
+            &HashMap::new(),
+        );
+        let loc = map.addr_to_source(0x3000).expect("location");
+        assert_eq!(loc.line, 7);
+        assert!(
+            loc.file.to_string_lossy().replace('\\', "/").ends_with("sub/gen.c"),
+            "indexed path lost end-to-end: {}",
             loc.file.display()
         );
     }

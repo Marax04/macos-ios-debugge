@@ -369,7 +369,7 @@ impl VmLifter {
     /// Translates guest instructions to readable pseudo-IL strings for static analysis.
     #[must_use]
     pub fn to_pseudo_il(instrs: &[GuestInstruction]) -> Vec<String> {
-        instrs.iter().map(|instr| instr.to_string()).collect()
+        instrs.iter().map(std::string::ToString::to_string).collect()
     }
 }
 
@@ -442,8 +442,7 @@ impl VmDispatcherDetector {
                 if code[i] == 0xFF && code[i + 1] == 0x24 && code[i + 2] == 0xCD {
                     // Extract the 32-bit table displacement
                     let disp =
-                        u32::from_le_bytes([code[i + 3], code[i + 4], code[i + 5], code[i + 6]])
-                            as u64;
+                        u64::from(u32::from_le_bytes([code[i + 3], code[i + 4], code[i + 5], code[i + 6]]));
                     // Heuristic: try to interpret disp as a file offset.
                     // Only extract the table if the displacement maps inside the buffer.
                     let entries = if disp >= base {
@@ -605,9 +604,8 @@ impl VmDispatcherDetector {
                 break;
             }
             let addr: u64 = match step {
-                2 => u16::from_le_bytes([data[off], data[off + 1]]) as u64,
-                4 => u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])
-                    as u64,
+                2 => u64::from(u16::from_le_bytes([data[off], data[off + 1]])),
+                4 => u64::from(u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])),
                 8 => u64::from_le_bytes([
                     data[off],
                     data[off + 1],
@@ -891,7 +889,7 @@ impl VmIsa {
     pub fn listing(&self) -> String {
         self.sorted_handlers()
             .iter()
-            .map(|d| d.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -1063,7 +1061,7 @@ impl VmBytecodeDisassembler {
     pub fn to_text(instrs: &[VmInstruction]) -> String {
         instrs
             .iter()
-            .map(|i| i.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -1079,41 +1077,41 @@ impl VmBytecodeDisassembler {
         // emit them as two separate operands.
         match sem {
             HandlerSemantic::BinOp(_) if ob == 2 && available >= 2 => {
-                vec![buf[pc] as u64, buf[pc + 1] as u64]
+                vec![u64::from(buf[pc]), u64::from(buf[pc + 1])]
             }
             HandlerSemantic::Push(PushSrc::VirtualReg(_))
             | HandlerSemantic::Pop(PopDst::VirtualReg(_))
                 if ob == 1 && available >= 1 =>
             {
-                vec![buf[pc] as u64]
+                vec![u64::from(buf[pc])]
             }
             // For load/store with 6-byte operands: 2 register bytes + 4-byte imm
             HandlerSemantic::Load(_) | HandlerSemantic::Store(_) if ob == 6 && available >= 6 => {
                 let imm = u32::from_le_bytes([buf[pc + 2], buf[pc + 3], buf[pc + 4], buf[pc + 5]]);
-                vec![buf[pc] as u64, buf[pc + 1] as u64, imm as u64]
+                vec![u64::from(buf[pc]), u64::from(buf[pc + 1]), u64::from(imm)]
             }
             // Load-immediate: 1 reg byte + 4-byte imm
             HandlerSemantic::Load(_) if ob == 5 && available >= 5 => {
                 let imm = u32::from_le_bytes([buf[pc + 1], buf[pc + 2], buf[pc + 3], buf[pc + 4]]);
-                vec![buf[pc] as u64, imm as u64]
+                vec![u64::from(buf[pc]), u64::from(imm)]
             }
             // Push-immediate: 4-byte imm
             HandlerSemantic::Push(PushSrc::Constant(_)) if ob == 4 && available >= 4 => {
                 let imm = u32::from_le_bytes([buf[pc], buf[pc + 1], buf[pc + 2], buf[pc + 3]]);
-                vec![imm as u64]
+                vec![u64::from(imm)]
             }
             // Branch / IpAdvance: 4-byte target offset
             HandlerSemantic::Branch | HandlerSemantic::IpAdvance(_)
                 if ob == 4 && available >= 4 =>
             {
                 let v = u32::from_le_bytes([buf[pc], buf[pc + 1], buf[pc + 2], buf[pc + 3]]);
-                vec![v as u64]
+                vec![u64::from(v)]
             }
             _ => {
                 // Generic: read `available` bytes as a single little-endian value
                 let mut raw = 0u64;
                 for (i, &b) in buf[pc..pc + available].iter().enumerate() {
-                    raw |= (b as u64) << (i * 8);
+                    raw |= u64::from(b) << (i * 8);
                 }
                 vec![raw]
             }
@@ -1289,7 +1287,6 @@ impl VmLifterPipeline {
 /// discarded even that and answered `{"ok": true}` unconditionally — a tool
 /// that reported success for an analysis it never performed on input it never
 /// received.
-#[must_use]
 pub fn run_pass(bytecode: &[u8]) -> Vec<String> {
     VmLifter::lift_to_instructions(bytecode)
         .map(|instrs| VmLifter::to_pseudo_il(&instrs))

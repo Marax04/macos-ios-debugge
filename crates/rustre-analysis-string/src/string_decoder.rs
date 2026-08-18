@@ -379,7 +379,7 @@ pub fn decode_utf16_le(raw: &[u8]) -> Option<String> {
         return None;
     }
     let units: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-    char::decode_utf16(units.iter().copied()).map(|r| r.ok()).collect::<Option<String>>()
+    char::decode_utf16(units.iter().copied()).map(std::result::Result::ok).collect::<Option<String>>()
 }
 
 /// Decode UTF-16 BE byte pairs into a String.
@@ -389,7 +389,7 @@ pub fn decode_utf16_be(raw: &[u8]) -> Option<String> {
         return None;
     }
     let units: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
-    char::decode_utf16(units.iter().copied()).map(|r| r.ok()).collect::<Option<String>>()
+    char::decode_utf16(units.iter().copied()).map(std::result::Result::ok).collect::<Option<String>>()
 }
 
 /// Decode Latin-1 (ISO 8859-1): bytes map 1-to-1 to Unicode codepoints.
@@ -438,7 +438,7 @@ pub fn decode_shift_jis_approx(raw: &[u8]) -> Option<String> {
             i += 2;
         } else if (0xA1..=0xDF).contains(&b) {
             // half-width katakana
-            let cp = 0xFF61u32 + (b as u32 - 0xA1);
+            let cp = 0xFF61u32 + (u32::from(b) - 0xA1);
             out.push(char::from_u32(cp)?);
             i += 1;
         } else {
@@ -473,7 +473,7 @@ pub fn base64_decode_bytes(raw: &[u8]) -> Option<Vec<u8>> {
         if b == b'=' { break; }
         let v = table[b as usize];
         if v == 255 { return None; }
-        buf = (buf << 6) | v as u32;
+        buf = (buf << 6) | u32::from(v);
         bits += 6;
         if bits >= 8 {
             bits -= 8;

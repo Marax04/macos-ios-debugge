@@ -669,7 +669,7 @@ impl HandlerTable {
     pub fn listing(&self) -> String {
         self.sorted()
             .iter()
-            .map(|h| h.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
     }

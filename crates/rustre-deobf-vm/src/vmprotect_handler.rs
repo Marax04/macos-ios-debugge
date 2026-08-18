@@ -678,7 +678,7 @@ impl VmpHandlerIdentifier {
                 && window[1] == 0x35  // xor rax, imm32 (REX.W prefix)
             {
                 let key_bytes = &window[2..6];
-                let xor_key = u32::from_le_bytes(key_bytes.try_into().unwrap_or_default()) as u64;
+                let xor_key = u64::from(u32::from_le_bytes(key_bytes.try_into().unwrap_or_default()));
                 if window[6] == 0xFF && window[7] == 0xE0 {
                     let conf = 0.85;
                     let mut d = VmpDispatcher::new(addr, VmpDispatchPattern::XorEncrypted, conf);
@@ -762,7 +762,7 @@ impl VmpHandlerIdentifier {
             mappings.push(VmpRegisterMapping {
                 guest_slot: slot,
                 host_reg: format!("<unknown-gp{slot}>"),
-                context_offset: Some((slot as i32 - 3) * 8),
+                context_offset: Some((i32::from(slot) - 3) * 8),
                 confidence: 0.35,
             });
         }

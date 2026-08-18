@@ -139,16 +139,16 @@ impl RiscVCallingConv {
     #[must_use]
     pub fn for_abi(abi: RiscVAbi) -> Self {
         let fp_args = if abi.has_fp_regs() {
-            FLOAT_ARG_REGS.iter().map(|s| s.to_string()).collect()
+            FLOAT_ARG_REGS.iter().map(std::string::ToString::to_string).collect()
         } else {
             Vec::new()
         };
         Self {
             abi,
-            int_args: INT_ARG_REGS.iter().map(|s| s.to_string()).collect(),
+            int_args: INT_ARG_REGS.iter().map(std::string::ToString::to_string).collect(),
             fp_args,
-            return_regs: RET_REGS.iter().map(|s| s.to_string()).collect(),
-            callee_saved: CALLEE_SAVED.iter().map(|s| s.to_string()).collect(),
+            return_regs: RET_REGS.iter().map(std::string::ToString::to_string).collect(),
+            callee_saved: CALLEE_SAVED.iter().map(std::string::ToString::to_string).collect(),
         }
     }
 

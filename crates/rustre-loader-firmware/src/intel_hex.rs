@@ -167,8 +167,8 @@ impl IhexRecord {
             return Err(FirmwareError::TruncatedData);
         }
         let byte_count = hex2(hex, 0)?;
-        let addr_hi = hex2(hex, 2)? as u16;
-        let addr_lo = hex2(hex, 4)? as u16;
+        let addr_hi = u16::from(hex2(hex, 2)?);
+        let addr_lo = u16::from(hex2(hex, 4)?);
         let address = (addr_hi << 8) | addr_lo;
         let rt_byte = hex2(hex, 6)?;
         let record_type = IhexType::from_byte(rt_byte);
@@ -344,7 +344,7 @@ impl IhexFile {
 
             match record.record_type {
                 IhexType::Data => {
-                    let abs_addr = upper_base + record.address as u64;
+                    let abs_addr = upper_base + u64::from(record.address);
                     // Try to merge into the last region if contiguous
                     if let Some(last) = regions.last_mut() && last.end_addr() == abs_addr {
                         last.extend(&record.data);
@@ -364,30 +364,30 @@ impl IhexFile {
                     if record.data.len() < 2 {
                         return Err(FirmwareError::TruncatedData);
                     }
-                    let upper = u16::from_be_bytes([record.data[0], record.data[1]]) as u64;
+                    let upper = u64::from(u16::from_be_bytes([record.data[0], record.data[1]]));
                     upper_base = upper << 16;
                 }
                 IhexType::ExtSegAddr => {
                     if record.data.len() < 2 {
                         return Err(FirmwareError::TruncatedData);
                     }
-                    let seg = u16::from_be_bytes([record.data[0], record.data[1]]) as u64;
+                    let seg = u64::from(u16::from_be_bytes([record.data[0], record.data[1]]));
                     upper_base = seg * 16;
                 }
                 IhexType::StartLinAddr => {
                     if record.data.len() >= 4 {
-                        start_address = Some(u32::from_be_bytes([
+                        start_address = Some(u64::from(u32::from_be_bytes([
                             record.data[0],
                             record.data[1],
                             record.data[2],
                             record.data[3],
-                        ]) as u64);
+                        ])));
                     }
                 }
                 IhexType::StartSegAddr => {
                     if record.data.len() >= 4 {
-                        let cs = u16::from_be_bytes([record.data[0], record.data[1]]) as u64;
-                        let ip = u16::from_be_bytes([record.data[2], record.data[3]]) as u64;
+                        let cs = u64::from(u16::from_be_bytes([record.data[0], record.data[1]]));
+                        let ip = u64::from(u16::from_be_bytes([record.data[2], record.data[3]]));
                         start_address = Some((cs << 4).wrapping_add(ip));
                     }
                 }
@@ -421,7 +421,7 @@ impl IhexFile {
         let end = self
             .regions
             .iter()
-            .map(|r| r.end_addr())
+            .map(MemRegion::end_addr)
             .max()
             .unwrap_or(base);
         if end <= base {
@@ -458,13 +458,13 @@ impl IhexFile {
     /// Return the highest end address across all regions.
     #[must_use]
     pub fn max_address(&self) -> Option<u64> {
-        self.regions.iter().map(|r| r.end_addr()).max()
+        self.regions.iter().map(MemRegion::end_addr).max()
     }
 
     /// Total number of data bytes across all regions.
     #[must_use]
     pub fn total_data_bytes(&self) -> usize {
-        self.regions.iter().map(|r| r.size()).sum()
+        self.regions.iter().map(MemRegion::size).sum()
     }
 
     /// Number of address-space gaps between regions.
@@ -551,7 +551,7 @@ pub fn encode_to_ihex(data: &[u8], base_address: u32, bytes_per_record: u8) -> S
     }
 
     // DATA records
-    let lower_base = (base_address & 0xFFFF) as u64;
+    let lower_base = u64::from(base_address & 0xFFFF);
     for (chunk_idx, chunk) in data.chunks(bpr).enumerate() {
         // Use u64 arithmetic throughout; chunk_idx and bpr are both bounded by
         // data.len() (<=usize::MAX) but the product must not overflow u64 on 64-bit

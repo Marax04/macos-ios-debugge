@@ -357,7 +357,7 @@ pub fn brute_force_rol_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
         for xor_key in 0u8..=255 {
             let decrypted: Vec<u8> = ciphertext
                 .iter()
-                .map(|&b| b.rotate_left(rot as u32) ^ xor_key)
+                .map(|&b| b.rotate_left(u32::from(rot)) ^ xor_key)
                 .collect();
             let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
             if score > 0.3 {
@@ -382,7 +382,7 @@ pub fn brute_force_ror_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
         for xor_key in 0u8..=255 {
             let decrypted: Vec<u8> = ciphertext
                 .iter()
-                .map(|&b| b.rotate_right(rot as u32) ^ xor_key)
+                .map(|&b| b.rotate_right(u32::from(rot)) ^ xor_key)
                 .collect();
             let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
             if score > 0.3 {

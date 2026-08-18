@@ -252,7 +252,7 @@ impl CfgBlock {
     /// Find the index of the terminating branch instruction, if any.
     #[must_use]
     pub fn branch_instr_idx(&self) -> Option<usize> {
-        self.instrs.iter().rposition(|i| i.is_branch())
+        self.instrs.iter().rposition(CfgInstr::is_branch)
     }
 }
 
@@ -283,7 +283,7 @@ impl Cfg {
         for b in &mut self.blocks { b.succs.clear(); b.preds.clear(); }
 
         let succ_info: Vec<(u32, Vec<u32>)> = self.blocks.iter()
-            .map(|b| (b.id, b.instrs.iter().flat_map(|i| i.successors()).collect()))
+            .map(|b| (b.id, b.instrs.iter().flat_map(CfgInstr::successors).collect()))
             .collect();
 
         for (id, succs) in &succ_info {

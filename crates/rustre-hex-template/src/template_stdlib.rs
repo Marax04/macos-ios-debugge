@@ -229,11 +229,11 @@ impl ReadInt {
         }
         let slice = &buf[*offset..end];
         let raw: u64 = match (self.width, self.endian) {
-            (1, _) => slice[0] as u64,
-            (2, Endian::Little) => u16::from_le_bytes(slice.try_into().unwrap()) as u64,
-            (2, Endian::Big) => u16::from_be_bytes(slice.try_into().unwrap()) as u64,
-            (4, Endian::Little) => u32::from_le_bytes(slice.try_into().unwrap()) as u64,
-            (4, Endian::Big) => u32::from_be_bytes(slice.try_into().unwrap()) as u64,
+            (1, _) => u64::from(slice[0]),
+            (2, Endian::Little) => u64::from(u16::from_le_bytes(slice.try_into().unwrap())),
+            (2, Endian::Big) => u64::from(u16::from_be_bytes(slice.try_into().unwrap())),
+            (4, Endian::Little) => u64::from(u32::from_le_bytes(slice.try_into().unwrap())),
+            (4, Endian::Big) => u64::from(u32::from_be_bytes(slice.try_into().unwrap())),
             (8, Endian::Little) => u64::from_le_bytes(slice.try_into().unwrap()),
             (8, Endian::Big) => u64::from_be_bytes(slice.try_into().unwrap()),
             _ => unreachable!(),

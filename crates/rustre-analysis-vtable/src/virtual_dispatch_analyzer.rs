@@ -682,7 +682,7 @@ impl VirtualDispatchAnalyzer {
                 let mut class_list: Vec<&str> = classes.iter().copied().collect();
                 class_list.sort_unstable();
                 let primary = class_list[0];
-                let confused: Vec<String> = class_list[1..].iter().map(|s| s.to_string()).collect();
+                let confused: Vec<String> = class_list[1..].iter().map(std::string::ToString::to_string).collect();
 
                 // Check if the classes are in a parent-child relationship.
                 // Exclude the primary itself: a class is never its own

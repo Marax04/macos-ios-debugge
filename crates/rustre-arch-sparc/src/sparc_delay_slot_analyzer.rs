@@ -272,7 +272,7 @@ impl DelaySlotAnalyzer {
     pub fn analyze(&self, bytes: &[u8], base_addr: u64) -> DelaySlotReport {
         let base = Address::new(base_addr);
         let instructions: Vec<_> = SparcLinearDisassembler::new(&self.arch, bytes, base)
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .collect();
 
         let total_instructions = instructions.len();
@@ -393,7 +393,7 @@ impl DelaySlotAnalyzer {
         let hex_str: String = ops
             .trim_start_matches('$')
             .chars()
-            .take_while(|c| c.is_ascii_hexdigit())
+            .take_while(char::is_ascii_hexdigit)
             .collect();
         u64::from_str_radix(&hex_str, 16).ok()
     }

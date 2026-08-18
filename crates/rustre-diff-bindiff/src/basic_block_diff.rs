@@ -421,7 +421,7 @@ impl FunctionDiff {
     pub fn has_changes(&self) -> bool {
         !self.blocks_removed.is_empty()
             || !self.blocks_added.is_empty()
-            || self.block_matches.iter().any(|bm| bm.has_changes())
+            || self.block_matches.iter().any(BlockMatch::has_changes)
     }
 
     /// Aggregated change statistics.
@@ -442,7 +442,7 @@ impl FunctionDiff {
     /// True if any block change looks security-relevant.
     #[must_use]
     pub fn is_security_relevant(&self) -> bool {
-        self.block_matches.iter().any(|bm| bm.is_security_relevant())
+        self.block_matches.iter().any(BlockMatch::is_security_relevant)
     }
 }
 

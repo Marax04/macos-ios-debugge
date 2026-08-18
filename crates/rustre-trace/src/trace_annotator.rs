@@ -178,7 +178,7 @@ impl AnnotatedEntry {
         let sym = self
             .symbol
             .as_ref()
-            .map_or_else(|| format!("{addr:#x}"), |s| s.to_string());
+            .map_or_else(|| format!("{addr:#x}"), std::string::ToString::to_string);
         let entry_mark = if self.is_function_entry { " [ENTRY]" } else { "" };
         let ret_mark = if self.is_function_return { " [RET]" } else { "" };
         format!("{indent}{sym}{entry_mark}{ret_mark}")

@@ -148,8 +148,8 @@ impl M68kCcr {
 impl fmt::Debug for M68kCcr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "CCR[X={} N={} Z={} V={} C={}]",
-            self.extend() as u8, self.negative() as u8,
-            self.zero() as u8, self.overflow() as u8, self.carry() as u8)
+            u8::from(self.extend()), u8::from(self.negative()),
+            u8::from(self.zero()), u8::from(self.overflow()), u8::from(self.carry()))
     }
 }
 
@@ -203,7 +203,7 @@ impl M68kSr {
 
     /// Merge a CCR value into the SR.
     pub fn set_ccr(&mut self, ccr: M68kCcr) {
-        self.0 = (self.0 & 0xff00) | (ccr.as_u8() as u16);
+        self.0 = (self.0 & 0xff00) | u16::from(ccr.as_u8());
     }
 
     #[must_use]
@@ -213,12 +213,12 @@ impl M68kSr {
 impl fmt::Debug for M68kSr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SR[T1={} T0={} S={} M={} I={} X={} N={} Z={} V={} C={}]",
-            self.trace1() as u8, self.trace0() as u8,
-            self.supervisor() as u8, self.master() as u8,
+            u8::from(self.trace1()), u8::from(self.trace0()),
+            u8::from(self.supervisor()), u8::from(self.master()),
             self.int_mask(),
-            self.ccr().extend() as u8, self.ccr().negative() as u8,
-            self.ccr().zero() as u8, self.ccr().overflow() as u8,
-            self.ccr().carry() as u8)
+            u8::from(self.ccr().extend()), u8::from(self.ccr().negative()),
+            u8::from(self.ccr().zero()), u8::from(self.ccr().overflow()),
+            u8::from(self.ccr().carry()))
     }
 }
 
@@ -335,12 +335,12 @@ impl M68kRegFile {
     /// Write lower 8 bits, preserving upper 24.
     pub fn set_dreg_byte(&mut self, r: M68kDReg, v: u8) {
         let cur = self.d[r.index()];
-        self.d[r.index()] = (cur & 0xffff_ff00) | (v as u32);
+        self.d[r.index()] = (cur & 0xffff_ff00) | u32::from(v);
     }
     /// Write lower 16 bits, preserving upper 16.
     pub fn set_dreg_word(&mut self, r: M68kDReg, v: u16) {
         let cur = self.d[r.index()];
-        self.d[r.index()] = (cur & 0xffff_0000) | (v as u32);
+        self.d[r.index()] = (cur & 0xffff_0000) | u32::from(v);
     }
 
     // ──── Address registers ──────────────────────────────────────────────────
@@ -438,14 +438,14 @@ impl M68kRegFile {
         }
         match upper.as_str() {
             "PC"  => Some(self.pc),
-            "SR"  => Some(self.sr.as_u16() as u32),
-            "CCR" => Some(self.ccr().as_u8() as u32),
+            "SR"  => Some(u32::from(self.sr.as_u16())),
+            "CCR" => Some(u32::from(self.ccr().as_u8())),
             "USP" => Some(self.usp),
             "ISP" | "SSP" => Some(self.isp),
             "MSP" => Some(self.msp),
             "VBR" => Some(self.vbr.0),
-            "SFC" => Some(self.sfc.as_u8() as u32),
-            "DFC" => Some(self.dfc.as_u8() as u32),
+            "SFC" => Some(u32::from(self.sfc.as_u8())),
+            "DFC" => Some(u32::from(self.dfc.as_u8())),
             "CACR"=> Some(self.cacr.0),
             "SP"  => Some(self.a[7]),
             _     => None,

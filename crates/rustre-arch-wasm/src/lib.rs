@@ -2992,7 +2992,7 @@ pub fn decode_fd_prefix(bytes: &[u8]) -> Result<(String, String, usize, InstrFla
         flags = InstrFlags::NONE;
         lanes
             .iter()
-            .map(|b| b.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(" ")
     } else if matches!(sub, 21..=34) {

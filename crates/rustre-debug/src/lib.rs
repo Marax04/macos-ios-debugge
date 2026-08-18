@@ -997,6 +997,38 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
+/// What happened when a backend tried to step off one of its own planted traps.
+///
+/// Three states, because `Option<DebugEvent>` gave the same shape to seven
+/// different situations and two of them needed opposite handling.
+///
+/// `step_off_planted_breakpoint` returned `None` for "there was no trap here"
+/// — the ordinary case, where the caller should just step — and ALSO for "the
+/// step failed", after it had already restored the original byte and re-armed
+/// the trap. The caller could not tell them apart, so it stepped again with the
+/// thread still sitting on a freshly re-armed `int3`. That executes the TRAP
+/// instead of the instruction, which is word for word the failure the
+/// function's own doc says it exists to prevent: "the caller asked for one
+/// instruction and got none, with no error to say so — a debugger that appears
+/// stuck". A transient step failure was converted into the exact symptom.
+///
+/// The re-arm failure had the mirror problem. If the step SUCCEEDED and
+/// re-planting the trap afterwards failed, the event was discarded and `None`
+/// returned, so the caller stepped a second time: the thread advanced two
+/// instructions for one request. The re-arm failure is real and is still
+/// handled — the address stops being claimed as planted — but it is not a
+/// reason to throw away a step that happened.
+#[derive(Debug)]
+pub enum StepOff {
+    /// Nothing of ours was planted under this thread's PC; step normally.
+    NotOnATrap,
+    /// The instruction under the trap was executed; this is the caller's step.
+    Stepped(DebugEvent),
+    /// The attempt failed with the target in a state the caller must be told
+    /// about, rather than stepped into.
+    Failed(DebugError),
+}
+
 /// The reason a named capability is unsupported on this build, or `None`.
 ///
 /// `backend_capabilities()` publishes, per platform and per architecture, both
@@ -1757,6 +1789,16 @@ impl RegisterSet {
             // `is_fp_name`. Matching only `fp_key` let `set("fp", …)` update
             // the map while leaving the typed `fp` field stale.
             self.fp = Some(value);
+        } else if crate::instr_step::is_ra_name_any(name) {
+            // `lr` was the one typed field this sync forgot, and forgetting it
+            // was worse than never having synced at all: `RegisterMap::encode_into`
+            // makes the typed `fp`/`lr` fields the LAST writers into the `g`
+            // block, after the loop over the named map. So `set("lr", x)`
+            // updated the map and was then overwritten by the stale `lr` that
+            // `decode` had filled in on the preceding read — `dropped` stayed
+            // empty and `set_registers` answered `Ok(())` for a return address
+            // that never left the host.
+            self.lr = Some(value);
         }
     }
 
@@ -9004,6 +9046,84 @@ mod tests_expanded {
         assert_eq!(run_to_return_step(false, Some((0x2000, 0x50)), TARGET, 0x10), KeepGoing);
     }
 
+    /// The loop must stop on stops it cannot step past — and must NOT stop on
+    /// its own step trap.
+    #[test]
+    fn run_to_return_is_blocked_by_stops_that_can_never_reach_the_return_site() {
+        use super::run_to_return_blocked_by as blocked;
+        let addr = Address::new(0x1234);
+
+        // A fault: the whole point. On a precise exception the pc does not
+        // move, so stepping again re-runs the faulting instruction forever.
+        let segv = StopReason::Signal {
+            signum: 11,
+            signame: "SIGSEGV".to_string(),
+            address: Some(addr),
+        };
+        let why = blocked(&segv).expect("a SIGSEGV must stop the loop");
+        assert!(why.contains("SIGSEGV"), "the reason must NAME the signal: {why}");
+
+        // A user breakpoint hit mid-step-out is a real stop, not something to
+        // silently step past: reporting it is the only way it ever fires.
+        assert!(blocked(&StopReason::Breakpoint {
+            address: addr,
+            bp: Breakpoint::new_software(addr),
+        })
+        .is_some());
+        assert!(blocked(&StopReason::AccessViolation { address: addr, is_write: false }).is_some());
+        assert!(blocked(&StopReason::Exception {
+            code: 0xC000_0005,
+            address: Some(addr),
+            description: "access violation".to_string(),
+        })
+        .is_some());
+        assert!(blocked(&StopReason::Unknown { description: "?".to_string() }).is_some());
+
+        // ...and the loop's OWN mechanism must never block it. A stub that
+        // does not send `reason:trace` reports the single-step trap as a bare
+        // SIGTRAP; calling that a wall would stop every step_out on its first
+        // iteration.
+        assert_eq!(
+            blocked(&StopReason::Signal {
+                signum: 5,
+                signame: "SIGTRAP".to_string(),
+                address: Some(addr),
+            }),
+            None,
+            "a SIGTRAP is this loop's own single-step trap, not a fault"
+        );
+        assert_eq!(blocked(&StopReason::SingleStep { address: addr }), None);
+        // An exit is `run_to_return_step`'s business, not this one's.
+        assert_eq!(blocked(&StopReason::ProcessExit { exit_code: 0 }), None);
+        // Informational stops are events to pump past.
+        assert_eq!(blocked(&StopReason::ThreadCreate { tid: ThreadId(2) }), None);
+        assert_eq!(
+            blocked(&StopReason::LibraryLoad {
+                path: "/usr/lib/libc.dylib".to_string(),
+                base: addr,
+            }),
+            None
+        );
+    }
+
+    /// Every backend's run-to-return loop must consult the shared decision,
+    /// not just `run_to_return_step`.
+    ///
+    /// Anchored on the ITEM, so a rename is a compile error rather than a
+    /// string search that silently matches nothing; the source scan then only
+    /// has to find the call.
+    #[test]
+    fn apple_step_out_consults_the_shared_blocked_by_decision() {
+        let _anchor: fn(&StopReason) -> Option<String> = super::run_to_return_blocked_by;
+        let src = include_str!("ios/apple_debugger.rs");
+        let out_at = src.find("async fn step_out(").expect("apple: no step_out");
+        let body = &src[out_at..];
+        assert!(
+            body.contains("run_to_return_blocked_by(&event.reason)"),
+            "apple: step_out evaluates only run_to_return_step, so a SIGSEGV (or any stop that              is not the return site) is re-stepped until the instruction budget runs out and              the call reports \"did not return within N instructions\" about a crash it saw on              the first step"
+        );
+    }
+
     #[test]
     fn session_state_is_live() {
         use SessionState::*;
@@ -10912,6 +11032,54 @@ mod tests_extra {
         );
     }
 
+    /// Stepping off a planted trap must not report a FAILURE as "no trap here".
+    ///
+    /// `step_off_planted_breakpoint` restores the original byte, steps, and
+    /// re-plants. It returned `Option<DebugEvent>`, and `None` meant all of: no
+    /// current thread, unreadable registers, a disabled breakpoint, no planted
+    /// breakpoint — and the step itself FAILING, through a `.ok()`.
+    ///
+    /// The caller treats `None` as "nothing to step off" and steps again. After
+    /// a failed step the trap has already been re-armed and the thread has not
+    /// moved, so that second step executes the `int3`: the caller asked for one
+    /// instruction, got none, and was told of no error. The doc on `single_step`
+    /// describes that exact outcome as the thing this machinery prevents.
+    ///
+    /// The mirror case cost an instruction rather than losing one: a step that
+    /// SUCCEEDED was discarded when re-planting the trap afterwards failed, so
+    /// the caller stepped a second time and the thread advanced twice.
+    ///
+    /// Structural, and the crate's own idiom for a path that needs a live
+    /// target: `code_only` strips comments first, so this paragraph cannot
+    /// satisfy the assertions, and they are anchored to identifiers.
+    #[test]
+    fn stepping_off_a_trap_distinguishes_failure_from_no_trap() {
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            let body = item_body(
+                &stripped,
+                "async fn step_off_planted_breakpoint(",
+                &[NEXT_FN, NEXT_ASYNC_FN],
+            );
+            assert!(
+                body.contains("StepOff::Failed"),
+                "{name}: step_off_planted_breakpoint cannot report a failure, so a failed                  step is indistinguishable from no trap and the caller steps into the                  re-armed int3 it just planted"
+            );
+            assert!(
+                body.contains("StepOff::NotOnATrap") && body.contains("StepOff::Stepped"),
+                "{name}: the three outcomes are not all expressible"
+            );
+            assert!(
+                !body.contains("single_step_raw(tid).await.ok()"),
+                "{name}: the step's error is dropped by `.ok()` before anyone can act on it"
+            );
+        }
+    }
+
     /// A capability name nobody declared must not read as a green light.
     ///
     /// Mine, from iteration 620, found by re-reading it. `capability_refusal`
@@ -11012,7 +11180,6 @@ pub ").unwrap_or(decl.len());
             crate::CapabilityStatus::Supported,
             "this build is x86, where the list declares it working"
         );
-
 
         // And every backend that arms watchpoints must ask before arming.
         for (name, src) in [

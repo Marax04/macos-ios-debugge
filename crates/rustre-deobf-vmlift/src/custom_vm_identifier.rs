@@ -535,7 +535,7 @@ fn read_ptr(bytes: &[u8], size: usize) -> u64 {
         return 0;
     }
     match size {
-        4 => u32::from_le_bytes(bytes[..4].try_into().unwrap_or_default()) as u64,
+        4 => u64::from(u32::from_le_bytes(bytes[..4].try_into().unwrap_or_default())),
         8 => u64::from_le_bytes(bytes[..8].try_into().unwrap_or_default()),
         _ => 0,
     }
@@ -606,12 +606,12 @@ fn find_execute_branches(bytes: &[u8], base: u64, decode_addr: u64) -> Vec<u64> 
         // je/jne rel32 (0F 84/85 xx xx xx xx)
         if window[0] == 0x0F && matches!(window[1], 0x84 | 0x85) {
             let disp = i32::from_le_bytes(window[2..6].try_into().unwrap_or_default());
-            let target = (addr as i64 + 6 + disp as i64) as u64;
+            let target = (addr as i64 + 6 + i64::from(disp)) as u64;
             branches.push(target);
         }
         // jz/jnz rel8 (74/75 xx)
         if matches!(window[0], 0x74 | 0x75) {
-            let disp = window[1] as i8 as i64;
+            let disp = i64::from(window[1] as i8);
             let target = (addr as i64 + 2 + disp) as u64;
             branches.push(target);
         }

@@ -807,12 +807,12 @@ impl CffRecoverer {
                         continue;
                     } else if !rex_w && i + 6 <= bytes.len() {
                         // REX (non-W) + MOV r32, imm32 (5 bytes after REX = 6 total)
-                        let imm = u32::from_le_bytes([
+                        let imm = u64::from(u32::from_le_bytes([
                             bytes[i + 2],
                             bytes[i + 3],
                             bytes[i + 4],
                             bytes[i + 5],
-                        ]) as u64;
+                        ]));
                         last_imm = Some(imm);
                         i += 6;
                         continue;
@@ -826,8 +826,7 @@ impl CffRecoverer {
             // MOV r32, imm32 — opcode B8+r (5 bytes).
             if (0xB8..=0xBF).contains(&b) && i + 5 <= bytes.len() {
                 let imm =
-                    u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]])
-                        as u64;
+                    u64::from(u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]));
                 last_imm = Some(imm);
                 i += 5;
                 continue;
@@ -838,12 +837,12 @@ impl CffRecoverer {
             if b == 0xC7 && i + 6 <= bytes.len() {
                 let modrm = bytes[i + 1];
                 if (modrm & 0b11_000_000) == 0b11_000_000 && (modrm & 0b00_111_000) == 0 {
-                    let imm = u32::from_le_bytes([
+                    let imm = u64::from(u32::from_le_bytes([
                         bytes[i + 2],
                         bytes[i + 3],
                         bytes[i + 4],
                         bytes[i + 5],
-                    ]) as u64;
+                    ]));
                     last_imm = Some(imm);
                     i += 6;
                     continue;
@@ -1607,7 +1606,7 @@ impl CffDispatcherDetector {
                         // Derive a pseudo-absolute address from the RIP-relative disp.
                         // RIP = pos + 7 (end of the instruction).
                         let rip = (pos + 7) as i64;
-                        state_var_addr = rip.wrapping_add(disp as i64) as u64;
+                        state_var_addr = rip.wrapping_add(i64::from(disp)) as u64;
                     }
                     handler_count += 1;
                     pos = jcc_pos + 2; // skip jcc + rel8
@@ -1627,7 +1626,7 @@ impl CffDispatcherDetector {
                             code[pos + 5],
                         ]);
                         let rip = (pos + 10) as i64;
-                        state_var_addr = rip.wrapping_add(disp as i64) as u64;
+                        state_var_addr = rip.wrapping_add(i64::from(disp)) as u64;
                     }
                     handler_count += 1;
                     pos = jcc_pos + 2;
@@ -1649,7 +1648,7 @@ impl CffDispatcherDetector {
                             code[pos + 4],
                             code[pos + 5],
                         ]);
-                        state_var_addr = (pos as i64 + 6).wrapping_add(disp as i64) as u64;
+                        state_var_addr = (pos as i64 + 6).wrapping_add(i64::from(disp)) as u64;
                     }
                     handler_count += 1;
                     pos = jcc_pos + 2;
@@ -1802,7 +1801,7 @@ impl StateTransitionAnalyzer {
         // C6 05 <disp32> <imm8>  — MOV BYTE PTR [rip+disp], imm8
         for i in 0..slice.len().saturating_sub(6) {
             if slice[i] == 0xC6 && slice[i + 1] == 0x05 {
-                let to_state = slice[i + 6] as u32;
+                let to_state = u32::from(slice[i + 6]);
                 return Some((seed, to_state, None));
             }
         }
@@ -1846,7 +1845,7 @@ impl CffDeflattener {
         // Cap the pre-allocation so an adversarially large StateGraph cannot
         // exhaust memory before the Vec is actually filled.
         const MAX_PREALLOC_EDGES: usize = 65_536;
-        let raw_cap: usize = state_graph.nodes.values().map(|v| v.len()).sum();
+        let raw_cap: usize = state_graph.nodes.values().map(std::vec::Vec::len).sum();
         let mut edges = Vec::with_capacity(raw_cap.min(MAX_PREALLOC_EDGES));
 
         for (&from_state, transitions) in &state_graph.nodes {

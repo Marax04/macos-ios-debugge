@@ -174,7 +174,7 @@ pub fn xor_brute_force_top3(data: &[u8]) -> Vec<XorBruteforceCandidate> {
                 .min(100);
             let decoded_utf8 = std::str::from_utf8(&decrypted)
                 .ok()
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             let decoded_utf8_lossy = if decoded_utf8.is_none() {
                 Some(String::from_utf8_lossy(&decrypted).into_owned())
             } else {
@@ -784,7 +784,7 @@ fn extract_stack_offset_i64(expr: &LlilExpr) -> Option<i64> {
                 LlilExpr::Const { value, .. },
             ) if r == "rsp" || r == "esp" || r == "rbp" || r == "ebp" => {
                 // Negate the offset; guard against overflow when value > i64::MAX.
-                i64::try_from(*value).ok().and_then(|v| v.checked_neg())
+                i64::try_from(*value).ok().and_then(i64::checked_neg)
             }
             _ => None,
         },

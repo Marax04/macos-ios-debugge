@@ -251,7 +251,7 @@ impl CpsrFlags {
     /// Set the processor mode.
     #[must_use]
     pub fn with_mode(self, mode: ProcessorMode) -> Self {
-        let raw = (self.raw & !cpsr_bits::MODE_MASK) | (mode.encoding() as u32);
+        let raw = (self.raw & !cpsr_bits::MODE_MASK) | u32::from(mode.encoding());
         Self { raw }
     }
 
@@ -518,10 +518,10 @@ impl AluOps {
     /// ADD — a + b, updates NZCV.
     #[must_use]
     pub fn add(a: u32, b: u32) -> AluResult {
-        let result64 = (a as u64).wrapping_add(b as u64);
+        let result64 = u64::from(a).wrapping_add(u64::from(b));
         let value = result64 as u32;
         let (n, z) = Self::nz(value);
-        let c = result64 > u32::MAX as u64;
+        let c = result64 > u64::from(u32::MAX);
         let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
         AluResult { value, n, z, c, v }
     }
@@ -529,10 +529,10 @@ impl AluOps {
     /// ADD with carry.
     #[must_use]
     pub fn adc(a: u32, b: u32, carry_in: bool) -> AluResult {
-        let result64 = (a as u64).wrapping_add(b as u64).wrapping_add(carry_in as u64);
+        let result64 = u64::from(a).wrapping_add(u64::from(b)).wrapping_add(u64::from(carry_in));
         let value = result64 as u32;
         let (n, z) = Self::nz(value);
-        let c = result64 > u32::MAX as u64;
+        let c = result64 > u64::from(u32::MAX);
         let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
         AluResult { value, n, z, c, v }
     }

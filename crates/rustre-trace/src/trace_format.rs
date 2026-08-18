@@ -378,8 +378,8 @@ fn parse_drcov_module_line(line: &str) -> Option<DrcovModule> {
 pub fn drcov_to_trace_records(modules: &[DrcovModule], bbs: &[DrcovBbEntry]) -> Vec<TraceRecord> {
     bbs.iter().enumerate().map(|(i, bb)| {
         let base = modules.get(bb.mod_id as usize).map(|m| m.base).unwrap_or(0);
-        let abs_addr = base + bb.start as u64;
-        TraceRecord::new_bb(i as u64, 0, abs_addr, bb.size as u32)
+        let abs_addr = base + u64::from(bb.start);
+        TraceRecord::new_bb(i as u64, 0, abs_addr, u32::from(bb.size))
     }).collect()
 }
 
@@ -579,7 +579,7 @@ pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
                 // Highest set bit index = position of the stop bit; the
                 // number of TNT bits below it equals that index.
                 let cnt = (7 - b.leading_zeros()) as u8;
-                let bits = ((b as u64) >> 1) & ((1 << cnt) - 1);
+                let bits = (u64::from(b) >> 1) & ((1 << cnt) - 1);
                 packets.push(PtPacket { ptype: PtPacketType::Tnt8, size: 1, ip: None, tnt_bits: Some(bits), tnt_count: cnt, tsc: None });
                 i += 1;
             }
@@ -615,13 +615,13 @@ fn decode_pt_ip(data: &[u8], offset: usize, last_ip: u64, mode: u8) -> (u64, usi
         0 => (0, 0),
         1 => {
             if offset + 2 > data.len() { return (0, 0); }
-            let update = u16::from_le_bytes([data[offset], data[offset+1]]) as u64;
+            let update = u64::from(u16::from_le_bytes([data[offset], data[offset+1]]));
             let ip = (last_ip & !0xFFFF) | update;
             (ip, 2)
         }
         2 => {
             if offset + 4 > data.len() { return (0, 0); }
-            let update = u32::from_le_bytes([data[offset],data[offset+1],data[offset+2],data[offset+3]]) as u64;
+            let update = u64::from(u32::from_le_bytes([data[offset],data[offset+1],data[offset+2],data[offset+3]]));
             let ip = (last_ip & !0xFFFFFFFF) | update;
             (ip, 4)
         }
@@ -664,7 +664,7 @@ pub fn pt_to_trace_records(packets: &[PtPacket]) -> Vec<TraceRecord> {
                         records.push(TraceRecord {
                             seq, tid: 0, pc: 0,
                             event: TraceEventKind::Branch,
-                            aux: taken as u64,
+                            aux: u64::from(taken),
                             mem_addr: 0, mem_size: 0, insn_bytes: vec![],
                         });
                         seq += 1;

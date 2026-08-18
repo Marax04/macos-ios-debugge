@@ -255,7 +255,7 @@ impl Z80Disassembler {
     fn format_operand(&self, op: &Z80Operand, pc: u16, instr_len: u8) -> String {
         match op {
             Z80Operand::Rel8(d) => {
-                let target = pc.wrapping_add(instr_len as u16).wrapping_add(*d as u16);
+                let target = pc.wrapping_add(u16::from(instr_len)).wrapping_add(*d as u16);
                 if let Some(resolver) = self.config.label_resolver {
                     if let Some(lbl) = resolver(target) {
                         return lbl;

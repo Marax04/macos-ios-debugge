@@ -177,7 +177,7 @@ impl XorMultiByteObf {
                 count += 1;
             }
             if count == 0 { continue; }
-            let ic = ic_sum / count as f64;
+            let ic = ic_sum / f64::from(count);
             if ic > best_ic {
                 best_ic = ic;
                 best_len = kl;
@@ -254,7 +254,7 @@ impl Base64Obf {
             let b = decode_char(chunk[1])?;
             let c = if chunk[2] == b'=' { 0 } else { decode_char(chunk[2])? };
             let d = if chunk[3] == b'=' { 0 } else { decode_char(chunk[3])? };
-            let v = (a as u32) << 18 | (b as u32) << 12 | (c as u32) << 6 | (d as u32);
+            let v = u32::from(a) << 18 | u32::from(b) << 12 | u32::from(c) << 6 | u32::from(d);
             out.push((v >> 16) as u8);
             if chunk[2] != b'=' { out.push((v >> 8) as u8); }
             if chunk[3] != b'=' { out.push(v as u8); }

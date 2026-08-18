@@ -631,7 +631,7 @@ fn try_reduce_multiply(expr: &LlilExpr, ivs: &[InductionVar]) -> Option<LlilExpr
     // pure expression rewrite — unlike introducing a fresh reduced IV register,
     // it needs no new definitions in the pre-header or loop body.
     if const_val == 0 || !const_val.is_power_of_two() { return None; }
-    let shift = const_val.trailing_zeros() as u64;
+    let shift = u64::from(const_val.trailing_zeros());
 
     Some(LlilExpr::Shl {
         value: Box::new(iv_expr.clone()),

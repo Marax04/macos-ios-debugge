@@ -210,7 +210,7 @@ impl FunctionDescriptor {
         let mut h: u64 = 0xcbf29ce484222325;
         for &bh in &self.block_hashes {
             for byte in bh.to_le_bytes() {
-                h ^= byte as u64;
+                h ^= u64::from(byte);
                 h = h.wrapping_mul(0x00000100000001B3);
             }
         }

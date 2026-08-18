@@ -180,8 +180,8 @@ impl<'a> HierarchyAnalyser<'a> {
         let abstract_count = kinds.values().filter(|k| matches!(k, ClassKind::AbstractBase | ClassKind::AbstractLeaf)).count();
         let concrete_count = kinds.values().filter(|k| matches!(k, ClassKind::ConcreteLeaf | ClassKind::ConcreteMid | ClassKind::ConcreteRoot | ClassKind::Standalone)).count();
         let interface_count = self.interface_ids().len();
-        let total_slots: usize = self.hierarchy.classes.iter().map(|c| c.slot_count()).sum();
-        let total_overrides: usize = self.hierarchy.classes.iter().map(|c| c.override_count()).sum();
+        let total_slots: usize = self.hierarchy.classes.iter().map(super::vtable_reconstructor::ClassNode::slot_count).sum();
+        let total_overrides: usize = self.hierarchy.classes.iter().map(super::vtable_reconstructor::ClassNode::override_count).sum();
         let avg_slots = if self.hierarchy.class_count() > 0 {
             total_slots as f64 / self.hierarchy.class_count() as f64
         } else { 0.0 };
@@ -402,7 +402,7 @@ pub fn to_json_hierarchy(hierarchy: &ReconstructedHierarchy) -> JsonHierarchy {
             confidence: c.confidence,
             bases: c.bases.clone(),
             derived: c.derived.clone(),
-            kind: kinds.get(&c.id).map(|k| k.to_string()).unwrap_or_else(|| "Unknown".to_string()),
+            kind: kinds.get(&c.id).map(std::string::ToString::to_string).unwrap_or_else(|| "Unknown".to_string()),
             dispatch_table: jdispatch,
         }
     }).collect();

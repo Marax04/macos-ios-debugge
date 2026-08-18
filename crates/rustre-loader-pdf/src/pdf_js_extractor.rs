@@ -826,7 +826,7 @@ fn extract_js_value(data: &[u8], pos: usize) -> String {
             // Hex string
             let end = data[pos + 1..].iter().position(|&b| b == b'>').unwrap_or(0);
             let hex = &data[pos + 1..pos + 1 + end];
-            let filtered: Vec<u8> = hex.iter().copied().filter(|b| b.is_ascii_alphanumeric()).collect();
+            let filtered: Vec<u8> = hex.iter().copied().filter(u8::is_ascii_alphanumeric).collect();
             let mut decoded = Vec::new();
             let mut idx = 0;
             while idx + 1 < filtered.len() {

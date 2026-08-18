@@ -345,19 +345,19 @@ impl InsnScanner {
         match b {
             // JMP rel8
             0xEB if p + 1 < data.len() => {
-                let rel = data[p + 1] as i8 as i64;
+                let rel = i64::from(data[p + 1] as i8);
                 let target = (insn_end as i64 + rel) as Addr;
                 Some((TermKind::Jump, Some(target)))
             }
             // JMP rel32
             0xE9 if p + 4 < data.len() => {
-                let rel = i32::from_le_bytes([data[p+1], data[p+2], data[p+3], data[p+4]]) as i64;
+                let rel = i64::from(i32::from_le_bytes([data[p+1], data[p+2], data[p+3], data[p+4]]));
                 let target = (insn_end as i64 + rel) as Addr;
                 Some((TermKind::Jump, Some(target)))
             }
             // CALL rel32
             0xE8 if p + 4 < data.len() => {
-                let rel = i32::from_le_bytes([data[p+1], data[p+2], data[p+3], data[p+4]]) as i64;
+                let rel = i64::from(i32::from_le_bytes([data[p+1], data[p+2], data[p+3], data[p+4]]));
                 let target = (insn_end as i64 + rel) as Addr;
                 Some((TermKind::Call, Some(target)))
             }
@@ -374,16 +374,16 @@ impl InsnScanner {
             }
             // Jcc rel8 (0x70-0x7F)
             0x70..=0x7F if p + 1 < data.len() => {
-                let rel = data[p + 1] as i8 as i64;
+                let rel = i64::from(data[p + 1] as i8);
                 let taken = (insn_end as i64 + rel) as Addr;
                 Some((TermKind::Branch, Some(taken)))
             }
             // 0x0F 0x8x — Jcc rel32
             0x0F if p + 1 < data.len() && data[p + 1] >= 0x80 && data[p + 1] <= 0x8F => {
                 if p + 5 < data.len() {
-                    let rel = i32::from_le_bytes([
+                    let rel = i64::from(i32::from_le_bytes([
                         data[p+2], data[p+3], data[p+4], data[p+5],
-                    ]) as i64;
+                    ]));
                     let taken = (insn_end as i64 + rel) as Addr;
                     Some((TermKind::Branch, Some(taken)))
                 } else {

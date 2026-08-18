@@ -801,7 +801,7 @@ impl fmt::Display for ArgLocation {
         match self {
             Self::Register(r) => write!(f, "{r}"),
             Self::RegisterMulti(regs) => {
-                let names: Vec<String> = regs.iter().map(|r| r.to_string()).collect();
+                let names: Vec<String> = regs.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", names.join(":"))
             }
             Self::Stack { offset, size } => write!(f, "stack+{offset}({size}B)"),

@@ -326,7 +326,7 @@ impl AnnotatedTrace {
     /// All annotations at exactly `pc`.
     #[must_use]
     pub fn at_pc(&self, pc: u64) -> &[TraceAnnotation] {
-        self.by_pc.get(&pc).map(|v| v.as_slice()).unwrap_or(&[])
+        self.by_pc.get(&pc).map(std::vec::Vec::as_slice).unwrap_or(&[])
     }
 
     /// All annotations that cover `addr` (including range annotations).
@@ -481,7 +481,7 @@ impl TraceAnnotator {
                         rec.pc,
                         AnnotationKind::Symbol {
                             name: name.to_string(),
-                            demangled: demangled.map(|s| s.to_string()),
+                            demangled: demangled.map(std::string::ToString::to_string),
                         },
                         AnnotationSource::SymbolFile("symbols".into()),
                     )

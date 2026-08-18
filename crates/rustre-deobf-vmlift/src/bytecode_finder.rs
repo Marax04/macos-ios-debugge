@@ -268,7 +268,7 @@ impl BytecodeFinder {
 
             // VM opcodes: typically 16–64 distinct values, evenly distributed
             if (16..=128).contains(&distinct) {
-                let max_count = *histogram.iter().max().unwrap_or(&0) as f64;
+                let max_count = f64::from(*histogram.iter().max().unwrap_or(&0));
                 let avg_count = total / distinct as f64;
                 let uniformity = avg_count / max_count.max(1.0);
 
@@ -313,7 +313,7 @@ impl BytecodeFinder {
                 for i in 0..aligned_count {
                     first_bytes[block[i * stride] as usize] += 1;
                 }
-                let max_fb = *first_bytes.iter().max().unwrap_or(&0) as f64;
+                let max_fb = f64::from(*first_bytes.iter().max().unwrap_or(&0));
                 let ratio = max_fb / aligned_count as f64;
 
                 // If >60% of stride-aligned positions share the same first byte,

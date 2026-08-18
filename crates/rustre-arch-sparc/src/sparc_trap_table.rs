@@ -205,7 +205,7 @@ fn e(tt: u8, name: &str, desc: &str, kind: TrapKind, priority: u8, sparc_version
         name: name.to_owned(),
         description: desc.to_owned(),
         kind,
-        table_offset: (tt as u16) * 0x10,
+        table_offset: u16::from(tt) * 0x10,
         priority,
         deferrable: false,
         sparc_version,

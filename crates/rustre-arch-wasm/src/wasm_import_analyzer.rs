@@ -560,7 +560,7 @@ fn compute_complexity_score(
     let func_score = (imported_func_count as f32 / 100.0).min(1.0) * 0.55;
     let wasi_bonus = if is_wasi { 0.15 } else { 0.0 };
     let emsc_bonus = if is_emscripten { 0.20 } else { 0.0 };
-    let mem_bonus = if imports.iter().any(|i| i.is_imported_memory()) { 0.10 } else { 0.0 };
+    let mem_bonus = if imports.iter().any(WasmImport::is_imported_memory) { 0.10 } else { 0.0 };
     (func_score + wasi_bonus + emsc_bonus + mem_bonus).clamp(0.0, 1.0)
 }
 

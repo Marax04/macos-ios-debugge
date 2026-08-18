@@ -357,7 +357,7 @@ impl SquashfsExtractor {
             mode: 0o755,
             uid: 0,
             gid: 0,
-            mtime: sb.modification_time as u64,
+            mtime: u64::from(sb.modification_time),
             data: vec![],
             symlink_target: None,
             inode: Some(1),
@@ -725,8 +725,8 @@ impl Ext2Extractor {
         // Avoid overflowing usize when storing the image size hint.  The value
         // is informational only; cap it at usize::MAX (saturating) so it never
         // wraps on 32-bit targets.
-        fs.image_size = (sb.block_count as u64)
-            .saturating_mul(sb.block_size as u64)
+        fs.image_size = u64::from(sb.block_count)
+            .saturating_mul(u64::from(sb.block_size))
             .min(usize::MAX as u64) as usize;
         fs.stats.files_found = sb.inode_count as usize;
 
@@ -823,12 +823,12 @@ impl FatExtractor {
         } else {
             let total_clusters = {
                 let total_sec = if total_sectors_16 != 0 {
-                    total_sectors_16 as u32
+                    u32::from(total_sectors_16)
                 } else {
                     total_sectors_32
                 };
                 if sectors_per_cluster > 0 {
-                    total_sec / sectors_per_cluster as u32
+                    total_sec / u32::from(sectors_per_cluster)
                 } else {
                     0
                 }
@@ -878,13 +878,13 @@ impl FatExtractor {
         };
 
         let total_sectors = if bs.total_sectors_16 != 0 {
-            bs.total_sectors_16 as u64
+            u64::from(bs.total_sectors_16)
         } else {
-            bs.total_sectors_32 as u64
+            u64::from(bs.total_sectors_32)
         };
 
         fs.image_size = total_sectors
-            .saturating_mul(bs.bytes_per_sector as u64)
+            .saturating_mul(u64::from(bs.bytes_per_sector))
             .min(usize::MAX as u64) as usize;
 
         fs.nodes.push(FsNode {

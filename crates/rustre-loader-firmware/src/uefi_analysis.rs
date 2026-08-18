@@ -138,7 +138,7 @@ impl GuidDatabase {
 
     #[must_use]
     pub fn lookup(&self, guid: &Guid) -> Option<&str> {
-        self.entries.get(guid).map(|s| s.as_str())
+        self.entries.get(guid).map(std::string::String::as_str)
     }
 
     #[must_use]
@@ -337,7 +337,7 @@ impl EfiFvIntegrityResult {
             };
         }
         // Sum all bytes in the header (should be 0 mod 256 for EFI checksum)
-        let sum: u32 = hdr_data.iter().take(56).map(|&b| b as u32).sum();
+        let sum: u32 = hdr_data.iter().take(56).map(|&b| u32::from(b)).sum();
         let actual = (sum & 0xffff) as u16;
         let stored = u16::from_le_bytes(hdr_data[0x32..0x34].try_into().unwrap_or([0, 0]));
         Self {
@@ -1662,7 +1662,7 @@ pub fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
         .unwrap_or(data.len());
     std::str::from_utf8(&data[offset..end])
         .ok()
-        .map(|s| s.to_owned())
+        .map(std::borrow::ToOwned::to_owned)
 }
 
 /// Align a value up to `align` (power-of-two).
@@ -1703,7 +1703,7 @@ pub fn byte_entropy(data: &[u8]) -> f64 {
     let mut entropy = 0.0f64;
     for &c in &freq {
         if c > 0 {
-            let p = c as f64 / n;
+            let p = f64::from(c) / n;
             entropy -= p * p.log2();
         }
     }
@@ -1755,7 +1755,7 @@ pub fn be_u32(data: &[u8], off: usize) -> u32 {
 pub fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
     for &byte in data {
-        a = (a + byte as u32) % 65521;
+        a = (a + u32::from(byte)) % 65521;
         b = (b + a) % 65521;
     }
     (b << 16) | a
@@ -1830,7 +1830,7 @@ pub const fn ror32(val: u32, n: u32) -> u32 {
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for &b in data {
-        crc ^= b as u32;
+        crc ^= u32::from(b);
         for _ in 0..8 {
             if crc & 1 != 0 {
                 crc = (crc >> 1) ^ 0xEDB8_8320;
@@ -1846,7 +1846,7 @@ pub fn crc32(data: &[u8]) -> u32 {
 pub fn fnv1a32(data: &[u8]) -> u32 {
     let mut h = 2166136261u32;
     for &b in data {
-        h ^= b as u32;
+        h ^= u32::from(b);
         h = h.wrapping_mul(16777619);
     }
     h

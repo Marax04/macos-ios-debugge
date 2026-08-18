@@ -368,7 +368,7 @@ const STOP_WORDS: &[&str] = &["the", "a", "an", "of", "and", "or", "in", "is", "
 #[must_use]
 pub fn compute_fingerprint(s: &str) -> String {
     let mut words: Vec<String> = s.split_whitespace()
-        .map(|w| w.to_lowercase())
+        .map(str::to_lowercase)
         .filter(|w| !STOP_WORDS.contains(&w.as_str()))
         .collect();
     words.sort();
@@ -432,7 +432,7 @@ impl TfIdfVectorizer {
 fn tokenize(s: &str) -> Vec<String> {
     s.split(|c: char| !c.is_alphanumeric())
         .filter(|t| !t.is_empty())
-        .map(|t| t.to_lowercase())
+        .map(str::to_lowercase)
         .collect()
 }
 

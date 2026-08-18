@@ -310,7 +310,7 @@ impl SparcState {
         let neg = result >> 31 != 0;
         let zero = result == 0;
         let overflow = ((lhs ^ result) & (rhs ^ result)) >> 31 != 0;
-        let carry = (result as u64) < (lhs as u64) + (rhs as u64);
+        let carry = u64::from(result) < u64::from(lhs) + u64::from(rhs);
         self.set_icc(neg, zero, overflow, carry);
     }
 
@@ -318,7 +318,7 @@ impl SparcState {
         let neg = result >> 31 != 0;
         let zero = result == 0;
         let overflow = ((lhs ^ rhs) & (lhs ^ result)) >> 31 != 0;
-        let carry = (lhs as u64) < (rhs as u64);
+        let carry = u64::from(lhs) < u64::from(rhs);
         self.set_icc(neg, zero, overflow, carry);
     }
 
@@ -365,7 +365,7 @@ impl SparcState {
         self.psr = (self.psr | PSR_S) & !PSR_ET;
         self.psr = (self.psr & !0x1F) | (old_cwp as u32 & 0x1F);
         // Build TBR with tt.
-        let tt_val = (tt.tt() as u32) << 4;
+        let tt_val = u32::from(tt.tt()) << 4;
         self.tbr = (self.tbr & !0xFF0) | tt_val;
         self.pc = self.tbr;
         self.npc = self.tbr + 4;
@@ -472,7 +472,7 @@ impl SparcState {
         // Sign-extend the 30-bit disp field to i32, then scale by 4.
         // We work in i64 to avoid any overflow before the sign extension,
         // sign-extend by shifting left then right, and truncate to i32.
-        let field = (instr & 0x3FFF_FFFF) as i64;
+        let field = i64::from(instr & 0x3FFF_FFFF);
         // Sign-extend 30-bit value: shift MSB to bit 63, arithmetic-shift back.
         let sign_ext = (field << 34) >> 34; // 64 - 30 = 34
         let disp30 = (sign_ext * 4) as i32;
@@ -630,22 +630,21 @@ impl SparcState {
                     .mem
                     .read_byte(addr)
                     .ok_or(SparcError::DataFault { addr, write: false })?;
-                self.rset(rd, val as u32);
+                self.rset(rd, u32::from(val));
             }
             0x02 => {
                 // LDUH (unsigned half)
                 // Use wrapping_add to avoid overflow when addr == 0xFFFF_FFFF
                 // (parser-trailing-data-ignored / integer-overflow guard).
-                let hi = self
+                let hi = u32::from(self
                     .mem
                     .read_byte(addr)
-                    .ok_or(SparcError::DataFault { addr, write: false })?
-                    as u32;
+                    .ok_or(SparcError::DataFault { addr, write: false })?);
                 let addr1 = addr.wrapping_add(1);
-                let lo = self.mem.read_byte(addr1).ok_or(SparcError::DataFault {
+                let lo = u32::from(self.mem.read_byte(addr1).ok_or(SparcError::DataFault {
                     addr: addr1,
                     write: false,
-                })? as u32;
+                })?);
                 self.rset(rd, (hi << 8) | lo);
             }
             0x09 => {
@@ -655,7 +654,7 @@ impl SparcState {
                     .read_byte(addr)
                     .ok_or(SparcError::DataFault { addr, write: false })?
                     as i8;
-                self.rset(rd, val as i32 as u32);
+                self.rset(rd, i32::from(val) as u32);
             }
             0x04 => {
                 // ST (32-bit store)

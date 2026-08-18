@@ -382,7 +382,7 @@ impl DeobfOrchestrator {
             .into_iter()
             .find(|p| {
                 // Check budget
-                let cost = p.category.cost() as u64;
+                let cost = u64::from(p.category.cost());
                 if session.total_cost + cost > self.config.compute_budget {
                     return false;
                 }
@@ -466,7 +466,7 @@ impl DeobfOrchestrator {
 
             let pass_name = pass.spec.name.clone();
             let category_str = format!("{:?}", pass.category);
-            let pass_cost = pass.category.cost() as u64;
+            let pass_cost = u64::from(pass.category.cost());
 
             // Run the pass
             let result = self.run_pass(pass, &current_data);

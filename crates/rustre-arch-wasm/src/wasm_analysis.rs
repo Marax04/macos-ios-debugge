@@ -146,7 +146,7 @@ impl FunctionCallGraph {
 
     #[must_use]
     pub fn edge_count(&self) -> usize {
-        self.calls.values().map(|s| s.len()).sum()
+        self.calls.values().map(std::collections::HashSet::len).sum()
     }
 }
 

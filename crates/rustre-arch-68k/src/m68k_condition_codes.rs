@@ -207,11 +207,11 @@ impl fmt::Display for CcRegister {
         write!(
             f,
             "CCR[X={} N={} Z={} V={} C={}]",
-            self.x() as u8,
-            self.n() as u8,
-            self.z() as u8,
-            self.v() as u8,
-            self.c() as u8,
+            u8::from(self.x()),
+            u8::from(self.n()),
+            u8::from(self.z()),
+            u8::from(self.v()),
+            u8::from(self.c()),
         )
     }
 }

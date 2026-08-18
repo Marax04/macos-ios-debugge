@@ -93,7 +93,7 @@ impl Fat32Bpb {
         }
         let total_sectors_32 = u32::from_le_bytes([sector[32], sector[33], sector[34], sector[35]]);
         let total_sectors = if total_sectors_16 != 0 {
-            (total_sectors_16) as u32
+            u32::from(total_sectors_16)
         } else {
             total_sectors_32
         };
@@ -152,7 +152,7 @@ impl Fat32Bpb {
     pub fn cluster_byte_offset(&self, cluster: u32) -> u64 {
         // Cluster 2 is the first data cluster; clusters 0 and 1 are reserved.
         // Guard subtraction against underflow for invalid cluster values.
-        let cluster_index = (cluster as u64).saturating_sub(2);
+        let cluster_index = u64::from(cluster).saturating_sub(2);
         self.data_start_byte()
             .saturating_add(cluster_index.saturating_mul(self.cluster_size()))
     }

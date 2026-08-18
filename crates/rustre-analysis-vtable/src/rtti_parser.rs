@@ -673,7 +673,7 @@ impl RttiParser {
                     if let Some(bti_va) = self.read_ptr(entry_off) {
                         let raw_flags = self
                             .read_u32(entry_off.wrapping_add(ps))
-                            .map(|v| v as i64)
+                            .map(|v| i64::from(v))
                             .unwrap_or(0);
                         let entry = GccBaseEntry {
                             typeinfo_va: bti_va,

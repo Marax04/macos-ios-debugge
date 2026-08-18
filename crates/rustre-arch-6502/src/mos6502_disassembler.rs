@@ -116,7 +116,7 @@ impl Mos6502Insn {
     pub fn branch_target(&self) -> Option<u16> {
         if let Mos6502Operand::Relative(off) = self.operand {
             let next = self.next_addr();
-            Some(next.wrapping_add(off as i16 as u16))
+            Some(next.wrapping_add(i16::from(off) as u16))
         } else {
             None
         }
@@ -581,7 +581,7 @@ impl Mos6502Disassembler {
     /// Count cycles for a linear block (ignoring branches/page-crosses).
     #[must_use]
     pub fn count_cycles(&self, insns: &[Mos6502Insn]) -> u32 {
-        insns.iter().map(|i| i.cycles as u32).sum()
+        insns.iter().map(|i| u32::from(i.cycles)).sum()
     }
 
     /// Find all JSR targets in the instruction stream.

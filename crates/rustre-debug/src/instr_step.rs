@@ -172,6 +172,31 @@ pub fn is_fp_name_any(name: &str) -> bool {
     ALL_STEP_ARCHES.iter().any(|a| is_fp_name(*a, name))
 }
 
+/// Name of the link register (return address) on `arch`, when it has one.
+///
+/// `Option`, not a string, because the x86 family genuinely has no link
+/// register: the return address lives on the stack. Answering `""` or `"lr"`
+/// there would make [`is_ra_name_any`] claim a register the target does not
+/// have.
+#[must_use]
+pub const fn ra_key(arch: StepArch) -> Option<&'static str> {
+    match arch {
+        StepArch::X86_64 | StepArch::X86 => None,
+        StepArch::Aarch64 => Some("x30"),
+    }
+}
+
+/// Does `name` denote the link register on ANY architecture? See [`is_pc_name`].
+///
+/// Both AArch64 spellings, for the same reason [`is_fp_name`] takes both: the
+/// role name `lr` and the architectural name `x30` are both in live use in this
+/// crate — `apple_debugger`'s `decode` resolves the typed `lr` field through
+/// `GenericRole::Ra` while `unwind` reads `get("x30").or_else(get("lr"))`.
+#[must_use]
+pub fn is_ra_name_any(name: &str) -> bool {
+    name == "lr" || ALL_STEP_ARCHES.iter().any(|a| ra_key(*a) == Some(name))
+}
+
 /// Does `name` denote the frame pointer on `arch`?
 ///
 /// The frame pointer is the one register this crate names TWO ways, and the two

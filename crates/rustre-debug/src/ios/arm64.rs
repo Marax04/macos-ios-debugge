@@ -751,9 +751,15 @@ impl Arm64RegisterFile {
             RegClass::Flags => self.cpsr = value as u32,
             RegClass::Vector => {
                 let slot = &mut self.v[spec.index as usize];
-                // Preserve the high half: a 64-bit write to `d3` must not clear
-                // the top of `v3` from the debugger's point of view.
-                *slot = (*slot & !u128::from(u64::MAX)) | u128::from(value);
+                // Preserve everything the NAMED VIEW does not cover: a write to
+                // `s3` (32 bits) must leave bits 32..127 of `v3` untouched, just
+                // as a write to `d3` (64 bits) must leave the high half alone.
+                // The mask is derived from `spec.bits`, not fixed at 64.
+                // `value` is already truncated to `spec.bits`; views wider than
+                // 64 (`v`/`q`) still write only the low 64 bits through this API.
+                let width = u32::from(spec.bits).min(64);
+                let keep = !((1u128 << width) - 1);
+                *slot = (*slot & keep) | u128::from(value);
             }
             RegClass::FpControl => {
                 if spec.name == "fpsr" {
@@ -1512,6 +1518,30 @@ mod tests {
         f.set("d3", 0xAA).unwrap();
         assert_eq!(f.v[3] >> 64, 0xFFFF_FFFF_FFFF_FFFF);
         assert_eq!(f.get("d3").unwrap(), 0xAA);
+    }
+
+    #[test]
+    fn narrow_vector_view_write_preserves_the_rest_of_the_low_half() {
+        let mut f = Arm64RegisterFile::new();
+        let base: u128 = 0xAAAA_AAAA_AAAA_AAAA_1111_1111_2222_2222;
+        f.v[3] = base;
+        f.set("s3", 0xDEAD).unwrap();
+        assert_eq!(f.v[3] >> 64, 0xAAAA_AAAA_AAAA_AAAA, "high half must survive");
+        assert_eq!(f.get("d3").unwrap(), 0x1111_1111_0000_DEAD, "bits 32..63 must survive");
+
+        f.v[3] = base;
+        f.set("h3", 0xBEEF).unwrap();
+        assert_eq!(f.get("d3").unwrap(), 0x1111_1111_2222_BEEF);
+
+        f.v[3] = base;
+        f.set("b3", 0x5A).unwrap();
+        assert_eq!(f.get("d3").unwrap(), 0x1111_1111_2222_225A);
+
+        // q/v remain full-width writes of the low 64 bits.
+        f.v[3] = base;
+        f.set("d3", 0x99).unwrap();
+        assert_eq!(f.get("d3").unwrap(), 0x99);
+        assert_eq!(f.v[3] >> 64, 0xAAAA_AAAA_AAAA_AAAA);
     }
 
     #[test]

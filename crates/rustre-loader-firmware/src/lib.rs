@@ -682,7 +682,7 @@ impl fmt::Display for FirmwareInfo {
             self.endian_hint.as_deref().unwrap_or("?"),
             self.rtos
                 .as_ref()
-                .map(|r| r.to_string())
+                .map(std::string::ToString::to_string)
                 .unwrap_or_else(|| "none".to_string()),
             self.entropy,
         )
@@ -857,7 +857,7 @@ pub fn detect_boot_sections(data: &[u8], base: u64) -> Vec<BootSection> {
                 name: "uboot-payload".to_string(),
                 offset: payload_off,
                 size: payload_len,
-                load_address: hdr.load_addr as u64,
+                load_address: u64::from(hdr.load_addr),
             });
         }
         sections.push(BootSection {
@@ -866,7 +866,7 @@ pub fn detect_boot_sections(data: &[u8], base: u64) -> Vec<BootSection> {
             size: 64,
             // Use the actual load address from the header, not the caller-supplied
             // base override, so this is consistent with the payload section above.
-            load_address: hdr.load_addr as u64,
+            load_address: u64::from(hdr.load_addr),
         });
         return sections;
     }
@@ -876,7 +876,7 @@ pub fn detect_boot_sections(data: &[u8], base: u64) -> Vec<BootSection> {
     {
         let mut seen: HashMap<u64, usize> = HashMap::new();
         for blk in &blocks {
-            *seen.entry(blk.target_addr as u64 & !0xFFFF).or_insert(0) += 1;
+            *seen.entry(u64::from(blk.target_addr) & !0xFFFF).or_insert(0) += 1;
         }
         for (addr, count) in &seen {
             sections.push(BootSection {
@@ -1191,8 +1191,8 @@ impl IntelHexRecord {
             return Err(FirmwareError::TruncatedData);
         }
         let byte_count = parse_hex_byte(hex, 0)?;
-        let addr_hi = parse_hex_byte(hex, 2)? as u16;
-        let addr_lo = parse_hex_byte(hex, 4)? as u16;
+        let addr_hi = u16::from(parse_hex_byte(hex, 2)?);
+        let addr_lo = u16::from(parse_hex_byte(hex, 4)?);
         let address = (addr_hi << 8) | addr_lo;
         let rt = parse_hex_byte(hex, 6)?;
         let record_type = IntelHexRecordType::from_byte(rt);
@@ -1260,7 +1260,7 @@ impl IntelHexImage {
                 .map_err(|e| FirmwareError::ParseError(format!("line {line_no}: {e}")))?;
             match record.record_type {
                 IntelHexRecordType::Data => {
-                    let addr = upper_base + record.address as u64;
+                    let addr = upper_base + u64::from(record.address);
                     if let Some(last) = regions.last_mut() && last.0 + last.1.len() as u64 == addr {
                         last.1.extend_from_slice(&record.data);
                         continue;
@@ -1273,28 +1273,28 @@ impl IntelHexImage {
                         return Err(FirmwareError::TruncatedData);
                     }
                     upper_base =
-                        (u16::from_be_bytes([record.data[0], record.data[1]]) as u64) << 16;
+                        u64::from(u16::from_be_bytes([record.data[0], record.data[1]])) << 16;
                 }
                 IntelHexRecordType::ExtendedSegmentAddress => {
                     if record.data.len() < 2 {
                         return Err(FirmwareError::TruncatedData);
                     }
-                    upper_base = (u16::from_be_bytes([record.data[0], record.data[1]]) as u64) * 16;
+                    upper_base = u64::from(u16::from_be_bytes([record.data[0], record.data[1]])) * 16;
                 }
                 IntelHexRecordType::StartLinearAddress => {
                     if record.data.len() >= 4 {
-                        start_address = Some(u32::from_be_bytes([
+                        start_address = Some(u64::from(u32::from_be_bytes([
                             record.data[0],
                             record.data[1],
                             record.data[2],
                             record.data[3],
-                        ]) as u64);
+                        ])));
                     }
                 }
                 IntelHexRecordType::StartSegmentAddress => {
                     if record.data.len() >= 4 {
-                        let cs = u16::from_be_bytes([record.data[0], record.data[1]]) as u64;
-                        let ip = u16::from_be_bytes([record.data[2], record.data[3]]) as u64;
+                        let cs = u64::from(u16::from_be_bytes([record.data[0], record.data[1]]));
+                        let ip = u64::from(u16::from_be_bytes([record.data[2], record.data[3]]));
                         start_address = Some((cs << 4) + ip);
                     }
                 }
@@ -1343,7 +1343,7 @@ impl SrecRecord {
         }
         let mut addr = 0u64;
         for i in 0..addr_bytes {
-            addr = (addr << 8) | parse_hex_byte(hex, 2 + i * 2)? as u64;
+            addr = (addr << 8) | u64::from(parse_hex_byte(hex, 2 + i * 2)?);
         }
         let data_start = 2 + addr_bytes * 2;
         let data_count = byte_count as usize - addr_bytes - 1;
@@ -1356,12 +1356,12 @@ impl SrecRecord {
             data.push(parse_hex_byte(hex, data_start + i * 2)?);
         }
         let checksum = parse_hex_byte(hex, data_end)?;
-        let mut sum = byte_count as u32;
+        let mut sum = u32::from(byte_count);
         for i in 0..addr_bytes {
-            sum += parse_hex_byte(hex, 2 + i * 2)? as u32;
+            sum += u32::from(parse_hex_byte(hex, 2 + i * 2)?);
         }
         for &b in &data {
-            sum += b as u32;
+            sum += u32::from(b);
         }
         let expected = (!(sum & 0xFF)) as u8;
         if expected != checksum {
@@ -1485,7 +1485,7 @@ impl Uf2Record {
     pub fn assemble(records: &[Self]) -> Vec<(u64, Vec<u8>)> {
         let mut regions: Vec<(u64, Vec<u8>)> = Vec::new();
         for rec in records {
-            let addr = rec.target_addr as u64;
+            let addr = u64::from(rec.target_addr);
             let size = rec.payload_size as usize;
             let payload = &rec.data[..size.min(rec.data.len())];
             if let Some(last) = regions.last_mut() && last.0 + last.1.len() as u64 == addr {
@@ -1719,15 +1719,15 @@ impl Loader for FirmwareLoader {
     }
 
     async fn load(&self, input: LoaderInput) -> Result<LoadResult, CoreError> {
-        let hint_base = input.hints.base_address().map(|a| a.as_u64());
+        let hint_base = input.hints.base_address().map(rustre_core::Address::as_u64);
         let arch_name = input
             .hints
             .architecture()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
 
         let (entry, actual_base) = if let Some(hdr) = UBootHeader::parse(&input.data) {
-            (hdr.entry_point as u64, hdr.load_addr as u64)
+            (u64::from(hdr.entry_point), u64::from(hdr.load_addr))
         } else {
             let base = hint_base.unwrap_or(0);
             (base, base)
@@ -1792,7 +1792,7 @@ impl Loader for IntelHexLoader {
         let arch_name = input
             .hints
             .architecture()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         let image =
             IntelHexImage::parse(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;
@@ -1855,7 +1855,7 @@ impl Loader for SrecLoader {
         let arch_name = input
             .hints
             .architecture()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         let image =
             SrecImage::parse(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;
@@ -1918,7 +1918,7 @@ impl Loader for Uf2Loader {
         let arch_name = input
             .hints
             .architecture()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         let records =
             Uf2Record::parse_all(&input.data).map_err(|e| CoreError::parse(0, e.to_string()))?;

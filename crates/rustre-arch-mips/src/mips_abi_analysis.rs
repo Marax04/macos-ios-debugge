@@ -75,11 +75,11 @@ impl O32Abi {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            int_args: O32_INT_ARG.iter().map(|s| s.to_string()).collect(),
-            fp_args: O32_FP_ARG.iter().map(|s| s.to_string()).collect(),
-            return_regs: O32_RET.iter().map(|s| s.to_string()).collect(),
-            callee_saved: O32_CALLEE_SAVED.iter().map(|s| s.to_string()).collect(),
-            temporaries: O32_TEMPORARIES.iter().map(|s| s.to_string()).collect(),
+            int_args: O32_INT_ARG.iter().map(std::string::ToString::to_string).collect(),
+            fp_args: O32_FP_ARG.iter().map(std::string::ToString::to_string).collect(),
+            return_regs: O32_RET.iter().map(std::string::ToString::to_string).collect(),
+            callee_saved: O32_CALLEE_SAVED.iter().map(std::string::ToString::to_string).collect(),
+            temporaries: O32_TEMPORARIES.iter().map(std::string::ToString::to_string).collect(),
         }
     }
 
@@ -173,9 +173,9 @@ impl N64Abi {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            int_args: N64_INT_ARG.iter().map(|s| s.to_string()).collect(),
-            fp_args: N64_FP_ARG.iter().map(|s| s.to_string()).collect(),
-            return_regs: N64_RET.iter().map(|s| s.to_string()).collect(),
+            int_args: N64_INT_ARG.iter().map(std::string::ToString::to_string).collect(),
+            fp_args: N64_FP_ARG.iter().map(std::string::ToString::to_string).collect(),
+            return_regs: N64_RET.iter().map(std::string::ToString::to_string).collect(),
             callee_saved: vec!["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]
                 .into_iter()
                 .map(str::to_string)
@@ -246,8 +246,8 @@ impl MipsEabi {
     pub fn new(is_32bit: bool) -> Self {
         Self {
             is_32bit,
-            int_args: EABI_INT_ARG.iter().map(|s| s.to_string()).collect(),
-            fp_args: EABI_FP_ARG.iter().map(|s| s.to_string()).collect(),
+            int_args: EABI_INT_ARG.iter().map(std::string::ToString::to_string).collect(),
+            fp_args: EABI_FP_ARG.iter().map(std::string::ToString::to_string).collect(),
             return_regs: vec!["v0".to_string(), "v1".to_string()],
             callee_saved: vec!["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"]
                 .into_iter()
@@ -311,8 +311,8 @@ impl ArgPassingRules {
     pub fn for_o32() -> Self {
         Self {
             abi: MipsAbiKind::O32,
-            int_regs: O32_INT_ARG.iter().map(|s| s.to_string()).collect(),
-            fp_regs: O32_FP_ARG.iter().map(|s| s.to_string()).collect(),
+            int_regs: O32_INT_ARG.iter().map(std::string::ToString::to_string).collect(),
+            fp_regs: O32_FP_ARG.iter().map(std::string::ToString::to_string).collect(),
             stack_align: 8,
             next_int: 0,
             next_fp: 0,
@@ -325,8 +325,8 @@ impl ArgPassingRules {
     pub fn for_n64() -> Self {
         Self {
             abi: MipsAbiKind::N64,
-            int_regs: N64_INT_ARG.iter().map(|s| s.to_string()).collect(),
-            fp_regs: N64_FP_ARG.iter().map(|s| s.to_string()).collect(),
+            int_regs: N64_INT_ARG.iter().map(std::string::ToString::to_string).collect(),
+            fp_regs: N64_FP_ARG.iter().map(std::string::ToString::to_string).collect(),
             stack_align: 16,
             next_int: 0,
             next_fp: 0,

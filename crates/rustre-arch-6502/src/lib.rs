@@ -957,14 +957,14 @@ impl Architecture for Cpu6502Arch {
         let target_val: Option<u64> = match bytes.len() {
             // Relative branches: opcode + 1-byte signed offset.
             2 => {
-                let offset = bytes[1] as i8 as i64;
+                let offset = i64::from(bytes[1] as i8);
                 let next_pc = instr.address.as_u64().wrapping_add(2);
                 Some((next_pc as i64).wrapping_add(offset) as u64)
             }
             // Absolute / absolute-X jumps: opcode + 2-byte little-endian address.
             3 => {
-                let lo = bytes[1] as u64;
-                let hi = bytes[2] as u64;
+                let lo = u64::from(bytes[1]);
+                let hi = u64::from(bytes[2]);
                 Some(lo | (hi << 8))
             }
             _ => None,

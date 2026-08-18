@@ -828,7 +828,7 @@ fn decode_official_brief(bytes: &[u8]) -> (String, usize) {
         0x00 => ("NOP".into(), 1),
         0x76 => ("HALT".into(), 1),
         0xC3 if bytes.len() >= 3 => {
-            let addr = (bytes[1] as u16) | ((bytes[2] as u16) << 8);
+            let addr = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
             (format!("JP ${addr:04X}"), 3)
         }
         0x3E if bytes.len() >= 2 => (format!("LD A,${:02X}", bytes[1]), 2),

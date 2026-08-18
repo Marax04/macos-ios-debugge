@@ -762,7 +762,7 @@ fn read_float(bytes: &[u8], endianness: Endianness) -> f64 {
                 Endianness::Little => u32::from_le_bytes(buf),
                 Endianness::Big => u32::from_be_bytes(buf),
             };
-            f32::from_bits(bits) as f64
+            f64::from(f32::from_bits(bits))
         }
         8 => {
             let mut buf = [0u8; 8];

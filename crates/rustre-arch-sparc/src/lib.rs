@@ -3862,7 +3862,7 @@ pub fn resolve_branches(instrs: &[AnnotatedSparcInstr]) -> Vec<(Address, Address
             let hex: String = ops
                 .trim_start_matches('$')
                 .chars()
-                .take_while(|c| c.is_ascii_hexdigit())
+                .take_while(char::is_ascii_hexdigit)
                 .collect();
             if let Ok(target) = u64::from_str_radix(&hex, 16) {
                 out.push((

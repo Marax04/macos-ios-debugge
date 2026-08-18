@@ -387,7 +387,7 @@ impl FunctionValidator {
                             pos += n;
                             // Check if offset exceeds declared memory
                             if self.memory_pages > 0 {
-                                let limit_bytes = self.memory_pages as u64 * 65536;
+                                let limit_bytes = u64::from(self.memory_pages) * 65536;
                                 if mem_offset > limit_bytes {
                                     self.errors.push(ValidationError::MemoryOutOfBounds {
                                         offset: mem_offset,
@@ -825,7 +825,7 @@ impl ValidationReport {
     /// Whether any fatal error was found.
     #[must_use]
     pub fn has_fatal(&self) -> bool {
-        self.errors.iter().any(|e| e.is_fatal())
+        self.errors.iter().any(ValidationError::is_fatal)
     }
 }
 

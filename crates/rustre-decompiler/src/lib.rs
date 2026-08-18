@@ -27657,7 +27657,7 @@ fn mentioned_arg_reg_prefix(blocks: &[rustre_il_mlil::MlilBasicBlock]) -> usize 
                 }
             }
             if let MlilInstruction::Assign { dest, .. } = &ins.instr
-                && let Some(i) = ARG_REGS.iter().position(|r| *r == dest.name)
+                && let Some(i) = arg_reg_index(&dest.name)
             {
                 assigned[i] = true;
                 written[i] = true;
@@ -27665,6 +27665,35 @@ fn mentioned_arg_reg_prefix(blocks: &[rustre_il_mlil::MlilBasicBlock]) -> usize 
         }
     }
     (0..4).take_while(|&i| assigned[i] || live_in[i]).count()
+}
+
+/// Indice dell'argomento Win64 scritto da un registro, **meta' a 32 bit
+/// comprese**.
+///
+/// #6860 — il confronto era `dest.name == "rcx"` e simili, quindi una scrittura
+/// a `ecx` NON contava come preparazione del primo argomento. Ma `xor %ecx,
+/// %ecx` e' il modo IDIOMATICO di passare zero e `mov $1, %ecx` quello di
+/// passare una costante piccola: su x86-64 scrivere la meta' bassa AZZERA i 32
+/// bit alti, quindi e' una scrittura a `rcx` a tutti gli effetti.
+///
+/// E' la divergenza che bloccava la direzione «alza» (§83.2): lo scanner sul
+/// disassemblato (`callsite_argc_from_bodies`) conta `%ecx`, questo lato no, e
+/// le due rilevazioni non potevano accordarsi.
+///
+/// Si applica al lato SCRITTURE (preparazione di un argomento). Il lato letture
+/// (`walk_arg_regs`, che alimenta `live_in`) e' lasciato com'e': e' una
+/// decisione diversa e va misurata a parte.
+fn arg_reg_index(nome: &str) -> Option<usize> {
+    const REGS64: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
+    const REGS32: [&str; 4] = ["ecx", "edx", "r8d", "r9d"];
+    const REGS16: [&str; 4] = ["cx", "dx", "r8w", "r9w"];
+    const REGS8: [&str; 4] = ["cl", "dl", "r8b", "r9b"];
+    REGS64
+        .iter()
+        .position(|r| *r == nome)
+        .or_else(|| REGS32.iter().position(|r| *r == nome))
+        .or_else(|| REGS16.iter().position(|r| *r == nome))
+        .or_else(|| REGS8.iter().position(|r| *r == nome))
 }
 
 /// Mark which of `rcx, rdx, r8, r9` an expression READS.
@@ -27977,7 +28006,7 @@ pub fn fill_mlil_call_args(
     blocks: &mut [rustre_il_mlil::MlilBasicBlock],
     arities: &HashMap<u64, usize>,
 ) {
-    fill_mlil_call_args_with(blocks, arities, &std::collections::HashSet::new());
+    fill_mlil_call_args_with(blocks, arities, &std::collections::HashSet::new(), &HashMap::new());
 }
 
 /// Come sopra, ma con un ripiego sull'arita' del PROTOTIPO PUBBLICATO.
@@ -27996,6 +28025,7 @@ fn fill_mlil_call_args_with(
     blocks: &mut [rustre_il_mlil::MlilBasicBlock],
     arities: &HashMap<u64, usize>,
     published: &std::collections::HashSet<u64>,
+    argc: &HashMap<u64, (usize, usize, usize, usize, usize)>,
 ) {
     use rustre_il_mlil::{MlilExpr, MlilInstruction};
     const ARG_REGS: [&str; 4] = ["rcx", "rdx", "r8", "r9"];
@@ -28028,11 +28058,25 @@ fn fill_mlil_call_args_with(
                     live_in[i] = true;
                 }
             }
-            if let MlilInstruction::Assign { dest, .. } = &ins.instr
-                && let Some(i) = ARG_REGS.iter().position(|r| *r == dest.name)
-            {
-                assigned[i] = true;
-                written[i] = true;
+            if let MlilInstruction::Assign { dest, .. } = &ins.instr {
+                // SONDA #6860 (`RUSTRE_DBG_REGNAME=1`, effetto ZERO): con quali
+                // NOMI il MLIL scrive i registri argomento. Serve a stabilire se
+                // il lift normalizzi le meta' a 32 bit (`ecx`) al nome a 64
+                // (`rcx`) — da cui dipende se il confronto stretto perdeva
+                // preparazioni di argomenti.
+                if std::env::var("RUSTRE_DBG_REGNAME").is_ok_and(|v| v != "0")
+                    && matches!(
+                        dest.name.as_str(),
+                        "rcx" | "rdx" | "r8" | "r9" | "ecx" | "edx" | "r8d" | "r9d"
+                            | "cx" | "dx" | "cl" | "dl"
+                    )
+                {
+                    eprintln!("[regname] {}", dest.name);
+                }
+                if let Some(i) = arg_reg_index(&dest.name) {
+                    assigned[i] = true;
+                    written[i] = true;
+                }
             }
             let (MlilInstruction::Call { dest, args, .. }
             | MlilInstruction::TailCall { dest, args }) = &mut ins.instr
@@ -28088,6 +28132,28 @@ fn fill_mlil_call_args_with(
             } else {
                 (0..4).take_while(|&i| assigned[i]).count()
             };
+            // SONDA #6880 (`RUSTRE_DBG_DIVERG=1`, effetto ZERO): affianca le DUE
+            // rilevazioni degli argomenti SULLO STESSO SITO.
+            //
+            // `available` = registri preparati secondo il MLIL, qui e ora.
+            // `min` della mappa = minimo osservato sul DISASSEMBLATO su TUTTI i
+            // siti di quel bersaglio; se la mappa dice che ogni sito ne prepara
+            // almeno M, questo sito dovrebbe averne almeno M.
+            //
+            // Ogni riga con `available < min` e' una divergenza, ed e' cio' che
+            // ha fatto fallire ogni tentativo di ALZARE una firma (§83.2): la
+            // firma veniva alzata a M e i siti emessi ne passavano meno.
+            //
+            // ⚠ Scritta DOPO due ipotesi sbagliate (§84) formulate senza
+            // misurare. La misura viene prima della congettura.
+            if std::env::var("RUSTRE_DBG_DIVERG").is_ok_and(|v| v != "0") {
+                let (mx, mn, siti, _, _) = argc.get(va).copied().unwrap_or((0, 0, 0, 0, 0));
+                let riempiti = arity.min(ARG_REGS.len()).min(available);
+                eprintln!(
+                    "[diverg] tgt={va:x} avail={available} pub={} arity={arity} riempiti={riempiti} map_min={mn} map_max={mx} siti={siti}",
+                    published.contains(va)
+                );
+            }
             *args = ARG_REGS
                 .iter()
                 .take(arity.min(ARG_REGS.len()).min(available))
@@ -28565,6 +28631,7 @@ impl DecompilerPass for IlAnalysisPass {
                     &mut mlil_func.blocks,
                     &ctx.callee_arities,
                     &ctx.published_arity,
+                    &ctx.callsite_argc,
                 );
             }
             // Return values. Condividevano UNA sola variabile con la

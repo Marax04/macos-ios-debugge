@@ -73,15 +73,6 @@ pub enum RspError {
     /// The remote replied with an empty packet, i.e. "command unsupported".
     #[error("remote does not support command {0}")]
     Unsupported(String),
-    /// `m` returned fewer bytes than were asked for.
-    ///
-    /// The protocol permits this — a stub that can only read part of a region
-    /// answers with what it got — but every caller in this crate assumes the
-    /// full length, so the shortfall has to be visible rather than silently
-    /// handed back as if it were the whole read. The concrete damage: the
-    /// software-breakpoint fallback saves the original word before patching
-    /// `BRK #0`, and a short save means the restore writes back fewer bytes
-    /// than it overwrote, leaving part of the `BRK` in the target's code.
     /// A data command was answered with a `W`/`X` stop reply.
     ///
     /// The stub is allowed to answer whatever command is in flight with an
@@ -92,6 +83,37 @@ pub enum RspError {
     /// is gone and no retry can succeed.
     #[error("process is gone (reply {reply} to command {cmd})")]
     ProcessGone { cmd: String, reply: String },
+    /// The read gave up waiting: the deadline passed with no reply.
+    ///
+    /// Distinct from [`Self::Transport`] on purpose. A closed socket means the
+    /// reply will NEVER come; a deadline means it may still be on its way, and
+    /// the two ask the caller for opposite repairs — reconnect versus wait
+    /// longer or interrupt the target. Collapsing them into one string is why
+    /// a 30 s `set_read_timeout` on a target that ran 45 s was indistinguishable
+    /// from "the stub refused".
+    #[error("RSP read timed out after {waited}: {what}")]
+    Timeout { what: String, waited: String },
+    /// The connection can no longer be trusted to align replies with commands.
+    ///
+    /// Raised by every request AFTER one that was abandoned while a reply was
+    /// still owed. Resetting the local framer does not unsend the stub's
+    /// answer: those bytes arrive later and the framer hands them to the NEXT
+    /// command, which is a permanent one-position shift — and a silent one
+    /// when the stale packet happens to be hex, because `g` then decodes a
+    /// previous `m`'s memory as registers and reports an invented pc/sp/lr.
+    /// The same class the `O`-packet and notification handling already closes;
+    /// an expired read reopened it from another door.
+    #[error("RSP connection is desynchronised: {0}")]
+    Desynchronized(String),
+    /// `m` returned fewer bytes than were asked for.
+    ///
+    /// The protocol permits this — a stub that can only read part of a region
+    /// answers with what it got — but every caller in this crate assumes the
+    /// full length, so the shortfall has to be visible rather than silently
+    /// handed back as if it were the whole read. The concrete damage: the
+    /// software-breakpoint fallback saves the original word before patching
+    /// `BRK #0`, and a short save means the restore writes back fewer bytes
+    /// than it overwrote, leaving part of the `BRK` in the target's code.
     #[error("short read at {addr:#x}: asked for {requested} bytes, got {returned}")]
     ShortRead {
         addr: u64,
@@ -139,11 +161,38 @@ impl RspError {
                 | Self::Truncated
         )
     }
+
+    /// `true` when the request was abandoned with a reply still owed by the
+    /// stub, so the connection is no longer known to be in step.
+    ///
+    /// The command was already written to the wire (`request_inner` sends
+    /// before its first read), so the stub either has answered or will; giving
+    /// up on the read does not withdraw the question. Errors that carry a
+    /// COMPLETE reply — `Remote`, `RemoteText`, `Unsupported`, `ProcessGone`,
+    /// `ShortRead`, `ShortWrite` — are excluded: those consumed their packet
+    /// and leave the stream aligned.
+    #[must_use]
+    pub const fn leaves_reply_pending(&self) -> bool {
+        matches!(
+            self,
+            Self::Transport(_) | Self::Timeout { .. } | Self::Desynchronized(_)
+        )
+    }
 }
 
 impl From<io::Error> for RspError {
     fn from(e: io::Error) -> Self {
-        Self::Transport(e.to_string())
+        // `set_read_timeout` surfaces as `TimedOut` on Windows and as
+        // `WouldBlock` on unix; both mean the deadline passed, not that the
+        // peer went away, and only the caller of a resume can decide whether
+        // waiting longer is the right answer.
+        match e.kind() {
+            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => Self::Timeout {
+                what: e.to_string(),
+                waited: "the transport's read deadline".to_string(),
+            },
+            _ => Self::Transport(e.to_string()),
+        }
     }
 }
 
@@ -1132,6 +1181,14 @@ pub struct MockFaults {
     pub corrupt_checksum_at: Option<usize>,
     /// Close the connection after N responses have been delivered.
     pub close_after: Option<usize>,
+    /// Behave like a socket carrying `set_read_timeout`: a `recv` with nothing
+    /// queued fails with `TimedOut` instead of reporting end-of-stream.
+    ///
+    /// That is what [`TcpRspTransport::connect`]'s timeout produces on a target
+    /// that is simply still running — the connection is perfectly alive and the
+    /// reply is merely late — and it is a different event from the peer hanging
+    /// up, which the default `Ok(0)` already models.
+    pub read_timeout: bool,
 }
 
 /// In-memory transport: scripted responses in, sent bytes recorded.
@@ -1252,6 +1309,12 @@ impl RspTransport for MockTransport {
         }
         let n = cap.min(self.incoming.len());
         if n == 0 {
+            if self.faults.read_timeout {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "mock read deadline expired",
+                ));
+            }
             return Ok(0);
         }
         for (i, slot) in buf.iter_mut().enumerate().take(n) {
@@ -1300,6 +1363,14 @@ pub struct RspClient<T: RspTransport> {
     /// stub's RECEIVE buffer: a longer packet is dropped or truncated by real
     /// debugserver, so writes must be split to fit rather than sent whole.
     packet_size: Option<usize>,
+    /// Set once a request was abandoned with a reply still owed, describing
+    /// which command left it owed. While it is `Some` every request refuses
+    /// rather than reading a reply that may belong to the abandoned command.
+    desynchronised: Option<String>,
+    /// Whether that owed reply can still arrive — a read deadline expired on a
+    /// live socket — rather than having died with the stream. Only the first
+    /// case can be, and needs to be, drained.
+    owed_reply_in_flight: bool,
 }
 
 /// Largest `M` payload we will emit when the stub advertised no `PacketSize`.
@@ -1347,6 +1418,8 @@ impl<T: RspTransport> RspClient<T> {
             console_output: VecDeque::new(),
             max_retries: 3,
             packet_size: None,
+            desynchronised: None,
+            owed_reply_in_flight: false,
         }
     }
 
@@ -1418,15 +1491,104 @@ impl<T: RspTransport> RspClient<T> {
     /// # Errors
     /// See [`RspError`].
     pub fn request(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
+        if self.desynchronised.take().is_some() && self.owed_reply_in_flight {
+            // Refusing every later command is not a repair: it makes the
+            // connection unusable exactly when the debugger most needs it —
+            // the command after an abandoned resume is the `D`/`k` that stops
+            // the inferior being left suspended, and a `D` refused locally
+            // never reaches the stub at all.
+            //
+            // The owed reply is DEALT WITH instead of feared. Nothing has been
+            // written to the wire since the command was abandoned, so any byte
+            // the stub sends before this command goes out can only belong to
+            // that abandoned command: reading and discarding it puts the
+            // stream back in step. The soundness rests entirely on that
+            // ordering, which is why it happens here and not after the send.
+            self.owed_reply_in_flight = false;
+            self.discard_owed_reply();
+        }
         let outcome = self.request_inner(payload);
-        if outcome.is_err() {
+        if let Err(e) = &outcome {
             // Every error exit above may abandon a half-read packet in the
             // framer. Those bytes are meaningless now, and keeping them would
             // splice them onto the NEXT command's reply — a permanent desync
             // on a link that may well be healthy again.
             self.framer.reset();
+            if e.leaves_reply_pending() {
+                // …but `reset` only clears the LOCAL buffer. The stub's answer
+                // to this command may still be in flight, and nothing here can
+                // make it not arrive. Record the fact so the next command
+                // drains it before it speaks.
+                self.desynchronised = Some(format!(
+                    "{} was abandoned ({e}) with its reply still owed",
+                    String::from_utf8_lossy(payload)
+                ));
+                // Only an expired read deadline leaves a LIVE socket with an
+                // answer genuinely still coming: the deadline passed, the peer
+                // did not. A `Transport` failure IS the byte stream breaking —
+                // the peer hung up, or the socket failed — and there is nothing
+                // left on it to drain; draining there would swallow the reply
+                // to the NEXT command instead, which is the very confusion this
+                // is meant to prevent.
+                self.owed_reply_in_flight = matches!(e, RspError::Timeout { .. });
+            }
         }
         outcome
+    }
+
+    /// Whether this connection has an unclaimed reply owed to an abandoned
+    /// command, which makes every later reply suspect.
+    #[must_use]
+    pub fn is_desynchronised(&self) -> bool {
+        self.desynchronised.is_some()
+    }
+
+    /// Declare the connection back in step.
+    ///
+    /// Only legitimate when the stream itself was replaced — a fresh transport
+    /// after a reconnect. It does NOT drain anything: nothing on this side can
+    /// tell an owed reply from a fresh one, which is precisely why the latch
+    /// exists.
+    pub fn clear_desynchronised(&mut self) {
+        self.desynchronised = None;
+        self.owed_reply_in_flight = false;
+        self.framer.reset();
+    }
+
+    /// Read and throw away the reply owed to a command abandoned on an expired
+    /// read deadline, so the next command cannot be handed it.
+    ///
+    /// Called from [`RspClient::request`] BEFORE anything is written, so every
+    /// byte read here provably belongs to the abandoned command. It stops at
+    /// the first complete packet, or as soon as the transport has nothing more
+    /// to give (a fresh deadline, or the peer gone) — never waiting longer than
+    /// one read deadline, and never reporting a failure of its own: whether the
+    /// link still works is about to be answered by the real command.
+    fn discard_owed_reply(&mut self) {
+        let mut buf = [0u8; 4096];
+        loop {
+            while let Some(item) = self.framer.next_item() {
+                match item {
+                    // Console output belongs to the inferior, not to the
+                    // abandoned command; it is still the user's output.
+                    Ok(RspIncoming::Packet(p)) if is_console_output(&p.data) => {
+                        let bytes =
+                            hex_decode(&p.data[1..]).unwrap_or_else(|_| p.data[1..].to_vec());
+                        self.console_output.push_back(bytes);
+                    }
+                    Ok(RspIncoming::Notification(p)) => self.notifications.push_back(p),
+                    // The owed reply: consumed, discarded, back in step.
+                    Ok(RspIncoming::Packet(_)) => return,
+                    // Acks, nacks and damaged bytes belonged to a reply nobody
+                    // will read; there is nothing left to repair.
+                    Ok(RspIncoming::Ack | RspIncoming::Nack) | Err(_) => {}
+                }
+            }
+            match self.transport.recv(&mut buf) {
+                Ok(0) | Err(_) => return,
+                Ok(n) => self.framer.push(&buf[..n]),
+            }
+        }
     }
 
     fn request_inner(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
@@ -1804,22 +1966,18 @@ impl<T: RspTransport> RspClient<T> {
     /// read — a partial debugging session that looks complete. See
     /// `thread_enumeration_reports_an_unparsable_id_instead_of_dropping_it`.
     ///
+    /// The `Exx`/empty check runs on every page of the enumeration, not only
+    /// on the reply to `qfThreadInfo`: see
+    /// `a_rejection_to_the_continuation_of_thread_enumeration_is_not_a_thread_id`.
+    ///
     /// # Errors
     /// See [`RspError`]. In particular [`RspError::Framing`] when an entry of
     /// the reply is not a thread id this parser understands.
     pub fn thread_ids(&mut self) -> RspResult<Vec<u64>> {
         let mut out = Vec::new();
         let mut payload = commands::q_first_thread_info();
-        let mut first = true;
         loop {
             let reply = self.request(&payload)?;
-            if first {
-                // An empty reply is "packet not supported", NOT "end of list":
-                // only `l` terminates an enumeration. Reporting it as an empty
-                // list would claim a live process has zero threads.
-                reply.clone().ok_or_err("qfThreadInfo")?;
-                first = false;
-            }
             let s = reply.as_str().into_owned();
             if s.is_empty() {
                 // RSP gives the empty reply and `l` two DIFFERENT meanings:
@@ -1830,6 +1988,11 @@ impl<T: RspTransport> RspClient<T> {
                     String::from_utf8_lossy(&payload).into_owned(),
                 ));
             }
+            // Applied to EVERY page, not just the first. `E01` is neither
+            // `m` nor `l` nor empty, and `E`, `0`, `1` are all hex digits, so
+            // an unchecked continuation reply parses as thread `0xE01` and the
+            // target's refusal reaches the caller as a live thread id.
+            reply.ok_or_err(&String::from_utf8_lossy(&payload))?;
             if s.starts_with('l') {
                 break;
             }
@@ -2725,6 +2888,45 @@ mod tests {
         );
     }
 
+    /// A reply that is merely LATE must not cost the debugger its ability to
+    /// speak. A `set_read_timeout` firing on a target that is still running is
+    /// a live connection with a late answer, not a dead one: the very next
+    /// thing a debugger does in that situation is send `D` (or `k`) so the
+    /// inferior is not left suspended for ever. If that `D` is refused
+    /// locally and never reaches the wire, the process can only be killed
+    /// from outside.
+    #[test]
+    fn a_read_timeout_does_not_make_the_connection_permanently_unusable() {
+        let t = MockTransport::new().with_faults(MockFaults {
+            read_timeout: true,
+            ..MockFaults::default()
+        });
+        let mut c = RspClient::new(t);
+        let e = c
+            .request(b"vAttach;1092")
+            .expect_err("with nothing queued the read deadline must fire");
+        assert!(matches!(e, RspError::Timeout { .. }), "got {e:?}");
+
+        // The link is alive: the stub's answer to `vAttach` turns up late, and
+        // then it answers the detach. Both must be handled — the late one
+        // discarded, the fresh one returned.
+        c.transport_mut().push_reply(b"T05thread:1092;");
+        c.transport_mut().push_reply(b"OK");
+        let reply = c
+            .request(b"D")
+            .expect("`D` must reach the stub after a late reply, not be refused locally");
+        assert_eq!(
+            reply.as_str(),
+            "OK",
+            "`D` was handed the late reply to `vAttach` instead of its own"
+        );
+        assert!(
+            c.transport_mut().sent_str().contains("$D#"),
+            "`D` never reached the wire: {}",
+            c.transport_mut().sent_str()
+        );
+    }
+
     #[test]
     fn closed_connection_is_reported_not_hung() {
         let mut c = RspClient::new(MockTransport::new());
@@ -2837,6 +3039,27 @@ mod tests {
         // whole list.
         let mut c2 = client_with(&[b"m1,zz,3", b"l"]);
         assert!(c2.thread_ids().is_err());
+    }
+
+    /// A rejection to `qsThreadInfo` must be reported, not parsed as a thread.
+    ///
+    /// The enumeration is a loop, but `ok_or_err` used to be applied only to
+    /// the FIRST reply. From the second page on, an `E01` refusal fell through
+    /// to the id parser — and `E`, `0`, `1` are all hex digits, so it parsed
+    /// cleanly as thread `0xE01`. The target's error became a thread id the
+    /// caller then selected with `Hg3585` and read registers from.
+    ///
+    /// Not vacuous: the mock answers `m1,2` first, so the loop is guaranteed
+    /// to reach a second `qsThreadInfo` before it sees `E01`. Removing the
+    /// per-iteration check makes this return `Ok([1, 2, 3585])`.
+    #[test]
+    fn a_rejection_to_the_continuation_of_thread_enumeration_is_not_a_thread_id() {
+        let mut c = client_with(&[b"m1,2", b"E01", b"l"]);
+        let got = c.thread_ids();
+        assert!(
+            matches!(got, Err(RspError::Remote(1))),
+            "an E01 on the continuation must surface as a remote error, got: {got:?}"
+        );
     }
 
     /// An EMPTY reply to `qfThreadInfo` means "packet not supported", not
@@ -3159,6 +3382,33 @@ mod tests {
         drop(transport);
         let _ = server.join();
     }
+
+    /// A read that gives up while the stub has not answered yet must not leave
+    /// the connection able to hand the late reply to the NEXT command.
+    ///
+    /// The fault matters: lateness is a read DEADLINE expiring on a live socket
+    /// (`read_timeout`), not the peer hanging up — a peer that hung up cannot
+    /// answer later at all, so modelling a late reply with `Ok(0)` describes a
+    /// sequence no socket can produce, and makes a repair that must apply only
+    /// to a live link look as if it had to apply to a dead one too.
+    #[test]
+    fn probe_late_reply_is_not_served_to_the_next_command() {
+        let t = MockTransport::new().with_faults(MockFaults {
+            read_timeout: true,
+            ..MockFaults::default()
+        });
+        let mut c = RspClient::new(t);
+        // `c` (continue): nothing has arrived yet, the read gives up.
+        assert!(c.request(b"c").is_err(), "the read must fail");
+        // The stub answers the CONTINUE, late, with nobody waiting.
+        c.transport_mut().push_reply(b"T05thread:1a2b;");
+        // The user now reads memory. This must NOT return the stop reply.
+        let next = c.request(b"m100000000,10");
+        assert!(
+            !matches!(&next, Ok(p) if p.as_str().starts_with("T05")),
+            "the `m` command was served the previous command's reply: {next:?}"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -3260,4 +3510,6 @@ mod packet_size_tests {
         drop(client);
         let _ = handle.join();
     }
+
+
 }

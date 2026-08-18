@@ -362,14 +362,14 @@ impl OpaqueRewriter {
         for addr in &order {
             let succs: Vec<Address> = blocks
                 .get(addr)
-                .map(|b| b.successors())
+                .map(RewriterBlock::successors)
                 .unwrap_or_default();
 
             // Propagate from this block's known constants to successors
             for succ in succs {
-                let prev_count = ctx.block_consts.get(&succ).map(|m| m.len()).unwrap_or(0);
+                let prev_count = ctx.block_consts.get(&succ).map(std::collections::HashMap::len).unwrap_or(0);
                 ctx.merge_from(succ, *addr);
-                let new_count = ctx.block_consts.get(&succ).map(|m| m.len()).unwrap_or(0);
+                let new_count = ctx.block_consts.get(&succ).map(std::collections::HashMap::len).unwrap_or(0);
                 propagated += (new_count.saturating_sub(prev_count)) as u32;
             }
         }

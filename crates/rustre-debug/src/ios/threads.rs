@@ -501,10 +501,37 @@ fn query_current_tid(session: &mut Session) -> Result<Option<ThreadId>, DebugErr
         // No `qC` support: the last stop is the best answer available.
         return Ok(if session.current_tid.0 == 0 { None } else { Some(session.current_tid) });
     };
-    // debugserver may answer `QCp<pid>.<tid>`.
-    let tail = hex.rsplit('.').next().unwrap_or(hex);
-    let tail = tail.trim_start_matches('p');
-    Ok(u32::from_str_radix(tail, 16).ok().map(ThreadId))
+    parse_qc_tid(hex)
+        .map(crate::ios::apple_debugger::thread_id_from_stub)
+        .transpose()
+}
+
+/// Decode the thread id out of the body of a `qC` reply — the text AFTER the
+/// `QC` prefix.
+///
+/// Two spellings are legal, and which one arrives depends on a feature this
+/// client itself negotiates: with `multiprocess+` (see the `handshake` call in
+/// `apple_debugger.rs`) debugserver answers `QCp<pid>.<tid>`, otherwise plain
+/// `QC<tid>`. Returning `None` for anything else is the point: every caller
+/// must be able to tell "id 0" from "could not parse", because 0 is this
+/// backend's "leave the stub's selection alone" wildcard.
+///
+/// All three `qC` ports go through here — `query_current_tid` above, the
+/// fallback inside `AppleDebugger::attach`, and `Debugger::current_thread`.
+/// The last two used to decode inline with `from_str_radix` over the whole
+/// body and did not know the `p<pid>.<tid>` spelling; that is why the doc of
+/// the unit test below now also has an end-to-end companion,
+/// `multiprocess_qc_reply_drives_attach_and_current_thread`.
+///
+/// Returns the RAW id: the >32-bit refusal lives in `thread_id_from_stub`, so
+/// "too wide" stays distinguishable from "not understood".
+pub(crate) fn parse_qc_tid(body: &str) -> Option<u64> {
+    let body = body.trim();
+    // `p<pid>.<tid>`: the tid is the part after the dot; a pid-less `p<tid>`
+    // has no dot, in which case the whole body minus the `p` is the tid.
+    let tail = body.rsplit('.').next().unwrap_or(body);
+    let tail = tail.strip_prefix('p').unwrap_or(tail);
+    u64::from_str_radix(tail, 16).ok()
 }
 
 // ---------------------------------------------------------------------------
@@ -644,6 +671,25 @@ mod tests {
     use rustre_core::address::Address;
     use crate::{BreakpointKind, Debugger, ProcessId};
     use std::sync::Arc;
+
+    /// Pure-parsing guard for the one `qC` decoder. The end-to-end attach test
+    /// below covers the wiring; this pins the shapes themselves, so a rewrite
+    /// of the decoder cannot quietly drop the `multiprocess+` spelling that
+    /// `Session::establish` asks debugserver for.
+    #[test]
+    fn parse_qc_tid_accepts_plain_and_multiprocess_bodies() {
+        // Compile-anchored: a rename cannot leave this test guarding nothing.
+        let decode: fn(&str) -> Option<u64> = parse_qc_tid;
+        assert_eq!(decode("2a"), Some(0x2a));
+        assert_eq!(decode("p1f4.2b3"), Some(0x2b3), "multiprocess `p<pid>.<tid>` must decode");
+        assert_eq!(decode("p2b3"), Some(0x2b3), "pid-less `p<tid>` must decode");
+        assert_eq!(decode("p1f4.2b3
+"), Some(0x2b3));
+        // Undecodable must stay `None`: 0 is this backend's "leave the stub's
+        // selection alone" wildcard, so it may never stand in for a failure.
+        assert_eq!(decode("zz"), None);
+        assert_eq!(decode(""), None);
+    }
 
     const TEXT_BASE: u64 = 0x1_0000_4000;
 
@@ -853,6 +899,36 @@ mod tests {
     }
 
     // -- against the mock --------------------------------------------------
+
+    /// The two REAL `qC` ports — the fallback inside `attach` and
+    /// `Debugger::current_thread` — against a stub that answers in the
+    /// `multiprocess+` spelling this client itself negotiates.
+    ///
+    /// Both used to run `from_str_radix` over the WHOLE body, which the
+    /// `p<pid>.<tid>` spelling is not: measured red was
+    /// `Err(Os("qC reply not understood: \"QCp1092.2a\""))` from
+    /// `current_thread`, while the attach fallback silently left `current_tid`
+    /// at 0 — this backend's "leave the stub's selection alone" wildcard, so
+    /// every later per-thread operation acted on whatever thread the stub had
+    /// selected. Both now go through `parse_qc_tid`, the one decoder.
+    #[tokio::test]
+    async fn multiprocess_qc_reply_drives_attach_and_current_thread() {
+        let mut srv = multi_thread_server();
+        srv.set_multiprocess_ids(true);
+        // No `thread:` key in the stop reply, so attach must fall back to `qC`.
+        srv.set_omit_stop_reply_thread(true);
+        srv.set_current_thread(0x2A);
+
+        let dbg = debugger_with(srv);
+        dbg.attach(ProcessId(4242)).await.unwrap();
+
+        // Compile-anchored on the production entry point, not a local copy.
+        let tid = <AppleDebugger as Debugger>::current_thread(&dbg)
+            .await
+            .expect("qC in multiprocess spelling must decode");
+        assert_eq!(tid, ThreadId(0x2A), "the tid is the part after the dot");
+        assert_ne!(tid, ThreadId(0), "0 is the wildcard and may never stand in for a parse failure");
+    }
 
     #[tokio::test]
     async fn jthreads_info_describes_every_thread_in_one_round_trip() {

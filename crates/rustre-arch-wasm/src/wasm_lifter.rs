@@ -850,7 +850,7 @@ impl WasmLifter {
                         bytes[pos + 3],
                     ]);
                     pos += 4;
-                    self.push(LlilExpr::ConstFloat(f32::from_bits(bits) as f64));
+                    self.push(LlilExpr::ConstFloat(f64::from(f32::from_bits(bits))));
                 }
                 0x44 => {
                     if pos + 8 > bytes.len() {

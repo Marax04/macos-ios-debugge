@@ -597,7 +597,7 @@ impl StructLayout {
             TypeKind::Enum => {
                 let size = ty
                     .underlying_type
-                    .map(|b| b.size())
+                    .map(BuiltinType::size)
                     .unwrap_or(4);
                 Ok(StructLayout {
                     type_name: ty.name.clone(),
@@ -780,16 +780,16 @@ impl PatternLanguage {
         }
         let bytes = &data[offset..offset + size];
         Ok(match ty {
-            BuiltinType::U8 => bytes[0] as i64,
-            BuiltinType::I8 => bytes[0] as i8 as i64,
-            BuiltinType::Bool => (bytes[0] != 0) as i64,
-            BuiltinType::Char => bytes[0] as i64,
-            BuiltinType::U16 => u16::from_le_bytes([bytes[0], bytes[1]]) as i64,
-            BuiltinType::I16 => i16::from_le_bytes([bytes[0], bytes[1]]) as i64,
-            BuiltinType::U32 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as i64,
-            BuiltinType::I32 => i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as i64,
+            BuiltinType::U8 => i64::from(bytes[0]),
+            BuiltinType::I8 => i64::from(bytes[0] as i8),
+            BuiltinType::Bool => i64::from(bytes[0] != 0),
+            BuiltinType::Char => i64::from(bytes[0]),
+            BuiltinType::U16 => i64::from(u16::from_le_bytes([bytes[0], bytes[1]])),
+            BuiltinType::I16 => i64::from(i16::from_le_bytes([bytes[0], bytes[1]])),
+            BuiltinType::U32 => i64::from(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])),
+            BuiltinType::I32 => i64::from(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])),
             BuiltinType::F32 => {
-                f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as f64 as i64
+                f64::from(f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])) as i64
             }
             BuiltinType::U64 | BuiltinType::I64 | BuiltinType::F64 => {
                 let arr: [u8; 8] = bytes.try_into().unwrap();

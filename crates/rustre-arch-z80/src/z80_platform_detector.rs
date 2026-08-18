@@ -242,7 +242,7 @@ impl Z80PlatformDetector {
             return 0.0;
         }
         let best = scores.values().copied().max().unwrap_or(0);
-        best as f64 / total as f64
+        f64::from(best) / f64::from(total)
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ impl Z80PlatformDetector {
 
     fn parse_call_target(&self, operands: &str) -> Option<u64> {
         let s = operands.trim_start_matches('$');
-        let hex: String = s.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+        let hex: String = s.chars().take_while(char::is_ascii_hexdigit).collect();
         if hex.is_empty() {
             return None;
         }

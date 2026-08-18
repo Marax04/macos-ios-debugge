@@ -93,7 +93,7 @@ impl Float16 {
     /// Convert to f32.
     #[must_use]
     pub fn to_f32(self) -> f32 {
-        let bits = self.0 as u32;
+        let bits = u32::from(self.0);
         let sign = (bits >> 15) & 1;
         let exp = (bits >> 10) & 0x1F;
         let mantissa = bits & 0x3FF;
@@ -281,7 +281,7 @@ impl PackedBcd {
     pub fn to_i64(&self) -> i64 {
         let mut v = 0i64;
         for &d in &self.digits {
-            v = v * 10 + d as i64;
+            v = v * 10 + i64::from(d);
         }
         if self.negative { -v } else { v }
     }
@@ -437,21 +437,21 @@ impl TaggedUnion {
         check_bounds(data, abs, self.tag_size)?;
 
         let tag = match self.tag_size {
-            1 => data[abs] as u64,
+            1 => u64::from(data[abs]),
             2 => {
                 let b = &data[abs..abs + 2];
                 if little_endian {
-                    u16::from_le_bytes(b.try_into().unwrap()) as u64
+                    u64::from(u16::from_le_bytes(b.try_into().unwrap()))
                 } else {
-                    u16::from_be_bytes(b.try_into().unwrap()) as u64
+                    u64::from(u16::from_be_bytes(b.try_into().unwrap()))
                 }
             }
             4 => {
                 let b = &data[abs..abs + 4];
                 if little_endian {
-                    u32::from_le_bytes(b.try_into().unwrap()) as u64
+                    u64::from(u32::from_le_bytes(b.try_into().unwrap()))
                 } else {
-                    u32::from_be_bytes(b.try_into().unwrap()) as u64
+                    u64::from(u32::from_be_bytes(b.try_into().unwrap()))
                 }
             }
             8 => {

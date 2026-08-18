@@ -8617,11 +8617,11 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
     let rs1 = ((word >> 15) & 0x1F) as usize;
     let rs2 = ((word >> 20) & 0x1F) as usize;
     let funct7 = (word >> 25) & 0x7F;
-    let imm_i = rv_imm_i(word) as i64;
-    let imm_s = rv_imm_s(word) as i64;
-    let imm_b = rv_imm_b(word) as i64;
-    let imm_u = rv_imm_u(word) as i64;
-    let imm_j = rv_imm_j(word) as i64;
+    let imm_i = i64::from(rv_imm_i(word));
+    let imm_s = i64::from(rv_imm_s(word));
+    let imm_b = i64::from(rv_imm_b(word));
+    let imm_u = i64::from(rv_imm_u(word));
+    let imm_j = i64::from(rv_imm_j(word));
 
     let ra1 = xabi(rs1);
     let ra2 = xabi(rs2);
@@ -8758,15 +8758,15 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
             };
             let expr = match funct3 {
                 0 => llil_add(llil_reg(&ra1), llil_const(imm_i)),
-                1 => llil_binop(LlilBinOp::Shl, llil_reg(&ra1), llil_const(shamt as i64)),
+                1 => llil_binop(LlilBinOp::Shl, llil_reg(&ra1), llil_const(i64::from(shamt))),
                 2 => llil_cmp(LlilCmpOp::Slt, llil_reg(&ra1), llil_const(imm_i)),
                 3 => llil_cmp(LlilCmpOp::Ult, llil_reg(&ra1), llil_const(imm_i)),
                 4 => llil_binop(LlilBinOp::Xor, llil_reg(&ra1), llil_const(imm_i)),
                 5 => {
                     if funct7 & 0x20 != 0 {
-                        llil_binop(LlilBinOp::AShr, llil_reg(&ra1), llil_const(shamt as i64))
+                        llil_binop(LlilBinOp::AShr, llil_reg(&ra1), llil_const(i64::from(shamt)))
                     } else {
-                        llil_binop(LlilBinOp::LShr, llil_reg(&ra1), llil_const(shamt as i64))
+                        llil_binop(LlilBinOp::LShr, llil_reg(&ra1), llil_const(i64::from(shamt)))
                     }
                 }
                 6 => llil_binop(LlilBinOp::Or, llil_reg(&ra1), llil_const(imm_i)),
@@ -8822,20 +8822,20 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
                 1 => llil_binop(
                     LlilBinOp::Shl,
                     llil_low(llil_reg(&ra1), 4),
-                    llil_const(shamt as i64),
+                    llil_const(i64::from(shamt)),
                 ),
                 5 => {
                     if funct7l & 0x20 != 0 {
                         llil_binop(
                             LlilBinOp::AShr,
                             llil_low(llil_reg(&ra1), 4),
-                            llil_const(shamt as i64),
+                            llil_const(i64::from(shamt)),
                         )
                     } else {
                         llil_binop(
                             LlilBinOp::LShr,
                             llil_low(llil_reg(&ra1), 4),
-                            llil_const(shamt as i64),
+                            llil_const(i64::from(shamt)),
                         )
                     }
                 }
@@ -9003,7 +9003,7 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         0x57 => {
             vec![LlilOp::Intrinsic {
                 name: format!("rvv.{word:#010x}"),
-                inputs: vec![llil_const(word as i64)],
+                inputs: vec![llil_const(i64::from(word))],
                 outputs: vec![],
             }]
         }
@@ -9031,7 +9031,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 // C.LW → lw rd', uimm(rs1')
                 let rd_p = ((hw >> 2) & 7) as usize + 8;
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let uimm = c_lw_imm(hw) as i64;
+                let uimm = i64::from(c_lw_imm(hw));
                 let addr = llil_add(llil_reg(&xabi(rs1_p)), llil_const(uimm));
                 vec![llil_set(&xabi(rd_p), llil_sext(llil_load(addr, 4), 4))]
             }
@@ -9039,7 +9039,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 // C.LD → ld rd', uimm(rs1')
                 let rd_p = ((hw >> 2) & 7) as usize + 8;
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let uimm = c_ld_imm(hw) as i64;
+                let uimm = i64::from(c_ld_imm(hw));
                 let addr = llil_add(llil_reg(&xabi(rs1_p)), llil_const(uimm));
                 vec![llil_set(&xabi(rd_p), llil_load(addr, 8))]
             }
@@ -9047,7 +9047,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 // C.SW
                 let rs2_p = ((hw >> 2) & 7) as usize + 8;
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let uimm = c_lw_imm(hw) as i64;
+                let uimm = i64::from(c_lw_imm(hw));
                 let addr = llil_add(llil_reg(&xabi(rs1_p)), llil_const(uimm));
                 vec![llil_store(addr, llil_low(llil_reg(&xabi(rs2_p)), 4), 4)]
             }
@@ -9055,7 +9055,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 // C.SD
                 let rs2_p = ((hw >> 2) & 7) as usize + 8;
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let uimm = c_ld_imm(hw) as i64;
+                let uimm = i64::from(c_ld_imm(hw));
                 let addr = llil_add(llil_reg(&xabi(rs1_p)), llil_const(uimm));
                 vec![llil_store(addr, llil_reg(&xabi(rs2_p)), 8)]
             }
@@ -9070,13 +9070,13 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 if rd_raw == 0 {
                     return vec![LlilOp::Nop];
                 }
-                let imm = c_addi_imm(hw) as i64;
+                let imm = i64::from(c_addi_imm(hw));
                 let expr = llil_add(llil_reg(&xabi(rd_raw)), llil_const(imm));
                 vec![llil_set(&xabi(rd_raw), expr)]
             }
             1 if xlen == 32 => {
                 // C.JAL (RV32 only)
-                let offset = c_j_offset(hw) as i64;
+                let offset = i64::from(c_j_offset(hw));
                 let target = pc.wrapping_add(offset as u64);
                 vec![
                     llil_set("ra", llil_const((pc as i64).wrapping_add(2))),
@@ -9086,26 +9086,26 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             1 if xlen >= 64 => {
                 // C.ADDIW
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                let imm = c_addi_imm(hw) as i64;
+                let imm = i64::from(c_addi_imm(hw));
                 let w = llil_add(llil_low(llil_reg(&xabi(rd_raw)), 4), llil_const(imm));
                 vec![llil_set(&xabi(rd_raw), llil_sext(w, 4))]
             }
             2 => {
                 // C.LI
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                let imm = c_addi_imm(hw) as i64;
+                let imm = i64::from(c_addi_imm(hw));
                 vec![llil_set(&xabi(rd_raw), llil_const(imm))]
             }
             3 => {
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
                 if rd_raw == 2 {
                     // C.ADDI16SP
-                    let imm = c_addi16sp_imm(hw) as i64;
+                    let imm = i64::from(c_addi16sp_imm(hw));
                     let expr = llil_add(llil_reg("sp"), llil_const(imm));
                     vec![llil_set("sp", expr)]
                 } else {
                     // C.LUI
-                    let imm = c_lui_imm(hw) as i64;
+                    let imm = i64::from(c_lui_imm(hw));
                     vec![llil_set(&xabi(rd_raw), llil_const(imm))]
                 }
             }
@@ -9115,21 +9115,21 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 let rs2_p = ((hw >> 2) & 7) as usize + 8;
                 match funct2 {
                     0 => {
-                        let sh = c_shamt(hw) as i64;
+                        let sh = i64::from(c_shamt(hw));
                         vec![llil_set(
                             &xabi(rd_p),
                             llil_binop(LlilBinOp::LShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
                         )]
                     }
                     1 => {
-                        let sh = c_shamt(hw) as i64;
+                        let sh = i64::from(c_shamt(hw));
                         vec![llil_set(
                             &xabi(rd_p),
                             llil_binop(LlilBinOp::AShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
                         )]
                     }
                     2 => {
-                        let imm = c_addi_imm(hw) as i64;
+                        let imm = i64::from(c_addi_imm(hw));
                         vec![llil_set(
                             &xabi(rd_p),
                             llil_binop(LlilBinOp::And, llil_reg(&xabi(rd_p)), llil_const(imm)),
@@ -9183,14 +9183,14 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             }
             5 => {
                 // C.J
-                let offset = c_j_offset(hw) as i64;
+                let offset = i64::from(c_j_offset(hw));
                 let target = pc.wrapping_add(offset as u64);
                 vec![LlilOp::Jump { target }]
             }
             6 => {
                 // C.BEQZ
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let offset = c_b_offset(hw) as i64;
+                let offset = i64::from(c_b_offset(hw));
                 let taken = pc.wrapping_add(offset as u64);
                 let fallthrough = pc.wrapping_add(2);
                 let cond = llil_cmp(LlilCmpOp::Eq, llil_reg(&xabi(rs1_p)), llil_const(0));
@@ -9203,7 +9203,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             7 => {
                 // C.BNEZ
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let offset = c_b_offset(hw) as i64;
+                let offset = i64::from(c_b_offset(hw));
                 let taken = pc.wrapping_add(offset as u64);
                 let fallthrough = pc.wrapping_add(2);
                 let cond = llil_cmp(LlilCmpOp::Ne, llil_reg(&xabi(rs1_p)), llil_const(0));
@@ -9221,7 +9221,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             0 => {
                 // C.SLLI
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                let shamt = c_shamt(hw) as i64;
+                let shamt = i64::from(c_shamt(hw));
                 vec![llil_set(
                     &xabi(rd_raw),
                     llil_binop(LlilBinOp::Shl, llil_reg(&xabi(rd_raw)), llil_const(shamt)),
@@ -9230,14 +9230,14 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             2 => {
                 // C.LWSP
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                let uimm = c_lwsp_imm(hw) as i64;
+                let uimm = i64::from(c_lwsp_imm(hw));
                 let addr = llil_add(llil_reg("sp"), llil_const(uimm));
                 vec![llil_set(&xabi(rd_raw), llil_sext(llil_load(addr, 4), 4))]
             }
             3 if xlen >= 64 => {
                 // C.LDSP
                 let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                let uimm = c_ldsp_imm(hw) as i64;
+                let uimm = i64::from(c_ldsp_imm(hw));
                 let addr = llil_add(llil_reg("sp"), llil_const(uimm));
                 vec![llil_set(&xabi(rd_raw), llil_load(addr, 8))]
             }
@@ -9275,14 +9275,14 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             6 => {
                 // C.SWSP
                 let rs2_raw = ((hw >> 2) & 0x1F) as usize;
-                let uimm = c_swsp_imm(hw) as i64;
+                let uimm = i64::from(c_swsp_imm(hw));
                 let addr = llil_add(llil_reg("sp"), llil_const(uimm));
                 vec![llil_store(addr, llil_low(llil_reg(&xabi(rs2_raw)), 4), 4)]
             }
             7 if xlen >= 64 => {
                 // C.SDSP
                 let rs2_raw = ((hw >> 2) & 0x1F) as usize;
-                let uimm = c_sdsp_imm(hw) as i64;
+                let uimm = i64::from(c_sdsp_imm(hw));
                 let addr = llil_add(llil_reg("sp"), llil_const(uimm));
                 vec![llil_store(addr, llil_reg(&xabi(rs2_raw)), 8)]
             }

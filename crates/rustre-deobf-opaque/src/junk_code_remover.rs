@@ -109,7 +109,7 @@ impl BasicBlock {
     pub fn byte_span(&self) -> u64 {
         self.instructions
             .iter()
-            .map(|(_, sz, _)| *sz as u64)
+            .map(|(_, sz, _)| u64::from(*sz))
             .sum()
     }
 
@@ -249,7 +249,7 @@ impl JunkCodeRemover {
             if let Some(block) = self.blocks.get(&block_start) {
                 dead_blocks.push(block_start);
                 for (addr, size, bytes) in &block.instructions {
-                    dead_bytes += *size as u64;
+                    dead_bytes += u64::from(*size);
                     dead_instructions.push(DeadInstruction {
                         address: *addr,
                         size: *size,

@@ -268,7 +268,7 @@ impl MipsArch {
         let shamt = (word >> 6) & 0x1F;
         let funct = word & 0x3F;
         let imm16 = word & 0xFFFF;
-        let simm16 = (imm16 as i16) as i64;
+        let simm16 = i64::from(imm16 as i16);
         let target26 = word & 0x03FF_FFFF;
         // Clamp to available bytes; callers that pass a short slice get a truncated raw field
         // rather than a panic.
@@ -939,7 +939,7 @@ impl MipsArch {
                 let nd = (word >> 17) & 1;
                 let tf = (word >> 16) & 1;
                 let imm16 = word & 0xFFFF;
-                let simm16 = (imm16 as i16) as i64;
+                let simm16 = i64::from(imm16 as i16);
                 let target = branch_target_i(address, simm16);
                 let mn = match (tf, nd) {
                     (0, 0) => "bc1f",
@@ -1497,7 +1497,7 @@ impl Architecture for MipsArch {
         };
         let opcode = (word >> 26) & 0x3F;
         let imm16 = word & 0xFFFF;
-        let simm16 = (imm16 as i16) as i64;
+        let simm16 = i64::from(imm16 as i16);
         let target26 = word & 0x03FF_FFFF;
         let target_addr = match opcode {
             0x02 | 0x03 => branch_target_j(instr.address, target26),
@@ -6138,7 +6138,7 @@ pub fn infer_signature(arch: &MipsArch, bytes: &[u8], base: Address) -> Inferred
     sig.arg_regs = o32_args
         .iter()
         .filter(|r| read.contains(**r))
-        .map(|r| r.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
 
     // Return value is $v0 or $v1
@@ -6146,7 +6146,7 @@ pub fn infer_signature(arch: &MipsArch, bytes: &[u8], base: Address) -> Inferred
     sig.ret_regs = o32_ret
         .iter()
         .filter(|r| defined.contains(**r))
-        .map(|r| r.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
 
     // Saved regs are $s0-$s7 that appear in sw instructions at the start
@@ -7150,7 +7150,7 @@ pub fn find_dependencies(instrs: &[Instruction]) -> Vec<RegDep> {
                 .iter()
                 .chain(parts.get(2).iter())
                 .filter(|s| s.starts_with('$'))
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect(),
             "addi" | "addiu" | "andi" | "ori" | "xori" | "slti" | "sltiu" | "daddi" | "daddiu" => {
                 if parts.len() >= 2 {
@@ -7158,7 +7158,7 @@ pub fn find_dependencies(instrs: &[Instruction]) -> Vec<RegDep> {
                     let sub: Vec<&str> = sub_joined.split(',').map(str::trim).collect::<Vec<_>>();
                     sub.first()
                         .filter(|s| s.starts_with('$'))
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                         .into_iter()
                         .collect()
                 } else {
@@ -7183,12 +7183,12 @@ pub fn find_dependencies(instrs: &[Instruction]) -> Vec<RegDep> {
                 .iter()
                 .take(2)
                 .filter(|s| s.starts_with('$'))
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect(),
             "blez" | "bgtz" | "bltz" | "bgez" => parts
                 .first()
                 .filter(|s| s.starts_with('$'))
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .into_iter()
                 .collect(),
             _ => vec![],
@@ -7215,7 +7215,7 @@ pub fn find_dependencies(instrs: &[Instruction]) -> Vec<RegDep> {
             | "lbu" | "ld" | "lwu" | "mfhi" | "mflo" | "movz" | "movn" => parts
                 .first()
                 .filter(|s| s.starts_with('$'))
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             _ => None,
         };
 
@@ -9210,7 +9210,7 @@ impl CfgNode {
                     {
                             let opcode = (w >> 26) & 0x3F;
                             let target26 = w & 0x03FF_FFFF;
-                            let imm16 = (w & 0xFFFF) as i16 as i64;
+                            let imm16 = i64::from((w & 0xFFFF) as i16);
                             let target = match opcode {
                                 0x02 | 0x03 => Some(branch_target_j(baddr, target26)),
                                 0x04 | 0x05 | 0x06 | 0x07 | 0x14 | 0x15 | 0x16 | 0x17 => {

@@ -435,7 +435,7 @@ impl StackStringRecon {
         let mut results = Vec::new();
         for region in &regions {
             if let Some(ss) = StackString::from_region(region) {
-                if ss.confidence as f64 / 100.0 >= self.config.min_printable_ratio {
+                if f64::from(ss.confidence) / 100.0 >= self.config.min_printable_ratio {
                     results.push(ss);
                 }
             }
@@ -496,7 +496,7 @@ impl StackStringRecon {
         while i + 4 < code.len() {
             // MOV BYTE PTR [RSP+disp8], imm8  — C6 44 24 NN VV
             if code[i] == 0xC6 && code[i + 1] == 0x44 && code[i + 2] == 0x24 && i + 4 < code.len() {
-                let disp = code[i + 3] as i64;
+                let disp = i64::from(code[i + 3]);
                 let val = code[i + 4];
                 stores.push(ByteStore::new(base_addr + i as u64, disp, val, 0));
                 i += 5;
@@ -504,7 +504,7 @@ impl StackStringRecon {
             }
             // MOV BYTE PTR [RBP+disp8], imm8  — C6 45 NN VV
             if code[i] == 0xC6 && code[i + 1] == 0x45 && i + 3 < code.len() {
-                let disp = code[i + 2] as i8 as i64;
+                let disp = i64::from(code[i + 2] as i8);
                 let val = code[i + 3];
                 stores.push(ByteStore::new(base_addr + i as u64, disp, val, 1));
                 i += 4;
@@ -512,7 +512,7 @@ impl StackStringRecon {
             }
             // MOV DWORD PTR [RSP+disp8], imm32  — C7 44 24 NN VV VV VV VV
             if code[i] == 0xC7 && code[i + 1] == 0x44 && code[i + 2] == 0x24 && i + 7 < code.len() {
-                let disp = code[i + 3] as i64;
+                let disp = i64::from(code[i + 3]);
                 let bytes = [code[i + 4], code[i + 5], code[i + 6], code[i + 7]];
                 for (j, &b) in bytes.iter().enumerate() {
                     stores.push(ByteStore::new_wide(

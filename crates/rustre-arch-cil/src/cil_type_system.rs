@@ -287,22 +287,22 @@ pub fn decode_compressed_uint(bytes: &[u8], pos: usize) -> Option<(u32, usize)> 
     if pos >= bytes.len() {
         return None;
     }
-    let b0 = bytes[pos] as u32;
+    let b0 = u32::from(bytes[pos]);
     if b0 & 0x80 == 0 {
         // 1-byte: 0xxxxxxx
         Some((b0, 1))
     } else if b0 & 0xC0 == 0x80 {
         // 2-byte: 10xxxxxx xxxxxxxx
         if pos + 1 >= bytes.len() { return None; }
-        let val = ((b0 & 0x3F) << 8) | bytes[pos + 1] as u32;
+        let val = ((b0 & 0x3F) << 8) | u32::from(bytes[pos + 1]);
         Some((val, 2))
     } else if b0 & 0xE0 == 0xC0 {
         // 4-byte: 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
         if pos + 3 >= bytes.len() { return None; }
         let val = ((b0 & 0x1F) << 24)
-            | ((bytes[pos + 1] as u32) << 16)
-            | ((bytes[pos + 2] as u32) << 8)
-            | bytes[pos + 3] as u32;
+            | (u32::from(bytes[pos + 1]) << 16)
+            | (u32::from(bytes[pos + 2]) << 8)
+            | u32::from(bytes[pos + 3]);
         Some((val, 4))
     } else {
         None

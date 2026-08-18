@@ -703,8 +703,8 @@ impl BinaryStringScanner {
             let mut run_chars: Vec<u16> = Vec::new();
 
             while i + 1 < data.len() {
-                let lo = data[i] as u16;
-                let hi = data[i + 1] as u16;
+                let lo = u16::from(data[i]);
+                let hi = u16::from(data[i + 1]);
                 let cp = lo | (hi << 8);
 
                 // Accept printable ASCII range as UTF-16LE

@@ -48,7 +48,7 @@ impl FunctionNode {
         fn ratio(a: u32, b: u32) -> f64 {
             if a == 0 && b == 0 { return 1.0; }
             let (lo, hi) = if a < b { (a, b) } else { (b, a) };
-            lo as f64 / hi as f64
+            f64::from(lo) / f64::from(hi)
         }
 
         let cfg_bonus = if self.cfg_hash == other.cfg_hash && self.cfg_hash != 0 { 0.40 } else { 0.0 };

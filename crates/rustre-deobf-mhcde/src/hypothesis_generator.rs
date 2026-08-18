@@ -439,7 +439,7 @@ impl HypothesisGenerator {
             return vec![];
         }
         let prior = HypothesisKind::NopPadded.base_prior();
-        let likelihood = (features.nop_density as f64 / 0.20).min(1.0);
+        let likelihood = (f64::from(features.nop_density) / 0.20).min(1.0);
         let confidence = Hypothesis::posterior(prior, likelihood);
         vec![Hypothesis::new(
             self.next_id(),
@@ -483,7 +483,7 @@ impl HypothesisGenerator {
             return vec![];
         }
         let prior = HypothesisKind::StackString.base_prior();
-        let likelihood = (features.mov_imm_density as f64 / 0.15).min(1.0);
+        let likelihood = (f64::from(features.mov_imm_density) / 0.15).min(1.0);
         let confidence = Hypothesis::posterior(prior, likelihood);
         vec![Hypothesis::new(
             self.next_id(),
@@ -634,7 +634,7 @@ pub fn viable_hypotheses(data: &[u8]) -> Vec<Hypothesis> {
     let mut generator = HypothesisGenerator::default();
     generator.generate(data)
         .into_iter()
-        .filter(|h| h.is_viable())
+        .filter(Hypothesis::is_viable)
         .collect()
 }
 

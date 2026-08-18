@@ -401,11 +401,11 @@ impl<'a> PdfObjectParser<'a> {
                         b'\\' => b'\\',
                         b'\n' | b'\r' => continue,
                         d if d.is_ascii_digit() => {
-                            let mut octal = (d - b'0') as u32;
+                            let mut octal = u32::from(d - b'0');
                             for _ in 0..2 {
                                 if self.peek().is_some_and(|c| c.is_ascii_digit()) {
                                     let c = self.advance().unwrap();
-                                    octal = octal * 8 + (c - b'0') as u32;
+                                    octal = octal * 8 + u32::from(c - b'0');
                                 }
                             }
                             (octal & 0xFF) as u8

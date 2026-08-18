@@ -402,11 +402,11 @@ impl WasmTableType {
         out.push(self.element_type.to_byte());
         if let Some(max) = self.max {
             out.push(1);
-            encode_uleb128(self.min as u64, out);
-            encode_uleb128(max as u64, out);
+            encode_uleb128(u64::from(self.min), out);
+            encode_uleb128(u64::from(max), out);
         } else {
             out.push(0);
-            encode_uleb128(self.min as u64, out);
+            encode_uleb128(u64::from(self.min), out);
         }
     }
 }
@@ -456,7 +456,7 @@ impl WasmMemType {
     /// Maximum size in bytes, if bounded.
     #[must_use]
     pub fn max_bytes(&self) -> Option<u64> {
-        self.max.map(|m| m as u64 * 65536)
+        self.max.map(|m| u64::from(m) * 65536)
     }
 
     /// Decode from binary.
@@ -483,11 +483,11 @@ impl WasmMemType {
     pub fn encode(&self, out: &mut Vec<u8>) {
         if let Some(max) = self.max {
             out.push(1);
-            encode_uleb128(self.min as u64, out);
-            encode_uleb128(max as u64, out);
+            encode_uleb128(u64::from(self.min), out);
+            encode_uleb128(u64::from(max), out);
         } else {
             out.push(0);
-            encode_uleb128(self.min as u64, out);
+            encode_uleb128(u64::from(self.min), out);
         }
     }
 }

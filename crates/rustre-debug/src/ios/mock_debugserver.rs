@@ -856,6 +856,15 @@ pub struct MockDebugserver {
     no_ack_mode: bool,
     thread_suffix_supported: bool,
     list_threads_in_stop_reply: bool,
+    /// When set, thread ids are reported in the multiprocess spelling the
+    /// `multiprocess+` feature turns on: `qC` answers `QCp<pid>.<tid>` instead
+    /// of `QC<tid>`. This client negotiates `multiprocess+` in its handshake,
+    /// so a conforming stub is entitled to answer this way.
+    multiprocess_ids: bool,
+    /// When set, stop replies carry no `thread:` key. The field is optional in
+    /// the protocol, so a stub omitting it is legal — and it is the only state
+    /// in which a client's `qC` fallback after a stop is reachable at all.
+    omit_stop_reply_thread: bool,
     /// When false the server answers `jThreadsInfo` with an empty packet, the
     /// way a stub that predates the extension does — the only way to reach a
     /// client's fallback path from a test.
@@ -959,6 +968,8 @@ impl MockDebugserver {
             no_ack_mode: false,
             thread_suffix_supported: false,
             list_threads_in_stop_reply: false,
+            multiprocess_ids: false,
+            omit_stop_reply_thread: false,
             jthreads_info_supported: true,
             launch_env_supported: false,
             launch_env: Vec::new(),
@@ -1042,6 +1053,23 @@ impl MockDebugserver {
         self.threads.push(thread);
     }
 
+    /// Report thread ids in the multiprocess `p<pid>.<tid>` spelling.
+    pub const fn set_multiprocess_ids(&mut self, on: bool) {
+        self.multiprocess_ids = on;
+    }
+
+    /// Leave the optional `thread:` key out of every stop reply.
+    pub const fn set_omit_stop_reply_thread(&mut self, on: bool) {
+        self.omit_stop_reply_thread = on;
+    }
+
+    /// Park the stub's own notion of the selected thread, the way a real stub
+    /// arrives at one on its own before the client has sent any `H`.
+    pub const fn set_current_thread(&mut self, tid: u32) {
+        self.current_g_thread = tid;
+        self.current_c_thread = tid;
+    }
+
     /// Turn the `jThreadsInfo` extension on or off.
     pub const fn set_jthreads_info_supported(&mut self, supported: bool) {
         self.jthreads_info_supported = supported;
@@ -1072,6 +1100,15 @@ impl MockDebugserver {
     #[must_use]
     pub fn threads(&self) -> &[MockThread] {
         &self.threads
+    }
+
+    /// Mutable access to the modelled threads.
+    ///
+    /// Exists so a test can stage register state the `g` block alone cannot
+    /// carry (the 128-bit `v` file), exactly as a live target would present it.
+    #[must_use]
+    pub fn threads_mut(&mut self) -> &mut [MockThread] {
+        &mut self.threads
     }
 
     #[must_use]
@@ -1556,7 +1593,11 @@ impl MockDebugserver {
             return ("l".to_string(), false);
         }
         if pkt == "qC" {
-            return (format!("QC{:x}", self.current_g_thread), false);
+            return if self.multiprocess_ids {
+                (format!("QCp{:x}.{:x}", self.pid, self.current_g_thread), false)
+            } else {
+                (format!("QC{:x}", self.current_g_thread), false)
+            };
         }
         if let Some(rest) = pkt.strip_prefix("qThreadStopInfo") {
             let tid = hex_u32(rest).unwrap_or(0);
@@ -1674,7 +1715,12 @@ impl MockDebugserver {
             if pid == self.pid {
                 return (self.stop_reply(self.current_c_thread), false);
             }
-            return ("E01".to_string(), false);
+            // ESRCH: this stub holds exactly one process, so a pid it does not
+            // have really is a pid that does not exist. It used to answer E01
+            // (EPERM), which on a real device means the OPPOSITE — the process
+            // is there and task_for_pid was refused, which is now a different
+            // DebugError (`attach_reply_error`).
+            return ("E03".to_string(), false);
         }
         if pkt.starts_with("vKill") || pkt == "k" {
             self.closed = true;
@@ -2209,7 +2255,11 @@ impl MockDebugserver {
             return format!("W{code:02x}");
         }
         let sig = t.stop.signal();
-        let mut s = format!("T{sig:02x}thread:{:x};", t.tid);
+        let mut s = if self.omit_stop_reply_thread {
+            format!("T{sig:02x}")
+        } else {
+            format!("T{sig:02x}thread:{:x};", t.tid)
+        };
         let _ = write!(s, "name:{};", t.name);
         if self.list_threads_in_stop_reply {
             let ids: Vec<String> = self.threads.iter().map(|t| format!("{:x}", t.tid)).collect();

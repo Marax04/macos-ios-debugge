@@ -260,7 +260,7 @@ impl SparcRegisterWindow {
             });
             // Rotate WIM on overflow: WIM = (WIM >> 1) | (top bit)
             // Guard against nwindows==0 or >=32 which would cause shift overflow.
-            let nw = (self.nwindows as u32).min(31).max(1);
+            let nw = u32::from(self.nwindows).min(31).max(1);
             let mask = (1u32 << nw).wrapping_sub(1);
             let top = self.wim & mask;
             self.wim = ((top >> 1) | (top << (nw - 1))) & mask;

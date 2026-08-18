@@ -6629,4 +6629,233 @@ trattato come un difetto della misura finche' non si prova il contrario.**
 
 ---
 
+# Round 83 — 2026-08-18 — Alzare SOLO da zero: quarta statistica, quarta perdita, e il blocco vero
+
+## 83.1 La modalita' `=5`
+
+Alza l'arieta' SOLO quando il corpo non ha dedotto alcun parametro
+(`cc_arity == 0`) e OGNI sito osservato prepara almeno un registro. E' la
+sottoclasse `definita con 0 -> chiamata con N`, che vale ~2950 dei 3424 `OVER`
+di path B.
+
+| | OVER | UNDER | **totale** |
+|---|---|---|---|
+| spento | 3424 | 6478 | 9902 |
+| **predefinito** | 3425 | **2448** | **5873** |
+| `=5` alza solo da zero | **2058** (−39,9%) | 3934 | 5992 |
+
+Scambia −1367 `OVER` per +1486 `UNDER`. In perdita, come le altre tre.
+
+## 83.2 Ma qui il risultato non torna, ed e' informativo
+
+`=5` richiede `minimo >= 1`, cioe' che **ogni** sito osservato prepari almeno un
+registro. Alzare a quel minimo NON dovrebbe creare incoerenze — e invece ne crea
+1486.
+
+L'unica spiegazione: i siti EMESSI passano meno argomenti di quanti il mio
+scanner ne veda preparati. Le due rilevazioni divergono:
+
+| | come conta |
+|---|---|
+| `callsite_argc_from_bodies` (#6800) | registri preparati, sul DISASSEMBLATO |
+| `fill_mlil_call_args_with` | `assigned` sul MLIL, piu' il bypass `published` |
+
+E' la stessa incoerenza fra due consumatori della stessa informazione che il
+§78.3 aveva gia' nominato e rinviato. **Ora e' il blocco**: finche' le due
+divergono, qualunque alzata basata sulla mia mappa produce firme che i siti
+emessi non onorano.
+
+## 83.3 Conclusione sul fronte
+
+Quattro statistiche provate per la direzione «alza» — massimo, minimo su tutti,
+minimo sui non nulli, alzata solo-da-zero — e **tutte e quattro in perdita**.
+Non e' piu' un problema di scelta della statistica: e' il disallineamento fra le
+due rilevazioni.
+
+Prossimo passo obbligato, prima di riprovare qualunque alzata: **misurare la
+divergenza** — quanti siti emessi passano meno argomenti di quanti la mappa ne
+veda preparati, e perche' (bypass `published`, differenze MLIL/disassemblato,
+troncamento dei corpi).
+
+Stato: predefinito invariato (0 differenze), `path A` 0 differenze in tutte e
+cinque le modalita', 1337 test passati.
+
+---
+
+
+<!-- ULTIMO-RAPPORTO: 83 -->
+
+## Come si conta (regola dell'utente, 2026-08-18)
+
+Ogni **5 round** va scritto in chat un rapporto di stato COMPLETO: percentuali,
+miglioramenti, regressioni, scoperte, bug/fix, ipotesi cadute, errori di misura,
+cosa resta aperto.
+
+⚠ La regola esisteva gia' in memoria dal 18-08 e NON e' stata applicata per 26
+round (57→83), perche' descriveva il contenuto e non l'INNESCO. Riparata cosi':
+
+1. dopo aver aggiunto un round qui sopra, `grep -c '^# Round ' STATUS.md`;
+2. confrontarlo con `ULTIMO-RAPPORTO` in questa riga;
+3. se la differenza e' >= 5, scrivere il rapporto e **aggiornare il numero**.
+
+Il marcatore sta QUI e non in memoria apposta: sopravvive alla compattazione del
+contesto, che e' cio' che ha fatto fallire la prima versione della regola.
+
+# Round 84 — 2026-08-18 — Due ipotesi sulla divergenza, ENTRAMBE false
+
+Obiettivo del giro: rimuovere il blocco del §83.2 — le due rilevazioni degli
+argomenti (disassemblato e MLIL) divergono, e finche' divergono nessuna alzata
+di firma puo' funzionare.
+
+## 84.1 Ipotesi A — «il MLIL scrive le meta' a 32 bit e il confronto le perde»
+
+`fill_mlil_call_args_with` confrontava `dest.name` con `["rcx","rdx","r8","r9"]`
+soltanto. Ma `xor %ecx, %ecx` e' il modo IDIOMATICO di passare zero, e su
+x86-64 scrivere la meta' bassa azzera i 32 bit alti: sarebbe una preparazione di
+argomento non contata.
+
+Introdotta `arg_reg_index` (64/32/16/8 bit) nei DUE siti che rilevano le
+scritture. Risultato: **output identico**, `OVER`/`UNDER` invariati, media
+argomenti per chiamata invariata (0,531).
+
+**Verificata, non assunta** — sonda `RUSTRE_DBG_REGNAME` su sample7_cpp:
+
+```
+3333 rdx   3285 rcx   1535 r8   1007 r9
+```
+
+**Zero** occorrenze di `ecx`/`edx`/`r8d`/`r9d`: il lift LLIL→MLIL normalizza
+tutte le scritture ai nomi a 64 bit. L'ipotesi era falsa e la modifica e'
+inerte. Tenuta comunque: e' corretta in principio e costa nulla.
+
+## 84.2 Ipotesi B — «il mio scanner conta come scritture anche `cmp` e `test`»
+
+Difetto REALE trovato leggendo il mio codice: `callsite_argc_from_bodies`
+trattava la destinazione di QUALUNQUE istruzione come una scrittura. `cmp %rax,
+%rcx` e `test %rcx, %rcx` leggono soltanto, e contarli gonfia il minimo
+osservato — che e' esattamente la direzione dell'errore misurato al §83.
+
+Corretto con una lista in POSITIVO (solo le istruzioni che scrivono davvero),
+non in negativo: un elenco di esclusioni dimentica sempre qualcosa, e qui
+sbagliare per difetto e' sicuro.
+
+| | OVER | UNDER | totale |
+|---|---|---|---|
+| predefinito, prima | 3425 | 2448 | 5873 |
+| **predefinito, dopo** | 3425 | 2448 | **5873** (identico) |
+| alza-da-zero, prima | 2058 | 3934 | 5992 |
+| alza-da-zero, dopo | 2123 | 3907 | **6030** (peggio) |
+
+Il difetto era reale ma **non era la causa dominante**: corretto, il predefinito
+non si muove di un byte e l'alzata peggiora leggermente.
+
+## 84.3 Bilancio onesto del giro
+
+Due ipotesi, due falsificazioni. Il blocco resta aperto e la sua causa NON e'
+nessuna delle due che sembravano piu' probabili.
+
+Cosa resta da controllare, in ordine di sospetto:
+1. il **bypass `published`** in `fill_mlil_call_args_with`, che riempie fino a 4
+   argomenti ignorando la clausola stretta;
+2. il **troncamento dei corpi** in `arities_from_seeds`
+   (`CALLEE_SCAN_BYTES` = 4096, 2000 istruzioni): la mia mappa vede solo una
+   parte dei siti nelle funzioni grandi;
+3. istruzioni che il MLIL modella come `Assign` a un registro argomento e che il
+   mio scanner non riconosce (o viceversa) — misurabile solo affiancando le due
+   rilevazioni sullo STESSO sito, che e' la sonda che manca.
+
+La terza e' quella che chiude la questione, e va scritta prima di formulare una
+terza ipotesi: **ho consumato un round su due congetture perche' ho indovinato
+invece di misurare la divergenza direttamente.**
+
+## 84.4 Stato
+
+* predefinito: **0 differenze** su 11342 file, prima e dopo entrambe le
+  modifiche;
+* `path A`: 0 differenze;
+* test: 1337 passati;
+* due correzioni tenute perche' corrette in principio e a costo zero
+  (`arg_reg_index`, filtro sulle scritture), una sonda nuova
+  (`RUSTRE_DBG_REGNAME`).
+
+---
+
+# Round 85 — 2026-08-18 — La divergenza MISURATA: e' STRUTTURALE, e chiude la questione
+
+Scritta la sonda che il §84.3 diceva di scrivere per prima:
+`RUSTRE_DBG_DIVERG`, che affianca le DUE rilevazioni degli argomenti **sullo
+stesso sito di chiamata**. `fill_mlil_call_args_with` riceve ora anche
+`callsite_argc`.
+
+## 85.1 Il risultato, su sample7_cpp (2431 siti)
+
+| | n | % |
+|---|---|---|
+| coerenti | 2095 | 86,2% |
+| **`avail > map_max`** — il MLIL vede PIU' di quanto la mappa registri | **151** | 6,2% |
+| bersaglio assente dalla mappa | 138 | 5,7% |
+| **`avail < map_min`** — la divergenza che rompe l'alzata | **47** | 1,9% |
+
+## 85.2 La causa, letta dagli esempi
+
+```
+tgt=140003790  avail=0  map_min=1  map_max=4  siti=38
+```
+
+Se davvero OGNI sito di quel bersaglio preparasse almeno un registro (`map_min`
+= 1), questo sito non potrebbe averne zero. L'unica spiegazione: **la mappa non
+ha visto questo sito**.
+
+`arities_from_seeds` disassembla ogni corpo fino a `CALLEE_SCAN_BYTES` = 4096
+byte / 2000 istruzioni. In una funzione piu' lunga, i siti di chiamata oltre il
+taglio sono INVISIBILI alla mappa. I 151 `avail > map_max` sono la stessa cosa
+vista dall'altro lato: il MLIL, che lavora sul corpo INTERO della funzione
+corrente, trova preparazioni che la mappa non ha registrato.
+
+## 85.3 La conseguenza, ed e' un teorema piccolo ma decisivo
+
+La mappa e' calcolata su un **SOTTOINSIEME** dei siti. Quindi:
+
+* **massimo su un sottoinsieme ≤ massimo vero.** Usarlo per SMENTIRE
+  («nessuno passa piu' di N») e' conservativo nella misura in cui sbaglia solo
+  per difetto — ed e' il motivo per cui la smentita funziona, con **1** solo
+  falso positivo su tutto il corpus;
+* **minimo su un sottoinsieme ≥ minimo vero.** Usarlo per AFFERMARE («tutti
+  passano almeno N») e' **UNSAFE PER COSTRUZIONE**: il minimo vero puo' essere
+  piu' basso, e le firme alzate a N producono siti che ne passano meno.
+
+**Questo spiega tutte e quattro le alzate fallite** (massimo, minimo su tutti,
+minimo sui non nulli, alza-solo-da-zero) con una causa sola, e chiude la
+questione aperta al §83: non era una scelta di statistica sbagliata, era che
+nessuna statistica di minimo puo' funzionare su un campione troncato.
+
+## 85.4 Cosa servirebbe per riaprirla
+
+Togliere il troncamento — cioe' disassemblare i corpi INTERI in
+`arities_from_seeds` — oppure costruire la mappa da una fonte che veda tutti i
+siti. Entrambe hanno un costo in tempo di analisi che va misurato prima di
+pagarlo, e nessuna delle due e' giustificata dal guadagno atteso: la direzione
+«alza» valeva al meglio −1367 `OVER` contro +1486 `UNDER`, cioe' un pareggio in
+perdita anche se l'evidenza fosse perfetta.
+
+**Raccomandazione: la direzione «alza» resta chiusa**, e ora si sa perche' e non
+solo che.
+
+## 85.5 Stato
+
+* sonda a effetto ZERO verificato (`diff -rq` su sample7_cpp: 0 differenze);
+* predefinito e `path A` invariati;
+* test: 1337 passati;
+* `fill_mlil_call_args_with` riceve ora `callsite_argc`: il cablaggio per farle
+  leggere la STESSA evidenza c'e', se un giorno la mappa sara' completa.
+
+## 85.6 Metodo
+
+Il §84 ha bruciato un round su due congetture. Questo giro ha risposto con una
+sonda scritta in quindici minuti. La regola, che vale la pena ripetere perche'
+l'ho violata due volte oggi: **quando due misure disaccordano, la prima cosa da
+scrivere e' quella che le affianca**, non un'ipotesi su quale delle due sbagli.
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->

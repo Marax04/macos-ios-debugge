@@ -607,7 +607,7 @@ impl ObfuscationClassifier {
             .filter(|f| {
                 f.dispatcher_loop_count >= self.config.cff_min_loop_count
                     && f.block_count > 0
-                    && (f.dispatcher_dominated_count as f64 / f.block_count as f64)
+                    && (f64::from(f.dispatcher_dominated_count) / f64::from(f.block_count))
                         >= self.config.cff_min_dominated_fraction
             })
             .collect();
@@ -645,7 +645,7 @@ impl ObfuscationClassifier {
         let total_candidates = stats.opaque_pred_candidate_count
             + funcs.iter().filter(|f| {
                 f.cond_branch_count > 0
-                    && f.tiny_block_count as f64 / f.block_count.max(1) as f64 > 0.25
+                    && f64::from(f.tiny_block_count) / f64::from(f.block_count.max(1)) > 0.25
             })
             .count() as u32;
 
@@ -654,7 +654,7 @@ impl ObfuscationClassifier {
         }
 
         let confidence = Confidence::new(
-            0.40 + (total_candidates as f64 / 100.0).min(0.50),
+            0.40 + (f64::from(total_candidates) / 100.0).min(0.50),
         );
 
         let mut tr = TechniqueResult::new(
@@ -666,7 +666,7 @@ impl ObfuscationClassifier {
         );
 
         for f in funcs.iter().filter(|f| {
-            f.tiny_block_count as f64 / f.block_count.max(1) as f64 > 0.25
+            f64::from(f.tiny_block_count) / f64::from(f.block_count.max(1)) > 0.25
         }) {
             tr.add_evidence(f.addr);
         }
@@ -681,7 +681,7 @@ impl ObfuscationClassifier {
             .iter()
             .filter(|f| {
                 f.instr_count > 0
-                    && (f.nop_count as f64 / f.instr_count as f64) >= self.config.junk_nop_ratio
+                    && (f64::from(f.nop_count) / f64::from(f.instr_count)) >= self.config.junk_nop_ratio
             })
             .collect();
 
@@ -691,7 +691,7 @@ impl ObfuscationClassifier {
 
         let mean_ratio: f64 = high_nop_funcs
             .iter()
-            .map(|f| f.nop_count as f64 / f.instr_count.max(1) as f64)
+            .map(|f| f64::from(f.nop_count) / f64::from(f.instr_count.max(1)))
             .sum::<f64>()
             / high_nop_funcs.len() as f64;
 
@@ -722,7 +722,7 @@ impl ObfuscationClassifier {
                 f.widening_mov_count >= 3
                     && f.xor_count >= 2
                     && f.instr_count > 0
-                    && (f.widening_mov_count + f.xor_count) as f64 / f.instr_count as f64 > 0.08
+                    && f64::from(f.widening_mov_count + f.xor_count) / f64::from(f.instr_count) > 0.08
             })
             .collect();
 
@@ -752,7 +752,7 @@ impl ObfuscationClassifier {
         if total_odd_consts < 4 {
             return None;
         }
-        let confidence = Confidence::new(0.40 + (total_odd_consts as f64 / 80.0).min(0.45));
+        let confidence = Confidence::new(0.40 + (f64::from(total_odd_consts) / 80.0).min(0.45));
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::ConstantEncoding,
             confidence,
@@ -777,7 +777,7 @@ impl ObfuscationClassifier {
             return None;
         }
 
-        let confidence = Confidence::new(0.45 + (total_stubs as f64 / 30.0).min(0.45));
+        let confidence = Confidence::new(0.45 + (f64::from(total_stubs) / 30.0).min(0.45));
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::StringEncryption,
             confidence,
@@ -795,7 +795,7 @@ impl ObfuscationClassifier {
             return None;
         }
         let confidence = Confidence::new(
-            0.50 + (stats.api_hash_candidate_count as f64 / 40.0).min(0.40),
+            0.50 + (f64::from(stats.api_hash_candidate_count) / 40.0).min(0.40),
         );
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::ApiHashing,
@@ -819,7 +819,7 @@ impl ObfuscationClassifier {
             return None;
         }
 
-        let mean_count = candidates.iter().map(|f| f.unusual_bitwise_count).sum::<u32>() as f64
+        let mean_count = f64::from(candidates.iter().map(|f| f.unusual_bitwise_count).sum::<u32>())
             / candidates.len() as f64;
         let confidence = Confidence::new(0.40 + (mean_count / 30.0).min(0.50));
 
@@ -844,7 +844,7 @@ impl ObfuscationClassifier {
             return None;
         }
         let confidence = Confidence::new(
-            0.60 + (stats.antidebug_import_count as f64 / 10.0).min(0.35),
+            0.60 + (f64::from(stats.antidebug_import_count) / 10.0).min(0.35),
         );
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::AntiDebug,
@@ -863,7 +863,7 @@ impl ObfuscationClassifier {
             return None;
         }
         let confidence = Confidence::new(
-            0.55 + (stats.antivm_check_count as f64 / 8.0).min(0.40),
+            0.55 + (f64::from(stats.antivm_check_count) / 8.0).min(0.40),
         );
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::AntiVm,
@@ -906,7 +906,7 @@ impl ObfuscationClassifier {
             return None;
         }
         let confidence = Confidence::new(
-            0.50 + (stats.vm_handler_count as f64 / 100.0).min(0.45),
+            0.50 + (f64::from(stats.vm_handler_count) / 100.0).min(0.45),
         );
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::Virtualization,
@@ -922,7 +922,7 @@ impl ObfuscationClassifier {
             return None;
         }
         let confidence = Confidence::new(
-            0.40 + (stats.transposition_jump_count as f64 / 200.0).min(0.40),
+            0.40 + (f64::from(stats.transposition_jump_count) / 200.0).min(0.40),
         );
         let mut tr = TechniqueResult::new(
             ObfuscationTechnique::CodeTransposition,

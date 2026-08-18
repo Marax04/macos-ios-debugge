@@ -356,7 +356,7 @@ impl BlockHash {
     /// Compute from owned strings.
     #[must_use]
     pub fn compute_owned(mnemonics: &[String], table: &PrimeTable, is_conditional: bool) -> Self {
-        let refs: Vec<&str> = mnemonics.iter().map(|s| s.as_str()).collect();
+        let refs: Vec<&str> = mnemonics.iter().map(std::string::String::as_str).collect();
         Self::compute(&refs, table, is_conditional)
     }
 
@@ -401,7 +401,7 @@ impl FunctionHash {
         let total_instrs: u32 = blocks
             .iter()
             .map(|b| b.instr_count)
-            .fold(0u32, |acc, c| acc.saturating_add(c));
+            .fold(0u32, u32::saturating_add);
         Self {
             value: h,
             block_count: blocks.len() as u32,
@@ -419,8 +419,8 @@ impl FunctionHash {
     /// Structural similarity heuristic based on block count and instruction count.
     #[must_use]
     pub fn structural_similarity(&self, other: &Self) -> f64 {
-        let bc = ratio(self.block_count as f64, other.block_count as f64);
-        let ic = ratio(self.total_instrs as f64, other.total_instrs as f64);
+        let bc = ratio(f64::from(self.block_count), f64::from(other.block_count));
+        let ic = ratio(f64::from(self.total_instrs), f64::from(other.total_instrs));
         0.5 * bc + 0.5 * ic
     }
 }
@@ -513,7 +513,7 @@ impl HashIndex {
     /// Look up all addresses matching a hash value.
     #[must_use]
     pub fn lookup(&self, value: u64) -> &[u64] {
-        self.map.get(&value).map(|v| v.as_slice()).unwrap_or(&[])
+        self.map.get(&value).map(std::vec::Vec::as_slice).unwrap_or(&[])
     }
 
     /// Number of unique hash values.
@@ -525,7 +525,7 @@ impl HashIndex {
     /// Number of functions indexed.
     #[must_use]
     pub fn function_count(&self) -> usize {
-        self.map.values().map(|v| v.len()).sum()
+        self.map.values().map(std::vec::Vec::len).sum()
     }
 }
 
@@ -992,7 +992,7 @@ impl PrimeFunctionDatabase {
         let mean_blocks = if total > 0 {
             self.hashes
                 .values()
-                .map(|h| h.block_count as f64)
+                .map(|h| f64::from(h.block_count))
                 .sum::<f64>()
                 / total as f64
         } else {

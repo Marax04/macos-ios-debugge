@@ -463,7 +463,7 @@ impl M68kDecoder {
             }
             7 => match reg {
                 0 => {
-                    let v = Self::read_word(data, base_off)? as u32;
+                    let v = u32::from(Self::read_word(data, base_off)?);
                     extra = 2;
                     M68kEa::AbsShort(v)
                 }
@@ -490,12 +490,12 @@ impl M68kDecoder {
                     // Immediate
                     match sz {
                         M68kSize::Byte => {
-                            let v = Self::read_word(data, base_off)? as u32 & 0xff;
+                            let v = u32::from(Self::read_word(data, base_off)?) & 0xff;
                             extra = 2;
                             M68kEa::Imm(v)
                         }
                         M68kSize::Word => {
-                            let v = Self::read_word(data, base_off)? as u32;
+                            let v = u32::from(Self::read_word(data, base_off)?);
                             extra = 2;
                             M68kEa::Imm(v)
                         }
@@ -505,7 +505,7 @@ impl M68kDecoder {
                             M68kEa::Imm(v)
                         }
                         _ => {
-                            let v = Self::read_word(data, base_off)? as u32;
+                            let v = u32::from(Self::read_word(data, base_off)?);
                             extra = 2;
                             M68kEa::Imm(v)
                         }
@@ -575,7 +575,7 @@ impl M68kDecoder {
                 };
                 let mut instr = self.make_instr(address, word, bop, M68kSize::Unsized);
                 instr.length = 4;
-                let bit_n = Self::read_word(data, 2).unwrap_or(0) as u32 & 0xff;
+                let bit_n = u32::from(Self::read_word(data, 2).unwrap_or(0)) & 0xff;
                 instr.src = Some(M68kEa::Imm(bit_n));
                 if let Some((ea, extra)) = self.parse_ea(data, 4, mode, reg, M68kSize::Byte) {
                     instr.dst = Some(ea);
@@ -752,7 +752,7 @@ impl M68kDecoder {
             return Ok(instr);
         }
         let sz = M68kSize::from_sz2(sz_bits).unwrap_or(M68kSize::Word);
-        let data3 = ((word >> 9) & 7) as u32;
+        let data3 = u32::from((word >> 9) & 7);
         let mnem = if (word >> 8) & 1 == 1 { "SUBQ" } else { "ADDQ" };
         let mut instr = self.make_instr(address, word, mnem, sz);
         instr.src = Some(M68kEa::Imm(if data3 == 0 { 8 } else { data3 }));
@@ -797,7 +797,7 @@ impl M68kDecoder {
 
     fn decode_moveq(&self, address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
         let dn = ((word >> 9) & 7) as u8;
-        let imm = (word & 0xff) as i8 as i32 as u32;
+        let imm = i32::from((word & 0xff) as i8) as u32;
         let mut instr = self.make_instr(address, word, "MOVEQ", M68kSize::Long);
         instr.src = Some(M68kEa::Imm(imm));
         instr.dst = Some(M68kEa::DataReg(dn));
@@ -963,7 +963,7 @@ impl M68kDecoder {
         };
         let mut instr = self.make_instr(address, word, mnem, sz);
         if ir == 0 {
-            instr.src = Some(M68kEa::Imm(if count == 0 { 8 } else { count as u32 }));
+            instr.src = Some(M68kEa::Imm(if count == 0 { 8 } else { u32::from(count) }));
         } else {
             instr.src = Some(M68kEa::DataReg(count));
         }

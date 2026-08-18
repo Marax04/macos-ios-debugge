@@ -46,7 +46,7 @@ impl fmt::Display for Insn {
         if self.operands.is_empty() {
             write!(f, "{}", self.mnemonic)
         } else {
-            let ops: Vec<String> = self.operands.iter().map(|o| o.to_string()).collect();
+            let ops: Vec<String> = self.operands.iter().map(std::string::ToString::to_string).collect();
             write!(f, "{} {}", self.mnemonic, ops.join(", "))
         }
     }
@@ -176,8 +176,8 @@ impl InstructionNormalizer {
                 scale,
                 disp,
             } => {
-                let base2 = base.as_deref().map(|s| s.to_lowercase());
-                let index2 = index.as_deref().map(|s| s.to_lowercase());
+                let base2 = base.as_deref().map(str::to_lowercase);
+                let index2 = index.as_deref().map(str::to_lowercase);
                 let disp2 = if self.abstract_immediates && disp.abs() > 0x10000 {
                     0
                 } else {
@@ -234,7 +234,7 @@ impl PrimeHashInsn {
         // and *different* mnemonics get (with very high probability) different primes.
         let mut h: u64 = 14695981039346656037;
         for b in mnemonic.bytes() {
-            h ^= b as u64;
+            h ^= u64::from(b);
             h = h.wrapping_mul(1099511628211);
         }
         let p = PRIMES[(h as usize) % PRIMES.len()];

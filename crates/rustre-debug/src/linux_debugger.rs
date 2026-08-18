@@ -347,7 +347,6 @@ impl LinuxDebugger {
                 }
                 crate::DebugRegisterState::Armed(_) => {}
             }
-
             regs.set("dr0", 0);
             regs.set("dr1", 0);
             regs.set("dr2", 0);
@@ -831,7 +830,7 @@ impl LinuxDebugger {
     /// step thread B while thread A sat on a planted trap stepped **A** and
     /// handed that event back as the answer for B — the caller was told its
     /// thread had advanced when a different one had.
-    async fn step_off_planted_breakpoint(&self, who: Option<ThreadId>) -> Option<DebugEvent> {
+    async fn step_off_planted_breakpoint(&self, who: Option<ThreadId>) -> crate::StepOff {
         let Some(tid) = who.or(*self.current_tid.lock()) else { return None };
         let Ok(regs) = self.get_registers(tid).await else { return None };
         let pc = regs.pc;
@@ -846,15 +845,26 @@ impl LinuxDebugger {
             }
         };
         if self.write_memory_raw(Address(pc), &original).await.is_err() {
-            return None;
+            // The trap is still in place and the thread is still on it. Saying
+            // "no trap here" would send the caller to step straight into it.
+            return crate::StepOff::Failed(DebugError::MemoryAccess(Address(pc)));
         }
-        let stepped = self.single_step_raw(tid).await.ok();
+        let stepped = self.single_step_raw(tid).await;
         if self.write_memory_raw(Address(pc), crate::host_trap_bytes()).await.is_err() {
-            // Could not re-arm: stop claiming it is planted.
+            // Could not re-arm: stop claiming it is planted. This is NOT a
+            // reason to discard a step that already happened — doing so made
+            // the caller step a second time and the thread advance twice for
+            // one request.
             self.breakpoints.lock().remove(&pc);
-            return None;
         }
-        stepped
+        match stepped {
+            Ok(ev) => crate::StepOff::Stepped(ev),
+            // The trap has just been re-armed under a thread that did not move.
+            // Reported, not swallowed: `.ok()` here turned a transient failure
+            // into the caller stepping onto the `int3` and getting no
+            // instruction, with nothing saying why.
+            Err(e) => crate::StepOff::Failed(e),
+        }
     }
 
     /// See `WindowsDebugger::rewind_past_own_breakpoint` for the full
@@ -3367,7 +3377,11 @@ impl crate::Debugger for LinuxDebugger {
         // stopped, and resuming from the outside would count as a second
         // continue.
         loop {
-            self.step_off_planted_breakpoint(None).await;
+            // The outcome is deliberately not propagated here: this is the
+            // resume path, which retries and re-plants on its own, and a thread
+            // that could not be stepped off is handled by the loop below. Named
+            // rather than dropped so the choice is visible.
+            let _stepped_off = self.step_off_planted_breakpoint(None).await;
             let missed = self.rearm_watchpoints_on_new_threads().await;
             // Not `let _ =`. The resume still does not fail — that part of the
             // old comment was right — but the answer is RECORDED instead of
@@ -3541,12 +3555,18 @@ impl crate::Debugger for LinuxDebugger {
             // dropped. Assigning, not extending: an address that has since been
             // re-armed clears itself, so this never accumulates stale claims.
             *self.unarmed_since_resume.lock() = missed.into_iter().collect();
-        if let Some(ev) = self.step_off_planted_breakpoint(Some(tid)).await {
-            *self.current_tid.lock() = Some(ev.tid);
-            if ev.reason.is_exit() {
-                self.retire_session_after_exit();
+        match self.step_off_planted_breakpoint(Some(tid)).await {
+            crate::StepOff::Stepped(ev) => {
+                *self.current_tid.lock() = Some(ev.tid);
+                if ev.reason.is_exit() {
+                    self.retire_session_after_exit();
+                }
+                return Ok(ev);
             }
-            return Ok(ev);
+            // Do NOT fall through to another step: the trap is re-armed and the
+            // thread has not moved, so stepping again executes the `int3`.
+            crate::StepOff::Failed(e) => return Err(e),
+            crate::StepOff::NotOnATrap => {}
         }
         self.single_step_raw(tid).await
     }

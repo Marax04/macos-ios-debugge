@@ -703,7 +703,7 @@ impl CallGraphBuilder {
                 // Find enclosing function.
                 let caller = funcs
                     .iter()
-                    .filter(|(s, f)| hint.call_site >= *s && hint.call_site < s + f.size as u64)
+                    .filter(|(s, f)| hint.call_site >= *s && hint.call_site < s + u64::from(f.size))
                     .map(|(s, _)| *s)
                     .next()
                     .unwrap_or(hint.call_site);

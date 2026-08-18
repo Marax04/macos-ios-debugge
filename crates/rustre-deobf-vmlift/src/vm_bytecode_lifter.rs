@@ -535,7 +535,7 @@ fn decode_operands(bytes: &[u8], pc: usize, op: &LiftedOp, operand_bytes: usize)
         // Push immediate: 4-byte imm
         LiftedOp::Push if operand_bytes == 4 && available >= 4 => {
             let imm = u32::from_le_bytes([bytes[pc], bytes[pc+1], bytes[pc+2], bytes[pc+3]]);
-            vec![LiftedOperand::Immediate(imm as u64)]
+            vec![LiftedOperand::Immediate(u64::from(imm))]
         }
         // Load/Store with 6 bytes: reg_dst, reg_src, imm32
         LiftedOp::Load { .. } | LiftedOp::Store { .. } if operand_bytes == 6 && available >= 6 => {
@@ -553,14 +553,14 @@ fn decode_operands(bytes: &[u8], pc: usize, op: &LiftedOp, operand_bytes: usize)
             let imm = u32::from_le_bytes([bytes[pc+1], bytes[pc+2], bytes[pc+3], bytes[pc+4]]);
             vec![
                 LiftedOperand::VirtualReg(dst),
-                LiftedOperand::Immediate(imm as u64),
+                LiftedOperand::Immediate(u64::from(imm)),
             ]
         }
         _ => {
             // Generic: read as single little-endian value
             let mut raw = 0u64;
             for (i, &b) in bytes[pc..pc + available].iter().enumerate() {
-                raw |= (b as u64) << (i * 8);
+                raw |= u64::from(b) << (i * 8);
             }
             vec![LiftedOperand::Immediate(raw)]
         }

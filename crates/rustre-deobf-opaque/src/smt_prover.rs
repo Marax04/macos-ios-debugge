@@ -630,7 +630,7 @@ impl SmtProver {
                 let val = if width >= 64 {
                     raw
                 } else {
-                    let shift = 64 - width as u32;
+                    let shift = 64 - u32::from(width);
                     (raw << shift) >> shift
                 };
                 env.insert(name.clone(), val);

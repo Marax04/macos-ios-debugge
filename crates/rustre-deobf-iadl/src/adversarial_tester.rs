@@ -250,13 +250,13 @@ impl AdversarialScore {
         let total = verdicts.len() as u32;
         let passed = verdicts.iter().filter(|v| v.matched).count() as u32;
         let failed = total - passed;
-        let pass_rate = passed as f64 / total as f64;
+        let pass_rate = f64::from(passed) / f64::from(total);
         let failing: Vec<u32> =
             verdicts.iter().filter(|v| !v.matched).map(|v| v.hamming_distance).collect();
         let mean_hamming = if failing.is_empty() {
             0.0
         } else {
-            failing.iter().sum::<u32>() as f64 / failing.len() as f64
+            f64::from(failing.iter().sum::<u32>()) / failing.len() as f64
         };
         let max_hamming = failing.iter().copied().max().unwrap_or(0);
         // Adversarial score: pass_rate, penalised by normalised mean hamming.

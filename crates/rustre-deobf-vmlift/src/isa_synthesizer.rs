@@ -299,7 +299,7 @@ impl IsaSynthesizer {
         if semantics.is_empty() {
             return 0;
         }
-        let sum: u32 = semantics.iter().map(|s| s.confidence as u32).sum();
+        let sum: u32 = semantics.iter().map(|s| u32::from(s.confidence)).sum();
         (sum / semantics.len() as u32).min(100) as u8
     }
 }

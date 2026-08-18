@@ -284,7 +284,7 @@ impl TransformPass for DeadCodeElimination {
             if let Some(insn) = func.insns.get(&id) {
                 if insn.flags.is_dead { continue; }
                 if let Some(dst) = insn.dst {
-                    let uses = func.def_use.get(&dst).map(|u| u.len()).unwrap_or(0);
+                    let uses = func.def_use.get(&dst).map(std::vec::Vec::len).unwrap_or(0);
                     if uses == 0 && !has_side_effects(&insn.op) {
                         if let Some(insn_mut) = func.insns.get_mut(&id) {
                             insn_mut.flags.is_dead = true;

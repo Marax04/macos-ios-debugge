@@ -1511,7 +1511,7 @@ impl TruthTableChecker {
 
         // Total combinations: range^n — can be huge.  Cap via iteration.
         const MAX_ENUMERATION: usize = 65_536;
-        let total = (range as u128).checked_pow(n as u32).unwrap_or(u128::MAX);
+        let total = u128::from(range).checked_pow(n as u32).unwrap_or(u128::MAX);
         let cap = (total.min(MAX_ENUMERATION as u128)) as usize;
         let mut result = Vec::with_capacity(cap);
         let mut indices: Vec<u64> = vec![0; n];

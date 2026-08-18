@@ -355,7 +355,7 @@ impl StreamDecoder {
             for &b in &group {
                 val = val
                     .checked_mul(85)
-                    .and_then(|v| v.checked_add((b - 33) as u32))
+                    .and_then(|v| v.checked_add(u32::from(b - 33)))
                     .ok_or_else(|| DecodeError::InvalidEncoding("ASCII85 overflow".to_string()))?;
             }
             let bytes = val.to_be_bytes();
@@ -611,7 +611,7 @@ pub fn png_predictor_undo(
                     let raw = if i < src.len() { src[i] } else { 0 };
                     let a = if i >= bpp { dst[i - bpp] } else { 0 };
                     let b = prev_row[i];
-                    dst[i] = raw.wrapping_add(((a as u16 + b as u16) / 2) as u8);
+                    dst[i] = raw.wrapping_add(((u16::from(a) + u16::from(b)) / 2) as u8);
                 }
             }
             4 => {
@@ -713,7 +713,7 @@ pub fn lzw_decompress(data: &[u8], early_change: bool) -> Result<Vec<u8>, Decode
     loop {
         // Fill bit buffer.
         while bit_count < bit_width && byte_pos < data.len() {
-            bit_buf = (bit_buf << 8) | data[byte_pos] as u64;
+            bit_buf = (bit_buf << 8) | u64::from(data[byte_pos]);
             bit_count += 8;
             byte_pos += 1;
         }

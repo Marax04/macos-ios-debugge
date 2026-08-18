@@ -438,7 +438,7 @@ impl RomAnalyzer {
     /// Compute a simple code/data size estimate for the ROM.
     #[must_use]
     pub fn code_size_estimate(&self) -> usize {
-        self.banks.iter().filter(|b| b.read_only).map(|b| b.size()).sum()
+        self.banks.iter().filter(|b| b.read_only).map(MemoryBank::size).sum()
     }
 
     /// Return a human-readable summary of the analyzed ROM.

@@ -427,7 +427,7 @@ pub fn has_unicode_escapes(s: &str) -> bool {
     let bytes = s.as_bytes();
     bytes.windows(6).any(|w| {
         w[0] == b'\\' && w[1] == b'u'
-            && w[2..6].iter().all(|b| b.is_ascii_hexdigit())
+            && w[2..6].iter().all(u8::is_ascii_hexdigit)
     })
 }
 

@@ -279,7 +279,7 @@ impl Z80Flags {
         let ci = u16::from(carry_in);
         let result16 = u16::from(a) + u16::from(b) + ci;
         let result = result16 as u8;
-        let half = ((a & 0x0F) + (b & 0x0F) + carry_in as u8) > 0x0F;
+        let half = ((a & 0x0F) + (b & 0x0F) + u8::from(carry_in)) > 0x0F;
         let overflow = ((a ^ result) & (b ^ result) & 0x80) != 0;
         self.set_s(result & 0x80 != 0);
         self.set_z(result == 0);
@@ -294,7 +294,7 @@ impl Z80Flags {
         let bi = u16::from(borrow_in);
         let result16 = (u16::from(a)).wrapping_sub(u16::from(b)).wrapping_sub(bi);
         let result = result16 as u8;
-        let half = (a & 0x0F) < (b & 0x0F) + borrow_in as u8;
+        let half = (a & 0x0F) < (b & 0x0F) + u8::from(borrow_in);
         let overflow = ((a ^ b) & (a ^ result) & 0x80) != 0;
         self.set_s(result & 0x80 != 0);
         self.set_z(result == 0);

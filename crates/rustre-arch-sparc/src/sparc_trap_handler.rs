@@ -301,7 +301,7 @@ impl TrapTable {
     ) -> TrapHandler {
         let base = Address::new(entry_addr);
         let instrs: Vec<_> = SparcLinearDisassembler::new(arch, bytes, base)
-            .filter_map(|r| r.ok())
+            .filter_map(std::result::Result::ok)
             .take(INSTRS_PER_TRAP)
             .collect();
 
@@ -320,7 +320,7 @@ impl TrapTable {
                     .operands
                     .trim_start_matches('$')
                     .chars()
-                    .take_while(|c| c.is_ascii_hexdigit())
+                    .take_while(char::is_ascii_hexdigit)
                     .collect();
                 u64::from_str_radix(&hex, 16).ok()
             });
@@ -401,7 +401,7 @@ impl TrapTable {
         } else {
             SPARC_V8_TRAPS
         };
-        let is_hw = table.iter().any(|e| e.number as u16 == n);
+        let is_hw = table.iter().any(|e| u16::from(e.number) == n);
         // Software traps: V8 = 0x80–0xFF, V9 = 0x100–0x1FF
         let is_sw = if arch.bits == 64 {
             (0x100..=0x1FF).contains(&n)

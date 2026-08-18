@@ -1210,11 +1210,20 @@ impl AppleUnwinder {
         // backtrace. Only the table knows the function is frameless, so ask
         // it before letting the register answer.
         let frameless = self.compact_says_frameless(regs.pc, depth);
+        // Same family, other encoding: at the FIRST byte of a FRAME function
+        // the prologue has not executed, so x29 is still the CALLER's frame
+        // pointer and walking it drops the immediate caller exactly as above.
+        let at_frame_entry = self.compact_says_prologue_not_executed(regs.pc, depth);
         for strategy in self.order.sequence() {
             let attempt = match strategy {
                 FrameProvenance::FramePointerChain if frameless => Err(
                     UnwindError::ImplausibleFrame(
                         "function is frameless: x29 holds the caller's frame pointer",
+                    ),
+                ),
+                FrameProvenance::FramePointerChain if at_frame_entry => Err(
+                    UnwindError::ImplausibleFrame(
+                        "pc is the entry of a frame function: its prologue has not run, so x29                          still holds the caller's frame pointer",
                     ),
                 ),
                 FrameProvenance::FramePointerChain => unwind_frame_pointer(regs, mem),
@@ -1264,6 +1273,41 @@ impl AppleUnwinder {
         matches!(Arm64Encoding::decode(entry.encoding), Ok(Arm64Encoding::Frameless { .. }))
     }
 
+    /// Is `pc` the exact ENTRY POINT of a function the compact table describes
+    /// as `Frame`?
+    ///
+    /// At that one address the prologue (`stp x29,x30,[sp,#-16]!; mov x29,sp`)
+    /// has not executed yet: the frame record the `Frame` encoding promises
+    /// does not exist, `x29` still holds the CALLER's frame pointer and the
+    /// return address is still live in `lr`. Reading `[x29]`/`[x29+8]` then
+    /// returns the caller's CALLER, and every validation passes — the skipped
+    /// frame is reported as table-derived. Setting a breakpoint on a function's
+    /// address is the most common thing done with a debugger, so this is not a
+    /// corner case.
+    ///
+    /// Only `depth == 1` can answer `true`: beyond the innermost frame `pc` is
+    /// a return address (and is looked up decremented), so it is never an entry
+    /// point, and `lr` is not known to hold anything. As with
+    /// `compact_says_frameless`, every uncertainty answers `false`.
+    fn compact_says_prologue_not_executed(&self, pc: u64, depth: usize) -> bool {
+        if depth != 1 {
+            return false;
+        }
+        let Some(image) = self.image_for(pc) else { return false };
+        if !image.arch.is_arm64() {
+            return false;
+        }
+        let Some(compact) = image.compact.as_ref() else { return false };
+        let Ok(fn_offset) = u32::try_from(pc.wrapping_sub(image.image_base)) else {
+            return false;
+        };
+        let Ok(entry) = compact.lookup(fn_offset) else { return false };
+        if entry.function_offset != fn_offset {
+            return false;
+        }
+        matches!(Arm64Encoding::decode(entry.encoding), Ok(Arm64Encoding::Frame { .. }))
+    }
+
     fn unwind_compact(
         &self,
         regs: Arm64UnwindRegs,
@@ -1307,7 +1351,27 @@ impl AppleUnwinder {
             // default cascade launders a rejected x29 into a frame stamped
             // `CompactUnwind` — table-derived provenance for a read off a
             // demonstrably invalid pointer.
-            Arm64Encoding::Frame { .. } => validated_frame_record_step(regs, mem),
+            Arm64Encoding::Frame { .. } => {
+                // ... but at the function's first byte the prologue has not
+                // run and there is no frame record yet; the answer lives in
+                // `lr`, not on the stack. One decision, one implementation:
+                // `step` consults the same predicate to suppress the fp
+                // strategy for this pc.
+                if self.compact_says_prologue_not_executed(regs.pc, depth) {
+                    // ABSENT is not "clean": without a live lr the return
+                    // address is unknown, and this module says so rather than
+                    // walking a record that does not exist.
+                    let lr = regs.lr.ok_or(UnwindError::FramelessWithoutLiveLr(depth))?;
+                    return Ok(Arm64UnwindRegs {
+                        pc: strip_pac(lr),
+                        // The prologue has not moved sp nor written x29.
+                        sp: regs.sp,
+                        fp: regs.fp,
+                        lr: None,
+                    });
+                }
+                validated_frame_record_step(regs, mem)
+            }
             Arm64Encoding::Frameless { stack_size } => {
                 // `lr` is only the return address until the callee spills it.
                 // Beyond frame 0 we do not know it, and guessing is exactly
@@ -2570,6 +2634,39 @@ mod tests {
             matches!(err, UnwindError::AllStrategiesFailed(_)),
             "expected every strategy to fail, got {err:?}"
         );
+    }
+
+    /// The most common arm64 compact encoding of all: MODE_FRAMELESS with
+    /// stack-size 0, what ld64 emits for every trivial leaf that allocates no
+    /// stack. The caller's sp EQUALS the callee's, which is the correct
+    /// answer (libunwind does `sp += stackSize*16` and demands no growth).
+    #[test]
+    fn a_frameless_leaf_with_a_zero_sized_frame_still_has_a_caller() {
+        let enc = UNWIND_ARM64_MODE_FRAMELESS; // stack-size 0
+        let page = regular_page(&[(0x1000, enc)]);
+        let data = build_unwind_info(&[], &[(0x1000, page)], 0x2000);
+        let unw = AppleUnwinder::new()
+            .with_order(UnwindOrder::TablesFirst)
+            .with_image(image_with_compact(&data));
+        let mem = SliceMemory::new(STACK_BASE, vec![0u8; 0x1000]);
+
+        let regs = Arm64UnwindRegs {
+            pc: IMAGE_BASE + 0x1004,
+            sp: STACK_BASE + 0x40,
+            fp: 0,
+            lr: Some(IMAGE_BASE + 0x2222),
+        };
+        let (next, prov) = unw
+            .step(regs, 1, &mem)
+            .unwrap_or_else(|e| panic!("a zero-sized frameless leaf must still yield its caller: {e:?}"));
+        assert_eq!(prov, FrameProvenance::CompactUnwind);
+        assert_eq!(next.pc, IMAGE_BASE + 0x2222);
+        assert_eq!(next.sp, STACK_BASE + 0x40, "sp is unchanged: stack-size 0");
+        assert_eq!(next.lr, None);
+
+        // And the whole backtrace must contain the caller, not stop at one frame.
+        let bt = unw.backtrace(regs, &mem);
+        assert!(bt.len() >= 2, "backtrace truncated to {} frame(s)", bt.len());
     }
 
     #[test]

@@ -122,7 +122,7 @@ pub fn detect_vm_entries(code: &[u8], base: u64) -> Vec<VmEntry> {
         // CALL rel32: E8 xx xx xx xx
         if code[i] == 0xE8 && i + 5 <= len {
             let rel = i32::from_le_bytes([code[i + 1], code[i + 2], code[i + 3], code[i + 4]]);
-            let target_rva = (base + i as u64 + 5).wrapping_add_signed(rel as i64);
+            let target_rva = (base + i as u64 + 5).wrapping_add_signed(i64::from(rel));
             let entry = VmEntry::new(
                 Addr(base + i as u64),
                 VmEntryKind::CallStub,
@@ -137,13 +137,13 @@ pub fn detect_vm_entries(code: &[u8], base: u64) -> Vec<VmEntry> {
             let imm = u32::from_le_bytes([code[i + 1], code[i + 2], code[i + 3], code[i + 4]]);
             let target = if code[i + 5] == 0xE9 && i + 10 <= len {
                 let rel = i32::from_le_bytes([code[i + 6], code[i + 7], code[i + 8], code[i + 9]]);
-                (base + i as u64 + 10).wrapping_add_signed(rel as i64)
+                (base + i as u64 + 10).wrapping_add_signed(i64::from(rel))
             } else {
                 base + i as u64 + 7
             };
             let entry = VmEntry::new(Addr(base + i as u64), VmEntryKind::PushJmp, Addr(target))
                 .with_confidence(85)
-                .with_opcode(imm as u64);
+                .with_opcode(u64::from(imm));
             entries.push(entry);
         }
     }
@@ -545,13 +545,13 @@ impl VirtualizedFunction {
         let entry_conf = self
             .entries
             .iter()
-            .map(|e| e.confidence as u32)
+            .map(|e| u32::from(e.confidence))
             .max()
             .unwrap_or(0);
         let disp_conf = self
             .dispatcher
             .as_ref()
-            .map(|d| d.confidence as u32)
+            .map(|d| u32::from(d.confidence))
             .unwrap_or(0);
         (((entry_conf + disp_conf) / 2) as u8).min(100)
     }
@@ -700,7 +700,7 @@ impl VmOpcodeFrequencyAnalyzer {
         freqs
             .iter()
             .map(|f| {
-                let p = f.fraction as f64;
+                let p = f64::from(f.fraction);
                 if p > 0.0 { -p * p.log2() } else { 0.0 }
             })
             .sum()

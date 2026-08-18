@@ -163,7 +163,7 @@ impl CostMatrix {
         let rows_orig = similarity.len();
         // The WIDEST row, not just the first: a jagged input whose later rows
         // are longer than row 0 used to index past the end of `data`.
-        let cols_orig = similarity.iter().map(|r| r.len()).max().unwrap_or(0);
+        let cols_orig = similarity.iter().map(std::vec::Vec::len).max().unwrap_or(0);
         // Guard against memory exhaustion: cap matrix dimension at HUNGARIAN_THRESHOLD.
         // Callers should already ensure this, but defend in depth.
         let rows_orig = rows_orig.min(HUNGARIAN_THRESHOLD);
@@ -785,10 +785,10 @@ impl FunctionFeatureSet {
     #[must_use]
     pub fn to_feature_vec(&self) -> Vec<f64> {
         let mut v = Vec::with_capacity(4 + self.opcode_hist.len());
-        v.push(self.block_count as f64);
-        v.push(self.insn_count  as f64);
-        v.push(self.call_out    as f64);
-        v.push(self.call_in     as f64);
+        v.push(f64::from(self.block_count));
+        v.push(f64::from(self.insn_count));
+        v.push(f64::from(self.call_out));
+        v.push(f64::from(self.call_in));
         v.extend_from_slice(&self.opcode_hist);
         v
     }
@@ -799,7 +799,7 @@ fn ratio_sim(a: u32, b: u32) -> f64 {
         return 1.0;
     }
     let (lo, hi) = if a < b { (a, b) } else { (b, a) };
-    lo as f64 / hi as f64
+    f64::from(lo) / f64::from(hi)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

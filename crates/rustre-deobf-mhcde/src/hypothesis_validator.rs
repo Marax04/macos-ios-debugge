@@ -426,7 +426,7 @@ impl HypothesisValidator {
         let nat_score = naturalness * 0.40;
 
         // Entropy bonus: penalise very high or very low entropy
-        let ent_f64 = entropy as f64;
+        let ent_f64 = f64::from(entropy);
         let ent_score = if ent_f64 < 1.5 || ent_f64 > 7.2 {
             0.0
         } else {
@@ -436,7 +436,7 @@ impl HypothesisValidator {
         };
 
         // NOP penalty
-        let nop_penalty = (nop_density as f64 * 0.3).min(0.15);
+        let nop_penalty = (f64::from(nop_density) * 0.3).min(0.15);
 
         // Length bonus: tiny fragments score lower
         let len_score = if len < 16 {

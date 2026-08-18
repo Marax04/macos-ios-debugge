@@ -818,13 +818,13 @@ impl FitImageFile {
                     .to_string();
                 let load_addr = child
                     .prop("load")
-                    .and_then(|p| p.as_u32_be())
-                    .map(|v| v as u64);
+                    .and_then(FdtProperty::as_u32_be)
+                    .map(|v| u64::from(v));
                 let entry = child
                     .prop("entry")
-                    .and_then(|p| p.as_u32_be())
-                    .map(|v| v as u64);
-                let raw_data = child.data_prop().map(|d| d.to_vec()).unwrap_or_default();
+                    .and_then(FdtProperty::as_u32_be)
+                    .map(|v| u64::from(v));
+                let raw_data = child.data_prop().map(<[u8]>::to_vec).unwrap_or_default();
                 images.push(FitImage {
                     node_name: child.full_name(),
                     image_type,
@@ -843,7 +843,7 @@ impl FitImageFile {
             default_config = cfg_node
                 .prop("default")
                 .and_then(|p| p.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             for child in &cfg_node.children {
                 let cfg = FitConfig {
                     node_name: child.full_name(),
@@ -855,15 +855,15 @@ impl FitImageFile {
                     kernel_ref: child
                         .prop("kernel")
                         .and_then(|p| p.as_str())
-                        .map(|s| s.to_string()),
+                        .map(std::string::ToString::to_string),
                     ramdisk_ref: child
                         .prop("ramdisk")
                         .and_then(|p| p.as_str())
-                        .map(|s| s.to_string()),
+                        .map(std::string::ToString::to_string),
                     fdt_ref: child
                         .prop("fdt")
                         .and_then(|p| p.as_str())
-                        .map(|s| s.to_string()),
+                        .map(std::string::ToString::to_string),
                 };
                 configs.push(cfg);
             }
@@ -943,7 +943,7 @@ impl UBootImage {
     #[must_use]
     pub fn entry_point(&self) -> Option<u64> {
         match self {
-            Self::Legacy(h) => Some(h.ih_ep as u64),
+            Self::Legacy(h) => Some(u64::from(h.ih_ep)),
             Self::Fit(f) => f.kernel().and_then(|k| k.entry),
         }
     }
@@ -952,7 +952,7 @@ impl UBootImage {
     #[must_use]
     pub fn load_address(&self) -> Option<u64> {
         match self {
-            Self::Legacy(h) => Some(h.ih_load as u64),
+            Self::Legacy(h) => Some(u64::from(h.ih_load)),
             Self::Fit(f) => f.kernel().and_then(|k| k.load_addr),
         }
     }

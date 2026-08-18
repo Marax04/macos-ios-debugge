@@ -212,7 +212,7 @@ pub fn decode_simd(full_bytes: &[u8]) -> Result<(String, String, usize, InstrFla
             }
             let lanes: Vec<String> = full_bytes[pos..pos + 16]
                 .iter()
-                .map(|b| b.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
             pos += 16;
             ("i8x16.shuffle", lanes.join(" "), InstrFlags::NONE)
