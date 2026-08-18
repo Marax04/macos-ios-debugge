@@ -752,7 +752,12 @@ mod _disabled_frida_tools {
 struct LiveRegs(HashMap<String, u64>);
 impl rustre_debug::expression_evaluator::RegisterState for LiveRegs {
     fn read_register(&self, name: &str) -> Option<u64> {
-        self.0.get(name).copied().or_else(|| self.0.get(&format!("r{name}")).copied())
+        // Prepending `r` used to be the whole story. It is right for `ax` and
+        // nonsense for `eax`, which became `reax` and read as absent — while
+        // `ax` found `rax` and handed back all 64 bits of it. Two different
+        // wrong answers from one line; see `read_register_by_name`, which knows
+        // the width each name means.
+        rustre_debug::read_register_by_name(name, |n| self.0.get(n).copied())
     }
     fn all_registers(&self) -> Vec<(String, u64)> {
         self.0.iter().map(|(k, v)| (k.clone(), *v)).collect()
@@ -4939,6 +4944,51 @@ mod tests {
     /// Only `Unsupported` may be silent, because that is the case the note
     /// actually argues for. Anything else has to appear in the reply.
     #[test]
+    /// A 32-bit register name must yield the 32-bit VALUE, not the whole 64.
+    ///
+    /// `LiveRegs` accepted a narrow name by prepending `r` to it. Measured, the
+    /// line produced TWO different wrong answers, not one: `eax` became `reax`
+    /// and read as ABSENT, while `ax` did find `rax` and handed back all 64
+    /// bits of it. (The first red here was `left: None`, which is why this
+    /// sentence no longer says what the first draft of it said.)
+    ///
+    /// Both consumers of `RegisterState` are conditional breakpoints and
+    /// `debug.evaluate`, so the wrong number decides whether execution stops: a
+    /// breakpoint conditioned on `ax == 0x1234` never fires while the register
+    /// really does hold `0x1234`, because the comparison is against
+    /// `0xFFFFFFFF00001234`.
+    ///
+    /// Nothing downstream repairs this: `expression_evaluator.rs` masks by the
+    /// size of a MEMORY read, never by the width implied by a register name,
+    /// and the string `"eax"` appears nowhere in either crate.
+    #[test]
+    fn a_thirty_two_bit_register_name_reads_thirty_two_bits() {
+        use rustre_debug::expression_evaluator::RegisterState;
+        let regs = LiveRegs(HashMap::from([
+            ("rax".to_string(), 0xFFFF_FFFF_0000_1234u64),
+            ("rbx".to_string(), 0x1122_3344_5566_7788u64),
+        ]));
+
+        // The full-width name is unchanged.
+        assert_eq!(regs.read_register("rax"), Some(0xFFFF_FFFF_0000_1234));
+
+        // The narrow views must be narrow.
+        assert_eq!(
+            regs.read_register("eax"),
+            Some(0x0000_1234),
+            "eax is the low 32 bits of rax; returning all 64 makes every              comparison against it false"
+        );
+        assert_eq!(regs.read_register("ax"), Some(0x1234));
+        assert_eq!(regs.read_register("al"), Some(0x34));
+        assert_eq!(regs.read_register("ah"), Some(0x12), "ah is bits 8..16");
+
+        // And on a register whose low half is also non-trivial.
+        assert_eq!(regs.read_register("ebx"), Some(0x5566_7788));
+
+        // A name that does not exist stays absent rather than becoming zero.
+        assert_eq!(regs.read_register("ecx"), None);
+    }
+
     fn detach_reports_whether_the_watchpoint_registers_were_actually_cleared() {
         let src = include_str!("debug.rs");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(src);

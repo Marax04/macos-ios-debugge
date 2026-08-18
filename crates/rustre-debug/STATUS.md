@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente: 608. Questa: **612**.
+> non un registro. Precedente: 608. Questa: **613**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -36,6 +36,15 @@
   backend **compila per ARM64** (602, 606), cosa che nessuno aveva mai provato.
 - **Sei tool MCP Linux riparati** (605): `linux_debug.rs` non compilava, quindi
   l'intera suite MCP non girava su Linux.
+- **Un nome di registro stretto legge il valore stretto** (613). Il ponte MCP
+  accettava un nome stretto preponendogli `r`: giusto per `ax`→`rax`, assurdo
+  per `eax`→`reax`. Misurate DUE risposte sbagliate diverse dalla stessa riga:
+  `eax` risultava **assente**, `ax` restituiva tutti e 64 i bit di `rax`. Non è
+  cosmetico — i due consumatori sono i breakpoint condizionali e
+  `debug.evaluate`, quindi decide se l'esecuzione si ferma: `ax == 0x1234` non
+  scattava mai mentre il registro valeva davvero `0x1234`. Ora
+  `read_register_by_name` conosce la larghezza che ogni nome significa, incluse
+  le viste `ah` (bit 8..16), i suffissi `r9d`/`r9w`/`r9b` e le `w0..w30` ARM64.
 - **Una scrittura ai registri `fp`/`lr`/`x29`/`x30` non viene più scartata** (612).
   I tre backend pubblicano ENTRAMBE le grafie in lettura e ne preferivano una in
   scrittura — Windows `fp`, macOS e Linux `x29` — quindi un normale
@@ -127,5 +136,14 @@
     rifiuto del 606 sembrava perdere un handle, ma il contratto lo porta avanti
     e lo chiude al prossimo acknowledge. Nessun difetto — e saperlo vale quanto
     trovarne uno.
-21. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
+21. **Un fallback sui nomi va provato su OGNI nome che accetta** (613): una
+    sola riga copriva `ax` e rompeva `eax`, e nessuno dei due casi era testato.
+    Il rosso misurato (`None`) non era quello che avevo previsto (64 bit), e ho
+    corretto la frase del test, non la misura.
+22. **Misurare un albero in movimento non è misurare, di nuovo** (613): la suite
+    non compilava per 7 errori in `src/ios/rsp.rs`, riscritto da un agente del
+    giro 7 in quel momento. Un `git worktree` su HEAD più i miei due soli file
+    ha dato la misura pulita — e ha PROVATO che gli errori non erano miei
+    invece di lasciarmelo supporre.
+23. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.

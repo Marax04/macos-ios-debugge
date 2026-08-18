@@ -872,6 +872,92 @@ pub(crate) fn arm64_watchpoint_from_dr_slot(
     Some((arm64_watchpoint_wvr(addr), wcr))
 }
 
+/// The full-width register a narrow name is a view of, and the mask that view is.
+///
+/// `("eax")` is `Some(("rax", 0xFFFF_FFFF))`. Returns `None` for a name that is
+/// already full width or that is not a register at all — the caller should then
+/// look the name up unchanged.
+///
+/// `ah`-style high-byte names are handled by the caller through `SHIFT`, which
+/// is why the return carries a shift as well as a mask.
+#[must_use]
+pub fn register_view(name: &str) -> Option<(&'static str, u64, u32)> {
+    // (64-bit name, 32-bit, 16-bit, low 8, high 8)
+    const X86: &[(&str, &str, &str, &str, Option<&str>)] = &[
+        ("rax", "eax", "ax", "al", Some("ah")),
+        ("rbx", "ebx", "bx", "bl", Some("bh")),
+        ("rcx", "ecx", "cx", "cl", Some("ch")),
+        ("rdx", "edx", "dx", "dl", Some("dh")),
+        ("rsi", "esi", "si", "sil", None),
+        ("rdi", "edi", "di", "dil", None),
+        ("rbp", "ebp", "bp", "bpl", None),
+        ("rsp", "esp", "sp", "spl", None),
+    ];
+    for (full, d32, d16, d8, d8h) in X86 {
+        if name == *d32 {
+            return Some((full, 0xFFFF_FFFF, 0));
+        }
+        if name == *d16 {
+            return Some((full, 0xFFFF, 0));
+        }
+        if name == *d8 {
+            return Some((full, 0xFF, 0));
+        }
+        if *d8h == Some(name) {
+            return Some((full, 0xFF, 8));
+        }
+    }
+    // r8..r15 carry the width in a suffix instead of a distinct name.
+    const R: &[(&str, &str)] = &[
+        ("r8", "r8"), ("r9", "r9"), ("r10", "r10"), ("r11", "r11"),
+        ("r12", "r12"), ("r13", "r13"), ("r14", "r14"), ("r15", "r15"),
+    ];
+    for (full, stem) in R {
+        for (suffix, mask) in [("d", 0xFFFF_FFFFu64), ("w", 0xFFFF), ("b", 0xFF)] {
+            if name.len() == stem.len() + 1
+                && name.starts_with(stem)
+                && name.ends_with(suffix)
+            {
+                return Some((full, mask, 0));
+            }
+        }
+    }
+    // AArch64: `w0` is the low 32 bits of `x0`, all the way to `w30`.
+    if let Some(n) = name.strip_prefix('w') {
+        if let Ok(i) = n.parse::<u8>() {
+            if i <= 30 && n == i.to_string() {
+                const X: [&str; 31] = [
+                    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
+                    "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17",
+                    "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25",
+                    "x26", "x27", "x28", "x29", "x30",
+                ];
+                return Some((X[i as usize], 0xFFFF_FFFF, 0));
+            }
+        }
+    }
+    None
+}
+
+/// Read a register by any of the names it answers to, at the WIDTH that name means.
+///
+/// A debugger that is asked for `eax` and hands back all 64 bits of `rax` has
+/// not answered the question: every comparison against the result is wrong the
+/// moment the upper half is non-zero. The two things that ask are conditional
+/// breakpoints and expression evaluation, so the wrong number does not just get
+/// printed — it decides whether execution stops.
+///
+/// `lookup` is the raw register map. Exact names win, so a backend that
+/// publishes a narrow register directly is never second-guessed.
+#[must_use]
+pub fn read_register_by_name(name: &str, lookup: impl Fn(&str) -> Option<u64>) -> Option<u64> {
+    if let Some(v) = lookup(name) {
+        return Some(v);
+    }
+    let (full, mask, shift) = register_view(name)?;
+    lookup(full).map(|v| (v >> shift) & mask)
+}
+
 /// Pick the value a caller MEANT when a register has two accepted spellings.
 ///
 /// AArch64's frame pointer and link register have an architectural name (`x29`,
@@ -10681,6 +10767,58 @@ mod tests_extra {
         );
     }
 
+    /// A narrow register name must read the narrow VALUE.
+    ///
+    /// The MCP live-register bridge accepted a narrow name by prepending `r` to
+    /// it, which is right for `ax` -> `rax` and nonsense for `eax` -> `reax`.
+    /// So `eax` read as absent, and `ax` read as all 64 bits of `rax`. Measured
+    /// both ways at iteration 613: two different wrong answers from one line.
+    ///
+    /// It decides control flow, not just output: a breakpoint conditioned on
+    /// `eax == 0x1234` never fires while the register really does hold
+    /// `0x1234`, because the comparison is against `0xFFFFFFFF00001234`.
+    #[test]
+    fn a_narrow_register_name_reads_the_narrow_value() {
+        use crate::read_register_by_name as rd;
+        let m = |n: &str| match n {
+            "rax" => Some(0xFFFF_FFFF_0000_1234u64),
+            "r9" => Some(0x1122_3344_5566_7788),
+            "x0" => Some(0xDEAD_BEEF_CAFE_BABE),
+            "eflags" => Some(0x246),
+            _ => None,
+        };
+
+        // Full width is untouched, and an exact hit is never second-guessed.
+        assert_eq!(rd("rax", m), Some(0xFFFF_FFFF_0000_1234));
+        assert_eq!(rd("eflags", m), Some(0x246));
+
+        // x86 views, each at its own width.
+        assert_eq!(rd("eax", m), Some(0x0000_1234), "eax is the LOW 32 bits");
+        assert_eq!(rd("ax", m), Some(0x1234));
+        assert_eq!(rd("al", m), Some(0x34));
+        assert_eq!(rd("ah", m), Some(0x12), "ah is bits 8..16, not bits 0..8");
+
+        // r8..r15 spell the width as a suffix.
+        assert_eq!(rd("r9d", m), Some(0x5566_7788));
+        assert_eq!(rd("r9w", m), Some(0x7788));
+        assert_eq!(rd("r9b", m), Some(0x88));
+
+        // AArch64: w0 is the low half of x0.
+        assert_eq!(rd("x0", m), Some(0xDEAD_BEEF_CAFE_BABE));
+        assert_eq!(rd("w0", m), Some(0xCAFE_BABE));
+
+        // Absent stays absent. Turning "I do not have it" into zero is the
+        // failure shape this crate condemns most.
+        assert_eq!(rd("ecx", m), None);
+        assert_eq!(rd("w1", m), None);
+        assert_eq!(rd("not_a_register", m), None);
+
+        // Not a register view: `w31` does not exist, and `r16d` does not either.
+        assert_eq!(crate::register_view("w31"), None);
+        assert_eq!(crate::register_view("r16d"), None);
+        assert_eq!(crate::register_view("rax"), None, "already full width");
+    }
+
     /// An edit through EITHER spelling of a register must survive the write.
     ///
     /// The AArch64 reader publishes `x29` and `fp` with the same value, and the
@@ -13216,6 +13354,41 @@ fn ";
             );
             assert!(body.contains("sync_map_from_special()"), "{name}: set_registers() does not reconcile the typed pc/sp/fp view into the map, so a caller that writes regs.pc gets Ok(()) and a thread that never moved");
         }
+    }
+
+    /// The iOS backend closes the same hole by a different route, so it needs
+    /// its own guard.
+    ///
+    /// `AppleDebugger` does not go through `sync_map_from_special()` — that
+    /// helper keys off `native_arch()`, which on a Windows host yields
+    /// `rip`/`rsp`/`rbp`, none of which a remote arm64 debugserver has, and it
+    /// has no notion of `lr` at all. `RegisterMap::encode_into` instead
+    /// resolves each typed field through `role_or_name`, the way it already did
+    /// for `pc`/`sp`. `fp` and `lr` were missing: `decode` fills them on every
+    /// read, so a read-modify-write carried the caller's edit in them, and the
+    /// stale copy left in `set.regs` was replayed straight over it while
+    /// `dropped` stayed empty — `Ok(())` for a write the device never saw.
+    ///
+    /// Anchored to the ROLE identifiers, not to prose: `code_only` strips
+    /// comments first, so this paragraph cannot satisfy the assertion.
+    #[test]
+    fn the_ios_backend_encodes_the_typed_fp_and_lr_fields() {
+        let stripped = code_only(include_str!("ios/apple_debugger.rs"));
+        let body = item_body(
+            &stripped,
+            "fn encode_into(&self, set: &RegisterSet, block: &mut [u8]) -> Vec<String> {",
+            &[NEXT_FN, NEXT_ASYNC_FN],
+        );
+        for role in ["GenericRole::Pc", "GenericRole::Sp", "GenericRole::Fp", "GenericRole::Ra"] {
+            assert!(
+                body.contains(role),
+                "ios: encode_into does not place {role}, so that typed field is dropped on write and set_registers still answers Ok(())"
+            );
+        }
+        assert!(
+            body.contains("set.fp") && body.contains("set.lr"),
+            "ios: encode_into never reads set.fp/set.lr"
+        );
     }
 
     /// Writing the typed field must reach the map, and writing the named
