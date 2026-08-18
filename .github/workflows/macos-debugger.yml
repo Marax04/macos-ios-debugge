@@ -23,6 +23,28 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# ── Concorrenza: un run per workflow per ramo ──────────────────────────────
+#
+# Misurato 2026-08-16: ELEVEN runs in flight at once — 5 Linux, 4 macOS, 2
+# Windows — with the oldest at 77 minutes and still not finished. Four of the
+# five Linux runs were measuring commits already superseded, competing for the
+# same runner pool as the only one whose answer was wanted.
+#
+# The cost is not wasted minutes, it is that NOTHING COMPLETES. A feedback loop
+# that never closes is worth the same as no CI, and this repo has spent whole
+# rounds waiting on an ARM answer that was starving behind its own stale
+# duplicates.
+#
+# THE TRADE-OFF, recorded rather than glossed: `cancel-in-progress` means a long
+# row can be killed by the next push. The aarch64 row takes ~30-90 minutes and
+# the measured push interval was ~13, so pushing at that rate would leave it
+# never finishing. That is a limit on how OFTEN to push, not a reason to keep
+# eleven runs racing: with the pool to itself the newest run is the one that
+# gets to finish. Batch the rounds; let the row land.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   # A debugger's tests are timing-sensitive; a backtrace on failure is what

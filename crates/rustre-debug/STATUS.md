@@ -102,6 +102,24 @@ Misurato mentre lo scrivevo: `cargo check --target aarch64-pc-windows-msvc` non
 gira sull'host di sviluppo — `libsqlite3-sys` vuole un cross-compiler C, lo
 stesso muro di `aarch64-unknown-linux-gnu`. Non c'è surrogato locale.
 
+### 599 — il ciclo di feedback si era fermato, e i numeri lo dicevano
+
+Misurato: **11 run simultanei** — 5 Linux, 4 macOS, 2 Windows — il più vecchio a
+**77 minuti e non finito**. Quattro dei cinque Linux misuravano commit già
+superati, in competizione per lo stesso pool del solo che serviva.
+
+Il costo non sono i minuti sprecati: è che **nulla si chiude**. Un ciclo di
+feedback che non torna mai vale quanto non avere CI, e questa sessione ha speso
+round interi ad aspettare una risposta ARM che stava morendo di fame dietro i
+propri duplicati.
+
+Aggiunto `concurrency` con `cancel-in-progress` ai tre workflow. **Il compromesso
+è registrato, non nascosto**: una riga lunga può essere uccisa dal push
+successivo. La riga aarch64 dura 30-90 minuti e l'intervallo di push misurato era
+~13, quindi spingere a quel ritmo la lascerebbe non finire mai. È un limite su
+QUANTO SPESSO spingere, non un motivo per tenere undici run in gara — col pool
+tutto per sé, il run più recente è quello che arriva in fondo.
+
 ### 598 — la stessa dichiarazione falsa, sull'altro backend
 
 Trovata misurando le asimmetrie fra i tre backend, non leggendo a caso: Windows
