@@ -2571,16 +2571,15 @@ fn apply_register_set(r: &mut libc::user_regs_struct, regs: &RegisterSet) {
             r.regs[i] = v;
         }
     }
-    if let Some(v) = regs.get("fp") {
+    // Both spellings are published on read, so four sequential `if let`s meant
+    // the LAST one written won: an edit made through `fp` was overwritten by the
+    // stale `x29` that the read had put there. Symmetric to the Windows and
+    // macOS copies of this same decision, which each preferred a DIFFERENT
+    // spelling. See `crate::aliased_register_write`.
+    if let Some(v) = crate::aliased_register_write(regs.get("x29"), regs.get("fp"), r.regs[29]) {
         r.regs[29] = v;
     }
-    if let Some(v) = regs.get("lr") {
-        r.regs[30] = v;
-    }
-    if let Some(v) = regs.get("x29") {
-        r.regs[29] = v;
-    }
-    if let Some(v) = regs.get("x30") {
+    if let Some(v) = crate::aliased_register_write(regs.get("x30"), regs.get("lr"), r.regs[30]) {
         r.regs[30] = v;
     }
     if let Some(v) = regs.get("sp") {

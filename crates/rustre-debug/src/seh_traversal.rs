@@ -477,7 +477,7 @@ fn parse_unwind_info(
         (kind, h_rva, None)
     };
 
-    let mut result = vec![UnwindInfo {
+    let result = vec![UnwindInfo {
         offset: file_offset as u32,
         version,
         flags,

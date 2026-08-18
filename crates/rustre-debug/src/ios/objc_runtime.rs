@@ -8,8 +8,12 @@
 //!
 //! Tutte le funzioni qui sono pure rispetto al lettore: nessun `cfg(target_os)`,
 //! nessuna syscall. Il layout implementato è quello a 64 bit little-endian
-//! (arm64 / arm64e / x86_64); i target big-endian (PPC) sono rifiutati con un
-//! errore esplicito invece di essere decodificati a caso.
+//! (arm64 / arm64e / x86_64), l'unico che le piattaforme Apple supportate
+//! usino: ogni accessore (`read_u32`/`read_u64`) decodifica in modo
+//! incondizionato little-endian e `ObjcAbi` non ha una variante in cui un
+//! target big-endian possa essere espresso. Non esiste quindi né un
+//! parametro di endianness né un rifiuto esplicito: dare a questo modulo
+//! memoria big-endian produce valori decodificati a caso, non un errore.
 
 use std::collections::BTreeMap;
 
@@ -190,15 +194,83 @@ where
         // significa "il target ha meno dati del previsto a quell'indirizzo",
         // la seconda "quell'indirizzo non esiste". Confonderle manderebbe un
         // chiamante a caccia del bug sbagliato.
-        let bytes = (self.0)(addr, len).ok_or_else(|| ObjcError::Unreadable {
-            addr,
-            len,
-            reason: "reader returned nothing for this range".to_string(),
-        })?;
+        let Some(bytes) = (self.0)(addr, len) else {
+            // A live reader (ptrace, an RSP `m` packet, `vm_read`) is
+            // all-or-nothing: a bulk read that crosses out of a mapping fails
+            // whole rather than coming back short. Reporting that as
+            // `Unreadable` would be a lie whenever the range STARTS inside a
+            // mapping, and it made `read_cstring`'s shrink-and-retry — which
+            // only recovers from `ShortRead` — unreachable outside the tests.
+            // So probe for the longest readable prefix and report the real
+            // shape. Only the failure path pays the extra round-trips, and
+            // there are at most log2(len) of them.
+            return match self.longest_readable_prefix(addr, len) {
+                Some(prefix) => Err(ObjcError::ShortRead {
+                    addr,
+                    wanted: len,
+                    got: prefix.len(),
+                }),
+                None => Err(ObjcError::Unreadable {
+                    addr,
+                    len,
+                    reason: "reader returned nothing for this range".to_string(),
+                }),
+            };
+        };
         if bytes.len() < len {
             return Err(ObjcError::ShortRead { addr, wanted: len, got: bytes.len() });
         }
         Ok(bytes)
+    }
+}
+
+impl<R> ReaderMemory<R>
+where
+    R: Fn(u64, usize) -> Option<Vec<u8>>,
+{
+    /// The longest prefix of `[addr, addr + len)` the reader will serve, or
+    /// `None` when not even one byte is readable.
+    ///
+    /// Binary search over the length: the readable prefix of a range that
+    /// starts inside a mapping is contiguous, so a length that succeeds proves
+    /// every shorter one succeeds too. The loop is bounded by the RANGE, which
+    /// halves every iteration, so it terminates on any reader behaviour —
+    /// including one that answers inconsistently.
+    fn longest_readable_prefix(&self, addr: u64, len: usize) -> Option<Vec<u8>> {
+        if len == 0 {
+            return None;
+        }
+        // `lo` is the largest length known to work, `hi` the smallest known to
+        // fail. `len` is known to fail: only the failure path calls us.
+        let mut best: Option<Vec<u8>> = None;
+        let (mut lo, mut hi) = (0usize, len);
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            match (self.0)(addr, mid) {
+                // A reader that itself returns short at `mid` bytes tells us
+                // the answer directly; treat it as the prefix and stop growing.
+                Some(b) if !b.is_empty() => {
+                    let got = b.len().min(mid);
+                    lo = got;
+                    best = Some(b);
+                    if got < mid {
+                        break;
+                    }
+                }
+                _ => hi = mid,
+            }
+        }
+        if lo == 0 {
+            // One byte is the only length the search above never tries when
+            // `len == 1`, and the case worth distinguishing from "unmapped".
+            if let Some(b) = (self.0)(addr, 1) {
+                if !b.is_empty() {
+                    return Some(b);
+                }
+            }
+            return None;
+        }
+        best
     }
 }
 
@@ -359,14 +431,18 @@ impl ObjcAbi {
     }
 }
 
-/// Rimuove i bit di Pointer Authentication (arm64e).
+/// Strip the Pointer Authentication code (arm64e) from a runtime pointer.
 ///
-/// Un puntatore firmato ha i bit alti occupati dal PAC; nessun parser del repo
-/// li toglie oggi, e seguirli produce letture a indirizzi impossibili.
-/// Manteniamo i 48 bit bassi, che è quanto indirizza realmente il TTBR0 utente.
+/// WHY it delegates: this module used to keep its own 48-bit mask, while
+/// `arm64::strip_pac` and `swift_runtime::strip_pac` both use the real Apple
+/// user-space width of `arm64::VA_BITS` = 47 bits. Bit 47 belongs to the PAC,
+/// not to the address, so the 48-bit copy left one signature bit standing and
+/// every isa / name / method-list read taken through it went to an address the
+/// target does not map — roughly half the signed pointers on arm64e. One
+/// architectural constant, one implementation.
 #[must_use]
 pub const fn strip_pac(ptr: u64) -> u64 {
-    ptr & 0x0000_ffff_ffff_ffff
+    super::arm64::strip_pac(ptr)
 }
 
 // ---------------------------------------------------------------------------
@@ -687,8 +763,14 @@ const MAX_SUPERCLASS_DEPTH: usize = 64;
 pub struct ObjcMethod {
     /// Selettore (`sel_getName`).
     pub name: String,
-    /// Type encoding (`method_getTypeEncoding`), vuoto se non leggibile.
-    pub types: String,
+    /// Type encoding (`method_getTypeEncoding`), or `None` when the string
+    /// cannot be read.
+    ///
+    /// An unreadable encoding is NOT an empty encoding. Collapsing the two with
+    /// `unwrap_or_default()` handed the caller `""` — a valid encoding meaning
+    /// "no type" — for a read that failed, and a method signature is what a
+    /// caller uses to decide argument widths.
+    pub types: Option<String>,
     /// Indirizzo dell'implementazione.
     pub imp: u64,
 }
@@ -1036,10 +1118,7 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
                 let types_ptr = rel_target(entry + 4, types_off);
                 ObjcMethod {
                     name,
-                    types: self
-                        .mem
-                        .read_cstring(types_ptr, MAX_NAME_LEN)
-                        .unwrap_or_default(),
+                    types: self.mem.read_cstring(types_ptr, MAX_NAME_LEN).ok(),
                     imp: rel_target(entry + 8, imp_off),
                 }
             } else {
@@ -1047,10 +1126,7 @@ impl<'m, M: ObjcMemory + ?Sized> ObjcRuntime<'m, M> {
                 let types_ptr = strip_pac(self.mem.read_u64(entry + 8)?);
                 ObjcMethod {
                     name: self.mem.read_cstring(name_ptr, MAX_NAME_LEN)?,
-                    types: self
-                        .mem
-                        .read_cstring(types_ptr, MAX_NAME_LEN)
-                        .unwrap_or_default(),
+                    types: self.mem.read_cstring(types_ptr, MAX_NAME_LEN).ok(),
                     imp: strip_pac(self.mem.read_u64(entry + 16)?),
                 }
             };
@@ -1327,6 +1403,42 @@ mod tests {
         assert_eq!(ok.read_u64(0x2000).unwrap(), 0x1122_3344_5566_7788);
         assert!(!served.borrow().is_empty(), "the adapter must call the closure");
     }
+
+    /// An all-or-nothing reader (what a live ptrace/RSP read actually is)
+    /// must still let `read_cstring` recover near the end of a mapping.
+    #[test]
+    fn reader_memory_reports_short_read_for_an_all_or_nothing_source() {
+        // Five readable bytes at 0x1000; anything reaching past 0x1005 fails
+        // outright, exactly as a bulk read crossing into an unmapped page does.
+        let page: Vec<u8> = vec![b'h', b'i', 0, 0, 0];
+        let mem = ReaderMemory(|addr: u64, len: usize| {
+            if addr >= 0x1000 && addr + len as u64 <= 0x1005 {
+                let off = (addr - 0x1000) as usize;
+                Some(page[off..off + len].to_vec())
+            } else {
+                None
+            }
+        });
+
+        // A 32-byte bulk read must be reported as SHORT (5 bytes available),
+        // not as an unmapped range: the distinction is what read_cstring needs.
+        match mem.read(0x1000, 32) {
+            Err(ObjcError::ShortRead { wanted, got, .. }) => {
+                assert_eq!((wanted, got), (32, 5));
+            }
+            other => panic!("expected ShortRead, got {other:?}"),
+        }
+
+        // A truly unmapped address stays Unreadable.
+        assert!(matches!(
+            mem.read(0x9000, 8),
+            Err(ObjcError::Unreadable { .. })
+        ));
+
+        // And the recovery path in read_cstring now fires on a live-shaped
+        // reader, instead of only against SparseMemory in tests.
+        assert_eq!(mem.read_cstring(0x1000, MAX_NAME_LEN).unwrap(), "hi");
+    }
     use super::*;
 
     // Indirizzi del layout sintetico: tutti in una regione "arm64-like".
@@ -1501,7 +1613,7 @@ mod tests {
         assert!(!c.realized);
         assert_eq!(c.methods.len(), 2);
         assert_eq!(c.methods[0].name, "init");
-        assert_eq!(c.methods[0].types, "@16@0:8");
+        assert_eq!(c.methods[0].types.as_deref(), Some("@16@0:8"));
         assert_eq!(c.methods[1].imp, 0x1_0000_9100);
         assert_eq!(c.ivars.len(), 1);
         assert_eq!(c.ivars[0].name, "_backing");
@@ -1577,6 +1689,49 @@ mod tests {
         ));
     }
 
+    /// An unreadable type encoding is NOT an empty type encoding: `""` is a
+    /// valid encoding, so collapsing the two hands the caller a confidently
+    /// wrong method signature. Both branches of `read_method_list` must report
+    /// `None` — the same rule the sibling `ObjcIvar::type_encoding` follows.
+    #[test]
+    fn unreadable_method_type_encoding_is_none_not_empty() {
+        // Absolute (24-byte) entries: `types` points at unmapped memory.
+        let mut m = SparseMemory::new();
+        const LIST: u64 = 0x3_0000_0000;
+        const NAME: u64 = 0x3_0000_1000;
+        const UNMAPPED: u64 = 0x7fff_0000_0000;
+        const IMP: u64 = 0x3_0000_2000;
+        let mut ml = Vec::new();
+        ml.extend_from_slice(&24u32.to_le_bytes());
+        ml.extend_from_slice(&1u32.to_le_bytes());
+        m.write(LIST, ml);
+        m.write_u64s(LIST + 8, &[NAME, UNMAPPED, IMP]);
+        m.write_cstr(NAME, "doWork:");
+        let methods = rt(&m).read_method_list(LIST).unwrap();
+        assert_eq!(methods[0].name, "doWork:");
+        assert_eq!(methods[0].types, None, "absolute entry: unreadable types must be None");
+
+        // Relative (12-byte) entries: same rule.
+        let mut r = SparseMemory::new();
+        const RLIST: u64 = 0x4_0000_0000;
+        const SELREF: u64 = 0x4_0000_1000;
+        const SELNAME: u64 = 0x4_0000_1100;
+        const RIMP: u64 = 0x4_0000_2000;
+        let entry = RLIST + 8;
+        let mut rl = Vec::new();
+        rl.extend_from_slice(&(12u32 | 0x8000_0000).to_le_bytes());
+        rl.extend_from_slice(&1u32.to_le_bytes());
+        rl.extend_from_slice(&i32::try_from(SELREF - entry).unwrap().to_le_bytes());
+        // Offset to an address with nothing mapped behind it.
+        rl.extend_from_slice(&0x0010_0000i32.to_le_bytes());
+        rl.extend_from_slice(&i32::try_from(RIMP - (entry + 8)).unwrap().to_le_bytes());
+        r.write(RLIST, rl);
+        r.write_u64(SELREF, SELNAME);
+        r.write_cstr(SELNAME, "doWork:");
+        let rmethods = rt(&r).read_method_list(RLIST).unwrap();
+        assert_eq!(rmethods[0].types, None, "relative entry: unreadable types must be None");
+    }
+
     #[test]
     fn small_method_list_uses_relative_offsets() {
         let mut m = SparseMemory::new();
@@ -1600,7 +1755,7 @@ mod tests {
         let methods = rt(&m).read_method_list(LIST).unwrap();
         assert_eq!(methods.len(), 1);
         assert_eq!(methods[0].name, "doWork:");
-        assert_eq!(methods[0].types, "v20@0:8i16");
+        assert_eq!(methods[0].types.as_deref(), Some("v20@0:8i16"));
         assert_eq!(methods[0].imp, IMP);
     }
 
@@ -2015,5 +2170,66 @@ mod tests {
     fn rel_target_handles_negative_offsets() {
         assert_eq!(rel_target(0x1000, -0x10), 0xff0);
         assert_eq!(rel_target(0x1000, 0x10), 0x1010);
+    }
+}
+
+#[cfg(test)]
+mod strip_pac_agreement_tests {
+    use super::{strip_pac, ObjcAbi};
+    use crate::ios::arm64;
+
+    /// Bit 47 belongs to the PAC, not to the address: Apple arm64 user space is
+    /// `arm64::VA_BITS` = 47 bits wide. This module used to keep 48 bits, so a
+    /// signed pointer with bit 47 set was followed to an unmapped address.
+    #[test]
+    fn objc_strip_pac_agrees_with_the_arm64_width() {
+        // Anchored to the identifier, not to a literal: if VA_BITS moves, so
+        // does the expectation.
+        assert_eq!(arm64::VA_BITS, 47);
+        let signed = 0x0000_8000_1234_5678u64;
+        assert_eq!(
+            strip_pac(signed),
+            arm64::strip_pac(signed),
+            "objc strip_pac must not keep PAC bit {}",
+            arm64::VA_BITS
+        );
+        assert_eq!(strip_pac(signed), 0x0000_1234_5678);
+    }
+
+    /// The module doc used to claim that big-endian targets "sono rifiutati con
+    /// un errore esplicito". No such path exists: every accessor is hard-wired
+    /// little-endian and unconditional, and `ObjcAbi` has no variant a
+    /// big-endian target could be expressed as. A doc that states a safety
+    /// property the code lacks is worse than no doc, so this guard ties the two
+    /// together: the claim may only be present if a rejection path is.
+    #[test]
+    fn module_doc_never_promises_an_endianness_rejection_the_code_lacks() {
+        // Anchor to identifiers that must exist to compile: if the ABI enum is
+        // ever widened, this test is recompiled and re-read.
+        let abi_variants = [ObjcAbi::Arm64, ObjcAbi::X86_64];
+        assert_eq!(abi_variants.len(), 2);
+
+        let src = include_str!("objc_runtime.rs");
+        let doc: String = src
+            .lines()
+            .take_while(|l| l.starts_with("//!"))
+            .collect::<Vec<_>>()
+            .join("
+");
+        let lower = doc.to_lowercase();
+        let promises_rejection = lower.contains("rifiutat") || lower.contains("reject");
+        // Search the NON-TEST portion only, and spell the needles by
+        // concatenation: a literal here would otherwise be found inside this
+        // very test and make the guard vacuously pass.
+        let code = src.split("mod tests").next().unwrap_or(src);
+        let be_bytes = format!("from_{}_bytes", "be");
+        let be_type = format!("Big{}", "Endian");
+        let be_field = format!("Endian{}", "ness");
+        let has_rejection_path =
+            code.contains(&be_bytes) || code.contains(&be_type) || code.contains(&be_field);
+        assert!(
+            !promises_rejection || has_rejection_path,
+            "module doc promises a big-endian rejection, but the file contains no              endianness discrimination at all (no from_be_bytes / BigEndian /              Endianness). Either implement the rejection or stop claiming it."
+        );
     }
 }

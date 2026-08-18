@@ -31,7 +31,7 @@ use crate::execution_heatmap::ExecutionHeatmap;
 use crate::root_cause_assistant::{self, RootCauseReport};
 use crate::provenance_classifier::{self, ModuleBaselineSpec};
 use crate::time_travel_debug::TracePosition;
-use crate::nl_query::{self, NlQuery as NlQueryVariant, NlQueryResult};
+use crate::nl_query::{self, NlQueryResult};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Errors
@@ -92,7 +92,7 @@ mod error_mapping_tests {
     use super::*;
     use crate::ios::apple_debugger::{AppleDebugger, LoopbackFactory};
     use crate::ios::mock_debugserver::MockDebugserver;
-    use crate::{BreakpointKind, Debugger, ProcessId, ThreadId};
+    use crate::{Debugger, ProcessId, ThreadId};
     use std::sync::Arc;
 
     /// A field too wide for the trait's watchpoint must be refused, not
@@ -157,7 +157,7 @@ mod error_mapping_tests {
             7,
         )));
         // Deliberately NOT attached.
-        let mut ctx = LiveScriptContext::new(
+        let ctx = LiveScriptContext::new(
             Box::new(dbg),
             ThreadId(1),
             TypeRegistry::new(),
@@ -1182,7 +1182,7 @@ mod tests {
         const ADDR: u64 = 0x4000;
 
         // --- Build a synthetic trace ---
-        let mut index = OmniscientIndex::from_writes(vec![
+        let index = OmniscientIndex::from_writes(vec![
             MemoryWrite { sequence: 3, address: Address(ADDR), size: 8,
                           tid: ThreadId(1), writer_pc: Some(Address(0x401000)), source_address: None },
             MemoryWrite { sequence: 7, address: Address(ADDR), size: 8,

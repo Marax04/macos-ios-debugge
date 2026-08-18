@@ -167,6 +167,12 @@ pub enum HwError {
     /// Removal asked for something that was never installed.
     #[error("no {kind:?} registered at {addr:#x}")]
     NotFound { kind: HwKind, addr: u64 },
+    /// A watchpoint entry point was handed a kind that is not a data
+    /// watchpoint. Distinct from [`HwError::NotFound`] on purpose: nothing was
+    /// looked up and nothing was attempted, so the remedy is "pass a watchpoint
+    /// kind", not "install it first".
+    #[error("{kind:?} is not a data watchpoint (requested for {addr:#x})")]
+    KindMismatch { kind: HwKind, addr: u64 },
     /// The stub refused the `Z`/`z` packet. Typically the target implements
     /// fewer slots than we were told, or the address is unmappable.
     #[error("target rejected {packet}: {source}")]
@@ -416,6 +422,7 @@ impl HwSlotTable {
     /// Reserve a watchpoint slot.
     ///
     /// # Errors
+    /// [`HwError::KindMismatch`] if `kind` is not a data watchpoint,
     /// [`HwError::Encoding`] for a size/alignment the `BAS` field cannot
     /// express, [`HwError::Duplicate`], or
     /// [`HwError::WatchpointSlotsExhausted`].
@@ -425,7 +432,12 @@ impl HwSlotTable {
         addr: u64,
         size: usize,
     ) -> Result<HwWatchpointEntry, HwError> {
-        debug_assert!(kind.is_watchpoint());
+        // A real check, not a `debug_assert!`: this crate is built in release,
+        // where a debug assertion is compiled out and the bad kind would reach
+        // `lsc()` below.
+        if !kind.is_watchpoint() {
+            return Err(HwError::KindMismatch { kind, addr });
+        }
         if let Some(existing) = self
             .watchpoints
             .iter()
@@ -437,7 +449,7 @@ impl HwSlotTable {
                 slot: existing.slot,
             });
         }
-        let lsc = kind.lsc().ok_or(HwError::NotFound { kind, addr })?;
+        let lsc = kind.lsc().ok_or(HwError::KindMismatch { kind, addr })?;
         let regs = hw::watchpoint(addr, size, lsc, hw::PrivilegeControl::El0)?;
         let slot = Self::lowest_free(
             &mut self.watchpoints.iter().map(|w| w.slot),
@@ -643,7 +655,7 @@ impl HwBreakpointController {
         size: usize,
     ) -> Result<HwWatchpointEntry, HwError> {
         if !kind.is_watchpoint() {
-            return Err(HwError::NotFound { kind, addr });
+            return Err(HwError::KindMismatch { kind, addr });
         }
         let entry = self.table.insert_watchpoint(kind, addr, size)?;
         let wire_size = u32::try_from(size).unwrap_or(u32::MAX);
@@ -890,6 +902,29 @@ mod tests {
             t.remove_watchpoint(HwKind::WriteWatch, 0x1000).unwrap_err(),
             HwError::NotFound { .. }
         ));
+    }
+
+    #[test]
+    fn a_non_watchpoint_kind_is_rejected_as_a_kind_error_not_a_lookup_miss() {
+        let mut t = HwSlotTable::new(HwSlotLimits::default());
+        let e = t.insert_watchpoint(HwKind::Breakpoint, 0x1000, 4).unwrap_err();
+        let msg = e.to_string();
+        assert!(
+            msg.contains("not a data watchpoint"),
+            "wrong diagnosis for a kind mismatch: {msg}"
+        );
+        assert!(
+            matches!(
+                e,
+                HwError::KindMismatch {
+                    kind: HwKind::Breakpoint,
+                    addr: 0x1000
+                }
+            ),
+            "expected a kind error, got {e:?}"
+        );
+        // Nothing was reserved, so the table is untouched.
+        assert!(t.watchpoints.is_empty());
     }
 
     #[test]

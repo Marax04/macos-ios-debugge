@@ -35,7 +35,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 use crate::time_travel_debug::{TtdBackend, TtdError, TtdState, TracePosition};

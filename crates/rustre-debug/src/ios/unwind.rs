@@ -427,9 +427,13 @@ impl Arm64Encoding {
 
 /// `x86_64` compact-unwind modes, decoded but **not** applied here.
 ///
-/// Present so an `x86_64` slice of a universal binary is *rejected with a
-/// reason* instead of looking like a corrupt table. Implementing `x86_64`
-/// frame recovery is a separate, honest piece of work.
+/// The rejection of an `x86_64` slice is NOT performed by this type: it is
+/// performed by [`UnwindArch`], which [`ImageUnwindTables`] carries and
+/// `unwind_compact` checks before decoding anything. This enum only names
+/// the mode an x86_64 word selects, for a diagnostic or a future x86_64
+/// implementation — which is separate, honest work. Note that the mode
+/// nibbles alone cannot tell the architectures apart: `MODE_DWARF` here and
+/// `UNWIND_ARM64_MODE_FRAME` are the same word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum X86_64EncodingMode {
     /// `rbp`-based frame.
@@ -938,9 +942,44 @@ impl UnwindOrder {
     }
 }
 
+/// The architecture whose compact-unwind encodings an image's
+/// `__unwind_info` is written in.
+///
+/// This is not decoration: the mode nibbles of the two architectures COLLIDE.
+/// `UNWIND_X86_64_MODE_DWARF` and `UNWIND_ARM64_MODE_FRAME` are both
+/// `0x0400_0000`, and `UNWIND_X86_64_MODE_STACK_IMMD` and
+/// `UNWIND_ARM64_MODE_FRAMELESS` are both `0x0200_0000`. Without knowing the
+/// architecture, an x86_64 table decodes silently as a valid-looking arm64
+/// one, so every entry must be refused unless the image is known to be arm64.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UnwindArch {
+    /// The image's architecture was never established. NOT a synonym for
+    /// arm64: an unknown architecture is refused, never guessed.
+    #[default]
+    Unknown,
+    /// `arm64`/`arm64e` — the only encodings [`Arm64Encoding`] decodes.
+    Arm64,
+    /// `x86_64` — recognised so it can be refused with a reason.
+    X86_64,
+    /// Any other Mach-O `cputype`, kept verbatim for the refusal message.
+    Other,
+}
+
+impl UnwindArch {
+    /// Whether compact-unwind decoding is defined for this architecture here.
+    #[must_use]
+    pub const fn is_arm64(self) -> bool {
+        matches!(self, Self::Arm64)
+    }
+}
+
 /// A loaded image's unwind tables plus where it is mapped.
 #[derive(Debug, Clone, Default)]
 pub struct ImageUnwindTables {
+    /// Architecture of the Mach-O this image was parsed from. Defaults to
+    /// [`UnwindArch::Unknown`], which refuses compact unwinding rather than
+    /// assuming arm64.
+    pub arch: UnwindArch,
     /// Runtime base address of the Mach-O header (static base + ASLR slide).
     pub image_base: u64,
     /// Runtime end of the image's executable range, used to decide whether a
@@ -1038,6 +1077,11 @@ where
             });
 
         images.push(ImageUnwindTables {
+            arch: match info.arch {
+                rustre_loader_macho::MachoArch::Arm64 => UnwindArch::Arm64,
+                rustre_loader_macho::MachoArch::X86_64 => UnwindArch::X86_64,
+                _ => UnwindArch::Other,
+            },
             image_base: base,
             image_end: base.wrapping_add(text.vm_size.max(m.size)),
             compact,
@@ -1205,6 +1249,13 @@ impl AppleUnwinder {
     fn compact_says_frameless(&self, pc: u64, depth: usize) -> bool {
         let lookup_pc = if depth > 1 { pc.wrapping_sub(1) } else { pc };
         let Some(image) = self.image_for(lookup_pc) else { return false };
+        // Same architecture guard as `unwind_compact`: an x86_64
+        // STACK_IMMD word is bit-identical to an arm64 FRAMELESS one, and
+        // answering `true` here would suppress the frame-pointer strategy
+        // on the strength of another architecture's table.
+        if !image.arch.is_arm64() {
+            return false;
+        }
         let Some(compact) = image.compact.as_ref() else { return false };
         let Ok(fn_offset) = u32::try_from(lookup_pc.wrapping_sub(image.image_base)) else {
             return false;
@@ -1231,6 +1282,14 @@ impl AppleUnwinder {
         let image = self
             .image_for(lookup_pc)
             .ok_or(UnwindError::ImplausibleFrame("pc in no known image"))?;
+        // The encoding words of the two architectures share the same mode
+        // nibbles, so decoding an x86_64 table with `Arm64Encoding` does not
+        // fail — it yields a well-formed lie. Refuse with a reason instead.
+        if !image.arch.is_arm64() {
+            return Err(UnwindError::UnsupportedEncoding(
+                "image is not arm64: its compact-unwind encodings are a different architecture's",
+            ));
+        }
         let compact = image
             .compact
             .as_ref()
@@ -2317,11 +2376,77 @@ mod tests {
 
     fn image_with_compact(data: &[u8]) -> ImageUnwindTables {
         ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
             compact: Some(CompactUnwindInfo::parse(data).unwrap()),
             eh_frame: None,
         }
+    }
+
+    /// Rewrite a synthetic Mach-O header's `cputype` to `x86_64`. Everything
+    /// else about the image is unchanged, which is exactly the shape a slice
+    /// picked out of a universal binary has.
+    fn as_x86_64_slice(mut image: Vec<u8>) -> Vec<u8> {
+        const CPU_TYPE_X86_64: u32 = 0x0100_0007;
+        image[4..8].copy_from_slice(&CPU_TYPE_X86_64.to_le_bytes());
+        image
+    }
+
+    /// An `x86_64` image must be REFUSED with a reason, not decoded with the
+    /// arm64 encoding table.
+    ///
+    /// The mode nibbles collide exactly: `UNWIND_X86_64_MODE_DWARF` and
+    /// `UNWIND_ARM64_MODE_FRAME` are both `0x0400_0000`. An x86_64 entry that
+    /// says "defer to __eh_frame" therefore decodes as an arm64 frame record,
+    /// and the walker reads `[CFA-8]`/`[CFA-16]` as an AAPCS64 frame record:
+    /// a plausible-looking backtrace built from the wrong architecture's
+    /// table, which is worse than a refusal.
+    #[test]
+    fn an_x86_64_image_refuses_to_unwind_with_the_arm64_tables() {
+        use crate::{Address, ModuleInfo};
+
+        let page = regular_page(&[(0x1000, UNWIND_X86_64_MODE_DWARF)]);
+        let unwind_bytes = build_unwind_info(&[], &[(0x1000, page)], 0x3000);
+        let mut image = as_x86_64_slice(build_macho_with_unwind_info(IMAGE_BASE, &unwind_bytes));
+        // Pad so the mapped range covers the pc probed below; without it the
+        // walk fails on "pc in no known image" and proves nothing about arch.
+        const MAPPED: usize = 0x10_0000;
+        image.resize(MAPPED, 0);
+
+        let modules = vec![ModuleInfo {
+            is_main: true,
+            name: "x.dylib".into(),
+            path: "/usr/lib/x.dylib".into(),
+            base: Address(IMAGE_BASE),
+            size: MAPPED as u64,
+            entry_point: None,
+        }];
+        let images = unwind_images_from_modules(&modules, |addr, len| {
+            (addr == IMAGE_BASE && len == image.len()).then(|| image.clone())
+        });
+        assert_eq!(images.len(), 1, "the image is still listed: its range is worth having");
+
+        let unw = images
+            .into_iter()
+            .fold(AppleUnwinder::new().with_order(UnwindOrder::TablesFirst), AppleUnwinder::with_image);
+
+        // A well-formed AAPCS64 frame record, so the arm64 misreading SUCCEEDS
+        // if nothing rejects the architecture — that is the defect.
+        let mem = build_fp_stack(&[(STACK_BASE + 0x100, IMAGE_BASE + 0x1500)]);
+        let regs = Arm64UnwindRegs::new(IMAGE_BASE + 0x1010, STACK_BASE, STACK_BASE + 0x100, 0);
+
+        let err = unw.unwind_compact(regs, 1, &mem).expect_err(
+            "an x86_64 __unwind_info must be refused: 0x0400_0000 is MODE_DWARF there, MODE_FRAME on arm64",
+        );
+        assert!(
+            matches!(err, UnwindError::UnsupportedEncoding(_)),
+            "expected a reasoned refusal, got {err:?}"
+        );
+        assert!(
+            !matches!(unw.step(regs, 1, &mem), Ok((_, FrameProvenance::CompactUnwind))),
+            "the cascade must not stamp a frame CompactUnwind from an x86_64 table"
+        );
     }
 
     #[test]
@@ -2591,6 +2716,7 @@ mod tests {
     fn eh_frame_unwinds_a_frame_using_the_aapcs64_frame_record() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
             compact: None,
@@ -2626,6 +2752,7 @@ mod tests {
     fn eh_frame_refuses_to_substitute_the_current_fp_when_the_caller_fp_is_unreadable() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
             compact: None,
@@ -2760,6 +2887,7 @@ mod tests {
         let page = regular_page(&[(0x7000, UNWIND_ARM64_MODE_FRAME)]);
         let data = build_unwind_info(&[], &[(0x7000, page)], 0x7100);
         let image = ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
             compact: Some(CompactUnwindInfo::parse(&data).unwrap()),
@@ -2815,6 +2943,7 @@ mod tests {
     fn validate_rejection_falls_through_to_the_remaining_strategies() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
             compact: None,
@@ -2849,6 +2978,7 @@ mod tests {
     fn frames_outside_every_known_image_are_rejected() {
         let mem = build_fp_stack(&[(STACK_BASE + 0x100, 0xBADD_0000_0000)]);
         let image = ImageUnwindTables {
+            arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x1000,
             compact: None,

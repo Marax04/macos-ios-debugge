@@ -19,7 +19,7 @@
 //! When `MemoryWrite` gains a `value: u64` field (planned), replace the PC proxy
 //! with the actual written value — the algorithm is identical.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use rustre_core::address::Address;
 use serde::{Deserialize, Serialize};

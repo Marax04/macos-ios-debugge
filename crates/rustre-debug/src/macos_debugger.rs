@@ -2836,10 +2836,18 @@ fn apply_register_set(r: &mut ThreadState, regs: &RegisterSet) {
             r.__x[i] = v;
         }
     }
-    // The aliases are accepted on the way in too, so a round trip through
-    // `regs_to_register_set` does not silently drop a write to `x29`/`x30`.
-    if let Some(v) = regs.get("x29").or_else(|| regs.get("fp")) { r.__fp = v; }
-    if let Some(v) = regs.get("x30").or_else(|| regs.get("lr")) { r.__lr = v; }
+    // The aliases are accepted on the way in too. Preferring one spelling was
+    // not enough: BOTH are published on read, so a caller that edits the other
+    // one hands back a map where they disagree, and the preferred spelling
+    // still carries the value that was read. That dropped the write silently —
+    // which is what the previous version of this comment claimed it prevented.
+    // See `crate::aliased_register_write`.
+    if let Some(v) = crate::aliased_register_write(regs.get("x29"), regs.get("fp"), r.__fp) {
+        r.__fp = v;
+    }
+    if let Some(v) = crate::aliased_register_write(regs.get("x30"), regs.get("lr"), r.__lr) {
+        r.__lr = v;
+    }
     if let Some(v) = regs.get("sp") { r.__sp = v; }
     if let Some(v) = regs.get("pc") { r.__pc = v; }
     if let Some(v) = regs.get("cpsr") { r.__cpsr = u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0); }

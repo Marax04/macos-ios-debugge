@@ -55,7 +55,7 @@ impl MemoryWrite {
     /// address space. Comparing the offset is exact everywhere and cannot
     /// overflow after the lower-bound check. Third and fourth site of the shape
     /// first corrected in iter 273.
-    #[must_use]
+    
     pub fn covers(&self, addr: Address) -> bool {
         let start = self.address.as_u64();
         let a = addr.as_u64();

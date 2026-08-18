@@ -24,7 +24,6 @@
 //! with the pre-existing `#![allow(dead_code)]` below. See
 //! `ENHANCEMENT_LOG.md` iters 230/232/233.
 
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fmt;

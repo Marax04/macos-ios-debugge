@@ -325,7 +325,17 @@ impl RegisterMap {
     ///
     /// Registers wider than 64 bits (the `v` file) are skipped rather than
     /// truncated: a silently halved `v0` is worse than an absent one.
-    fn decode(&self, block: &[u8]) -> RegisterSet {
+    ///
+    /// # Errors
+    /// [`DebugError::RegisterError`] when the block yields no program counter
+    /// or no stack pointer. Those two fields are plain `u64`s with no "absent"
+    /// spelling, so the previous `unwrap_or(0)` handed the caller address 0 as
+    /// if the target had reported it — the same fabrication the stop
+    /// classifier refuses one layer up. A stub that describes its registers
+    /// without an `offset:` reaches exactly this state: every register is
+    /// skipped, `g_packet_bytes` is 0 so the length guard passes vacuously,
+    /// and the answer would otherwise be an empty set with pc = 0.
+    fn decode(&self, block: &[u8]) -> Result<RegisterSet, DebugError> {
         let mut set = RegisterSet::new();
         for r in &self.regs {
             let (Some(off), size) = (r.offset, r.byte_size() as usize) else {
@@ -342,17 +352,23 @@ impl RegisterMap {
             buf[..size].copy_from_slice(raw);
             set.set(&r.name, u64::from_le_bytes(buf));
         }
-        set.pc = self
-            .role_or_name(GenericRole::Pc, "pc")
-            .and_then(|r| set.get(&r.name))
-            .unwrap_or(0);
-        set.sp = self
-            .role_or_name(GenericRole::Sp, "sp")
-            .and_then(|r| set.get(&r.name))
-            .unwrap_or(0);
+        let required = |set: &RegisterSet, role: GenericRole, name: &str| -> Result<u64, DebugError> {
+            self.role_or_name(role, name)
+                .and_then(|r| set.get(&r.name))
+                .ok_or_else(|| {
+                    DebugError::RegisterError(format!(
+                        "the register block carries no {name}: {} of {} registers described by                          qRegisterInfo could be read out of {} bytes",
+                        set.regs.len(),
+                        self.regs.len(),
+                        block.len()
+                    ))
+                })
+        };
+        set.pc = required(&set, GenericRole::Pc, "pc")?;
+        set.sp = required(&set, GenericRole::Sp, "sp")?;
         set.fp = self.role_or_name(GenericRole::Fp, "fp").and_then(|r| set.get(&r.name));
         set.lr = self.role_or_name(GenericRole::Ra, "lr").and_then(|r| set.get(&r.name));
-        set
+        Ok(set)
     }
 
     /// Overlay a [`RegisterSet`] onto an existing raw `g` block.
@@ -563,6 +579,46 @@ impl Session {
         Ok(reply.as_str().into_owned())
     }
 
+    /// Terminate an inferior this session created but never handed to the
+    /// caller, best effort.
+    ///
+    /// `A` is what starts the process on debugserver — this crate sends no
+    /// `qLaunchSuccess`, so nothing after `A` gates the inferior's existence.
+    /// A failure on any later round trip therefore drops the transport on a
+    /// live process that is stopped at its entry point, and the caller was
+    /// told the launch failed, so nothing will ever come back for it: on the
+    /// usbmux tunnel this backend targets the process is simply stranded on
+    /// the device. `self.session` is not installed yet at that point, so
+    /// `Drop`, `kill` and `detach` are all no-ops (the latter two answer
+    /// `NotAttached`).
+    ///
+    /// The result is deliberately discarded: this runs on a path that is
+    /// already returning an error, and that error names the original failure,
+    /// which is the one the caller can act on. `vKill` first because it is
+    /// answered; bare `k` as the fallback because the stub dies mid-reply and
+    /// its silence is expected.
+    fn abandon_inferior(&mut self) {
+        let pid = self.pid;
+        if let Ok(reply) = self.text(format!("vKill;{:x}", pid.0).as_bytes(), "vKill") {
+            if reply.starts_with("OK") {
+                return;
+            }
+        }
+        let _ = self
+            .client
+            .transport_mut()
+            .send(&crate::ios::rsp::RspPacket::new(commands::kill()).encode());
+    }
+
+    /// Release a target this session attached to but never handed to the
+    /// caller, best effort. Same reasoning as [`Session::abandon_inferior`],
+    /// except the process existed before the debugger did: killing it would
+    /// destroy something the caller never asked to own, so the correct undo of
+    /// `vAttach` is `D`, which leaves the target running as it was found.
+    fn abandon_attachment(&mut self) {
+        let _ = self.text(&commands::detach(), "D");
+    }
+
     /// Point `Hg`/`Hc` at `tid`, so a subsequent register or resume packet acts
     /// on the thread the caller named rather than on whatever was last stopped.
     pub(crate) fn select_thread(&mut self, tid: ThreadId) -> Result<(), DebugError> {
@@ -590,7 +646,7 @@ impl Session {
                 self.regs.g_packet_bytes()
             )));
         }
-        Ok(self.regs.decode(&block))
+        self.regs.decode(&block)
     }
 }
 
@@ -2323,12 +2379,28 @@ impl Debugger for AppleDebugger {
                 opts.executable
             )));
         }
+        // From here on the inferior EXISTS: `A` is what created it and there is
+        // no `qLaunchSuccess` to gate it. Every failure below must therefore
+        // kill it before returning, or it is stranded stopped at its entry
+        // point with the debugger gone — see `Session::abandon_inferior`.
         // Refresh: the pid learned during `establish` predates the exec.
-        let info = Session::process_info(&mut session.client)?;
+        let info = match Session::process_info(&mut session.client) {
+            Ok(info) => info,
+            Err(e) => {
+                session.abandon_inferior();
+                return Err(e);
+            }
+        };
         session.pid = ProcessId(u32::try_from(info.pid).unwrap_or(0));
         session.arch = TargetArch::from_cpu(info.cputype, info.cpusubtype);
 
-        let stop = session.text(&commands::halt_reason(), "?")?;
+        let stop = match session.text(&commands::halt_reason(), "?") {
+            Ok(stop) => stop,
+            Err(e) => {
+                session.abandon_inferior();
+                return Err(e);
+            }
+        };
         if let Ok(StopReply::SignalWithInfo { thread: Some(t), .. }) = StopReply::parse(stop.as_bytes())
         {
             session.current_tid = ThreadId(u32::try_from(t).unwrap_or(0));
@@ -2361,14 +2433,29 @@ impl Debugger for AppleDebugger {
         if reply.is_empty() || reply.starts_with('E') {
             return Err(DebugError::ProcessNotFound(pid.0));
         }
-        let stop = StopReply::parse(reply.as_bytes())
-            .map_err(|e| DebugError::Os(format!("vAttach stop reply {reply:?}: {e}")))?;
+        // `vAttach` was accepted, so the target is stopped and owned by this
+        // session from here on. Returning without a `D` leaves it suspended
+        // with the debugger gone and `self.session` never installed, so
+        // `detach()` answers `NotAttached` and nothing can resume it.
+        let stop = match StopReply::parse(reply.as_bytes()) {
+            Ok(stop) => stop,
+            Err(e) => {
+                session.abandon_attachment();
+                return Err(DebugError::Os(format!("vAttach stop reply {reply:?}: {e}")));
+            }
+        };
         if let StopReply::SignalWithInfo { thread: Some(t), .. } = stop {
             session.current_tid = ThreadId(u32::try_from(t).unwrap_or(0));
         }
         if session.current_tid.0 == 0 {
             // Fall back to the stub's notion of "current thread".
-            let qc = session.text(b"qC", "qC")?;
+            let qc = match session.text(b"qC", "qC") {
+                Ok(qc) => qc,
+                Err(e) => {
+                    session.abandon_attachment();
+                    return Err(e);
+                }
+            };
             if let Some(hex) = qc.strip_prefix("QC") {
                 session.current_tid = ThreadId(u32::from_str_radix(hex, 16).unwrap_or(0));
             }
@@ -2556,7 +2643,18 @@ impl Debugger for AppleDebugger {
             Some(self.plant_temp_breakpoint(ret)?)
         };
         let event = self.resume(Some(tid), false);
+        // If the stepped-over call ENDED the process, there is nothing left to
+        // un-plant: the trap went with the target, and `classify`'s exit arm
+        // has just cleared `self.breakpoints` precisely so no record outlives
+        // it. Un-planting anyway fails against the dead process, and the
+        // failure path then INSERTS an armed record — with `saved` bytes that
+        // `disarm_all_breakpoints` writes back unconditionally — into the map
+        // that was just emptied, re-creating the state the clear exists to
+        // prevent. `step_off_planted_breakpoint` already re-checks its own
+        // state after its inner resume for the same reason.
+        let target_gone = event.as_ref().is_ok_and(|e| e.reason.is_exit());
         if let Some(saved) = planted
+            && !target_gone
             && self.unplant_temp_breakpoint(ret, saved.clone()).is_err()
         {
             // The trap is still in the target. Adopt it into the map rather
@@ -5204,6 +5302,55 @@ mod tests {
         );
     }
 
+    /// A step-over whose call ENDS the process must not resurrect the
+    /// breakpoint table the exit handler just cleared.
+    ///
+    /// `classify`'s exit arm empties `self.breakpoints` on purpose: records
+    /// kept past an exit describe traps that exist nowhere, so
+    /// `set_breakpoint` answers `BreakpointExists` for an address with nothing
+    /// planted and `detach`'s restore sweep writes "saved originals" into a
+    /// process that never had them. `step_over` then un-planted its temporary
+    /// return-site trap against the dead process, the write failed, and
+    /// `retrack_abandoned_temp_breakpoint` INSERTED a fresh armed record with
+    /// `saved` bytes into the map that had just been emptied — re-creating the
+    /// exact state the clear exists to prevent, three statements later.
+    #[tokio::test]
+    async fn step_over_a_call_that_exits_leaves_no_breakpoint_record() {
+        // The callee zeroes its link register and returns, which the mock
+        // treats as running off the outermost frame: process exit.
+        let code = vec![
+            0xA9BF_7BFD, // +0x00 stp x29, x30, [sp, #-16]!
+            0x9100_03FD, // +0x04 mov x29, sp
+            0x9400_0004, // +0x08 bl  +0x10  -> +0x18
+            0xA8C1_7BFD, // +0x0C ldp x29, x30, [sp], #16   (the return site)
+            0xD65F_03C0, // +0x10 ret
+            0xD420_0000, // +0x14 brk #0
+            0xD280_001E, // +0x18 movz x30, #0
+            0xD65F_03C0, // +0x1C ret -> exit
+        ];
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &code);
+        // Self-patched BRK path, so the un-plant is a memory WRITE — which the
+        // mock refuses once the inferior is gone, as a real stub does.
+        srv.refuse_software_breakpoints();
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let tid = dbg.current_thread().await.expect("current thread");
+        dbg.set_register(tid, "pc", TEXT_BASE + 8).await.expect("park on the bl");
+
+        let event = dbg.step_over(tid).await.expect("step_over");
+        assert!(
+            matches!(event.reason, StopReason::ProcessExit { .. }),
+            "precondition: the stepped-over call must end the process, got {:?}",
+            event.reason
+        );
+
+        assert!(
+            dbg.breakpoints().await.expect("breakpoints").is_empty(),
+            "a record survived the process exit: {:?}",
+            dbg.breakpoints().await.expect("breakpoints")
+        );
+    }
+
     /// The same step-over, against a stub with no server-managed software
     /// breakpoints — the case `set_breakpoint` has always handled by patching
     /// `BRK #0` itself.
@@ -5602,11 +5749,31 @@ mod tests {
         set.set("x3", 0x1122_3344);
         set.pc = 0xABCD;
         map.encode_into(&set, &mut block);
-        let back = map.decode(&block);
+        let back = map.decode(&block).expect("a complete g block decodes");
         assert_eq!(back.get("x3"), Some(0x1122_3344));
         assert_eq!(back.pc, 0xABCD);
         // Vector registers are skipped, not truncated into the name space.
         assert!(back.get("v0").is_none());
+    }
+
+    #[test]
+    fn a_g_block_without_a_program_counter_is_refused_not_zeroed() {
+        // A stub that exposes its registers only through `p`/`P` emits no
+        // `offset:` in qRegisterInfo. The implied `g` length is then 0, so the
+        // length guard passes vacuously and every register is skipped — the
+        // decode used to answer `Ok` with a fabricated pc/sp of 0, which the
+        // breakpoint machinery then consumed as a real address.
+        let regs = ["name:pc;bitsize:64;generic:pc;", "name:sp;bitsize:64;generic:sp;"]
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                lldb_ext::RegisterInfo::parse(u32::try_from(i).unwrap(), r).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let map = RegisterMap { regs };
+        assert_eq!(map.g_packet_bytes(), 0);
+        let err = map.decode(&[]).expect_err("a pc-less g block must be a failure");
+        assert!(matches!(err, DebugError::RegisterError(_)), "wrong error kind: {err:?}");
     }
 
     // -- expression evaluation against the live session ----------------------
@@ -5905,6 +6072,206 @@ mod tests {
             inner: LoopbackFactory::new(srv, 7),
             refuse,
         }))
+    }
+
+    /// A launch that fails AFTER the `A` packet must not orphan the inferior.
+    ///
+    /// `A` is what starts the inferior on debugserver — there is no
+    /// `qLaunchSuccess` in this crate, so nothing later gates its existence.
+    /// Every `?` after that point (`qProcessInfo`, the `?` stop query) used to
+    /// return `Err` and drop the session, and with it the transport, without a
+    /// `vKill`, a `k` or a `D`. `self.session` was never installed, so `Drop`
+    /// returns immediately and `kill`/`detach` answer `NotAttached`: a real
+    /// process is left stopped at its entry point with the debugger gone and
+    /// nobody able to reach it. The `?` round trip is censored here because it
+    /// is the last one, i.e. the case where the inferior is most certainly
+    /// alive.
+    #[tokio::test]
+    async fn a_launch_that_fails_after_the_a_packet_kills_the_inferior() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        struct Tap {
+            inner: Box<dyn RspTransport>,
+            seen: Arc<Mutex<Vec<String>>>,
+            refuse: PacketPredicate,
+        }
+        impl RspTransport for Tap {
+            fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+                let text = String::from_utf8_lossy(data).into_owned();
+                self.seen.lock().push(text.clone());
+                if (self.refuse)(&text) {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        format!("transport refused to write {text:?}"),
+                    ));
+                }
+                self.inner.send(data)
+            }
+            fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.inner.recv(buf)
+            }
+            fn description(&self) -> String {
+                self.inner.description()
+            }
+            fn interrupter(&self) -> Option<Arc<dyn crate::ios::rsp::RspInterrupter>> {
+                self.inner.interrupter()
+            }
+        }
+        struct TapFactory {
+            inner: LoopbackFactory,
+            seen: Arc<Mutex<Vec<String>>>,
+            refuse: PacketPredicate,
+        }
+        impl TransportFactory for TapFactory {
+            fn connect(
+                &self,
+                request: &ConnectRequest<'_>,
+            ) -> Result<Box<dyn RspTransport>, DebugError> {
+                Ok(Box::new(Tap {
+                    inner: self.inner.connect(request)?,
+                    seen: Arc::clone(&self.seen),
+                    refuse: Arc::clone(&self.refuse),
+                }))
+            }
+            fn description(&self) -> String {
+                "tapping-loopback".to_string()
+            }
+        }
+
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        let dbg = AppleDebugger::new(Arc::new(TapFactory {
+            inner: LoopbackFactory::new(srv, 7),
+            seen: Arc::clone(&seen),
+            refuse: Arc::new(|pkt: &str| pkt.contains("$?#")),
+        }));
+
+        let outcome = dbg.launch(LaunchOptions::new("/usr/bin/true")).await;
+        assert!(outcome.is_err(), "the censored `?` round trip must fail the launch");
+        assert!(!dbg.is_attached(), "a failed launch must not leave the debugger attached");
+
+        let wire = seen.lock().concat();
+        assert!(
+            wire.contains("$A"),
+            "the test never reached the packet that starts the inferior: {wire}"
+        );
+        assert!(
+            wire.contains("vKill") || wire.contains("$k#") || wire.contains("$D#"),
+            "launch failed after `A` created the inferior and sent no vKill/k/D: the process is              stopped at its entry point on the device with the debugger gone, and neither kill()              nor detach() can reach it because self.session is None. wire: {wire}"
+        );
+    }
+
+
+    /// An attach that fails AFTER `vAttach` was accepted must send `D`.
+    ///
+    /// `vAttach` stops the target. If the stop reply cannot be parsed the
+    /// function used to return on the `?` and drop the transport, leaving a
+    /// real process SUSPENDED with the debugger gone: `self.session` was never
+    /// installed, so `detach()` answers `NotAttached` and nothing can resume
+    /// it. `D` — not a kill — is the right undo: the process existed before
+    /// this debugger and the caller never asked to own it.
+    ///
+    /// The stop reply is replaced with a payload no `StopReply` can parse,
+    /// which is exactly the failure the `map_err(...)?` describes.
+    #[tokio::test]
+    async fn an_attach_that_fails_after_vattach_detaches_the_target() {
+        struct Mangler {
+            inner: Box<dyn RspTransport>,
+            seen: Arc<Mutex<Vec<String>>>,
+            armed: bool,
+            out: Vec<u8>,
+        }
+        impl Mangler {
+            fn pull_frame(&mut self) -> std::io::Result<Vec<u8>> {
+                let mut frame = Vec::new();
+                let mut buf = [0u8; 1];
+                loop {
+                    let n = self.inner.recv(&mut buf)?;
+                    if n == 0 {
+                        return Ok(frame);
+                    }
+                    frame.push(buf[0]);
+                    // A complete RSP frame ends with `#` plus two checksum
+                    // digits; stop as soon as one has been read.
+                    if frame.len() >= 3 && frame[frame.len() - 3] == b'#' {
+                        return Ok(frame);
+                    }
+                }
+            }
+        }
+        impl RspTransport for Mangler {
+            fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+                let text = String::from_utf8_lossy(data).into_owned();
+                self.seen.lock().push(text.clone());
+                if text.contains("vAttach") {
+                    self.armed = true;
+                }
+                self.inner.send(data)
+            }
+            fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if self.out.is_empty() && self.armed {
+                    let frame = self.pull_frame()?;
+                    if frame.is_empty() {
+                        return Ok(0);
+                    }
+                    self.armed = false;
+                    let lead = frame.iter().position(|b| *b == b'$').unwrap_or(0);
+                    self.out.extend_from_slice(&frame[..lead]);
+                    let payload = "Qnot-a-stop-reply";
+                    let sum: u8 = payload.bytes().fold(0u8, u8::wrapping_add);
+                    self.out.extend_from_slice(format!("${payload}#{sum:02x}").as_bytes());
+                }
+                if self.out.is_empty() {
+                    return self.inner.recv(buf);
+                }
+                let n = self.out.len().min(buf.len()).min(7);
+                buf[..n].copy_from_slice(&self.out[..n]);
+                self.out.drain(..n);
+                Ok(n)
+            }
+            fn description(&self) -> String {
+                self.inner.description()
+            }
+            fn interrupter(&self) -> Option<Arc<dyn crate::ios::rsp::RspInterrupter>> {
+                self.inner.interrupter()
+            }
+        }
+        struct ManglerFactory {
+            inner: LoopbackFactory,
+            seen: Arc<Mutex<Vec<String>>>,
+        }
+        impl TransportFactory for ManglerFactory {
+            fn connect(
+                &self,
+                request: &ConnectRequest<'_>,
+            ) -> Result<Box<dyn RspTransport>, DebugError> {
+                Ok(Box::new(Mangler {
+                    inner: self.inner.connect(request)?,
+                    seen: Arc::clone(&self.seen),
+                    armed: false,
+                    out: Vec::new(),
+                }))
+            }
+            fn description(&self) -> String {
+                "mangling-loopback".to_string()
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        let dbg = AppleDebugger::new(Arc::new(ManglerFactory {
+            inner: LoopbackFactory::new(srv, 7),
+            seen: Arc::clone(&seen),
+        }));
+
+        let outcome = dbg.attach(ProcessId(4242)).await;
+        assert!(outcome.is_err(), "an unparsable vAttach stop reply must fail the attach");
+        assert!(!dbg.is_attached(), "a failed attach must not leave the debugger attached");
+
+        let wire = seen.lock().concat();
+        assert!(wire.contains("vAttach"), "the test never reached vAttach: {wire}");
+        assert!(
+            wire.contains("$D#"),
+            "attach failed after `vAttach` stopped the target and sent no `D`: the process is              left suspended with the debugger gone, and detach() answers NotAttached because              self.session is None. wire: {wire}"
+        );
     }
 
     /// `kill` must report a kill that never reached the target.

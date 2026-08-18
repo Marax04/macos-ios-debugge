@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente: 601. Questa: **608**.
+> non un registro. Precedente: 608. Questa: **612**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -18,6 +18,7 @@
 | Linux aarch64 | CI `ubuntu-24.04-arm` | **2009 / 3** — da 6, poi 5, ora 3 |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi**; step MCP rosso per un cricchetto altrui |
 | iOS Simulator | CI `macos-14`, arm64 reale | **verde** |
+| iOS, giri avversariali | `/workflows` | giro 6: **77 agenti, 9 confermati / 9 chiusi / 0 falsi positivi**; giro 7 in corso |
 | iOS device | CI | compila e **linka i test**; non esegue (serve hardware) |
 | MCP | locale + CI | 392/0 su Windows; su Linux **compila per la prima volta** (605) |
 | Darwin ×2 | `cargo check` | 0 errori |
@@ -35,6 +36,14 @@
   backend **compila per ARM64** (602, 606), cosa che nessuno aveva mai provato.
 - **Sei tool MCP Linux riparati** (605): `linux_debug.rs` non compilava, quindi
   l'intera suite MCP non girava su Linux.
+- **Una scrittura ai registri `fp`/`lr`/`x29`/`x30` non viene più scartata** (612).
+  I tre backend pubblicano ENTRAMBE le grafie in lettura e ne preferivano una in
+  scrittura — Windows `fp`, macOS e Linux `x29` — quindi un normale
+  leggi-modifica-riscrivi attraverso l'altra grafia veniva sovrascritto dal
+  valore stale e `set_register` riportava successo. Tre copie, tre preferenze
+  diverse: famiglia 2 allo stato puro. La decisione ora sta in
+  `aliased_register_write`, in `lib.rs`, dove **è testabile** — i due file
+  colpevoli sono `cfg`-gated a target che questa macchina non compila.
 - **L'MCP dice quattro verità nuove**: `"note"` sui watchpoint non riarmati
   (568), `capabilities` col motivo di ogni assenza (577), `"fault"` portabile
   (582), `library_path` risolto (601).
@@ -107,5 +116,16 @@
     avevano rotto la build condivisa.
 17. **Non alzare il cricchetto di un altro per farlo tacere**: alzarlo è
     disfarlo. Riportarlo a chi lo possiede.
-18. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
+18. **Una capacità pubblicata in due grafie va accettata in due grafie** (612):
+    pubblicarne due e preferirne una fa perdere l'edit di chi usa l'altra. Se non
+    si vuole scegliere quale sia canonica, la scelta va spostata al momento della
+    scrittura — quella che DIFFERISCE dal registro è la modifica.
+19. **Il commento che descrive la difesa va verificato quanto la difesa** (612):
+    quello su macOS dichiarava di non far cadere le scritture, ed era vero per
+    `x29`/`x30` e falso per il caso simmetrico `fp`/`lr`.
+20. **Verificare la propria dichiarazione può anche assolverla** (612): il
+    rifiuto del 606 sembrava perdere un handle, ma il contratto lo porta avanti
+    e lo chiude al prossimo acknowledge. Nessun difetto — e saperlo vale quanto
+    trovarne uno.
+21. **Eseguire TUTTO ciò che il ciclo chiede**: il 605 è emerso perché su Linux
     non stavo eseguendo la suite MCP, solo quella del debugger.

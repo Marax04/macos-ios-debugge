@@ -3062,7 +3062,7 @@ mod tests {
         srv.run_until_interrupt = true;
         let (addr, server) = srv.spawn_tcp().expect("spawn tcp mock");
 
-        let mut transport =
+        let transport =
             TcpTransport::connect(addr.as_str(), Some(Duration::from_secs(5))).expect("connect");
         let oob = transport.interrupter().expect("tcp exposes an interrupter");
         let mut client = RspClient::new(transport);

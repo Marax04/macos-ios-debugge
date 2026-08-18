@@ -2183,8 +2183,14 @@ fn apply_register_set(ctx: &mut CONTEXT, regs: &RegisterSet) {
         "x20" => X20, "x21" => X21, "x22" => X22, "x23" => X23, "x24" => X24,
         "x25" => X25, "x26" => X26, "x27" => X27, "x28" => X28,
     }
-    if let Some(v) = regs.get("fp").or_else(|| regs.get("x29")) { x.Fp = v; }
-    if let Some(v) = regs.get("lr").or_else(|| regs.get("x30")) { x.Lr = v; }
+    // Both spellings are published on read, so a read-modify-write through
+    // EITHER of them must survive. See `aliased_register_write`.
+    if let Some(v) = crate::aliased_register_write(regs.get("fp"), regs.get("x29"), x.Fp) {
+        x.Fp = v;
+    }
+    if let Some(v) = crate::aliased_register_write(regs.get("lr"), regs.get("x30"), x.Lr) {
+        x.Lr = v;
+    }
     if let Some(v) = regs.get("sp") { ctx.Sp = v; }
     if let Some(v) = regs.get("pc") { ctx.Pc = v; }
     if let Some(v) = regs.get("cpsr") {

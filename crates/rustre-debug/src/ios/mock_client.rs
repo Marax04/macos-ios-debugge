@@ -133,6 +133,8 @@ pub enum ClientError {
     Malformed(String),
     #[error("unsupported by this server: {0}")]
     Unsupported(String),
+    #[error("short read at {addr:#x}: asked for {requested} bytes, got {returned}")]
+    ShortRead { addr: u64, requested: usize, returned: usize },
 }
 
 // ---------------------------------------------------------------------------
@@ -307,10 +309,18 @@ impl<T: AppleTransport> RspClient<T> {
 
     // -- wire ---------------------------------------------------------------
 
+    /// Send one packet and return the (unescaped, RLE-expanded) reply payload
+    /// as raw BYTES. Binary objects (`qXfer` on a non-XML annex, for one) are
+    /// not text, so anything that needs a byte count must use this and never
+    /// the length of a lossily-decoded `String`.
+    pub fn command_bytes(&mut self, payload: &str) -> Result<Vec<u8>, ClientError> {
+        self.transport.send(&encode_packet(payload))?;
+        self.read_reply_bytes()
+    }
+
     /// Send one packet and return the (unescaped, RLE-expanded) reply payload.
     pub fn command(&mut self, payload: &str) -> Result<String, ClientError> {
-        self.transport.send(&encode_packet(payload))?;
-        self.read_reply()
+        Ok(String::from_utf8_lossy(&self.command_bytes(payload)?).to_string())
     }
 
     /// Like [`Self::command`] but maps an `Exx` payload to
@@ -336,7 +346,7 @@ impl<T: AppleTransport> RspClient<T> {
         Ok(reply)
     }
 
-    fn read_reply(&mut self) -> Result<String, ClientError> {
+    fn read_reply_bytes(&mut self) -> Result<Vec<u8>, ClientError> {
         loop {
             if let Some(payload) = self.take_packet()? {
                 return Ok(payload);
@@ -358,7 +368,7 @@ impl<T: AppleTransport> RspClient<T> {
     }
 
     /// Extract one packet from the receive buffer, consuming acks along the way.
-    fn take_packet(&mut self) -> Result<Option<String>, ClientError> {
+    fn take_packet(&mut self) -> Result<Option<Vec<u8>>, ClientError> {
         loop {
             match self.rx.first() {
                 None => return Ok(None),
@@ -394,8 +404,7 @@ impl<T: AppleTransport> RspClient<T> {
         if !self.no_ack_mode {
             self.transport.send(b"+")?;
         }
-        let payload = unescape(&body);
-        Ok(Some(String::from_utf8_lossy(&payload).to_string()))
+        Ok(Some(unescape(&body)))
     }
 
     // -- session ------------------------------------------------------------
@@ -484,16 +493,42 @@ impl<T: AppleTransport> RspClient<T> {
     }
 
     /// Read one register by *name*, resolved through the runtime register map.
+    ///
+    /// The `p` reply must be EXACTLY as wide as `qRegisterInfo` said the
+    /// register is. A short reply was never sent in full, and zero-filling its
+    /// high bytes hands back a plausible wrong value as success (`pc` =
+    /// `0x00000000deadbeef`); a longer one is not the register we asked for.
+    /// Both are "unknown", and an unknown may not be degraded to a default.
     pub fn read_register(&mut self, tid: u32, name: &str) -> Result<u64, ClientError> {
-        let idx = self
+        let reg = self
             .register_map
             .by_name(name)
             .or_else(|| self.register_map.by_generic(name))
-            .ok_or_else(|| ClientError::Unsupported(format!("register {name}")))?
-            .index;
+            .ok_or_else(|| ClientError::Unsupported(format!("register {name}")))?;
+        let (idx, bitsize) = (reg.index, reg.bitsize);
+        if bitsize == 0 || bitsize % 8 != 0 {
+            return Err(ClientError::Malformed(format!(
+                "register {name} has an unusable bitsize {bitsize}"
+            )));
+        }
+        if bitsize > 64 {
+            return Err(ClientError::Unsupported(format!(
+                "register {name} is {bitsize} bits wide and does not fit a u64"
+            )));
+        }
+        let size = bitsize as usize / 8;
         let reply = self.command_checked(&format!("p{idx:x};thread:{tid:x};"))?;
-        le_hex_to_u64(&reply)
-            .ok_or_else(|| ClientError::Malformed(format!("bad register value {reply:?}")))
+        let bytes = decode_hex(&reply)
+            .ok_or_else(|| ClientError::Malformed(format!("bad register value {reply:?}")))?;
+        if bytes.len() != size {
+            return Err(ClientError::Malformed(format!(
+                "p{idx:x} ({name}) returned {} bytes but qRegisterInfo describes {size} ({bitsize} bits)",
+                bytes.len()
+            )));
+        }
+        let mut buf = [0u8; 8];
+        buf[..size].copy_from_slice(&bytes);
+        Ok(u64::from_le_bytes(buf))
     }
 
     pub fn write_register(&mut self, tid: u32, name: &str, value: u64) -> Result<(), ClientError> {
@@ -511,7 +546,15 @@ impl<T: AppleTransport> RspClient<T> {
 
     pub fn read_memory(&mut self, addr: u64, len: usize) -> Result<Vec<u8>, ClientError> {
         let reply = self.command_checked(&format!("m{addr:x},{len:x}"))?;
-        decode_hex(&reply).ok_or_else(|| ClientError::Malformed(format!("bad hex {reply:?}")))
+        let bytes = decode_hex(&reply)
+            .ok_or_else(|| ClientError::Malformed(format!("bad hex {reply:?}")))?;
+        // A shortfall is data loss, not data: `m` may legally answer with fewer
+        // bytes for a partially readable range, and handing that back as `Ok`
+        // gives the caller a buffer smaller than the object it must hold.
+        if bytes.len() != len {
+            return Err(ClientError::ShortRead { addr, requested: len, returned: bytes.len() });
+        }
+        Ok(bytes)
     }
 
     pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<(), ClientError> {
@@ -549,24 +592,59 @@ impl<T: AppleTransport> RspClient<T> {
     }
 
     /// Read a `qXfer` object, reassembling every `m`-chunk until the `l`-chunk.
-    pub fn read_qxfer(&mut self, object: &str, annex: &str) -> Result<String, ClientError> {
-        let mut out = String::new();
+    ///
+    /// Works on BYTES throughout: `off` is a byte offset into the remote
+    /// object, and a chunk boundary is free to fall in the middle of a
+    /// multi-byte UTF-8 sequence (or the object may not be text at all). A
+    /// per-chunk lossy decode would substitute a 3-byte U+FFFD for every byte
+    /// it could not decode, so the next request would start PAST data that was
+    /// never delivered — and the `l` chunk would still make the result look
+    /// complete.
+    pub fn read_qxfer_bytes(&mut self, object: &str, annex: &str) -> Result<Vec<u8>, ClientError> {
+        let mut out: Vec<u8> = Vec::new();
         let mut off = 0usize;
         loop {
-            let reply =
-                self.command(&format!("qXfer:{object}:read:{annex}:{off:x},200"))?;
-            let Some(first) = reply.chars().next() else {
+            let reply = self.command_bytes(&format!("qXfer:{object}:read:{annex}:{off:x},200"))?;
+            let Some(&first) = reply.first() else {
                 return Err(ClientError::Unsupported(format!("qXfer:{object}")));
             };
             let body = &reply[1..];
-            out.push_str(body);
+            out.extend_from_slice(body);
             off += body.len();
             match first {
-                'l' => return Ok(out),
-                'm' => {}
-                _ => return Err(ClientError::Malformed(format!("bad qXfer chunk {reply:?}"))),
+                b'l' => return Ok(out),
+                b'm' => {
+                    if body.is_empty() {
+                        // An empty `m` chunk advances nothing: continuing would
+                        // loop forever asking for the same offset.
+                        return Err(ClientError::Malformed(format!(
+                            "empty qXfer:{object} `m` chunk at offset {off:#x}"
+                        )));
+                    }
+                }
+                _ => {
+                    return Err(ClientError::Malformed(format!(
+                        "bad qXfer chunk {:?}",
+                        String::from_utf8_lossy(&reply)
+                    )));
+                }
             }
         }
+    }
+
+    /// Read a `qXfer` object as text.
+    ///
+    /// Refuses an object that is not valid UTF-8 rather than handing back
+    /// replacement characters: a caller asking for a document must not be given
+    /// a silently substituted one.
+    pub fn read_qxfer(&mut self, object: &str, annex: &str) -> Result<String, ClientError> {
+        let bytes = self.read_qxfer_bytes(object, annex)?;
+        String::from_utf8(bytes).map_err(|e| {
+            ClientError::Malformed(format!(
+                "qXfer:{object}:{annex} is not valid UTF-8 at byte {}",
+                e.utf8_error().valid_up_to()
+            ))
+        })
     }
 
     /// Walk the ARM64 frame-pointer chain. Returns `(pc, fp)` per frame,
@@ -589,8 +667,17 @@ impl<T: AppleTransport> RspClient<T> {
                 break;
             }
             let Ok(saved) = self.read_memory(fp, 16) else { break };
-            let next_fp = u64::from_le_bytes(saved[..8].try_into().unwrap_or([0; 8]));
-            let ret = u64::from_le_bytes(saved[8..16].try_into().unwrap_or([0; 8]));
+            // A stub may legally answer a stack read short. A partial frame is
+            // not data: stop the walk rather than slicing past the end or
+            // degrading an unknown return address to zero.
+            let (Ok(next_bytes), Ok(ret_bytes)) = (
+                <[u8; 8]>::try_from(&saved[..saved.len().min(8)]),
+                <[u8; 8]>::try_from(&saved[saved.len().min(8)..]),
+            ) else {
+                break;
+            };
+            let next_fp = u64::from_le_bytes(next_bytes);
+            let ret = u64::from_le_bytes(ret_bytes);
             if ret == 0 {
                 break;
             }
@@ -618,7 +705,7 @@ fn expect_ok(reply: &str) -> Result<(), ClientError> {
 mod tests {
     use super::*;
     use crate::ios::mock_debugserver::{
-        Arm64Interp, FaultInjection, LoadedImage, MemoryRegion, MockThread, Perms,
+        Arm64Interp, FaultInjection, LoadedImage, MemoryRegion, MockThread, Perms, escape,
     };
 
     /// main -> a -> b, where b traps on `brk`. Three real frames.
@@ -659,6 +746,43 @@ mod tests {
         let mut client = RspClient::new(LoopbackTransport::new(srv).with_chunk(7));
         client.handshake().expect("handshake");
         client
+    }
+
+    fn connected_with<F: FnOnce(&mut MockDebugserver)>(f: F) -> RspClient<LoopbackTransport> {
+        let (base, code) = three_frame_program();
+        let mut srv = MockDebugserver::with_program(0x1234, base, &code);
+        f(&mut srv);
+        let mut client = RspClient::new(LoopbackTransport::new(srv).with_chunk(7));
+        client.handshake().expect("handshake");
+        client
+    }
+
+    /// A `p` reply shorter than the register's `bitsize` must be an error, not a
+    /// zero-extended value: 4 bytes of a 64-bit `pc` would otherwise read back
+    /// as a plausible-looking `0x00000000deadbeef`.
+    #[test]
+    fn short_p_reply_is_refused_not_zero_filled() {
+        let mut c = connected_with(|s| s.faults_mut().truncate_p_to_bytes = Some(4));
+        let err = c.read_register(1, "pc").unwrap_err();
+        match err {
+            ClientError::Malformed(ref m) => {
+                assert!(m.contains("4 bytes"), "{m}");
+                assert!(m.contains("64"), "{m}");
+            }
+            other => panic!("expected Malformed, got {other:?}"),
+        }
+    }
+
+    /// A 128-bit `v0` does not fit in a `u64`; silently returning the low half
+    /// is worse than refusing.
+    #[test]
+    fn oversize_p_reply_is_refused_not_halved() {
+        let mut c = connected();
+        let err = c.read_register(1, "v0").unwrap_err();
+        assert!(
+            matches!(err, ClientError::Unsupported(ref m) if m.contains("128")),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -740,6 +864,24 @@ mod tests {
         assert_eq!(frames[2].0, 0x1_0000_1000 + 12, "return address inside `main`");
         // Frame pointers must strictly increase towards the stack base.
         assert!(frames[0].1 < frames[1].1, "{frames:?}");
+    }
+
+    /// A stub that answers a stack read one byte short must fail the unwind,
+    /// not panic and not invent a zero return address.
+    #[test]
+    fn short_stack_read_stops_the_backtrace_without_panicking() {
+        let mut c = connected();
+        let stop = c.cont().expect("run to brk");
+        assert_eq!(stop.pc(), Some(0x1_0000_1048));
+        c.transport_mut().server_mut().short_read_memory();
+
+        let frames = c.frame_pointer_backtrace(1, 4).expect("backtrace must not fail");
+        assert_eq!(
+            frames.len(),
+            1,
+            "a short frame read is not data: only the innermost frame is known, got {frames:?}"
+        );
+        assert_eq!(frames[0].0, 0x1_0000_1048);
     }
 
     #[test]
@@ -931,6 +1073,21 @@ mod tests {
     }
 
     #[test]
+    fn short_memory_read_is_an_error_not_data() {
+        let (base, code) = three_frame_program();
+        let mut srv = MockDebugserver::with_program(0x1234, base, &code);
+        srv.short_read_memory();
+        let mut c = RspClient::new(LoopbackTransport::new(srv));
+        c.handshake().expect("handshake");
+        let sp = c.read_register(1, "sp").unwrap();
+        let err = c.read_memory(sp - 64, 16).unwrap_err();
+        assert!(
+            matches!(err, ClientError::ShortRead { requested: 16, returned: 15, .. }),
+            "a 15-of-16 `m` reply must be an error, not data: {err:?}"
+        );
+    }
+
+    #[test]
     fn extra_mapped_region_is_reachable_from_the_client() {
         let (base, code) = three_frame_program();
         let mut srv = MockDebugserver::with_program(1, base, &code);
@@ -943,5 +1100,84 @@ mod tests {
         let mut c = RspClient::new(LoopbackTransport::new(srv));
         c.handshake().unwrap();
         assert_eq!(c.read_memory(0x5_0000_0000, 5).unwrap(), b"apple");
+    }
+
+    /// A `qXfer` object served in chunks whose boundaries fall in the middle of
+    /// a multi-byte UTF-8 sequence. Each individual chunk is therefore NOT
+    /// valid UTF-8, even though the whole object is.
+    struct SplitXferTransport {
+        data: Vec<u8>,
+        chunk: usize,
+        pending: Vec<u8>,
+    }
+
+    impl SplitXferTransport {
+        fn new(data: Vec<u8>, chunk: usize) -> Self {
+            Self { data, chunk, pending: Vec::new() }
+        }
+    }
+
+    impl AppleTransport for SplitXferTransport {
+        fn send(&mut self, data: &[u8]) -> io::Result<()> {
+            let text = String::from_utf8_lossy(data).to_string();
+            let Some(start) = text.find('$') else { return Ok(()) };
+            let Some(end) = text.find('#') else { return Ok(()) };
+            let req = &text[start + 1..end];
+            let Some(rest) = req.strip_prefix("qXfer:blob:read::") else {
+                // Anything else is answered as unsupported.
+                self.pending.extend_from_slice(b"+$#00");
+                return Ok(());
+            };
+            let off = usize::from_str_radix(rest.split(',').next().unwrap_or("0"), 16).unwrap_or(0);
+            let off = off.min(self.data.len());
+            let take = self.chunk.min(self.data.len() - off);
+            let mut body = Vec::new();
+            body.push(if off + take == self.data.len() { b'l' } else { b'm' });
+            body.extend_from_slice(&self.data[off..off + take]);
+            let escaped = escape(&body);
+            self.pending.push(b'+');
+            self.pending.push(b'$');
+            self.pending.extend_from_slice(&escaped);
+            self.pending.push(b'#');
+            // The checksum covers the ESCAPED wire bytes, which is what the
+            // client sees and sums.
+            self.pending
+                .extend_from_slice(format!("{:02x}", checksum(&escaped)).as_bytes());
+            Ok(())
+        }
+
+        fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = self.pending.len().min(buf.len());
+            buf[..n].copy_from_slice(&self.pending[..n]);
+            self.pending.drain(..n);
+            Ok(n)
+        }
+    }
+
+    /// `off` is a byte offset into the remote object, so it must advance by the
+    /// number of BYTES received — not by the length of a lossily-decoded
+    /// string, which substitutes 3-byte U+FFFD for every invalid byte and so
+    /// makes the next request start past data that was never delivered.
+    #[test]
+    fn qxfer_chunk_split_inside_a_utf8_sequence_is_reassembled_exactly() {
+        let want: String = "é".repeat(100); // 200 bytes, 2 bytes per char
+        let data = want.as_bytes().to_vec();
+        // 63 is odd, so every chunk boundary lands mid-character.
+        let mut c = RspClient::new(SplitXferTransport::new(data.clone(), 63));
+        assert_eq!(c.read_qxfer_bytes("blob", "").expect("blob bytes"), data);
+        assert_eq!(c.read_qxfer("blob", "").expect("blob"), want);
+    }
+
+    /// A binary object must come back byte-exact, and the text accessor must
+    /// REFUSE it instead of returning U+FFFD in place of the bytes it dropped.
+    #[test]
+    fn non_utf8_qxfer_object_is_exact_in_bytes_and_refused_as_text() {
+        let data: Vec<u8> = (0u16..300).map(|i| (i % 256) as u8).collect();
+        let mut c = RspClient::new(SplitXferTransport::new(data.clone(), 37));
+        assert_eq!(c.read_qxfer_bytes("blob", "").expect("blob bytes"), data);
+        match c.read_qxfer("blob", "") {
+            Err(ClientError::Malformed(m)) => assert!(m.contains("not valid UTF-8"), "{m}"),
+            other => panic!("a non-UTF-8 object must not decode: {other:?}"),
+        }
     }
 }

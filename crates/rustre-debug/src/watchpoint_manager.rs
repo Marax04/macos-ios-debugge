@@ -134,7 +134,7 @@ impl Watchpoint {
     /// address space. Comparing the offset is exact everywhere and cannot
     /// overflow after the lower-bound check. Third and fourth site of the shape
     /// first corrected in iter 273.
-    #[must_use]
+    
     pub fn covers(&self, addr: Address) -> bool {
         let start = u64::from(self.address);
         let a = u64::from(addr);
@@ -146,7 +146,7 @@ impl Watchpoint {
     /// Exact intersection, without materialising either end — see `covers`.
     /// A watchpoint on the last bytes of memory used to miss the access that
     /// touched it, which for a watchpoint is a MISSED STOP: invisible.
-    #[must_use]
+    
     pub fn overlaps(&self, addr: Address, width: usize) -> bool {
         let wp_start = u64::from(self.address);
         let acc_start = u64::from(addr);

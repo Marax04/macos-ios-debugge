@@ -872,6 +872,40 @@ pub(crate) fn arm64_watchpoint_from_dr_slot(
     Some((arm64_watchpoint_wvr(addr), wcr))
 }
 
+/// Pick the value a caller MEANT when a register has two accepted spellings.
+///
+/// AArch64's frame pointer and link register have an architectural name (`x29`,
+/// `x30`) and a role name (`fp`, `lr`). This crate publishes BOTH on read,
+/// because which one is canonical is an open question recorded as a user
+/// decision, and answering it silently in a register map would decide it for
+/// everyone.
+///
+/// Publishing both creates a trap on the way back. A caller that reads the set,
+/// changes `x29`, and writes it returns a map where BOTH names are present and
+/// they disagree — and a writer that simply prefers one spelling takes the
+/// stale value and discards the edit. The call reports success and the register
+/// is unchanged, which is this crate's most-condemned failure shape.
+///
+/// When they disagree, exactly one of them differs from what is currently in
+/// the register, and that one is the edit. That is what this returns.
+///
+/// If both differ from the current value the caller has given genuinely
+/// contradictory instructions; `primary` wins and the ambiguity is real rather
+/// than hidden — there is no third value to consult.
+#[must_use]
+pub(crate) fn aliased_register_write(
+    primary: Option<u64>,
+    alias: Option<u64>,
+    current: u64,
+) -> Option<u64> {
+    match (primary, alias) {
+        (Some(a), Some(b)) if a == b => Some(a),
+        (Some(a), Some(b)) => Some(if a != current { a } else { b }),
+        (Some(v), None) | (None, Some(v)) => Some(v),
+        (None, None) => None,
+    }
+}
+
 /// Decode a `DBGWCR`'s `LSC` and `BAS` into x86 `DR7` `R/W` and `LEN` bits.
 ///
 /// ONE copy, because iteration 608 made a second one. The staged-slot reader it
@@ -10645,6 +10679,50 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// An edit through EITHER spelling of a register must survive the write.
+    ///
+    /// The AArch64 reader publishes `x29` and `fp` with the same value, and the
+    /// writer used to take `fp` first with `x29` as a fallback. A caller doing
+    /// the ordinary thing — read the set, change one field, write it back —
+    /// therefore had its edit discarded whenever it used the architectural
+    /// name, because the role name was still present carrying the old value.
+    ///
+    /// `set_register` then reported success and the register was unchanged.
+    /// Mine, introduced with the Windows ARM64 port in 602, and the same trap
+    /// exists for `lr`/`x30`.
+    ///
+    /// The logic lives here rather than in the backend because the backend's
+    /// ARM64 half is `cfg`-gated to a target this machine cannot compile —
+    /// iteration 611's lesson — so putting it in shared code is what makes it
+    /// testable at all.
+    #[test]
+    fn an_edit_through_either_spelling_of_a_register_survives() {
+        use crate::aliased_register_write as pick;
+
+        // Agreement: nothing to decide.
+        assert_eq!(pick(Some(7), Some(7), 7), Some(7));
+
+        // Read-modify-write through the ARCHITECTURAL name: `fp` still carries
+        // the value that was read, `x29` carries the edit.
+        assert_eq!(
+            pick(Some(100), Some(200), 100),
+            Some(200),
+            "the spelling that DIFFERS from the register is the edit; preferring the other one              silently discards it and reports success"
+        );
+
+        // And through the role name, which used to work by luck rather than by
+        // rule.
+        assert_eq!(pick(Some(200), Some(100), 100), Some(200));
+
+        // Only one present: no ambiguity to resolve.
+        assert_eq!(pick(Some(5), None, 0), Some(5));
+        assert_eq!(pick(None, Some(5), 0), Some(5));
+
+        // Neither: the caller said nothing about this register, so it must be
+        // left exactly as it is rather than zeroed.
+        assert_eq!(pick(None, None, 42), None);
     }
 
     /// The free-slot search must not hand out a slot the CPU does not have.

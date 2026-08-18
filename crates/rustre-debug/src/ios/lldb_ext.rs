@@ -75,19 +75,36 @@ type Result<T> = std::result::Result<T, LldbExtError>;
 ///
 /// # Errors
 /// [`LldbExtError::Unsupported`] for an empty reply, [`LldbExtError::ErrorReply`]
-/// for `Exx`.
+/// for both error shapes.
+///
+/// The protocol defines TWO error shapes and both must be recognised here, the
+/// same rule `threads.rs::is_error_reply` documents:
+/// * `Exx` — `xx` hex digits, the numeric form;
+/// * `E.errtext` — the textual form.
+///
+/// This is the gate for every parser in this module, and its worst consumer is
+/// `apple_debugger::discover_registers`, which ends the `qRegisterInfo`
+/// enumeration only on [`LldbExtError::ErrorReply`] and turns any other error
+/// into a fatal attach failure. A stub that ends the list with `E.unsupported`
+/// therefore used to abort the attach instead of stopping the enumeration.
+///
+/// `E.` cannot collide with a hex payload: `.` is not a hex digit. The textual
+/// form carries no numeric code, so `code` is reported as 0 — that is the
+/// absence of a code, not a fabricated one; callers match on the variant.
 pub fn check_reply(packet: &'static str, reply: &str) -> Result<()> {
     if reply.is_empty() {
         return Err(LldbExtError::Unsupported(packet));
     }
     // `E` alone is not an error reply (e.g. a register named `E...` never
     // occurs, but a hex payload may legitimately start with 'e' lowercase).
-    if let Some(rest) = reply.strip_prefix('E')
-        && rest.len() == 2
-        && rest.bytes().all(|b| b.is_ascii_hexdigit())
-    {
-        let code = u8::from_str_radix(rest, 16).unwrap_or(0);
-        return Err(LldbExtError::ErrorReply { packet, code });
+    if let Some(rest) = reply.strip_prefix('E') {
+        if rest.starts_with('.') {
+            return Err(LldbExtError::ErrorReply { packet, code: 0 });
+        }
+        if !rest.is_empty() && rest.len() <= 2 && rest.bytes().all(|b| b.is_ascii_hexdigit()) {
+            let code = u8::from_str_radix(rest, 16).unwrap_or(0);
+            return Err(LldbExtError::ErrorReply { packet, code });
+        }
     }
     Ok(())
 }
@@ -1268,6 +1285,32 @@ mod tests {
         let hi = from_packet(&pkt, HostInfo::parse).unwrap();
         assert!(hi.is_arm64e());
     }
+
+#[cfg(test)]
+mod check_reply_textual_error_tests {
+    use super::{check_reply, LldbExtError};
+
+    /// The stub may end an enumeration with the TEXTUAL error form `E.errtext`
+    /// as well as the numeric `Exx`. `discover_registers` only breaks the
+    /// qRegisterInfo loop on `ErrorReply`; anything else aborts the attach.
+    #[test]
+    fn textual_error_reply_is_classified_as_error_reply() {
+        for reply in ["E.no more registers", "E.unsupported", "E."] {
+            match check_reply("qRegisterInfo", reply) {
+                Err(LldbExtError::ErrorReply { .. }) => {}
+                other => panic!("{reply:?} not classified as ErrorReply: {other:?}"),
+            }
+        }
+        // The numeric form must keep working, with its code preserved.
+        match check_reply("qHostInfo", "E2f") {
+            Err(LldbExtError::ErrorReply { code, .. }) => assert_eq!(code, 0x2f),
+            other => panic!("numeric form regressed: {other:?}"),
+        }
+        // A payload that merely starts with `E` is NOT an error.
+        assert!(check_reply("qHostInfo", "Endian:little").is_ok());
+        assert!(check_reply("qHostInfo", "E12345").is_ok());
+    }
+}
 
 #[cfg(test)]
 mod launch_env_packet_tests {
