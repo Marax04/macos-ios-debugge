@@ -5,6 +5,74 @@ use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Real corpus loading
+//
+// ⚠ Why this exists. Every tool below built a `MalpediaLocalDb` and called
+// `populate_mock_data()` on it, then answered questions like "is this hash
+// known malware" out of that fixture. There was no argument by which a caller
+// could supply real data, and the response named
+// `MalpediaLocalDb::populate_mock_data` as its source — truthfully, and
+// uselessly, because a client reading a family attribution does not check
+// which function produced it.
+//
+// `corpus_path` is now required and points at a Malpedia JSON export
+// (`{"families": [...], "actors": [...], "samples": [...]}`), loaded by the
+// real `MalpediaLocalDb::load_path`. The fixture stays reachable only behind
+// an explicit opt-in that LABELS its output.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Build a corpus-backed database from `args`.
+///
+/// Returns `(db, is_fixture)` so every handler can label its answer.
+///
+/// # Errors
+/// `InvalidParams` when neither `corpus_path` nor the explicit opt-in is
+/// given; `ToolError` when the corpus cannot be read or parsed.
+fn malpedia_db_from_args(
+    args: &Value,
+) -> Result<(rustre_ti_malpedia::MalpediaLocalDb, bool), McpError> {
+    let db = rustre_ti_malpedia::MalpediaLocalDb::new();
+    if args.get("use_synthetic_fixture").and_then(Value::as_bool) == Some(true) {
+        db.populate_mock_data();
+        return Ok((db, true));
+    }
+    let path = args.get("corpus_path").and_then(Value::as_str).ok_or_else(|| {
+        McpError::InvalidParams(
+            "'corpus_path' is required: a Malpedia JSON export with \"families\", \"actors\"              and/or \"samples\". Pass \"use_synthetic_fixture\": true to query the built-in              test fixture instead; its answers are NOT threat intelligence."
+                .to_string(),
+        )
+    })?;
+    let counts = db
+        .load_path(std::path::Path::new(path))
+        .map_err(McpError::ToolError)?;
+    if counts.is_empty() {
+        return Err(McpError::ToolError(format!(
+            "corpus '{path}' loaded 0 records: it has no families, actors or samples"
+        )));
+    }
+    Ok((db, false))
+}
+
+/// Add the corpus arguments to an existing tool schema.
+fn with_corpus_args(mut schema: Value) -> Value {
+    schema["properties"]["corpus_path"] = json!({
+        "type": "string",
+        "description": "Path to a Malpedia JSON export"
+    });
+    schema["properties"]["use_synthetic_fixture"] = json!({
+        "type": "boolean",
+        "description": "Query the built-in test fixture instead of a corpus. Answers are labelled is_synthetic_fixture and are NOT threat intelligence."
+    });
+    let req = schema["required"].as_array().cloned().unwrap_or_default();
+    let mut req: Vec<Value> = req;
+    if !req.iter().any(|v| v == "corpus_path") {
+        req.push(json!("corpus_path"));
+    }
+    schema["required"] = Value::Array(req);
+    schema
+}
+
 pub struct TiMalpediaNormalizeFamilyNameTool;
 
 pub struct TiMalpediaFamilyToMalwareTypeTool;
@@ -181,7 +249,7 @@ impl TiMalpediaMockDbSearchTool {
         ToolDefinition {
             name: "ti_malpedia_mock_db_search".to_string(),
             description: "Search the mock-populated Malpedia local DB for families matching a query.".to_string(),
-            input_schema: json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}),
+            input_schema: with_corpus_args(json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"]})),
             parameters: Value::Null,
         }
     }
@@ -191,13 +259,13 @@ impl ToolHandler for TiMalpediaMockDbSearchTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let q = args.get("query").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'query'".into()))?;
-        let db = rustre_ti_malpedia::MalpediaLocalDb::new();
-        db.populate_mock_data();
+        let (db, is_synthetic_fixture) = malpedia_db_from_args(&args)?;
         let results = db.search_families(q);
         let names: Vec<String> = results.iter().map(|f| f.name.clone()).collect();
         Ok(ToolResult::text(json!({
             "count": names.len(),
             "names": names,
+            "is_synthetic_fixture": is_synthetic_fixture,
             "source": "rustre_ti_malpedia::MalpediaLocalDb::search_families",
         }).to_string()))
     }
@@ -210,7 +278,7 @@ impl TiMalpediaMockDbFindByHashTool {
         ToolDefinition {
             name: "ti_malpedia_mock_db_find_by_hash".to_string(),
             description: "Look up a sample in the mock-populated Malpedia local DB by any hash (SHA-256/SHA-1/MD5).".to_string(),
-            input_schema: json!({"type":"object","properties":{"hash":{"type":"string"}},"required":["hash"]}),
+            input_schema: with_corpus_args(json!({"type":"object","properties":{"hash":{"type":"string"}},"required":["hash"]})),
             parameters: Value::Null,
         }
     }
@@ -220,12 +288,12 @@ impl ToolHandler for TiMalpediaMockDbFindByHashTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let h = args.get("hash").and_then(Value::as_str)
             .ok_or_else(|| McpError::InvalidParams("missing 'hash'".into()))?;
-        let db = rustre_ti_malpedia::MalpediaLocalDb::new();
-        db.populate_mock_data();
+        let (db, is_synthetic_fixture) = malpedia_db_from_args(&args)?;
         let found = db.find_by_hash(h);
         Ok(ToolResult::text(json!({
             "found": found.is_some(),
             "sample": found.map(|s| json!({"sha256": s.sha256, "family": s.family})),
+            "is_synthetic_fixture": is_synthetic_fixture,
             "source": "rustre_ti_malpedia::MalpediaLocalDb::find_by_hash",
         }).to_string()))
     }
@@ -507,21 +575,21 @@ impl TiMalpediaLocalDbPopulateStatsTool {
         ToolDefinition {
             name: "ti_malpedia_local_db_populate_stats".to_string(),
             description: "Populate a MalpediaLocalDb with mock data and return family/actor/sample counts.".to_string(),
-            input_schema: json!({"type":"object","properties":{}}),
+            input_schema: with_corpus_args(json!({"type":"object","properties":{}})),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for TiMalpediaLocalDbPopulateStatsTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let db = rustre_ti_malpedia::MalpediaLocalDb::new();
-        db.populate_mock_data();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (db, is_synthetic_fixture) = malpedia_db_from_args(&args)?;
         Ok(ToolResult::text(json!({
             "families": db.family_count(),
             "actors": db.actor_count(),
             "samples": db.sample_count(),
-            "source": "rustre_ti_malpedia::MalpediaLocalDb::populate_mock_data",
+            "source": "rustre_ti_malpedia::MalpediaLocalDb (corpus supplied by the caller)",
+            "is_synthetic_fixture": is_synthetic_fixture,
         }).to_string()))
     }
 }
@@ -751,19 +819,19 @@ impl TiMalpediaLocalDbListFamiliesTool {
         ToolDefinition {
             name: "ti_malpedia_local_db_list_families".to_string(),
             description: "List all family names in a mock-populated MalpediaLocalDb.".to_string(),
-            input_schema: json!({"type":"object","properties":{}}),
+            input_schema: with_corpus_args(json!({"type":"object","properties":{}})),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for TiMalpediaLocalDbListFamiliesTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let db = rustre_ti_malpedia::MalpediaLocalDb::new();
-        db.populate_mock_data();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (db, is_synthetic_fixture) = malpedia_db_from_args(&args)?;
         let names: Vec<String> = db.list_families().into_iter().map(|f| f.name).collect();
         Ok(ToolResult::text(json!({
             "families": names,
+            "is_synthetic_fixture": is_synthetic_fixture,
             "source": "rustre_ti_malpedia::MalpediaLocalDb::list_families",
         }).to_string()))
     }

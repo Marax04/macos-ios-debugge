@@ -1888,7 +1888,7 @@ impl TiProvider for VirusTotalClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustre_threatintel::{IoCType, Severity};
+    use rustre_threatintel::IoCType;
 
     fn client() -> VirusTotalClient {
         VirusTotalClient::new("test-api-key-xxxxxxxxxxxxxxxxxxxxxxxx".to_string())

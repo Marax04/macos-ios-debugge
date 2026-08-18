@@ -1355,7 +1355,7 @@ mod tests {
         // entry, then "Rich" and the plaintext key. Everything before "Rich"
         // is XORed with the key.
         let mut p = 0x40usize;
-        let mut put = |v: u32, out: &mut Vec<u8>, p: &mut usize| {
+        let put = |v: u32, out: &mut Vec<u8>, p: &mut usize| {
             out[*p..*p + 4].copy_from_slice(&(v ^ key).to_le_bytes());
             *p += 4;
         };

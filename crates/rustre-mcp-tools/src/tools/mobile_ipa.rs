@@ -6,6 +6,61 @@ use serde_json::{json, Value};
 use async_trait::async_trait;
 use crate::wire_tools::{__ipa_hex_decode};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Real IPA loading
+//
+// ⚠ Why this exists. The eight `mobile_ipa_mock_*` tools below declared
+// `input_schema: {"properties": {}}` — they accepted NO arguments — and each
+// called `IpaPackage::mock()`, so every answer described a built-in reference
+// image rather than any IPA a user has. `has_entitlements`, `targets_iphone`,
+// `codesign_flags` and the rest were properties of a fixture, reported as if
+// they were properties of an app.
+//
+// `path` is now REQUIRED. A tool that "works" by answering about a fixture is
+// exactly the contract that lies, so it now fails instead. The reference image
+// stays reachable behind an explicit opt-in that LABELS its output, because a
+// fixture you asked for by name is not the same as one you were handed silently.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Schema shared by every IPA-analysing tool.
+fn ipa_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Path to the .ipa file to analyse"},
+            "use_reference_fixture": {"type": "boolean", "description": "Analyse the built-in reference IPA instead of a real file. The response is labelled `is_reference_fixture: true`."}
+        },
+        "required": ["path"]
+    })
+}
+
+/// Parse the IPA named by `args["path"]`, or the reference image when the
+/// caller explicitly asks for it.
+///
+/// Returns `(package, is_reference_fixture)` so every handler can label its
+/// answer. Never silently substitutes the fixture for a real file.
+///
+/// # Errors
+/// `InvalidParams` when neither `path` nor the explicit opt-in is given;
+/// `ToolError` when the file cannot be read or is not a parsable IPA.
+fn ipa_from_args(args: &Value) -> Result<(rustre_mobile_ipa::IpaPackage, bool), McpError> {
+    if args.get("use_reference_fixture").and_then(Value::as_bool) == Some(true) {
+        return Ok((rustre_mobile_ipa::IpaPackage::mock(), true));
+    }
+    let path = args.get("path").and_then(Value::as_str).ok_or_else(|| {
+        McpError::InvalidParams(
+            "'path' is required: the .ipa to analyse. Pass \"use_reference_fixture\": true              to inspect the built-in reference image instead."
+                .to_string(),
+        )
+    })?;
+    let bytes = std::fs::read(path)
+        .map_err(|e| McpError::ToolError(format!("cannot read '{path}': {e}")))?;
+    let pkg = rustre_mobile_ipa::IpaPackage::parse(&bytes)
+        .map_err(|e| McpError::ToolError(format!("'{path}' is not a parsable IPA: {e}")))?;
+    Ok((pkg, false))
+}
+
+
 pub struct MobileIpaIsBinaryPlistTool;
 
 pub struct MobileIpaMockPackageTool;
@@ -15,32 +70,32 @@ pub struct MobileIpaPlistIsBinaryTool;
 pub struct MobileIpaMockSummaryTool;
 
 pub struct MobileIpaMockHasEntitlementsTool;
-impl MobileIpaMockHasEntitlementsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_has_entitlements".to_string(), description: "InfoPlist::has_entitlements on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockHasEntitlementsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); Ok(ToolResult::text(json!({"has_entitlements":p.info_plist.has_entitlements(),"source":"rustre_mobile_ipa::InfoPlist::has_entitlements"}).to_string())) } }
+impl MobileIpaMockHasEntitlementsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_has_entitlements".to_string(), description: "InfoPlist::has_entitlements on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockHasEntitlementsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; Ok(ToolResult::text(json!({"has_entitlements":p.info_plist.has_entitlements(),"source":"rustre_mobile_ipa::InfoPlist::has_entitlements","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockParsedMinOsTool;
-impl MobileIpaMockParsedMinOsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_parsed_min_os".to_string(), description: "InfoPlist::parsed_min_os on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockParsedMinOsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); Ok(ToolResult::text(json!({"min_os":p.info_plist.parsed_min_os(),"source":"rustre_mobile_ipa::InfoPlist::parsed_min_os"}).to_string())) } }
+impl MobileIpaMockParsedMinOsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_parsed_min_os".to_string(), description: "InfoPlist::parsed_min_os on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockParsedMinOsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; Ok(ToolResult::text(json!({"min_os":p.info_plist.parsed_min_os(),"source":"rustre_mobile_ipa::InfoPlist::parsed_min_os","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockTargetsIphoneTool;
-impl MobileIpaMockTargetsIphoneTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_targets_iphone".to_string(), description: "InfoPlist::targets_iphone on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockTargetsIphoneTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); Ok(ToolResult::text(json!({"targets_iphone":p.info_plist.targets_iphone(),"source":"rustre_mobile_ipa::InfoPlist::targets_iphone"}).to_string())) } }
+impl MobileIpaMockTargetsIphoneTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_targets_iphone".to_string(), description: "InfoPlist::targets_iphone on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockTargetsIphoneTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; Ok(ToolResult::text(json!({"targets_iphone":p.info_plist.targets_iphone(),"source":"rustre_mobile_ipa::InfoPlist::targets_iphone","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockCodesignFlagsTool;
-impl MobileIpaMockCodesignFlagsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_codesign_flags".to_string(), description: "CodeSignature developer/enterprise/adhoc flags on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockCodesignFlagsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); let cs = p.code_signature.as_ref(); Ok(ToolResult::text(json!({"is_developer_signed":cs.map(rustre_mobile_ipa::CodeSignature::is_developer_signed),"is_enterprise":cs.map(rustre_mobile_ipa::CodeSignature::is_enterprise),"is_adhoc":cs.map(rustre_mobile_ipa::CodeSignature::is_adhoc),"source":"rustre_mobile_ipa::CodeSignature"}).to_string())) } }
+impl MobileIpaMockCodesignFlagsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_codesign_flags".to_string(), description: "CodeSignature developer/enterprise/adhoc flags on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockCodesignFlagsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; let cs = p.code_signature.as_ref(); Ok(ToolResult::text(json!({"is_developer_signed":cs.map(rustre_mobile_ipa::CodeSignature::is_developer_signed),"is_enterprise":cs.map(rustre_mobile_ipa::CodeSignature::is_enterprise),"is_adhoc":cs.map(rustre_mobile_ipa::CodeSignature::is_adhoc),"source":"rustre_mobile_ipa::CodeSignature","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockLeafCertAppleTool;
-impl MobileIpaMockLeafCertAppleTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_leaf_cert_apple".to_string(), description: "CodeSignature::leaf_cert + CertInfo::is_apple_issued on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockLeafCertAppleTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); let leaf = p.code_signature.as_ref().and_then(rustre_mobile_ipa::CodeSignature::leaf_cert); Ok(ToolResult::text(json!({"apple_issued":leaf.map(rustre_mobile_ipa::CertInfo::is_apple_issued),"subject":leaf.map(|c|c.subject.clone()),"source":"rustre_mobile_ipa::CertInfo::is_apple_issued"}).to_string())) } }
+impl MobileIpaMockLeafCertAppleTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_leaf_cert_apple".to_string(), description: "CodeSignature::leaf_cert + CertInfo::is_apple_issued on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockLeafCertAppleTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; let leaf = p.code_signature.as_ref().and_then(rustre_mobile_ipa::CodeSignature::leaf_cert); Ok(ToolResult::text(json!({"apple_issued":leaf.map(rustre_mobile_ipa::CertInfo::is_apple_issued),"subject":leaf.map(|c|c.subject.clone()),"source":"rustre_mobile_ipa::CertInfo::is_apple_issued","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockBinaryEntriesTool;
-impl MobileIpaMockBinaryEntriesTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_binary_entries".to_string(), description: "IpaPackage::binary_entries on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockBinaryEntriesTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); let paths: Vec<String> = p.binary_entries().iter().map(|e|e.path.clone()).collect(); Ok(ToolResult::text(json!({"binary_paths":paths,"count":p.binary_entries().len(),"source":"rustre_mobile_ipa::IpaPackage::binary_entries"}).to_string())) } }
+impl MobileIpaMockBinaryEntriesTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_binary_entries".to_string(), description: "IpaPackage::binary_entries on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockBinaryEntriesTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; let paths: Vec<String> = p.binary_entries().iter().map(|e|e.path.clone()).collect(); Ok(ToolResult::text(json!({"binary_paths":paths,"count":p.binary_entries().len(),"source":"rustre_mobile_ipa::IpaPackage::binary_entries","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaMockEntryCountsTool;
-impl MobileIpaMockEntryCountsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_entry_counts".to_string(), description: "IpaPackage::entry_count + framework_count on mock package.".to_string(), input_schema: json!({"type":"object","properties":{}}), parameters: Value::Null } } }
-#[async_trait] impl ToolHandler for MobileIpaMockEntryCountsTool { async fn call(&self, _args: Value) -> Result<ToolResult, McpError> { let p = rustre_mobile_ipa::IpaPackage::mock(); Ok(ToolResult::text(json!({"entry_count":p.entry_count(),"framework_count":p.framework_count(),"is_encrypted":p.is_encrypted(),"source":"rustre_mobile_ipa::IpaPackage"}).to_string())) } }
+impl MobileIpaMockEntryCountsTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_mock_entry_counts".to_string(), description: "IpaPackage::entry_count + framework_count on mock package.".to_string(), input_schema: ipa_schema(), parameters: Value::Null } } }
+#[async_trait] impl ToolHandler for MobileIpaMockEntryCountsTool { async fn call(&self, args: Value) -> Result<ToolResult, McpError> { let (p, is_fixture) = ipa_from_args(&args)?; Ok(ToolResult::text(json!({"entry_count":p.entry_count(),"framework_count":p.framework_count(),"is_encrypted":p.is_encrypted(),"source":"rustre_mobile_ipa::IpaPackage","is_reference_fixture":is_fixture}).to_string())) } }
 
 pub struct MobileIpaPlistReadStringTool;
 impl MobileIpaPlistReadStringTool { #[must_use] pub fn definition() -> ToolDefinition { ToolDefinition { name: "mobile_ipa_plist_read_string".to_string(), description: "SimplePlistReader::read_string at given offset.".to_string(), input_schema: json!({"type":"object","properties":{"hex":{"type":"string"},"offset":{"type":"integer"}},"required":["hex","offset"]}), parameters: Value::Null } } }

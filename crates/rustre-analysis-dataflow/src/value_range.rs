@@ -484,7 +484,7 @@ fn topo_order(func: &SsaFunction) -> Vec<BBId> {
 mod tests {
     use super::*;
     use crate::cfg_dom::{BBId, Cfg};
-    use crate::ssa::{Instruction, SsaFunction, SsaVar, Var};
+    use crate::ssa::{Instruction, SsaFunction, Var};
 
     use crate::test_util::sv;
 
@@ -911,7 +911,7 @@ impl<'a> RangeAnalysisExt<'a> {
 #[cfg(test)]
 mod value_range_extended_tests {
     use super::*;
-    use crate::ssa::SsaVar;
+    
 
     use crate::test_util::sv;
 

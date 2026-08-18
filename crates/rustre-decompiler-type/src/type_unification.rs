@@ -503,7 +503,7 @@ pub fn unify_all(types: &[DecompType]) -> DecompType {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::CallingConvention;
+    
 
     fn i32() -> DecompType { DecompType::Int(IntWidth::I32) }
     pub(crate) fn i64() -> DecompType { DecompType::Int(IntWidth::I64) }

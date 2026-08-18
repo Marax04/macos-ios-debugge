@@ -402,7 +402,7 @@ fn liveness_returns_sorted_unique() {
 }
 
 #[test]
-fn liveness_kill_overrides_gen_NOT_but_gen_takes_precedence() {
+fn liveness_kill_overrides_gen_not_but_gen_takes_precedence() {
     // gen={5}, kill={5} — gen∪(out\kill), gen wins because added after filter.
     let cfg = vec![(0u32, vec![], vec![5u32], vec![5u32])];
     let res = compute_liveness(&cfg);

@@ -2490,4 +2490,1202 @@ motivo per cui questo STATUS annota sempre la fonte e la data di ogni numero.
 
 ---
 
+# Round 30 — 2026-08-18 — ✅ PRIMO GUADAGNO DI FEDELTÀ MISURATO: arity 122 → 128 su 135
+
+## 30.1 Cosa ho implementato (#6650)
+
+`apply_win64_calling_convention_with` (`lib.rs`) usa ora il **prototipo
+pubblicato come LIMITE INFERIORE** dell'arità della DEFINIZIONE, dietro il gate
+`RUSTRE_PROTO_ARITY` (opt-in, default OFF).
+
+Due funzioni nuove:
+- `signature_fn_name(code)` — estrae il nome dalla riga di firma, con la guardia
+  contro `if`/`while`/`for`/`switch` (un matcher `(…) {` prende anche quelli:
+  trappola documentata in CLAUDE.md);
+- `published_arity_ungated(name)` — stessa sorgente di `published_lib_arity`
+  (`LibrarySignatureDb`, 154 firme mingw-w64 estratte dagli header) ma **senza**
+  il gate di quella, che governa un asse diverso (i CALL SITE, §29.2).
+
+**Asimmetria deliberata: alza soltanto, mai abbassa.** Un'arità troppo BASSA
+perde argomenti reali e rompe le chiamate; una troppo ALTA inventa parametri
+fantasma che compilano puliti e sono invisibili a `check.sh`. Alzare è
+recuperabile, abbassare no.
+
+## 30.2 Misura su `sample7_cpp` (il bucket che contiene tutti i 135 prototipi, §29.1)
+
+| | correct | OVER | UNDER | pct |
+|---|---|---|---|---|
+| baseline | 122 | 6 | 7 | 90,37 |
+| **`RUSTRE_PROTO_ARITY=1`** | **128** | **6** | **1** | **94,81** |
+
+**UNDER 7 → 1. OVER invariato a 6.** È esattamente la forma richiesta dai criteri
+di §18.4: gli UNDER scendono e gli OVER **non salgono**. Il difetto è stato
+corretto, non spostato — al contrario del tentativo del Round 27, che con gli
+stessi criteri risultò rosso e fu messo dietro gate.
+
+`_Unwind_FindEnclosingFunction`, che CLAUDE.md descrive come «perfettamente
+consistente e uniformemente sbagliata» (0 parametri in ogni build contro un
+prototipo di 1), ora esce:
+```c
+__int64 __fastcall _Unwind_FindEnclosingFunction(__int64 a1) {
+```
+
+## 30.3 Controlli anti-regressione
+
+| controllo | esito |
+|---|---|
+| compilazione (120 file, `gcc -std=gnu89 -fsyntax-only -w`) | **120/120 ok**, identico alla baseline |
+| `sample1` — arity | **identico** (8 correct, 1 over, 1 under) |
+| `sample1` — callsite_consistency | **identico** (5 OVER, 21 UNDER) |
+| `sample7_cpp` — callsite_consistency | 161→160 OVER, 203→204 UNDER (**neutro, ±1**) |
+
+Lo scambio ±1 su `callsite_consistency` è **spiegato**: la correzione tocca le
+DEFINIZIONI, non i call site. Una funzione che guadagna un parametro e continua
+a essere chiamata con zero argomenti genera un UNDER interno. È un'informazione,
+non un difetto nuovo: dice che l'altro lato va allineato.
+
+## 30.4 `RUSTRE_LIBSIG_ARITY` è confermato inerte, anche in combinazione
+
+| | arity | callsite |
+|---|---|---|
+| solo `PROTO_ARITY` | 128/135 | 160/204 |
+| **entrambi i gate** | **128/135** | **160/204** |
+
+Identici. Il gate dei call site non muove nulla nemmeno insieme all'altro,
+confermando §29.2: non è «spento per prudenza», è **senza effetto misurabile**
+sull'asse che le metriche osservano.
+
+## 30.5 Perché resta opt-in (per ora)
+
+Manca la validazione su **`behaviour`**: aggiungere un parametro a una
+definizione cambia ciò che la funzione legge quando l'harness la **compila,
+linka ed esegue**. Un parametro in più letto come spazzatura può trasformare un
+AGREE in un DIVERGE, e nessuna delle metriche misurate qui lo vedrebbe.
+
+Condizione per il default-ON: una `measure.sh` completa su albero **stabile**
+(oggi è conteso, §19) con `behaviour` non in regressione. Numeri e criteri sono
+tutti qui sopra: chi la esegue non deve ri-derivare nulla.
+
+## 30.6 Nota di metodo — cosa ha fatto la differenza
+
+Il Round 27 (guardia sui cicli) e questo round hanno la stessa struttura:
+diagnosi, implementazione, misura. Uno è fallito, l'altro no. La differenza non
+è la fortuna:
+
+- il Round 27 richiedeva di **decidere se un registro è un parametro** — un
+  giudizio semantico che un'euristica sintattica non può fare;
+- questo round **non decide nulla**: prende una risposta già scritta e verificata
+  (il prototipo estratto meccanicamente dagli header) e la usa come limite.
+
+Dove esiste una fonte di verità, usarla batte qualunque euristica. Ed è
+esattamente l'argomento a favore del cablaggio della catena: quei crate SONO
+fonti di verità già scritte e verificate.
+
+---
+
+# Round 31 — 2026-08-18 — CAUSA SISTEMATICA DEI 5 OVER `pthread_*`: arity da funzioni `noreturn`
+
+## 31.1 Il pattern che ha innescato l'indagine
+
+I 6 OVER di `sample7_cpp` si dividono in due gruppi:
+- `_pei386_runtime_relocator`: want 0, got 4 (il caso dell'ordine nei cicli, §26);
+- **5 × `pthread_*`: tutte con esattamente +2 parametri** (`want 2, got 4` ×4;
+  `want 1, got 3` ×1).
+
+«+2 su cinque funzioni della stessa famiglia» non è rumore: è una causa
+sistematica.
+
+E l'unico UNDER residuo, `__mingw_raise_matherr` (want 5, got 4), **non è un
+bug**: Win64 passa 4 argomenti in registro e il quinto sullo stack. Il limite
+`published <= 4` di #6650 ha fatto bene a rifiutarlo. È un limite strutturale
+del recupero, che modella solo i registri.
+
+## 31.2 Catena di eliminazione, misurata
+
+| ipotesi | verifica | esito |
+|---|---|---|
+| `a3`/`a4` usati nel corpo | grep su `pthread_join` | **mai usati**, solo in firma |
+| promossi dai registri INTERI | sonda `[PARAMREG-LIVEIN]` | **no**: promuove solo a1/a2 |
+| promossi dal file XMM | sonda `[PARAMREG-XMM]` aggiunta | **no**: 30 attivazioni nel bucket, **zero** per `pthread_join` |
+| promossi dalla regola **D9** | sonda `[PARAMREG]` preesistente | **SÌ** |
+
+```
+[PARAMREG] fn=pthread_join callee=0x140011230 arity=4 accende a3
+[PARAMREG] fn=pthread_join callee=0x140011230 arity=4 accende a4
+```
+
+⚠ Correzione al §15.2a: avevo concluso «la regola D9 non scatta mai» dopo aver
+misurato su `sample1`, dove `callee_arities` è vuota. Su `sample7_cpp` scatta
+**476 volte**. La conclusione era corretta per quel bucket e **generalizzata a
+torto**.
+
+## 31.3 La causa: `__stack_chk_fail` con arity 4
+
+I callee più propagati:
+```
+85 × callee=0x140011230 arity=4     <- __stack_chk_fail
+48 × callee=0x14002bec0 arity=4
+46 × callee=0x14002bc50 arity=4
+46 × callee=0x140022170 arity=4
+42 × callee=0x140022430 arity=4
+```
+
+`0x140011230` è **`__stack_chk_fail`**, che di parametri ne prende **ZERO**.
+
+Perché la liveness ne ricava 4: è `noreturn`. Non ritorna mai — salta nel
+gestore — quindi i registri che il corpo «legge prima di scrivere» sono quelli
+che il **chiamante** ha lasciato vivi, non i suoi parametri. L'arità che ne esce
+è un **artefatto**, e D9 la propaga verso l'alto su 85 call site.
+
+`__stack_chk_fail` **non è** nei prototipi pubblicati, quindi la strada delle
+firme (#6650) non lo copre.
+
+## 31.4 La correzione (#6670): stessa forma della guardia thunk già esistente
+
+Il repo ha già il precedente esatto: D9-THUNK (#6600) rimuove i thunk d'import
+dalla mappa delle arità perché «un thunk non ha un corpo da cui ricavare
+un'arità», con la motivazione *«meglio NESSUNA evidenza di una FALSA»*.
+
+Aggiunta la guardia gemella in `arities_from_seeds` (`binary_entry.rs`), gate
+`RUSTRE_NORETURN_NO_ARITY` (opt-in):
+```rust
+order.retain(|va| !crate::detect_noreturn(&bodies[va]));
+```
+`detect_noreturn` esisteva già (`lib.rs:6117`), promossa a `pub(crate)`. Il
+bucket contiene **231** funzioni già riconosciute `__noreturn`.
+
+**È una regola semantica, non un'euristica**: una funzione che non ritorna non
+ha parametri osservabili per liveness. La differenza rispetto al tentativo
+fallito del Round 27 è la stessa del Round 30: qui non si *indovina*, si
+riconosce una proprietà che il decompilatore già determina.
+
+## 31.5 Da misurare
+
+Attesa: i 5 OVER `pthread_*` scendono; OVER totale 6 → 1 (resta
+`_pei386_runtime_relocator`, di causa diversa). **Da verificare**, e insieme che
+UNDER non salga — se D9 smette di propagare arità *corrette* da qualche noreturn,
+si perdono argomenti veri.
+
+Ciclo di misura: `sample7_cpp` + `fidelity_arity.py` (§29.1), ~40 s per giro.
+
+---
+
+# Round 32 — 2026-08-18 — La guardia `noreturn` non serve: quelle funzioni RITORNANO (7ª ipotesi caduta)
+
+## 32.1 Misura
+
+| | correct | OVER | UNDER |
+|---|---|---|---|
+| baseline | 122 | 6 | 7 |
+| `PROTO_ARITY` | 128 | 6 | 1 |
+| **`PROTO_ARITY` + `NORETURN_NO_ARITY`** | **128** | **6** | **1** |
+
+Nessun effetto. Verificato con la sonda: **476 attivazioni D9 con la guardia
+accesa, 476 con la guardia spenta** — la `retain` non rimuove nulla.
+
+## 32.2 Perché: `detect_noreturn` ha ragione a non riconoscerle
+
+Disassemblato `0x140011230`:
+```asm
+0x140011280  sub  $0x38, %rsp
+0x140011284  mov  %r9, 0x58(%rsp)     <- spill di r9 nello shadow space
+0x140011289  lea  0x58(%rsp), %r9     <- indirizzo dello spill
+0x14001128e  mov  %r9, 0x28(%rsp)
+0x140011293  call 0x1400112A0
+0x140011298  add  $0x38, %rsp
+0x14001129c  ret                       <- RITORNA
+```
+
+La funzione **ritorna**. `detect_noreturn` cerca «ultima istruzione significativa
+= `call` seguita solo da `ud2`/`int3`/`hlt`/padding» e qui trova `ret`:
+comportamento **corretto**. La mia regola era valida in generale e
+**inapplicabile a questo caso**.
+
+## 32.3 Il pattern vero: prologo di salvataggio registri di una VARIADICA
+
+`mov %r9, 0x58(%rsp)` + `lea 0x58(%rsp), %r9` + passaggio dell'indirizzo è il
+prologo che costruisce una **`va_list`**. Una funzione variadica legge
+legittimamente tutti e quattro i registri argomento: la sua arity 4 è **corretta
+per lei**, ed è sbagliato che D9 la propaghi a chiamanti che variadici non sono.
+
+Regola corretta, da implementare al posto di quella `noreturn`:
+**D9 non deve propagare l'arità da un callee VARIADICO.** `published_lib_arity`
+già scarta le variadiche (`if sig.is_variadic { return None }`), ma qui il callee
+è noto per VA e non per nome, quindi serve il riconoscimento del prologo.
+
+## 32.4 Secondo reperto: il simbolo è attribuito male
+
+Il file emesso per quell'indirizzo dichiara
+`__int64 __fastcall __stack_chk_fail()`. Ma `__stack_chk_fail` non costruisce
+una `va_list` e non ritorna: **il nome non c'entra con questo corpo**. C'è quindi
+un difetto di attribuzione dei simboli su questo indirizzo, indipendente
+dall'arità — e potenzialmente più grave, perché un nome sbagliato inquina ogni
+ragionamento che vi si appoggia (incluso il mio di §31.3).
+
+## 32.5 Stato della guardia #6670
+
+Tenuta, `RUSTRE_NORETURN_NO_ARITY` default OFF, con questa nota: la regola è
+semanticamente valida (una funzione che non ritorna non ha parametri osservabili
+per liveness) ma **misurata a effetto zero su `sample7_cpp`**, perché i callee
+responsabili non sono `noreturn`. Non riaccenderla aspettandosi un guadagno su
+questo bucket.
+
+## 32.6 Bilancio ipotesi
+
+Settima ipotesi caduta della sessione. Ma il costo è stato basso — una guardia di
+tre righe e due misure da 40 secondi — perché il ciclo veloce di §29.1 era già
+in piedi. La stessa ipotesi al Round 15 sarebbe costata un'ora.
+
+---
+
+# Round 33 — 2026-08-18 — ✅ SECONDO GUADAGNO: arity 122 → 131 su 135 (OVER 6 → 3)
+
+## 33.1 La guardia variadica (#6680)
+
+`ha_prologo_variadico` in `binary_entry.rs`: riconosce il salvataggio di un
+registro argomento nello shadow space seguito dal `lea` dell'**indirizzo dello
+stesso slot** — la costruzione di una `va_list`. I callee così riconosciuti
+vengono rimossi dalla mappa delle arità (`order.retain`), esattamente come i
+thunk d'import (#6600).
+
+Gate `RUSTRE_VARIADIC_NO_ARITY`, opt-in.
+
+### Un difetto MIO, trovato misurando
+
+Prima versione: finestra limitata alle prime 16 istruzioni. **Effetto zero**
+(476 attivazioni D9 prima e dopo). Causa: nel caso che aveva motivato la guardia
+(`0x140011230`) la coppia `mov`/`lea` sta a `0x140011284`, ~0x54 byte dopo
+l'ingresso — **fuori dalla finestra**. Allargata a tutto il corpo: il pattern
+resta specifico (il `lea` deve puntare *esattamente* allo slot salvato) e un
+falso positivo costa solo «nessuna evidenza di arità», la direzione prudente.
+
+## 33.2 Misura su `sample7_cpp`
+
+| | correct | OVER | UNDER | pct |
+|---|---|---|---|---|
+| baseline | 122 | 6 | 7 | 90,37 |
+| `PROTO_ARITY` (#6650) | 128 | 6 | 1 | 94,81 |
+| **`PROTO_ARITY` + `VARIADIC_NO_ARITY`** | **131** | **3** | **1** | **97,04** |
+
+**OVER 6 → 3, UNDER fermo a 1.** Entrambe le direzioni nella forma richiesta dai
+criteri di §18.4.
+
+## 33.3 Controlli
+
+| controllo | esito |
+|---|---|
+| compilazione (120 file) | **120/120**, come la baseline |
+| `callsite_consistency` | OVER 161→**204**, UNDER 203→**95**, totale 364→**299** |
+
+⚠ Il totale delle incoerenze **scende di 65**, ma gli OVER **salgono di 43**
+mentre gli UNDER crollano di 108. È coerente con l'intervento: le definizioni
+hanno guadagnato parametri (#6650) e le arità dei callee variadici sono sparite
+(#6680), quindi più call site passano ora *più* argomenti di quanti la
+definizione dichiari. **Netto positivo, ma non uniforme** — va detto, non
+nascosto dietro il totale.
+
+## 33.4 I 3 OVER rimasti, con causa
+
+| funzione | want/got | causa |
+|---|---|---|
+| `_pei386_runtime_relocator` | 0/4 | ordine di indirizzo nei cicli (§26) — serve liveness su CFG |
+| `pthread_cond_signal` | 1/3 | il terzo parametro esce `double` → file XMM (§31.2), non ancora indagato |
+| `pthread_mutex_timedlock32` | 2/4 | da indagare |
+
+## 33.5 Riepilogo dei guadagni misurati della sessione
+
+| intervento | metrica | prima | dopo |
+|---|---|---|---|
+| `JUMPOUT` → tail call (#6620) | `JUMPOUT` nel corpus | 18 | **0** |
+| — | `goto` | 0 | 0 (invariato) |
+| `behavior.py` una sola esecuzione | costo di una misura completa | ~62 min | ~32 min (atteso) |
+| `PROTO_ARITY` + `VARIADIC_NO_ARITY` | arity su `sample7_cpp` | 122/135 | **131/135** |
+| — | UNDER | 7 | **1** |
+| — | OVER | 6 | **3** |
+
+Tutti e tre i gate nuovi sono **opt-in**: il default-ON richiede una `measure.sh`
+completa con `behaviour` su albero stabile (§30.5).
+
+---
+
+# Round 34 — 2026-08-18 — 🔴 L'ORACOLO RISPONDE: lo `0 goto` è in parte PERDITA DI CODICE
+
+## 34.1 Cablato `CfsValidator` (#6700)
+
+`rustre_decompiler_cfs::CfsValidator::validate(ast, blocks)` — presente nel
+crate, **mai chiamato dal decompilatore** — verifica che l'AST strutturato
+contenga TUTTI i blocchi di partenza e altrimenti riporta `missing blocks: [...]`.
+
+Agganciato in `emit_structured_code` subito dopo `structurer.structure(entry)`,
+gate `RUSTRE_CFS_VALIDATE`, **effetto zero sull'emissione**. Il clone dei blocchi
+avviene solo a gate acceso (`ControlFlowStructurer` ne prende possesso).
+
+## 34.2 La domanda che poneva
+
+Il corpus emette **0 `goto` su 11342 file** — meglio di Hex-Rays, e confermato da
+un audit indipendente dell'utente su 3816 file. Ma quello zero ha **due cause
+possibili e opposte**:
+- **(a)** lo structuring chiude davvero ogni regione;
+- **(b)** i blocchi non strutturabili vengono **scartati in silenzio**, e i loro
+  `goto` spariscono con essi.
+
+Nessuna metrica esistente distingue i due casi.
+
+## 34.3 Risposta: è (b), su circa una funzione su sei
+
+| bucket | funzioni con blocchi PERSI | su totale | % |
+|---|---|---|---|
+| `sample7_cpp` | **193** | 994 | **19,4%** |
+| `sample1` | 7 | 43 | 16,3% |
+| `sample6_c` | 7 | 49 | 14,3% |
+| `sample11_c` | 8 | 51 | 15,7% |
+
+## 34.4 Il pattern è SISTEMATICO: si perde l'ULTIMO blocco
+
+```
+___w64_mingwthr_add_key_dtor    7 blocchi -> missing [BlockId(6)]    <- l'ultimo
+__mingw_TLScallback            18 blocchi -> missing [BlockId(17)]   <- l'ultimo
+_gnu_exception_handler         31 blocchi -> missing [BlockId(30)]   <- l'ultimo
+_FindPESectionByName           12 blocchi -> missing [BlockId(10), BlockId(11)]
+__do_global_ctors               9 blocchi -> missing [BlockId(8)]    <- l'ultimo
+___w64_mingwthr_remove_key_dtor 13 blocchi -> missing [BlockId(12)]  <- l'ultimo
+_matherr                       11 blocchi -> missing [BlockId(10)]   <- l'ultimo
+```
+
+Distribuzione su `sample7_cpp` (quanti blocchi persi per funzione):
+
+| blocchi persi | funzioni |
+|---|---|
+| **1** | **155** |
+| 2 | 18 |
+| 3 | 7 |
+| 4 | 4 |
+| 5 / 6 | 1 / 1 |
+| **15** | 1 |
+| **17** | 1 |
+
+155 su 193 perdono **esattamente un blocco, l'ultimo**. Due funzioni ne perdono
+15 e 17 — quelle sono perdite gravi.
+
+Nota: `drop_empty_blocks` gira **prima** e il validatore confronta l'AST con i
+blocchi che ha ricevuto DOPO quella potatura. Quindi i blocchi qui riportati non
+sono blocchi vuoti già scartati: sono blocchi passati allo structurer e non
+ricomparsi nell'AST.
+
+## 34.5 Perché è importante
+
+1. **Ridimensiona un risultato di punta.** Lo `0 goto` non è interamente merito
+   dello structuring: una parte è codice che non c'è più.
+2. **È una firma plausibile per i 12 CRASH e gli 11 DIVERGE** (§5.1): una
+   funzione a cui manca l'ultimo blocco — tipicamente epilogo, `ret`, o un ramo
+   d'uscita — compila benissimo e si comporta male. Esattamente il profilo di
+   «confidently wrong» che `check.sh` non vede.
+3. **Nessuna metrica esistente lo vedeva.** Serviva un oracolo, e stava nel crate
+   inutilizzato — il caso più netto della tesi di questo STATUS: la capacità
+   c'era, mancava il cablaggio.
+
+## 34.6 Da fare
+
+- Verificare se il blocco perso è **raggiungibile**: un blocco morto scartato è
+  corretto, un ramo d'uscita perso no. `CfsValidator` non lo distingue.
+- Le due funzioni con 15 e 17 blocchi persi vanno guardate per prime: lì la
+  perdita non può essere benigna.
+- Incrociare l'elenco delle funzioni con blocchi persi con i 12 CRASH e gli 11
+  DIVERGE di `behavior.py`: se si sovrappongono, la causa è trovata.
+
+⚠ Il gate resta opt-in ed è **diagnostico**: non corregge nulla, misura. Ma è la
+prima cosa da tenere accesa in un ciclo di lavoro sullo structuring.
+
+---
+
+# Round 35 — 2026-08-18 — ⚠ RIDIMENSIONAMENTO del §34.5: la perdita di blocchi NON spiega i DIVERGE
+
+## 35.1 L'incrocio
+
+§34.5 affermava che la perdita di blocchi era «una firma plausibile per i 12
+CRASH e gli 11 DIVERGE». **Verificato, e i dati non la sostengono.**
+
+Funzioni con blocchi persi, per bucket:
+
+| bucket | funzioni con blocchi persi |
+|---|---|
+| `sample6_c` | `__mingw_TLScallback`, `___w64_mingwthr_add_key_dtor`, `_matherr`, `__do_global_ctors`, `_FindPESectionByName`, `___w64_mingwthr_remove_key_dtor`, `_gnu_exception_handler` |
+| `sample1` | le stesse sette |
+| `sample11_c` | le stesse + **`matrix_trace`** |
+
+Funzioni testate da `behavior.py`:
+
+| bucket | funzioni |
+|---|---|
+| `sample6_c` | `classify`, `factorial`, `apply`, `count_set_flags`, `dot` |
+| `sample11_c` | `dispatch`, `punned_bits`, `pack_fields`, `my_strlen`, `matrix_trace` |
+| `sample1` | `accumulate`, `find_max` |
+
+**Nessuna delle funzioni con DIVERGE dimostrato perde blocchi.** `classify`,
+`my_strlen`, `apply`, `count_set_flags` non compaiono nell'elenco. Le loro cause
+restano quelle isolate ai §26, §11, §9: difetti di **tipo** e di versione
+registro.
+
+## 35.2 E una sovrapposizione che smentisce l'ipotesi
+
+`matrix_trace` (`sample11_c`) **perde blocchi** ed è testata dal comportamento.
+Il suo esito in `behavior.txt` è **`AGREE  matrix_trace  (3 curated)`**.
+
+Quindi **almeno una perdita di blocchi è benigna**: il blocco scartato era morto,
+e la funzione si comporta correttamente. `CfsValidator` dice che un blocco manca,
+**non** che servisse.
+
+## 35.3 Cosa resta valido del §34, e cosa va corretto
+
+**Resta valido:**
+- il fatto misurato: **~15-19% delle funzioni perde blocchi** durante lo
+  structuring (193/994 in `sample7_cpp`);
+- il pattern: 155 su 193 perdono **esattamente l'ultimo blocco**;
+- il ridimensionamento dello `0 goto`: una parte di quello zero è codice che non
+  compare nell'AST, non structuring riuscito;
+- il valore del cablaggio: l'oracolo stava nel crate inutilizzato e nessuna delle
+  sei metriche esistenti vedeva questa classe.
+
+**Va corretto:** l'ipotesi che questa perdita spieghi i fallimenti
+comportamentali. **Non dimostrata, e un controesempio (`matrix_trace` AGREE) la
+indebolisce.**
+
+## 35.4 Le due domande ancora aperte
+
+1. **Il blocco perso è raggiungibile?** Un blocco morto scartato è corretto; un
+   ramo d'uscita perso no. Serve un'analisi di raggiungibilità sul CFG di
+   partenza — di nuovo `rustre-analysis-cfg`, con `reachable_from` fra i 355
+   elementi inutilizzati.
+2. **Le due funzioni che perdono 15 e 17 blocchi**: lì la perdita non può essere
+   benigna, e vanno guardate per prime.
+
+## 35.5 Nota di metodo
+
+Il §34 è stato scritto con l'entusiasmo di un dato forte (19% di funzioni con
+codice perso) e ci ha attaccato una spiegazione plausibile mai verificata. Un
+solo incrocio l'ha smontata in due minuti.
+
+È la stessa lezione delle otto ipotesi cadute, applicata a un risultato **mio e
+positivo** invece che a una diagnosi altrui: un dato vero non autorizza la
+conclusione che gli sta comoda accanto.
+
+---
+
+# Round 36 — 2026-08-18 — 🔴 La perdita di blocchi è MOLTO peggiore di quanto misurato al §34
+
+## 36.1 ⚠ Il conteggio del §34.4 era SBAGLIATO — mio errore
+
+Il §34.4 riportava «155 funzioni perdono esattamente 1 blocco». **Falso.** Quel
+conteggio faceva `awk -F',' '{print NF}'` sull'**intera riga di log**, che
+contiene altre virgole oltre a quelle dentro `missing blocks: [...]`.
+
+Rifatto estraendo il contenuto delle parentesi (`cfsdist.py` in scratchpad).
+
+## 36.2 I numeri veri su `sample7_cpp`
+
+| | |
+|---|---|
+| funzioni con blocchi persi | **169** su 994 |
+| blocchi persi | **623** su 4935 nelle stesse funzioni = **12%** |
+
+Distribuzione per **frazione del corpo perduta**:
+
+| perdita | funzioni |
+|---|---|
+| **≥75% del corpo** | **4** |
+| 50-74% | 9 |
+| 25-49% | 5 |
+| <25% | 23 |
+| esattamente 1 blocco | 128 |
+
+I casi peggiori, con nome:
+
+| funzione | persi / totali | % |
+|---|---|---|
+| `sub_1400128F4` | 32 / 34 | **94%** |
+| `__mingw_pformat` | **131 / 164** | 79% |
+| `read_encoded_value_with_base` | 17 / 22 | 77% |
+| `d_type` | 76 / 115 | 66% |
+| `sub_140006194` | 74 / 118 | 62% |
+| `sub_14001F250` | 68 / 133 | 51% |
+
+## 36.3 Lettura corretta
+
+Il difetto ha **due popolazioni distinte**, e mescolarle nasconde quella grave:
+
+1. **128 funzioni perdono 1 solo blocco.** Probabilmente benigno: `matrix_trace`
+   è in questa fascia e il suo esito comportamentale è **AGREE** (§35.2).
+2. **18 funzioni perdono ≥25% del corpo, 4 ne perdono ≥75%.** Qui non può essere
+   codice morto: `__mingw_pformat` è l'implementazione di `printf`, e il file
+   emesso è di 180 righe con 131 blocchi su 164 mancanti — un **guscio**.
+
+Il §34 aveva quindi ragione sul fatto (la perdita esiste ed è diffusa) e torto
+sulla forma (non è «quasi sempre un blocco solo»).
+
+## 36.4 Perché nessuna metrica lo vedeva
+
+Un corpo mutilato **compila perfettamente**: `check.sh` non se ne accorge.
+`fidelity_arity.py` guarda la firma, non il corpo. `callsite_consistency` conta
+argomenti. `cross_build` confronta build fra loro, e se la mutilazione è
+uniforme le trova tutte d'accordo.
+
+Solo `behaviour` potrebbe vederlo — ma nessuna delle 63 funzioni testate è tra le
+18 gravi, quindi **non lo vede neanche lui**. È un difetto che il corpus attuale
+non copre.
+
+## 36.5 Prossimi passi
+
+1. Capire **perché** lo structurer scarta: `ControlFlowStructurer::structure`
+   restituisce un AST che non contiene quei blocchi. Se la causa è una regione
+   irriducibile non gestita, il rimedio esiste già nella catena
+   (`decompiler-cfs::LoopStructurer`, `analysis-cfg::LoopForest`, entrambi
+   inutilizzati).
+2. **Aggiungere una funzione mutilata al `behavior_spec.json`**, così la
+   metrica comportamentale copre questa classe. Oggi il corpus è cieco proprio
+   dove il difetto è più grave.
+3. Distinguere blocco morto da blocco raggiungibile
+   (`analysis-cfg::reachable_from`, inutilizzato).
+
+---
+
+# Round 37 — 2026-08-18 — ✅ LO STRUCTURER È INNOCENTE: scarta esattamente i blocchi IRRAGGIUNGIBILI
+
+## 37.1 La misura
+
+Esteso l'oracolo #6700 con il calcolo della raggiungibilità dall'entry sui
+blocchi che lo structurer riceve (BFS sui `successors`):
+
+| funzione | blocchi | raggiungibili | persi | superstiti (blocchi − persi) |
+|---|---|---|---|---|
+| `__mingw_pformat` | 164 | **33** | 131 | **33** |
+| `d_type` | 115 | **39** | 76 | **39** |
+| `read_encoded_value_with_base` | 22 | **5** | 17 | **5** |
+| `sub_1400128F4` | 34 | **2** | 32 | **2** |
+
+**I superstiti coincidono ESATTAMENTE con i raggiungibili, in tutti e quattro i
+casi.**
+
+## 37.2 Conclusione: il difetto non è dove lo cercavo
+
+`ControlFlowStructurer` scarta **precisamente** i blocchi irraggiungibili
+dall'entry. È il comportamento corretto: non perde codice vivo.
+
+Il §34 e il §36 attribuivano la perdita allo structuring. **Sbagliato.** Il
+difetto è **a monte**: il CFG contiene blocchi non collegati — 131 su 164 in
+`__mingw_pformat`.
+
+## 37.3 Secondo indizio: i blocchi sono troppi
+
+`__mingw_pformat` occupa `0x1400133a0..0x14001359c` = **508 byte** secondo
+`disasm_dump`, ma il CFG ne conta **164 blocchi**: ~3 byte per blocco,
+impossibile per x86-64.
+
+Due spiegazioni, non mutuamente esclusive:
+- gli **archi di successione** non vengono calcolati per alcune forme di salto,
+  e ogni blocco resta orfano;
+- il **confine di funzione** include codice che non le appartiene — e c'è già un
+  precedente misurato: due rilevatori di confine discordanti sulla stessa
+  funzione (57 vs 224 istruzioni, §23.1).
+
+## 37.4 Dove intervenire
+
+Non nello structurer. Nella **costruzione del CFG** —
+`build_cfg_from_instructions_with_tables` (§1.3), che trova i leader di blocco
+con `ins.mnemonic.to_lowercase()` e `parse_hex_target(ins.operands.trim())`, cioè
+**parsando stringhe di disassemblato**. Una forma di salto non riconosciuta dal
+parser testuale produce esattamente questo: blocco senza archi → irraggiungibile
+→ scartato → codice perso.
+
+Gli strumenti per farlo bene sono nella catena inutilizzata:
+`rustre-analysis-cfg` (355 elementi su 400 mai chiamati) con `reachable_from`,
+`LoopForest`, le frontiere di dominanza; e il CFG costruito sul **MLIL** invece
+che sul testo.
+
+## 37.5 Valore della sequenza §34 → §37
+
+Quattro round per arrivare da «0 goto, meglio di Hex-Rays» a una causa precisa:
+1. §34 — l'oracolo rivela che il 19% delle funzioni perde blocchi;
+2. §35 — l'incrocio smentisce che spieghi i DIVERGE;
+3. §36 — il conteggio corretto mostra che 4 funzioni perdono ≥75% del corpo;
+4. §37 — la raggiungibilità scagiona lo structurer e sposta il difetto sul CFG.
+
+Ogni passo ha corretto il precedente. Nessuno dei quattro sarebbe stato possibile
+senza cablare un componente che era già scritto e non veniva chiamato.
+
+---
+
+# Round 38 — 2026-08-18 — Il punto sensibile: i leader di blocco nascono da un parse di STRINGHE
+
+## 38.1 Il codice
+
+`build_cfg_from_instructions_with_tables` (`lib.rs:811`) individua i leader così:
+
+```rust
+for ins in instructions {
+    let m = ins.mnemonic.to_lowercase();
+    if is_branch_mnemonic(&m)
+        && let Some(t) = parse_hex_target(ins.operands.trim())
+    {
+        jump_targets.insert(t);
+    }
+}
+```
+
+Più i target delle jump table già risolte.
+
+## 38.2 Perché produce blocchi orfani
+
+Un salto il cui operando **non è un esadecimale semplice** non produce alcun
+target:
+- salto indiretto (`jmp *%rax`, `jmp *(%rdx,%rcx,8)`);
+- salto attraverso registro o memoria;
+- qualunque forma che `parse_hex_target` non copra.
+
+Il blocco che ne sarebbe la destinazione **non riceve un arco entrante da
+nessuno** → resta orfano → risulta irraggiungibile → lo structurer lo scarta
+(correttamente, §37) → il codice sparisce dall'output **senza alcun segnale**.
+
+È il meccanismo compatibile con i 131 blocchi scollegati su 164 di
+`__mingw_pformat` (§36.2).
+
+## 38.3 La conseguenza generale
+
+**Il CFG di path A nasce da un parsing di stringhe di disassemblato.** Ogni forma
+di salto non prevista dal parser testuale diventa codice perso in silenzio — e
+nessuna metrica lo vede, perché il risultato compila.
+
+È la stessa fragilità già osservata altrove:
+- i leader trovati con `ins.mnemonic.to_lowercase()` (§1.3);
+- l'analisi di liveness che scorre in ordine di indirizzo (§26);
+- due rilevatori di confine di funzione discordanti (§23.1).
+
+Tutte e tre hanno la stessa radice: **path A ragiona sul TESTO del disassemblato,
+non su un IR**.
+
+## 38.4 Dove porta
+
+Il rimedio non è aggiungere casi al parser — sarebbe rincorrere le forme una per
+una. È costruire il CFG **sul MLIL**, dove un salto indiretto è un nodo tipizzato
+e non una stringa da riconoscere. Cioè: **path B**.
+
+Questo è il quarto difetto indipendente che punta nella stessa direzione, ed è la
+giustificazione tecnica più forte trovata finora per l'obiettivo dell'utente
+(«path B unico»): non è una preferenza architetturale, è che path A non ha
+l'informazione necessaria.
+
+Strumenti pertinenti, tutti nella catena inutilizzata:
+`rustre-analysis-cfg` (355/400 inutilizzati) per archi e raggiungibilità,
+`rustre-analysis-vsa` per i target indiretti, `build_mlil_cfg` (già chiamata, il
+suo output non alimenta l'emissione, §1.3).
+
+---
+
+# Round 39 — 2026-08-18 — ⚠ RIBALTAMENTO: i blocchi «persi» sono codice di ALTRE funzioni
+
+## 39.1 La misura che cambia tutto
+
+Disassemblato `__mingw_pformat` (`0x1400133a0`):
+
+| | |
+|---|---|
+| istruzioni della funzione | **129** |
+| range | `0x1400133a0..=0x14001359c` (508 byte) |
+| salti condizionali | 19 |
+| `jmp` diretti | 2 |
+| `jmp` indiretti | **1** (`jmp *%rdx`) |
+| **blocchi nel CFG** | **164** |
+| **blocchi raggiungibili** | **33** |
+
+Con 129 istruzioni e 22 salti in tutto **non si possono avere 164 blocchi**.
+Ma **33 blocchi per 129 istruzioni fanno ~4 istruzioni per blocco**, che è la
+densità normale.
+
+## 39.2 Conclusione corretta
+
+Il flusso di istruzioni passato al costruttore del CFG **contiene molto più
+codice della funzione**. I 131 blocchi «persi» sono in gran parte **codice di
+ALTRE funzioni**, che lo structurer scarta correttamente perché irraggiungibile
+dall'entry di questa.
+
+**`__mingw_pformat` è probabilmente emessa CORRETTAMENTE.** I 33 blocchi
+superstiti sono i suoi.
+
+## 39.3 Cosa va corretto dei §34-38
+
+| affermazione | esito |
+|---|---|
+| §34: «lo `0 goto` è in parte perdita di codice» | **da ridimensionare**: è in parte scarto di codice ESTRANEO |
+| §36: «4 funzioni perdono ≥75% del corpo» | **falso**: non perdono il proprio corpo, scartano corpo altrui |
+| §37: «lo structurer scarta esattamente gli irraggiungibili» | **confermato e corretto** |
+| §38: «i leader nascono da un parse di stringhe» | **vero come fatto**, ma NON è la causa di questo fenomeno (un solo `jmp *%rdx` in tutta la funzione) |
+
+## 39.4 Il difetto vero, di nuovo lo stesso
+
+**Over-scan del confine di funzione.** È il difetto già misurato al §23.1 —
+`win64_param_regs_live_in` invocata tre volte sulla stessa funzione con corpi da
+57, 57 e 224 istruzioni — e ricompare qui in forma più visibile: un flusso che
+copre 164 blocchi dove la funzione ne ha 33.
+
+Conseguenze già osservate dello stesso difetto:
+- arità recuperate su corpi sbagliati (§23.2);
+- l'analisi di liveness che vede istruzioni di altre funzioni;
+- ora: CFG gonfiati di blocchi estranei.
+
+## 39.5 Cosa resta valido e utile
+
+- **L'oracolo `CfsValidator` funziona ed è prezioso**: ha portato a scoprire
+  l'over-scan da una direzione indipendente. Va tenuto acceso.
+- La misura di raggiungibilità aggiunta alla sonda è ciò che ha permesso di
+  distinguere «perdita» da «scarto corretto». Senza, la conclusione allarmante
+  del §34 sarebbe rimasta in piedi.
+- **La domanda aperta**: le 128 funzioni che perdono UN SOLO blocco. Lì l'over-scan
+  non spiega nulla (un blocco solo), e `matrix_trace` — che è in quella fascia —
+  risulta `AGREE`. Probabilmente benigno, **non verificato**.
+
+## 39.6 Nota di metodo — quinta correzione dello stesso filone
+
+§34 (allarme) → §35 (non spiega i DIVERGE) → §36 (conteggio sbagliato, mio) →
+§37 (structurer innocente) → §39 (è codice altrui).
+
+Cinque round, cinque conclusioni, ognuna che corregge la precedente. Il valore
+non è nell'ultima: è che ogni passaggio è stato **misurato e scritto**, quindi
+nessuno dovrà ripercorrerlo. Ma il costo è reale, e la lezione operativa è che un
+dato sorprendente va confrontato con una grandezza indipendente PRIMA di
+costruirci sopra una diagnosi — qui bastava contare le istruzioni della funzione.
+
+---
+
+# Round 40 — 2026-08-18 — ✅ L'over-scan è VOLUTO e CORRETTO — ma inquina le analisi senza filtro
+
+## 40.1 L'esperimento
+
+Esiste già il gate `RUSTRE_PDATA_EXTENT` (default ON), che semina l'estensione
+della scansione con la fine DICHIARATA in `.pdata` «così un `jmp` in avanti dopo
+il primo `ret` non tronca la funzione».
+
+| | con `.pdata` (default) | senza (`=0`) |
+|---|---|---|
+| `__mingw_pformat` — blocchi | **164** | **26** |
+| `__mingw_pformat` — raggiungibili | **33** | **22** |
+| `sub_1400128F4` | 34 blocchi / 2 raggiungibili | **assente** (nessuna perdita) |
+| funzioni con blocchi persi (bucket) | 193 | 164 |
+
+## 40.2 Confronto con la grandezza indipendente
+
+`disasm_dump` dà **129 istruzioni** per `__mingw_pformat`.
+
+- con `.pdata`: **33 blocchi raggiungibili ≈ 132 istruzioni** → **combacia**;
+- senza: 22 blocchi ≈ 88 istruzioni → la funzione è **TRONCATA**.
+
+**L'estensione `.pdata` fa esattamente il suo lavoro.** I 131 blocchi in più sono
+codice vicino tirato dentro dalla scansione, e il filtro di raggiungibilità dello
+structurer li elimina correttamente.
+
+## 40.3 Conclusione: nessun difetto nell'EMISSIONE
+
+**over-scan + filtro di raggiungibilità = risultato corretto.**
+`__mingw_pformat` è emessa bene. Spegnere `RUSTRE_PDATA_EXTENT` la
+peggiorerebbe (troncamento).
+
+Questo chiude definitivamente il filone §34-§39: **non c'era perdita di codice.**
+
+## 40.4 MA il costo lo pagano le analisi senza filtro
+
+Il flusso completo (164 blocchi, 224 istruzioni al §23.1) viene passato **anche**
+alle analisi che NON filtrano per raggiungibilità:
+
+- `win64_param_regs_live_in` — calcola «letto prima di scritto» su istruzioni di
+  **altre funzioni**;
+- `win64_recovered_arity` — idem;
+- `arities_from_seeds` — costruisce le arità dei callee sugli stessi flussi
+  gonfiati.
+
+È il collegamento che mancava fra due difetti che sembravano indipendenti:
+**i parametri fantasma (§26, §31) e l'over-scan (§23.1, §39.4) sono lo stesso
+fenomeno visto da due lati.** Lo structurer si difende con la raggiungibilità;
+le analisi di liveness no.
+
+## 40.5 Il rimedio, e perché è esattamente il cablaggio della catena
+
+Le analisi di liveness/arity devono ricevere **solo i blocchi raggiungibili
+dall'entry**, come già fa lo structurer. Serve quindi la raggiungibilità sul CFG
+**prima** delle analisi, non solo dentro lo structuring.
+
+Strumento: `rustre-analysis-cfg::reachable_from` — fra i **355 elementi
+inutilizzati su 400** di quel crate. Oppure il CFG MLIL (`build_mlil_cfg`, già
+chiamata, il cui output non alimenta path A).
+
+Il rimedio ha un test di verifica immediato e già pronto: se funziona, i
+parametri fantasma di `_pei386_runtime_relocator` (want 0, got 4) devono
+scendere, e `arity` OVER da 3 verso 1.
+
+## 40.6 Bilancio del filone §34-§40
+
+Sette round. Conclusione finale: **nessun difetto dove sembrava, un difetto
+reale altrove**, e i due difetti che sembravano separati sono uno solo.
+
+Il valore netto:
+- una classe di allarme falso chiusa definitivamente (perdita di codice);
+- un collegamento causale nuovo fra over-scan e parametri fantasma;
+- un rimedio preciso con criterio di verifica già misurabile;
+- l'oracolo `CfsValidator` cablato, che ha reso possibile tutto questo.
+
+Costo: sette round. La regola operativa che ne esce, già scritta al §39.6:
+**confrontare un dato sorprendente con una grandezza indipendente PRIMA di
+costruirci una diagnosi.** Qui la grandezza era «quante istruzioni ha la
+funzione», e costava trenta secondi.
+
+---
+
+# Round 41 — 2026-08-18 — Filtro di raggiungibilità cablato: funziona, ma NON muove l'arity
+
+## 41.1 Cosa ho implementato (#6710)
+
+`reachable_instruction_addrs` — visita ricorsiva del flusso dall'ingresso
+(fallthrough tranne dopo salto incondizionato o `ret`; target dei salti diretti
+risolvibili; un salto indiretto interrompe il fallthrough senza aggiungere
+target). Applicata in `apply_win64_calling_convention` prima delle analisi di
+liveness, gate `RUSTRE_LIVEIN_REACHABLE` (opt-in).
+
+Idea: dare alle analisi di liveness la stessa difesa che
+`ControlFlowStructurer` ha già (§37).
+
+## 41.2 Il filtro FUNZIONA
+
+Sonda `[LIVEIN-REACH]` su `sample7_cpp`:
+
+| | |
+|---|---|
+| invocazioni | 994 |
+| **in cui il filtro rimuove istruzioni** | **435** (44%) |
+| esempi | `330 -> 319`, `53 -> 49`, `44 -> 43` |
+
+## 41.3 Ma l'arity NON cambia
+
+| | correct | OVER | UNDER |
+|---|---|---|---|
+| senza filtro (§33) | 131 | 3 | 1 |
+| **con filtro** | **131** | **3** | **1** |
+
+## 41.4 L'ipotesi del §40.4 NON regge
+
+§40.4 sosteneva che «i parametri fantasma e l'over-scan sono lo stesso fenomeno
+visto da due lati». **Non confermato.**
+
+Il motivo, visibile nei numeri della sonda: le riduzioni sono **modeste** — una
+decina di istruzioni per funzione — mentre il gonfiore osservato al §39 era nei
+**blocchi del CFG** (164 contro 33 raggiungibili), che arrivano da un percorso
+diverso. Il flusso passato alla liveness è già quasi pulito.
+
+Quindi i 3 OVER residui hanno un'altra causa, ancora da trovare.
+
+## 41.5 Cosa resta
+
+- Lo strumento è cablato, testato e **misurato a effetto zero sull'arity**: non
+  va acceso aspettandosi un guadagno lì. Puo' servire ad altre analisi che
+  ricevono lo stesso flusso (`win64_recovered_arity`, `arities_from_seeds`) —
+  non verificato.
+- Da capire: **perché il CFG ha 164 blocchi se il flusso ha ~129 istruzioni**.
+  I due numeri non sono compatibili, e la spiegazione «il flusso è gonfio» è
+  appena stata smentita. Probabile che i blocchi nascano da `jump_targets` che
+  include indirizzi FUORI dal flusso (target di jump table), creando blocchi
+  senza istruzioni.
+- I 3 OVER rimasti: `_pei386_runtime_relocator` (0/4), `pthread_cond_signal`
+  (1/2 dopo #6690), `pthread_mutex_timedlock32` (2/4).
+
+## 41.6 Nota
+
+Terza ipotesi caduta in questo filone, ma il costo è stato basso: un'ora fra
+implementazione e misura, e resta uno strumento riutilizzabile. La differenza
+rispetto ai round 15-24 è che ora ogni ipotesi si verifica in 40 secondi invece
+che in un'ora — la scorciatoia di misura del §29.1 ha cambiato l'economia del
+lavoro.
+
+---
+
+# Round 42 — 2026-08-18 — 🎯 LOCALIZZATA la lacuna che causa il DIVERGE `my_strlen`
+
+## 42.1 Il codice macchina dà DUE segnali, entrambi inequivocabili
+
+`my_strlen` (`sample11_c`, `0x140001550`):
+```asm
+0x140001550  cmpb $0, (%rcx)     <- suffisso 'b': accesso a memoria di 1 BYTE
+0x140001555  mov  %rcx, %rax
+0x140001560  add  $1, %rax       <- passo di 1
+0x140001564  cmpb $0, (%rax)     <- 1 BYTE
+0x140001569  sub  %rcx, %rax
+```
+Elemento da **1 byte** → `char *`. Sia la larghezza dell'accesso sia il passo lo
+dicono.
+
+## 42.2 Cosa emette il decompilatore
+
+```c
+__int64 __fastcall my_strlen(char *a1) {   // <- PARAMETRO corretto
+    __int64 *result;                        // <- LOCALE sbagliato (8 byte)
+    result = (__int64 *)a1;
+    do { ++result; } while (*result != 0);  // avanza di 8, legge 8
+```
+
+Il **parametro** è tipizzato bene, la **variabile di ciclo** no. Due percorsi
+diversi: uno cablato, l'altro no.
+
+## 42.3 La lacuna, esatta
+
+`att_mem_access_width(mnem, ops)` (`lib.rs:3340`) estrae la larghezza
+dell'accesso a memoria dal suffisso AT&T. È **testata** (7 asserzioni a
+`lib.rs:39437-39447`) e ha **un solo chiamante produttivo**, a `lib.rs:5936`.
+
+Quel chiamante cicla su `reg_to_param`:
+```rust
+for &(reg, p) in &reg_to_param {
+    ...
+    match att_mem_access_width(mnem, ops) {
+        Some(1) => obs[p].byte_read = true,
+        ...
+```
+**Solo i 4 registri argomento mappati a PARAMETRI.** Le variabili LOCALI non
+vengono mai osservate.
+
+Il commento sopra quel blocco documenta pure l'importanza della cosa: «corpus-wide
+there were literally ZERO `char *` parameters, because that verdict needs
+`byte_read`».
+
+## 42.4 Il rimedio
+
+Applicare la stessa osservazione ai **locali promossi a puntatore**: `result`
+vive in `rax`, e `cmpb $0, (%rax)` dice 1 byte.
+
+Punto di aggancio: `promote_pointer_locals_rec` (`lib.rs:5077`) e
+`scalar_elem_size` (`lib.rs:5338`), che oggi decidono la dimensione
+dell'elemento dal **tipo dichiarato** invece che dall'**accesso osservato**.
+
+## 42.5 Perché vale
+
+Chiude **due DIVERGE con causa dimostrata**:
+- `my_strlen` — elemento 8 byte invece di 1 (§8);
+- `count_set_flags` — elemento 8 invece di 4, con doppio scalamento ×32 (§11).
+
+E in `count_set_flags` c'è un indizio in più: **la scala corretta (4) è già stata
+recuperata** ed è nel codice emesso (`*(a1 + count*4)`). L'informazione per
+dedurre `uint32_t *` è già presente; manca di essere usata per tipizzare la base.
+
+## 42.6 Stato
+
+Lacuna **localizzata e documentata**, implementazione **non ancora fatta**. È il
+prossimo intervento a valore più alto: agisce sulla metrica che misura
+l'obiettivo dichiarato (`behaviour`), non su un proxy.
+
+---
+
+# Round 43 — 2026-08-18 — Tentativo #6720: la regola D7 esisteva già, ma il testo ha perso l'informazione
+
+## 43.1 Scoperta: la regola giusta ESISTE
+
+`promote_pointer_locals_rec` (`lib.rs:5077`) contiene già la classe di bug **D7**:
+```rust
+if ty == "__int64" && !subscripted.contains(name) {
+    match uniform_self_stride(code, name) {
+        Some(4) => ty = "int",
+        Some(2) => ty = "__int16",
+        Some(1) => ty = "char",
+        _ => {}
+    }
+}
+```
+Un `__int64` dereferenziato e auto-avanzato di passo < 8 viene ritipizzato al
+tipo largo quanto il passo. **È esattamente la regola che serve a `my_strlen`.**
+
+## 43.2 Primo difetto trovato: `uniform_self_stride` non vedeva `++name`
+
+Riconosceva solo `name += K`, `name -= K`, `name = name ± K`. **Non** `++name`
+né `name++` — che è la forma con cui il codice emesso avanza i puntatori.
+Aggiunte entrambe (#6720).
+
+## 43.3 MA la misura dice effetto ZERO
+
+| | arity | puntatori ritipizzati per passo |
+|---|---|---|
+| prima | 131/135 (3 over, 1 under) | 161 |
+| dopo | **131/135 (3 over, 1 under)** | **161** |
+
+Identici. `my_strlen` esce ancora `__int64 *result`.
+
+## 43.4 Perché — due ragioni, la seconda decisiva
+
+**(a) La regola non viene interrogata.** D7 agisce quando promuove uno SCALARE
+`__int64 name;` a puntatore. In `my_strlen` la variabile è **già** dichiarata
+`__int64 *result;` — promossa da un altro percorso — e la regola non la rivede.
+
+**(b) L'informazione è già persa.** Nel C emesso `++result` su un `__int64 *`
+avanza **già di 8 byte**: il passo nel testo è in unità di ELEMENTO, non in byte.
+Il passo macchina reale (1 byte, da `add $1,%rax` con `cmpb`) non è più
+ricostruibile dal testo.
+
+**Nessuna passata testuale può correggere questo difetto.**
+
+## 43.5 Conseguenza per il piano
+
+Il rimedio deve stare **a livello di istruzioni**, dove `cmpb` e `add $1` sono
+ancora visibili: estendere `att_mem_access_width` (`lib.rs:3340`, testata, **un
+solo chiamante** limitato ai 4 registri argomento) ai **locali promossi a
+puntatore**.
+
+È un'ulteriore conferma della tesi generale di questo STATUS: path A ragiona sul
+TESTO del C emesso, e a quel punto informazioni che il binario aveva sono già
+state distrutte. Quarto caso documentato, dopo §26 (liveness in ordine di
+indirizzo), §38 (leader da parse di stringhe) e §23 (confini di funzione).
+
+## 43.6 Stato della modifica
+
+Tenuta, con il numero rosso scritto nel commento in-source: semanticamente
+corretta, costo nullo, **effetto zero misurato**. Non va contata come una
+correzione, e chi la trova non deve credere che stia facendo qualcosa.
+
+---
+
+# Round 44 — 2026-08-18 — ⭐ PATH B CALCOLA GIUSTO DOVE PATH A SBAGLIA — dimostrato
+
+## 44.1 L'esperimento
+
+`RUSTRE_HLIL=1` su `sample11_c` (51 file `.hlil.c` generati), funzione
+`my_strlen` — il DIVERGE con causa dimostrata al §8 (elemento puntatore 8 byte
+invece di 1, esiti multipli di 8).
+
+## 44.2 I due output a confronto
+
+**PATH A** (quello che le metriche misurano):
+```c
+__int64 __fastcall my_strlen(char *a1) {
+    __int64 *result;                       // <- elemento 8 byte
+    result = (__int64 *)a1;
+    do { ++result; } while (*result != 0); // avanza 8, legge 8
+    result = (__int64 *)((__int64)result - (__int64)a1);
+    return (__int64)result;
+}
+```
+Esiti `behavior.py`: atteso 1/11/16, emesso **48/72/136** (= 6×8, 9×8, 17×8).
+**DIVERGE.**
+
+**PATH B** (`.hlil.c`):
+```c
+__int64 my_strlen(uint64_t a1)
+{
+    uint64_t v1;
+    v1 = a1;
+    do {
+        v1 = (v1 + 1);                     // <- passo 1, in BYTE
+        var_tmp0 = (*(uint8_t *)v1 - 0);
+    } while (*(uint8_t *)v1 != 0);         // <- lettura di 1 byte, TIPIZZATA
+    v1 = (v1 - a1);
+    return v1;
+}
+```
+`v1` parte da `a1`, avanza di **1 byte** per iterazione, legge **1 byte**, e
+ritorna `v1 - a1` = numero di byte percorsi. **È la lunghezza corretta.**
+
+## 44.3 Perché path B non può sbagliare qui
+
+Path B **non tenta di indovinare un tipo puntatore**: tiene `v1` come intero e
+mette il cast sull'ACCESSO (`*(uint8_t *)v1`), preso dalla larghezza che il MLIL
+ha già tipizzata. Non c'è scalamento implicito da sbagliare.
+
+Path A invece promuove `result` a `__int64 *` e da quel momento ogni `++` vale 8
+byte per costruzione. L'informazione sul passo reale è persa (§43.4).
+
+## 44.4 Il confronto ribalta l'assunto abituale
+
+| | path A | path B |
+|---|---|---|
+| leggibilità | **migliore** (`char *a1`, `++result`, niente cast) | peggiore (`var_tmp0`, cast espliciti) |
+| **correttezza** | **DIVERGE** | **CORRETTA** |
+
+Path B è più brutto e **più giusto**. Finora questo STATUS ha documentato path B
+come «indietro» (§1.4: 9497 `var_tmp0`, 7447 `goto`, nomi e argomenti persi) — ed
+è vero sulla FORMA. Ma sulla **semantica**, almeno su questo caso, è path A a
+sbagliare.
+
+## 44.5 Conseguenza per l'obiettivo «path B unico»
+
+È la giustificazione più forte trovata finora, e la prima **dimostrata su un
+comportamento misurato** invece che su un'ispezione del codice:
+
+- §26, §38, §23, §43 mostrano che path A perde informazione del binario perché
+  lavora sul testo;
+- questo round mostra che path B, sullo stesso caso, **conserva quella
+  informazione e produce il risultato giusto**.
+
+Il divario di path B (§1.4) è di FORMA — temporanei, goto, nomi — e la forma si
+recupera cablando i crate. Il difetto di path A è di SOSTANZA, e non si recupera
+senza cambiare il formato su cui lavora.
+
+## 44.6 Prossima verifica proposta
+
+Misurare `behavior.py` sui file `.hlil.c` invece che sui `.c`: oggi l'harness
+legge solo path A. Se path B vince su `my_strlen` e `count_set_flags`, il numero
+15/63 va rifatto per path B — e sarebbe la misura che decide la commutazione.
+
+⚠ Richiede di insegnare a `behavior.py` a leggere `*.hlil.c`, e i `.hlil.c`
+hanno bisogno di `RUSTRE_HLIL=1` in fase di generazione.
+
+---
+
+# Round 45 — 2026-08-18 — `behavior.py --path-b`: la misura che rende DECIDIBILE la scelta
+
+## 45.1 Il problema
+
+`behavior.py` è l'unica metrica che misura l'obiettivo dichiarato (compila,
+linka, **esegue** e confronta). Ma legge **solo i `.c` di path A**: due filtri
+espliciti (`if not f.endswith(".c") or f.endswith(".hlil.c")`) escludono path B.
+
+Conseguenza: il vantaggio semantico di path B dimostrato al §44 —
+`my_strlen` calcolata **giusta** da path B e sbagliata da path A — è
+**invisibile alla metrica**. Finché è così, la scelta fra i due percorsi resta
+un'opinione invece che un numero.
+
+## 45.2 Cosa ho implementato
+
+`behavior.py --path-b`: inverte il filtro e misura le unità `*.hlil.c`.
+
+- flag `PATH_B` a livello di modulo + helper `_is_emitted_unit(fname)`;
+- i due filtri duplicati sostituiti da una chiamata all'helper (erano copie
+  esatte: un cambiamento in uno solo sarebbe stato un difetto silenzioso);
+- documentato in-source che lo snapshot deve essere generato con
+  `RUSTRE_HLIL=1`, altrimenti non esistono `.hlil.c` e ogni funzione riporta
+  `NOT_EMITTED` — un modo facile di leggere «path B fa schifo» quando invece non
+  è stato generato.
+
+Verificato: `ast.parse` OK, il flag compare in `--help`.
+
+## 45.3 Corpus di prova generato
+
+`RUSTRE_HLIL=1` su `sample11_c`, `sample6_c`, `sample1`:
+**143 file `.c` e 143 `.hlil.c`** — un `.hlil.c` per ogni funzione, quindi path B
+copre l'intero campione e il confronto è alla pari.
+
+Le funzioni testate in quei tre bucket includono i DIVERGE con causa dimostrata:
+`my_strlen` (§8), `count_set_flags` (§11), `classify` (§6), `apply` (§9),
+`accumulate` (§10).
+
+## 45.4 Cosa aspettarsi, e cosa NON concludere
+
+Path B è **indietro sulla forma** (§1.4: 9497 `var_tmp0`, 7447 `goto`, nomi e
+argomenti persi), quindi è plausibile che perda su `LINK_FAIL` e `COMPILE_FAIL`.
+Il punto della misura **non** è che path B vinca in totale: è vedere se vince
+**sui DIVERGE**, cioè dove path A produce codice che gira e risponde sbagliato.
+
+Un path B con più `LINK_FAIL` ma meno `DIVERGE` è un percorso **più giusto e meno
+completo** — e la parte mancante (§1.4) è quella che si recupera cablando i crate,
+mentre il difetto di path A (§43.4) non si recupera senza cambiare formato.
+
+⚠ Da non fare: confrontare le percentuali totali come se fossero commensurabili.
+Sono due popolazioni con difetti di natura diversa.
+
+## 45.5 Stato
+
+Misura in esecuzione al momento della scrittura. È la prima volta che path B
+viene sottoposto alla metrica comportamentale.
+
+---
+
 <!-- I round successivi si aggiungono qui sotto. Non rimuovere nulla di sopra. -->

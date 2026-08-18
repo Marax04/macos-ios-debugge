@@ -523,8 +523,13 @@ impl MispQuery {
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Execute a search (mock implementation).
-    pub async fn execute(&self, search: &MispSearch) -> Result<SearchResult, String> {
+    /// Build a SYNTHETIC result shaped like a MISP reply.
+    ///
+    /// Generated entirely from the request; it matches nothing.  Kept so the
+    /// pagination and export code can be exercised without a MISP instance,
+    /// and deliberately not reachable from [`Self::execute`].
+    #[must_use]
+    pub fn synthetic_result(&self, search: &MispSearch) -> SearchResult {
         let count = search.pagination.page_size.min(3);
         let events: Vec<SearchEventResult> = (1..=count as u64)
             .map(|i| {
@@ -532,7 +537,7 @@ impl MispQuery {
                 SearchEventResult {
                     id: i,
                     uuid: format!("00000000-0000-0000-0000-{i:012x}"),
-                    info: format!("Mock Event {i}"),
+                    info: format!("SYNTHETIC fixture event {i} - not a MISP result"),
                     date: "2024-01-15".to_string(),
                     threat_level_id: if is_high_threat { 1 } else { 4 },
                     attribute_count: (i as usize) * 3,
@@ -549,23 +554,57 @@ impl MispQuery {
         let mut pagination = search.pagination.clone();
         pagination.has_next = count > 0;
 
-        Ok(SearchResult {
+        SearchResult {
             events,
             pagination,
             query_info: format!("page={}", search.pagination.page),
-        })
+        }
+    }
+
+    /// Execute a search against the configured MISP instance.
+    ///
+    /// This builder has no HTTP transport.  It used to return up to three
+    /// events named "Mock Event N", with `threat_level_id` taken from the
+    /// query filter, as if they had matched.
+    ///
+    /// The real search is [`crate::client::MispClient::search_by_ioc`].
+    ///
+    /// # Errors
+    ///
+    /// Always returns a message naming the required network lookup.
+    pub async fn execute(&self, search: &MispSearch) -> Result<SearchResult, String> {
+        let _ = search;
+        Err(format!(
+            "network lookup required: executing this MISP search needs a live instance              at {}; no events were returned and none were invented.",
+            self.server_url
+        ))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
     /// Execute a search and export the results in the given format.
+    ///
+    /// The export step is offline and real; the search step needs the live
+    /// instance, so this fails exactly where [`Self::execute`] does.
     pub async fn export(
         &self,
         search: &MispSearch,
         format: ExportFormat,
     ) -> Result<String, String> {
         let result = self.execute(search).await?;
+        Self::export_result(&result, format)
+    }
+
+    /// Serialise a [`SearchResult`] the caller already holds.
+    ///
+    /// Purely offline: it reshapes the rows it is given and adds nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message if JSON serialisation fails, or if the format has no
+    /// serialiser here.
+    pub fn export_result(result: &SearchResult, format: ExportFormat) -> Result<String, String> {
         match format {
             ExportFormat::Json => {
                 serde_json::to_string_pretty(&result.events)
@@ -593,7 +632,9 @@ impl MispQuery {
                 }
                 Ok(text)
             }
-            _ => Ok(format!("Export as {format} not implemented in mock")),
+            _ => Err(format!(
+                "no exporter for {format} in rustre-ti-misp; nothing was written"
+            )),
         }
     }
 
@@ -919,51 +960,64 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_execute_returns_events() {
+    async fn test_execute_reports_network_lookup() {
         let search = MispSearch::new();
-        let result = query().execute(&search).await.unwrap();
+        let err = query().execute(&search).await.unwrap_err();
+        assert!(err.contains("network lookup required"), "{err}");
+        assert!(err.contains("none were invented"), "{err}");
+    }
+
+    #[test]
+    fn test_synthetic_result_is_labelled() {
+        let search = MispSearch::new();
+        let result = query().synthetic_result(&search);
         assert!(!result.is_empty());
+        assert!(result.events.iter().all(|e| e.info.contains("SYNTHETIC")));
     }
 
     #[tokio::test]
     async fn test_execute_threat_level_filter() {
         let search = MispSearch::new()
             .with_event_filter(EventFilter::new().by_threat_level(1));
-        let result = query().execute(&search).await.unwrap();
+        assert!(query().execute(&search).await.is_err());
+        let result = query().synthetic_result(&search);
         assert!(result.events.iter().all(|e| e.threat_level_id == 1));
     }
 
     #[tokio::test]
     async fn test_export_csv() {
         let search = MispSearch::new();
-        let csv = query().export(&search, ExportFormat::Csv).await.unwrap();
+        // The export path fails at the search, not at the serialiser.
+        assert!(query().export(&search, ExportFormat::Csv).await.is_err());
+        let r = query().synthetic_result(&search);
+        let csv = MispQuery::export_result(&r, ExportFormat::Csv).unwrap();
         assert!(csv.contains("id,uuid,info"));
     }
 
     #[tokio::test]
     async fn test_export_json() {
         let search = MispSearch::new();
-        let json = query().export(&search, ExportFormat::Json).await.unwrap();
+        let r = query().synthetic_result(&search);
+        let json = MispQuery::export_result(&r, ExportFormat::Json).unwrap();
         assert!(json.starts_with('['));
     }
 
     #[tokio::test]
     async fn test_export_text() {
         let search = MispSearch::new();
-        let text = query().export(&search, ExportFormat::Text).await.unwrap();
-        assert!(text.contains("Mock Event"));
+        let r = query().synthetic_result(&search);
+        let text = MispQuery::export_result(&r, ExportFormat::Text).unwrap();
+        assert!(text.contains("SYNTHETIC"));
     }
 
     #[tokio::test]
-    async fn test_lookup_value() {
-        let result = query().lookup_value("deadbeef1234").await.unwrap();
-        assert!(result.is_some());
+    async fn test_lookup_value_reports_network_lookup() {
+        // Previously answered Some(event) for any value at all.
+        assert!(query().lookup_value("deadbeef1234").await.is_err());
     }
 
     #[tokio::test]
-    async fn test_sensitive_events() {
-        let events = query().sensitive_events().await.unwrap();
-        assert!(!events.is_empty());
-        assert!(events.iter().all(|e| e.threat_level_id == 1));
+    async fn test_sensitive_events_reports_network_lookup() {
+        assert!(query().sensitive_events().await.is_err());
     }
 }

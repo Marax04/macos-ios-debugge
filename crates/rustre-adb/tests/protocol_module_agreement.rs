@@ -11,7 +11,6 @@
 //! different protocol than the other half implements — and no test inside either
 //! module can see it.
 
-use std::io::Read;
 
 use rustre_adb::adb_protocol::{
     AdbMessage as ProtoMessage, CMD_AUTH, CMD_CLSE, CMD_CNXN, CMD_OKAY, CMD_OPEN, CMD_SYNC,

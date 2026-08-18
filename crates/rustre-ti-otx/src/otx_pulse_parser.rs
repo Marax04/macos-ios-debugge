@@ -246,29 +246,38 @@ impl OtxPulse {
         !self.attack_ids.is_empty()
     }
 
-    /// Create a sample pulse for unit tests.
+    /// Create a SYNTHETIC pulse for unit tests.
+    ///
+    /// This is a fixture with the shape of an OTX pulse and none of the
+    /// content: its indicators are drawn from the RFC 5737 / RFC 2606
+    /// documentation ranges and it names no real campaign, actor or family.
+    /// It must never be served as a threat-intelligence result.
     #[must_use]
     pub fn sample() -> Self {
         Self {
-            id: "pulse-abc-123".to_string(),
-            name: "Emotet Spam Campaign Q1 2024".to_string(),
-            description: Some("Fresh Emotet IOCs from Q1 2024 spam campaign.".to_string()),
-            author_name: "ti_analyst".to_string(),
+            id: "synthetic-test-pulse-0001".to_string(),
+            name: "SYNTHETIC TEST PULSE - not threat intelligence".to_string(),
+            description: Some(
+                "Locally generated fixture used by rustre-ti-otx unit tests.                  It describes no real campaign and its indicators are                  documentation-range placeholders."
+                    .to_string(),
+            ),
+            author_name: "rustre-ti-otx-test-fixture".to_string(),
             tlp: Some("white".to_string()),
             threat_level_id: Some(3),
-            tags: vec!["emotet".to_string(), "spam".to_string(), "banking-trojan".to_string()],
+            tags: vec!["synthetic".to_string(), "fixture".to_string(), "not-real".to_string()],
             industries: vec!["finance".to_string()],
             targeted_countries: vec!["DE".to_string(), "FR".to_string()],
             attack_ids: vec!["T1071".to_string(), "T1055".to_string()],
             indicators: vec![
-                OtxIndicator::ip(1, "185.220.101.1"),
-                OtxIndicator::domain(2, "evil-c2.example.com"),
+                // RFC 5737 TEST-NET-1 and RFC 2606 reserved name.
+                OtxIndicator::ip(1, "192.0.2.1"),
+                OtxIndicator::domain(2, "c2.example.invalid"),
                 OtxIndicator::sha256(
                     3,
                     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
                 ),
             ],
-            malware_families: vec!["Emotet".to_string()],
+            malware_families: vec!["SyntheticFixtureFamily".to_string()],
             created: "2024-01-10T08:00:00Z".to_string(),
             modified: "2024-01-11T09:00:00Z".to_string(),
             subscriber_count: 1234,
@@ -629,7 +638,8 @@ mod tests {
         let parser = make_parser();
         let json = sample_pulse_json();
         let pulse = parser.parse_pulse(&json).expect("should parse");
-        assert_eq!(pulse.name, "Emotet Spam Campaign Q1 2024");
+        assert_eq!(pulse.name, OtxPulse::sample().name);
+        assert!(pulse.name.contains("SYNTHETIC"));
         assert_eq!(pulse.indicators.len(), 3);
     }
 

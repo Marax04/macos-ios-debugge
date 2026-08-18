@@ -2,7 +2,7 @@
 
 use rustre_diff::{
     BinaryDiff, ChangeType, DiffEngine, DiffError, ExportDiff, ExportEntry, FuncFingerprint,
-    FuncMatch, FunctionDiff, MatchKind, NamedBinaryDiff, byte_histogram_similarity,
+    FuncMatch, FunctionDiff, MatchKind, byte_histogram_similarity,
     combined_byte_similarity, diff_by_name, diff_exports, lcs_similarity, ngram_jaccard_similarity,
     simple_hash,
 };

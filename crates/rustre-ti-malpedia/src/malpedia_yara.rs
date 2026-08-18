@@ -1253,12 +1253,21 @@ mod tests {
     }
 
     #[test]
-    fn test_downloader_mock_download() {
+    fn test_downloader_reports_missing_transport() {
         let mut d = YaraDownloader::new();
-        let f = d.download_family("win.emotet").unwrap();
-        assert_eq!(f.family, "win.emotet");
-        assert!(d.last_download.is_some());
-        assert_eq!(d.total_downloaded, 1);
+        let err = d.download_family("win.emotet").unwrap_err();
+        assert!(err.to_string().contains("no network lookup performed"));
+        // No download happened, so the counters must not claim one did.
+        assert!(d.last_download.is_none());
+        assert_eq!(d.total_downloaded, 0);
+    }
+
+    #[test]
+    fn test_family_yara_template_rule_is_labelled_local() {
+        let fy = FamilyYara::new("win.emotet");
+        let r = fy.mock_rule();
+        assert!(r.source.contains("LOCAL TEMPLATE"));
+        assert!(!r.source.contains("author = \"malpedia\""));
     }
 
     #[test]
@@ -1368,6 +1377,11 @@ mod tests {
     #[test]
     fn test_malpedia_yara_fetch_family() {
         let mut my = MalpediaYara::new();
+        // Nothing registered yet: the fetch reports that, it does not invent
+        // a rule set for "win.test".
+        assert!(my.fetch_family("win.test").is_err());
+
+        my.register_family(FamilyYara::new("win.test"));
         let f = my.fetch_family("win.test").unwrap();
         assert_eq!(f.family, "win.test");
         // Second call should use cache.

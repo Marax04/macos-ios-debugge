@@ -207,40 +207,38 @@ fn trait_object_decode_reports_missing_input() {
 fn impl_decode_basename_extracted() {
     let cfg = ApktoolConfig::new("a", "/o");
     let r = ApktoolRunnerImpl::new(cfg);
-    let res = r.decode("/path/to/some_app.apk").unwrap();
-    assert!(res.output_dir.ends_with("/some_app"));
+    assert!(r.output_dir_for("/path/to/some_app.apk").ends_with("/some_app"));
+    // and the decode itself still refuses to invent a result
+    assert!(r.decode("/path/to/some_app.apk").is_err());
 }
 
 #[test]
 fn impl_decode_basename_windows_sep() {
     let cfg = ApktoolConfig::new("a", "/o");
     let r = ApktoolRunnerImpl::new(cfg);
-    let res = r.decode("C:\\foo\\bar\\thing.apk").unwrap();
-    assert!(res.output_dir.ends_with("/thing"));
+    assert!(r.output_dir_for("C:\\foo\\bar\\thing.apk").ends_with("/thing"));
+
 }
 
 #[test]
 fn impl_decode_no_src_warns() {
     let cfg = ApktoolConfig::new("a", "/o").with_no_src();
     let r = ApktoolRunnerImpl::new(cfg);
-    let res = r.decode("z.apk").unwrap();
-    assert!(res.smali_dirs.is_empty());
-    assert!(!res.is_clean());
-    assert_eq!(res.smali_count(), 0);
+    assert!(matches!(r.decode("z.apk"), Err(ApktoolError::NotFound(_))));
 }
 
 #[test]
 fn impl_decode_no_res_returns_none() {
     let cfg = ApktoolConfig::new("a", "/o").with_no_res();
     let r = ApktoolRunnerImpl::new(cfg);
-    assert!(r.decode("z.apk").unwrap().res_dir.is_none());
+    assert!(matches!(r.decode("z.apk"), Err(ApktoolError::NotFound(_))));
 }
 
 #[test]
 fn impl_decode_uppercase_apk_ok() {
     let cfg = ApktoolConfig::new("a", "/o");
     let r = ApktoolRunnerImpl::new(cfg);
-    assert!(r.decode("X.APK").is_ok());
+    assert!(matches!(r.decode("X.APK"), Err(ApktoolError::NotFound(_))));
 }
 
 #[test]
@@ -268,18 +266,15 @@ fn impl_build_empty_errors() {
 fn impl_build_unsigned_zero_size() {
     let cfg = ApktoolConfig::new("a", "/o");
     let r = ApktoolRunnerImpl::new(cfg);
-    let b = r.build("/d/x").unwrap();
-    assert!(b.unsigned);
-    assert_eq!(b.size_bytes, 0);
-    assert!(b.apk_path.ends_with("/x.apk"));
+    assert!(matches!(r.build("/d/x"), Err(ApktoolError::NotFound(_))));
 }
 
 #[test]
 fn impl_install_framework_apk_ok() {
     let cfg = ApktoolConfig::new("a", "/o");
     let r = ApktoolRunnerImpl::new(cfg);
-    assert!(r.install_framework("f.apk").is_ok());
-    assert!(r.install_framework("f.APK").is_ok());
+    assert!(matches!(r.install_framework("f.apk"), Err(ApktoolError::NotFound(_))));
+    assert!(matches!(r.install_framework("f.APK"), Err(ApktoolError::NotFound(_))));
 }
 
 #[test]
@@ -478,8 +473,8 @@ fn runner_impl_send_sync_threads() {
         handles.push(std::thread::spawn(move || {
             for i in 0..100 {
                 let name = format!("app_{t}_{i}.apk");
-                let res = r.decode(&name).unwrap();
-                assert!(res.output_dir.contains(&format!("app_{t}_{i}")));
+                assert!(r.decode(&name).is_err());
+                assert!(r.output_dir_for(&name).contains(&format!("app_{t}_{i}")));
             }
         }));
     }

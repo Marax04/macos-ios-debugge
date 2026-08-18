@@ -545,7 +545,7 @@ fn fuzz_linear_truncated_tail() {
     // Buffer whose length isn't a multiple of 4: must stop cleanly without panic.
     let arch = arch();
     let buf = vec![0x60u8; 10];
-    let mut lin = PpcLinearDisassembler::new(&arch, &buf, a(0));
+    let lin = PpcLinearDisassembler::new(&arch, &buf, a(0));
     let mut last_was_err = false;
     for r in lin {
         if r.is_err() {

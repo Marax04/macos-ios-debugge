@@ -826,7 +826,7 @@ mod tests {
             HexToken::Wildcard,
             HexToken::Byte(0x01),
         ];
-        let mut m = HexMatcher::new(&tokens, data, 0);
+        let m = HexMatcher::new(&tokens, data, 0);
         assert_eq!(m.try_match(), Some(4));
     }
 
@@ -839,7 +839,7 @@ mod tests {
             HexToken::Jump { min: 1, max: Some(5) },
             HexToken::Byte(0x01),
         ];
-        let mut m = HexMatcher::new(&tokens, data, 0);
+        let m = HexMatcher::new(&tokens, data, 0);
         assert_eq!(m.try_match(), Some(6));
     }
 

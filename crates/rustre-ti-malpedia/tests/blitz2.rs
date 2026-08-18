@@ -190,41 +190,55 @@ fn test_client_with_ttl_and_base_url_chain() {
 
 #[test]
 fn test_client_get_stats_cached() {
-    let c = MalpediaApiClient::new(None);
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(None).with_local_db(db);
     let s1 = c.get_stats().unwrap();
     let s2 = c.get_stats().unwrap();
     assert_eq!(s1.family_count, s2.family_count);
+    // With no corpus at all there is nothing to count and nothing to invent.
+    assert!(MalpediaApiClient::new(None).get_stats().is_err());
 }
 
 #[test]
-fn test_client_search_family_mock_returns_some() {
-    let c = MalpediaApiClient::new(None);
-    let r = c.search_family("emotet").unwrap();
-    assert!(!r.is_empty());
+fn test_client_search_family_needs_a_corpus() {
+    assert!(MalpediaApiClient::new(None).search_family("emotet").is_err());
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(None).with_local_db(db);
+    assert!(!c.search_family("emotet").unwrap().is_empty());
 }
 
 #[test]
-fn test_client_get_yara_rules() {
-    let c = MalpediaApiClient::new(None);
-    let r = c.get_yara_rules("emotet").unwrap();
+fn test_client_get_yara_rules_come_from_the_corpus() {
+    // Previously fabricated one "detect_<family>" rule for any name at all.
+    assert!(MalpediaApiClient::new(None).get_yara_rules("emotet").is_err());
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(None).with_local_db(db);
+    let r = c.get_yara_rules("win.emotet").unwrap();
     assert_eq!(r.len(), 1);
-    assert_eq!(r[0].family, "emotet");
-    assert!(r[0].name.starts_with("detect_"));
+    assert_eq!(r[0].family, "win.emotet");
 }
 
 #[test]
-fn test_client_search_by_hash_evil_and_bad() {
+fn test_client_search_by_hash_does_not_grade_by_substring() {
+    // "evil"/"bad" in the string used to mean "known malware".
     let c = MalpediaApiClient::new(None);
-    assert!(c.search_by_hash("evil_thing").unwrap().is_some());
-    assert!(c.search_by_hash("verybad_x").unwrap().is_some());
-    assert!(c.search_by_hash("clean").unwrap().is_none());
+    assert!(c.search_by_hash("evil_thing").is_err());
+    assert!(c.search_by_hash("verybad_x").is_err());
+    assert!(c.search_by_hash("clean").is_err());
+
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c2 = MalpediaApiClient::new(None).with_local_db(db);
+    assert!(c2.search_by_hash("evil_thing").unwrap().is_none());
+    assert!(c2.search_by_hash("deadbeef").unwrap().is_some());
 }
 
 #[test]
-fn test_client_list_families_mock_count() {
-    let c = MalpediaApiClient::new(None);
-    let r = c.list_families(None, None).unwrap();
-    assert_eq!(r.len(), 3);
+fn test_client_list_families_needs_a_corpus() {
+    assert!(MalpediaApiClient::new(None).list_families(None, None).is_err());
 }
 
 #[test]
@@ -312,24 +326,42 @@ fn test_client_search_limit_zero_returns_empty() {
 
 #[tokio::test]
 async fn test_provider_lookup_clean() {
-    let c = MalpediaApiClient::new(Some("k".to_string()));
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(Some("k".to_string())).with_local_db(db);
     let ioc = IoC::new(IoCType::Sha256, "abc123".to_string(), "t".to_string());
     let r = c.lookup(&ioc).await.unwrap();
     assert!(!r.is_malicious());
 }
 
 #[tokio::test]
-async fn test_provider_lookup_malicious_evil() {
-    let c = MalpediaApiClient::new(Some("k".to_string()));
-    let ioc = IoC::new(IoCType::Sha256, "evil_dead".to_string(), "t".to_string());
-    let r = c.lookup(&ioc).await.unwrap();
-    assert!(r.is_malicious());
-    assert!(!r.malware_families.is_empty());
+async fn test_provider_lookup_verdict_comes_from_the_corpus() {
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(Some("k".to_string())).with_local_db(db);
+
+    // "evil_dead" is not in the corpus: no longer graded malicious for its name.
+    let evil = IoC::new(IoCType::Sha256, "evil_dead".to_string(), "t".to_string());
+    let r = c.lookup(&evil).await.unwrap();
+    assert!(!r.is_malicious());
+    assert!(r.malware_families.is_empty());
+
+    // A hash the corpus really holds is reported, with its real family.
+    let known = IoC::new(IoCType::Sha256, "deadbeef".to_string(), "t".to_string());
+    let r2 = c.lookup(&known).await.unwrap();
+    assert!(r2.is_malicious());
+    assert_eq!(r2.malware_families, vec!["win.emotet".to_string()]);
+
+    // With no corpus the lookup fails instead of guessing.
+    let bare = MalpediaApiClient::new(Some("k".to_string()));
+    assert!(bare.lookup(&known).await.is_err());
 }
 
 #[tokio::test]
 async fn test_provider_lookup_non_hash_no_verdict() {
-    let c = MalpediaApiClient::new(Some("k".to_string()));
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    let c = MalpediaApiClient::new(Some("k".to_string())).with_local_db(db);
     let ioc = IoC::new(IoCType::Ip, "1.2.3.4".to_string(), "t".to_string());
     let r = c.lookup(&ioc).await.unwrap();
     assert!(r.verdicts.is_empty());
@@ -630,10 +662,15 @@ fn test_stats_new_default() {
 }
 
 #[test]
-fn test_stats_mock_breakdowns() {
+fn test_stats_mock_has_no_invented_breakdowns() {
     let s = MalpediaStats::mock();
-    assert!(s.platform_breakdown.contains_key("win"));
-    assert!(s.actor_country_breakdown.contains_key("RU"));
+    assert!(s.platform_breakdown.is_empty());
+    assert!(s.actor_country_breakdown.is_empty());
+
+    // Real breakdowns are counted from real records.
+    let db = MalpediaLocalDb::new();
+    db.populate_mock_data();
+    assert!(db.compute_stats().platform_breakdown.contains_key("win"));
 }
 
 #[test]

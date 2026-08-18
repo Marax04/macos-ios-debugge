@@ -60,7 +60,7 @@ fn prel31_roundtrip_many() {
         let base = g() as u32;
         // Pick an offset in [-2^30, 2^30) deterministically from the LCG.
         let raw = g() as u32;
-        let signed_off = ((raw as i32) >> 2); // arithmetic shift → range [-2^30, 2^30)
+        let signed_off = (raw as i32) >> 2; // arithmetic shift → range [-2^30, 2^30)
         let target = base.wrapping_add(signed_off as u32);
         let enc = addr_to_prel31(base, target);
         assert_eq!(enc & 0x8000_0000, 0, "PREL31 must be 31-bit");

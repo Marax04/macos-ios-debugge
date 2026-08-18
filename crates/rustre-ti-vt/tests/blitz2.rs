@@ -355,24 +355,21 @@ fn t31_search_query_serde() {
 // ---------------- mock_file_report / mock_ip_report ----------------
 
 #[test]
-fn t32_mock_file_report_bad_detected() {
-    let r = mock_file_report("bad_hash_evil");
-    assert!(r.is_malicious());
-    assert!(r.malicious_count() >= 1);
+fn t32_mock_file_report_bad_not_invented() {
+    assert!(mock_file_report("bad_hash_evil").is_err());
 }
 
 #[test]
-fn t33_mock_file_report_clean() {
-    let r = mock_file_report("safe");
-    assert!(!r.is_malicious());
-    assert_eq!(r.malicious_count(), 0);
+fn t33_mock_file_report_clean_not_invented() {
+    // "no detections" is itself a claim, and one we cannot make offline.
+    assert!(mock_file_report("safe").is_err());
 }
 
 #[test]
-fn t34_mock_ip_report_clean_and_malicious() {
-    assert!(!mock_ip_report("8.8.8.8").is_malicious());
-    assert!(mock_ip_report("10.0.0.1").is_malicious());
-    assert!(mock_ip_report("evil_thing").is_malicious());
+fn t34_mock_ip_report_reports_no_verdict() {
+    assert!(mock_ip_report("8.8.8.8").is_err());
+    assert!(mock_ip_report("10.0.0.1").is_err());
+    assert!(mock_ip_report("evil_thing").is_err());
 }
 
 #[test]
@@ -380,8 +377,8 @@ fn t35_mock_file_report_fuzz() {
     let mut g = lcg();
     for _ in 0..50 {
         let s = format!("h{:x}", g());
-        let r = mock_file_report(&s);
-        assert_eq!(r.sha256, s);
+        // Whatever the input, no report is manufactured.
+        assert!(mock_file_report(&s).is_err());
     }
 }
 
@@ -482,119 +479,102 @@ fn t38_file_report_full_helpers() {
 // ---------------- Async client methods ----------------
 
 #[test]
-fn t39_scan_file_returns_id() {
-    let r = rt().block_on(async {
-        client().scan_file(&[]).await
+// Every method below is a live VirusTotal call.  `client()` carries a
+// placeholder key, so each must report the missing key rather than answering.
+// They used to return canned reports whose verdicts came from whether the
+// argument contained "evil".
+
+fn t39_scan_file_requires_a_key() {
+    let r = rt().block_on(async { client().scan_file(&[]).await });
+    assert!(matches!(r, Err(VtClientError::NoApiKey)));
+}
+
+#[test]
+fn t40_scan_url_requires_a_key() {
+    rt().block_on(async {
+        assert!(client().scan_url("http://a.com").await.is_err());
+        assert!(client().scan_url("http://abcdef.com").await.is_err());
     });
-    assert!(r.is_ok());
-    assert!(!r.unwrap().is_empty());
 }
 
 #[test]
-fn t40_scan_url_varies_with_length() {
-    let r = rt().block_on(async {
-        (
-            client().scan_url("http://a.com").await.unwrap(),
-            client().scan_url("http://abcdef.com").await.unwrap(),
-        )
+fn t41_get_file_report_does_not_grade_by_substring() {
+    rt().block_on(async {
+        // Not hex, so it is rejected as a hash before any transport concern.
+        assert!(matches!(
+            client().get_file_report("evilhash").await,
+            Err(VtClientError::InvalidHash(_))
+        ));
+        // Well-formed hash, no key: no report either way.
+        assert!(matches!(
+            client().get_file_report(&"a".repeat(64)).await,
+            Err(VtClientError::NoApiKey)
+        ));
     });
-    assert_ne!(r.0, r.1);
 }
 
 #[test]
-fn t41_get_file_report_clean_and_evil() {
-    let (clean, evil) = rt().block_on(async {
-        (
-            client().get_file_report("safehash").await.unwrap(),
-            client().get_file_report("evilhash").await.unwrap(),
-        )
+fn t42_get_url_report_requires_a_key() {
+    rt().block_on(async {
+        assert!(client().get_url_report("http://clean.com").await.is_err());
+        assert!(client().get_url_report("http://evil.com").await.is_err());
     });
-    assert!(!clean.is_malicious());
-    assert!(evil.is_malicious());
-    assert!(evil.threat_label().is_some());
-    assert!(clean.threat_label().is_none());
 }
 
 #[test]
-fn t42_get_url_report_branches() {
-    let (clean, mal) = rt().block_on(async {
-        (
-            client().get_url_report("http://clean.com").await.unwrap(),
-            client().get_url_report("http://evil.com").await.unwrap(),
-        )
+fn t43_get_domain_report_requires_a_key() {
+    rt().block_on(async {
+        assert!(client().get_domain_report("x.com").await.is_err());
     });
-    assert!(!clean.is_malicious());
-    assert!(mal.is_malicious());
 }
 
 #[test]
-fn t43_get_domain_report_dns_records() {
-    let r = rt().block_on(async { client().get_domain_report("x.com").await.unwrap() });
-    assert_eq!(r.id, "x.com");
-    assert_eq!(r.last_dns_records.len(), 1);
-}
-
-#[test]
-fn t44_get_ip_report_branches() {
-    let (clean, mal) = rt().block_on(async {
-        (
-            client().get_ip_report("8.8.8.8").await.unwrap(),
-            client().get_ip_report("10.0.0.5").await.unwrap(),
-        )
+fn t44_get_ip_report_requires_a_key() {
+    rt().block_on(async {
+        assert!(client().get_ip_report("8.8.8.8").await.is_err());
+        assert!(client().get_ip_report("10.0.0.5").await.is_err());
     });
-    assert!(!clean.is_malicious());
-    assert!(mal.is_malicious());
 }
 
 #[test]
-fn t45_search_limit_capped_at_5() {
+fn t45_search_requires_a_key() {
     let q = VtSearchQuery::new("x").with_limit(100);
-    let r = rt().block_on(async { client().search(&q).await.unwrap() });
-    assert_eq!(r.len(), 5);
+    let r = rt().block_on(async { client().search(&q).await });
+    assert!(matches!(r, Err(VtClientError::NoApiKey)));
 }
 
 #[test]
-fn t46_search_limit_default_5() {
+fn t46_search_default_limit_requires_a_key() {
     let q = VtSearchQuery::new("x");
-    let r = rt().block_on(async { client().search(&q).await.unwrap() });
-    assert_eq!(r.len(), 5);
+    assert!(rt().block_on(async { client().search(&q).await }).is_err());
 }
 
 #[test]
-fn t47_get_behavior_dns_seeded() {
-    let b = rt().block_on(async { client().get_behavior("h").await.unwrap() });
-    assert!(!b.network.dns_lookups.is_empty());
-    assert!(!b.mutexes.is_empty());
+fn t47_get_behavior_requires_a_key() {
+    assert!(rt().block_on(async { client().get_behavior("h").await }).is_err());
 }
 
 #[test]
-fn t48_get_relationships_returns_at_least_one() {
+fn t48_get_relationships_requires_a_key() {
     let r = rt().block_on(async {
         client()
             .get_relationships("id", &VtRelationshipType::ContactedIps)
             .await
-            .unwrap()
     });
-    assert!(!r.is_empty());
+    assert!(r.is_err());
 }
 
 #[test]
-fn t49_get_collections_returns_one() {
-    let r = rt().block_on(async { client().get_collections("id").await.unwrap() });
-    assert_eq!(r.len(), 1);
-    assert!(r[0].files_count >= 1);
+fn t49_get_collections_requires_a_key() {
+    assert!(rt().block_on(async { client().get_collections("id").await }).is_err());
 }
 
 #[test]
-fn t50_get_votes_and_comments() {
-    let (v, c) = rt().block_on(async {
-        (
-            client().get_votes("x").await.unwrap(),
-            client().get_comments("x").await.unwrap(),
-        )
+fn t50_get_votes_and_comments_require_a_key() {
+    rt().block_on(async {
+        assert!(client().get_votes("x").await.is_err());
+        assert!(client().get_comments("x").await.is_err());
     });
-    assert!(!v.is_empty());
-    assert!(!c.is_empty());
 }
 
 // ---------------- client config builders ----------------
@@ -724,16 +704,16 @@ fn t60_provider_lookup_async() {
         "evil_value".to_string(),
         "src".to_string(),
     );
-    let r = rt().block_on(async { client().lookup(&ioc).await.unwrap() });
-    assert_eq!(r.ioc.value, "evil_value");
-    assert!(r.verdicts.iter().any(|v| v.malicious));
-    assert!(!r.malware_families.is_empty());
+    // The value contains "evil"; that must not be enough to produce a verdict.
+    let r = rt().block_on(async { client().lookup(&ioc).await });
+    let err = r.unwrap_err().to_string();
+    assert!(err.contains("no VirusTotal API key configured"), "{err}");
 }
 
 // ---------------- Fuzz scan_url ----------------
 
 #[test]
-fn t61_scan_url_fuzz_never_errors() {
+fn t61_scan_url_fuzz_never_answers_without_a_key() {
     let mut g = lcg();
     rt().block_on(async {
         for _ in 0..30 {
@@ -742,7 +722,7 @@ fn t61_scan_url_fuzz_never_errors() {
                 .map(|_| char::from(b'a' + (g() % 26) as u8))
                 .collect();
             let r = client().scan_url(&url).await;
-            assert!(r.is_ok());
+            assert!(matches!(r, Err(VtClientError::NoApiKey)));
         }
     });
 }

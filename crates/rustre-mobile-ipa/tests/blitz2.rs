@@ -211,7 +211,9 @@ fn t11_code_signature_adhoc_empty_chain() {
         cert_chain: vec![],
         entitlements_xml: String::new(),
     };
-    assert!(cs.is_adhoc());
+    // Empty chain now means "no certificates recovered", not "ad-hoc";
+    // CS_ADHOC in the CodeDirectory flags is the real signal.
+    assert!(!cs.is_adhoc());
     assert!(!cs.is_developer_signed());
     assert!(!cs.is_enterprise());
     assert!(cs.leaf_cert().is_none());
@@ -223,6 +225,8 @@ fn t12_code_signature_enterprise_detect() {
     let cs = CodeSignature {
         team_id: "T".into(),
         signing_id: "S".into(),
+        // 7 sets CS_ADHOC (0x2), so this signature really does declare itself
+        // ad-hoc; only the certificate-derived questions differ.
         flags: 7,
         cert_chain: vec![CertInfo {
             subject: "iPhone Distribution: Acme".into(),
@@ -235,7 +239,7 @@ fn t12_code_signature_enterprise_detect() {
     };
     assert!(cs.is_enterprise());
     assert!(!cs.is_developer_signed());
-    assert!(!cs.is_adhoc());
+    assert!(cs.is_adhoc());
 }
 
 #[test]

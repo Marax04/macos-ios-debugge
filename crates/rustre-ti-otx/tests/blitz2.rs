@@ -624,7 +624,7 @@ fn t57_contributing_pulses() {
     let mut p2 = OtxPulse::sample(); p2.id = "p2".into();
     let r = e.extract_iocs(&[p1, p2]).unwrap();
     let s = OtxIocExtractor::contributing_pulses(&r);
-    assert!(s.contains("pulse-abc-123"));
+    assert!(s.contains(&OtxPulse::sample().id));
     assert!(s.contains("p2"));
 }
 

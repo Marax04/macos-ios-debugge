@@ -12,7 +12,7 @@ use std::thread;
 use rustre_analysis_callconv::{
     aapcs32, aapcs64, cdecl_x86, fastcall_x86, mips_o32, msvc_x64, riscv64_lp64d, stdcall_x86,
     sysv_x64, thiscall_x86, vectorcall_x64, Arch, ArgType, CallConvDatabase, CallConvError,
-    CallConvStats, CallingConvDef, CallingConventionDatabase, CallingConventionDetector,
+    CallConvStats, CallingConventionDatabase, CallingConventionDetector,
     CallingConventionPattern, CcKey, CcStackCleanup, Compiler, DetectInstr, FunctionCallConvSummary,
     FunctionInfo, Instruction, ObservedPattern, Os, ParameterMapper, RegisterClassifier,
     RegisterRole, CC_CDECL, CC_FASTCALL, CC_MS_X64, CC_STDCALL, CC_SYSV_AMD64, CC_THISCALL,

@@ -534,7 +534,7 @@ fn t41_undo_redo() {
     assert_eq!(nav.current_idx, 3);
     let prev = nav.undo();
     assert!(prev.is_some());
-    let cur = nav.current_idx;
+    let _cur = nav.current_idx;
     let re = nav.redo();
     assert_eq!(re, Some(3));
     assert!(true); // monotonic OK

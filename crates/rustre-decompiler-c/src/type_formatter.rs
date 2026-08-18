@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_canonicalizer_deduplicates_qualifiers() {
-        let c = TypeCanonicalizer::new();
+        let _c = TypeCanonicalizer::new();
         let ty = CType::Qualified {
             qualifiers: vec![Qualifier::Const, Qualifier::Const, Qualifier::Volatile],
             inner: Box::new(CType::int()),
@@ -647,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_canonicalizer_strips_empty_qualifiers() {
-        let c = TypeCanonicalizer::new();
+        let _c = TypeCanonicalizer::new();
         let ty = CType::Qualified {
             qualifiers: vec![],
             inner: Box::new(CType::int()),

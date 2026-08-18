@@ -14,8 +14,8 @@ use rustre_loader_console::switch_formats::{
     NSO_MAGIC,
 };
 use rustre_loader_console::{
-    detect_format, extract_rom_strings, is_gb, is_gba, is_genesis, is_nes, is_snes, xor_checksum,
-    BankSwitchInfo, ConsoleArch, ConsoleDisassemblyHints, ConsoleLoader, ConsoleStream,
+    detect_format, extract_rom_strings, is_gb, is_gba, is_genesis, is_snes, xor_checksum,
+    BankSwitchInfo, ConsoleArch, ConsoleDisassemblyHints, ConsoleStream,
     GameConsoleRomLoader, GbCartType, GbHeader, GbaHeader, GbaSaveType, GenesisHeader,
     GenesisRegion, NesHeader, NesMirroring, NesTvSystem, Platform, RomString, SnesHeader,
     SnesMapMode, StreamStats, GB_LOGO, GBA_ENTRY_INSTR, GBA_HEADER_SIZE, NES_MAGIC,
@@ -437,7 +437,7 @@ fn gb_header_short_data() {
 
 #[test]
 fn gb_header_bad_logo() {
-    let mut data = vec![0u8; 0x150];
+    let data = vec![0u8; 0x150];
     // logo bytes wrong
     let h = GbHeader::parse(&data);
     assert!(h.is_err());

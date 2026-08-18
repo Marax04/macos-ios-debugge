@@ -980,6 +980,61 @@ fn parse_switch_marker_stmt(s: &CfsStatement) -> Option<u64> {
 
 /// Return `true` for x86 unconditional/conditional branch mnemonics whose
 /// operand is an intra-function code target (used to find block leaders).
+/// Istruzioni RAGGIUNGIBILI dall'ingresso, per visita ricorsiva del flusso.
+///
+/// Serve perche' il flusso passato alle analisi **non contiene solo la funzione**.
+/// La scansione e' deliberatamente estesa oltre il primo `ret` (gate
+/// `RUSTRE_PDATA_EXTENT`, default ON) per non troncare le funzioni con un `jmp`
+/// in avanti — ed e' la scelta giusta: misurato, senza estensione
+/// `__mingw_pformat` esce con 22 blocchi raggiungibili contro le 129 istruzioni
+/// che ha davvero, cioe' TRONCATA.
+///
+/// Il prezzo e' che il flusso tira dentro codice VICINO: per `__mingw_pformat`
+/// 164 blocchi dove la funzione ne ha 33. `ControlFlowStructurer` si difende da
+/// solo, scartando gli irraggiungibili (misurato: i superstiti coincidono
+/// ESATTAMENTE con i raggiungibili). Le analisi di liveness/arita' invece NO:
+/// `win64_param_regs_live_in` calcola «letto prima di scritto» su istruzioni di
+/// ALTRE funzioni, e ne ricava parametri che non esistono.
+///
+/// Questa funzione da' alle analisi la stessa difesa che lo structurer ha gia'.
+///
+/// Regole della visita: si segue il fallthrough tranne dopo un salto
+/// incondizionato o un `ret`; si seguono i target dei salti diretti risolvibili;
+/// un salto INDIRETTO non aggiunge target (non e' noto) ma interrompe il
+/// fallthrough, esattamente come un `jmp` diretto.
+fn reachable_instruction_addrs(instructions: &[Instruction]) -> std::collections::HashSet<u64> {
+    use std::collections::{HashMap, HashSet};
+    let idx: HashMap<u64, usize> = instructions
+        .iter()
+        .enumerate()
+        .map(|(i, ins)| (ins.address.as_u64(), i))
+        .collect();
+    let mut visti: HashSet<u64> = HashSet::new();
+    let Some(primo) = instructions.first() else {
+        return visti;
+    };
+    let mut da_fare = vec![primo.address.as_u64()];
+    while let Some(a) = da_fare.pop() {
+        let Some(&i) = idx.get(&a) else { continue };
+        if !visti.insert(a) {
+            continue;
+        }
+        let ins = &instructions[i];
+        let m = ins.mnemonic.to_ascii_lowercase();
+        let incondizionato = m == "jmp" || m == "jmpq";
+        let termina = matches!(m.as_str(), "ret" | "retq" | "retn" | "ud2" | "hlt");
+        if is_branch_mnemonic(&m)
+            && let Some(t) = parse_hex_target(ins.operands.trim())
+        {
+            da_fare.push(t);
+        }
+        if !incondizionato && !termina && let Some(next) = instructions.get(i + 1) {
+            da_fare.push(next.address.as_u64());
+        }
+    }
+    visti
+}
+
 fn is_branch_mnemonic(mnem: &str) -> bool {
     matches!(
         mnem,
@@ -2331,6 +2386,34 @@ fn apply_win64_calling_convention(
     instructions: &[Instruction],
     callee_arities: &HashMap<u64, usize>,
 ) -> String {
+    // #6710 (`RUSTRE_LIVEIN_REACHABLE`, opt-in): dai alle analisi di liveness la
+    // stessa difesa che `ControlFlowStructurer` ha gia' — vedere SOLO le
+    // istruzioni raggiungibili dall'ingresso. Vedi `reachable_instruction_addrs`
+    // per la misura che motiva la cosa.
+    let filtrate: Vec<Instruction>;
+    let instructions = if matches!(
+        std::env::var("RUSTRE_LIVEIN_REACHABLE").as_deref(),
+        Ok("1") | Ok("true")
+    ) {
+        let vivi = reachable_instruction_addrs(instructions);
+        filtrate = instructions
+            .iter()
+            .filter(|i| vivi.contains(&i.address.as_u64()))
+            .cloned()
+            .collect();
+        if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+            eprintln!(
+                "[LIVEIN-REACH] fn={:?} {} -> {} istruzioni",
+                instructions.first().map(|f| f.address),
+                instructions.len(),
+                filtrate.len()
+            );
+        }
+        &filtrate
+    } else {
+        instructions
+    };
+
     let is_param = win64_param_regs_live_in(instructions, callee_arities);
     let is_fp = win64_xmm_param_regs_live_in(instructions);
     let regs = ["rcx", "rdx", "r8", "r9"];
@@ -2872,6 +2955,19 @@ pub(crate) fn win64_xmm_param_regs_live_in(instructions: &[Instruction]) -> [boo
             }
             let Some((dst, src)) = halves else {
                 // One-operand xmm use — conservatively a read.
+                // SONDA #6660 (`RUSTRE_DBG_PARAMREG`, zero effetto): i 5 OVER
+                // `pthread_*` hanno tutti esattamente +2 parametri e il corpo
+                // non usa mai `a3`/`a4`; la sonda sui registri INTERI mostra
+                // che li promuove correttamente solo a1/a2, quindi i due in
+                // piu' arrivano dal file XMM (prova: `pthread_cond_signal`
+                // esce con `double a3`, e una pthread non prende un double).
+                if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                    eprintln!(
+                        "[PARAMREG-XMM]    fn={:?} promuove a{} ({}) @{:?} {} {} [1-operando]",
+                        instructions.first().map(|f| f.address),
+                        i + 1, r, ins.address, mnem, ops
+                    );
+                }
                 is_param[i] = true;
                 continue;
             };
@@ -2887,11 +2983,31 @@ pub(crate) fn win64_xmm_param_regs_live_in(instructions: &[Instruction]) -> [boo
             // / sqrt-family replace the destination outright. Anything else
             // that names the xmm as destination (addsd, mulsd, shufps, comisd
             // has no reg dst at all, …) reads it too.
+            // #6690: la famiglia `pshuf*` e le estensioni `pmovzx/pmovsx`
+            // sovrascrivono la destinazione INTERAMENTE — mescolano/estendono la
+            // SORGENTE dentro il registro di destinazione senza leggerne il
+            // valore precedente. Mancavano da questa lista, quindi cadevano nel
+            // ramo «nomina la destinazione ma non e' pure write → allora la
+            // legge» e producevano un parametro fantasma.
+            //
+            // MISURATO: `pthread_cond_signal` (`0x14001c6d0`) usciva con
+            // `int __fastcall pthread_cond_signal(__int64 *a1, int a2, double a3)`
+            // — tre parametri contro un prototipo pubblicato di UNO, e il terzo
+            // tipizzato `double` perche' proveniente dal file XMM. La sonda
+            // `[PARAMREG-XMM]` indica l'istruzione esatta:
+            //     pshufd $0xe5, %xmm0, %xmm2   -> promuove a3 (xmm2) [lettura]
+            //
+            // ⚠ `shufps`/`shufpd` (senza la `p` iniziale) NON vanno qui: quelle
+            // combinano destinazione E sorgente, quindi la destinazione e' letta
+            // davvero. Il commento sopra le cita gia' per questo motivo.
             let pure_write = stem.starts_with("mov")
                 || stem.starts_with("cvt")
                 || stem.starts_with("sqrt")
                 || stem.starts_with("rcp")
                 || stem.starts_with("round")
+                || stem.starts_with("pshuf")
+                || stem.starts_with("pmovzx")
+                || stem.starts_with("pmovsx")
                 || stem == "lddqu";
             let dst_is_this_reg =
                 mentions_reg(dst, r) && !dst.contains('(') && !dst.contains('[');
@@ -2899,6 +3015,13 @@ pub(crate) fn win64_xmm_param_regs_live_in(instructions: &[Instruction]) -> [boo
                 || (mentions_reg(dst, r) && (dst.contains('(') || dst.contains('[')))
                 || (dst_is_this_reg && !pure_write);
             if reads {
+                if std::env::var("RUSTRE_DBG_PARAMREG").is_ok() {
+                    eprintln!(
+                        "[PARAMREG-XMM]    fn={:?} promuove a{} ({}) @{:?} {} {} [lettura]",
+                        instructions.first().map(|f| f.address),
+                        i + 1, r, ins.address, mnem, ops
+                    );
+                }
                 is_param[i] = true;
                 continue;
             }
@@ -2950,6 +3073,45 @@ fn apply_win64_calling_convention_with(
     for i in 0..4 {
         if is_param[i] || is_fp[i] { arity = i + 1; }
     }
+
+    // ── #6650: prototipo PUBBLICATO come limite inferiore dell'arita' ──────────
+    //
+    // GATE `RUSTRE_PROTO_ARITY`, opt-in, default OFF.
+    //
+    // `rustre-analysis-type` porta 154 firme mingw-w64/libgcc estratte
+    // MECCANICAMENTE dagli header (`mingw_runtime_sigs.rs`, con `header:riga` per
+    // ogni voce). Il decompilatore le consulta gia' — ma solo per seminare
+    // l'arita' dei CALL SITE (`published_lib_arity`, unico chiamante a
+    // `lib.rs:19274`, dentro il blocco `direct_call_target`). La DEFINIZIONE di
+    // una funzione continua a prendere l'arita' dalla sola liveness.
+    //
+    // MISURATO: accendere `RUSTRE_LIBSIG_ARITY` non muove nulla —
+    // `sample7_cpp` da' 122/135 (6 over, 7 under) con il gate acceso e con il
+    // gate spento, e `_Unwind_FindEnclosingFunction` resta a ZERO parametri
+    // contro un prototipo pubblicato di 1. Il gate agisce su un altro asse.
+    //
+    // Qui il prototipo pubblicato viene usato come **limite inferiore**: mai per
+    // ridurre l'arita' recuperata, solo per alzarla fino al valore pubblicato.
+    // Motivo dell'asimmetria: un'arita' TROPPO BASSA (UNDER) perde argomenti
+    // reali e rompe le chiamate; una TROPPO ALTA (OVER) inventa parametri
+    // fantasma che compilano puliti e sono invisibili a `check.sh`. Alzare e'
+    // recuperabile, abbassare no — quindi si alza soltanto.
+    //
+    // Rischio dichiarato, lo stesso annotato su `published_lib_arity`: se il
+    // nome risolto e' SBAGLIATO, il prototipo giusto della funzione sbagliata
+    // introduce argomenti fantasma. Per questo e' opt-in e va misurato su OVER
+    // **e** UNDER insieme.
+    if matches!(
+        std::env::var("RUSTRE_PROTO_ARITY").as_deref(),
+        Ok("1") | Ok("true")
+    ) && let Some(name) = signature_fn_name(code)
+        && let Some(published) = published_arity_ungated(&name)
+        && published > arity
+        && published <= 4
+    {
+        arity = published;
+    }
+
     if arity == 0 { return code.to_string(); }
 
     // Rename each detected param reg — every width alias — to aN. A slot
@@ -4874,10 +5036,65 @@ fn uniform_self_stride(code: &str, name: &str) -> Option<u64> {
         if is_deref_line(t) {
             seg_deref = true;
         }
-        // Self-increment site?  `name += K` / `name -= K` / `name = name ± K`.
+        // #6720: forma `++name` / `--name`, che questa scansione NON vedeva.
+        //
+        // Riconosceva solo `name += K`, `name -= K` e `name = name ± K`. Ma il
+        // codice emesso usa l'incremento prefisso, e il puntatore di un ciclo
+        // pointer-walk avanza cosi'. Risultato: la regola D7 qui sotto — che
+        // ritipizza un `__int64` dereferenziato con passo < 8 al tipo largo
+        // quanto il passo — **non scattava mai** per quei cicli.
+        //
+        // MISURATO su `my_strlen` (sample11_c, 0x140001550):
+        //     0x140001550  cmpb $0, (%rcx)   <- accesso a 1 BYTE
+        //     0x140001560  add  $1, %rax     <- passo 1
+        // Il codice macchina dice `char *` due volte. Il parametro `a1` esce
+        // infatti `char *`, ma il locale usciva `__int64 *result` con
+        // `++result` — cioe' avanzando di 8 byte e leggendone 8. `behavior.py`
+        // lo classifica DIVERGE con esiti multipli di 8 (atteso 1/11/16,
+        // emesso 48/72/136 = 6x8, 9x8, 17x8).
+        //
+        // `++name` e `--name` sono passo 1 per definizione. La forma postfissa
+        // (`name++`) e' gestita dal ramo sotto, che parte da `strip_prefix(name)`.
+        //
+        // ⚠ MISURATO A EFFETTO ZERO sul corpus (2026-08-18): arity 131/135 e
+        // conteggio dei puntatori ritipizzati (161) IDENTICI prima e dopo.
+        // Il motivo: la regola D7 che consuma questo passo agisce solo quando
+        // promuove uno SCALARE `__int64 name;` a puntatore, mentre nel caso che
+        // ha motivato la modifica (`my_strlen`) la variabile e' gia' dichiarata
+        // `__int64 *result;` — promossa altrove — e la regola non la rivede.
+        //
+        // Piu' a fondo: nel C emesso `++result` su un `__int64 *` avanza GIA' di
+        // 8 byte, perche' il passo nel testo e' in unita' di ELEMENTO e non in
+        // byte. Il passo macchina reale (1 byte, da `add $1,%rax` con `cmpb`)
+        // e' perso prima di arrivare qui: **nessuna passata testuale puo'
+        // recuperarlo**. Il rimedio vero e' a livello di istruzioni, con
+        // `att_mem_access_width` esteso ai LOCALI (oggi ha un solo chiamante,
+        // limitato ai 4 registri argomento — vedi STATUS §42.3).
+        //
+        // La riga resta perche' e' semanticamente corretta e a costo nullo, ma
+        // non va contata come una correzione: non lo e'.
+        let t_no_pre = t.trim_start();
+        if let Some(r) = t_no_pre
+            .strip_prefix("++")
+            .or_else(|| t_no_pre.strip_prefix("--"))
+            && r.trim_start().strip_prefix(name).is_some_and(|r2| {
+                let r2 = r2.trim_start();
+                r2.is_empty() || r2.starts_with(';')
+            })
+        {
+            seg_strides.push(Some(1));
+            continue;
+        }
+
+        // Self-increment site?  `name += K` / `name -= K` / `name = name ± K`
+        // / `name++` / `name--`.
         let rest = if let Some(r) = t.strip_prefix(name) {
             let r = r.trim_start();
-            if let Some(r2) = r.strip_prefix("+=").or_else(|| r.strip_prefix("-=")) {
+            if r.starts_with("++") || r.starts_with("--") {
+                // Postfisso `name++;` — passo 1, come il prefisso sopra.
+                seg_strides.push(Some(1));
+                continue;
+            } else if let Some(r2) = r.strip_prefix("+=").or_else(|| r.strip_prefix("-=")) {
                 Some(Some(r2))
             } else if let Some(r2) = r.strip_prefix('=') {
                 let r2 = r2.trim_start();
@@ -6055,7 +6272,7 @@ fn rewrite_param_array_access(s: &str) -> String {
 
 /// Detect a `__noreturn` tail pattern: the last meaningful instruction
 /// is a `call` followed only by `ud2`, `int3`, `hlt`, or padding.
-fn detect_noreturn(instructions: &[Instruction]) -> bool {
+pub(crate) fn detect_noreturn(instructions: &[Instruction]) -> bool {
     let mut saw_call = false;
     for ins in instructions.iter().rev() {
         let m = ins.mnemonic.to_lowercase();
@@ -14060,6 +14277,63 @@ fn api_signature(name: &str) -> Option<&'static [&'static str]> {
 /// fantasma se il nome risolto e' sbagliato. La promozione a default-ON va
 /// fatta col numero in mano (`measure.sh` + `arity_b.py`), non per simmetria
 /// con `RUSTRE_CRT_ARITY`.
+/// Nome della funzione dalla riga di firma del codice emesso.
+///
+/// Cerca la prima riga che termina con `) {` e che NON sia un'intestazione di
+/// controllo — un matcher `(…) {` prende anche `while`/`for`/`if`, ed e' una
+/// trappola gia' documentata in CLAUDE.md. Il nome e' l'identificatore
+/// immediatamente prima della parentesi aperta.
+fn signature_fn_name(code: &str) -> Option<String> {
+    for line in code.lines() {
+        let t = line.trim_end();
+        if !t.ends_with(") {") {
+            continue;
+        }
+        let head = t.trim_start();
+        if head.starts_with("if ")
+            || head.starts_with("while ")
+            || head.starts_with("for ")
+            || head.starts_with("switch ")
+            || head.starts_with("else")
+        {
+            continue;
+        }
+        let open = t.find('(')?;
+        let name: String = t[..open]
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        if !name.is_empty() && !name.chars().next()?.is_ascii_digit() {
+            return Some(name);
+        }
+    }
+    None
+}
+
+/// Arita' dal prototipo pubblicato, **senza** il gate di [`published_lib_arity`].
+///
+/// Stessa sorgente (`LibrarySignatureDb`, 154 firme estratte dagli header
+/// mingw-w64), ma consultabile da chiamanti che hanno il proprio gate — qui
+/// `RUSTRE_PROTO_ARITY` in `apply_win64_calling_convention_with`. Tenerle
+/// separate evita che un gate pensato per i CALL SITE decida anche per le
+/// DEFINIZIONI: sono due assi distinti, e confonderli e' costato una riga
+/// sbagliata in CLAUDE.md.
+fn published_arity_ungated(name: &str) -> Option<usize> {
+    use std::sync::OnceLock;
+    static DB: OnceLock<rustre_analysis_type::interprocedural::LibrarySignatureDb> =
+        OnceLock::new();
+    let db = DB.get_or_init(rustre_analysis_type::interprocedural::LibrarySignatureDb::new);
+    let sig = db.lookup(name)?;
+    if sig.is_variadic {
+        return None;
+    }
+    Some(sig.param_types.len())
+}
+
 fn published_lib_arity(name: &str) -> Option<usize> {
     if !matches!(
         std::env::var("RUSTRE_LIBSIG_ARITY").as_deref(),
@@ -18312,7 +18586,7 @@ fn binop_of(mnem: &str) -> Option<&'static str> {
 
 /// Split a 2-operand `"dst, src"` string. Trims whitespace; returns
 /// `None` if the comma is missing.
-fn split_two(s: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_two(s: &str) -> Option<(&str, &str)> {
     // Paren-aware split on the first top-level comma so memory refs
     // like `(%rdx,%rdx,8)` don't get torn apart.
     let mut depth: i32 = 0;
@@ -19447,8 +19721,71 @@ impl DecompilerPipeline {
         // cosi' il gruppo di controllo e' provabile ACCESO e SPENTO senza
         // toccare l'ambiente del processo.
         let blocks = drop_empty_blocks(blocks, entry, cfs_empty_block_enabled());
+
+        // ── ORACOLO #6700 (`RUSTRE_CFS_VALIDATE`, opt-in, zero effetto) ───────
+        //
+        // `CfsValidator::validate` (`rustre-decompiler-cfs`, mai chiamato dal
+        // decompilatore) verifica che l'AST strutturato contenga TUTTI i blocchi
+        // di partenza, e altrimenti riporta `missing blocks: [...]`.
+        //
+        // Serve a rispondere a una domanda che nessuna metrica attuale pone:
+        // il corpus emette **0 `goto` su 11342 file** — un risultato migliore di
+        // Hex-Rays — ma quello zero puo' avere DUE cause opposte:
+        //   (a) lo structuring chiude davvero ogni regione, oppure
+        //   (b) i blocchi che non si riescono a strutturare vengono SCARTATI in
+        //       silenzio, e spariscono insieme ai loro goto.
+        // Nel caso (b) lo zero non e' una vittoria, e' una perdita di codice —
+        // e sarebbe una firma plausibile per i 12 CRASH e gli 11 DIVERGE, dove
+        // la funzione gira e fa la cosa sbagliata.
+        //
+        // Il clone dei blocchi avviene SOLO a gate acceso: `ControlFlowStructurer`
+        // prende possesso di `blocks`, e pagare una copia per ogni funzione del
+        // corpus quando la sonda e' spenta sarebbe un costo senza contropartita.
+        let blocks_for_oracle = if std::env::var("RUSTRE_CFS_VALIDATE").is_ok() {
+            Some(blocks.clone())
+        } else {
+            None
+        };
+
         let structurer = ControlFlowStructurer::new(blocks);
         let ast = structurer.structure(entry).ok()?;
+
+        if let Some(orig) = blocks_for_oracle
+            && let Err(perche) = rustre_decompiler_cfs::CfsValidator::new().validate(&ast, &orig)
+        {
+            // Un blocco puo' mancare dall'AST per due ragioni OPPOSTE:
+            //   - e' IRRAGGIUNGIBILE dall'entry -> scartarlo e' corretto, e il
+            //     difetto (se c'e') sta a monte, in chi ha costruito il CFG;
+            //   - e' RAGGIUNGIBILE -> lo structuring ha perso codice vivo.
+            // `CfsValidator` non distingue i due casi: dice che manca, non che
+            // servisse. Qui si calcola la raggiungibilita' sui blocchi che lo
+            // structurer ha effettivamente ricevuto, cosi' il log separa la
+            // perdita benigna da quella grave.
+            let mut raggiungibili: std::collections::HashSet<BlockId> =
+                std::collections::HashSet::new();
+            let mut da_visitare = vec![entry];
+            let per_id: std::collections::HashMap<BlockId, &BasicBlock> =
+                orig.iter().map(|b| (b.id, b)).collect();
+            while let Some(id) = da_visitare.pop() {
+                if !raggiungibili.insert(id) {
+                    continue;
+                }
+                if let Some(b) = per_id.get(&id) {
+                    da_visitare.extend(b.successors.iter().copied());
+                }
+            }
+            // `raggiungibili == blocchi_iniziali` significa che TUTTI i blocchi
+            // passati allo structurer erano vivi: allora ogni mancante e' codice
+            // perso davvero. Se invece e' minore, i mancanti possono essere
+            // proprio quelli morti, e la perdita e' benigna.
+            eprintln!(
+                "[CFS-VALIDATE] {} blocchi_iniziali={} raggiungibili={} -> {}",
+                func_name,
+                orig.len(),
+                raggiungibili.len(),
+                perche
+            );
+        }
 
         // Build a type environment and derive local-variable declarations from
         // the collected DecompVariables.

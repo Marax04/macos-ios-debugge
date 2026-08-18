@@ -427,7 +427,7 @@ mod tests {
         let mut out = Vec::new();
         out.extend_from_slice(b"MZ");
         out.extend_from_slice(&[0u8; 14]); // some DOS header padding
-        let mut xored = |v: u32, out: &mut Vec<u8>| out.extend_from_slice(&(v ^ key).to_le_bytes());
+        let xored = |v: u32, out: &mut Vec<u8>| out.extend_from_slice(&(v ^ key).to_le_bytes());
         xored(u32::from_le_bytes(*b"DanS"), &mut out);
         for _ in 0..3 {
             xored(0, &mut out); // padding

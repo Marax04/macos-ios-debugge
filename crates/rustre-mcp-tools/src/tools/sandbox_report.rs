@@ -5,6 +5,86 @@ use rustre_mcp_server::{McpError, ToolDefinition, ToolHandler, ToolResult};
 use serde_json::{json, Value};
 use async_trait::async_trait;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Real report input
+//
+// ⚠ Why this exists. The five tools in this file took NO arguments and called
+// `SandboxReport::mock()` / `IocSet::mock()`, then rendered the result as JSON,
+// Markdown or HTML. The renderers were always real; the observations were
+// invented. So `sandbox_report_mock_json` returned a verdict, a score and a
+// malware family for a sample nobody had analysed.
+//
+// They now take the report itself. A report is `Serialize`/`Deserialize`, so a
+// caller that ran an analysis can hand the result straight back for rendering,
+// which is what a renderer is for.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Deserialize the `report` argument, or the synthetic fixture on explicit
+/// request.
+///
+/// # Errors
+/// `InvalidParams` when `report` is absent and the fixture was not asked for;
+/// `ToolError` when the value is not a valid `SandboxReport`.
+fn report_from_args(
+    args: &Value,
+) -> Result<(rustre_sandbox_report::SandboxReport, bool), McpError> {
+    if args.get("use_synthetic_fixture").and_then(Value::as_bool) == Some(true) {
+        return Ok((rustre_sandbox_report::SandboxReport::mock(), true));
+    }
+    let raw = args.get("report").ok_or_else(|| {
+        McpError::InvalidParams(
+            "'report' is required: a SandboxReport object from a real analysis.              Pass \"use_synthetic_fixture\": true to render the built-in fixture instead;              its verdict is NOT an analysis result."
+                .to_string(),
+        )
+    })?;
+    let report: rustre_sandbox_report::SandboxReport = serde_json::from_value(raw.clone())
+        .map_err(|e| McpError::ToolError(format!("'report' is not a SandboxReport: {e}")))?;
+    Ok((report, false))
+}
+
+/// Deserialize the `iocs` argument, or the synthetic fixture on explicit request.
+///
+/// # Errors
+/// As [`report_from_args`], for an `IocSet`.
+fn ioc_set_from_args(args: &Value) -> Result<(rustre_sandbox_report::IocSet, bool), McpError> {
+    if args.get("use_synthetic_fixture").and_then(Value::as_bool) == Some(true) {
+        return Ok((rustre_sandbox_report::IocSet::mock(), true));
+    }
+    let raw = args.get("iocs").ok_or_else(|| {
+        McpError::InvalidParams(
+            "'iocs' is required: an IocSet from a real analysis. Pass              \"use_synthetic_fixture\": true to use the built-in fixture instead."
+                .to_string(),
+        )
+    })?;
+    let set: rustre_sandbox_report::IocSet = serde_json::from_value(raw.clone())
+        .map_err(|e| McpError::ToolError(format!("'iocs' is not an IocSet: {e}")))?;
+    Ok((set, false))
+}
+
+/// Schema for the report-rendering tools.
+fn report_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "report": {"type": "object", "description": "A SandboxReport from a real analysis"},
+            "use_synthetic_fixture": {"type": "boolean", "description": "Render the built-in fixture instead. Output is labelled is_synthetic_fixture and is NOT an analysis result."}
+        },
+        "required": ["report"]
+    })
+}
+
+/// Schema for the IOC-set tool.
+fn ioc_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "iocs": {"type": "object", "description": "An IocSet from a real analysis"},
+            "use_synthetic_fixture": {"type": "boolean", "description": "Use the built-in fixture instead."}
+        },
+        "required": ["iocs"]
+    })
+}
+
 pub struct SandboxReportMockSummaryTool;
 impl SandboxReportMockSummaryTool {
     #[must_use]
@@ -12,15 +92,15 @@ impl SandboxReportMockSummaryTool {
         ToolDefinition {
             name: "sandbox_report_mock_summary".to_string(),
             description: "Return summary of the mock SandboxReport (rustre_sandbox_report::SandboxReport::mock): verdict, score, family, indicator/behavior/ioc counts.".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportMockSummaryTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let r = rustre_sandbox_report::SandboxReport::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (r, is_synthetic_fixture) = report_from_args(&args)?;
         Ok(ToolResult::text(json!({
             "sample": r.sample,
             "sha256": r.sha256,
@@ -32,7 +112,8 @@ impl ToolHandler for SandboxReportMockSummaryTool {
             "ioc_count": r.iocs.len(),
             "technique_count": r.attack.techniques.len(),
             "tags": r.tags,
-            "source": "rustre_sandbox_report::SandboxReport::mock",
+            "is_synthetic_fixture": is_synthetic_fixture,
+            "source": "rustre_sandbox_report::SandboxReport (supplied by the caller)",
         }).to_string()))
     }
 }
@@ -58,7 +139,7 @@ impl SandboxReportIocSetMockTool {
 impl ToolHandler for SandboxReportIocSetMockTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
         let threshold = args.get("confidence_threshold").and_then(Value::as_u64).unwrap_or(80) as u8;
-        let mut set = rustre_sandbox_report::IocSet::mock();
+        let (mut set, is_synthetic_fixture) = ioc_set_from_args(&args)?;
         let before = set.len();
         set.deduplicate();
         let after = set.len();
@@ -74,7 +155,8 @@ impl ToolHandler for SandboxReportIocSetMockTool {
                 "confidence": i.confidence,
                 "context": i.context,
             })).collect::<Vec<_>>(),
-            "source": "rustre_sandbox_report::IocSet::mock",
+            "is_synthetic_fixture": is_synthetic_fixture,
+            "source": "rustre_sandbox_report::IocSet (supplied by the caller)",
         }).to_string()))
     }
 }
@@ -130,7 +212,7 @@ impl SandboxReportMockMarkdownTool {
         ToolDefinition {
             name: "sandbox_report_mock_markdown".to_string(),
             description: "Render the mock SandboxReport as Markdown via rustre_sandbox_report::SandboxReport::mock().to_markdown().".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
@@ -150,7 +232,7 @@ impl SandboxReportMockHtmlTool {
         ToolDefinition {
             name: "sandbox_report_mock_html".to_string(),
             description: "Render the mock SandboxReport as HTML via rustre_sandbox_report::SandboxReport::mock().to_html().".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
@@ -170,15 +252,15 @@ impl SandboxReportClassifyApisTool {
         ToolDefinition {
             name: "sandbox_report_classify_apis".to_string(),
             description: "Return the count of API calls categorized by suspicious substring in the mock SandboxReport.".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportClassifyApisTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let r = rustre_sandbox_report::SandboxReport::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (r, _is_synthetic_fixture) = report_from_args(&args)?;
         let md = r.to_markdown();
         let suspicious_keywords = ["VirtualAlloc", "WriteProcessMemory", "CreateRemoteThread", "LoadLibrary", "GetProcAddress"];
         let matches: Vec<&str> = suspicious_keywords.iter().copied()
@@ -226,15 +308,15 @@ impl SandboxReportScoreEngineComputeTool {
         ToolDefinition {
             name: "sandbox_report_score_engine_compute".to_string(),
             description: "Run rustre_sandbox_report::ScoreEngine::compute + verdict on the mock SandboxReport indicators.".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportScoreEngineComputeTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let r = rustre_sandbox_report::SandboxReport::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (r, _is_synthetic_fixture) = report_from_args(&args)?;
         let engine = rustre_sandbox_report::ScoreEngine::new();
         let score = engine.compute(&r.indicators);
         let verdict = engine.verdict(score);
@@ -256,15 +338,15 @@ impl SandboxReportCriticalIndicatorsTool {
         ToolDefinition {
             name: "sandbox_report_critical_indicators".to_string(),
             description: "Return the critical-severity indicators of the mock SandboxReport (rustre_sandbox_report::SandboxReport::critical_indicators).".to_string(),
-            input_schema: json!({ "type": "object", "properties": {} }),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportCriticalIndicatorsTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let r = rustre_sandbox_report::SandboxReport::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (r, _is_synthetic_fixture) = report_from_args(&args)?;
         let crits = r.critical_indicators();
         let items: Vec<Value> = crits.iter().map(|i| json!({
             "name": i.name,
@@ -348,15 +430,15 @@ impl SandboxReportIocSetDedupTool {
         ToolDefinition {
             name: "sandbox_report_iocset_deduplicate".to_string(),
             description: "Deduplicate mock IocSet and report before/after counts.".to_string(),
-            input_schema: json!({"type":"object","properties":{}}),
+            input_schema: ioc_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportIocSetDedupTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let mut set = rustre_sandbox_report::IocSet::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (mut set, _is_synthetic_fixture) = ioc_set_from_args(&args)?;
         set.add(rustre_sandbox_report::Ioc::new(rustre_sandbox_report::IocKind::Ip, "185.220.101.1", 95, "dup"));
         let before = set.len();
         set.deduplicate();
@@ -488,15 +570,15 @@ impl SandboxReportMockJsonTool {
         ToolDefinition {
             name: "sandbox_report_mock_json".to_string(),
             description: "Return mock SandboxReport JSON length and top metrics.".to_string(),
-            input_schema: json!({"type":"object","properties":{}}),
+            input_schema: report_schema(),
             parameters: Value::Null,
         }
     }
 }
 #[async_trait]
 impl ToolHandler for SandboxReportMockJsonTool {
-    async fn call(&self, _args: Value) -> Result<ToolResult, McpError> {
-        let r = rustre_sandbox_report::SandboxReport::mock();
+    async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
+        let (r, _is_synthetic_fixture) = report_from_args(&args)?;
         let s = r.to_json().map_err(|e| McpError::InternalError(e.to_string()))?;
         Ok(ToolResult::text(json!({"json_len": s.len(), "verdict": r.verdict.to_string(), "score": r.score, "source":"rustre_sandbox_report::SandboxReport::to_json"}).to_string()))
     }
@@ -555,7 +637,7 @@ impl ToolHandler for SandboxReportIndicatorsByCategoryTool {
             "reconnaissance" => IndicatorCategory::Reconnaissance,
             _ => IndicatorCategory::Other,
         };
-        let r = rustre_sandbox_report::SandboxReport::mock();
+        let (r, _is_synthetic_fixture) = report_from_args(&args)?;
         let out: Vec<_> = r.indicators_by_category(&cat).into_iter().map(|i| json!({
             "name": i.name, "severity": i.severity.to_string(), "desc": i.desc
         })).collect();

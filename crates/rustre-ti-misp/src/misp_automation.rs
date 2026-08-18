@@ -280,19 +280,24 @@ impl AutoCorrelation {
         Self::default()
     }
 
-    /// Simulate a correlation run over a set of events.
+    /// Number of event PAIRS a correlation run would have to compare.
     ///
-    /// Returns the number of correlations found (mock).
+    /// This is arithmetic on the event count, not a result: it used to
+    /// multiply the pair count by a made-up 0.3 and report the product as
+    /// "correlations found", a statistic about data it had never seen.
+    /// Correlating real events requires the events; see
+    /// [`crate::misp_correlation`].
     pub fn run(&mut self, event_count: u32) -> u32 {
         if !self.enabled {
             return 0;
         }
-        // Heuristic: expect ~0.3 correlations per event pair.
-        let pairs = (u64::from(event_count) * u64::from(event_count.saturating_sub(1)) / 2) as u32;
-        let correlations = (pairs as f32 * 0.3) as u32;
+        let pairs = u32::try_from(
+            u64::from(event_count) * u64::from(event_count.saturating_sub(1)) / 2,
+        )
+        .unwrap_or(u32::MAX);
         self.last_run = Some(unix_now());
-        self.last_run_count = correlations;
-        correlations
+        self.last_run_count = pairs;
+        pairs
     }
 
     /// Return `true` if a given attribute type is excluded from correlation.

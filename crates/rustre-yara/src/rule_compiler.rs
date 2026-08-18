@@ -1210,7 +1210,7 @@ mod tests {
 
     #[test]
     fn test_atom_quality() {
-        let compiler = RuleCompiler::new();
+        let _compiler = RuleCompiler::new();
         assert_eq!(RuleCompiler::atom_quality(&[]), 0);
         assert_eq!(RuleCompiler::atom_quality(&[0x00, 0x00, 0x00, 0x00]), 0);
         assert_eq!(RuleCompiler::atom_quality(&[0xFF, 0xFF, 0xFF, 0xFF]), 0);

@@ -714,9 +714,37 @@ mod tests {
         let src = "void f() {\n    while (x) {\n        if (skip) goto loop_top;\n        work();\nloop_top:\n    }\n}\n";
         let remover = GotoRemover::new();
         let (out, stats) = remover.process(src);
-        // Should convert or at least not crash.
-        assert!(stats.converted_to_continue >= 0);
-        let _ = out;
+        // ⚠ This asserted `stats.converted_to_continue >= 0` on an unsigned
+        // counter: always true, so the test could not fail. It was also
+        // watching the wrong counter — MEASURED, the pass converts nothing to
+        // `continue` here (`converted_to_continue == 0`) and instead removes
+        // the `goto` by INVERTING the guard:
+        //
+        //     if (skip) goto loop_top;  work();   ->   if (!(skip)) { work(); }
+        //
+        // which is the correct transformation for a backward jump to a label at
+        // the end of the loop body. Asserting the real output makes the test
+        // able to fail if that transformation regresses.
+        assert!(
+            !out.contains("goto"),
+            "the goto must be removed, got: {out}"
+        );
+        assert!(
+            !out.contains("loop_top"),
+            "the now-unreferenced label must go too, got: {out}"
+        );
+        assert!(
+            out.contains("if (!(skip))"),
+            "the guard must be inverted, got: {out}"
+        );
+        assert!(
+            out.contains("work();"),
+            "the guarded body must survive, got: {out}"
+        );
+        assert_eq!(
+            stats.converted_to_continue, 0,
+            "this shape is fixed by guard inversion, not by a `continue`"
+        );
     }
 
     #[test]

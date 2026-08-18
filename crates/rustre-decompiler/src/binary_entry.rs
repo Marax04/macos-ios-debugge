@@ -1287,6 +1287,57 @@ pub fn image_callee_arities(
 /// Serve a `arities_from_seeds` per NON inferire un'arita' da un corpo che non
 /// esiste. Il vincolo dell'asterisco e' deliberato: un tail-call DIRETTO
 /// (`jmp target`) e' una funzione vera e va misurata normalmente.
+/// Riconosce il prologo di salvataggio registri di una funzione VARIADICA.
+///
+/// Forma cercata (Win64, AT&T): un registro argomento viene salvato in uno slot
+/// dello shadow space e subito dopo si prende l'INDIRIZZO di quello slot — cioe'
+/// si costruisce la `va_list`:
+/// ```asm
+///     mov  %r9, 0x58(%rsp)
+///     lea  0x58(%rsp), %r9
+/// ```
+/// E' l'`lea` sullo stesso offset a distinguere una variadica da un normale
+/// spill di parametro: un prologo qualunque salva i registri, solo una variadica
+/// ne prende l'indirizzo per scorrerli.
+///
+/// Si scorre TUTTO il corpo, non solo le prime istruzioni. Misurato: nel caso
+/// che ha motivato questa guardia (`0x140011230` in `sample7_cpp`) la coppia
+/// `mov`/`lea` sta a `0x140011284`, ~0x54 byte dopo l'ingresso — una prima
+/// versione limitata alle prime 16 istruzioni non la vedeva e la guardia
+/// risultava a effetto zero.
+///
+/// Il pattern resta specifico abbastanza: il `lea` deve puntare ESATTAMENTE
+/// allo slot in cui un registro argomento e' stato salvato. E la conseguenza di
+/// un falso positivo e' solo «nessuna evidenza di arita' per quel callee», che
+/// e' la direzione prudente.
+fn ha_prologo_variadico(body: &[Instruction]) -> bool {
+    let head = body;
+    // Offset di stack in cui e' stato salvato un registro argomento.
+    let mut spilled: Vec<String> = Vec::new();
+    for ins in head {
+        let m = ins.mnemonic.to_ascii_lowercase();
+        let o = ins.operands.to_ascii_lowercase();
+        let Some((dst, src)) = crate::split_two(&o) else { continue };
+        if crate::att_mnemonic_stem(&m) == "mov"
+            && dst.contains("(%rsp)")
+            && ["%rcx", "%rdx", "%r8", "%r9"].iter().any(|r| src.trim() == *r)
+            && let Some(off) = dst.split('(').next()
+        {
+            spilled.push(off.trim().to_string());
+            continue;
+        }
+        // `lea OFF(%rsp), reg` sullo STESSO offset appena salvato.
+        if m.starts_with("lea")
+            && src.contains("(%rsp)")
+            && let Some(off) = src.split('(').next()
+            && spilled.iter().any(|s| s == off.trim())
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn e_thunk_di_import(body: &[Instruction]) -> bool {
     body.first().is_some_and(|i| {
         i.mnemonic.to_lowercase().starts_with("jmp") && i.operands.contains('*')
@@ -1367,6 +1418,72 @@ fn arities_from_seeds(
     //    NESSUNA evidenza di una FALSA.
     if !matches!(std::env::var("RUSTRE_THUNK_NO_ARITY").as_deref(), Ok("0") | Ok("false")) {
         order.retain(|va| !e_thunk_di_import(&bodies[va]));
+    }
+    // ── D9-NORETURN (#6670, gate `RUSTRE_NORETURN_NO_ARITY`, opt-in) ──────────
+    //
+    // Stessa logica della guardia D9-THUNK qui sopra, applicata a una seconda
+    // classe di arita' che e' un ARTEFATTO e non una misura.
+    //
+    // Una funzione `noreturn` NON RITORNA MAI: salta nel gestore (`__stack_chk_fail`
+    // -> `abort`), quindi i registri che il suo corpo "legge prima di scrivere"
+    // sono quelli che il CHIAMANTE ha lasciato vivi, non i suoi parametri. La
+    // liveness ne ricava 4 sistematicamente, e la regola D9 propaga quel 4 nei
+    // chiamanti come parametri fantasma.
+    //
+    // MISURATO su `sample7_cpp` con la sonda `RUSTRE_DBG_PARAMREG`: 476
+    // attivazioni della regola D9, di cui
+    //     85 x callee=0x140011230 arity=4   <- `__stack_chk_fail`, che di
+    //                                          parametri ne prende ZERO
+    //     48 x callee=0x14002bec0 arity=4
+    //     46 x callee=0x14002bc50 arity=4
+    //     46 x callee=0x140022170 arity=4
+    //     42 x callee=0x140022430 arity=4
+    // e i 5 OVER `pthread_*` (tutti con esattamente +2 parametri, corpo che non
+    // usa mai `a3`/`a4`) nascono proprio da qui: la sonda mostra
+    // `fn=pthread_join callee=0x140011230 arity=4 accende a3/a4`.
+    //
+    // `__stack_chk_fail` NON e' nei prototipi pubblicati, quindi la strada delle
+    // firme (#6650) non lo copre: serve questa regola, che e' semantica e non
+    // euristica. Il bucket contiene 231 funzioni gia' riconosciute `__noreturn`.
+    //
+    // Assenza dalla mappa e' il comportamento corretto: D9 e' gia' scritta per
+    // non fare nulla quando il callee non ha un'arita' nota — meglio NESSUNA
+    // evidenza di una FALSA (stessa frase della guardia thunk, stesso motivo).
+    if matches!(
+        std::env::var("RUSTRE_NORETURN_NO_ARITY").as_deref(),
+        Ok("1") | Ok("true")
+    ) {
+        order.retain(|va| !crate::detect_noreturn(&bodies[va]));
+    }
+    // ── D9-VARIADIC (#6680, gate `RUSTRE_VARIADIC_NO_ARITY`, opt-in) ─────────
+    //
+    // Terza classe di arita' che e' un ARTEFATTO, dopo i thunk (#6600) e il
+    // tentativo `noreturn` (#6670, misurato a effetto zero: quelle funzioni
+    // RITORNANO, vedi STATUS §32).
+    //
+    // Una funzione VARIADICA apre salvando i registri argomento nello shadow
+    // space e prendendo l'indirizzo dello slot, per costruire la `va_list`:
+    //     mov  %r9, 0x58(%rsp)     <- spill
+    //     lea  0x58(%rsp), %r9     <- indirizzo dello spill = va_list
+    //     mov  %r9, 0x28(%rsp)
+    // Legge quindi TUTTI e quattro i registri argomento, e la sua arita' 4 e'
+    // corretta PER LEI. Ma la regola D9 la propaga nei chiamanti, che variadici
+    // non sono: da qui i 5 OVER `pthread_*` con esattamente +2 parametri
+    // (STATUS §31.1), misurati sulla sonda come
+    // `fn=pthread_join callee=0x140011230 arity=4 accende a3/a4`.
+    //
+    // `published_lib_arity` scarta gia' le variadiche (`if sig.is_variadic`),
+    // ma li' il callee e' noto per NOME; qui e' noto solo per VA, quindi serve
+    // riconoscere il prologo.
+    //
+    // Assenza dalla mappa e' il comportamento corretto: D9 non fa nulla quando
+    // il callee non ha un'arita' nota — meglio NESSUNA evidenza di una FALSA
+    // (stessa motivazione della guardia thunk).
+    if matches!(
+        std::env::var("RUSTRE_VARIADIC_NO_ARITY").as_deref(),
+        Ok("1") | Ok("true")
+    ) {
+        order.retain(|va| !ha_prologo_variadico(&bodies[va]));
     }
     let mut out: HashMap<u64, usize> =
         order.iter().map(|&va| (va, crate::win64_recovered_arity(&bodies[&va]))).collect();

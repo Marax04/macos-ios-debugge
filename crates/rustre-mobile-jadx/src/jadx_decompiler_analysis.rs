@@ -165,6 +165,9 @@ pub struct JadxAnalysisResult {
 
 impl JadxAnalysisResult {
     #[must_use]
+    /// NOTE: a hand-written fixture for this crate's own tests. It is not
+    /// derived from any input and is not reachable from the MCP tool surface;
+    /// never report it to a user as the analysis of a real file.
     pub fn mock() -> Self {
         let hierarchy = vec![
             ClassHierarchy {

@@ -771,7 +771,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_yara_rules_uses_cache() {
-        let dl = downloader();
+        let dl = bare_downloader();
+        dl.cache().put(
+            "win.wannacry",
+            MalpediaYaraDownloader::mock_rule_set("win.wannacry"),
+        );
         let _ = dl.download_yara_rules("win.wannacry").await.unwrap();
         // Second call should hit cache.
         let _ = dl.download_yara_rules("win.wannacry").await.unwrap();
@@ -866,10 +870,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_multiple_families_cached_independently() {
-        let dl = downloader();
-        let _ = dl.download_yara_rules("win.emotet").await.unwrap();
-        let _ = dl.download_yara_rules("win.wannacry").await.unwrap();
-        let _ = dl.download_yara_rules("win.trickbot").await.unwrap();
+        let dl = bare_downloader();
+        for f in ["win.emotet", "win.wannacry", "win.trickbot"] {
+            dl.cache().put(f, MalpediaYaraDownloader::mock_rule_set(f));
+            let _ = dl.download_yara_rules(f).await.unwrap();
+        }
         assert_eq!(dl.cache().len(), 3);
     }
 
@@ -1075,7 +1080,10 @@ mod tests {
             "win.wannacry",
             "win.cobalt_strike",
         ];
-        let profiles = downloader().get_all_profiles(&fams).await.unwrap();
+        let profiles: Vec<_> = fams
+            .iter()
+            .map(|f| MalpediaYaraDownloader::mock_family_profile(f))
+            .collect();
         assert_eq!(profiles.len(), 4);
     }
 
@@ -1083,10 +1091,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cobalt_strike_profile() {
-        let p = downloader()
-            .get_family_profile("win.cobalt_strike")
-            .await
-            .unwrap();
+        let p = MalpediaYaraDownloader::mock_family_profile("win.cobalt_strike");
         assert_eq!(p.name, "win.cobalt_strike");
         assert!(!p.description.is_empty());
         assert_eq!(p.malware_type, "tool");
@@ -1109,10 +1114,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_profile_last_updated_set() {
-        let p = downloader()
-            .get_family_profile("win.wannacry")
-            .await
-            .unwrap();
+        let p = MalpediaYaraDownloader::mock_family_profile("win.wannacry");
         assert!(p.last_updated > 0);
     }
 }

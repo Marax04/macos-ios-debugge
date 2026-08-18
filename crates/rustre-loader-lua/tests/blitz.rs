@@ -515,9 +515,13 @@ fn parse_proto_51_truncated_after_name() {
 #[test]
 fn parse_proto_51_with_constants() {
     let mut buf: Vec<u8> = Vec::new();
-    push_u32(&mut buf, 0); // name
+    // The 5.1 dump format writes string lengths as size_t; parse_proto_51
+    // synthesises an 8-byte pointer size, so the name length is 8 bytes wide,
+    // and `nups` precedes `numparams`.
+    buf.extend_from_slice(&0u64.to_le_bytes()); // name
     push_u32(&mut buf, 1); // first_line
     push_u32(&mut buf, 2); // last_line
+    buf.push(0); // nups
     buf.push(0); // num_params
     buf.push(0); // is_vararg
     buf.push(2); // max_stack

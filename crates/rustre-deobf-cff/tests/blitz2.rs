@@ -4,7 +4,7 @@ use rustre_core::address::Address;
 use rustre_deobf_cff::{
     BlockMapping, CffCandidate, CffDeflattener, CffDeobfuscationPass, CffDetector,
     CffDispatcher, CffDispatcherDetector, CffPattern, CffRecoverer, CffVerifier,
-    CfgEdge, ConstLattice, EdgeType, RecoveredEdgeType,
+    CfgEdge, ConstLattice, EdgeType,
     SimpleBb, SimpleCfg, StateGraph, StateTransitionAnalyzer, StateVariable,
 };
 use rustre_deobf_cff::ollvm::{

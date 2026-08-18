@@ -674,13 +674,31 @@ mod ssa_opt {
         B(bool),
     }
 
-    // Payloads are carried only for their Debug rendering in test failures.
+    // Payloads are carried for the failure message.
+    //
+    // ⚠ `derive(Debug)` does not count as a read, so `UndefinedVar(SsaRef)` and
+    // `NoBlock(u32)` were reported as never-read fields and the comment above
+    // ("carried only for their Debug rendering") was the justification for an
+    // `#[allow(dead_code)]`. Rather than silence it, the payloads are now read
+    // by a real `Display`, which is also what a failing assertion should print:
+    // "undefined variable v3" beats "UndefinedVar(SsaRef { .. })".
     #[derive(Debug)]
     enum ExecErr {
         UndefinedVar(SsaRef),
         TypeError,
         NoBlock(u32),
         StepLimit,
+    }
+
+    impl std::fmt::Display for ExecErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::UndefinedVar(r) => write!(f, "undefined variable {r:?}"),
+                Self::TypeError => write!(f, "type error"),
+                Self::NoBlock(id) => write!(f, "no such block: {id}"),
+                Self::StepLimit => write!(f, "step limit reached"),
+            }
+        }
     }
 
     fn get(env: &HashMap<SsaRef, Val>, r: &SsaRef) -> Result<Val, ExecErr> {

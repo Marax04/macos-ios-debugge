@@ -968,7 +968,7 @@ fn dwarf_location_eq_30_pairs() {
 fn dw_form_eq_30_pairs() {
     let mut lcg = Lcg::new();
     for _ in 0..30 {
-        let code = (lcg.next() & 0xFF);
+        let code = lcg.next() & 0xFF;
         let a = ab::DwForm::from_code(code);
         let b = ab::DwForm::from_code(code);
         assert_eq!(a, b);

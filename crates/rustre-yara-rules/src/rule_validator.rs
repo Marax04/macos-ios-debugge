@@ -671,15 +671,26 @@ fn is_generic_string(value: &str) -> bool {
 }
 
 fn has_catastrophic_backtracking(regex: &str) -> bool {
-    // Detect patterns like (a+)+ or (a|b)+ followed by something requiring backtrack
+    // Detect nested quantifiers: `(X+)+`, `(X*)+`, `(X+)*` — the shape that
+    // makes a backtracking engine try exponentially many splits.
+    //
+    // ⚠ The scan used to run `for i in 0..len.saturating_sub(4)`, which cannot
+    // reach the pattern it is looking for. The smallest input that exhibits the
+    // defect is `(a+)+b`: the inner `+` sits at index 2 and `len - 4` is also 2,
+    // so the loop stopped one index short and returned false. The detector was
+    // therefore blind to its own canonical example — `test_catastrophic_
+    // backtracking_detection` asserted exactly that case and had been failing.
+    //
+    // Three bytes are inspected per position, so the last valid start is
+    // `len - 3`; the bound is `len - 2` because the range is exclusive.
     let bytes = regex.as_bytes();
-    for i in 0..bytes.len().saturating_sub(4) {
-        // (X+)+ or (X*)+ patterns
-        if (bytes[i] == b'+' || bytes[i] == b'*' || bytes[i] == b'?')
-            && i + 2 < bytes.len() && bytes[i + 1] == b')'
-                && i + 2 < bytes.len() && (bytes[i + 2] == b'+' || bytes[i + 2] == b'*') {
-                    return true;
-                }
+    for i in 0..bytes.len().saturating_sub(2) {
+        let inner_quantifier = matches!(bytes[i], b'+' | b'*' | b'?');
+        let closes_group = bytes[i + 1] == b')';
+        let outer_quantifier = matches!(bytes[i + 2], b'+' | b'*');
+        if inner_quantifier && closes_group && outer_quantifier {
+            return true;
+        }
     }
     false
 }

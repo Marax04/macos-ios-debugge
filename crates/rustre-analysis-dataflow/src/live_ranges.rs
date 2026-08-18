@@ -333,7 +333,7 @@ impl InterferenceGraph {
 mod tests {
     use super::*;
     use crate::cfg_dom::{BBId, Cfg};
-    use crate::ssa::{Instruction, SsaFunction, SsaVar, Var};
+    use crate::ssa::{Instruction, SsaFunction, Var};
 
     fn v(s: &str) -> Var {
         Var::new(s)
@@ -735,7 +735,7 @@ impl LiveRanges {
 mod live_range_extended_tests {
     use super::*;
     use crate::cfg_dom::{BBId, Cfg};
-    use crate::ssa::{Instruction, SsaFunction, SsaVar, Var};
+    use crate::ssa::{Instruction, SsaFunction, Var};
 
     fn v(s: &str) -> Var {
         Var::new(s)

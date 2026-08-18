@@ -603,10 +603,19 @@ impl MispSearchClient {
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Execute a search and return a mock `SearchResponse`.
+    /// Execute a search against the configured MISP instance.
     ///
-    /// In production this would dispatch an HTTP POST and deserialise the
-    /// response; here we return deterministic mock data.
+    /// This type builds and validates the request but has no HTTP transport of
+    /// its own, so a search cannot be answered here.  It used to return
+    /// deterministic sample attributes/events — complete with `to_ids` flags,
+    /// `tlp:red` tags and correlation counts — as if they had matched.
+    ///
+    /// The real search is [`crate::client::MispClient::search_by_ioc`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the validation error for a malformed request, otherwise a
+    /// message naming the required network lookup.
     pub async fn search(
         &self,
         request: &SearchRequest,
@@ -615,7 +624,13 @@ impl MispSearchClient {
         if let Some(err) = request.validate() {
             return Err(err);
         }
-        Ok(self.mock_response(request, controller))
+        let _ = controller;
+        Err(format!(
+            "network lookup required: MispSearchClient builds requests for {} but has no \
+             HTTP transport; no results were produced and none were invented. Use \
+             crate::client::MispClient against a reachable instance.",
+            self.search_url(controller)
+        ))
     }
 
     /// # Errors
@@ -689,9 +704,16 @@ impl MispSearchClient {
         Ok(combined)
     }
 
-    // ── Mock implementation ───────────────────────────────────────────────────
+    // ── Synthetic response builder (fixtures, never a search result) ─────────
 
-    fn mock_response(&self, req: &SearchRequest, controller: SearchController) -> SearchResponse {
+    /// Build a SYNTHETIC [`SearchResponse`] shaped like a MISP reply.
+    ///
+    /// Every field is generated from the request and an index counter; it
+    /// matches nothing and describes nothing.  It exists so the pagination and
+    /// response-handling code can be tested without a MISP instance, and is
+    /// deliberately no longer reachable from [`Self::search`].
+    #[must_use]
+    pub fn mock_response(&self, req: &SearchRequest, controller: SearchController) -> SearchResponse {
         let limit = req.limit.unwrap_or(10).min(20);
         match controller {
             SearchController::Attributes => {
@@ -802,10 +824,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_search_by_value_returns_attrs() {
+    async fn test_search_by_value_reports_network_lookup() {
         let c = client();
-        let resp = c.search_by_value("evil.com").await.unwrap();
-        assert!(!resp.attributes.is_empty());
+        let err = c.search_by_value("evil.com").await.unwrap_err();
+        assert!(err.contains("network lookup required"), "{err}");
+        assert!(err.contains("none were invented"), "{err}");
+    }
+
+    #[test]
+    fn test_synthetic_response_still_available_for_tests() {
+        let c = client();
+        let req = SearchRequest::new().with_value("evil.com").with_limit(4);
+        let resp = c.mock_response(&req, SearchController::Attributes);
+        assert_eq!(resp.attributes.len(), 4);
         for attr in &resp.attributes {
             assert!(attr.value.contains("evil.com"));
         }
@@ -815,7 +846,8 @@ mod tests {
     async fn test_search_event_controller() {
         let c = client();
         let req = SearchRequest::new().with_limit(5);
-        let resp = c.search(&req, SearchController::Events).await.unwrap();
+        assert!(c.search(&req, SearchController::Events).await.is_err());
+        let resp = c.mock_response(&req, SearchController::Events);
         assert!(!resp.events.is_empty());
         assert!(resp.attributes.is_empty());
     }
@@ -824,26 +856,29 @@ mod tests {
     async fn test_search_respects_limit() {
         let c = client();
         let req = SearchRequest::new().with_limit(3);
-        let resp = c.search(&req, SearchController::Attributes).await.unwrap();
+        let resp = c.mock_response(&req, SearchController::Attributes);
         assert!(resp.attributes.len() <= 3);
     }
 
     #[tokio::test]
     async fn test_search_by_value_and_type() {
         let c = client();
-        let resp = c.search_by_value_and_type("abc123", "sha256").await.unwrap();
-        for attr in &resp.attributes {
+        assert!(c.search_by_value_and_type("abc123", "sha256").await.is_err());
+        let req = SearchRequest::new().with_value("abc123").with_type("sha256");
+        for attr in &c.mock_response(&req, SearchController::Attributes).attributes {
             assert_eq!(attr.type_, "sha256");
         }
     }
 
     #[tokio::test]
-    async fn test_batch_search() {
+    async fn test_batch_search_fails_per_value_not_silently() {
         let c = client();
         let results = c.batch_search_by_values(&["hash1", "hash2", "domain.com"]).await;
         assert_eq!(results.len(), 3);
+        // Each entry carries its own honest failure rather than empty results
+        // that would read as "no threat intelligence for this value".
         for r in &results {
-            assert!(r.is_ok());
+            assert!(r.is_err());
         }
     }
 

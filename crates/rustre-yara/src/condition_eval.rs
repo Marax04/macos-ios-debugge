@@ -676,7 +676,7 @@ mod tests {
     #[test]
     fn test_hex_pattern_match() {
         use crate::rule_parser::HexByte;
-        let sm = StringMatcher::new();
+        let _sm = StringMatcher::new();
         let file = b"\x60\xE8\xAA\xBB\x00\x00";
         let s = crate::rule_parser::YaraString::new(
             "$a".into(),

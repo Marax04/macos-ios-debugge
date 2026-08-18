@@ -602,7 +602,7 @@ pub struct DefUseSummary {
 mod def_use_extended_tests {
     use super::*;
     use crate::cfg_dom::{BBId, Cfg};
-    use crate::ssa::{Instruction, SsaFunction, SsaVar, Var};
+    use crate::ssa::{Instruction, SsaFunction, Var};
 
     use crate::test_util::sv;
 

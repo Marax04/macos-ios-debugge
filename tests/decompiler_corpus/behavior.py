@@ -55,12 +55,36 @@ def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
 
+# Quale percorso di emissione valutare.
+#
+# `False` (default): i `.c` di PATH A — il comportamento storico di questo
+# harness, e l'unico misurato finora (behaviour 15/63).
+# `True` (`--path-b`): i `.hlil.c` di PATH B, che esistono solo se il corpus e'
+# stato rigenerato con `RUSTRE_HLIL=1`.
+#
+# Perche' serve: path A e path B possono DIVERGERE sulla semantica, non solo
+# sulla forma. Misurato su `my_strlen` (sample11_c): path A promuove il puntatore
+# di scorrimento a `__int64 *` e avanza di 8 byte (atteso 1/11/16, emesso
+# 48/72/136 = multipli di 8, DIVERGE); path B tiene l'intero e mette il cast
+# sull'ACCESSO — `*(uint8_t *)v1` con `v1 = v1 + 1` — e calcola la lunghezza
+# GIUSTA. Finche' l'harness legge solo path A, quel vantaggio e' invisibile e la
+# scelta fra i due percorsi resta un'opinione invece che un numero.
+PATH_B = False
+
+
+def _is_emitted_unit(fname):
+    """Il file appartiene al percorso di emissione che stiamo misurando?"""
+    if PATH_B:
+        return fname.endswith(".hlil.c")
+    return fname.endswith(".c") and not fname.endswith(".hlil.c")
+
+
 def find_definition(bucket_dir, name):
     """The emitted .c defining `name`. Control-flow keywords can't appear here
     because we anchor on the exact identifier followed by `(`...`) {`."""
     pat = re.compile(r'^[A-Za-z_][\w \*]*?\b' + re.escape(name) + r'\s*\([^)]*\)\s*\{', re.M)
     for f in sorted(os.listdir(bucket_dir)):
-        if not f.endswith(".c") or f.endswith(".hlil.c"):
+        if not _is_emitted_unit(f):
             continue
         p = os.path.join(bucket_dir, f)
         try:
@@ -336,7 +360,7 @@ def build_bucket(work, bucket_dir, prelude, ref_names, obj_of_file):
         fh.write("main em_main_unused\n")
 
     for f in sorted(os.listdir(bucket_dir)):
-        if not f.endswith(".c") or f.endswith(".hlil.c"):
+        if not _is_emitted_unit(f):
             continue
         unit = os.path.join(work, "u_" + f)
         with open(unit, "w", encoding="utf-8") as out:
@@ -515,7 +539,16 @@ def main():
                          "behavior.json 20:33:55).")
     ap.add_argument("--keep", action="store_true", help="keep the build dir")
     ap.add_argument("--spec", default=os.path.join(HERE, "behavior_spec.json"))
+    ap.add_argument("--path-b", action="store_true",
+                    help="measure the PATH B units (*.hlil.c) instead of path A "
+                         "(*.c). The snapshot must have been generated with "
+                         "RUSTRE_HLIL=1, otherwise no .hlil.c exists and every "
+                         "function reports NOT_EMITTED. Lets the two emission "
+                         "paths be compared on the metric that measures the "
+                         "stated goal instead of on inspection.")
     a = ap.parse_args()
+    global PATH_B
+    PATH_B = a.path_b
 
     spec = json.load(open(a.spec))
     prelude = os.path.join(HERE, "ida_defs.h")

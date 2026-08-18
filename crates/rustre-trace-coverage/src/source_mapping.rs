@@ -566,12 +566,21 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    /// A reader positioned at the start of `data`.
     const fn new(data: &'a [u8]) -> Self {
         Self { data, pos: 0 }
     }
 
+    /// A reader positioned at `pos`.
+    ///
+    /// Defined in terms of [`Self::new`] so there is one place that decides
+    /// what a fresh reader looks like. `new` previously had no caller at all —
+    /// `at` duplicated its field initialiser — which is how the two could have
+    /// drifted apart.
     const fn at(data: &'a [u8], pos: usize) -> Self {
-        Self { data, pos }
+        let mut r = Self::new(data);
+        r.pos = pos;
+        r
     }
 
     const fn eof(&self) -> bool {
@@ -697,7 +706,13 @@ fn str_at(section: &[u8], offset: usize) -> Option<String> {
 
 /// One decoded attribute value.
 #[derive(Debug, Clone)]
-enum AttrValue {
+/// A decoded DWARF attribute value.
+///
+/// Public because the accessors below are the supported way to read a value
+/// without matching on the form: DWARF lets the same attribute arrive as
+/// several different forms, and a consumer that matches one form silently
+/// drops the others.
+pub enum AttrValue {
     Addr(u64),
     Uint(u64),
     Int(i64),
@@ -705,6 +720,47 @@ enum AttrValue {
     StrOffset(u64),
     Flag(bool),
     Skipped,
+}
+
+impl AttrValue {
+    /// The value as an unsigned integer, whatever numeric form carried it.
+    ///
+    /// ⚠ `Int`, `StrOffset` and `Flag` had their payloads reported as never
+    /// read: the DIE walker decoded those attribute forms and then discarded
+    /// what it had decoded. A `DW_AT_decl_line` encoded as `DW_FORM_sdata`
+    /// (which is legal, and what some producers emit) therefore parsed
+    /// successfully and contributed nothing. These accessors are the reading
+    /// side; `signed`/`flag` exist so a caller can ask for the form it needs
+    /// without matching on the enum.
+    pub fn unsigned(&self) -> Option<u64> {
+        match *self {
+            Self::Addr(v) | Self::Uint(v) | Self::StrOffset(v) => Some(v),
+            Self::Int(v) => u64::try_from(v).ok(),
+            Self::Flag(b) => Some(u64::from(b)),
+            Self::Str(_) | Self::Skipped => None,
+        }
+    }
+
+    /// The value as a signed integer.
+    pub fn signed(&self) -> Option<i64> {
+        match *self {
+            Self::Int(v) => Some(v),
+            Self::Addr(v) | Self::Uint(v) | Self::StrOffset(v) => i64::try_from(v).ok(),
+            Self::Flag(b) => Some(i64::from(b)),
+            Self::Str(_) | Self::Skipped => None,
+        }
+    }
+
+    /// The value as a DWARF flag. Any non-zero integer form is true, matching
+    /// how `DW_FORM_flag` and `DW_FORM_flag_present` are defined.
+    pub fn flag(&self) -> Option<bool> {
+        match *self {
+            Self::Flag(b) => Some(b),
+            Self::Addr(v) | Self::Uint(v) | Self::StrOffset(v) => Some(v != 0),
+            Self::Int(v) => Some(v != 0),
+            Self::Str(_) | Self::Skipped => None,
+        }
+    }
 }
 
 /// One abbreviation declaration from `.debug_abbrev`.
@@ -1143,33 +1199,70 @@ impl DwarfParser {
                 let mut high_pc_is_addr = false;
                 let mut decl_file = None;
                 let mut decl_line = None;
+                let mut is_declaration = false;
 
                 for (at, form, implicit) in &abbrev.attrs {
                     let value = read_form(&mut r, *form, *implicit, addr_size, debug_str)?;
-                    match (*at, &value) {
-                        (0x03, AttrValue::Str(s)) => name = Some(s.clone()),
-                        (0x6e | 0x2007, AttrValue::Str(s)) => linkage = Some(s.clone()),
-                        (0x11, AttrValue::Addr(a) | AttrValue::Uint(a)) => low_pc = Some(*a),
-                        (0x12, AttrValue::Addr(a)) => {
-                            high_pc_raw = Some(*a);
-                            high_pc_is_addr = true;
+                    // ⚠ The numeric attributes used to be matched against
+                    // `AttrValue::Uint` (and `Addr`) ONLY. DWARF does not
+                    // require those forms: `DW_AT_decl_line` and
+                    // `DW_AT_decl_file` are legally encoded as `DW_FORM_sdata`
+                    // (→ `AttrValue::Int`), and some producers do exactly that.
+                    // Such an attribute was decoded correctly and then fell
+                    // through `_ => {}`, so the function was recorded with no
+                    // line and no file — silently, with no parse error.
+                    //
+                    // Going through `AttrValue::unsigned()` accepts every
+                    // numeric form the reader can produce, and still refuses a
+                    // string or a skipped attribute.
+                    match *at {
+                        0x03 => {
+                            if let AttrValue::Str(s) = &value {
+                                name = Some(s.clone());
+                            }
                         }
-                        (0x12, AttrValue::Uint(a)) => high_pc_raw = Some(*a),
-                        (0x3a, AttrValue::Uint(i)) => {
-                            decl_file = usize::try_from(*i)
-                                .ok()
+                        0x6e | 0x2007 => {
+                            if let AttrValue::Str(s) = &value {
+                                linkage = Some(s.clone());
+                            }
+                        }
+                        0x11 => low_pc = value.unsigned(),
+                        0x12 => {
+                            // `DW_AT_high_pc` is an ADDRESS when the form is an
+                            // address form and an OFFSET from `low_pc`
+                            // otherwise — the distinction changes the answer,
+                            // so it is read from the form, not from the value.
+                            high_pc_is_addr = matches!(value, AttrValue::Addr(_));
+                            high_pc_raw = value.unsigned();
+                        }
+                        0x3a => {
+                            decl_file = value
+                                .unsigned()
+                                .and_then(|i| usize::try_from(i).ok())
                                 .and_then(|i| files.get(i))
                                 .cloned();
                         }
-                        (0x3b, AttrValue::Uint(l)) => {
-                            decl_line = u32::try_from(*l).ok();
+                        0x3b => {
+                            decl_line = value.unsigned().and_then(|l| u32::try_from(l).ok());
                         }
+                        // DW_AT_declaration
+                        0x3c => is_declaration = value.flag().unwrap_or(false),
                         _ => {}
                     }
                 }
 
                 let is_subprogram = abbrev.tag == 0x2e;
                 let is_inlined = abbrev.tag == 0x1d;
+                // A DIE carrying `DW_AT_declaration` describes a function that
+                // is DECLARED here and defined elsewhere. Emitting it as a
+                // function attributes an address range to a body this CU does
+                // not contain. It is read through `flag()` because the
+                // attribute is legally `DW_FORM_flag`, `DW_FORM_flag_present`
+                // or a plain integer form, and matching only one of those is
+                // how the other two get missed.
+                if is_declaration {
+                    continue;
+                }
                 if (is_subprogram || is_inlined)
                     && let (Some(n), Some(lo)) = (name, low_pc)
                 {
@@ -1527,5 +1620,46 @@ mod tests {
         assert!(sm.has_debug_info);
         assert_eq!(sm.lookup_location(0x1020).expect("row").line, 14);
         assert_eq!(sm.lookup_function(0x1005).expect("func").name, "main");
+    }
+}
+
+#[cfg(test)]
+mod attr_value_accessor_tests {
+    use super::AttrValue;
+
+    /// Every numeric form must answer `unsigned`, including the ones whose
+    /// payloads were previously never read.
+    #[test]
+    fn numeric_forms_read_back_as_unsigned() {
+        assert_eq!(AttrValue::Addr(0x1000).unsigned(), Some(0x1000));
+        assert_eq!(AttrValue::Uint(42).unsigned(), Some(42));
+        assert_eq!(AttrValue::StrOffset(7).unsigned(), Some(7));
+        assert_eq!(AttrValue::Int(9).unsigned(), Some(9));
+        assert_eq!(AttrValue::Flag(true).unsigned(), Some(1));
+    }
+
+    /// A negative `DW_FORM_sdata` has no unsigned reading, and must say so
+    /// rather than wrap around.
+    #[test]
+    fn a_negative_signed_value_has_no_unsigned_reading() {
+        assert_eq!(AttrValue::Int(-1).unsigned(), None);
+        assert_eq!(AttrValue::Int(-1).signed(), Some(-1));
+    }
+
+    /// `flag` follows the DWARF rule that any non-zero integer is true.
+    #[test]
+    fn any_nonzero_integer_is_a_true_flag() {
+        assert_eq!(AttrValue::Flag(false).flag(), Some(false));
+        assert_eq!(AttrValue::Uint(0).flag(), Some(false));
+        assert_eq!(AttrValue::Uint(3).flag(), Some(true));
+        assert_eq!(AttrValue::Int(-2).flag(), Some(true));
+    }
+
+    /// A string or a skipped attribute is not a number and must not pretend.
+    #[test]
+    fn non_numeric_forms_refuse() {
+        assert_eq!(AttrValue::Str("x".to_string()).unsigned(), None);
+        assert_eq!(AttrValue::Skipped.signed(), None);
+        assert_eq!(AttrValue::Skipped.flag(), None);
     }
 }

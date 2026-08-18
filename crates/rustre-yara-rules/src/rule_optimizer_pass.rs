@@ -433,9 +433,21 @@ impl OptimizationPass for HexNormalizerPass {
         let mut change_log = Vec::new();
         let mut hex_count = 0usize;
 
+        // ⚠ `in_hex` used to be set by the FIRST `{`, which in
+        // `rule X { strings: $a = { 4D 5A } condition: $a }` is the rule body
+        // brace, not the hex-string brace. Everything after it was treated as
+        // hex, so this pass UPPERCASED IDENTIFIERS: `$a` became `$A` and
+        // `condition: $a` no longer referred to the string it defined. The
+        // failing test only caught the symptom (`changed` was true for a rule
+        // already uppercase); the real defect was that the pass corrupted the
+        // rule.
+        //
+        // A `{` opens a hex block only when it follows an `=`, i.e. it is the
+        // value of a string definition. Anything else is structure.
+        let mut last_significant: Option<char> = None;
         for ch in rule_text.chars() {
             if ch == '{' {
-                in_hex = true;
+                in_hex = last_significant == Some('=');
                 out.push(ch);
             } else if ch == '}' {
                 in_hex = false;
@@ -446,6 +458,9 @@ impl OptimizationPass for HexNormalizerPass {
                 changed = true;
             } else {
                 out.push(ch);
+            }
+            if !ch.is_whitespace() {
+                last_significant = Some(ch);
             }
         }
 

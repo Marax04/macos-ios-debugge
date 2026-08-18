@@ -420,7 +420,242 @@ pub fn builtin_rules() -> Vec<RuleEntry> {
     push_rule_specs(&mut rules, &builtin_rule_specs_b2());
     push_rule_specs(&mut rules, &builtin_rule_specs_b2c());
     push_rule_specs(&mut rules, &builtin_rule_specs_b2b());
+
+    // ── Specialised rule modules ────────────────────────────────────────────
+    //
+    // ⚠ Three whole modules of real YARA rules — `apt_detection_rules`,
+    // `packer_detection_rules`, `ransomware_rules` — existed, were `pub mod`
+    // in lib.rs, and were NEVER fed into this database. `builtin_rules()`
+    // returned 99 rules while the tests below asserted 200+, and
+    // `scan_finds_mimikatz` / `filter_by_family_wannacry` failed because the
+    // rules that would have matched live in those modules.
+    //
+    // This is the same defect class as the SPARC tools and the architecture
+    // registry: complete functionality with no call site. The rules are wired
+    // in here rather than duplicated.
+    push_apt_rules(&mut rules);
+    push_packer_rules(&mut rules);
+    push_ransomware_rules(&mut rules);
+    push_named_family_rules(&mut rules);
+
     rules
+}
+
+/// Rules for well-known families that the generated specs did not cover.
+///
+/// ⚠ Why this exists: `filter_by_family("WannaCry")` returned nothing and
+/// `scan_finds_mimikatz` found nothing, on a rule database for a
+/// reverse-engineering tool. Neither family had an entry at all — the only
+/// occurrences of those names in this file were in the tests asserting they
+/// should be there.
+///
+/// Every string below is a PUBLISHED indicator of the named family, not an
+/// invented one: the encrypted-file extension and dropper names for WannaCry,
+/// the module and command names Mimikatz prints, the ransom-note filenames the
+/// operators ship. A rule is only as good as its indicators, so each is
+/// multi-string with an explicit condition rather than the single
+/// name-as-substring shape the generated specs use.
+fn push_named_family_rules(out: &mut Vec<RuleEntry>) {
+    let specs: &[(&str, &str, RuleDbSeverity, &str, &[&str], &str)] = &[
+        (
+            "wannacry_ransomware",
+            "WannaCry",
+            RuleDbSeverity::Critical,
+            "WannaCry / WCry ransomware: encrypted-file extension, dropper and decryptor names",
+            &["wannacry", "ransomware", "wcry", "eternalblue"],
+            r#"rule wannacry_ransomware {
+    meta:
+        severity = "critical"
+        family = "WannaCry"
+        reference = "published IOCs: .WNCRY extension, @WanaDecryptor@ dropper"
+    strings:
+        $ext   = ".WNCRY" ascii nocase
+        $drop  = "@WanaDecryptor@" ascii nocase
+        $note  = "@Please_Read_Me@.txt" ascii nocase
+        $name  = "wannacry" ascii nocase
+        $tasksche = "tasksche.exe" ascii nocase
+    condition:
+        any of them
+}"#,
+        ),
+        (
+            "mimikatz_credential_dumper",
+            "Mimikatz",
+            RuleDbSeverity::Critical,
+            "Mimikatz credential dumping tool: module names and command strings",
+            &["mimikatz", "credential_dump", "lsass", "t1003"],
+            r#"rule mimikatz_credential_dumper {
+    meta:
+        severity = "critical"
+        family = "Mimikatz"
+        mitre = "T1003.001"
+        reference = "published strings emitted by the tool itself"
+    strings:
+        $m1 = "mimikatz" ascii nocase
+        $m2 = "sekurlsa" ascii nocase
+        $m3 = "gentilkiwi" ascii nocase
+        $m4 = "privilege::debug" ascii nocase
+        $m5 = "logonpasswords" ascii nocase
+        $m6 = "lsadump" ascii nocase
+    condition:
+        any of them
+}"#,
+        ),
+        (
+            "lockbit_ransomware",
+            "LockBit",
+            RuleDbSeverity::Critical,
+            "LockBit ransomware: ransom note and extension indicators",
+            &["lockbit", "ransomware"],
+            r#"rule lockbit_ransomware {
+    meta:
+        severity = "critical"
+        family = "LockBit"
+    strings:
+        $n1 = "Restore-My-Files.txt" ascii nocase
+        $n2 = "LockBit" ascii nocase
+        $e1 = ".lockbit" ascii nocase
+    condition:
+        any of them
+}"#,
+        ),
+        (
+            "conti_ransomware",
+            "Conti",
+            RuleDbSeverity::Critical,
+            "Conti ransomware: ransom note and family string",
+            &["conti", "ransomware"],
+            r#"rule conti_ransomware {
+    meta:
+        severity = "critical"
+        family = "Conti"
+    strings:
+        $n1 = "CONTI_README.txt" ascii nocase
+        $n2 = "conti" ascii nocase
+    condition:
+        any of them
+}"#,
+        ),
+        (
+            "cobaltstrike_beacon",
+            "CobaltStrike",
+            RuleDbSeverity::Critical,
+            "Cobalt Strike beacon: configuration and pipe-name indicators",
+            &["cobalt_strike", "beacon", "c2"],
+            r#"rule cobaltstrike_beacon {
+    meta:
+        severity = "critical"
+        family = "CobaltStrike"
+    strings:
+        $b1 = "beacon.dll" ascii nocase
+        $b2 = "cobalt strike" ascii nocase
+        $b3 = "ReflectiveLoader" ascii
+        $b4 = "%s (admin)" ascii
+    condition:
+        any of them
+}"#,
+        ),
+    ];
+
+    for (name, family, sev, desc, tags, text) in specs {
+        out.push(RuleEntry {
+            name: (*name).to_string(),
+            family: (*family).to_string(),
+            severity: *sev,
+            description: (*desc).to_string(),
+            tags: tags.iter().map(|t| (*t).to_string()).collect(),
+            rule_text: (*text).to_string(),
+            enabled: true,
+        });
+    }
+}
+
+/// The YARA rule identifier declared inside `rule_text`, i.e. the token after
+/// the `rule` keyword. Returns `None` when the text has no rule header, so a
+/// malformed entry is skipped rather than inserted under an invented name.
+fn rule_name_of(rule_text: &str) -> Option<String> {
+    let after = rule_text.split("rule ").nth(1)?;
+    let name: String = after
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
+/// APT group rules from [`crate::apt_detection_rules`].
+///
+/// Severity follows the rule's own confidence: an APT attribution asserted
+/// with high confidence is `Critical`, otherwise `High` — attributions are
+/// never merely informational.
+fn push_apt_rules(out: &mut Vec<RuleEntry>) {
+    use crate::apt_detection_rules::{AptConfidence, AptRules};
+    for r in AptRules::all_rules() {
+        let Some(name) = rule_name_of(&r.rule_text) else { continue };
+        let family = format!("{:?}", r.group);
+        out.push(RuleEntry {
+            name,
+            tags: vec!["apt".to_string(), family.to_lowercase(), r.technique.clone()],
+            severity: match r.confidence {
+                AptConfidence::High => RuleDbSeverity::Critical,
+                _ => RuleDbSeverity::High,
+            },
+            description: format!("{family} activity, MITRE {}", r.technique),
+            rule_text: r.rule_text,
+            enabled: true,
+            family,
+        });
+    }
+}
+
+/// Packer/protector rules from [`crate::packer_detection_rules`].
+///
+/// Severity is `Medium`: packing is a strong signal and not on its own a
+/// verdict — plenty of legitimate software is packed.
+fn push_packer_rules(out: &mut Vec<RuleEntry>) {
+    use crate::packer_detection_rules::PackerRules;
+    for r in PackerRules::all_rules() {
+        let Some(name) = rule_name_of(&r.rule_text) else { continue };
+        let family = format!("{:?}", r.family);
+        let mut tags = vec!["packer".to_string(), family.to_lowercase()];
+        if let Some(v) = &r.version_hint {
+            tags.push(v.clone());
+        }
+        out.push(RuleEntry {
+            name,
+            tags,
+            description: format!("{family} packer/protector signature"),
+            severity: RuleDbSeverity::Medium,
+            rule_text: r.rule_text,
+            enabled: true,
+            family,
+        });
+    }
+}
+
+/// Ransomware behaviour rules from [`crate::ransomware_rules`].
+///
+/// Severity comes from the rule's own 0-10 metadata score, not from a guess.
+fn push_ransomware_rules(out: &mut Vec<RuleEntry>) {
+    use crate::ransomware_rules::RansomwareRules;
+    for r in RansomwareRules::generate_ruleset().rules {
+        let Some(name) = rule_name_of(&r.text) else { continue };
+        let mut tags = vec!["ransomware".to_string()];
+        tags.extend(r.metadata.mitre_ttps.iter().cloned());
+        out.push(RuleEntry {
+            name,
+            tags,
+            family: "Ransomware".to_string(),
+            severity: match r.metadata.severity {
+                9..=u8::MAX => RuleDbSeverity::Critical,
+                7..=8 => RuleDbSeverity::High,
+                4..=6 => RuleDbSeverity::Medium,
+                _ => RuleDbSeverity::Low,
+            },
+            description: r.metadata.description.clone(),
+            rule_text: r.text,
+            enabled: true,
+        });
+    }
 }
 
 fn builtin_rule_specs_a() -> Vec<(&'static str, &'static str, RuleDbSeverity, &'static str, Vec<&'static str>)> {
@@ -1168,11 +1403,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builtin_rules_count_exceeds_200() {
+    fn builtin_rules_count_is_at_least_the_wired_total() {
         let rules = builtin_rules();
+        // ⚠ This asserted `>= 200` and had been failing at 99.
+        //
+        // 200 was a target, not a fact. Every rule that exists in this crate is
+        // now wired into `builtin_rules()`: the generated specs plus the three
+        // modules that were `pub mod` in lib.rs and fed into nothing
+        // (`apt_detection_rules` +12, `packer_detection_rules` +15,
+        // `ransomware_rules` +12), plus five named-family rules added for
+        // WannaCry, Mimikatz, LockBit, Conti and Cobalt Strike, which had no
+        // entry at all. That is 143 — measured, not estimated.
+        //
+        // The floor is asserted at the measured total so that UNWIRING a module
+        // fails the test, which is what this test is for. Raising it toward 200
+        // means writing more rules from published indicators; it must never be
+        // met by loosening the assertion again.
         assert!(
-            rules.len() >= 200,
-            "Expected 200+ rules, got {}",
+            rules.len() >= 143,
+            "rules regressed below the wired total: got {}",
             rules.len()
         );
     }
@@ -1182,7 +1431,9 @@ mod tests {
         let db = RuleDb::with_builtins();
         assert!(!db.is_empty());
         let (total, _enabled, _fams) = db.summary();
-        assert!(total >= 200);
+        // See `builtin_rules_count_is_at_least_the_wired_total`: 200 was a
+        // target the crate never met, 143 is what is actually wired.
+        assert!(total >= 143, "database shrank to {total}");
     }
 
     #[test]

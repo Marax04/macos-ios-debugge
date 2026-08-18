@@ -12,12 +12,11 @@ use rustre_mem::entropy::{
     EntropyBlock, entropy_blocks, high_entropy_spans, shannon_entropy,
 };
 use rustre_mem::helpers::{
-    read_f32_be_at, read_f32_le_at, read_f64_be_at, read_f64_le_at, read_i8_at,
-    read_i16_le_at, read_i32_le_at, read_i64_le_at, read_u8_at, read_u16_be_at,
+    read_f32_be_at, read_f32_le_at, read_f64_be_at, read_f64_le_at, read_i8_at, read_i32_le_at, read_i64_le_at, read_u8_at, read_u16_be_at,
     read_u16_le_at, read_u32_be_at, read_u32_le_at, read_u64_be_at,
     read_u64_le_at, read_u128_le_at, search_bytes, search_bytes_with_mask,
     write_f32_le_at, write_f64_le_at, write_i32_le_at, write_i64_le_at,
-    write_u8_at, write_u16_be_at, write_u16_le_at, write_u32_be_at,
+    write_u8_at, write_u16_be_at, write_u16_le_at,
     write_u32_le_at, write_u64_be_at, write_u64_le_at,
 };
 use rustre_mem::*;

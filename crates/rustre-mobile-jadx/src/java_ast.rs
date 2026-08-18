@@ -778,6 +778,9 @@ impl AstClass {
 
     /// Build a mock `AstClass` for testing.
     #[must_use]
+    /// NOTE: a hand-written fixture for this crate's own tests. It is not
+    /// derived from any input and is not reachable from the MCP tool surface;
+    /// never report it to a user as the analysis of a real file.
     pub fn mock(name: &str, package: &str) -> Self {
         let mut cls = Self::new(name, package);
         cls.super_class = Some("java.lang.Object".to_owned());

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use rustre_diff::{
     BasicBlock, BasicBlockDiffer, BinaryDiff, ChangeType, DiffEngine, DiffError, DiffFunction,
-    DiffInstr, DiffReport, ExportDiff, ExportEntry, FuncFingerprint, FuncMatch, FunctionDiff,
+    DiffInstr, DiffReport, ExportEntry, FuncFingerprint, FuncMatch, FunctionDiff,
     InstrDiffKind, InstrDiffer, MatchKind, NamedBinaryDiff, StructuralDiffer, StructuralMatch,
     StructuralMatchKind, byte_histogram_similarity, combined_byte_similarity, diff_by_name,
     diff_exports, histogram_cosine, jaccard, lcs_similarity, ngram_jaccard_similarity, ratio,

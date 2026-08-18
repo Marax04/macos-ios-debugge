@@ -635,85 +635,77 @@ fn event_spec_has_ids_attributes_empty() {
 // ---------- Async API smoke / fuzz ----------
 
 #[tokio::test]
-async fn async_get_event_assigns_id() {
-    let c = client();
-    for id in [0u64, 1, 42, u64::MAX] {
-        let e = c.get_event(id).await.unwrap();
-        assert_eq!(e.id, id);
-    }
+async fn async_get_event_requires_instance() {
+    assert!(client().get_event(7).await.is_err());
 }
 
 #[tokio::test]
-async fn async_search_events_limit_capped_at_3() {
+// Every call below needs the live MISP instance.  They used to succeed
+// offline: three events for any search, `id = 1` for an event never created,
+// `true` for a publish that never happened, and a warning-list verdict from a
+// two-name substring test.
+
+async fn async_search_events_requires_instance() {
     let c = client();
-    let s = MispSearch::new().with_limit(100);
-    let r = c.search_events(&s).await.unwrap();
-    assert_eq!(r.len(), 3);
-    let s2 = MispSearch::new().with_limit(1);
-    let r2 = c.search_events(&s2).await.unwrap();
-    assert_eq!(r2.len(), 1);
+    assert!(c.search_events(&MispSearch::new().with_limit(100)).await.is_err());
+    assert!(c.search_events(&MispSearch::new().with_limit(1)).await.is_err());
 }
 
 #[tokio::test]
-async fn async_search_events_default_returns_3() {
-    let r = client().search_events(&MispSearch::new()).await.unwrap();
-    assert_eq!(r.len(), 3);
+async fn async_search_events_default_requires_instance() {
+    assert!(client().search_events(&MispSearch::new()).await.is_err());
 }
 
 #[tokio::test]
-async fn async_create_event_id_assigned() {
-    let c = client();
+async fn async_create_event_requires_instance() {
     let e = MispEventFull::new("x".to_string());
-    let r = c.create_event(e).await.unwrap();
-    assert_eq!(r.id, 1);
+    assert!(client().create_event(e).await.is_err());
 }
 
 #[tokio::test]
-async fn async_add_attribute_sets_event_id() {
-    let c = client();
+async fn async_add_attribute_requires_instance() {
     let a = MispAttributeFull::new(0, "md5".to_string(), "v".to_string());
-    let r = c.add_attribute(99, a).await.unwrap();
-    assert_eq!(r.event_id, 99);
+    assert!(client().add_attribute(99, a).await.is_err());
 }
 
 #[tokio::test]
-async fn async_publish_event() {
-    assert!(client().publish_event(1).await.unwrap());
+async fn async_publish_event_requires_instance() {
+    assert!(client().publish_event(1).await.is_err());
 }
 
 #[tokio::test]
-async fn async_check_warning_list_fuzz() {
+async fn async_check_warning_list_never_guesses() {
     let c = client();
     let mut g = lcg();
     for _ in 0..30 {
         let n = g();
         let v = format!("host-{n:x}.example.com");
-        let r = c.check_warning_lists(&v).await.unwrap();
-        assert!(!r);
+        assert!(c.check_warning_lists(&v).await.is_err());
     }
-    assert!(c.check_warning_lists("google.com").await.unwrap());
-    assert!(c.check_warning_lists("microsoft.com").await.unwrap());
+    // These two used to be reported as warning-listed on a substring match.
+    assert!(c.check_warning_lists("google.com").await.is_err());
+    assert!(c.check_warning_lists("microsoft.com").await.is_err());
 }
 
 // ---------- TiProvider impl ----------
 
 #[tokio::test]
-async fn provider_lookup_returns_for_clean() {
+async fn provider_lookup_needs_a_reachable_instance() {
     use rustre_threatintel::{IoC, IoCType, TiProvider};
-    let c = client();
+    // 192.0.2.1 is RFC 5737 TEST-NET-1: it never answers.
+    let c = MispApiClient::new("https://192.0.2.1".to_string(), "k".to_string());
     let ioc = IoC::new(IoCType::Sha256, "cleanhash".to_string(), "t".to_string());
-    let r = c.lookup(&ioc).await.unwrap();
-    assert_eq!(r.ioc.value, "cleanhash");
-    assert!(!r.verdicts.is_empty());
+    // The lookup fails; it does not fall back to a manufactured verdict.
+    assert!(c.lookup(&ioc).await.is_err());
 }
 
 #[tokio::test]
-async fn provider_lookup_malicious_flagged() {
+async fn provider_lookup_does_not_flag_on_the_name_alone() {
     use rustre_threatintel::{IoC, IoCType, TiProvider};
-    let c = client();
+    let c = MispApiClient::new("https://192.0.2.1".to_string(), "k".to_string());
     let ioc = IoC::new(IoCType::Domain, "evil.example.com".to_string(), "t".to_string());
-    let r = c.lookup(&ioc).await.unwrap();
-    assert!(r.verdicts.iter().any(|v| v.malicious));
+    // "evil" in the name used to be enough for a malicious verdict.
+    assert!(c.lookup(&ioc).await.is_err());
 }
 
 #[test]

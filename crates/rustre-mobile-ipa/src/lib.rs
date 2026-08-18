@@ -171,7 +171,7 @@ impl CodeSignature {
     /// no trust store, so there is no evidence from which to answer. The error
     /// names exactly what is missing rather than reporting a name match as a
     /// verification result.
-    pub fn apple_leaf_verdict(&self) -> Result<bool, CertVerifyError> {
+    pub const fn apple_leaf_verdict(&self) -> Result<bool, CertVerifyError> {
         if self.cert_chain.is_empty() {
             return Err(CertVerifyError::NoCertificateChain);
         }

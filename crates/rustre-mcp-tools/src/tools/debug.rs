@@ -84,11 +84,9 @@ fn resolve_library_path(sess: &mut LiveSession, ev: &rustre_debug::DebugEvent) -
         .filter(|p| !p.is_empty())
 }
 
-fn req_str<'a>(args: &'a Value, key: &str) -> AnyhowResult<&'a str> {
-    args.get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("missing required field '{key}'"))
-}
+// `req_str` lives in `debug_execution_heatmap.rs`: it was defined identically
+// in both files, used 83 times here and never there. One definition now.
+use super::debug_execution_heatmap::req_str;
 
 /// Coerce a JSON value into a `u64`, accepting the several shapes MCP clients
 /// actually send an address as: a JSON integer, a hex string (`"0x1400..."`),
@@ -507,6 +505,13 @@ fn make_backend() -> Option<Box<dyn Debugger>> {
     {
         return Some(Box::new(rustre_debug::macos_debugger::MacosDebugger::new()));
     }
+    // The fallback is cfg-gated to the platforms none of the arms above cover.
+    // Without the gate it is dead code on every supported platform — one of the
+    // arms has already returned — which is what the `unreachable expression`
+    // warning was reporting. Gating it also means adding a new backend above
+    // without extending this list is a compile error here, rather than a
+    // silently unreachable `None`.
+    #[cfg(not(any(windows, all(unix, target_os = "linux"), target_os = "macos")))]
     {
         None
     }
@@ -817,7 +822,6 @@ fn eval_on_session(sess: &LiveSession, expr: &str) -> AnyhowResult<u64> {
 // ---------------------------------------------------------------------------
 
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
-    use rustre_debug::v2::Debugger as _RdV2Debugger;
 
     let mut v = vec![
         // ── debug.launch ────────────────────────────────────────────────────

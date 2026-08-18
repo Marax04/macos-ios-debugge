@@ -276,6 +276,9 @@ impl JavaClass {
 
     /// Create a mock class for testing.
     #[must_use]
+    /// NOTE: a hand-written fixture for this crate's own tests. It is not
+    /// derived from any input and is not reachable from the MCP tool surface;
+    /// never report it to a user as the analysis of a real file.
     pub fn mock(package: &str, name: &str) -> Self {
         Self {
             class_name: name.to_string(),
@@ -673,6 +676,9 @@ impl JavaDecompiler {
 
     /// Decompile a mock class (used for testing without real DEX data).
     #[must_use]
+    /// NOTE: a hand-written fixture for this crate's own tests. It is not
+    /// derived from any input and is not reachable from the MCP tool surface;
+    /// never report it to a user as the analysis of a real file.
     pub fn decompile_mock(&mut self, package: &str, name: &str) -> JavaClass {
         let mut cls = JavaClass::mock(package, name);
         let formatter = JavaFormatter::new(self.config.clone());

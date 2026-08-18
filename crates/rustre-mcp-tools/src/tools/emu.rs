@@ -703,7 +703,6 @@ impl EmuBaseFactoryCreateTool {
 #[async_trait]
 impl ToolHandler for EmuBaseFactoryCreateTool {
     async fn call(&self, args: Value) -> Result<ToolResult, McpError> {
-        use rustre_emu::Emulator;
         let arch = emu_base_arg_arch(&args)?;
         let emu = rustre_emu::EmulatorFactory::create(arch);
         Ok(ToolResult::text(json!({

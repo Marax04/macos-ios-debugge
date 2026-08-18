@@ -7,7 +7,7 @@ use rustre_threatintel::confidence::{
 };
 use rustre_threatintel::error::TiError;
 use rustre_threatintel::ioc::{IoC, IoCType, Severity};
-use rustre_threatintel::ioc_extractor::{ExtractedIocs, IocExtractor};
+use rustre_threatintel::ioc_extractor::IocExtractor;
 use rustre_threatintel::ioc_normalizer::{
     Defanger, IoCCanonicalizer, IoCDeduplicator, IoCNormalizer, IoCValidator, NormalizationResult,
     NormalizedIoC, NormalizerConfig, SourceConfidenceScorer, SourceTier, ValidationError,

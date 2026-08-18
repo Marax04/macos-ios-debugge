@@ -723,20 +723,16 @@ fn vt_relationship_type_serde() {
 }
 
 #[test]
-fn mock_file_report_bad_sha_is_malicious() {
-    let r = mock_file_report("deadbeefbad");
-    assert!(r.is_malicious());
-    assert!(r.malicious_count() >= 1);
-    let clean = mock_file_report("01234567");
-    assert!(!clean.is_malicious());
+fn mock_file_report_never_invents_a_verdict() {
+    // Both used to be graded by whether the string contained "bad".
+    assert!(mock_file_report("deadbeefbad").is_err());
+    assert!(mock_file_report("01234567").is_err());
 }
 
 #[test]
-fn mock_ip_report_10_dot_0_marked_malicious() {
-    let r = mock_ip_report("10.0.0.5");
-    assert!(r.is_malicious());
-    let c = mock_ip_report("8.8.8.8");
-    assert!(!c.is_malicious());
+fn mock_ip_report_never_invents_a_verdict() {
+    assert!(mock_ip_report("10.0.0.5").is_err());
+    assert!(mock_ip_report("8.8.8.8").is_err());
 }
 
 #[test]

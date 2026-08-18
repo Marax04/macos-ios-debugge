@@ -1305,6 +1305,16 @@ pub struct MispOrganisation {
     pub uuid: String,
 }
 
+
+/// Build the error returned when an operation needs the live MISP instance.
+fn network_required(what: &str) -> MispError {
+    MispError::InvalidInput(format!(
+        "network lookup required for {what}: no result was produced offline, and none \
+         was invented. Use `MispClient` (crate::client) with a reachable MISP URL and \
+         a valid auth key."
+    ))
+}
+
 // ---------------------------------------------------------------------------
 // MispApiClient
 // ---------------------------------------------------------------------------
@@ -1344,7 +1354,11 @@ impl MispApiClient {
     }
 
     /// Convert a MISP event into a `TiResult` for the queried `IoC`.
-    fn event_to_ti_result(&self, event: &MispEventSpec, ioc: &IoC) -> TiResult {
+    /// Convert a MISP event the caller already holds into a [`TiResult`].
+    ///
+    /// Offline: it reshapes a real event, it does not fetch one.
+    #[must_use]
+    pub fn event_to_ti_result(&self, event: &MispEventSpec, ioc: &IoC) -> TiResult {
         let mut result = TiResult::new(ioc.clone());
         let malicious = event.threat_level_id <= 2;
         result.verdicts.push(Verdict {
@@ -1368,41 +1382,75 @@ impl MispApiClient {
         result
     }
 
-    /// Build a mock MISP event for the given `IoC`.
-    fn mock_event(&self, ioc: &IoC) -> MispEventSpec {
-        let malicious = ioc.value.contains("evil")
-            || ioc.value.contains("malware")
-            || ioc.value.contains("bad");
+    /// Build an event that carries the queried `IoC` and NOTHING ELSE.
+    ///
+    /// It used to decide `threat_level_id` from whether the queried string
+    /// contained "evil"/"malware"/"bad", attach an unrelated `ip-src` of
+    /// 203.0.113.1 as "Related infrastructure", and tag the result
+    /// `misp-galaxy:ransomware` — all invented.  The event now carries only
+    /// the attribute the caller asked about, at the "undefined" threat level,
+    /// with `to_ids` false; it asserts nothing.
+    ///
+    /// Real events come from [`Self::search_events`] against a live instance.
+    #[must_use]
+    pub fn mock_event(&self, ioc: &IoC) -> MispEventSpec {
         MispEventSpec {
-            id: 1001,
-            uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890".to_string(),
-            info: format!("Mock MISP event for {}", ioc.value),
-            date: "2024-01-15".to_string(),
-            threat_level_id: if malicious { 1 } else { 4 },
-            attributes: vec![
-                MispAttributeSpec {
-                    id: 1,
-                    type_field: "ip-src".to_string(),
-                    value: "203.0.113.1".to_string(),
-                    comment: Some("Related infrastructure".to_string()),
-                    to_ids: malicious,
-                },
-                MispAttributeSpec {
-                    id: 2,
-                    type_field: ioc.ioc_type.as_str().to_string(),
-                    value: ioc.value.clone(),
-                    comment: None,
-                    to_ids: malicious,
-                },
-            ],
-            tags: if malicious {
-                vec![MispTagSpec::new(
-                    "misp-galaxy:ransomware".to_string(),
-                    "#FF0000".to_string(),
-                )]
-            } else {
-                vec![]
-            },
+            id: 0,
+            uuid: uuid_v4_mock(),
+            info: format!("no MISP lookup performed for {}", ioc.value),
+            date: String::new(),
+            threat_level_id: 4, // 4 = undefined in MISP
+            attributes: vec![MispAttributeSpec {
+                id: 0,
+                type_field: ioc.ioc_type.as_str().to_string(),
+                value: ioc.value.clone(),
+                comment: None,
+                to_ids: false,
+            }],
+            tags: vec![],
+        }
+    }
+
+    /// Build a real [`MispClient`] from this client's URL and auth key.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL or key is empty, or the TLS client cannot
+    /// be built.
+    pub fn rest_client(&self) -> Result<crate::client::MispClient, MispError> {
+        if self.api_url.trim().is_empty() {
+            return Err(MispError::InvalidInput(
+                "no MISP URL configured".to_string(),
+            ));
+        }
+        if self.api_key.trim().is_empty() {
+            return Err(MispError::AuthError);
+        }
+        if self.verify_ssl {
+            crate::client::MispClient::new(self.api_url.clone(), self.api_key.clone())
+        } else {
+            crate::client::MispClient::new_insecure(self.api_url.clone(), self.api_key.clone())
+        }
+    }
+
+    /// Map an [`IoCType`] to the MISP attribute type used to search for it.
+    ///
+    /// Returns `""` (search all types) for a type MISP has no direct name for.
+    #[must_use]
+    pub fn ioc_type_to_misp_attribute(t: &IoCType) -> &'static str {
+        match t {
+            IoCType::Md5 => "md5",
+            IoCType::Sha1 => "sha1",
+            IoCType::Sha256 => "sha256",
+            IoCType::Sha512 => "sha512",
+            IoCType::Ip => "ip-dst",
+            IoCType::Domain => "domain",
+            IoCType::Url => "url",
+            IoCType::Email => "email",
+            IoCType::Registry => "regkey",
+            IoCType::Filename => "filename",
+            IoCType::Mutex => "mutex",
+            IoCType::Yara => "yara",
         }
     }
 
@@ -1431,86 +1479,83 @@ impl MispApiClient {
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Create a MISP event.
+    /// Create a MISP event on the configured instance.
+    ///
+    /// It used to stamp `id = 1` on the argument and hand it back, so callers
+    /// could not tell a successful publish from a no-op.
     pub async fn create_event(&self, event: MispEventFull) -> Result<MispEventFull, MispError> {
-        // Mock: return the event with an assigned ID
-        let mut e = event;
-        e.id = 1;
-        Ok(e)
+        let _ = &event;
+        Err(network_required("creating a MISP event"))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Get an event by ID.
+    /// Get an event by ID from the configured instance.
     pub async fn get_event(&self, id: u64) -> Result<MispEventFull, MispError> {
-        let mut e = MispEventFull::new(format!("Mock event {id}"));
-        e.id = id;
-        Ok(e)
+        Err(network_required(&format!("MISP event {id}")))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Search events with a query.
+    /// Search events on the configured instance.
+    ///
+    /// It used to return N events named "Mock Event 1..N" regardless of the
+    /// query, which reads as "N events matched".
     pub async fn search_events(
         &self,
         search: &MispSearch,
     ) -> Result<Vec<MispEventFull>, MispError> {
-        // Mock: return up to 3 events
-        let count = search.limit.unwrap_or(3).min(3);
-        Ok((1..=(count as u64))
-            .map(|i| {
-                let mut e = MispEventFull::new(format!("Mock Event {i}"));
-                e.id = i;
-                e
-            })
-            .collect())
+        let _ = search;
+        Err(network_required("a MISP event search"))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Add an attribute to an event.
+    /// Add an attribute to an event on the configured instance.
     pub async fn add_attribute(
         &self,
         event_id: u64,
         attr: MispAttributeFull,
     ) -> Result<MispAttributeFull, MispError> {
-        let mut a = attr;
-        a.event_id = event_id;
-        Ok(a)
+        let _ = attr;
+        Err(network_required(&format!(
+            "adding an attribute to MISP event {event_id}"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Add a tag to an event.
+    /// Add a tag to an event on the configured instance.
+    ///
+    /// It used to return `true` ("tagged") without contacting anything.
     pub async fn add_tag(&self, event_id: u64, tag: &str) -> Result<bool, MispError> {
-        let _ = event_id;
-        let _ = tag;
-        Ok(true)
+        Err(network_required(&format!(
+            "tagging MISP event {event_id} with '{tag}'"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Publish an event.
+    /// Publish an event on the configured instance.
+    ///
+    /// It used to report success for an event it never published.
     pub async fn publish_event(&self, event_id: u64) -> Result<bool, MispError> {
-        let _ = event_id;
-        Ok(true)
+        Err(network_required(&format!(
+            "publishing MISP event {event_id}"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Get a feed by ID.
+    /// Get a feed by ID from the configured instance.
     pub async fn get_feed(&self, id: u64) -> Result<MispFeed, MispError> {
-        Ok(MispFeed::new(
-            id,
-            format!("Feed {id}"),
-            "https://example.com/feed".to_string(),
-        ))
+        Err(network_required(&format!("MISP feed {id}")))
     }
 
     /// # Errors
@@ -1518,64 +1563,71 @@ impl MispApiClient {
     /// Returns an error if the operation fails.
     /// Trigger a server pull from a remote MISP.
     pub async fn pull_server(&self, server_id: u64) -> Result<bool, MispError> {
-        let _ = server_id;
-        Ok(true)
+        Err(network_required(&format!(
+            "pulling from MISP server {server_id}"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Get a galaxy by name.
+    /// Get a galaxy by name from the configured instance.
+    ///
+    /// It used to claim every galaxy belonged to the `mitre-attack` namespace.
     pub async fn get_galaxy(&self, name: &str) -> Result<MispGalaxy, MispError> {
-        let galaxy = MispGalaxy::new(name.to_string(), "mitre-attack".to_string());
-        Ok(galaxy)
+        Err(network_required(&format!("MISP galaxy '{name}'")))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Attach a galaxy cluster to an event.
+    /// Attach a galaxy cluster to an event on the configured instance.
     pub async fn attach_galaxy_cluster(
         &self,
         event_id: u64,
         cluster_uuid: &str,
     ) -> Result<bool, MispError> {
-        let _ = event_id;
-        let _ = cluster_uuid;
-        Ok(true)
+        Err(network_required(&format!(
+            "attaching cluster {cluster_uuid} to MISP event {event_id}"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Record a sighting for an attribute.
+    /// Record a sighting for an attribute on the configured instance.
     pub async fn add_sighting(
         &self,
         attribute_uuid: &str,
         sighting_type: u8,
     ) -> Result<MispSighting, MispError> {
-        Ok(MispSighting::new(attribute_uuid.to_string(), sighting_type))
+        let _ = sighting_type;
+        Err(network_required(&format!(
+            "recording a sighting for attribute {attribute_uuid}"
+        )))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// List warning lists.
+    /// List the warning lists configured on the instance.
+    ///
+    /// It used to return a two-entry "Top 1000 domains" list.
     pub async fn list_warning_lists(&self) -> Result<Vec<MispWarningList>, MispError> {
-        Ok(vec![{
-            let mut wl = MispWarningList::new(1, "Top 1000 domains".to_string());
-            wl.entries = vec!["google.com".to_string(), "microsoft.com".to_string()];
-            wl
-        }])
+        Err(network_required("the MISP warning lists"))
     }
 
     /// # Errors
     ///
     /// Returns an error if the operation fails.
-    /// Check if a value is in any enabled warning list.
+    /// Check whether a value is on any enabled warning list.
+    ///
+    /// It used to answer from a two-name substring test, so a value could be
+    /// declared "known good" on no evidence.
     pub async fn check_warning_lists(&self, value: &str) -> Result<bool, MispError> {
-        // Mock: google.com and microsoft.com are in warning lists
-        Ok(value.contains("google") || value.contains("microsoft"))
+        Err(network_required(&format!(
+            "a warning-list check for '{value}'"
+        )))
     }
 }
 
@@ -1599,8 +1651,48 @@ impl TiProvider for MispApiClient {
     }
 
     async fn lookup(&self, ioc: &IoC) -> Result<TiResult, TiError> {
-        let event = self.mock_event(ioc);
-        Ok(self.event_to_ti_result(&event, ioc))
+        // Real path: query the configured MISP instance through the
+        // reqwest-backed `MispClient` and build the verdict from the
+        // attributes it actually returned.
+        let client = self.rest_client().map_err(|e| TiError::Other(e.to_string()))?;
+        let misp_type = Self::ioc_type_to_misp_attribute(&ioc.ioc_type);
+        let attrs = client
+            .search_by_ioc(&ioc.value, misp_type)
+            .await
+            .map_err(|e| TiError::Other(e.to_string()))?;
+
+        let mut result = TiResult::new(ioc.clone());
+        let hits = u32::try_from(attrs.len()).unwrap_or(u32::MAX);
+        let flagged = attrs.iter().any(|a| a.to_ids);
+        let mut tags: Vec<String> = attrs
+            .iter()
+            .flat_map(|a| a.tags.iter().map(|t| t.name.clone()))
+            .collect();
+        tags.sort_unstable();
+        tags.dedup();
+        result.verdicts.push(Verdict {
+            malicious: flagged,
+            confidence: if flagged { 80 } else { 0 },
+            tags,
+            engine_count: 1,
+            positive_count: u32::from(flagged),
+            first_seen: None,
+            last_seen: None,
+            description: Some(format!(
+                "{hits} matching attribute(s) on the configured MISP instance"
+            )),
+            provider: "misp".to_string(),
+        });
+        for a in &attrs {
+            if let Some(t) = Self::parse_misp_attribute_type(&a.ty)
+                && (t != ioc.ioc_type || a.value != ioc.value)
+            {
+                result
+                    .related_iocs
+                    .push(IoC::new(t, a.value.clone(), "misp".to_string()));
+            }
+        }
+        Ok(result)
     }
 
     fn rate_limit_per_minute(&self) -> u32 {
@@ -1711,114 +1803,160 @@ mod tests {
         );
     }
 
-    // ---- async API ----
+    // ---- async API: every one of these needs the live instance ----
+    //
+    // Each of these used to return a plausible success offline: an event with
+    // id 1 that was never created, `true` for a publish that never happened,
+    // a galaxy in the "mitre-attack" namespace whatever its name, and a
+    // warning-list verdict decided by a two-name substring test.
+
+    fn expect_network_required(msg: &str) {
+        assert!(
+            msg.contains("network lookup required"),
+            "expected an explicit network-lookup error, got: {msg}"
+        );
+        assert!(msg.contains("none\n         was invented") || msg.contains("was invented"));
+    }
 
     #[tokio::test]
-    async fn test_create_event() {
+    async fn test_create_event_requires_instance() {
         let e = MispEventFull::new("Test event".to_string());
-        let result = client().create_event(e).await.unwrap();
-        assert_eq!(result.id, 1);
+        let err = client().create_event(e).await.unwrap_err();
+        expect_network_required(&err.to_string());
     }
 
     #[tokio::test]
-    async fn test_get_event() {
-        let e = client().get_event(42).await.unwrap();
-        assert_eq!(e.id, 42);
+    async fn test_get_event_requires_instance() {
+        let err = client().get_event(42).await.unwrap_err();
+        assert!(err.to_string().contains("MISP event 42"));
     }
 
     #[tokio::test]
-    async fn test_search_events() {
+    async fn test_search_events_requires_instance() {
         let search = MispSearch::new().with_limit(2);
-        let events = client().search_events(&search).await.unwrap();
-        assert_eq!(events.len(), 2);
+        assert!(client().search_events(&search).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_add_attribute() {
+    async fn test_add_attribute_requires_instance() {
         let attr = MispAttributeFull::new(0, "sha256".to_string(), "deadbeef".to_string());
-        let result = client().add_attribute(99, attr).await.unwrap();
-        assert_eq!(result.event_id, 99);
+        assert!(client().add_attribute(99, attr).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_add_tag() {
-        let ok = client().add_tag(1, "malware").await.unwrap();
-        assert!(ok);
+    async fn test_add_tag_requires_instance() {
+        assert!(client().add_tag(1, "malware").await.is_err());
     }
 
     #[tokio::test]
-    async fn test_publish_event() {
-        let ok = client().publish_event(1).await.unwrap();
-        assert!(ok);
+    async fn test_publish_event_requires_instance() {
+        assert!(client().publish_event(1).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_get_feed() {
-        let feed = client().get_feed(1).await.unwrap();
-        assert_eq!(feed.id, 1);
+    async fn test_get_feed_requires_instance() {
+        assert!(client().get_feed(1).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_pull_server() {
-        let ok = client().pull_server(1).await.unwrap();
-        assert!(ok);
+    async fn test_pull_server_requires_instance() {
+        assert!(client().pull_server(1).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_get_galaxy() {
-        let g = client().get_galaxy("MITRE ATT&CK").await.unwrap();
-        assert_eq!(g.name, "MITRE ATT&CK");
+    async fn test_get_galaxy_requires_instance() {
+        assert!(client().get_galaxy("MITRE ATT&CK").await.is_err());
     }
 
     #[tokio::test]
-    async fn test_attach_galaxy_cluster() {
-        let ok = client()
-            .attach_galaxy_cluster(1, "some-uuid")
-            .await
-            .unwrap();
-        assert!(ok);
+    async fn test_attach_galaxy_cluster_requires_instance() {
+        assert!(
+            client()
+                .attach_galaxy_cluster(1, "some-uuid")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
-    async fn test_add_sighting() {
-        let s = client().add_sighting("attr-uuid", 0).await.unwrap();
-        assert_eq!(s.attribute_uuid, "attr-uuid");
-        assert!(!s.is_false_positive());
+    async fn test_add_sighting_requires_instance() {
+        assert!(client().add_sighting("attr-uuid", 0).await.is_err());
+        assert!(client().add_sighting("attr-uuid", 1).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_add_false_positive_sighting() {
-        let s = client().add_sighting("attr-uuid", 1).await.unwrap();
-        assert!(s.is_false_positive());
+    async fn test_check_warning_lists_requires_instance() {
+        assert!(client().check_warning_lists("google.com").await.is_err());
+        assert!(
+            client()
+                .check_warning_lists("evil.example.com")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
-    async fn test_check_warning_lists_match() {
-        let matched = client().check_warning_lists("google.com").await.unwrap();
-        assert!(matched);
+    async fn test_list_warning_lists_requires_instance() {
+        assert!(client().list_warning_lists().await.is_err());
+    }
+
+    #[test]
+    fn test_mock_event_asserts_nothing() {
+        let ioc = IoC::new(IoCType::Domain, "evil.example.com".to_string(), "t".to_string());
+        let e = client().mock_event(&ioc);
+        // threat level 4 = "undefined" in MISP
+        assert_eq!(e.threat_level_id, 4);
+        assert!(e.tags.is_empty());
+        assert_eq!(e.attributes.len(), 1);
+        assert_eq!(e.attributes[0].value, "evil.example.com");
+        assert!(!e.attributes[0].to_ids);
+    }
+
+    #[test]
+    fn test_ioc_type_to_misp_attribute_roundtrip() {
+        for t in [
+            IoCType::Md5,
+            IoCType::Sha1,
+            IoCType::Sha256,
+            IoCType::Domain,
+            IoCType::Url,
+        ] {
+            let name = MispApiClient::ioc_type_to_misp_attribute(&t);
+            assert_eq!(MispApiClient::parse_misp_attribute_type(name), Some(t));
+        }
     }
 
     #[tokio::test]
-    async fn test_check_warning_lists_no_match() {
-        let matched = client()
-            .check_warning_lists("evil.example.com")
-            .await
-            .unwrap();
-        assert!(!matched);
+    async fn test_lookup_without_a_reachable_instance_errors() {
+        let ioc = IoC::new(IoCType::Sha256, "deadbeef".to_string(), "t".to_string());
+        // No MISP reachable at the configured URL: a verdict is not produced.
+        assert!(client().lookup(&ioc).await.is_err());
+    }
+
+    #[test]
+    fn test_rest_client_rejects_empty_config() {
+        let c = MispApiClient::new(String::new(), "k".to_string());
+        assert!(c.rest_client().is_err());
+        let c2 = MispApiClient::new("https://misp.test".to_string(), String::new());
+        assert!(matches!(c2.rest_client(), Err(MispError::AuthError)));
     }
 
     #[tokio::test]
-    async fn test_lookup_returns_result() {
+    async fn test_lookup_against_unreachable_instance_errors() {
+        // 192.0.2.1 is RFC 5737 TEST-NET-1: guaranteed not to answer.
+        let c = MispApiClient::new("https://192.0.2.1".to_string(), "k".to_string())
+            .with_timeout(1);
         let ioc = hash_ioc("testvalue");
-        let result = client().lookup(&ioc).await.unwrap();
-        assert_eq!(result.ioc.value, "testvalue");
+        // The failure is reported; no verdict is manufactured from it.
+        assert!(c.lookup(&ioc).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_bulk_lookup() {
+    async fn test_bulk_lookup_surfaces_the_failure() {
+        let c = MispApiClient::new("https://192.0.2.1".to_string(), "k".to_string())
+            .with_timeout(1);
         let iocs = vec![hash_ioc("a"), hash_ioc("b"), ip_ioc("1.2.3.4")];
-        let results = client().bulk_lookup(&iocs).await.unwrap();
-        assert_eq!(results.len(), 3);
+        assert!(c.bulk_lookup(&iocs).await.is_err());
     }
 
     // ---- MispDistributionLevel ----
@@ -1981,18 +2119,15 @@ mod tests {
     // ---- Mock event / lookup ----
 
     #[test]
-    fn test_mock_event_malicious() {
-        let ioc = hash_ioc("evil_hash");
-        let event = client().mock_event(&ioc);
-        assert_eq!(event.threat_level_id, 1);
-        assert!(!event.tags.is_empty());
-    }
-
-    #[test]
-    fn test_mock_event_clean() {
-        let ioc = hash_ioc("safe_hash");
-        let event = client().mock_event(&ioc);
-        assert_eq!(event.threat_level_id, 4);
+    fn test_mock_event_does_not_grade_by_string_content() {
+        // "evil_hash" and "safe_hash" must produce the SAME empty shell: the
+        // old code graded the threat level from the substring "evil".
+        let evil = client().mock_event(&hash_ioc("evil_hash"));
+        let safe = client().mock_event(&hash_ioc("safe_hash"));
+        assert_eq!(evil.threat_level_id, 4);
+        assert_eq!(safe.threat_level_id, 4);
+        assert!(evil.tags.is_empty());
+        assert!(safe.tags.is_empty());
     }
 
     // ---- Serde ----

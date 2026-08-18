@@ -172,7 +172,7 @@ fn segment_mapping_roundtrip_fuzz() {
     );
     let mut g = make_lcg();
     for _ in 0..50 {
-        let off = (g() % 0x1000);
+        let off = g() % 0x1000;
         let va = Address::new(0x4000 + off);
         let fo = seg.va_to_file_offset(va).unwrap();
         let back = seg.file_offset_to_va(fo).unwrap();

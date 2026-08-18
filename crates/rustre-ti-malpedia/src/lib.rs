@@ -793,6 +793,31 @@ impl ActorAttribution {
 // MalpediaLocalDb
 // ---------------------------------------------------------------------------
 
+/// How many records a corpus load inserted, per kind.
+///
+/// Returned so a caller can distinguish an empty corpus from a loaded one —
+/// "0 families" is a fact worth reporting, not a silent success.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CorpusLoadCounts {
+    pub families: usize,
+    pub actors: usize,
+    pub samples: usize,
+}
+
+impl CorpusLoadCounts {
+    /// Total records inserted across all kinds.
+    #[must_use]
+    pub const fn total(self) -> usize {
+        self.families + self.actors + self.samples
+    }
+
+    /// Whether the corpus contained nothing at all.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.total() == 0
+    }
+}
+
 /// Offline local database populated from Malpedia data dumps.
 #[derive(Debug)]
 pub struct MalpediaLocalDb {
@@ -818,6 +843,64 @@ impl MalpediaLocalDb {
     ///
     /// # Panics
     /// Panics if the internal mutex is poisoned.
+    /// Load a corpus from a JSON export.
+    ///
+    /// ⚠ Why this exists. Before it, the only ways to fill this database were
+    /// `insert_*` one record at a time and `populate_mock_data`. The MCP layer
+    /// took the second: `tools/ti_malpedia.rs` called `populate_mock_data()`
+    /// and reported the result as a corpus lookup, so "is this hash known
+    /// malware" was answered out of a test fixture. There was no way to point
+    /// the client at real data even if you had it.
+    ///
+    /// Expects an object with any of the keys `families`, `actors`, `samples`,
+    /// each an array of the corresponding record. Unknown keys are ignored, so
+    /// a richer export still loads. Returns how many of each were inserted, so
+    /// a caller can tell "loaded nothing" from "loaded".
+    ///
+    /// # Errors
+    /// Returns the parse error if `json` is not a JSON object, or if a record
+    /// inside a known key does not match its schema — a malformed corpus is
+    /// reported, never partially guessed.
+    pub fn load_json(&self, json: &str) -> Result<CorpusLoadCounts, serde_json::Error> {
+        #[derive(Deserialize, Default)]
+        struct Corpus {
+            #[serde(default)]
+            families: Vec<MalpediaFamilySpec>,
+            #[serde(default)]
+            actors: Vec<MalpediaActorSpec>,
+            #[serde(default)]
+            samples: Vec<MalpediaSampleSpec>,
+        }
+        let corpus: Corpus = serde_json::from_str(json)?;
+        let counts = CorpusLoadCounts {
+            families: corpus.families.len(),
+            actors: corpus.actors.len(),
+            samples: corpus.samples.len(),
+        };
+        for f in corpus.families {
+            self.insert_family(f);
+        }
+        for a in corpus.actors {
+            self.insert_actor(a);
+        }
+        for sm in corpus.samples {
+            self.insert_sample(sm);
+        }
+        Ok(counts)
+    }
+
+    /// Load a corpus from a file on disk. See [`Self::load_json`].
+    ///
+    /// # Errors
+    /// Returns a message naming the path when the file cannot be read, or the
+    /// parse error when its contents are not a valid corpus.
+    pub fn load_path(&self, path: &std::path::Path) -> Result<CorpusLoadCounts, String> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read corpus '{}': {e}", path.display()))?;
+        self.load_json(&text)
+            .map_err(|e| format!("corpus '{}' is not valid: {e}", path.display()))
+    }
+
     pub fn insert_family(&self, family: MalpediaFamilySpec) {
         self.families
             .lock()

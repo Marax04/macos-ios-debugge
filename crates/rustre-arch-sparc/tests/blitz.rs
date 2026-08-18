@@ -20,8 +20,8 @@ use rustre_arch_sparc::sparc_trap_table::{
 use rustre_arch_sparc::{
     build_epilogue, build_prologue, build_return_seq, disassemble_annotated,
     encode_alu_imm, encode_alu_reg, encode_bicc, encode_call, encode_jmpl, encode_load, encode_nop,
-    encode_sethi, encode_store, extract_branch_targets, format_annotated, identify_idiom,
-    lookup_asi, lookup_condition, lookup_fp_opcode, lookup_priv_reg, lookup_v8_trap,
+    encode_sethi, extract_branch_targets, format_annotated, identify_idiom,
+    lookup_asi, lookup_condition, lookup_fp_opcode, lookup_v8_trap,
     lookup_v9_trap, resolve_branches, sparc_print_gnu, sparc_print_sun, synth_clr, synth_cmp_imm,
     synth_cmp_reg, synth_dec, synth_inc, synth_mov_imm, synth_mov_reg, synth_neg, synth_not,
     synth_set, synth_tst, AnnotatedSparcInstr, SparcArch, SparcAsiEntry, SparcCodeStats,

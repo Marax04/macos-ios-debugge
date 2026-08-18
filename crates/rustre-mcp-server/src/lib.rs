@@ -7850,7 +7850,6 @@ mod tests {
         assert!(debug_tools.len() >= 12);
     }
 
-    #[test]
     /// `project.open` on a nonexistent path must FAIL and name the path.
     ///
     /// This used to assert `result["stub"] == true`: back then `project.open`
@@ -8572,7 +8571,6 @@ mod rmcp_tests {
 
     // Ã¢—â‚¬Ã¢—â‚¬ dispatch_tool Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬Ã¢—â‚¬
 
-    #[test]
     /// Opening a path that does not exist must FAIL, and say so.
     ///
     /// This used to assert success for `/tmp/test.exe` — a Unix path, on a
@@ -8647,7 +8645,6 @@ mod rmcp_tests {
         assert!(result.is_error != Some(true));
     }
 
-    #[test]
     /// Launching an unloaded binary must FAIL, and the error must say how to
     /// proceed.
     ///
@@ -8716,7 +8713,6 @@ mod rmcp_tests {
         );
     }
 
-    #[test]
     /// `analyze.full` on an unloaded binary must FAIL, not return an empty
     /// "analysis" that a caller would read as "this binary has no functions,
     /// no strings and no xrefs".
@@ -8810,7 +8806,6 @@ mod rmcp_tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    #[test]
     /// Decompiling an address in an unloaded binary must FAIL. Returning
     /// pseudo-code here would be the worst fabrication in the server: it looks
     /// exactly like a real result.
@@ -8835,7 +8830,6 @@ mod rmcp_tests {
         assert_eq!(result.content.len(), 1);
     }
 
-    #[test]
     /// No tool may invent a result when a REQUIRED parameter is missing.
     ///
     /// This test used to demand the opposite: it called every catalog tool

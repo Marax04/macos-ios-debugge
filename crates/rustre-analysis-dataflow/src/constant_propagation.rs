@@ -966,7 +966,7 @@ impl LatticeVal {
 #[cfg(test)]
 mod cp_extended_tests {
     use super::*;
-    use crate::ssa::SsaVar;
+    
 
     use crate::test_util::sv;
 

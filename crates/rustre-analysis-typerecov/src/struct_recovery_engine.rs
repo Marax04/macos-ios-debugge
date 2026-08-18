@@ -830,7 +830,7 @@ mod tests {
         use crate::test_prng::xorshift as xs;
         let mut s = 0x5eed_5eed_5eed_5eedu64;
         for iter in 0..500 {
-            let mut mk = |s: &mut u64| {
+            let mk = |s: &mut u64| {
                 let n = 1 + (xs(s) % 5) as usize;
                 let accesses: Vec<FieldAccess> = (0..n)
                     .map(|_| {

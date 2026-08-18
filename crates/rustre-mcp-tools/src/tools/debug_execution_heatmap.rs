@@ -20,7 +20,14 @@ use rustre_debug::time_travel_debug::TracePosition;
 // Helpers (copied verbatim from tools/debug.rs so this file compiles alone)
 // ---------------------------------------------------------------------------
 
-fn req_str<'a>(args: &'a Value, key: &str) -> AnyhowResult<&'a str> {
+/// Required string field, or an error naming the field.
+///
+/// ⚠ This existed here AND in `tools/debug.rs`, byte-for-byte, with the comment
+/// above saying it was "copied verbatim so this file compiles alone". The copy
+/// here had zero callers while the one in `debug.rs` had 83 — two definitions
+/// of the same contract, one of them never exercised, free to drift. It is now
+/// the single definition and `debug.rs` imports it.
+pub(crate) fn req_str<'a>(args: &'a Value, key: &str) -> AnyhowResult<&'a str> {
     args.get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("missing required field '{key}'"))

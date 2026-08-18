@@ -430,7 +430,9 @@ impl AndroidSecurityAnalyzer {
             has_debugger_detection: combined.contains("isdebuggable")
                 || combined.contains("debugger"),
             has_frida_detection: combined.contains("frida") || combined.contains("ptrace"),
-            has_integrity_check: combined.contains("checksum") || combined.contains("signature"),
+            has_integrity_check: combined.contains("checksum")
+                || combined.contains("signature")
+                || combined.contains("sandbox"),
             obfuscation_tool: None,
             packer: None,
         }
