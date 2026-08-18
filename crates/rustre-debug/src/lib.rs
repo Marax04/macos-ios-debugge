@@ -10525,6 +10525,38 @@ mod tests_extra {
         );
     }
 
+    /// A `LibraryLoad` reaching a HUMAN must name the library.
+    ///
+    /// From a live audit of the Windows backend on `notepad.exe`:
+    /// `LibraryLoad { path: "", base: Address(140736485130240) }`.
+    ///
+    /// The first reading of this was wrong and worth recording. The backend
+    /// looks like it never resolves the path, and it does — in
+    /// `continue_execution`, after the event is acknowledged, gated on whether
+    /// any pending breakpoint is waiting for a module. The comment there states
+    /// the trade deliberately: "the path stays empty rather than being paid for
+    /// by every caller who did not ask for it", because filling it costs a
+    /// whole `modules()` enumeration on every DLL load.
+    ///
+    /// Resolving it INSIDE `classify_event` — which was the obvious fix and the
+    /// one I tried — is forbidden by
+    /// `classify_event_does_not_query_the_traced_process`, a guard established
+    /// BY BISECTION: a psapi query in that window broke hardware watchpoint
+    /// hits outright, `DR6` no longer reading as set. It would have traded a
+    /// cosmetic empty string for a broken watchpoint engine.
+    ///
+    /// So the gap is real but it is not in the engine: it is at the surface a
+    /// person reads. `debug.continue` hands a user a library with no name, and
+    /// there the `modules()` call is paid once, by someone who is looking.
+    #[test]
+    fn the_mcp_names_a_loaded_library() {
+        let src = include_str!("../../rustre-mcp-tools/src/tools/debug.rs");
+        assert!(
+            src.contains("resolve_library_path"),
+            "mcp: a LibraryLoad stop is published with whatever path the backend happened to              fill — empty unless a pending breakpoint was waiting — so a user is told a library              loaded and never which one. The backend is right not to pay for it in the hot              loop; the surface a human reads is where it should be paid"
+        );
+    }
+
     /// A trap left in the target on `Drop` must not be left in SILENCE.
     ///
     /// Every backend's `Drop` restores the original bytes before letting go,

@@ -11,6 +11,41 @@ use anyhow::{Result as AnyhowResult, anyhow};
 // Helper functions (mirrors those in lib.rs register_debug_group callers)
 // ---------------------------------------------------------------------------
 
+/// Name the library a `LibraryLoad` stop is about, when the backend left it blank.
+///
+/// The Windows backend fills this path only when a pending breakpoint is
+/// waiting for a module, and says why: resolving it costs a whole `modules()`
+/// enumeration, and paying that on every DLL load would charge every caller for
+/// something most of them never asked about. That is the right trade in the hot
+/// loop.
+///
+/// It is the wrong answer HERE. A live audit of `debug.continue` against
+/// `notepad.exe` got back `LibraryLoad { path: "", base: ... }` — a user told a
+/// library appeared and never which one. At this surface the cost is paid once,
+/// by a person who is looking at the event.
+///
+/// Not resolved inside `classify_event`, which was the obvious place and is
+/// forbidden: `classify_event_does_not_query_the_traced_process` was
+/// established BY BISECTION after a psapi query in that window broke hardware
+/// watchpoint hits outright, `DR6` no longer reading as set.
+///
+/// Returns `None` rather than an empty string when the base matches no module:
+/// "not known" and "named nothing" are different answers, and the caller can
+/// tell them apart.
+fn resolve_library_path(sess: &mut LiveSession, ev: &rustre_debug::DebugEvent) -> Option<String> {
+    let rustre_debug::StopReason::LibraryLoad { path, base } = &ev.reason else {
+        return None;
+    };
+    if !path.is_empty() {
+        return Some(path.clone());
+    }
+    let mods = block_on(sess.dbg.modules()).ok()?;
+    mods.iter()
+        .find(|m| m.base == *base)
+        .map(|m| m.path.clone())
+        .filter(|p| !p.is_empty())
+}
+
 fn req_str<'a>(args: &'a Value, key: &str) -> AnyhowResult<&'a str> {
     args.get(key)
         .and_then(Value::as_str)
@@ -398,7 +433,6 @@ fn make_backend() -> Option<Box<dyn Debugger>> {
     {
         return Some(Box::new(rustre_debug::macos_debugger::MacosDebugger::new()));
     }
-    #[allow(unreachable_code)]
     {
         None
     }
@@ -685,7 +719,7 @@ impl rustre_debug::expression_evaluator::SymbolTable for SessionSyms<'_> {
 /// conditional-breakpoint loop so both use identical semantics.
 fn eval_on_session(sess: &LiveSession, expr: &str) -> AnyhowResult<u64> {
     use rustre_debug::expression_evaluator::{
-        parse_expression, EvalContext, ExprEvaluator, TypeSystem,
+        parse_expression, EvalContext, ExprEvaluator,
     };
     let ast = parse_expression(expr).map_err(|e| anyhow!("parse error: {e:?}"))?;
     let regset = block_on(sess.dbg.get_registers(sess.tid))
@@ -709,7 +743,6 @@ fn eval_on_session(sess: &LiveSession, expr: &str) -> AnyhowResult<u64> {
 // ---------------------------------------------------------------------------
 
 pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
-    #[allow(unused_imports)]
     use rustre_debug::v2::Debugger as _RdV2Debugger;
 
     let mut v = vec![
@@ -884,6 +917,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The library's NAME when this stop is a load.
+                        //
+                        // `stop_reason` renders the backend's own path, which
+                        // is empty unless a pending breakpoint happened to be
+                        // waiting — so a user reading this saw a library appear
+                        // and never learnt which one. Resolved here, where the
+                        // `modules()` call is paid once by someone looking,
+                        // rather than on every DLL load in the debug loop.
+                        "library_path": resolve_library_path(sess, &ev),
                         // The PORTABLE answer to "did it fault, and where?".
                         //
                         // `stop_reason` above is a Rust `Debug` string, and the
@@ -938,6 +980,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The library's NAME when this stop is a load.
+                        //
+                        // `stop_reason` renders the backend's own path, which
+                        // is empty unless a pending breakpoint happened to be
+                        // waiting — so a user reading this saw a library appear
+                        // and never learnt which one. Resolved here, where the
+                        // `modules()` call is paid once by someone looking,
+                        // rather than on every DLL load in the debug loop.
+                        "library_path": resolve_library_path(sess, &ev),
                         // The PORTABLE answer to "did it fault, and where?".
                         //
                         // `stop_reason` above is a Rust `Debug` string, and the
@@ -990,6 +1041,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "status": if ev.reason.is_exit() { "exited" } else { "stopped" },
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The library's NAME when this stop is a load.
+                        //
+                        // `stop_reason` renders the backend's own path, which
+                        // is empty unless a pending breakpoint happened to be
+                        // waiting — so a user reading this saw a library appear
+                        // and never learnt which one. Resolved here, where the
+                        // `modules()` call is paid once by someone looking,
+                        // rather than on every DLL load in the debug loop.
+                        "library_path": resolve_library_path(sess, &ev),
                         // The PORTABLE answer to "did it fault, and where?".
                         //
                         // `stop_reason` above is a Rust `Debug` string, and the
@@ -1601,6 +1661,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                         "session_id": session_id,
                         "tid": step_tid.0,
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The library's NAME when this stop is a load.
+                        //
+                        // `stop_reason` renders the backend's own path, which
+                        // is empty unless a pending breakpoint happened to be
+                        // waiting — so a user reading this saw a library appear
+                        // and never learnt which one. Resolved here, where the
+                        // `modules()` call is paid once by someone looking,
+                        // rather than on every DLL load in the debug loop.
+                        "library_path": resolve_library_path(sess, &ev),
                         // The PORTABLE answer to "did it fault, and where?".
                         //
                         // `stop_reason` above is a Rust `Debug` string, and the
@@ -1913,8 +1982,8 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             }),
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
-                use rustre_debug::MemoryMap;
-                use rustre_core::address::Address;
+                
+                
 
                 if let Some(r) = with_live(&session_id, |sess| {
                     let maps = block_on(sess.dbg.memory_maps()).map_err(|e| anyhow!("{e}"))?;
@@ -2134,6 +2203,15 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                     Ok(json!({
                         "session_id": session_id,
                         "stop_reason": format!("{:?}", ev.reason),
+                        // The library's NAME when this stop is a load.
+                        //
+                        // `stop_reason` renders the backend's own path, which
+                        // is empty unless a pending breakpoint happened to be
+                        // waiting — so a user reading this saw a library appear
+                        // and never learnt which one. Resolved here, where the
+                        // `modules()` call is paid once by someone looking,
+                        // rather than on every DLL load in the debug loop.
+                        "library_path": resolve_library_path(sess, &ev),
                         // The PORTABLE answer to "did it fault, and where?".
                         //
                         // `stop_reason` above is a Rust `Debug` string, and the
@@ -2351,7 +2429,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 }
 
                 // Constant-only fallback: no registers, no memory.
-                use rustre_debug::expression_evaluator::{RegisterState, error::{DebugError, DebugResult}, MemoryProvider, SymbolTable};
+                use rustre_debug::expression_evaluator::{RegisterState, error::{DebugError, DebugResult}, MemoryProvider};
                 struct EmptyRegs;
                 impl RegisterState for EmptyRegs {
                     fn read_register(&self, _n: &str) -> Option<u64> { None }
@@ -2519,7 +2597,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 "additionalProperties": false
             }),
             |args| {
-                use rustre_debug::watchpoint_engine::{TargetArch, WatchpointEngine, WatchpointType};
+                use rustre_debug::watchpoint_engine::WatchpointType;
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
                 let size = opt_u64(&args, "size", 8) as u8;
@@ -3653,7 +3731,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             |args| {
                 use rustre_debug::expression_evaluator::{
                     error::{DebugError, DebugResult}, parse_expression, pretty_print,
-                    EvalContext, ExprEvaluator, MemoryProvider, TypeSystem,
+                    EvalContext, ExprEvaluator, MemoryProvider,
                 };
                 use rustre_debug::time_travel_debug::{TracePosition, TtdBackend as _};
                 let session_id = req_str(&args, "session_id")?.to_string();
@@ -3910,7 +3988,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
     // Backed by a process-global Mutex<DebugSessionManager>.
     {
         use rustre_debug::debug_session_manager::{
-            DebugSession, DebugSessionManager, DebugTarget, SessionId, SessionState,
+            DebugSessionManager, DebugTarget, SessionId,
         };
         use std::sync::{Mutex, OnceLock};
 
@@ -5175,7 +5253,6 @@ mod tests {
     // `#[allow(dead_code)]` costs a warning suppression on an unused path, the
     // alternative costs coverage. Its sibling `call_tool_err` already carries
     // the same allow for the same reason.
-    #[allow(dead_code)]
     async fn call_tool(
         tools: &[(rustre_mcp_server::ToolDefinition, Box<dyn rustre_mcp_server::ToolHandler>)],
         name: &str,
@@ -5200,7 +5277,6 @@ mod tests {
     /// the message instead of on a JSON body. A tool that unexpectedly succeeds
     /// panics here, which is the regression we want caught: it would mean some
     /// branch started inventing an answer again.
-    #[allow(dead_code)]
     async fn call_tool_err(
         tools: &[(ToolDefinition, Box<dyn ToolHandler>)],
         name: &str,
