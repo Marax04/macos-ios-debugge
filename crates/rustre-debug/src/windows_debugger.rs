@@ -1501,6 +1501,28 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                 }
             }
             Command::SingleStep(tid) => {
+                // Hardware single step is an x86 TRAP FLAG here, and AArch64
+                // has no `EFlags` to put it in. Measured on `windows-11-arm`
+                // after the 602 port removed the twenty-one `Dr` errors: this
+                // was the one site left, "no field `EFlags` on type `CONTEXT`".
+                //
+                // REFUSED rather than guessed. Windows-on-ARM single steps
+                // through a different mechanism entirely, and writing something
+                // plausible into `Cpsr` would be inventing a stepping engine
+                // from a field name — the shape this crate treats as worse than
+                // an error, because a "step" that silently became a "continue"
+                // would run the target past everything the caller wanted to
+                // watch and report success.
+                #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
+                {
+                    let _ = tid;
+                    let _ = reply_tx.send(Reply::Event(Err(DebugError::Unsupported(
+                        "single step on this backend sets the x86 trap flag in EFlags, which                          this architecture does not have; the AArch64 mechanism is not                          implemented, and continuing the target instead would run it past the                          instruction you asked to step"
+                            .into(),
+                    ))));
+                    continue;
+                }
+                #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
                 if let Some(ctx) = read_context(tid.0) {
                     let mut ctx = ctx;
                     ctx.EFlags |= 0x100; // TF (trap flag)
@@ -5073,7 +5095,7 @@ mod live_tests {
             }
         }
         let tid = tid.expect("expected the initial system breakpoint");
-        let regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
+        let _regs = dbg.get_registers(tid).await.expect("get_registers should succeed");
 
         // An EXECUTABLE page the test allocates and nothing ever jumps to.
         // This used to be `regs.sp`, i.e. the stack — which made the test
@@ -8228,7 +8250,7 @@ mod live_tests {
             // the scenario — skip it rather than failing for the wrong
             // reason. (The loop above is the only place that can happen.)
             let Some(tid) = tid else { continue };
-            let Ok(regs) = dbg.get_registers(tid).await else { continue };
+            let Ok(_regs) = dbg.get_registers(tid).await else { continue };
 
             let unreachable_target = Address(alloc_unreachable_code_page(&dbg));
             match dbg.run_to_return(tid, unreachable_target, 0).await {

@@ -125,6 +125,30 @@ verificata».
 **Da 5 a 3 rossi**: 590, 591 e 594 ne hanno chiusi due. Restano il PAC
 nell'unwinder e i due test sui registri di debug.
 
+## 4-quinquies. 606 — l'ultimo errore ARM64, e un rifiuto invece di un'invenzione
+
+Il port del 602 ha funzionato: dei ventidue errori su `windows-11-arm` ne
+restava **uno**, `no field EFlags on type CONTEXT`. Il single step qui imposta il
+**trap flag x86**, che AArch64 non ha.
+
+**Rifiutato, non indovinato.** Windows-on-ARM esegue il single step con un
+meccanismo del tutto diverso; scrivere qualcosa di plausibile in `Cpsr` sarebbe
+inventare un motore di stepping da un nome di campo. E un «passo» che diventasse
+in silenzio un «continue» farebbe correre il target oltre tutto ciò che il
+chiamante voleva osservare, riportando successo.
+
+### Un cricchetto mai tarato su Linux
+
+Chiuso il 605, la suite MCP Linux **compila ed esegue per la prima volta**: 367
+test. Uno fallisce — `no_new_wire_tool_answers_without_its_required_params`, a
+**170 fabbricanti contro un soffitto di 168**.
+
+Verificato prima di attribuirlo: **nessuno** dei 170 è un tool `linux_*`, quindi
+i sei che ho riparato rifiutano correttamente. Il soffitto era tarato dove il
+crate compilava — cioè non su Linux — ed è la prima misura di quella
+piattaforma. Non l'ho alzato: alzare un cricchetto per farlo tacere è disfarlo,
+e non è il mio.
+
 ## 5. Lezioni di metodo
 
 1. **Misurare il rosso PRIMA del fix.** Un test che passa senza aver mai fallito
