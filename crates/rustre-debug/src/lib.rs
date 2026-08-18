@@ -1224,7 +1224,47 @@ pub fn backend_capabilities() -> &'static [BackendCapability] {
             },
         ]
     }
-    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    // iOS is a REAL backend here (`src/ios`, GDB Remote Serial Protocol to
+    // debugserver), not an unsupported host. Iteration 577 shipped only three
+    // arms, so this target fell through to the empty slice below and published
+    // NOTHING — the exact silence 577 existed to remove, on the platform where
+    // an operator can least afford it. Measured red on the iOS-simulator CI
+    // row, which is why that row went from 1923/0 to a failure.
+    #[cfg(any(target_os = "ios", target_os = "tvos", target_os = "watchos"))]
+    {
+        &[
+            // Measured: `StopReason::ThreadCreate` appears ZERO times in
+            // `src/ios`. The RSP stub reports stops, and thread creation is not
+            // one of them.
+            BackendCapability {
+                name: "thread_events",
+                supported: false,
+                because: "debugserver's RSP stop-replies do not announce thread creation, so no                           stop arrives when a thread is born. A client must poll threads().",
+            },
+            BackendCapability {
+                name: "hardware_watchpoints",
+                supported: true,
+                because: "",
+            },
+            // Supported, with a limit the backend itself documents: when the
+            // stub answers `reason:watchpoint` WITHOUT an address key, the PC
+            // is reported instead of the datum. Saying "supported" flatly would
+            // overstate it; saying "unsupported" would understate it.
+            BackendCapability {
+                name: "fault_address",
+                supported: true,
+                because: "reported from the stub's watch address; in the rarer reply that omits                           it, the PC is returned instead of the datum touched.",
+            },
+        ]
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "tvos",
+        target_os = "watchos"
+    )))]
     {
         &[]
     }

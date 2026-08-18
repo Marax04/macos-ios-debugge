@@ -2672,6 +2672,39 @@ impl Default for UserHwdebugState {
 #[cfg(target_arch = "aarch64")]
 const _: () = assert!(std::mem::size_of::<UserHwdebugState>() == 264);
 
+#[cfg(target_arch = "aarch64")]
+impl UserHwdebugState {
+    /// How many register pairs the HARDWARE actually has, per the kernel.
+    ///
+    /// `dbg_info` is the kernel's answer and was declared here and never read.
+    /// Its low byte is the slot count; bits 8..12 are the debug architecture
+    /// version. Real CPUs publish 2-16 watchpoints and 2-16 breakpoints, and
+    /// they are NOT the same number.
+    ///
+    /// Reading it is not a refinement, it is the difference between working and
+    /// not. Measured on `ubuntu-24.04-arm`: writing the full sixteen-slot
+    /// struct made `PTRACE_SETREGSET` answer `ENOSPC` — "No space left on
+    /// device" — and FIVE live tests failed on that one error, because every
+    /// path that programs a debug register goes through this write.
+    fn slot_count(&self) -> usize {
+        let n = (self.dbg_info & 0xFF) as usize;
+        // Clamped, not trusted: the struct has room for sixteen, and a kernel
+        // reporting more would have us read past the array. Zero means the CPU
+        // exposes no such register at all, which the caller must be able to see
+        // rather than have rounded up to one.
+        n.min(16)
+    }
+
+    /// Bytes that describe exactly `slot_count()` pairs.
+    ///
+    /// `iov_len` must span the header plus the slots that EXIST. Sending the
+    /// whole struct describes registers the hardware does not have, which is
+    /// what the kernel refuses.
+    fn iov_len_for_slots(&self) -> usize {
+        std::mem::size_of::<u32>() * 2 + self.slot_count() * std::mem::size_of::<HwDebugReg>()
+    }
+}
+
 /// `NT_ARM_HW_WATCH`, not exposed by `libc`.
 #[cfg(target_arch = "aarch64")]
 const NT_ARM_HW_WATCH: libc::c_int = 0x403;
@@ -2810,7 +2843,11 @@ fn write_arm_hw_regset(
     let ok = unsafe {
         let mut iov = libc::iovec {
             iov_base: std::ptr::addr_of!(*state).cast::<libc::c_void>().cast_mut(),
-            iov_len: std::mem::size_of::<UserHwdebugState>(),
+            // Sized by the KERNEL's count, not by our struct. See
+            // `slot_count`: writing sixteen pairs to hardware that has four
+            // answers ENOSPC and every debug-register operation on this backend
+            // fails with it.
+            iov_len: state.iov_len_for_slots(),
         };
         libc::ptrace(
             libc::PTRACE_SETREGSET,
@@ -2826,6 +2863,28 @@ fn write_arm_hw_regset(
         )));
     }
     Ok(())
+}
+
+/// Refuse a slot this CPU does not have, rather than writing past it.
+///
+/// `iov_len_for_slots` sends only the pairs the hardware reports, which is what
+/// the kernel demands — but it also means a pair written into a HIGHER index
+/// would be silently left out of the message. The write would then succeed and
+/// arm nothing: a request accepted and quietly dropped, which is this crate's
+/// most-condemned failure shape.
+///
+/// x86 has four debug registers and the shared engine speaks in those terms;
+/// AArch64 publishes its own count, and it can be as low as two. So the two
+/// vocabularies can disagree, and when they do the caller has to be told.
+#[cfg(target_arch = "aarch64")]
+fn ensure_slot_exists(state: &UserHwdebugState, slot: u8, regset: libc::c_int) -> Result<(), DebugError> {
+    let have = state.slot_count();
+    if usize::from(slot) < have {
+        return Ok(());
+    }
+    Err(DebugError::RegisterError(format!(
+        "debug slot {slot} does not exist on this CPU: the kernel reports {have} pair(s) for          regset {regset:#x}. The request is refused rather than written into a message the          hardware never sees, which would report success and arm nothing"
+    )))
 }
 
 /// Present the AArch64 watchpoint pairs to the engine as `dr0`-`dr3` + `dr7`.
@@ -2902,6 +2961,10 @@ fn write_debug_registers(pid: libc::pid_t, regs: &RegisterSet) -> Result<(), Deb
         // `dr` slot as two different things, and a later disarm would find one
         // of them and report success.
         match crate::arm64_watchpoint_from_dr_slot(addr, dr7, slot) {
+            // Refused, not dropped: see `ensure_slot_exists`.
+            Some(_) if ensure_slot_exists(&watch, slot, NT_ARM_HW_WATCH).is_err() => {
+                return ensure_slot_exists(&watch, slot, NT_ARM_HW_WATCH);
+            }
             Some((wvr, wcr)) => {
                 watch.dbg_regs[i].addr = wvr;
                 watch.dbg_regs[i].ctrl = u32::try_from(wcr & 0xFFFF_FFFF).unwrap_or(0);
@@ -2917,6 +2980,10 @@ fn write_debug_registers(pid: libc::pid_t, regs: &RegisterSet) -> Result<(), Deb
         }
         if let Some(b) = brk.as_mut() {
             match crate::arm64_breakpoint_from_dr_slot(addr, dr7, slot) {
+                // Refused, not dropped: see `ensure_slot_exists`.
+                Some(_) if ensure_slot_exists(b, slot, NT_ARM_HW_BREAK).is_err() => {
+                    return ensure_slot_exists(b, slot, NT_ARM_HW_BREAK);
+                }
                 Some((bvr, bcr)) => {
                     b.dbg_regs[i].addr = bvr;
                     b.dbg_regs[i].ctrl = u32::try_from(bcr & 0xFFFF_FFFF).unwrap_or(0);
@@ -4791,17 +4858,24 @@ int main(void) {
         // 573 and 575 fixes went unmeasured too. A diagnostic improvement that
         // hangs is worse than the ambiguity it replaced.
         //
-        // The condition is now the one that is always bounded: consume the
-        // birth-stops the kernel actually delivers, and poll `threads()` after
-        // each. Where no birth-stop arrives the loop simply does not spin, and
-        // the assertion below reports that fact instead of waiting for it.
-        while matches!(ev.reason, StopReason::ThreadCreate { .. }) && !ev.reason.is_exit() {
+        // ITERATION 587 corrects 585, which was measured RED on Linux x86_64
+        // CI: `still at a thread birth after 64 resumes`. 585 broke out of the
+        // loop the moment two threads were visible — which on x86-64 is the
+        // FIRST birth-stop — leaving the target parked on a `ThreadCreate` that
+        // the assertion below then rightly rejects. Removing a hang is not
+        // licence to leave the target in a state the test forbids.
+        //
+        // The loop condition is now the only one that is bounded WITHOUT
+        // assuming anything about the platform: consume exactly the birth-stops
+        // the kernel delivers, and stop when the stop is no longer a birth.
+        // That is the idiom the two neighbouring loops in this file already use
+        // (`_ => break`), and departing from it is what produced both defects.
+        //
+        // Where no birth-stop arrives — ARM — the body never runs and nothing
+        // is resumed, so there is no wait to hang on. `threads()` is polled
+        // AFTER the loop, and `saw_thread_birth` tells the two cases apart.
+        while matches!(ev.reason, StopReason::ThreadCreate { .. }) {
             saw_thread_birth = true;
-            tids = dbg.threads().await.expect("threads() should enumerate /proc/<pid>/task");
-            if tids.len() >= 2 {
-                // Already visible: resuming again would only risk another wait.
-                break;
-            }
             ev = dbg.continue_execution().await.expect("continue should not error");
         }
         // Read once more AFTER the loop: on a backend that delivers no
