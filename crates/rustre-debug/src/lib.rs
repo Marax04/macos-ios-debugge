@@ -997,6 +997,32 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
+/// The reason a named capability is unsupported on this build, or `None`.
+///
+/// `backend_capabilities()` publishes, per platform and per architecture, both
+/// WHETHER something works and WHY it does not. The comment on that list says a
+/// wrong answer is worse than none, "because `supported: true` where the answer
+/// is `Unsupported` sends them" the wrong way. The declaration was careful and
+/// the code that had to enforce it was not connected to it at all.
+///
+/// Concretely: on Windows-on-ARM the list says hardware watchpoints are
+/// unsupported and explains that this backend programs the x86 debug registers,
+/// which that architecture does not have. `set_watchpoint_sized` knew none of
+/// that. It ran the whole arming loop, wrote `dr0..dr7` into a `CONTEXT` with
+/// no such fields, read back nothing, found `armed == 0` and returned
+/// `DebugError::NotAttached` — a diagnosis that sends the caller to look at
+/// their session when the session was fine.
+///
+/// Reading the refusal out of the same list that publishes it is what keeps the
+/// two from drifting: there is no second copy of the reason to update.
+#[must_use]
+pub fn capability_refusal(name: &str) -> Option<&'static str> {
+    backend_capabilities()
+        .iter()
+        .find(|c| c.name == name && !c.supported)
+        .map(|c| c.because)
+}
+
 /// What a register set can tell us about the hardware debug registers.
 ///
 /// The three desktop backends all decided this with `regs.get("dr7").unwrap_or(0)`
@@ -10850,6 +10876,53 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
+    }
+
+    /// A declared-unsupported capability must be REFUSED with the declared reason.
+    ///
+    /// `backend_capabilities()` says, on Windows-on-ARM, that hardware
+    /// watchpoints are unsupported and explains exactly why. Nothing consulted
+    /// it. `set_watchpoint_sized` ran its arming loop against debug registers
+    /// that do not exist on that architecture, found nothing armed, and
+    /// returned `NotAttached` — pointing the caller at their session, which was
+    /// never the problem.
+    ///
+    /// Structural, and it has to be: this build is x86_64, where the capability
+    /// IS supported and `capability_refusal` correctly returns `None`, so no
+    /// runtime call here can exercise the refusing branch. The same reasoning
+    /// as the single-step guard added in iteration 606.
+    ///
+    /// Anchored to the IDENTIFIER `capability_refusal`, and `code_only` strips
+    /// comments first, so this paragraph cannot satisfy the assertion.
+    #[test]
+    fn a_declared_unsupported_capability_is_refused_by_its_own_reason() {
+        // The lookup agrees with the list on this build.
+        assert_eq!(
+            crate::capability_refusal("hardware_watchpoints").is_none(),
+            crate::backend_capabilities()
+                .iter()
+                .any(|c| c.name == "hardware_watchpoints" && c.supported),
+            "the lookup and the list must not disagree about the same capability"
+        );
+        assert_eq!(crate::capability_refusal("not_a_capability"), None);
+
+        // And every backend that arms watchpoints must ask before arming.
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            let body = item_body(
+                &stripped,
+                "async fn set_watchpoint_sized(",
+                &[NEXT_FN, NEXT_ASYNC_FN],
+            );
+            assert!(
+                body.contains("capability_refusal"),
+                "{name}: set_watchpoint_sized arms the debug registers without asking                  whether this build has any, so an architecture the capability list                  already declares unsupported gets NotAttached instead of the reason"
+            );
+        }
     }
 
     /// An absent `dr7` must not read as a disarmed thread.

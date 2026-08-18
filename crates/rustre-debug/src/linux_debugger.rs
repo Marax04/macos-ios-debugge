@@ -3950,6 +3950,19 @@ impl crate::Debugger for LinuxDebugger {
         kind: BreakpointKind,
         size: u8,
     ) -> Result<(), DebugError> {
+
+        // Ask the capability list BEFORE touching the debug registers. It
+        // already publishes, per architecture, whether this backend can arm a
+        // hardware watchpoint and why not — and nothing consulted it, so on
+        // Windows-on-ARM the whole arming loop ran against `dr0..dr7` fields
+        // that do not exist, found nothing armed, and answered `NotAttached`.
+        // That points the caller at their session, which was never the problem.
+        //
+        // The reason is READ from the declaration rather than restated here, so
+        // the two cannot drift apart.
+        if let Some(why) = crate::capability_refusal("hardware_watchpoints") {
+            return Err(DebugError::Unsupported(why.to_string()));
+        }
         // Actually program the debug registers. Without this the trait default
         // forwarded to `set_breakpoint`, which rejects everything that is not
         // `Software`, so every hardware watchpoint request on this backend

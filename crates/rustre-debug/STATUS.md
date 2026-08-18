@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **619**.
+> non un registro. Precedente riscrittura: 614. Questa: **618**, aggiornata al **620**.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
 > ha risposto: lacuna dichiarata, non dettaglio.
@@ -16,8 +16,8 @@
 
 | Dove | Verificato come | Esito |
 |---|---|---|
-| Windows x86_64 | suite locale, worktree isolato | **2059 / 0** |
-| Linux x86_64 | WSL, `--test-threads=1` | **2042 / 0** |
+| Windows x86_64 | suite locale, worktree isolato | **2060 / 0** |
+| Linux x86_64 | WSL, `--test-threads=1` | **2043 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
 | MCP | Windows | **399 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
@@ -50,6 +50,21 @@ fatto tacere alzando il soffitto.
 
 ## 3. Chiuso di recente, con la misura
 
+- **Una capacità dichiarata assente ora viene RIFIUTATA con la sua stessa
+  ragione** (620). `backend_capabilities()` pubblica, per piattaforma e per
+  architettura, se una cosa funziona **e perché no** — e il commento su quella
+  lista dice che una risposta sbagliata è peggio di nessuna. Nessuno la
+  consultava. Su Windows-on-ARM la lista dice che i watchpoint hardware non ci
+  sono e spiega che questo backend programma i registri di debug x86, che quella
+  architettura non ha; `set_watchpoint_sized` non ne sapeva nulla, eseguiva
+  l'intero ciclo di arming contro `dr0..dr7` inesistenti, trovava `armed == 0` e
+  rispondeva **`NotAttached`** — una diagnosi che manda il chiamante a guardare
+  la propria sessione, che non era il problema. Ora `capability_refusal` legge la
+  ragione dalla stessa lista che la pubblica, così le due non possono divergere,
+  e un guard strutturale impone a tutti e tre i backend di chiedere prima di
+  armare. Verificato leggendo, non supponendo: Linux e macOS dichiarano
+  `supported: true` senza condizioni, quindi lì il guard è un **no-op stretto** e
+  i watchpoint ARM Linux del 570/608/609 non vengono toccati.
 - **Un `dr7` assente non è più un thread disarmato** (619). I tre backend
   decidevano con `regs.get("dr7").unwrap_or(0)` e trattavano lo `0` come «nulla
   armato, salta questo thread» — mentre **tre righe sopra** gli stessi cicli
@@ -130,7 +145,7 @@ enorme.
 | **2 test sui registri di debug** | Linux ARM | `NT_ARM_HW_WATCH` sembra fallire su quel runner: da capire, non da indovinare |
 | **Cricchetto MCP 172/168** | tutti | non mio, misurato al 612 e al 618 |
 | **Single step su Windows ARM** | Windows | rifiutato esplicitamente (606): il meccanismo AArch64 non è implementato e inventarlo sarebbe peggio |
-| **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha 2 slot, non 4. Capacità dichiarata assente (598) |
+| **Watchpoint hw su Windows ARM** | Windows | il CONTEXT ha `Bcr`/`Bvr`/`Wcr`/`Wvr` (**2 slot**, non 4). Capacità dichiarata assente (598) e ora anche **rifiutata a runtime con quella ragione** (620) |
 | **Eventi di thread** | macOS, iOS | Mach e RSP non li consegnano. Dichiarati assenti col motivo |
 | **`task_for_pid` root** | macOS | ⚠️ **decisione dell'utente** |
 | **iOS su hardware** | infrastruttura | i runner ospitati non hanno iPhone. Il simulatore però è arm64 REALE |
@@ -195,7 +210,14 @@ enorme.
     con un marcatore `//PERTURB` ancora attaccato e il test che la copriva
     rosso. La tecnica che dimostra un rosso diventa il difetto se ci si ferma a
     metà. Verificato al 619: **zero** marcatori residui nel crate.
-23. **Distinguere «non lo so» da «no» vale anche a tre righe di distanza** (619):
+23. **Una capacità DICHIARATA va anche IMPOSTA** (620): la lista era accurata e
+    dettagliata, e nessuna riga di codice la consultava. Fra dichiarare e
+    imporre c'è la stessa distanza che fra un commento e un test. La ragione va
+    LETTA dalla dichiarazione, non riscritta accanto: una seconda copia diverge.
+24. **Verificare una propria dichiarazione trova difetti anche quando la
+    dichiarazione è giusta** (620): il 598 diceva il vero, ma il percorso a
+    runtime lo contraddiceva. Undicesima volta che questo controllo paga.
+25. **Distinguere «non lo so» da «no» vale anche a tre righe di distanza** (619):
     lo stesso ciclo trattava «non ho potuto leggere» come non verificato e «non
     c'è» come pulito.
 24. **Un agente fallito per errore di server non è un difetto assente**: va
