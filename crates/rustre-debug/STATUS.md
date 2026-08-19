@@ -1,7 +1,7 @@
 # rustre-debug — stato misurato
 
 > **Regola.** Ogni 4 iterazioni questo file va riscritto DA ZERO. È un cruscotto,
-> non un registro. Precedente riscrittura: 618. Questa: **624**, aggiornata al **626**, con due
+> non un registro. Precedente riscrittura: 618. Questa: **624**, aggiornata al **627**, con due
 > iterazioni di ritardo — annotate, non nascoste.
 >
 > **Ogni numero è misurato.** «Non dimostrato» = nessuna macchina raggiungibile
@@ -20,7 +20,7 @@
 | Windows x86_64 | suite locale, worktree isolato | **2097 / 0** |
 | Linux x86_64 | WSL, `--test-threads=1` | **2080 / 0** |
 | Darwin ×2 | `cargo check --target` | **0 errori** |
-| MCP | Windows | **399 / 1** |
+| MCP | Windows | **400 / 1** |
 | Windows ARM64 | CI `windows-11-arm` | compila (602, 606); non riconfermato dopo il 612 |
 | Linux aarch64 | CI `ubuntu-24.04-arm` | 3 fallimenti al 608; **i fix 607/608/609 non sono mai stati rimisurati** |
 | macOS Intel / Apple Silicon | CI | suite e live test **verdi** |
@@ -81,6 +81,21 @@ e azzerare l'indice sui propri file subito dopo.
 | **14 file `.bak*`** | `src/` | ⚠️ **decisione dell'utente** |
 
 ## 5. Chiuso di recente, con la misura
+
+- **Un argomento MCP presente ma illeggibile non diventa più il default** (627).
+  `u64_arg_aliased` restituiva il default ogni volta che `coerce_u64` diceva
+  `None`, e `None` copriva due situazioni diverse: «il chiamante non l'ha
+  mandato» e «il chiamante ha mandato qualcosa che non so leggere». Una
+  richiesta con `len: "sixteen"` veniva servita come se non avesse detto nulla —
+  sedici byte di memoria, nessun errore, nessun indizio che l'argomento fosse
+  stato scartato: il chiamante legge la risposta come risposta alla domanda che
+  credeva di aver fatto. Ora l'assente resta default e il **presente-illeggibile**
+  è un rifiuto che nomina la chiave.
+  Il secondo pezzo è peggiore perché è silenzioso due volte:
+  `debug.set_watchpoint` faceva `u64_arg_aliased(&args, "size", 8) as u8`, quindi
+  `size: 256` e `size: 4096` arrivavano entrambi come **0** — un watchpoint che
+  non sorveglia nulla, senza che nulla fra la richiesta e i registri di debug
+  dicesse che il numero era cambiato. `u8_arg_checked` rifiuta invece di troncare.
 
 - **⚠ CORREZIONE DI UNA MIA DIAGNOSI, e il rosso chiuso** (626). Al 625 avevo
   scritto che il mock «non serve via `m` le proprie scritture di stack». **Era
@@ -156,6 +171,7 @@ e azzerare l'indice sui propri file subito dopo.
 | 8 | 74 | 15 | **2** (13 agenti morti su errori server) |
 | 8 (retry) | 64 | 5 | **5** |
 | 9 | 62 | 12 | **12** |
+| 10 | 67 | 11 | **11** |
 
 ## 7. Lezioni di metodo
 
@@ -194,7 +210,14 @@ e azzerare l'indice sui propri file subito dopo.
     Si applica il proprio **hunk** su `main`.
 15. **Attribuire con PROVA, nelle due direzioni** (622): il modo più netto è
     chiedersi se il test **esistesse** nel proprio ultimo verde.
-16. **Una misura giusta non è una diagnosi giusta** (625→626): la sonda diceva
+16. **Cercare bene e non trovare è un risultato** (627): cinque superfici dei
+    backend desktop — `run_to_return`, la pulizia per-indirizzo di
+    `remove_breakpoint`, le scritture parziali, `step_over`, i displacement dei
+    programmi sintetici — sono state esaminate e sono risultate corrette. Nove
+    round di irrobustimento si vedono. Il difetto è stato poi trovato nello
+    strato che ne ha ricevuto molta meno, l'MCP: **dove non si è ancora guardato
+    batte dove si è già guardato nove volte.**
+17. **Una misura giusta non è una diagnosi giusta** (625→626): la sonda diceva
     il vero (`target = 0x0`) e la spiegazione che ci ho costruito sopra era
     falsa. Il numero va spiegato risalendo, non completato a intuito — e la
     frase sbagliata va corretta dove è stata scritta, non solo dove fa danno.

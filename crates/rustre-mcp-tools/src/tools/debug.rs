@@ -190,6 +190,55 @@ fn opt_u64(args: &Value, key: &str, default: u64) -> u64 {
 /// Order matters and the tool's OWN name is always first: if a caller sends
 /// both, the documented one wins, so adding a synonym can never change what an
 /// already-correct request means.
+/// [`u64_arg_aliased`], but a value that is PRESENT and unreadable is an ERROR.
+///
+/// The unchecked form returns the default whenever `coerce_u64` says `None`,
+/// and `None` covers two different situations: the caller did not send this
+/// argument, and the caller sent something that cannot be read as a number. A
+/// request carrying `len: "sixteen"` was answered as though it had said
+/// nothing — sixteen bytes of memory, no error, no hint that the argument had
+/// been discarded. The caller reads the reply as the answer to the question
+/// they asked.
+///
+/// Absent still means default. Only *present and unusable* is refused, and the
+/// refusal names the key so the caller can see which one it was.
+///
+/// # Errors
+/// When `primary` — or one of its accepted synonyms — is present but cannot be
+/// read as an unsigned integer.
+fn u64_arg_checked(args: &Value, primary: &str, default: u64) -> anyhow::Result<u64> {
+    const QUANTITY: &[&str] = &["len", "size", "count", "n"];
+    let mut names: Vec<&str> = vec![primary];
+    if QUANTITY.contains(&primary) {
+        names.extend(QUANTITY.iter().filter(|a| **a != primary));
+    }
+    for name in names {
+        let Some(raw) = args.get(name) else { continue };
+        return coerce_u64(raw).ok_or_else(|| {
+            anyhow!(
+                "'{name}' is present but cannot be read as an unsigned integer: {raw}.                  Accepted: a JSON integer, a whole number, a decimal string, or                  \"0x…\" hex. Refusing rather than quietly using the default {default},                  which would answer a question you did not ask."
+            )
+        });
+    }
+    Ok(default)
+}
+
+/// [`u64_arg_checked`] for a field that must fit in a byte.
+///
+/// `debug.set_watchpoint` used to write `u64_arg_aliased(&args, "size", 8) as u8`,
+/// so `size: 256` and `size: 4096` both arrived as **0** — a watchpoint watching
+/// nothing, with no step between the request and the debug registers saying the
+/// number had changed.
+///
+/// # Errors
+/// When the argument is unreadable, or does not fit in a `u8`.
+fn u8_arg_checked(args: &Value, primary: &str, default: u8) -> anyhow::Result<u8> {
+    let v = u64_arg_checked(args, primary, u64::from(default))?;
+    u8::try_from(v).map_err(|_| {
+        anyhow!("'{primary}' is {v}, which does not fit in a byte; truncating it would silently                  ask for a different size than you did (256 and 4096 both become 0)")
+    })
+}
+
 fn u64_arg_aliased(args: &Value, primary: &str, default: u64) -> u64 {
     // Same concept, different spellings across this file's own tools. Kept as
     // one list rather than per-tool: the point is that a caller should not have
@@ -1329,7 +1378,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
             |args| {
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
-                let len = u64_arg_aliased(&args, "len", 16).min(4096) as usize;
+                let len = u64_arg_checked(&args, "len", 16)?.min(4096) as usize;
 
                 // Live path: read from the real process address space.
                 if let Some(sess) = get_session(&session_id) {
@@ -2706,7 +2755,7 @@ pub fn handlers() -> Vec<(ToolDefinition, Box<dyn ToolHandler>)> {
                 use rustre_debug::watchpoint_engine::WatchpointType;
                 let session_id = req_str(&args, "session_id")?.to_string();
                 let addr = req_u64(&args, "addr")?;
-                let size = u64_arg_aliased(&args, "size", 8) as u8;
+                let size = u8_arg_checked(&args, "size", 8)?;
                 let kind = match opt_str(&args, "kind", "write") {
                     "read" => WatchpointType::Read,
                     "access" | "readwrite" | "read|write" => WatchpointType::Access,
@@ -5207,6 +5256,43 @@ mod tests {
         assert!(msg.contains("debug.session_list"), "must name the discovery tool: {msg}");
         assert!(msg.contains("debug.launch"), "must name the creation tool: {msg}");
         assert!(msg.contains("no mock fallback"), "must state nothing is faked: {msg}");
+    }
+
+    /// An argument that is PRESENT but unusable must not become the default.
+    ///
+    /// `u64_arg_aliased` returns the default when `coerce_u64` says `None`, and
+    /// `None` means both "the caller did not send this" and "the caller sent
+    /// something I cannot read". A request carrying `len: "sixteen"` is answered
+    /// as though it had said nothing, with 16 bytes of memory and no hint that
+    /// the argument was discarded.
+    ///
+    /// The truncation is silent in a second way: `debug.set_watchpoint` does
+    /// `u64_arg_aliased(&args, "size", 8) as u8`, so `size: 256` and
+    /// `size: 4096` both arrive as **0**. A zero-length watchpoint is not the
+    /// watchpoint anyone asked for, and nothing between the request and the
+    /// debug registers says the number changed.
+    #[test]
+    fn a_malformed_numeric_argument_is_not_silently_defaulted() {
+        assert_eq!(u64_arg_checked(&json!({"len": 32}), "len", 16).unwrap(), 32);
+        assert_eq!(u64_arg_checked(&json!({"len": "0x20"}), "len", 16).unwrap(), 32);
+        assert_eq!(u64_arg_checked(&json!({}), "len", 16).unwrap(), 16, "absent means default");
+
+        for bad in [json!({"len": "sixteen"}), json!({"len": -4}), json!({"len": null})] {
+            let err = u64_arg_checked(&bad, "len", 16)
+                .expect_err("a value the tool cannot read must not be replaced by the default");
+            let text = format!("{err}");
+            assert!(
+                text.contains("len"),
+                "the refusal must name the argument it could not read: {text}"
+            );
+        }
+
+        assert_eq!(u8_arg_checked(&json!({"size": 8}), "size", 8).unwrap(), 8);
+        for wide in [json!({"size": 256}), json!({"size": 4096})] {
+            let err = u8_arg_checked(&wide, "size", 8)
+                .expect_err("a size that cannot fit in a u8 must be refused, not truncated to 0");
+            assert!(format!("{err}").contains("size"));
+        }
     }
 
     #[test]
