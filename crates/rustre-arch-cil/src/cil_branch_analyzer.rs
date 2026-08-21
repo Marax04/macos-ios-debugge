@@ -334,64 +334,8 @@ impl CfgBuilder {
             offset_to_block.insert(block.start_offset, i);
         }
 
-        // Helper: find block index by offset.
-        let find_block = |off: u32| -> Option<usize> { offset_to_block.get(&off).copied() };
-
         // Step 4: wire edges.
-        for block in blocks.iter_mut().take(n) {
-            let Some(last) = block.last_instr().cloned() else {
-                continue;
-            };
-            let fall_through = block.end_offset;
-            let mut succs: Vec<CfgEdge> = vec![];
-
-            match last.opcode {
-                Opcode::Ret | Opcode::Throw | Opcode::Rethrow | Opcode::Endfinally => {
-                    // no successors
-                }
-                Opcode::Br | Opcode::BrS => {
-                    if let Some(tgt) = last.branch_target()
-                        && let Some(b) = find_block(tgt) {
-                            succs.push(CfgEdge { target_block: b, kind: EdgeKind::Unconditional });
-                        }
-                }
-                Opcode::Leave | Opcode::LeaveS => {
-                    if let Some(tgt) = last.branch_target()
-                        && let Some(b) = find_block(tgt) {
-                            succs.push(CfgEdge { target_block: b, kind: EdgeKind::Leave });
-                        }
-                }
-                Opcode::Switch => {
-                    for (case, tgt) in last.switch_targets().into_iter().enumerate() {
-                        if let Some(b) = find_block(tgt) {
-                            succs.push(CfgEdge {
-                                target_block: b,
-                                kind: EdgeKind::Switch(u32::try_from(case).unwrap_or(u32::MAX)),
-                            });
-                        }
-                    }
-                    // default (fall-through)
-                    if let Some(b) = find_block(fall_through) {
-                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::False });
-                    }
-                }
-                _ => {
-                    // Conditional branches
-                    if let Some(tgt) = last.branch_target() {
-                        if let Some(b) = find_block(tgt) {
-                            succs.push(CfgEdge { target_block: b, kind: EdgeKind::True });
-                        }
-                        if let Some(b) = find_block(fall_through) {
-                            succs.push(CfgEdge { target_block: b, kind: EdgeKind::False });
-                        }
-                    } else if let Some(b) = find_block(fall_through) {
-                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::Unconditional });
-                    }
-                }
-            }
-
-            block.succs = succs;
-        }
+        wire_edges(&mut blocks, n, &offset_to_block);
 
         // Step 5: fill predecessor lists.
         let succs_copy: Vec<Vec<CfgEdge>> = blocks.iter().map(|b| b.succs.clone()).collect();
@@ -438,6 +382,73 @@ impl CfgBuilder {
     }
 }
 
+
+
+/// Block index that starts at `off`, if any.
+fn find_block(offset_to_block: &HashMap<u32, usize>, off: u32) -> Option<usize> {
+    offset_to_block.get(&off).copied()
+}
+
+/// Step 4 of CFG construction: give every block its successor edges.
+///
+/// Split out of [`CfgBuilder::build`], which otherwise carried all nine
+/// construction steps in a single function.
+fn wire_edges(blocks: &mut [CilBlock], n: usize, offset_to_block: &HashMap<u32, usize>) {
+    for block in blocks.iter_mut().take(n) {
+        let Some(last) = block.last_instr().cloned() else {
+            continue;
+        };
+        let fall_through = block.end_offset;
+        let mut succs: Vec<CfgEdge> = vec![];
+
+        match last.opcode {
+            Opcode::Ret | Opcode::Throw | Opcode::Rethrow | Opcode::Endfinally => {
+                // no successors
+            }
+            Opcode::Br | Opcode::BrS => {
+                if let Some(tgt) = last.branch_target()
+                    && let Some(b) = find_block(offset_to_block, tgt) {
+                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::Unconditional });
+                    }
+            }
+            Opcode::Leave | Opcode::LeaveS => {
+                if let Some(tgt) = last.branch_target()
+                    && let Some(b) = find_block(offset_to_block, tgt) {
+                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::Leave });
+                    }
+            }
+            Opcode::Switch => {
+                for (case, tgt) in last.switch_targets().into_iter().enumerate() {
+                    if let Some(b) = find_block(offset_to_block, tgt) {
+                        succs.push(CfgEdge {
+                            target_block: b,
+                            kind: EdgeKind::Switch(u32::try_from(case).unwrap_or(u32::MAX)),
+                        });
+                    }
+                }
+                // default (fall-through)
+                if let Some(b) = find_block(offset_to_block, fall_through) {
+                    succs.push(CfgEdge { target_block: b, kind: EdgeKind::False });
+                }
+            }
+            _ => {
+                // Conditional branches
+                if let Some(tgt) = last.branch_target() {
+                    if let Some(b) = find_block(offset_to_block, tgt) {
+                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::True });
+                    }
+                    if let Some(b) = find_block(offset_to_block, fall_through) {
+                        succs.push(CfgEdge { target_block: b, kind: EdgeKind::False });
+                    }
+                } else if let Some(b) = find_block(offset_to_block, fall_through) {
+                    succs.push(CfgEdge { target_block: b, kind: EdgeKind::Unconditional });
+                }
+            }
+        }
+
+        block.succs = succs;
+    }
+}
 
 /// Find every basic-block leader offset in `instrs`.
 ///

@@ -1376,7 +1376,31 @@ fn decode_cil_group14(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), 
 /// Split out of `decode_cil_group14` so the prefix opcodes are one function
 /// rather than a 130-line arm nested inside the single-byte table.
 fn decode_cil_prefixed(bytes: &[u8], op2: u8) -> Result<(CilInstr, usize), CilDecodeError> {
-    match op2 {
+    if let Some(r) = decode_cil_prefixed_group1(bytes, op2)? {
+        return Ok(r);
+    }
+
+    if let Some(r) = decode_cil_prefixed_group2(bytes, op2)? {
+        return Ok(r);
+    }
+
+    if let Some(r) = decode_cil_prefixed_group3(bytes, op2)? {
+        return Ok(r);
+    }
+
+    // Not handled by any slice above.
+    Err(CilDecodeError::UnknownPrefixedOpcode(op2))
+}
+
+/// One slice of the 0xFE two-byte prefix table.
+///
+/// `Ok(None)` means this slice does not handle `op2`, so the caller can try
+/// the next one.
+fn decode_cil_prefixed_group1(
+    bytes: &[u8],
+    op2: u8,
+) -> Result<Option<(CilInstr, usize)>, CilDecodeError> {
+    Ok(Some(match op2 {
         0x00 => Ok(prefixed("arglist", InstrFlags::NONE, op2)),
         0x01 => Ok(prefixed("ceq", InstrFlags::NONE, op2)),
         0x02 => Ok(prefixed("cgt", InstrFlags::NONE, op2)),
@@ -1437,6 +1461,19 @@ fn decode_cil_prefixed(bytes: &[u8], op2: u8) -> Result<(CilInstr, usize), CilDe
                 vec![0xfe, op2, bytes[2], bytes[3]],
             ))
         }
+        _ => return Ok(None),
+    }?))
+}
+
+/// One slice of the 0xFE two-byte prefix table.
+///
+/// `Ok(None)` means this slice does not handle `op2`, so the caller can try
+/// the next one.
+fn decode_cil_prefixed_group2(
+    bytes: &[u8],
+    op2: u8,
+) -> Result<Option<(CilInstr, usize)>, CilDecodeError> {
+    Ok(Some(match op2 {
         0x0d => {
             need(bytes, 4)?;
             Ok(prefixed_ops(
@@ -1497,6 +1534,19 @@ fn decode_cil_prefixed(bytes: &[u8], op2: u8) -> Result<(CilInstr, usize), CilDe
                 vec![0xfe, op2, bytes[2]],
             ))
         }
+        _ => return Ok(None),
+    }?))
+}
+
+/// One slice of the 0xFE two-byte prefix table.
+///
+/// `Ok(None)` means this slice does not handle `op2`, so the caller can try
+/// the next one.
+fn decode_cil_prefixed_group3(
+    bytes: &[u8],
+    op2: u8,
+) -> Result<Option<(CilInstr, usize)>, CilDecodeError> {
+    Ok(Some(match op2 {
         0x1a => Ok(prefixed("rethrow", InstrFlags::BRANCH, op2)),
         0x1c => {
             need(bytes, 6)?;
@@ -1509,10 +1559,10 @@ fn decode_cil_prefixed(bytes: &[u8], op2: u8) -> Result<(CilInstr, usize), CilDe
         }
         0x1d => Ok(prefixed("refanytype", InstrFlags::NONE, op2)),
         0x1e => Ok(prefixed("readonly", InstrFlags::NONE, op2)),
-        _ => Err(CilDecodeError::UnknownPrefixedOpcode(op2)),
-    
-    }
+        _ => return Ok(None),
+    }?))
 }
+
 
 // ---------------------------------------------------------------------------
 // CilArch
