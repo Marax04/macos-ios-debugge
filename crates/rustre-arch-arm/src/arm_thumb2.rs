@@ -283,7 +283,9 @@ impl Thumb2Decoder {
     /// Returns [`Thumb2DecodeError`] if the word is not a valid Thumb-2 encoding.
     pub fn decode_word(word: u32) -> Result<Thumb2Instr, Thumb2DecodeError> {
         let op1 = (word >> 27) & 0x3; // bits 28:27
-        let _op2 = (word >> 20) & 0x7F; // bits 26:20 (reserved for future sub-decoding)
+        // bits 26:20 — the second-level opcode field; exposed for callers that
+        // need to sub-decode further than this dispatch does.
+        debug_assert_eq!(thumb2_op2(word), (word >> 20) & 0x7F);
 
         Ok(match op1 {
             0x1 => {
@@ -415,7 +417,7 @@ impl Thumb2Decoder {
     }
 
     fn decode_branch(word: u32) -> Thumb2Instr {
-        let _op = (word >> 20) & 0x7F;
+        debug_assert_eq!(thumb2_op2(word), (word >> 20) & 0x7F);
         // B<cond>.W / B.W / BL / BLX
         // BL/BLX: hw2[14]=1 (bit14 of the combined 32-bit word), distinguishing from B<cond>.
         if (word >> 14) & 1 == 1 {
@@ -918,5 +920,30 @@ mod tests {
         let bytes = [0x00u8, 0x00, 0x2D, 0xE9, 0x10, 0x40];
         let r = Thumb2Decoder::decode_bytes(&bytes[2..], 0);
         assert!(r.is_ok());
+    }
+}
+
+/// The Thumb-2 `op2` field, bits [26:20] of a 32-bit encoding.
+///
+/// The top-level decoder dispatches on `op1` alone; this accessor exposes the
+/// second-level opcode field so callers (and future sub-decoders) can read it
+/// without re-deriving the shift and mask.
+#[must_use]
+pub const fn thumb2_op2(word: u32) -> u32 {
+    (word >> 20) & 0x7F
+}
+
+#[cfg(test)]
+mod op2_tests {
+    use super::thumb2_op2;
+
+    #[test]
+    fn op2_extracts_bits_26_to_20() {
+        assert_eq!(thumb2_op2(0), 0);
+        assert_eq!(thumb2_op2(0x7F << 20), 0x7F);
+        // Bits outside [26:20] must not leak into the result.
+        assert_eq!(thumb2_op2(0xFFF0_0000) & !0x7F, 0);
+        assert_eq!(thumb2_op2(0x000F_FFFF), 0);
+        assert_eq!(thumb2_op2(0x0170_0000), 0x17);
     }
 }

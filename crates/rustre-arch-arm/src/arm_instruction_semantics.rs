@@ -137,6 +137,10 @@ impl ConditionCode {
 
     /// Returns the inverse/opposite condition (swap last bit).
     #[must_use]
+    /// # Panics
+    ///
+    /// Never in practice: `encoding()` returns a 4-bit value and flipping its
+    /// low bit stays within the 16 encodings `from_bits` accepts.
     pub fn invert(self) -> Self {
         Self::from_bits(self.encoding() ^ 1).unwrap()
     }
@@ -951,6 +955,12 @@ pub struct ExclusiveMonitor {
 
 impl ExclusiveMonitor {
     #[must_use]
+    /// # Panics
+    ///
+    /// Panics unless `granule` is a non-zero power of two; the alignment mask
+    /// `!(granule - 1)` used by `mark_exclusive` is only correct for such a
+    /// value, so an invalid granule is rejected at construction rather than
+    /// silently mis-aligning every reservation.
     pub fn new(granule: u32) -> Self {
         assert!(granule > 0 && granule.is_power_of_two(),
             "ExclusiveMonitor granule must be a non-zero power of two, got {granule}");
@@ -1215,6 +1225,26 @@ impl Default for ArmInstructionSemantics {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/// Low 32 bits of a 64-bit value.
+///
+/// Reads the low four little-endian bytes rather than performing a numeric
+/// cast, so the narrowing is exact by construction for every input and cannot
+/// panic. This is the defined result of the ARM 32-bit data-processing and
+/// `UMULL`/`SMULL` low-word operations.
+#[must_use]
+pub const fn low32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// High 32 bits of a 64-bit value, by the same byte-image rule as [`low32`].
+#[must_use]
+pub const fn high32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[4], b[5], b[6], b[7]])
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1728,23 +1758,4 @@ mod tests {
         assert_eq!(r.value, 0);
         assert!(r.carry_out);
     }
-}
-
-/// Low 32 bits of a 64-bit value.
-///
-/// Reads the low four little-endian bytes rather than performing a numeric
-/// cast, so the narrowing is exact by construction for every input and cannot
-/// panic. This is the defined result of the ARM 32-bit data-processing and
-/// `UMULL`/`SMULL` low-word operations.
-#[must_use]
-pub const fn low32(v: u64) -> u32 {
-    let b = v.to_le_bytes();
-    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-}
-
-/// High 32 bits of a 64-bit value, by the same byte-image rule as [`low32`].
-#[must_use]
-pub const fn high32(v: u64) -> u32 {
-    let b = v.to_le_bytes();
-    u32::from_le_bytes([b[4], b[5], b[6], b[7]])
 }
