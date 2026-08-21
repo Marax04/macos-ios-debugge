@@ -8013,10 +8013,7 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     // Arithmetic — opcode == 0x57
     let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
 
-    match funct3 {
-        // OPIVV / OPIVX / OPIVI
-        _ => decode_rvv_mid(address, word, bytes),
-    }
+    decode_rvv_mid(address, word, bytes)
 }
 
 /// Continuation of the RVV funct3 dispatch.
@@ -8126,46 +8123,7 @@ fn decode_rvv_mid(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
 
     match funct3 {
         0 | 3 | 2 => {
-            let mn: Option<&str> = match funct6 {
-                0x00 => Some("vadd"),
-                0x02 => Some("vsub"),
-                0x03 => Some("vrsub"),
-                0x04 => Some("vminu"),
-                0x05 => Some("vmin"),
-                0x06 => Some("vmaxu"),
-                0x07 => Some("vmax"),
-                0x09 => Some("vand"),
-                0x0A => Some("vor"),
-                0x0B => Some("vxor"),
-                0x0C => Some("vrgather"),
-                0x0E => Some("vslideup"),
-                0x0F => Some("vslidedown"),
-                0x10 => Some("vadc"),
-                0x11 => Some("vmadc"),
-                0x18 => Some("vmseq"),
-                0x19 => Some("vmsne"),
-                0x1A => Some("vmsltu"),
-                0x1B => Some("vmslt"),
-                0x1C => Some("vmsleu"),
-                0x1D => Some("vmsle"),
-                0x1E => Some("vmsgtu"),
-                0x1F => Some("vmsgt"),
-                0x20 => Some("vsaddu"),
-                0x21 => Some("vsadd"),
-                0x22 => Some("vssubu"),
-                0x23 => Some("vssub"),
-                0x25 => Some("vsll"),
-                0x27 => Some("vsmul"),
-                0x28 => Some("vsrl"),
-                0x29 => Some("vsra"),
-                0x2A => Some("vssrl"),
-                0x2B => Some("vssra"),
-                0x2C => Some("vnsrl"),
-                0x2D => Some("vnsra"),
-                0x2E => Some("vnclipu"),
-                0x2F => Some("vnclip"),
-                _ => None,
-            };
+            let mn: Option<&str> = rvv_mnemonic_table_1(funct6);
             if let Some(m) = mn {
                 let sfx = match funct3 {
                     3 => "vx",
@@ -12303,5 +12261,52 @@ fn decode_compressed_q0_tail2(hw: u16, xlen: u32, addr: Address) -> Result<Instr
             ))
         }
         _ => decode_compressed_q0_tail(hw, xlen, addr),
+    }
+}
+
+/// Mnemonic table for one RVV `funct6` group.
+///
+/// Extracted from the dispatch body so the decoder stays readable; the
+/// table itself is unchanged.
+const fn rvv_mnemonic_table_1(funct6: u32) -> Option<&'static str> {
+    match funct6 {
+        0x00 => Some("vadd"),
+        0x02 => Some("vsub"),
+        0x03 => Some("vrsub"),
+        0x04 => Some("vminu"),
+        0x05 => Some("vmin"),
+        0x06 => Some("vmaxu"),
+        0x07 => Some("vmax"),
+        0x09 => Some("vand"),
+        0x0A => Some("vor"),
+        0x0B => Some("vxor"),
+        0x0C => Some("vrgather"),
+        0x0E => Some("vslideup"),
+        0x0F => Some("vslidedown"),
+        0x10 => Some("vadc"),
+        0x11 => Some("vmadc"),
+        0x18 => Some("vmseq"),
+        0x19 => Some("vmsne"),
+        0x1A => Some("vmsltu"),
+        0x1B => Some("vmslt"),
+        0x1C => Some("vmsleu"),
+        0x1D => Some("vmsle"),
+        0x1E => Some("vmsgtu"),
+        0x1F => Some("vmsgt"),
+        0x20 => Some("vsaddu"),
+        0x21 => Some("vsadd"),
+        0x22 => Some("vssubu"),
+        0x23 => Some("vssub"),
+        0x25 => Some("vsll"),
+        0x27 => Some("vsmul"),
+        0x28 => Some("vsrl"),
+        0x29 => Some("vsra"),
+        0x2A => Some("vssrl"),
+        0x2B => Some("vssra"),
+        0x2C => Some("vnsrl"),
+        0x2D => Some("vnsra"),
+        0x2E => Some("vnclipu"),
+        0x2F => Some("vnclip"),
+        _ => None,
     }
 }
