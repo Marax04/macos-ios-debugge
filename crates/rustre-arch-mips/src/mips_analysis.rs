@@ -202,7 +202,7 @@ impl MipsInsn {
 
     /// True for any control-transfer instruction (has a delay slot).
     #[must_use]
-    pub fn has_delay_slot(self) -> bool {
+    pub const fn has_delay_slot(self) -> bool {
         self.is_branch() || self.is_jump() || self.is_jr_jalr()
     }
 

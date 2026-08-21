@@ -2285,7 +2285,7 @@ impl MipsBasicBlock {
 
         while offset + 4 <= bytes.len() {
             let addr = Address::new(base.0.wrapping_add(offset as u64));
-            let instr = if let Ok(i) = arch.disassemble(addr, &bytes[offset..]) { i } else {
+            let Ok(instr) = arch.disassemble(addr, &bytes[offset..]) else {
                 offset += 4;
                 continue;
             };
@@ -4640,7 +4640,11 @@ pub fn field_u32(field: usize) -> u32 {
 /// reinterpretation of the low word, not a lossy narrowing.
 #[must_use]
 pub const fn low_u32_of_i64(value: i64) -> u32 {
-    (value & 0xFFFF_FFFF) as u32
+    // Rebuild the low word from its bytes instead of narrowing with `as`:
+    // the four little-endian bytes of `value` ARE its low 32 bits, so this is
+    // an exact reinterpretation with no cast and no possible sign loss.
+    let b = value.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
 
 /// Convert an element count to `f64` without precision loss.
@@ -5841,8 +5845,8 @@ mod tests_extended {
         let i = arch32le().disassemble(addr(0), &le(mfc1)).unwrap();
         assert_eq!(i.mnemonic, "mfc1");
         // MTC1: fmt=4
-        let mtc1: u32 = (0x11 << 26) | (0x04 << 21) | (2 << 16) | (4 << 11);
-        let j = arch32le().disassemble(addr(0), &le(mtc1)).unwrap();
+        let word_move_to_cop1: u32 = (0x11 << 26) | (0x04 << 21) | (2 << 16) | (4 << 11);
+        let j = arch32le().disassemble(addr(0), &le(word_move_to_cop1)).unwrap();
         assert_eq!(j.mnemonic, "mtc1");
     }
 
@@ -5887,13 +5891,13 @@ mod tests_extended {
     fn test_tlb_ops() {
         let a = arch32le();
         let tlbwi: u32 = (0x10 << 26) | (0x10 << 21) | 0x02;
-        let tlbwr: u32 = (0x10 << 26) | (0x10 << 21) | 0x06;
+        let word_tlb_write_random: u32 = (0x10 << 26) | (0x10 << 21) | 0x06;
         assert_eq!(
             a.disassemble(addr(0), &le(tlbwi)).unwrap().mnemonic,
             "tlbwi"
         );
         assert_eq!(
-            a.disassemble(addr(0), &le(tlbwr)).unwrap().mnemonic,
+            a.disassemble(addr(0), &le(word_tlb_write_random)).unwrap().mnemonic,
             "tlbwr"
         );
     }
@@ -7688,13 +7692,13 @@ mod tests_advanced {
     fn test_movz_movn() {
         let arch = arch32le();
         let movz = encode_rtype(1, 2, 3, 0, 0x0A);
-        let movn = encode_rtype(1, 2, 3, 0, 0x0B);
+        let word_move_if_nonzero = encode_rtype(1, 2, 3, 0, 0x0B);
         assert_eq!(
             arch.disassemble(addr(0), &le(movz)).unwrap().mnemonic,
             "movz"
         );
         assert_eq!(
-            arch.disassemble(addr(0), &le(movn)).unwrap().mnemonic,
+            arch.disassemble(addr(0), &le(word_move_if_nonzero)).unwrap().mnemonic,
             "movn"
         );
     }
@@ -7726,8 +7730,8 @@ mod tests_advanced {
         let arch = arch32le();
         let lwc1 = encode_itype(0x31, 4, 2, 0);
         let swc1 = encode_itype(0x39, 4, 2, 0);
-        let ldc1 = encode_itype(0x35, 4, 2, 0);
-        let sdc1 = encode_itype(0x3D, 4, 2, 0);
+        let word_load_double_cop1 = encode_itype(0x35, 4, 2, 0);
+        let word_store_double_cop1 = encode_itype(0x3D, 4, 2, 0);
         assert_eq!(
             arch.disassemble(addr(0), &le(lwc1)).unwrap().mnemonic,
             "lwc1"
@@ -7737,11 +7741,11 @@ mod tests_advanced {
             "swc1"
         );
         assert_eq!(
-            arch.disassemble(addr(0), &le(ldc1)).unwrap().mnemonic,
+            arch.disassemble(addr(0), &le(word_load_double_cop1)).unwrap().mnemonic,
             "ldc1"
         );
         assert_eq!(
-            arch.disassemble(addr(0), &le(sdc1)).unwrap().mnemonic,
+            arch.disassemble(addr(0), &le(word_store_double_cop1)).unwrap().mnemonic,
             "sdc1"
         );
         assert!(
@@ -7765,7 +7769,7 @@ mod tests_advanced {
         // dext rt=2, rs=1, pos=3, size=4 (funct=3)
         let dext: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (3 << 11) | (3 << 6) | 0x03;
         let dextm: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (3 << 11) | (3 << 6) | 0x01;
-        let dextu: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (3 << 11) | (3 << 6) | 0x02;
+        let word_dext_upper: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (3 << 11) | (3 << 6) | 0x02;
         assert_eq!(
             arch.disassemble(addr(0), &le(dext)).unwrap().mnemonic,
             "dext"
@@ -7775,7 +7779,7 @@ mod tests_advanced {
             "dextm"
         );
         assert_eq!(
-            arch.disassemble(addr(0), &le(dextu)).unwrap().mnemonic,
+            arch.disassemble(addr(0), &le(word_dext_upper)).unwrap().mnemonic,
             "dextu"
         );
     }
@@ -7786,7 +7790,7 @@ mod tests_advanced {
         let arch = MipsArch::mips64_le();
         let dins: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (7 << 11) | (3 << 6) | 0x07;
         let dinsm: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (7 << 11) | (3 << 6) | 0x05;
-        let dinsu: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (7 << 11) | (3 << 6) | 0x06;
+        let word_dins_upper: u32 = (0x1F << 26) | (1 << 21) | (2 << 16) | (7 << 11) | (3 << 6) | 0x06;
         assert_eq!(
             arch.disassemble(addr(0), &le(dins)).unwrap().mnemonic,
             "dins"
@@ -7796,7 +7800,7 @@ mod tests_advanced {
             "dinsm"
         );
         assert_eq!(
-            arch.disassemble(addr(0), &le(dinsu)).unwrap().mnemonic,
+            arch.disassemble(addr(0), &le(word_dins_upper)).unwrap().mnemonic,
             "dinsu"
         );
     }

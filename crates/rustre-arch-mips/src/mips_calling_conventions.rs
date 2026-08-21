@@ -354,8 +354,13 @@ pub const fn stack_arg_offset(conv: MipsCallingConvention, arg_index: usize) -> 
     };
     let base = conv.home_area_size().cast_signed();
     // `stack_index` counts the stack arguments of one call, so it is far
-    // below `i32::MAX`; the mask makes that provable to the compiler.
-    let index = (stack_index & 0x7FFF_FFFF) as i32;
+    // below `i32::MAX`; the mask makes that provable. Rebuilding the value
+    // from its four low little-endian bytes is exact for any masked value
+    // (the discarded bytes are all zero) and needs no `as`, so it can neither
+    // truncate nor wrap on a 32-bit or a 64-bit `usize`.
+    let masked = stack_index & 0x7FFF_FFFF;
+    let b = masked.to_le_bytes();
+    let index = i32::from_le_bytes([b[0], b[1], b[2], b[3]]);
     Some(base + index * slot_size)
 }
 
