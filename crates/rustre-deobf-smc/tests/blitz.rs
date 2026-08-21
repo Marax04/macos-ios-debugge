@@ -62,7 +62,7 @@ fn smckey_equality() {
 #[test]
 fn smckey_serde_all_variants() {
     for k in [
-        SmcKey::Constant(0xDEADBEEF),
+        SmcKey::Constant(0xDEAD_BEEF),
         SmcKey::Derived,
         SmcKey::FromMemory(0x1000),
         SmcKey::FromRegister("EAX".to_owned()),

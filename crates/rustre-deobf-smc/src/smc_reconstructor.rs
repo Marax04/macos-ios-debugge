@@ -733,10 +733,10 @@ mod tests {
         let key = 0x5Eu8;
         let ciphertext: Vec<u8> = plaintext.iter().map(|b| b ^ key).collect();
 
-        let mut rec = SmcReconstructor::with_defaults(0x401000, ciphertext);
+        let mut rec = SmcReconstructor::with_defaults(0x0040_1000, ciphertext);
         let region = SmcRegion {
-            start: 0x401000,
-            end: 0x401000 + u64::try_from(plaintext.len()).unwrap_or(u64::MAX),
+            start: 0x0040_1000,
+            end: 0x0040_1000 + u64::try_from(plaintext.len()).unwrap_or(u64::MAX),
             decryptor_addr: 0,
             algorithm: SmcAlgorithm::Xor,
             key: SmcKey::Constant(u64::from(key)),

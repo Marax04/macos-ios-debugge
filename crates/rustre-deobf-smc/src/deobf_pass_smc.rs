@@ -629,7 +629,7 @@ mod tests {
     fn test_pass_no_regions_returns_failure() {
         let mut pass = SmcDeobfPass::new();
         let binary = make_binary(0x1000, 0xcc);
-        let (_, result) = pass.run(binary, 0x400000);
+        let (_, result) = pass.run(binary, 0x0040_0000);
         assert!(!result.success);
     }
 
@@ -639,15 +639,15 @@ mod tests {
         // Binary: 0x1000 bytes at base 0x400000.
         let binary = make_binary(0x1000, 0xaa);
         // Encrypted region at offset 0x100 (VA = 0x400100), size 0x10.
-        pass.add_region(0x400100, 0x10, 0x400050);
+        pass.add_region(0x0040_0100, 0x10, 0x0040_0050);
 
         // Simulate 16 emulated writes (one per byte).
         for i in 0..16u64 {
-            let w = EmulatedWrite::new(0x400100 + i, vec![0x90], i + 1, 0x400050 + i * 2);
-            pass.feed_write(0x400100, w);
+            let w = EmulatedWrite::new(0x0040_0100 + i, vec![0x90], i + 1, 0x0040_0050 + i * 2);
+            pass.feed_write(0x0040_0100, w);
         }
 
-        let (rb, result) = pass.run(binary, 0x400000);
+        let (rb, result) = pass.run(binary, 0x0040_0000);
         assert!(result.layers_decrypted > 0);
         // Patched bytes at offset 0x100 should be 0x90 (NOP).
         assert_eq!(rb.patched[0x100], 0x90);
@@ -655,10 +655,10 @@ mod tests {
 
     #[test]
     fn test_reconstructed_binary_va_to_offset() {
-        let rb = ReconstructedBinary::new(vec![0u8; 0x1000], 0x400000);
-        assert_eq!(rb.va_to_offset(0x400000), Some(0));
-        assert_eq!(rb.va_to_offset(0x400100), Some(0x100));
-        assert_eq!(rb.va_to_offset(0x3fffff), None);
+        let rb = ReconstructedBinary::new(vec![0u8; 0x1000], 0x0040_0000);
+        assert_eq!(rb.va_to_offset(0x0040_0000), Some(0));
+        assert_eq!(rb.va_to_offset(0x0040_0100), Some(0x100));
+        assert_eq!(rb.va_to_offset(0x003f_ffff), None);
     }
 
     #[test]

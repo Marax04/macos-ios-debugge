@@ -90,7 +90,7 @@ impl SmcLayer {
         for &c in &freq {
             if c > 0 {
                 let p = f64::from(u32::try_from(c).unwrap_or(u32::MAX)) / n;
-                h -= p * p.log2();
+                h = p.mul_add(-p.log2(), h);
             }
         }
         h
@@ -681,7 +681,7 @@ mod tests {
     fn test_smc_extractor_begin_and_finalize() {
         let mut ext = SmcExtractor::new();
         let id = ext.begin_layer(0x2000, vec![0xaa; 32], 0x100);
-        ext.finalize_layer(0x2000, id, &vec![0x90; 32]);
+        ext.finalize_layer(0x2000, id, &[0x90; 32]);
         assert!(ext.analysis.extracted.contains_key(&0));
     }
 

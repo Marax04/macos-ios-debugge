@@ -516,7 +516,7 @@ impl WriteMonitor {
     #[must_use]
     pub fn ranked_loops(&self) -> Vec<&DecryptionLoop> {
         let mut loops: Vec<&DecryptionLoop> = self.decryption_loops.iter().collect();
-        loops.sort_by(|a, b| b.iteration_count.cmp(&a.iteration_count));
+        loops.sort_by_key(|b| std::cmp::Reverse(b.iteration_count));
         loops
     }
 
@@ -529,7 +529,7 @@ impl WriteMonitor {
     #[must_use]
     pub fn top_writers(&self, n: usize) -> Vec<(u64, u64)> {
         let mut sorted: Vec<(u64, u64)> = self.writer_pcs.iter().map(|(&pc, &c)| (pc, c)).collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
         sorted.truncate(n);
         sorted
     }

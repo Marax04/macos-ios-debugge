@@ -701,8 +701,8 @@ mod tests {
     #[test]
     fn test_iat_scanner_resolves_known_exports() {
         let mut scanner = IatScanner::new(0x1000, 8);
-        scanner.register_export(0x7FF00001u64, "kernel32", "GetProcAddress");
-        let memory = 0x7FF00001u64.to_le_bytes().to_vec();
+        scanner.register_export(0x7FF0_0001_u64, "kernel32", "GetProcAddress");
+        let memory = 0x7FF0_0001_u64.to_le_bytes().to_vec();
         let entries = scanner.scan(&memory, true);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].symbol, "GetProcAddress");

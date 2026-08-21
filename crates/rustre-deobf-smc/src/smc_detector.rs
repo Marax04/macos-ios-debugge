@@ -631,7 +631,7 @@ mod tests {
     fn test_detect_all_xor_loop() {
         let data = xor_loop_bytes(0xFF, 32);
         let det = SmcDetectorExt::new();
-        let result = det.detect_all(&data, 0x400000);
+        let result = det.detect_all(&data, 0x0040_0000);
         assert!(!result.xor_loops.is_empty());
         assert!(result.has_smc());
     }

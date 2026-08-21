@@ -1480,7 +1480,7 @@ pub fn shannon_entropy(data: &[u8]) -> f64 {
     for &count in &freq {
         if count > 0 {
             let p = f64::from(u32::try_from(count).unwrap_or(u32::MAX)) / n;
-            h -= p * p.log2();
+            h = p.mul_add(-p.log2(), h);
         }
     }
     h
@@ -3305,7 +3305,7 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_trace_write_event_target_end() {
         let ev = TraceWriteEvent::new(0, 0x1000, 0x0040_1000, 0, vec![0xAA, 0xBB, 0xCC], None);
-        assert_eq!(ev.target_end(), 0x401003);
+        assert_eq!(ev.target_end(), 0x0040_1003);
     }
 
     #[test]
@@ -3468,16 +3468,16 @@ mod smc_reconstruction_tests {
         tl.add_event(TraceWriteEvent::new(
             0,
             0,
-            0x401000,
+            0x0040_1000,
             0,
             vec![0x55, 0x8B, 0xEC],
             None,
         ));
-        tl.add_event(TraceWriteEvent::new(300, 0, 0x402000, 0, vec![0x90], None));
+        tl.add_event(TraceWriteEvent::new(300, 0, 0x0040_2000, 0, vec![0x90], None));
         let stages = SmcAnalyzer::identify_stages(&tl);
         assert_eq!(stages.len(), 2);
-        assert_eq!(stages[0].writes[0].target_addr, 0x401000);
-        assert_eq!(stages[1].writes[0].target_addr, 0x402000);
+        assert_eq!(stages[0].writes[0].target_addr, 0x0040_1000);
+        assert_eq!(stages[1].writes[0].target_addr, 0x0040_2000);
     }
 
     // ── SmcAnalyzer::find_oep ────────────────────────────────────────────────
@@ -3490,7 +3490,7 @@ mod smc_reconstruction_tests {
         let writes = vec![TraceWriteEvent::new(
             0,
             0,
-            0x401000,
+            0x0040_1000,
             0,
             vec![0x55, 0x8B, 0xEC],
             None,
@@ -3662,7 +3662,7 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_mock_tracer_produces_two_stages() {
         let binary = vec![0x00u8; 0x20000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let stages = SmcAnalyzer::identify_stages(&timeline);
         assert_eq!(
             stages.len(),
@@ -3674,23 +3674,23 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_mock_tracer_stage_write_ranges() {
         let binary = vec![0xAAu8; 0x20000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let stages = SmcAnalyzer::identify_stages(&timeline);
         assert_eq!(stages.len(), 2);
 
         // Stage 1 writes start at 0x401000.
         let s1_min = stages[0].min_write_addr().unwrap();
-        assert_eq!(s1_min, 0x401000, "stage 1 should write to 0x401000");
+        assert_eq!(s1_min, 0x0040_1000, "stage 1 should write to 0x401000");
 
         // Stage 2 writes start at 0x402000.
         let s2_min = stages[1].min_write_addr().unwrap();
-        assert_eq!(s2_min, 0x402000, "stage 2 should write to 0x402000");
+        assert_eq!(s2_min, 0x0040_2000, "stage 2 should write to 0x402000");
     }
 
     #[test]
     fn test_mock_tracer_timeline_sorted() {
         let binary = vec![0xBBu8; 0x10000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let ts: Vec<u64> = timeline.events.iter().map(|e| e.timestamp).collect();
         let mut sorted = ts.clone();
         sorted.sort_unstable();
@@ -3700,7 +3700,7 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_mock_tracer_has_snapshots() {
         let binary = vec![0u8; 0x10000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         assert!(timeline.snapshots.len() >= 2, "expect at least 2 snapshots");
     }
 
@@ -3709,7 +3709,7 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_timeline_report_two_stage() {
         let binary = vec![0u8; 0x20000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let stages = SmcAnalyzer::identify_stages(&timeline);
         let report = SmcTimelineReport::generate(&timeline, &stages);
         assert_eq!(report.stages_count, 2);
@@ -3750,7 +3750,7 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_timeline_report_recommendation_count() {
         let binary = vec![0u8; 0x20000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let stages = SmcAnalyzer::identify_stages(&timeline);
         let report = SmcTimelineReport::generate(&timeline, &stages);
         assert!(report.recommendation_count() >= 3);
@@ -3774,8 +3774,8 @@ mod smc_reconstruction_tests {
     fn test_reconstructed_binary_non_empty() {
         let rb = ReconstructedBinary {
             data: vec![0x55u8, 0x8B, 0xEC],
-            base_addr: 0x401000,
-            oep: Some(0x401000),
+            base_addr: 0x0040_1000,
+            oep: Some(0x0040_1000),
             stage: 1,
         };
         assert!(!rb.is_empty());
@@ -3787,13 +3787,13 @@ mod smc_reconstruction_tests {
     #[test]
     fn test_full_pipeline_mock_trace_and_reconstruct() {
         let binary = vec![0x90u8; 0x20000];
-        let timeline = MockSmcTracer::trace_binary(&binary, 0x401000);
+        let timeline = MockSmcTracer::trace_binary(&binary, 0x0040_1000);
         let stages = SmcAnalyzer::identify_stages(&timeline);
         assert_eq!(stages.len(), 2);
 
         for stage in &stages {
             let rb =
-                SmcAnalyzer::reconstruct_from_snapshot(&binary, &stage.snapshot, 0x401000, stage);
+                SmcAnalyzer::reconstruct_from_snapshot(&binary, &stage.snapshot, 0x0040_1000, stage);
             assert!(!rb.is_empty());
         }
 
