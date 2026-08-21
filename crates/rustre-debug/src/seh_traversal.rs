@@ -45,7 +45,7 @@ pub enum SehError {
 pub enum PdataFormat {
     /// x86-64: 12-byte records — `BeginAddress`, `EndAddress`, `UnwindInfoAddress`.
     X64,
-    /// AArch64: 8-byte records — `BeginAddress`, `UnwindData`.
+    /// `AArch64`: 8-byte records — `BeginAddress`, `UnwindData`.
     Arm64,
 }
 
@@ -64,7 +64,7 @@ impl PdataFormat {
     /// Returns `None` for every other machine (x86, ARM32, IA64, …) — those
     /// either have no `.pdata` or a layout this module does not decode.
     #[must_use]
-    pub fn from_machine(machine: u16) -> Option<Self> {
+    pub const fn from_machine(machine: u16) -> Option<Self> {
         match machine {
             0x8664 => Some(Self::X64),
             0xAA64 => Some(Self::Arm64),
@@ -108,7 +108,7 @@ pub struct Arm64PackedUnwind {
 /// Returns `None` when the low two bits are zero — that is not packed data at
 /// all, it is an RVA pointing into `.xdata`.
 #[must_use]
-pub fn decode_arm64_packed(unwind_data: u32) -> Option<Arm64PackedUnwind> {
+pub const fn decode_arm64_packed(unwind_data: u32) -> Option<Arm64PackedUnwind> {
     let flag = (unwind_data & 0b11) as u8;
     if flag == 0 {
         return None;
@@ -179,7 +179,7 @@ pub struct UnwindCode {
 pub struct UnwindInfo {
     /// File offset of the `UNWIND_INFO` structure.
     pub offset: u32,
-    /// UNWIND_INFO version (must be 1).
+    /// `UNWIND_INFO` version (must be 1).
     pub version: u8,
     /// Raw flags byte (bits `[7:3]`).
     pub flags: u8,
@@ -338,13 +338,13 @@ impl SehIndex {
 
     /// Number of functions in the index.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Returns `true` if the index is empty (no `.pdata` entries).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }
@@ -364,7 +364,7 @@ fn read_u32(data: &[u8], offset: usize) -> Result<u32, SehError> {
 /// are one or two links; anything longer is malformed or hostile input.
 const MAX_CHAIN_DEPTH: usize = 8;
 
-/// Find the `UnwindInfoAddress` of the RUNTIME_FUNCTION whose `BeginAddress`
+/// Find the `UnwindInfoAddress` of the `RUNTIME_FUNCTION` whose `BeginAddress`
 /// is `target_rva`, scanning the `.pdata` table directly.
 ///
 /// A linear scan on purpose: this runs only while resolving a chain (one or
@@ -469,7 +469,6 @@ fn parse_unwind_info(
             None
         };
         let kind = match flags {
-            UNW_FLAG_EHANDLER => HandlerKind::ExceptionHandler,
             UNW_FLAG_UHANDLER => HandlerKind::TerminationHandler,
             UNW_FLAG_FHANDLER => HandlerKind::FilterAndHandler,
             _ => HandlerKind::ExceptionHandler, // treat unknown as __except
@@ -508,7 +507,7 @@ fn parse_unwind_info(
 /// simplified: assumes sections are not re-aligned for in-memory mapping,
 /// i.e. file offset == RVA for flat in-file buffers loaded without VA bias).
 ///
-/// For a real PE loaded via `ReadProcessMemory` where file offset == VA - image_base,
+/// For a real PE loaded via `ReadProcessMemory` where file offset == VA - `image_base`,
 /// pass `rva_to_file_offset = |rva| rva as usize`.
 ///
 /// `format` selects the `RUNTIME_FUNCTION` stride and field layout — see
@@ -732,7 +731,7 @@ pub fn parse_pe_file(data: &[u8]) -> Result<SehIndex, SehError> {
 mod tests {
     use super::*;
 
-    /// Build minimal .pdata + UNWIND_INFO bytes for a function with no handler.
+    /// Build minimal .pdata + `UNWIND_INFO` bytes for a function with no handler.
     fn make_nhandler_pdata() -> (Vec<u8>, usize, usize) {
         // image layout:
         //  offset 0x000: .pdata (12 bytes = 1 entry)
@@ -755,9 +754,9 @@ mod tests {
 
     /// Build a .pdata with a CHAINED function whose parent carries the codes.
     ///
-    /// Entry 0: the chained child at RVA 0x1000, UNWIND_INFO at 0x100 with
-    ///          UNW_FLAG_CHAININFO, pointing back at the parent's BeginAddress.
-    /// Entry 1: the parent at RVA 0x2000, UNWIND_INFO at 0x180 with one code
+    /// Entry 0: the chained child at RVA 0x1000, `UNWIND_INFO` at 0x100 with
+    ///          `UNW_FLAG_CHAININFO`, pointing back at the parent's `BeginAddress`.
+    /// Entry 1: the parent at RVA 0x2000, `UNWIND_INFO` at 0x180 with one code
     ///          and an exception handler.
     fn make_chained_pdata() -> (Vec<u8>, usize, usize) {
         let mut buf = vec![0u8; 0x400];
@@ -794,7 +793,7 @@ mod tests {
     /// A chained function must resolve to its parent's unwind data.
     ///
     /// `UNW_FLAG_CHAININFO` means "my real unwind information lives in another
-    /// RUNTIME_FUNCTION" — the shape MSVC emits for hot/cold split functions,
+    /// `RUNTIME_FUNCTION`" — the shape MSVC emits for hot/cold split functions,
     /// which is ordinary in optimised builds. `parse_unwind_info` recorded the
     /// parent's RVA and stopped, and `parse_pdata` never followed it, so
     /// `unwind_chain` was ALWAYS one element long even though its doc says it
@@ -859,7 +858,7 @@ mod tests {
     }
 
     /// A minimal but genuinely well-formed PE32+ file carrying one `.pdata`
-    /// section with a single RUNTIME_FUNCTION plus its UNWIND_INFO.
+    /// section with a single `RUNTIME_FUNCTION` plus its `UNWIND_INFO`.
     /// `parse_pe_file` had NO test at all — a public parser over wholly
     /// untrusted PE bytes with zero coverage.
     fn make_minimal_pe() -> Vec<u8> {
@@ -902,13 +901,13 @@ mod tests {
     /// An arm64 PE must never be parsed as if it were x64.
     ///
     /// `.pdata` exists on ARM64 Windows too, but its `RUNTIME_FUNCTION` is
-    /// **8 bytes** (BeginAddress + UnwindData), not the 12 of x64
+    /// **8 bytes** (`BeginAddress` + `UnwindData`), not the 12 of x64
     /// (Begin/End/UnwindInfoAddress). This parser divided the section by 12 and
     /// strode through it in steps of 12 without ever looking at the machine
     /// field, so on an arm64 image every record it produced straddled two real
     /// ones: `begin_address` values taken from the middle of a neighbour,
     /// `unwind_info_address` pointing at nothing in particular. Malformed
-    /// UNWIND_INFO is skipped with `continue`, so the result was not an error —
+    /// `UNWIND_INFO` is skipped with `continue`, so the result was not an error —
     /// it was a confidently-populated `SehIndex` full of fabricated functions,
     /// which `containing()` and `entries_with_handler()` would then answer from.
     ///
@@ -1000,7 +999,7 @@ mod tests {
         assert!(idx.containing(0x2000).is_none());
     }
 
-    /// Build .pdata + UNWIND_INFO with an __except handler.
+    /// Build .pdata + `UNWIND_INFO` with an __except handler.
     fn make_ehandler_pdata() -> (Vec<u8>, usize, usize) {
         let mut buf = vec![0u8; 0x400];
         buf[0..4].copy_from_slice(&0x2000u32.to_le_bytes()); // BeginAddress
@@ -1187,7 +1186,7 @@ mod tests {
     /// guessed"), and `containing()` then answered None for those functions -
     /// including for their own entry point. None reads as absence, so a caller
     /// asking which function covers a crash RVA concluded there was no SEH
-    /// entry, while the entry and its xdata_rva were sitting right there.
+    /// entry, while the entry and its `xdata_rva` were sitting right there.
     #[test]
     fn an_entry_of_unknown_length_is_not_reported_as_absent() {
         let idx = index_of(vec![entry(0x1000, 0x1000, Some(0x9000))]);

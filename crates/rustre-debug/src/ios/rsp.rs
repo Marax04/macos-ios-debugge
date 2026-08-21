@@ -199,6 +199,12 @@ impl From<io::Error> for RspError {
 /// Result alias for this module.
 pub type RspResult<T> = Result<T, RspError>;
 
+/// Wraps the WRITE of one packet, so a caller can hold a lock across it.
+///
+/// Handed a closure that puts the packet on the wire; it must call it. See
+/// [`RspClient::request_gated`] for why this exists.
+pub type SendGate<'a> = dyn FnMut(&mut dyn FnMut() -> RspResult<()>) -> RspResult<()> + 'a;
+
 // ---------------------------------------------------------------------------
 // checksum / hex
 // ---------------------------------------------------------------------------
@@ -242,7 +248,7 @@ pub fn hex_encode(data: &[u8]) -> Vec<u8> {
 /// # Errors
 /// Returns [`RspError::Hex`] on odd length or non-hex digits.
 pub fn hex_decode(data: &[u8]) -> RspResult<Vec<u8>> {
-    if data.len() % 2 != 0 {
+    if !data.len().is_multiple_of(2) {
         return Err(RspError::Hex(format!("odd length {}", data.len())));
     }
     let mut out = Vec::with_capacity(data.len() / 2);
@@ -435,7 +441,7 @@ impl RspPacket {
 
     /// `true` for the empty reply, which means "command not supported".
     #[must_use]
-    pub fn is_empty_reply(&self) -> bool {
+    pub const fn is_empty_reply(&self) -> bool {
         self.data.is_empty()
     }
 
@@ -498,16 +504,14 @@ impl RspPacket {
     /// # Errors
     /// [`RspError::ProcessGone`] when the reply parses as an exit stop reply.
     pub fn err_if_exit(self, cmd: &str) -> RspResult<Self> {
-        if matches!(self.data.first(), Some(b'W' | b'X')) {
-            if let Ok(stop) = StopReply::parse(&self.data) {
-                if stop.is_exit() {
+        if matches!(self.data.first(), Some(b'W' | b'X'))
+            && let Ok(stop) = StopReply::parse(&self.data)
+                && stop.is_exit() {
                     return Err(RspError::ProcessGone {
                         cmd: cmd.to_string(),
                         reply: self.as_str().into_owned(),
                     });
                 }
-            }
-        }
         Ok(self)
     }
 
@@ -1491,6 +1495,32 @@ impl<T: RspTransport> RspClient<T> {
     /// # Errors
     /// See [`RspError`].
     pub fn request(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
+        self.request_gated(payload, &mut |send| send())
+    }
+
+    /// Send a payload with the write itself wrapped in `on_send`, then wait
+    /// for the matching reply.
+    ///
+    /// [`Self::request`] fuses the send and the receive, so a caller that must
+    /// publish "this packet is now outstanding" has nowhere to do it except
+    /// *before* the call — that is, before the bytes exist on the wire. The
+    /// window is not academic: `AppleDebugger` raised `resume_in_flight` there,
+    /// and `pause()` read the flag and wrote `\x03` at a target that was still
+    /// stopped; the stop reply that produces is owed to no request, and the
+    /// next command reads it as its own answer.
+    ///
+    /// `on_send` is given a closure that writes the packet and must call it;
+    /// whatever it holds around that call is held with the write strictly
+    /// inside. A gate that returns without writing is refused rather than
+    /// leaving us parked on a read for a command the stub never received.
+    ///
+    /// # Errors
+    /// See [`RspError`], plus whatever `on_send` itself returns.
+    pub fn request_gated(
+        &mut self,
+        payload: &[u8],
+        on_send: &mut SendGate<'_>,
+    ) -> RspResult<RspPacket> {
         if self.desynchronised.take().is_some() && self.owed_reply_in_flight {
             // Refusing every later command is not a repair: it makes the
             // connection unusable exactly when the debugger most needs it —
@@ -1507,7 +1537,7 @@ impl<T: RspTransport> RspClient<T> {
             self.owed_reply_in_flight = false;
             self.discard_owed_reply();
         }
-        let outcome = self.request_inner(payload);
+        let outcome = self.request_inner(payload, on_send);
         if let Err(e) = &outcome {
             // Every error exit above may abandon a half-read packet in the
             // framer. Those bytes are meaningless now, and keeping them would
@@ -1539,8 +1569,23 @@ impl<T: RspTransport> RspClient<T> {
     /// Whether this connection has an unclaimed reply owed to an abandoned
     /// command, which makes every later reply suspect.
     #[must_use]
-    pub fn is_desynchronised(&self) -> bool {
+    pub const fn is_desynchronised(&self) -> bool {
         self.desynchronised.is_some()
+    }
+
+    /// Whether a reply is still OWED by the stub to a command this client
+    /// abandoned — a read deadline expired on a live socket.
+    ///
+    /// Distinct from [`Self::is_desynchronised`] on purpose: that one is true
+    /// for every abandoned command, including the ones abandoned because the
+    /// stream itself broke, where nothing is coming. This one is true only in
+    /// the state the doc of [`RspError::Timeout`] describes — the deadline
+    /// passed, the peer did not — which is also the only state in which the
+    /// command may still be RUNNING at the other end. `AppleDebugger` reads it
+    /// to tell an abandoned resume (target still going) from a concluded one.
+    #[must_use]
+    pub const fn owes_reply(&self) -> bool {
+        self.owed_reply_in_flight
     }
 
     /// Declare the connection back in step.
@@ -1591,12 +1636,36 @@ impl<T: RspTransport> RspClient<T> {
         }
     }
 
-    fn request_inner(&mut self, payload: &[u8]) -> RspResult<RspPacket> {
+    fn request_inner(
+        &mut self,
+        payload: &[u8],
+        on_send: &mut SendGate<'_>,
+    ) -> RspResult<RspPacket> {
         let wire = RspPacket::new(payload.to_vec()).encode();
         let mut attempt = 0u32;
         // Sent ONCE, outside the loop. Which failure happened decides whether
         // it may be sent again — see the two arms below.
-        self.transport.send(&wire)?;
+        //
+        // Through the gate, so a caller can hold a lock ACROSS the write. The
+        // re-sends below deliberately bypass it: by then the packet has been on
+        // the wire once, which is the fact the gate exists to publish.
+        let wrote = std::cell::Cell::new(false);
+        {
+            let transport = &mut self.transport;
+            let wrote = &wrote;
+            let wire = &wire;
+            on_send(&mut || {
+                wrote.set(true);
+                transport.send(wire).map_err(RspError::from)
+            })?;
+        }
+        if !wrote.get() {
+            return Err(RspError::Transport(format!(
+                "send gate returned without writing {} to {}",
+                String::from_utf8_lossy(payload),
+                self.transport.description()
+            )));
+        }
         loop {
             match self.read_reply() {
                 Ok(Some(pkt)) => {
@@ -2369,7 +2438,7 @@ mod tests {
 
     #[test]
     fn binary_write_is_escaped_at_encode_time() {
-        let payload = commands::write_memory_binary(0, &[b'$', b'#', b'}', b'*']);
+        let payload = commands::write_memory_binary(0, b"$#}*");
         let wire = RspPacket::new(payload.clone()).encode();
         assert_eq!(RspPacket::decode(&wire).unwrap().data, payload);
     }
@@ -2423,7 +2492,7 @@ mod tests {
     ///
     /// The dual of the read-splitting test below, and the case where splitting
     /// is not available: `G` writes the whole register block or nothing. An
-    /// AArch64 block — thirty-odd integer registers plus a 32x128-bit vector
+    /// `AArch64` block — thirty-odd integer registers plus a 32x128-bit vector
     /// file — is over a kilobyte once hex-encoded, so a stub that advertised
     /// less either drops it or, worse, applies the PREFIX: half the target's
     /// registers overwritten and half not, from a call that reported success.

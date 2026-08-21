@@ -221,11 +221,10 @@ impl RegisterSet {
         }
         // Otherwise it may be a sub-register: the shared table knows its width,
         // and the parent must be a register of THIS architecture.
-        if let Some((parent, _shift, mask)) = crate::sub_register_of(&lc) {
-            if self.registers.iter().any(|r| r.name == parent) {
+        if let Some((parent, _shift, mask)) = crate::sub_register_of(&lc)
+            && self.registers.iter().any(|r| r.name == parent) {
                 return Some(mask.count_ones());
             }
-        }
         // Finally, an alias this table lists but the shared one does not model
         // (segment aliases, `flags`) keeps the parent's width.
         self.find(&lc).map(|m| u32::from(m.bits))
@@ -593,7 +592,7 @@ mod tests {
         let vals = ctx.all_values();
         let names: Vec<&str> = vals.iter().map(|(n, _)| n.as_str()).collect();
         let mut sorted = names.clone();
-        sorted.sort();
+        sorted.sort_unstable();
         assert_eq!(names, sorted);
     }
 
@@ -675,7 +674,7 @@ mod tests {
         assert_eq!(ctx.sp(), 0xFFFF_F000);
     }
 
-    /// On AArch64 `x30` IS the link register and `x29` IS the frame pointer —
+    /// On `AArch64` `x30` IS the link register and `x29` IS the frame pointer —
     /// one physical register each, two spellings.
     ///
     /// The table generated `x0..=x30` as canonical registers AND declared `x30`
@@ -690,7 +689,7 @@ mod tests {
             let mut ctx = RegisterContext::new(Architecture::Arm64, 2);
             ctx.set(gpr, RegValue::U64(0xAAAA)).unwrap();
             assert_eq!(
-                ctx.get(name).map(|v| v.as_u64()).ok(),
+                ctx.get(name).map(super::RegValue::as_u64).ok(),
                 Some(0xAAAA),
                 "{gpr} and {name} are the same physical register: a write to one must be visible through the other"
             );
@@ -698,7 +697,7 @@ mod tests {
             // ...and the reverse direction, with the later write winning rather
             // than landing in a second slot.
             ctx.set(name, RegValue::U64(0xBBBB)).unwrap();
-            assert_eq!(ctx.get(gpr).map(|v| v.as_u64()).ok(), Some(0xBBBB));
+            assert_eq!(ctx.get(gpr).map(super::RegValue::as_u64).ok(), Some(0xBBBB));
             assert_eq!(
                 ctx.set_count(),
                 1,
@@ -714,7 +713,7 @@ mod tests {
     /// first entry whose name OR alias matches, so such a collision silently
     /// splits one physical register into two independently-writable slots. The
     /// check covers every architecture the crate knows, including ones added
-    /// later — the AArch64 table is simply where the collision happened to
+    /// later — the `AArch64` table is simply where the collision happened to
     /// exist.
     #[test]
     fn no_alias_collides_with_another_registers_canonical_name() {

@@ -456,11 +456,10 @@ pub fn dispatch(ctx: &mut dyn ScriptContext, req: ScriptRequest) -> Result<Scrip
                 crate::dataflow_dsl::DslCommand::TraceBackward { address, at_time, until_pc } => {
                     let address = address.as_u64();
                     let mut hops = ctx.trace_origin(address, at_time);
-                    if let Some(pc) = until_pc {
-                        if let Some(cut) = hops.iter().position(|h| h.write.writer_pc == Some(pc)) {
+                    if let Some(pc) = until_pc
+                        && let Some(cut) = hops.iter().position(|h| h.write.writer_pc == Some(pc)) {
                             hops.truncate(cut + 1);
                         }
-                    }
                     Ok(ScriptResponse::Origin { address, hops })
                 }
             }
@@ -731,13 +730,13 @@ pub fn block_on<F: core::future::Future>(mut fut: F) -> F::Output {
     }
     fn wake(p: *const ()) {
         // SAFETY: `p` is the `&Thread` we passed into the waker below.
-        unsafe { (*(p as *const std::thread::Thread)).unpark() }
+        unsafe { (*p.cast::<std::thread::Thread>()).unpark() }
     }
     fn wake_by_ref(p: *const ()) {
         // SAFETY: as above.
-        unsafe { (*(p as *const std::thread::Thread)).unpark() }
+        unsafe { (*p.cast::<std::thread::Thread>()).unpark() }
     }
-    fn drop_(_: *const ()) {}
+    const fn drop_(_: *const ()) {}
     static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop_);
 
     let handle = std::thread::current();
@@ -802,13 +801,13 @@ impl LiveScriptContext {
 
     /// Update the thread that register/backtrace calls act on (e.g. after a
     /// debug event reports a new stopping thread).
-    pub fn set_thread(&mut self, tid: crate::ThreadId) {
+    pub const fn set_thread(&mut self, tid: crate::ThreadId) {
         self.tid = tid;
     }
 
     /// The thread register/backtrace calls currently act on.
     #[must_use]
-    pub fn thread(&self) -> crate::ThreadId {
+    pub const fn thread(&self) -> crate::ThreadId {
         self.tid
     }
 }
@@ -980,9 +979,9 @@ mod tests {
     #[test]
     fn breakpoint_lifecycle() {
         let mut ctx = MockScriptContext::new();
-        let resp = dispatch(&mut ctx, ScriptRequest::SetBreakpoint { address: 0x401000 }).unwrap();
+        let resp = dispatch(&mut ctx, ScriptRequest::SetBreakpoint { address: 0x0040_1000 }).unwrap();
         let ScriptResponse::BreakpointSet { id, address } = resp else { panic!("wrong variant") };
-        assert_eq!(address, 0x401000);
+        assert_eq!(address, 0x0040_1000);
 
         let list = dispatch(&mut ctx, ScriptRequest::ListBreakpoints).unwrap();
         assert_eq!(list, ScriptResponse::Breakpoints { ids: vec![id] });
@@ -1032,7 +1031,7 @@ mod tests {
             address: Address::new(0x1000),
             size: 8,
             tid: ThreadId(1),
-            writer_pc: Some(Address::new(0x401000)),
+            writer_pc: Some(Address::new(0x0040_1000)),
             source_address: None,
         });
         let resp = dispatch(&mut ctx, ScriptRequest::WhoWrote { address: 0x1000, at_time: 100 }).unwrap();
@@ -1049,7 +1048,7 @@ mod tests {
             address: Address::new(0x1000),
             size: 8,
             tid: ThreadId(1),
-            writer_pc: Some(Address::new(0x401000)),
+            writer_pc: Some(Address::new(0x0040_1000)),
             source_address: None,
         });
         let resp = dispatch(&mut ctx, ScriptRequest::DataflowQuery { query: "FIND WRITES TO 0x1000 BEFORE 100".into() }).unwrap();
@@ -1168,9 +1167,9 @@ mod tests {
     }
 
     /// Cross-cutting scenario: build a synthetic trace with writes to address X,
-    /// set a retroactive_print annotation via `retro_print_dispatch`, then ask
+    /// set a `retroactive_print` annotation via `retro_print_dispatch`, then ask
     /// `nl_query_dispatch` "who wrote to X" — verify the NL result cites the
-    /// same writes that the retro_print annotation observed.
+    /// same writes that the `retro_print` annotation observed.
     #[test]
     fn nl_query_and_retro_print_cross_scenario() {
         use crate::nl_query::NlQueryResult;
@@ -1184,16 +1183,16 @@ mod tests {
         // --- Build a synthetic trace ---
         let index = OmniscientIndex::from_writes(vec![
             MemoryWrite { sequence: 3, address: Address(ADDR), size: 8,
-                          tid: ThreadId(1), writer_pc: Some(Address(0x401000)), source_address: None },
+                          tid: ThreadId(1), writer_pc: Some(Address(0x0040_1000)), source_address: None },
             MemoryWrite { sequence: 7, address: Address(ADDR), size: 8,
-                          tid: ThreadId(1), writer_pc: Some(Address(0x401010)), source_address: None },
+                          tid: ThreadId(1), writer_pc: Some(Address(0x0040_1010)), source_address: None },
         ]);
 
         // --- retroactive_print: annotate address ADDR, render rax at each write ---
         let mut replay = SnapshotReplayBackend::new();
-        let mut st3 = TtdState::new(TracePosition::new(3, 0), 0x401000, 0x7000);
+        let mut st3 = TtdState::new(TracePosition::new(3, 0), 0x0040_1000, 0x7000);
         st3.regs.insert("rax".into(), 0xAA);
-        let mut st7 = TtdState::new(TracePosition::new(7, 0), 0x401010, 0x7000);
+        let mut st7 = TtdState::new(TracePosition::new(7, 0), 0x0040_1010, 0x7000);
         st7.regs.insert("rax".into(), 0xBB);
         replay.record(st3);
         replay.record(st7);
@@ -1206,7 +1205,7 @@ mod tests {
         let retro_resp = retro_print_dispatch(
             &index,
             &replay,
-            ScriptRequest::RetroPrint { address: ADDR, format: ann.format.clone(), args: ann.args.clone(), before: None },
+            ScriptRequest::RetroPrint { address: ADDR, format: ann.format.clone(), args: ann.args, before: None },
         ).unwrap();
 
         // The retro_print timeline must cover both writes (most-recent first).
@@ -1284,7 +1283,7 @@ mod tests {
             ScriptRequest::WriteMemory { address: 0x1000, bytes: vec![1, 2, 3, 4] },
             ScriptRequest::ReadRegister { name: "rax".into() },
             ScriptRequest::WriteRegister { name: "rax".into(), value: 1 },
-            ScriptRequest::SetBreakpoint { address: 0x401000 },
+            ScriptRequest::SetBreakpoint { address: 0x0040_1000 },
             ScriptRequest::RemoveBreakpoint { id: 1 },
             ScriptRequest::SetTypeFieldWatchpoint { type_name: "Entity".into(), base_address: 0x2000, field_path: "hp".into(), watch_write: true },
             ScriptRequest::DescribeType { type_name: "Entity".into() },

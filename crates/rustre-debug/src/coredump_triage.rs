@@ -39,7 +39,7 @@ pub struct CrashCluster {
 impl CrashCluster {
     /// Number of crashes in this cluster.
     #[must_use]
-    pub fn count(&self) -> usize {
+    pub const fn count(&self) -> usize {
         self.member_ids.len()
     }
 
@@ -266,7 +266,7 @@ mod tests {
     /// Two runs of the SAME unsymbolicated crash must land in one cluster.
     ///
     /// The identity fell straight from "function name" to "raw PC", skipping
-    /// the module+offset that was sitting in the same StackFrame. Under ASLR
+    /// the module+offset that was sitting in the same `StackFrame`. Under ASLR
     /// every run has different absolute addresses, so N reports of one
     /// recurring crash became N clusters of one, and the crash farm was told
     /// there is no recurring crash - the single claim the person triaging it

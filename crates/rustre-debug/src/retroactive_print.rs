@@ -149,7 +149,7 @@ pub struct HistoricalEvalContext<'a> {
     position: TracePosition,
 }
 
-impl<'a> HistoricalEvalContext<'a> {
+impl HistoricalEvalContext<'_> {
     /// Read a register by name (case-insensitive).  Also accepts `pc`, `rip`,
     /// `sp`, `rsp` as aliases to the `pc`/`sp` fields when not in `regs`.
     #[must_use]
@@ -277,7 +277,7 @@ fn eval_expr_depth(expr: &str, ctx: &HistoricalEvalContext<'_>, depth: u32) -> E
 /// addend, skipping a leading `$` and the register name characters.
 fn find_addend_op(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
-    let start = if bytes.first() == Some(&b'$') { 1 } else { 0 };
+    let start = usize::from(bytes.first() == Some(&b'$'));
     for (i, &b) in bytes[start..].iter().enumerate() {
         if (b == b'+' || b == b'-') && i + start > 0 {
             return Some(i + start);
@@ -355,7 +355,7 @@ pub fn retro_print(
             let rendered = render_format(&ann.format, &arg_values);
             RetroPrintEntry {
                 position:  state.position,
-                writer_pc: write.writer_pc.map(|a| a.as_u64()),
+                writer_pc: write.writer_pc.map(rustre_core::Address::as_u64),
                 write:     write.clone(),
                 arg_values,
                 rendered,
@@ -368,7 +368,7 @@ pub fn retro_print(
             let rendered = render_format(&ann.format, &arg_values);
             RetroPrintEntry {
                 position:  pos,
-                writer_pc: write.writer_pc.map(|a| a.as_u64()),
+                writer_pc: write.writer_pc.map(rustre_core::Address::as_u64),
                 write:     write.clone(),
                 arg_values,
                 rendered,
@@ -479,11 +479,11 @@ mod tests {
         let mut idx = OmniscientIndex::new();
         let mut replay = SnapshotReplayBackend::new();
 
-        idx.push(make_write(5, 0x1000, 0x401000));
-        idx.push(make_write(10, 0x1000, 0x401010));
+        idx.push(make_write(5, 0x1000, 0x0040_1000));
+        idx.push(make_write(10, 0x1000, 0x0040_1010));
 
-        replay.record(make_state(5, 0x401000, 0x7000, 42));
-        replay.record(make_state(10, 0x401010, 0x7000, 99));
+        replay.record(make_state(5, 0x0040_1000, 0x7000, 42));
+        replay.record(make_state(10, 0x0040_1010, 0x7000, 99));
 
         let ann = RetroAnnotation {
             address: 0x1000,
@@ -502,8 +502,8 @@ mod tests {
         let mut idx = OmniscientIndex::new();
         let mut replay = SnapshotReplayBackend::new();
 
-        idx.push(make_write(1, 0x2000, 0x401000));
-        replay.record(make_state(1, 0x401000, 0x7000, 0xDEAD));
+        idx.push(make_write(1, 0x2000, 0x0040_1000));
+        replay.record(make_state(1, 0x0040_1000, 0x7000, 0xDEAD));
 
         let ann = RetroAnnotation {
             address: 0x2000,
@@ -520,8 +520,8 @@ mod tests {
         let mut idx = OmniscientIndex::new();
         let mut replay = SnapshotReplayBackend::new();
 
-        idx.push(make_write(3, 0x3000, 0x401000));
-        replay.record(make_state(3, 0x401000, 0x7000, 7));
+        idx.push(make_write(3, 0x3000, 0x0040_1000));
+        replay.record(make_state(3, 0x0040_1000, 0x7000, 7));
 
         let ann = RetroAnnotation {
             address: 0x3000,
@@ -537,10 +537,10 @@ mod tests {
         let mut idx = OmniscientIndex::new();
         let mut replay = SnapshotReplayBackend::new();
 
-        idx.push(make_write(1, 0x1000, 0x401000));
-        idx.push(make_write(20, 0x1000, 0x401010));
-        replay.record(make_state(1, 0x401000, 0x7000, 1));
-        replay.record(make_state(20, 0x401010, 0x7000, 2));
+        idx.push(make_write(1, 0x1000, 0x0040_1000));
+        idx.push(make_write(20, 0x1000, 0x0040_1010));
+        replay.record(make_state(1, 0x0040_1000, 0x7000, 1));
+        replay.record(make_state(20, 0x0040_1010, 0x7000, 2));
 
         let ann = RetroAnnotation { address: 0x1000, format: "{0}".into(), args: vec!["rax".into()] };
         let entries = retro_print(&idx, &replay, &ann, 10 /* before seq 20 */);
@@ -553,7 +553,7 @@ mod tests {
         let mut idx = OmniscientIndex::new();
         let replay = SnapshotReplayBackend::new(); // empty — no states recorded
 
-        idx.push(make_write(5, 0x1000, 0x401000));
+        idx.push(make_write(5, 0x1000, 0x0040_1000));
 
         let ann = RetroAnnotation { address: 0x1000, format: "{0}".into(), args: vec!["rax".into()] };
         let entries = retro_print(&idx, &replay, &ann, u64::MAX);
@@ -635,16 +635,16 @@ mod tests {
     /// with no depth limit — so a user-supplied expression could overflow
     /// the stack. That is an ABORT, not a catchable panic: `catch_unwind`
     /// cannot contain it, so the whole debug process dies. Measured on the
-    /// pre-fix logic: ~20_000 asterisks was enough (exit code 127), i.e. a
+    /// pre-fix logic: ~`20_000` asterisks was enough (exit code 127), i.e. a
     /// 20 KB string through `debug.retroactive_print`.
     ///
-    /// 200_000 here — ten times the measured crash threshold — so the test
+    /// `200_000` here — ten times the measured crash threshold — so the test
     /// genuinely exercises the guard rather than sitting just under it.
     #[test]
     fn deeply_nested_deref_is_rejected_instead_of_overflowing_the_stack() {
         let regs = std::collections::BTreeMap::new();
         let replay = SnapshotReplayBackend::new();
-        let ctx = make_ctx(&replay, &regs, 0x401000, 0x7fff_0000);
+        let ctx = make_ctx(&replay, &regs, 0x0040_1000, 0x7fff_0000);
 
         let bomb = "*".repeat(200_000) + "rax";
         match eval_expr(&bomb, &ctx) {
@@ -692,8 +692,8 @@ mod tests {
         let mut store = AnnotationStore::new();
         let a1 = RetroAnnotation::simple(0x1000, "rax");
         let a2 = RetroAnnotation::simple(0x2000, "rbx");
-        let id1 = store.insert(a1.clone());
-        let id2 = store.insert(a2.clone());
+        let id1 = store.insert(a1);
+        let id2 = store.insert(a2);
         assert_eq!(store.len(), 2);
 
         let ids: Vec<_> = store.iter().map(|(id, _)| id).collect();

@@ -266,7 +266,7 @@ impl CvTypeProps {
     /// True if this is a compiler-intrinsic type (e.g. `__m128`).
     #[must_use]
     pub const fn is_intrinsic(self)       -> bool { self.0 & 0x2000 != 0 }
-    /// MoCOM UDT kind (bits 14-15: none/ref/value/interface).
+    /// `MoCOM` UDT kind (bits 14-15: none/ref/value/interface).
     #[must_use]
     pub const fn mocom(self)              -> u8   { ((self.0 >> 14) & 3) as u8 }
 }
@@ -338,7 +338,7 @@ impl PointerAttr {
     /// Pointer size in bytes (bits 13-18).
     #[must_use]
     pub const fn size(self) -> u8             { ((self.0 >> 13) & 0x3f) as u8 }
-    /// True for a MoCOM (WinRT/managed) pointer.
+    /// True for a `MoCOM` (WinRT/managed) pointer.
     #[must_use]
     pub const fn is_mocom(self) -> bool       { self.0 & 0x0008_0000 != 0 }
     /// True for an lvalue reference (`&`).

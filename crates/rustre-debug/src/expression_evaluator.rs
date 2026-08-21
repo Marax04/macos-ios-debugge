@@ -1485,13 +1485,12 @@ impl ExprEvaluator {
     /// `ty` is a SIGNED integer narrower than 8 bytes, so e.g. `*(i8*)p` of 0xFF
     /// evaluates to -1 (0xFFFF…FF), not 255. No-op for unsigned/8-byte/non-int.
     fn sign_extend_for(raw: u64, ty: TypeId, nbytes: u64, ctx: &EvalContext<'_>) -> u64 {
-        if let Some(TypeKind::Int { signed: true, .. }) = ctx.types.get(ty) {
-            if (1..8).contains(&nbytes) {
+        if let Some(TypeKind::Int { signed: true, .. }) = ctx.types.get(ty)
+            && (1..8).contains(&nbytes) {
                 let bits = nbytes * 8;
                 let shift = 64 - bits;
                 return ((raw << shift) as i64 >> shift) as u64;
             }
-        }
         raw
     }
 

@@ -410,7 +410,7 @@ impl ImageSymbols {
 
     /// Number of address-bearing symbols retained.
     #[must_use]
-    pub fn symbol_count(&self) -> usize {
+    pub const fn symbol_count(&self) -> usize {
         self.symbols.len()
     }
 
@@ -644,7 +644,7 @@ impl Symbolicator {
 
     /// Number of registered images.
     #[must_use]
-    pub fn image_count(&self) -> usize {
+    pub const fn image_count(&self) -> usize {
         self.images.len()
     }
 
@@ -1310,8 +1310,8 @@ mod tests {
     /// A symbol's upper bound is the end of the segment **the symbol** lives
     /// in, not the end of the segment the *queried address* happens to fall in.
     ///
-    /// Image: `__TEXT` [0x1_0000_0000, +0x4000) holding the only symbol, then a
-    /// disjoint `__DATA` [0x1_0001_0000, +0x4000). An address inside `__DATA`
+    /// Image: `__TEXT` [`0x1_0000_0000`, +0x4000) holding the only symbol, then a
+    /// disjoint `__DATA` [`0x1_0001_0000`, +0x4000). An address inside `__DATA`
     /// is above every symbol, so the last symbol has no successor and the bound
     /// degenerates to "end of the queried address's segment" — which is the end
     /// of `__DATA`. The `__TEXT` symbol then claims a `__DATA` address 0xF100

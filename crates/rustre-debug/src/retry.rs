@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn succeeds_on_first_try() {
-        let result = retry_with_backoff(3, Duration::from_millis(1), |_: &()| true, || Ok::<i32, ()>(42));
+        let result = retry_with_backoff(3, Duration::from_millis(1), |(): &()| true, || Ok::<i32, ()>(42));
         assert_eq!(result, Ok(42));
     }
 

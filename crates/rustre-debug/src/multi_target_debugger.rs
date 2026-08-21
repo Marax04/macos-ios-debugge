@@ -299,7 +299,7 @@ impl SessionRouter {
             }
             CommandRoute::Broadcast => {
                 let ids = targets.ids();
-                for id in ids.iter() {
+                for id in &ids {
                     self.queues.entry(id.clone()).or_default().push_back(cmd.clone());
                 }
                 ids.len()
@@ -316,7 +316,7 @@ impl SessionRouter {
                     .into_iter()
                     .map(|t| t.id.clone())
                     .collect();
-                for id in matching.iter() {
+                for id in &matching {
                     self.queues.entry(id.clone()).or_default().push_back(cmd.clone());
                 }
                 matching.len()

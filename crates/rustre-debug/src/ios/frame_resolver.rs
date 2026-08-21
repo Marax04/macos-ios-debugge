@@ -474,7 +474,7 @@ mod tests {
         out
     }
 
-    /// One abbreviation: a compile unit with name/comp_dir/low_pc/stmt_list.
+    /// One abbreviation: a compile unit with `name/comp_dir/low_pc/stmt_list`.
     fn build_debug_abbrev() -> Vec<u8> {
         let mut out = Vec::new();
         uleb(1, &mut out); // code
@@ -681,8 +681,8 @@ mod tests {
         0x1F,
     ];
 
-    /// Static layout shared by the fixtures: `__TEXT` at 0x1_0000_0000,
-    /// `_main` at 0x1_0000_1000, line rows over 0x1_0000_1000..0x1_0000_1008.
+    /// Static layout shared by the fixtures: `__TEXT` at `0x1_0000_0000`,
+    /// `_main` at `0x1_0000_1000`, line rows over `0x1_0000_1000..0x1_0000_1008`.
     const STATIC_BASE: u64 = 0x1_0000_0000;
     const STATIC_FN: u64 = 0x1_0000_1000;
 
@@ -745,7 +745,7 @@ mod tests {
         let resolved = image
             .resolve(STATIC_FN + 4)
             .expect("symbol table alone must name the address");
-        assert_eq!(resolved.symbol, "_main", "got {:?}", resolved);
+        assert_eq!(resolved.symbol, "_main", "got {resolved:?}");
 
         let mapper =
             DsymLineMapper::from_bundle(&app_dsym(APP_UUID, STATIC_FN), &SourceRootMapper::new())
@@ -790,7 +790,7 @@ mod tests {
     }
 
     /// The reason the slide lives on the image and not on the dSYM: with the
-    /// image loaded 0x10_0000 above its link-time base, the *runtime* pc must
+    /// image loaded `0x10_0000` above its link-time base, the *runtime* pc must
     /// still land on the same source line, and the static pc must resolve to
     /// nothing at all.
     #[test]

@@ -74,7 +74,7 @@ pub enum InvariantOp {
 impl InvariantOp {
     /// Evaluate `value OP rhs`, returning `true` if the invariant **holds**.
     #[must_use]
-    pub fn holds(&self, value: u64, rhs: u64) -> bool {
+    pub const fn holds(&self, value: u64, rhs: u64) -> bool {
         match self {
             Self::Eq        => value == rhs,
             Self::Ne        => value != rhs,
@@ -169,7 +169,7 @@ pub struct InvariantEngine {
 impl InvariantEngine {
     /// Create an engine with the given invariant specifications.
     #[must_use]
-    pub fn new(specs: Vec<InvariantSpec>) -> Self {
+    pub const fn new(specs: Vec<InvariantSpec>) -> Self {
         Self { specs }
     }
 
@@ -191,7 +191,7 @@ impl InvariantEngine {
     /// counter of the writing instruction, or failing that the WIDTH of the
     /// write. It then reported a fully formed `Violation`, naming the
     /// invariant and quoting the bad value, so `debug.invariant_check`
-    /// serialised claims like "refcount_non_negative violated with value
+    /// serialised claims like "`refcount_non_negative` violated with value
     /// 0x401000" that were about nothing at all. Both directions were
     /// meaningless: the violations it reported and the silence when it
     /// reported none.
@@ -338,7 +338,7 @@ mod tests {
         };
         let engine = InvariantEngine::new(vec![spec]);
         let report = engine
-            .check_against_with(&index, |w| w.writer_pc.map(|a| a.as_u64()));
+            .check_against_with(&index, |w| w.writer_pc.map(rustre_core::Address::as_u64));
         assert_eq!(report.violations.len(), 1);
         assert_eq!(report.violations[0].write.sequence, 2);
         assert_eq!(report.violations[0].bad_value, 200);
@@ -352,14 +352,14 @@ mod tests {
     /// `check_against` used to invent the value: the writing instruction's PC,
     /// or failing that the WIDTH of the write. It then produced fully formed
     /// violations naming the invariant and quoting the bad value, so
-    /// `debug.invariant_check` reported claims like "refcount_non_negative
+    /// `debug.invariant_check` reported claims like "`refcount_non_negative`
     /// violated with value 0x401000" that were about nothing at all — and its
     /// silence, when it was silent, was worth exactly as little.
     #[test]
     fn without_values_the_check_is_inconclusive_not_clean() {
         let writes = vec![
-            make_write(1, 0x1000, 0x401000),
-            make_write(2, 0x1000, 0x401010),
+            make_write(1, 0x1000, 0x0040_1000),
+            make_write(2, 0x1000, 0x0040_1010),
         ];
         let index = OmniscientIndex::from_writes(writes);
         let engine = InvariantEngine::new(vec![InvariantSpec {

@@ -482,7 +482,7 @@ const ARM64_HOST_TRAP: [u8; 4] = crate::ios::arm64::brk_bytes(0);
 /// breakpoint machinery threw that number away: `?` catches an `Err` but a
 /// short `Ok(n)` reads as complete success.
 ///
-/// On x86 a trap is one byte, so a partial write cannot happen. On AArch64 it
+/// On x86 a trap is one byte, so a partial write cannot happen. On `AArch64` it
 /// is FOUR, and a page boundary, a protection change, or a target that dies
 /// mid-write can land some of them. The half-written cases are the bad ones in
 /// both directions:
@@ -557,7 +557,7 @@ pub(crate) const fn host_trap_bytes() -> &'static [u8] {
 /// Alignment a software breakpoint must respect on this architecture.
 ///
 /// x86 instructions are unaligned, so any address is a legal implant site.
-/// AArch64 instructions are 4-byte aligned: patching an unaligned address
+/// `AArch64` instructions are 4-byte aligned: patching an unaligned address
 /// would straddle two instructions and corrupt both.
 #[must_use]
 pub(crate) const fn host_trap_alignment() -> u64 {
@@ -617,7 +617,7 @@ pub(crate) fn x86_encode_watchpoint_dr7(
             )));
         }
     };
-    if addr % u64::from(size) != 0 {
+    if !addr.is_multiple_of(u64::from(size)) {
         return Err(DebugError::Unsupported(format!(
             "a {size}-byte hardware watchpoint must be {size}-byte aligned, but {addr:#x} is not"
         )));
@@ -681,7 +681,7 @@ pub(crate) fn x86_free_watchpoint_slot(dr7: u64) -> Option<u8> {
 
 /// The same search, over the number of slots the hardware ACTUALLY has.
 ///
-/// x86 has four debug registers and that is part of the architecture. AArch64
+/// x86 has four debug registers and that is part of the architecture. `AArch64`
 /// does not: the Linux kernel reports the real count in
 /// `user_hwdebug_state::dbg_info`, real CPUs publish between two and sixteen,
 /// and Windows' own header declares `ARM64_MAX_WATCHPOINTS = 2`.
@@ -700,7 +700,7 @@ pub(crate) fn free_watchpoint_slot(dr7: u64, slots: u8) -> Option<u8> {
     (0u8..slots).find(|n| dr7 & (1u64 << (2 * u32::from(*n))) == 0)
 }
 
-/// Encode an AArch64 watchpoint control register (`DBGWCR<n>_EL1`).
+/// Encode an `AArch64` watchpoint control register (`DBGWCR<n>_EL1`).
 ///
 /// Apple Silicon has no `DR0`-`DR7`. Its hardware watchpoints are 16 pairs of
 /// `DBGWVR` (the address) and `DBGWCR` (the control word), reached on Darwin
@@ -741,7 +741,7 @@ pub(crate) fn arm64_encode_watchpoint_wcr(
     // The watched region must not straddle the aligned doubleword `BAS`
     // indexes: a 4-byte watch at offset 6 has no representable mask.
     let offset = addr & 7;
-    if offset % u64::from(size) != 0 {
+    if !offset.is_multiple_of(u64::from(size)) {
         return None;
     }
     let bas = ((1u64 << size) - 1) << offset;
@@ -757,11 +757,11 @@ pub(crate) const fn arm64_watchpoint_wvr(addr: u64) -> u64 {
     addr & !7
 }
 
-/// Program an AArch64 EXECUTION breakpoint pair from a `dr` slot.
+/// Program an `AArch64` EXECUTION breakpoint pair from a `dr` slot.
 ///
 /// The twin of [`arm64_watchpoint_from_dr_slot`], for the case that one
 /// deliberately refuses: `rw == 0b00` in `DR7` is an execution breakpoint on
-/// x86, and AArch64 puts those in `DBGBVR`/`DBGBCR` — a different register
+/// x86, and `AArch64` puts those in `DBGBVR`/`DBGBCR` — a different register
 /// file, reached through a different regset (`NT_ARM_HW_BREAK`).
 ///
 /// Returns `None` when the slot is disabled in `DR7`, when it is a DATA slot
@@ -825,7 +825,7 @@ pub(crate) fn arm64_watchpoint_slot_for(wvr: &[u64], wcr: &[u64], addr: u64) -> 
         .position(|(c, v)| c & 1 != 0 && *v == base)
 }
 
-/// Translate one x86 debug-register slot into the AArch64 pair that means the
+/// Translate one x86 debug-register slot into the `AArch64` pair that means the
 /// same thing.
 ///
 /// The watchpoint engine in every backend speaks `dr0`-`dr3` + `DR7`. Apple
@@ -932,9 +932,9 @@ pub fn register_view(name: &str) -> Option<(&'static str, u64, u32)> {
         }
     }
     // AArch64: `w0` is the low 32 bits of `x0`, all the way to `w30`.
-    if let Some(n) = name.strip_prefix('w') {
-        if let Ok(i) = n.parse::<u8>() {
-            if i <= 30 && n == i.to_string() {
+    if let Some(n) = name.strip_prefix('w')
+        && let Ok(i) = n.parse::<u8>()
+            && i <= 30 && n == i.to_string() {
                 const X: [&str; 31] = [
                     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
                     "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17",
@@ -943,8 +943,6 @@ pub fn register_view(name: &str) -> Option<(&'static str, u64, u32)> {
                 ];
                 return Some((X[i as usize], 0xFFFF_FFFF, 0));
             }
-        }
-    }
     None
 }
 
@@ -997,53 +995,12 @@ pub fn write_register_by_name(regs: &mut RegisterSet, name: &str, value: u64) ->
     true
 }
 
-/// Validate the return address `step_out` just read out of a stack frame.
-///
-/// Every backend reads eight bytes from `[fp+8]` and hands the result to
-/// `run_to_return` as the address to stop at. None of them asked whether the
-/// value was usable, and zero is the one value that certainly is not: no
-/// function returns to address 0. `run_to_return_step` then compares
-/// `pc == 0`, which never comes true, so the loop single-steps until the
-/// process EXITS and reports that exit as the answer.
-///
-/// That is the worst available outcome. The caller asked to leave one frame and
-/// the debugger ran their program to completion, then said the step succeeded.
-/// A corrupt or non-standard frame is exactly the situation a debugger is
-/// opened for, and this crate already knows the rule elsewhere: the unwinder's
-/// `validate` refuses `pc == 0` with "null return address (end of stack)".
-///
-/// Measured, not supposed: instrumenting the iOS `step_out` on
-/// `step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
-/// printed `target=0x0`, and the loop then ran to exit.
-///
-/// Iteration 625 deferred the iOS half and gave the wrong reason for it: it
-/// blamed the mock for not serving its own stack writes. The writes were fine.
-/// The synthetic program those tests run branched to the wrong address —
-/// `bl` takes a PC-RELATIVE displacement and `bl(0x14)` at offset `0x08`
-/// reaches `0x1C`, not the `0x14` the comment beside it claims — so execution
-/// skipped the callee's prologue entirely and read `main`'s frame, whose saved
-/// `x30` is genuinely zero because `main` has no caller. The zeros were real
-/// and the memory was innocent. Corrected and landed on all four backends at
-/// iteration 626.
-///
-/// # Errors
-/// [`DebugError::StepError`] naming the slot, so the caller learns the frame is
-/// unusable instead of learning nothing.
-pub fn step_out_target_from_frame(raw: u64, slot: u64) -> Result<u64, DebugError> {
-    if raw == 0 {
-        return Err(DebugError::StepError(format!(
-            "step_out: the saved return address at {slot:#x} is null, so there is no frame to              return to; refusing to run the target looking for address 0"
-        )));
-    }
-    Ok(raw)
-}
-
 /// Read a little-endian `u64` out of a buffer that may be SHORTER than eight bytes.
 ///
 /// `read_memory` is asked for eight bytes and is allowed to return fewer — a
 /// short read at a page boundary, a partially mapped stack, a target that died
 /// mid-call. Three backends then did `bytes[..8].try_into()`, whose `try_into`
-/// arm carries the message "step_out: short read" and can never run: slicing
+/// arm carries the message "`step_out`: short read" and can never run: slicing
 /// `[..8]` on a shorter `Vec` panics first. The guard the author wrote for
 /// exactly this case was unreachable, and the failure it meant to report as an
 /// error took the process down instead — in a debugger, that is the session,
@@ -1053,6 +1010,40 @@ pub fn step_out_target_from_frame(raw: u64, slot: u64) -> Result<u64, DebugError
 #[must_use]
 pub fn u64_from_le_prefix(bytes: &[u8]) -> Option<u64> {
     bytes.get(..8).and_then(|b| <[u8; 8]>::try_from(b).ok()).map(u64::from_le_bytes)
+}
+
+/// Validate the return address just read out of a frame before stepping out to it.
+///
+/// Zero is not a return address. It is what the slot holds at a thread's entry
+/// frame, after a stack smash, and whenever the frame pointer was pointing at
+/// something that is not a frame. Unchecked, it flows into `run_to_return`,
+/// which compares `pc == 0` — a condition that never comes true, so the loop
+/// single-steps the target until the PROCESS EXITS and then reports that exit
+/// as a successful step-out. The caller is told the step worked; the thing it
+/// was debugging is gone.
+///
+/// Rejecting it here rather than in each backend is what the three call sites
+/// (`windows_`/`linux_`/`macos_debugger.rs`) already assume: all three read the
+/// slot with [`u64_from_le_prefix`] and hand the result straight to this
+/// function.
+///
+/// # Errors
+/// Returns [`DebugError::StepError`] when the slot held a null return address,
+/// naming the slot it was read from so the caller can see WHERE the frame chain
+/// broke, not just that it did.
+pub fn step_out_target_from_frame(
+    return_addr: u64,
+    saved_ret_slot: u64,
+) -> Result<u64, DebugError> {
+    if return_addr == 0 {
+        return Err(DebugError::StepError(format!(
+            "step_out: the return-address slot at {saved_ret_slot:#x} holds a null return \
+             address — the frame chain ends here (thread entry frame, or a frame pointer \
+             that was not pointing at a frame). Stepping out to 0 would run the target to \
+             its death and report that as success."
+        )));
+    }
+    Ok(return_addr)
 }
 
 /// What happened when a backend tried to step off one of its own planted traps.
@@ -1159,8 +1150,8 @@ pub fn capability_status(name: &str) -> CapabilityStatus {
 ///
 /// It is not hypothetical on either side of the ARM64 port:
 ///
-/// * The Windows AArch64 `context_to_register_set` publishes no `dr7` at all —
-///   AArch64 has `Bcr`/`Bvr`/`Wcr`/`Wvr`, not debug registers 0..7. Every one
+/// * The Windows `AArch64` `context_to_register_set` publishes no `dr7` at all —
+///   `AArch64` has `Bcr`/`Bvr`/`Wcr`/`Wvr`, not debug registers 0..7. Every one
 ///   of these sites therefore read `0` and concluded "clean" unconditionally.
 /// * On Linux ARM `dr7` is synthesised from `NT_ARM_HW_WATCH`, and
 ///   `merge_debug_state` returns early when that regset cannot be read — the
@@ -1190,7 +1181,7 @@ pub fn debug_register_state(regs: &RegisterSet) -> DebugRegisterState {
 
 /// Pick the value a caller MEANT when a register has two accepted spellings.
 ///
-/// AArch64's frame pointer and link register have an architectural name (`x29`,
+/// `AArch64`'s frame pointer and link register have an architectural name (`x29`,
 /// `x30`) and a role name (`fp`, `lr`). This crate publishes BOTH on read,
 /// because which one is canonical is an open question recorded as a user
 /// decision, and answering it silently in a register map would decide it for
@@ -1209,14 +1200,14 @@ pub fn debug_register_state(regs: &RegisterSet) -> DebugRegisterState {
 /// contradictory instructions; `primary` wins and the ambiguity is real rather
 /// than hidden — there is no third value to consult.
 #[must_use]
-pub(crate) fn aliased_register_write(
+pub(crate) const fn aliased_register_write(
     primary: Option<u64>,
     alias: Option<u64>,
     current: u64,
 ) -> Option<u64> {
     match (primary, alias) {
         (Some(a), Some(b)) if a == b => Some(a),
-        (Some(a), Some(b)) => Some(if a != current { a } else { b }),
+        (Some(a), Some(b)) => Some(if a == current { b } else { a }),
         (Some(v), None) | (None, Some(v)) => Some(v),
         (None, None) => None,
     }
@@ -1236,7 +1227,7 @@ pub(crate) fn aliased_register_write(
 /// lie the engine then acts on. And `None` for a `BAS` that names no bytes,
 /// which is an untouched pair rather than a described one.
 #[must_use]
-fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
+const fn arm64_wcr_to_dr7_fields(wcr: u64) -> Option<(u64, u64)> {
     let bas = (wcr >> 5) & 0xff;
     if bas == 0 {
         return None;
@@ -1329,7 +1320,7 @@ pub(crate) fn dr_slot_from_arm64_watchpoint_staged(
     Some((wvr, (rw_bits << shift) | (len_bits << (shift + 2))))
 }
 
-/// The inverse: describe an armed AArch64 pair in the `dr` vocabulary.
+/// The inverse: describe an armed `AArch64` pair in the `dr` vocabulary.
 ///
 /// The engine reads `DR7` to find a free slot and to recognise the address it
 /// already watches, so what it reads back must match what it wrote — otherwise
@@ -1370,7 +1361,7 @@ pub(crate) fn dr_slot_from_arm64_watchpoint(wvr: u64, wcr: u64, slot: u8) -> Opt
     if bas != (((1u64 << size) - 1) << offset) {
         return None;
     }
-    if offset % size != 0 {
+    if !offset.is_multiple_of(size) {
         return None;
     }
     let shift = 16 + 4 * u32::from(slot);
@@ -1641,7 +1632,7 @@ pub struct BackendCapability {
 /// properties of the backend that IS built, and a runtime probe would have to
 /// invent an answer before a process is attached.
 #[must_use]
-pub fn backend_capabilities() -> &'static [BackendCapability] {
+pub const fn backend_capabilities() -> &'static [BackendCapability] {
     #[cfg(target_os = "windows")]
     {
         &[
@@ -1780,6 +1771,7 @@ pub fn backend_capabilities() -> &'static [BackendCapability] {
     }
 }
 
+#[must_use]
 pub fn sub_register_of(name: &str) -> Option<(&'static str, u32, u64)> {
     // ONE table, not two. This function and `register_view` were written
     // independently, hours apart, by two actors, and both decoded the parent,
@@ -2216,7 +2208,7 @@ impl StopReason {
     /// or unbacked rather than unmapped — but it is still "the target died
     /// touching memory", which is the question being asked.
     #[must_use]
-    pub fn access_fault(&self) -> Option<AccessFault> {
+    pub const fn access_fault(&self) -> Option<AccessFault> {
         match self {
             Self::AccessViolation { address, is_write } => Some(AccessFault {
                 address: Some(*address),
@@ -2536,7 +2528,7 @@ pub enum RunToReturnStep {
 /// `regs` is `None` when the register read failed — that is a vanished
 /// thread, not a failure of `run_to_return`.
 #[must_use]
-pub fn run_to_return_step(
+pub const fn run_to_return_step(
     event_is_exit: bool,
     regs: Option<(u64, u64)>,
     target: u64,
@@ -2557,7 +2549,7 @@ pub fn run_to_return_step(
 /// [`run_to_return_step`] answers only two questions: did the process exit,
 /// and is the thread back at the return site. Every OTHER stop reason fell
 /// into `KeepGoing`, so the loop resumed the thread again — and on a PRECISE
-/// exception (an AArch64 data abort leaves the pc ON the faulting
+/// exception (an `AArch64` data abort leaves the pc ON the faulting
 /// instruction) resuming re-executes the same load, which faults again. The
 /// loop then spends its whole instruction budget on one instruction and ends
 /// in an error that LIES: "did not return within N instructions", about a
@@ -2578,7 +2570,13 @@ pub fn run_to_return_blocked_by(reason: &StopReason) -> Option<String> {
     /// The single-step trace trap, which is this loop's own mechanism.
     const SIGTRAP: i32 = 5;
     match reason {
-        StopReason::Signal { signum: SIGTRAP, .. } => None,
+        StopReason::Signal { signum: SIGTRAP, .. } | StopReason::SingleStep { .. }
+        | StopReason::ProcessExit { .. }
+        | StopReason::ThreadCreate { .. }
+        | StopReason::ThreadExit { .. }
+        | StopReason::LibraryLoad { .. }
+        | StopReason::LibraryUnload { .. }
+        | StopReason::ProcessCreate { .. } => None,
         StopReason::Signal { signum, signame, address } => Some(format!(
             "the target stopped with {signame} ({signum}){}, which no amount of              single-stepping can step past",
             address.map_or(String::new(), |a| format!(" at {a}")),
@@ -2597,14 +2595,7 @@ pub fn run_to_return_blocked_by(reason: &StopReason) -> Option<String> {
         StopReason::Unknown { description } => {
             Some(format!("the target stopped for an unrecognised reason: {description}"))
         }
-        StopReason::SingleStep { .. }
-        | StopReason::ProcessExit { .. }
-        | StopReason::ThreadCreate { .. }
-        | StopReason::ThreadExit { .. }
-        | StopReason::LibraryLoad { .. }
-        | StopReason::LibraryUnload { .. }
-        | StopReason::ProcessCreate { .. } => None,
-    }
+        }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2792,7 +2783,7 @@ pub trait Debugger: Send + Sync {
     }
 
     /// Skip the next `count` hits of the breakpoint at `addr` before stopping
-    /// again (gdb's `ignore N`, WinDbg's `bp /N`). `0` clears it.
+    /// again (gdb's `ignore N`, `WinDbg`'s `bp /N`). `0` clears it.
     ///
     /// The skipped hits are still COUNTED — an ignore count consumes hits by
     /// definition, and a count that never decreases never expires.
@@ -6038,7 +6029,7 @@ mod tests_expanded {
     /// `x >> 100` as `x >> 36`. For a debugger expression that is the most
     /// misleading answer available: the value looks computed and is simply the
     /// input. The two evaluators in this crate also disagreed on the huge-count
-    /// fallback (one fabricated 63, the other u32::MAX), so the same expression
+    /// fallback (one fabricated 63, the other `u32::MAX`), so the same expression
     /// had two wrong answers depending on which path evaluated it.
     #[test]
     fn a_shift_of_sixty_four_or_more_clears_the_value_instead_of_wrapping() {
@@ -6748,9 +6739,7 @@ mod tests_expanded {
         let body = |file: &str| -> String {
             sources
                 .iter()
-                .find(|(name, _)| name == file)
-                .map(|(_, text)| text.clone())
-                .unwrap_or_else(|| panic!("{file} not among the scanned sources"))
+                .find(|(name, _)| name == file).map_or_else(|| panic!("{file} not among the scanned sources"), |(_, text)| text.clone())
         };
 
         let lib = body("lib.rs");
@@ -6880,13 +6869,13 @@ mod tests_expanded {
     /// iterations earlier. Nothing contradicted it because nothing looked.
     ///
     /// The needles are assembled at runtime so this guard does not match itself.
-    /// The AArch64 watchpoint control word must be right bit for bit.
+    /// The `AArch64` watchpoint control word must be right bit for bit.
     ///
     /// Nothing on this host can run it, and an Apple Silicon Mac cannot tell a
     /// wrong encoding from a right one either: a bad `PAC` or a bad `BAS` gives a
     /// watchpoint that arms cleanly and never fires. So the encoding is pinned
     /// here, against the field layout in the ARM ARM (`DBGWCR<n>_EL1`).
-    /// Apple Silicon must actually reach the AArch64 watchpoint registers.
+    /// Apple Silicon must actually reach the `AArch64` watchpoint registers.
     ///
     /// The x86 plumbing landed first; on ARM Macs `set_watchpoint_sized` still
     /// bailed out at its architecture gate, so a whole platform kept answering
@@ -7477,7 +7466,7 @@ mod tests_expanded {
         assert_eq!(wvr(0x1007), 0x1000);
     }
 
-    /// Slot bookkeeping for the sixteen AArch64 watchpoint registers.
+    /// Slot bookkeeping for the sixteen `AArch64` watchpoint registers.
     #[test]
     fn arm64_watchpoint_slots_are_reused_before_they_are_allocated() {
         use crate::{arm64_free_watchpoint_slot as free, arm64_watchpoint_slot_for as slot_for};
@@ -7505,7 +7494,7 @@ mod tests_expanded {
         assert_eq!(free(&full), None, "all sixteen armed must be refused, not silently wrapped to slot 0");
     }
 
-    /// The `dr` <-> AArch64 translation must round-trip, or the engine loses track.
+    /// The `dr` <-> `AArch64` translation must round-trip, or the engine loses track.
     ///
     /// Every backend's watchpoint engine speaks `dr0`-`dr3` + `DR7`; on Apple
     /// Silicon those registers do not exist and the macOS backend translates at
@@ -7518,7 +7507,7 @@ mod tests_expanded {
     /// `NT_ARM_HW_BREAK` transport in iteration 571.
     ///
     /// The property is the one that makes the whole `dr` abstraction safe on
-    /// AArch64, and it is not "the bits look right": what the engine reads back
+    /// `AArch64`, and it is not "the bits look right": what the engine reads back
     /// must EQUAL what it wrote. `DR7` is how it finds a free slot and the
     /// address register is how it recognises the breakpoint it must disarm, so
     /// a lossy trip would make `set` allocate a fresh slot every call and
@@ -8727,7 +8716,7 @@ mod tests_expanded {
     ///
     /// All three backends write the literal byte `0xCC` to implant a software
     /// breakpoint, and none of them is gated on the host architecture — only on
-    /// the OS (`cfg(target_os = ...)`). On AArch64 `0xCC` is not a trap: it is
+    /// the OS (`cfg(target_os = ...)`). On `AArch64` `0xCC` is not a trap: it is
     /// an arbitrary byte overwriting one quarter of a 4-byte instruction. The
     /// target does not stop, it executes corrupted code.
     ///
@@ -8737,10 +8726,10 @@ mod tests_expanded {
     /// `libc::user_regs_struct`, absent on aarch64; `macos_debugger` reads
     /// `x86_thread_state64_t`), so the trap byte is the last link in a broken
     /// chain, not the first. The runtime refusal below is defence in depth, not
-    /// the only defence. The real prerequisite for AArch64 support is porting
+    /// the only defence. The real prerequisite for `AArch64` support is porting
     /// `read_regs`/`regs_to_register_set`, not the implant.
     ///
-    /// Implanting the correct AArch64 `BRK #0` is a much larger change (the
+    /// Implanting the correct `AArch64` `BRK #0` is a much larger change (the
     /// crate already has `ios::arm64::encode_brk`, but the whole
     /// read-modify-write path assumes a 1-byte patch). Refusing loudly is the
     /// part that can be done correctly today: a clear `Unsupported` beats
@@ -9208,7 +9197,7 @@ mod tests_expanded {
         let received: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(Vec::new()));
         let recv_clone = Arc::clone(&received);
         d.subscribe(Box::new(move |ev| {
-            recv_clone.lock().unwrap_or_else(|p| p.into_inner()).push(ev.pid.0);
+            recv_clone.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(ev.pid.0);
         }));
         assert_eq!(d.subscriber_count(), 1);
         let ev = DebugEvent::new(
@@ -9219,7 +9208,7 @@ mod tests_expanded {
             },
         );
         d.dispatch(&ev);
-        assert_eq!(*received.lock().unwrap_or_else(|p| p.into_inner()), vec![42u32]);
+        assert_eq!(*received.lock().unwrap_or_else(std::sync::PoisonError::into_inner), vec![42u32]);
     }
 
     #[test]
@@ -9367,7 +9356,7 @@ mod tests_expanded {
         regs.pc = 0x4000;
         regs.sp = 0x7EF0;
         regs.fp = Some(0x7F00);
-        let frames = FramePointerUnwinder.unwind(&regs, &vec![(0x7F00u64, cyc)]).unwrap();
+        let frames = FramePointerUnwinder.unwind(&regs, &[(0x7F00u64, cyc)]).unwrap();
         assert!(
             frames.len() <= 3,
             "a frame-pointer cycle must stop as soon as the chain stops moving up the              stack, not run to the frame cap: got {} frames",
@@ -9907,7 +9896,7 @@ mod tests_extra {
 
     // ── RegisterSchema: AArch64 ABI names ────────────────────────────────────
 
-    /// The rest of the crate refers to the AArch64 frame pointer and link
+    /// The rest of the crate refers to the `AArch64` frame pointer and link
     /// register by their AAPCS64 names (`fp`, `lr`), not by `x29`/`x30`:
     /// `register_context.rs` names them that way, and `minidump_analysis.rs`
     /// decodes the ARM64 CONTEXT into keys `"fp"`/`"lr"`. The schema must
@@ -10398,16 +10387,13 @@ mod tests_extra {
         // The last item in a file legitimately has no following marker, so the
         // refusal is conditioned on the leftover being implausibly large for
         // one function: no item in this crate approaches 20k characters.
-        let end = match next_markers.iter().filter_map(|m| rest.find(m)).min() {
-            Some(e) => e,
-            None => {
-                assert!(
-                    rest.len() < 20_000,
-                    "`{start}`: no end marker matched and {} characters remain — the                      delimiters are stale, and the extracted body would contain every                      needle the guard could search for",
-                    rest.len()
-                );
+        let end = if let Some(e) = next_markers.iter().filter_map(|m| rest.find(m)).min() { e } else {
+            assert!(
+                rest.len() < 20_000,
+                "`{start}`: no end marker matched and {} characters remain — the                      delimiters are stale, and the extracted body would contain every                      needle the guard could search for",
                 rest.len()
-            }
+            );
+            rest.len()
         };
         &rest[..end]
     }
@@ -10598,7 +10584,7 @@ mod tests_extra {
     /// `host_trap_alignment()` existed from the moment the multi-byte trap was
     /// introduced and NOTHING consulted it — it was referenced only by its own
     /// unit test. On x86 that is invisible, because the alignment is 1. On
-    /// AArch64 it means a breakpoint at an unaligned address plants four bytes
+    /// `AArch64` it means a breakpoint at an unaligned address plants four bytes
     /// across an instruction boundary: the tail of one instruction and the
     /// head of the next are both destroyed, and removal writes the original
     /// four bytes back across the same boundary as though nothing were wrong.
@@ -10640,7 +10626,7 @@ mod tests_extra {
     ///
     /// The tracking map used to be `HashMap<u64, u8>` and every implant site
     /// wrote the literal `[0xCC]`. That shape is why all three backends simply
-    /// REFUSED to arm a breakpoint on AArch64: a 4-byte `BRK #0` had nowhere
+    /// REFUSED to arm a breakpoint on `AArch64`: a 4-byte `BRK #0` had nowhere
     /// to record the four bytes it replaced. Widening the map to `Vec<u8>` and
     /// routing every implant through `host_trap_bytes()` is what makes an
     /// Apple Silicon breakpoint expressible at all.
@@ -10696,7 +10682,7 @@ mod tests_extra {
 
     /// The host trap must be the right instruction, and the right width.
     ///
-    /// A one-byte `0xCC` on AArch64 does not trap: it overwrites a quarter of
+    /// A one-byte `0xCC` on `AArch64` does not trap: it overwrites a quarter of
     /// a 4-byte instruction and the target runs corrupted code. So the width
     /// is not decoration — it is the difference between stopping a process
     /// and silently breaking it. This pins both the bytes and the alignment
@@ -10729,7 +10715,7 @@ mod tests_extra {
 
     /// The trap this crate implants must be the one its own tables describe.
     ///
-    /// `host_trap_bytes` now DERIVES the AArch64 encoding instead of spelling
+    /// `host_trap_bytes` now DERIVES the `AArch64` encoding instead of spelling
     /// it out, so a test comparing it against the same encoder would prove
     /// nothing. What is still worth pinning is that the value the backends
     /// actually write agrees with the two tables that describe implanting
@@ -10763,7 +10749,7 @@ mod tests_extra {
     /// The architecture check must come BEFORE any byte is written.
     ///
     /// A software breakpoint here is the x86 `int3`, a single `0xCC`. On
-    /// AArch64 that is not a trap: it overwrites one byte of a 4-byte
+    /// `AArch64` that is not a trap: it overwrites one byte of a 4-byte
     /// instruction and the target runs corrupted code instead of stopping.
     /// All three backends refuse it — but refusing is only worth anything if
     /// nothing has been written yet. Reordering the check after the original
@@ -10997,7 +10983,7 @@ mod tests_extra {
     /// A backend must save exactly as many bytes as its trap overwrites.
     ///
     /// All three read **one** byte as the "original" and then write
-    /// `host_trap_bytes()`, which is one byte on x86 and **four** on AArch64.
+    /// `host_trap_bytes()`, which is one byte on x86 and **four** on `AArch64`.
     /// Removing the breakpoint restores what was saved, so on ARM64 that
     /// restores one byte and leaves **three bytes of `BRK`** behind — the
     /// instruction stream is corrupted permanently, in a process the user asked
@@ -11051,7 +11037,7 @@ mod tests_extra {
     /// Two places decided "is this thread sitting on one of our traps?" the x86
     /// way: take the reported PC, subtract **one**, and look for `0xCC`. That is
     /// correct on x86, where `int3` is a single byte and the CPU reports the
-    /// address *after* it. On AArch64 it is wrong twice over — the trap is a
+    /// address *after* it. On `AArch64` it is wrong twice over — the trap is a
     /// four-byte `BRK #0`, and the PC reported is the address *of* it, not after
     /// it. So the test never matched:
     ///
@@ -11088,45 +11074,6 @@ mod tests_extra {
             "macos_debugger.rs no longer compares against `arch_breakpoint::trap_bytes`, so it \
              is back to a hard-coded encoding that is right on one architecture"
         );
-    }
-
-    /// A null return address must be refused, not chased to process exit.
-    ///
-    /// Every backend read `[fp+8]` and handed it straight to `run_to_return`.
-    /// Zero is not a return address; `pc == 0` never comes true, so the loop
-    /// single-stepped until the process EXITED and then reported that exit as
-    /// the result of the step-out. The caller asked to leave one frame and had
-    /// their program run to completion, and was told it worked.
-    ///
-    /// Not hypothetical: instrumenting the iOS `step_out` on the currently-red
-    /// `step_out_leaves_the_frame_when_lr_no_longer_holds_the_return_address`
-    /// printed `target=0x0` and then exactly that run-to-exit.
-    #[test]
-    fn a_null_return_address_is_refused_not_chased() {
-        use crate::step_out_target_from_frame as check;
-
-        assert_eq!(check(0x1_0000_400C, 0x16f00ffe8).unwrap(), 0x1_0000_400C);
-
-        let err = check(0, 0x16f00ffe8).expect_err("address 0 is not a frame to return to");
-        let text = format!("{err}");
-        assert!(
-            text.contains("16f00ffe8"),
-            "the refusal must name the slot it read, so the caller can look at the frame: {text}"
-        );
-
-        // And no backend may hand an unchecked value to `run_to_return`.
-        for (name, src) in [
-            ("windows", include_str!("windows_debugger.rs")),
-            ("linux", include_str!("linux_debugger.rs")),
-            ("macos", include_str!("macos_debugger.rs")),
-        ] {
-            let stripped = code_only(src);
-            let body = item_body(&stripped, "async fn step_out(", &[NEXT_FN, NEXT_ASYNC_FN]);
-            assert!(
-                body.contains("step_out_target_from_frame"),
-                "{name}: step_out chases whatever was in the frame slot, including 0, and a                  process that exits while it looks is reported as a successful return"
-            );
-        }
     }
 
     /// A short read must be an ERROR, not a panic.
@@ -11170,6 +11117,55 @@ mod tests_extra {
             assert!(
                 !stripped.contains("return_addr_bytes[..8]"),
                 "{name}: slices the read result without checking its length, so a short                  read panics instead of reaching the error the next line spells out"
+            );
+        }
+    }
+
+    /// A null return address must be an ERROR, not a step-out target.
+    ///
+    /// The three desktop backends call `step_out_target_from_frame` on the
+    /// value they just read out of the frame — and for one build the function
+    /// they all called did not exist, so the workspace did not compile at all.
+    ///
+    /// What it guards is worse than a build break. Zero is what the slot holds
+    /// at a thread's entry frame and after a stack smash. Passed through,
+    /// `run_to_return` waits for `pc == 0`, which never happens, so the loop
+    /// single-steps until the process EXITS — and reports that exit as a
+    /// successful step-out. The caller is told the step worked while the target
+    /// it was debugging is gone: the crate's recurring failure shape, an
+    /// absence wearing the costume of an answer.
+    #[test]
+    fn a_null_return_address_is_an_error_not_a_step_out_target() {
+        use crate::step_out_target_from_frame as target;
+
+        // Ordinary frames pass through untouched.
+        assert_eq!(target(0x7FF6_1234_5678, 0x1000).unwrap(), 0x7FF6_1234_5678);
+        assert_eq!(target(1, 0x1000).unwrap(), 1);
+        assert_eq!(target(u64::MAX, 0x1000).unwrap(), u64::MAX);
+
+        // The case that used to run the target to its death.
+        let err = target(0, 0xDEAD_BEEF).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("null return address"),
+            "the error must name the defect, not just fail: {msg}"
+        );
+        assert!(
+            msg.contains("deadbeef") || msg.contains("DEADBEEF") || msg.contains("dead_beef"),
+            "the error must name the SLOT the null came from, so the caller can see                  where the frame chain broke: {msg}"
+        );
+
+        // And every backend must route through the guard rather than stepping
+        // out to whatever the slot happened to hold.
+        for (name, src) in [
+            ("windows", include_str!("windows_debugger.rs")),
+            ("linux", include_str!("linux_debugger.rs")),
+            ("macos", include_str!("macos_debugger.rs")),
+        ] {
+            let stripped = code_only(src);
+            assert!(
+                stripped.contains("step_out_target_from_frame"),
+                "{name}: steps out to the raw slot value, so a null return address is                  chased until the process dies and the death is reported as success"
             );
         }
     }
@@ -11291,7 +11287,7 @@ pub ").unwrap_or(decl.len());
     /// returned `NotAttached` — pointing the caller at their session, which was
     /// never the problem.
     ///
-    /// Structural, and it has to be: this build is x86_64, where the capability
+    /// Structural, and it has to be: this build is `x86_64`, where the capability
     /// IS supported and `capability_refusal` correctly returns `None`, so no
     /// runtime call here can exercise the refusing branch. The same reasoning
     /// as the single-step guard added in iteration 606.
@@ -11350,7 +11346,7 @@ pub ").unwrap_or(decl.len());
     /// it "UNVERIFIED, not clean". A set that was read and carries no `dr7` is
     /// the same situation and got the opposite answer.
     ///
-    /// Both ARM64 ports produce exactly that set: the Windows AArch64 reader
+    /// Both ARM64 ports produce exactly that set: the Windows `AArch64` reader
     /// publishes no `dr7`, and the Linux one omits it whenever the
     /// `NT_ARM_HW_WATCH` regset cannot be read.
     #[test]
@@ -11441,7 +11437,7 @@ pub ").unwrap_or(decl.len());
     /// Going map -> typed, the NAME tells you the architecture. Going typed ->
     /// map there is no name, only a value, so the function has to choose a
     /// spelling — and it chose `pc_key(native_arch())`, the host's. On an
-    /// x86_64 host driving an arm64 device it wrote `rip` into a map the iOS
+    /// `x86_64` host driving an arm64 device it wrote `rip` into a map the iOS
     /// backend reads by `pc`, so the write was dropped and reported as success.
     ///
     /// It does not have to guess. The backend already published the target's
@@ -11552,7 +11548,7 @@ pub ").unwrap_or(decl.len());
     /// `native_arch()`, whose own doc says it is "the architecture this build
     /// actually runs on" — chosen at compile time. That is the host. For every
     /// remote-debugging session the host and the target are different machines,
-    /// and for iOS they are routinely different ARCHITECTURES: an x86_64
+    /// and for iOS they are routinely different ARCHITECTURES: an `x86_64`
     /// Windows or Intel-Mac host driving an arm64 device. There
     /// `pc_key(native_arch())` is `"rip"`, the target publishes `"pc"`, and the
     /// typed field silently never updates — the exact defect the comment claims
@@ -11700,7 +11696,7 @@ pub ").unwrap_or(decl.len());
 
     /// An edit through EITHER spelling of a register must survive the write.
     ///
-    /// The AArch64 reader publishes `x29` and `fp` with the same value, and the
+    /// The `AArch64` reader publishes `x29` and `fp` with the same value, and the
     /// writer used to take `fp` first with `x29` as a fallback. A caller doing
     /// the ordinary thing — read the set, change one field, write it back —
     /// therefore had its edit discarded whenever it used the architectural
@@ -11746,7 +11742,7 @@ pub ").unwrap_or(decl.len());
     ///
     /// `x86_free_watchpoint_slot` searches `0..4` unconditionally, because x86
     /// has exactly four debug registers and that number is part of the
-    /// architecture. It is not part of AArch64: the kernel reports the real
+    /// architecture. It is not part of `AArch64`: the kernel reports the real
     /// count in `user_hwdebug_state::dbg_info`, real CPUs publish between two
     /// and sixteen, and Windows' own header says `ARM64_MAX_WATCHPOINTS = 2`.
     ///
@@ -11800,7 +11796,7 @@ pub ").unwrap_or(decl.len());
     /// translation only reconstructed bits for ENABLED slots, so a caller
     /// staging a whole `DR7` before switching it on got part of it back.
     ///
-    /// AArch64 expresses this exactly, as it did for the address: `DBGWCR`
+    /// `AArch64` expresses this exactly, as it did for the address: `DBGWCR`
     /// holds `LSC` and `BAS` with `E = 0`. Nothing is armed either way — only
     /// the enable bit decides that — so preserving the rest costs no safety and
     /// stops a written value from disappearing.
@@ -11986,7 +11982,7 @@ pub ").unwrap_or(decl.len());
     /// `Drop` cannot return an error, so discarding the `Result` is the only
     /// thing to do with the VALUE. It is not the only thing to do with the
     /// FACT. If that write fails the target keeps a trap in its code — `0xCC`
-    /// on x86, a `BRK` on AArch64 — and will die on it later, in a process the
+    /// on x86, a `BRK` on `AArch64` — and will die on it later, in a process the
     /// debugger has already let go of, with nothing anywhere connecting the two.
     ///
     /// This is the shape 568 dealt with in the resume paths and the same
@@ -12082,7 +12078,7 @@ pub ").unwrap_or(decl.len());
     /// macOS can report the faulting address, and said it could not.
     ///
     /// Iteration 577 published `fault_address: supported: false` for macOS with
-    /// the reason *"would come from __far via thread_get_state, which mach2
+    /// the reason *"would come from __far via `thread_get_state`, which mach2
     /// does not expose"*. The reason is TRUE and the conclusion does not follow:
     /// this backend already hand-declares what `mach2` omits. `ArmDebugState64`
     /// is written out by hand precisely because the crate lacks it, with a
@@ -12554,13 +12550,13 @@ pub ").unwrap_or(decl.len());
     /// An execution slot must reach `DBGBVR`/`DBGBCR`, not be silently zeroed.
     ///
     /// Iteration 570 brought hardware DATA watchpoints to ARM64 Linux. It did
-    /// not bring hardware BREAKpoints, and the difference is invisible from the
+    /// not bring hardware `BREAKpoints`, and the difference is invisible from the
     /// outside: a slot with `rw == 0b00` in `DR7` — an execution breakpoint on
     /// x86 — falls into the `None` arm of `arm64_watchpoint_from_dr_slot`, and
     /// `write_debug_registers` clears the pair. The caller asked for a hardware
     /// breakpoint, got `Ok`, and nothing is armed.
     ///
-    /// That `None` is CORRECT and was correct before 570: AArch64 really does
+    /// That `None` is CORRECT and was correct before 570: `AArch64` really does
     /// put execution breakpoints in a different register file, and arming a
     /// data watchpoint instead would fire on the wrong events. What changed is
     /// what it MEANS. Before 570 it said "not supported on this platform";
@@ -12573,7 +12569,7 @@ pub ").unwrap_or(decl.len());
     /// field.
     ///
     /// Mapping note, because it is the one real design decision: x86 has four
-    /// slots shared between breakpoints and watchpoints, AArch64 has two
+    /// slots shared between breakpoints and watchpoints, `AArch64` has two
     /// SEPARATE files each with its own slots. Slot `n` is therefore programmed
     /// into exactly one of them according to `rw`, and the other is cleared —
     /// so a slot never means two things at once.
@@ -12601,7 +12597,7 @@ pub ").unwrap_or(decl.len());
         );
     }
 
-    /// Linux must reach the AArch64 watchpoint registers, not refuse them
+    /// Linux must reach the `AArch64` watchpoint registers, not refuse them
     /// while the crate already holds the translation.
     ///
     /// `set_watchpoint_sized` on the Linux backend answers:
@@ -12611,7 +12607,7 @@ pub ").unwrap_or(decl.len());
     ///  which this host architecture does not have"
     /// ```
     ///
-    /// The second half is true — ptrace on AArch64 does not expose `DR0`-`DR7`.
+    /// The second half is true — ptrace on `AArch64` does not expose `DR0`-`DR7`.
     /// What makes it a gap rather than a fact is that the hard half of the work
     /// is already done and sits in the SHARED crate root, not in a backend:
     /// `arm64_watchpoint_from_dr_slot` / `dr_slot_from_arm64_watchpoint`
@@ -12674,7 +12670,7 @@ pub ").unwrap_or(decl.len());
     ///
     /// The refusal describes an implant this function no longer performs.
     /// Twenty lines below it writes `crate::host_trap_bytes()`, which is
-    /// `BRK #0` on AArch64 — derived from this crate's single arm64 encoder,
+    /// `BRK #0` on `AArch64` — derived from this crate's single arm64 encoder,
     /// four bytes wide per `trap_len`, with `pc_after_trap` already accounting
     /// for the x86-vs-ARM difference in the reported PC. The alignment check
     /// immediately above it already asks `host_trap_alignment()`.
@@ -13518,7 +13514,7 @@ pub ").unwrap_or(decl.len());
     /// architecture-specific name.
     ///
     /// `rewind_past_own_breakpoint` set the PC with a literal `rip` key. On
-    /// AArch64 the register map is keyed by `pc`: the write landed on a key
+    /// `AArch64` the register map is keyed by `pc`: the write landed on a key
     /// nothing reads, `apply_register_set` took the OLD `pc` from the map, and
     /// the rewind did nothing at all on Apple Silicon. Silent, because
     /// `regs.pc` — the struct field, which the same code does set — is not
@@ -13744,7 +13740,7 @@ fn ";
     ///
     /// `ReadProcessMemory` and `WriteProcessMemory` are the two calls a
     /// debugging session makes most, and both reported a bare
-    /// "ReadProcessMemory failed" — one sentence for causes the user must act
+    /// "`ReadProcessMemory` failed" — one sentence for causes the user must act
     /// on differently:
     ///
     /// * `ERROR_PARTIAL_COPY` (299): the range runs into unmapped memory, so
@@ -13774,7 +13770,7 @@ fn ";
         }
     }
 
-    /// The AArch64 -> `dr` translation reads HARDWARE, so it must not describe
+    /// The `AArch64` -> `dr` translation reads HARDWARE, so it must not describe
     /// a pattern it could not have produced.
     ///
     /// `merge_debug_state` on macOS calls this on the debug state read back
@@ -14203,7 +14199,7 @@ fn ";
             // one helper name: the three backends reach the threads by
             // different routes and only the effect has to match.
             assert!(
-                body.contains(r#"regs.set(name, 0)"#) && body.contains(r#""dr7""#),
+                body.contains(r"regs.set(name, 0)") && body.contains(r#""dr7""#),
                 "{name}: Drop does not disarm the debug registers, so dropping an attached debugger leaves the target trapping with nothing to take the trap — the kernel then kills it"
             );
             assert!(body.contains("hw_watchpoints.lock().clear()"), "{name}: Drop does not clear `hw_watchpoints`, the eighth per-address map");
@@ -14329,7 +14325,7 @@ fn ";
     /// both spellings are in live use: `macos_debugger` does `set("fp", …)`
     /// AND `set("x29", …)` on the same read, then reads back with
     /// `get("x29").or_else(|| get("fp"))`. `set` matched only `fp_key`, which
-    /// on AArch64 is `"x29"` — so `set("fp", …)` updated the map and left the
+    /// on `AArch64` is `"x29"` — so `set("fp", …)` updated the map and left the
     /// typed `fp` field untouched, and `backtrace`/`step_out`, which the
     /// crate's own comment says consult the typed fields, saw NO frame
     /// pointer.
@@ -14373,7 +14369,7 @@ fn ";
     /// went straight through. `write_memory` has refused short writes on the
     /// public API for a long time; the internal path it is built on did not.
     ///
-    /// On x86 the trap is one byte and this cannot bite. On AArch64 it is FOUR,
+    /// On x86 the trap is one byte and this cannot bite. On `AArch64` it is FOUR,
     /// and a partly written `BRK` is neither the original instruction nor a
     /// trap — while `remove_breakpoint` untracks the address immediately after,
     /// turning a half-restore into a landmine with nothing left tracking it.
@@ -15096,7 +15092,7 @@ fn "]);
     /// `KERN_INVALID_ADDRESS` is the documented end-of-address-space
     /// terminator and is a normal loop exit. Treating EVERY non-success
     /// return as that terminator meant a target dying part-way through
-    /// enumeration (KERN_INVALID_TASK / MACH_SEND_INVALID_DEST) returned
+    /// enumeration (`KERN_INVALID_TASK` / `MACH_SEND_INVALID_DEST`) returned
     /// `Ok` with however many regions had been collected — a silently
     /// truncated address space indistinguishable from a complete one.
     /// (Missing entitlements are NOT this case: `resolve_task_port` already

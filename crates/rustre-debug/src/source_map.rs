@@ -1260,7 +1260,7 @@ mod tests {
         )
     }
 
-    /// Build two sequences, each properly closed by an end_sequence row - the
+    /// Build two sequences, each properly closed by an `end_sequence` row - the
     /// shape a real DWARF line program has, and the one the fixture above
     /// deliberately lacks.
     fn map_with_two_closed_sequences() -> SourceMap {
@@ -1315,7 +1315,7 @@ mod tests {
     /// preceding row - a constant with no basis in the line table. The gap
     /// between two blocks of code is routinely smaller than that, so a program
     /// counter sitting in padding, in another function, or in another
-    /// compilation unit came back with a confident file:line belonging to the
+    /// compilation unit came back with a confident <file:line> belonging to the
     /// previous block. A wrong location is worse than none: it sends the
     /// reader to a line the target is not executing, and nothing marks it as a
     /// guess.
@@ -1337,7 +1337,7 @@ mod tests {
         assert!(map.addr_to_source(0x0FFF).is_none());
     }
 
-    /// A sequence with no end_sequence row has an unknown extent at its last
+    /// A sequence with no `end_sequence` row has an unknown extent at its last
     /// row, and the lookup says so rather than inventing a range.
     #[test]
     fn a_row_with_no_terminator_answers_only_for_its_own_address() {

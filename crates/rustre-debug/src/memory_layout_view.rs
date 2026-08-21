@@ -1575,7 +1575,7 @@ mod tests {
         assert!(
             measured_zero.to_string().contains("0B RSS"),
             "a region measured at zero must still report a number: {}",
-            measured_zero.to_string()
+            measured_zero
         );
 
         // Partial data is data: the known regions are summed.
@@ -1608,7 +1608,7 @@ mod tests {
     ///   unwound frame pc 0x77aba8e6a55c0c should fall inside a loaded module
     ///
     /// That value is 55 bits wide, above the 48-bit user range: it is a signed
-    /// pointer, not an address. On AArch64 the saved `LR` at `[fp+8]` carries a
+    /// pointer, not an address. On `AArch64` the saved `LR` at `[fp+8]` carries a
     /// PAC in its high bits whenever the target was built with branch
     /// protection — the norm on Apple arm64e and increasingly on Linux — and
     /// this unwinder read it raw. Every frame past the first therefore landed
@@ -1618,7 +1618,7 @@ mod tests {
     /// The fix strips ONLY when the raw address resolves to nothing and the
     /// stripped one resolves to something. That conditional shape is not
     /// timidity: `strip_pac` is documented as Apple's 47-bit user split, and
-    /// Linux AArch64 is commonly 48 — so a mask that is wrong for the platform
+    /// Linux `AArch64` is commonly 48 — so a mask that is wrong for the platform
     /// produces an address that resolves to nothing either, and nothing
     /// changes. It cannot make a working backtrace worse.
     #[test]
@@ -1850,9 +1850,9 @@ mod tests {
 
     /// ...but an address the map does not describe AT ALL is still followed.
     ///
-    /// memory_maps can miss freshly mapped JIT code, and refusing what we
+    /// `memory_maps` can miss freshly mapped JIT code, and refusing what we
     /// merely cannot see would truncate exactly the stacks that need an
-    /// unwinder most. Same rule run_to_return follows in all three backends.
+    /// unwinder most. Same rule `run_to_return` follows in all three backends.
     #[test]
     fn a_return_address_in_an_unmapped_region_is_still_followed() {
         let mut regions = MappedRegionView::default();

@@ -22,7 +22,7 @@
 use crate::ios::arm64;
 use crate::register_context::Architecture;
 
-/// The AArch64 `BRK #0` encoding, little-endian, derived from the already-tested
+/// The `AArch64` `BRK #0` encoding, little-endian, derived from the already-tested
 /// [`arm64::brk_bytes`] rather than re-spelled as a magic constant.
 const BRK0_BYTES: [u8; 4] = arm64::brk_bytes(0);
 
@@ -62,7 +62,7 @@ impl TrapSpec {
     /// Does the PC point *past* the trap when the target reports the stop?
     ///
     /// True on x86/x86-64 (`int3` is a trap, the saved RIP is the byte after
-    /// it). False on AArch64: `BRK` is a fault, ELR_EL1 holds the address *of*
+    /// it). False on `AArch64`: `BRK` is a fault, `ELR_EL1` holds the address *of*
     /// the `BRK` itself.
     #[must_use]
     pub const fn pc_advances_past_trap(&self) -> bool {
@@ -75,7 +75,7 @@ impl TrapSpec {
 ///
 /// Only the architectures the crate can actually service are listed. ARM32 and
 /// RISC-V have well-known trap encodings, but committing an unused constant
-/// table is precisely the mistake iter 342 punished (seven of eight CodeView
+/// table is precisely the mistake iter 342 punished (seven of eight `CodeView`
 /// AMD64 registers were wrong and nothing noticed, because nothing read them).
 #[must_use]
 pub const fn for_arch(arch: Architecture) -> Option<TrapSpec> {
@@ -279,7 +279,7 @@ pub fn is_already_trapped(arch: Architecture, bytes: &[u8]) -> bool {
 /// Map a reported stop PC back to the breakpoint address.
 ///
 /// `pc - 1` on x86/x86-64, because `int3` is a trap and the saved RIP points
-/// past it; `pc` unchanged on AArch64, because `BRK` is a fault and the saved
+/// past it; `pc` unchanged on `AArch64`, because `BRK` is a fault and the saved
 /// PC is the address of the `BRK` itself.
 ///
 /// **Honesty note:** this function has no callers today, and it is not fixing a
@@ -287,7 +287,7 @@ pub fn is_already_trapped(arch: Architecture, bytes: &[u8]) -> bool {
 /// unconditional — but that file cannot compile on aarch64 at all (it reads
 /// `regs.rip` of `libc::user_regs_struct`, a field that does not exist there),
 /// so the wrong rewind is unreachable rather than latent. This is the correct
-/// primitive for the port that will make those files compile on AArch64; it
+/// primitive for the port that will make those files compile on `AArch64`; it
 /// should not be presented as a defect fix.
 #[must_use]
 pub const fn trap_pc_to_breakpoint_addr(arch: Architecture, pc: u64) -> u64 {

@@ -1,4 +1,4 @@
-//! retroactive_print_demo — annotate an address, replay the write log, print output.
+//! `retroactive_print_demo` — annotate an address, replay the write log, print output.
 //!
 //! Demonstrates [`retroactive_print`]: annotate a watched address with a
 //! format string and expression arguments, then replay the recorded write

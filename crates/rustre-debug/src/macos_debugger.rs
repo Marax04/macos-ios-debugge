@@ -807,7 +807,6 @@ impl MacosDebugger {
                 }
                 crate::DebugRegisterState::Armed(_) => {}
             }
-
             regs.set("dr0", 0);
             regs.set("dr1", 0);
             regs.set("dr2", 0);

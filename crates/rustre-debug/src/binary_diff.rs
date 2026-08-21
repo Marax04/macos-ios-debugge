@@ -100,7 +100,7 @@ pub enum BreakpointMigration {
 }
 
 /// Find the symbol in `symbols` that contains `address`, if any.
-fn containing_symbol<'a>(symbols: &'a [Symbol], address: Address) -> Option<&'a Symbol> {
+fn containing_symbol(symbols: &[Symbol], address: Address) -> Option<&Symbol> {
     let addr = address.as_u64();
     symbols
         .iter()

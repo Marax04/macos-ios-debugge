@@ -430,7 +430,7 @@ impl Arm64Encoding {
 /// The rejection of an `x86_64` slice is NOT performed by this type: it is
 /// performed by [`UnwindArch`], which [`ImageUnwindTables`] carries and
 /// `unwind_compact` checks before decoding anything. This enum only names
-/// the mode an x86_64 word selects, for a diagnostic or a future x86_64
+/// the mode an `x86_64` word selects, for a diagnostic or a future `x86_64`
 /// implementation — which is separate, honest work. Note that the mode
 /// nibbles alone cannot tell the architectures apart: `MODE_DWARF` here and
 /// `UNWIND_ARM64_MODE_FRAME` are the same word.
@@ -855,11 +855,10 @@ impl EhFrameSection {
                 // `body_end` is known, so the walk stays synchronised and the
                 // record is skipped rather than ending the search — the same
                 // degrade `parse_fde_at` returning `None` already gets.
-                if let Some(cie_len_pos) = body_start.checked_sub(id as usize) {
-                    if let Some(m) = self.parse_fde_at(pc, cie_len_pos, body_start + 4, body_end) {
+                if let Some(cie_len_pos) = body_start.checked_sub(id as usize)
+                    && let Some(m) = self.parse_fde_at(pc, cie_len_pos, body_start + 4, body_end) {
                         return Some(m);
                     }
-                }
             }
             pos = body_end;
         }
@@ -949,7 +948,7 @@ impl UnwindOrder {
 /// `UNWIND_X86_64_MODE_DWARF` and `UNWIND_ARM64_MODE_FRAME` are both
 /// `0x0400_0000`, and `UNWIND_X86_64_MODE_STACK_IMMD` and
 /// `UNWIND_ARM64_MODE_FRAMELESS` are both `0x0200_0000`. Without knowing the
-/// architecture, an x86_64 table decodes silently as a valid-looking arm64
+/// architecture, an `x86_64` table decodes silently as a valid-looking arm64
 /// one, so every entry must be refused unless the image is known to be arm64.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum UnwindArch {
@@ -973,9 +972,32 @@ impl UnwindArch {
     }
 }
 
+/// How much is known about an image the target reported.
+///
+/// The third state is the point: a module the target LISTS whose bytes could
+/// not be read is still a KNOWN image — only its CONTENT is unknown. Dropping
+/// it made `AppleUnwinder::validate` reject every return address inside it as
+/// "in no known image", truncating the backtrace silently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageKnowledge {
+    /// The Mach-O was read and parsed; ranges and tables are authoritative.
+    #[default]
+    Parsed,
+    /// The module's bytes could not be read or did not parse, but the target
+    /// reported a non-zero `[base, base+size)`. The RANGE alone is enough to
+    /// keep a walk that crosses this image alive.
+    RangeOnly,
+    /// The target reported the module with no usable size, so not even its
+    /// range is known. An image set containing one of these is INCOMPLETE,
+    /// and the "no known image" rejection must not be applied against it.
+    ExtentUnknown,
+}
+
 /// A loaded image's unwind tables plus where it is mapped.
 #[derive(Debug, Clone, Default)]
 pub struct ImageUnwindTables {
+    /// How much of this image is actually known — see [`ImageKnowledge`].
+    pub knowledge: ImageKnowledge,
     /// Architecture of the Mach-O this image was parsed from. Defaults to
     /// [`UnwindArch::Unknown`], which refuses compact unwinding rather than
     /// assuming arm64.
@@ -993,9 +1015,20 @@ pub struct ImageUnwindTables {
 
 impl ImageUnwindTables {
     /// Whether `pc` falls inside this image's mapped range.
+    ///
+    /// An image whose extent was never established claims nothing: with no
+    /// end address, "inside" has no meaning, and answering `true` would let
+    /// it swallow the whole address space.
     #[must_use]
     pub const fn contains(&self, pc: u64) -> bool {
-        pc >= self.image_base && pc < self.image_end
+        !self.extent_unknown() && pc >= self.image_base && pc < self.image_end
+    }
+
+    /// Whether this image's range is unknown, i.e. the image set it belongs
+    /// to cannot be treated as a complete map of the target.
+    #[must_use]
+    pub const fn extent_unknown(&self) -> bool {
+        matches!(self.knowledge, ImageKnowledge::ExtentUnknown)
     }
 }
 
@@ -1007,7 +1040,7 @@ impl ImageUnwindTables {
 /// tests pass synthetic Mach-O bytes.
 ///
 /// Why this exists: [`AppleUnwinder::new`] starts with no images, and nothing
-/// ever called [`AppleUnwinder::with_image`], so the CompactUnwind and EhFrame
+/// ever called [`AppleUnwinder::with_image`], so the `CompactUnwind` and `EhFrame`
 /// strategies could never run against a real target — only the frame-pointer
 /// walk did. On arm64 the majority of functions carry compact unwind and no
 /// frame pointer chain worth following, so that was precisely the case left
@@ -1026,18 +1059,54 @@ where
     let mut images = Vec::new();
     for m in modules {
         let base = m.base.as_u64();
-        let Ok(len) = usize::try_from(m.size) else { continue };
+        // A module the target listed is KNOWN even when unreadable. Dropping
+        // it here is what made `validate` call a return address inside it
+        // "in no known image" and truncate the walk, so every failure below
+        // degrades to a weaker entry instead of vanishing.
+        let range_only = || ImageUnwindTables {
+            knowledge: ImageKnowledge::RangeOnly,
+            arch: UnwindArch::Unknown,
+            image_base: base,
+            image_end: base.wrapping_add(m.size),
+            compact: None,
+            eh_frame: None,
+        };
+        let extent_unknown = || ImageUnwindTables {
+            knowledge: ImageKnowledge::ExtentUnknown,
+            arch: UnwindArch::Unknown,
+            image_base: base,
+            image_end: base,
+            compact: None,
+            eh_frame: None,
+        };
+        let Ok(len) = usize::try_from(m.size) else {
+            images.push(extent_unknown());
+            continue;
+        };
         if len == 0 {
+            // Exactly what `AppleDebugger::modules()` reports when neither
+            // the segment sum nor the header region could measure the image:
+            // "I do not know", which is not "zero bytes".
+            images.push(extent_unknown());
             continue;
         }
-        let Some(bytes) = read(base, len) else { continue };
-        let Ok(info) = MachoParser::parse_single(&bytes) else { continue };
+        let Some(bytes) = read(base, len) else {
+            images.push(range_only());
+            continue;
+        };
+        let Ok(info) = MachoParser::parse_single(&bytes) else {
+            images.push(range_only());
+            continue;
+        };
 
         // Anchor the image's extent on __TEXT, the segment the loader maps
         // first. Without it there is no honest end address, and a wrong one
         // would make the unwinder either truncate valid walks or accept
         // garbage PCs as "inside the image".
-        let Some(text) = info.segments.iter().find(|s| s.name == "__TEXT") else { continue };
+        let Some(text) = info.segments.iter().find(|s| s.name == "__TEXT") else {
+            images.push(range_only());
+            continue;
+        };
         // How far the image moved from where it was linked. `__eh_frame`
         // needs it: its FDEs are matched against RUNTIME pcs, so the section
         // must be told its slid address. (`__unwind_info` does not — its
@@ -1077,6 +1146,7 @@ where
             });
 
         images.push(ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: match info.arch {
                 rustre_loader_macho::MachoArch::Arm64 => UnwindArch::Arm64,
                 rustre_loader_macho::MachoArch::X86_64 => UnwindArch::X86_64,
@@ -1173,32 +1243,34 @@ impl AppleUnwinder {
     ///
     /// # Errors
     /// [`UnwindError::ImplausibleFrame`] with the specific invariant broken.
-    fn validate(&self, prev: Arm64UnwindRegs, next: Arm64UnwindRegs) -> Result<(), UnwindError> {
+    fn validate(
+        &self,
+        prev: Arm64UnwindRegs,
+        next: Arm64UnwindRegs,
+        allow_equal_sp: bool,
+    ) -> Result<(), UnwindError> {
         if next.pc == 0 {
             return Err(UnwindError::ImplausibleFrame("null return address (end of stack)"));
         }
-        // The stack may not SHRINK. It is allowed to stay put, and refusing
-        // that was rejecting a shape the compiler emits constantly: a frameless
-        // leaf with stack-size 0 allocates nothing, so the caller's `sp` equals
-        // the callee's and the return address is in `lr`. libunwind does
-        // `sp += stackSize * 16` and demands no growth for exactly this reason.
-        // Any backtrace taken inside such a leaf stopped at depth 1.
-        //
-        // The check's real purpose — refusing a step that makes no progress, so
-        // the walk cannot spin — is kept by requiring the pc to move when `sp`
-        // does not. A frame with the same pc AND the same sp is the loop this
-        // guard was written against; `backtrace` also caps the walk at
-        // `max_depth`, so an alternating pair is bounded too.
-        if next.sp < prev.sp {
-            return Err(UnwindError::ImplausibleFrame("stack pointer moved downward"));
+        // An UNWIND_ARM64_MODE_FRAMELESS entry with stack-size 0 — the word
+        // ld64 emits for every trivial leaf that allocates nothing — says the
+        // caller's sp EQUALS the callee's. libunwind does `sp += stackSize*16`
+        // and demands no growth, so equality there is the CORRECT answer, not
+        // the end of the stack. It is allowed only on that branch
+        // (`allow_equal_sp`): elsewhere a non-growing sp is still a rejection,
+        // which keeps the eh_frame CFA = sp+0 shape screened out.
+        if next.sp < prev.sp || (next.sp == prev.sp && !allow_equal_sp) {
+            return Err(UnwindError::ImplausibleFrame("stack pointer did not grow upward"));
         }
-        if next.sp == prev.sp && next.pc == prev.pc {
-            return Err(UnwindError::ImplausibleFrame(
-                "frame makes no progress: same pc and same stack pointer",
-            ));
-        }
-
-        if !self.images.is_empty() && self.image_for(next.pc).is_none() {
+        // Sound ONLY over a COMPLETE image set. If any reported module has an
+        // unknown extent the map has holes, and rejecting an address for
+        // falling in one of them would truncate a real walk — the same
+        // non-monotonic trap as before: with zero images the check is skipped
+        // and the full stack comes back, so a partially known target must not
+        // do strictly worse than a wholly unknown one.
+        let complete = !self.images.is_empty()
+            && !self.images.iter().any(ImageUnwindTables::extent_unknown);
+        if complete && self.image_for(next.pc).is_none() {
             return Err(UnwindError::ImplausibleFrame("return address in no known image"));
         }
         Ok(())
@@ -1255,7 +1327,17 @@ impl AppleUnwinder {
                 // image), so `validate` runs INSIDE the cascade: a rejected
                 // candidate means "ask the next strategy", not "the stack
                 // ends here".
-                Ok(next) => match self.validate(regs, next) {
+                Ok(next) => match self.validate(
+                    regs,
+                    next,
+                    // Only the compact branch at depth 1 may hand back an sp
+                    // equal to the callee's: a zero-sized FRAMELESS frame, or
+                    // a FRAME function stopped at its entry, whose prologue
+                    // has not pushed anything yet.
+                    (frameless || at_frame_entry)
+                        && depth == 1
+                        && strategy == FrameProvenance::CompactUnwind,
+                ) {
                     Ok(()) => return Ok((next, strategy)),
                     Err(e) => failures.push((strategy, e)),
                 },
@@ -2172,7 +2254,7 @@ mod tests {
     }
 
     /// `AppleUnwinder::new()` starts with no images and nothing ever called
-    /// `with_image`, so CompactUnwind and EhFrame — the strategies that matter
+    /// `with_image`, so `CompactUnwind` and `EhFrame` — the strategies that matter
     /// on arm64, where most functions have no frame-pointer chain worth
     /// following — could never run against a real target.
     ///
@@ -2196,7 +2278,9 @@ mod tests {
                 size: image.len() as u64,
                 entry_point: None,
             },
-            // Unreadable image: skipped, never fatal.
+            // Unreadable image: kept as a RANGE-ONLY entry, never fatal.
+            // It must NOT be dropped — see
+            // `a_module_whose_bytes_could_not_be_read_must_not_truncate_the_backtrace`.
             ModuleInfo {
                 is_main: false,
                 name: "gone.dylib".into(),
@@ -2211,7 +2295,9 @@ mod tests {
             (addr == LOADED_AT && len == image.len()).then(|| image.clone())
         });
 
-        assert_eq!(images.len(), 1, "the unreadable image must be skipped, not fatal");
+        assert_eq!(images.len(), 2, "the unreadable image must be kept, range-only");
+        assert_eq!(images[1].knowledge, ImageKnowledge::RangeOnly);
+        assert!(images[1].compact.is_none() && images[1].eh_frame.is_none());
         let img = &images[0];
         assert_eq!(img.image_base, LOADED_AT);
         assert!(img.contains(LOADED_AT), "the image must claim its own base");
@@ -2337,7 +2423,7 @@ mod tests {
         // its own `encodingsPageOffset` proves the array holds exactly one.
         let page_a_off = 28 + common.len() * 4 + 3 * 12;
         assert_eq!(u32::from(honest[page_a_off]), SECOND_LEVEL_COMPRESSED);
-        let mut hostile = honest.clone();
+        let mut hostile = honest;
         hostile[page_a_off + 6] = 5;
         hostile[page_a_off + 7] = 0;
 
@@ -2387,7 +2473,7 @@ mod tests {
         // the next first-level index entry proves the page holds one.
         let page_a_off = 28 + 3 * 12;
         assert_eq!(u32::from(honest[page_a_off]), SECOND_LEVEL_REGULAR);
-        let mut hostile = honest.clone();
+        let mut hostile = honest;
         hostile[page_a_off + 6] = 2;
         hostile[page_a_off + 7] = 0;
 
@@ -2458,6 +2544,7 @@ mod tests {
 
     fn image_with_compact(data: &[u8]) -> ImageUnwindTables {
         ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
@@ -2479,8 +2566,8 @@ mod tests {
     /// arm64 encoding table.
     ///
     /// The mode nibbles collide exactly: `UNWIND_X86_64_MODE_DWARF` and
-    /// `UNWIND_ARM64_MODE_FRAME` are both `0x0400_0000`. An x86_64 entry that
-    /// says "defer to __eh_frame" therefore decodes as an arm64 frame record,
+    /// `UNWIND_ARM64_MODE_FRAME` are both `0x0400_0000`. An `x86_64` entry that
+    /// says "defer to __`eh_frame`" therefore decodes as an arm64 frame record,
     /// and the walker reads `[CFA-8]`/`[CFA-16]` as an AAPCS64 frame record:
     /// a plausible-looking backtrace built from the wrong architecture's
     /// table, which is worse than a refusal.
@@ -2654,7 +2741,7 @@ mod tests {
         );
     }
 
-    /// The most common arm64 compact encoding of all: MODE_FRAMELESS with
+    /// The most common arm64 compact encoding of all: `MODE_FRAMELESS` with
     /// stack-size 0, what ld64 emits for every trivial leaf that allocates no
     /// stack. The caller's sp EQUALS the callee's, which is the correct
     /// answer (libunwind does `sp += stackSize*16` and demands no growth).
@@ -2757,6 +2844,41 @@ mod tests {
         assert_eq!(next.fp, caller_fp, "a frameless function never touched x29");
     }
 
+    /// A breakpoint on the FIRST instruction of a FRAME function stops before
+    /// `stp x29,x30,[sp,#-16]!; mov x29,sp` has run, so x29 still holds the
+    /// CALLER's frame pointer and the return address is still live in lr.
+    /// Reading [x29]/[x29+8] therefore walks the CALLER's record and returns
+    /// the caller's caller — every validation passes, so the skipped frame is
+    /// stamped `CompactUnwind`: table-derived provenance for a frame the table
+    /// never described.
+    #[test]
+    fn a_breakpoint_at_a_frame_functions_entry_must_not_skip_the_caller() {
+        let page = regular_page(&[(0x1000, UNWIND_ARM64_MODE_FRAME)]);
+        let data = build_unwind_info(&[], &[(0x1000, page)], 0x2000);
+        let unw = AppleUnwinder::new().with_image(image_with_compact(&data));
+
+        let caller_fp = STACK_BASE + 0x100;
+        let mem = build_fp_stack(&[(caller_fp, IMAGE_BASE + 0x9999)]);
+
+        let regs = Arm64UnwindRegs {
+            pc: IMAGE_BASE + 0x1000, // the exact first byte of the function
+            sp: STACK_BASE + 0x40,
+            fp: caller_fp,                 // still the CALLER's x29
+            lr: Some(IMAGE_BASE + 0x5555), // return address, not yet spilled
+        };
+
+        let (next, prov) = unw.step(regs, 1, &mem).unwrap();
+        assert_eq!(
+            next.pc,
+            IMAGE_BASE + 0x5555,
+            "the immediate caller must not be skipped: got {:#x}",
+            next.pc
+        );
+        assert_eq!(prov, FrameProvenance::CompactUnwind);
+        assert_eq!(next.sp, STACK_BASE + 0x40, "the prologue has not moved sp");
+        assert_eq!(next.fp, caller_fp, "the prologue has not written x29");
+    }
+
     #[test]
     fn compact_dwarf_deferral_without_eh_frame_is_an_explicit_error() {
         let page = regular_page(&[(0x1000, UNWIND_ARM64_MODE_DWARF | 0x99)]);
@@ -2831,6 +2953,7 @@ mod tests {
     fn eh_frame_unwinds_a_frame_using_the_aapcs64_frame_record() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
@@ -2867,6 +2990,7 @@ mod tests {
     fn eh_frame_refuses_to_substitute_the_current_fp_when_the_caller_fp_is_unreadable() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
@@ -3002,6 +3126,7 @@ mod tests {
         let page = regular_page(&[(0x7000, UNWIND_ARM64_MODE_FRAME)]);
         let data = build_unwind_info(&[], &[(0x7000, page)], 0x7100);
         let image = ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
@@ -3058,6 +3183,7 @@ mod tests {
     fn validate_rejection_falls_through_to_the_remaining_strategies() {
         let eh = build_eh_frame(EH_VMADDR, EH_FN, 0x100);
         let image = ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x10_0000,
@@ -3093,6 +3219,7 @@ mod tests {
     fn frames_outside_every_known_image_are_rejected() {
         let mem = build_fp_stack(&[(STACK_BASE + 0x100, 0xBADD_0000_0000)]);
         let image = ImageUnwindTables {
+            knowledge: ImageKnowledge::Parsed,
             arch: UnwindArch::Arm64,
             image_base: IMAGE_BASE,
             image_end: IMAGE_BASE + 0x1000,
@@ -3136,5 +3263,133 @@ mod tests {
         assert_eq!(sf.fp.map(rustre_core::address::Address::as_u64), Some(0x3000));
         assert!(sf.function_name.is_none(), "this crate never invents symbol names");
         assert_eq!(f.provenance.to_string(), "eh-frame");
+    }
+
+    /// A module the target REPORTS but whose bytes cannot be read used to
+    /// vanish from the image set entirely; `validate` then rejected every
+    /// return address landing in it ("return address in no known image") and
+    /// `backtrace()` truncated the walk, returning a short, plausible stack
+    /// with no error and no marker. The module is KNOWN — only its CONTENT
+    /// is unknown, and its RANGE is exactly what the termination check needs.
+    ///
+    /// Two modules; the reader serves A and refuses B. frame0 is in A, its
+    /// frame record returns into B, and B's record returns into A. All three
+    /// frames are real.
+    #[test]
+    fn a_module_whose_bytes_could_not_be_read_must_not_truncate_the_backtrace() {
+        use crate::{Address, ModuleInfo};
+
+        const A_BASE: u64 = 0x1_0000_0000;
+        const B_BASE: u64 = 0x1_0100_0000;
+        const A_SIZE: u64 = 0x10_0000;
+        const B_SIZE: u64 = 0x10_0000;
+
+        let page = regular_page(&[(0x1000, UNWIND_ARM64_MODE_FRAME)]);
+        let unwind_bytes = build_unwind_info(&[], &[(0x1000, page)], 0x3000);
+        let mut image = build_macho_with_unwind_info(A_BASE, &unwind_bytes);
+        image.resize(usize::try_from(A_SIZE).unwrap(), 0);
+
+        let modules = vec![
+            ModuleInfo {
+                is_main: true,
+                name: "a.dylib".into(),
+                path: "/usr/lib/a.dylib".into(),
+                base: Address(A_BASE),
+                size: A_SIZE,
+                entry_point: None,
+            },
+            ModuleInfo {
+                is_main: false,
+                name: "b.framework".into(),
+                path: "/System/Library/Frameworks/b.framework/b".into(),
+                base: Address(B_BASE),
+                size: B_SIZE,
+                entry_point: None,
+            },
+        ];
+        let images = unwind_images_from_modules(&modules, |addr, len| {
+            (addr == A_BASE && len == image.len()).then(|| image.clone())
+        });
+
+        let unw = images.into_iter().fold(AppleUnwinder::new(), AppleUnwinder::with_image);
+        let fp0 = STACK_BASE + 0x100;
+        let fp1 = STACK_BASE + 0x200;
+        let mem = build_fp_stack(&[(fp0, B_BASE + 0x2_0000), (fp1, A_BASE + 0x8000)]);
+        let regs = Arm64UnwindRegs { pc: A_BASE + 0x4000, sp: STACK_BASE, fp: fp0, lr: None };
+
+        let frames = unw.backtrace(regs, &mem);
+        assert_eq!(
+            frames.len(),
+            3,
+            "the walk must cross the unreadable module: got {} frames",
+            frames.len()
+        );
+        assert_eq!(frames[1].regs.pc, B_BASE + 0x2_0000);
+        assert_eq!(frames[2].regs.pc, A_BASE + 0x8000);
+    }
+
+    /// The other half of the same defect, and the non-monotonic one: when
+    /// `AppleDebugger::modules()` cannot measure an image it reports
+    /// `size == 0`, which is "I do not know", not "zero bytes". Collapsing
+    /// that into a dropped image left the remaining images looking like a
+    /// COMPLETE map, so the "no known image" rejection was applied against a
+    /// map with a hole. With ZERO images the check is skipped entirely, so a
+    /// partially known target answered strictly WORSE than a wholly unknown
+    /// one. An `ExtentUnknown` entry restores the ordering.
+    #[test]
+    fn a_module_with_no_measurable_size_makes_the_image_set_incomplete_not_smaller() {
+        use crate::{Address, ModuleInfo};
+
+        const A_BASE: u64 = 0x1_0000_0000;
+        const B_BASE: u64 = 0x1_0100_0000;
+        const A_SIZE: u64 = 0x10_0000;
+
+        let page = regular_page(&[(0x1000, UNWIND_ARM64_MODE_FRAME)]);
+        let unwind_bytes = build_unwind_info(&[], &[(0x1000, page)], 0x3000);
+        let mut image = build_macho_with_unwind_info(A_BASE, &unwind_bytes);
+        image.resize(usize::try_from(A_SIZE).unwrap(), 0);
+
+        let modules = vec![
+            ModuleInfo {
+                is_main: true,
+                name: "a.dylib".into(),
+                path: "/usr/lib/a.dylib".into(),
+                base: Address(A_BASE),
+                size: A_SIZE,
+                entry_point: None,
+            },
+            // Unmeasurable: neither the segment sum nor the header region
+            // gave a size.
+            ModuleInfo {
+                is_main: false,
+                name: "b.framework".into(),
+                path: "/System/Library/Frameworks/b.framework/b".into(),
+                base: Address(B_BASE),
+                size: 0,
+                entry_point: None,
+            },
+        ];
+        let images = unwind_images_from_modules(&modules, |addr, len| {
+            (addr == A_BASE && len == image.len()).then(|| image.clone())
+        });
+        assert_eq!(images.len(), 2, "the unmeasurable module must still be listed");
+        assert_eq!(images[1].knowledge, ImageKnowledge::ExtentUnknown);
+        // It claims no address: with no end, "inside" has no meaning.
+        assert!(!images[1].contains(B_BASE));
+
+        let unw = images.into_iter().fold(AppleUnwinder::new(), AppleUnwinder::with_image);
+        let fp0 = STACK_BASE + 0x100;
+        let fp1 = STACK_BASE + 0x200;
+        let mem = build_fp_stack(&[(fp0, B_BASE + 0x2_0000), (fp1, A_BASE + 0x8000)]);
+        let regs = Arm64UnwindRegs { pc: A_BASE + 0x4000, sp: STACK_BASE, fp: fp0, lr: None };
+
+        let frames = unw.backtrace(regs, &mem);
+        assert_eq!(
+            frames.len(),
+            3,
+            "an incomplete image set must not truncate: got {} frames",
+            frames.len()
+        );
+        assert_eq!(frames[2].regs.pc, A_BASE + 0x8000);
     }
 }

@@ -160,6 +160,18 @@ impl StopReply {
         let kind = chars
             .next()
             .ok_or_else(|| ClientError::Malformed("empty stop reply".into()))?;
+        // `payload` comes from `String::from_utf8_lossy`, so a byte the stub (or
+        // a noisy usbmux tunnel) mangled is already a 3-byte U+FFFD here.
+        // Slicing at byte index 1 would land inside it and panic — and the
+        // release profile uses `panic = "abort"`, so that is not a failed
+        // session but a dead process. A stop-reply kind is always one ASCII
+        // letter; anything else is malformed, and saying so is both the correct
+        // answer and the thing that makes the byte slice below safe.
+        if !kind.is_ascii() {
+            return Err(ClientError::Malformed(format!(
+                "non-ASCII stop-reply kind {kind:?} in {payload:?}"
+            )));
+        }
         let rest = &payload[1..];
         let sig_hex: String = rest.chars().take(2).collect();
         // A stop reply always carries exactly two hex digits of signal/exit
@@ -372,11 +384,8 @@ impl<T: AppleTransport> RspClient<T> {
         loop {
             match self.rx.first() {
                 None => return Ok(None),
-                Some(b'+' | b'-') => {
-                    self.rx.remove(0);
-                }
                 Some(b'$') => break,
-                Some(_) => {
+                Some(b'+' | b'-' | _) => {
                     self.rx.remove(0);
                 }
             }
@@ -414,11 +423,10 @@ impl<T: AppleTransport> RspClient<T> {
     pub fn handshake(&mut self) -> Result<(), ClientError> {
         let supported = self.command("qSupported:xmlRegisters=aarch64")?;
         self.features = supported.split(';').map(str::to_string).collect();
-        if self.features.iter().any(|f| f == "QStartNoAckMode+") {
-            if self.command("QStartNoAckMode")? == "OK" {
+        if self.features.iter().any(|f| f == "QStartNoAckMode+")
+            && self.command("QStartNoAckMode")? == "OK" {
                 self.no_ack_mode = true;
             }
-        }
         if self.features.iter().any(|f| f == "QThreadSuffixSupported+") {
             let _ = self.command("QThreadSuffixSupported")?;
         }
@@ -811,7 +819,7 @@ mod tests {
         c.write_register(1, "x0", 0xFEED_FACE).expect("P x0");
         assert_eq!(c.read_register(1, "x0").unwrap(), 0xFEED_FACE);
 
-        let mut new_regs = regs.clone();
+        let mut new_regs = regs;
         new_regs.x[5] = 0x5555;
         c.write_registers(1, &new_regs).expect("G");
         assert_eq!(c.read_registers(1).unwrap().x[5], 0x5555);
@@ -1178,6 +1186,45 @@ mod tests {
         match c.read_qxfer("blob", "") {
             Err(ClientError::Malformed(m)) => assert!(m.contains("not valid UTF-8"), "{m}"),
             other => panic!("a non-UTF-8 object must not decode: {other:?}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod stop_reply_non_ascii_tests {
+    use super::*;
+
+    /// The payload handed to [`StopReply::parse`] comes from
+    /// `String::from_utf8_lossy`, so a single corrupt byte on the wire is a
+    /// 3-byte U+FFFD by the time it gets here. Byte-slicing at index 1 landed
+    /// inside it and panicked — and with `panic = "abort"` that takes the whole
+    /// MCP server down, not just the session talking to the stub.
+    #[test]
+    fn stop_reply_rejects_a_lossy_replacement_char_instead_of_panicking() {
+        let payload = String::from_utf8_lossy(&[0xFF, b'0', b'5']).into_owned();
+        assert_eq!(payload.len(), 5, "U+FFFD is 3 bytes wide");
+        match StopReply::parse(&payload) {
+            Err(ClientError::Malformed(_)) => {}
+            other => panic!("expected Malformed, got {other:?}"),
+        }
+    }
+
+    /// The guard must not cost the legitimate replies anything.
+    #[test]
+    fn ascii_stop_replies_still_parse_after_the_guard() {
+        assert_eq!(StopReply::parse("W00").unwrap(), StopReply::Exited { code: 0 });
+        assert_eq!(StopReply::parse("S05").unwrap(), StopReply::Stopped {
+            signal: 5,
+            tid: None,
+            keys: HashMap::new(),
+        });
+        match StopReply::parse("T05thread:1a;20:0011223344556677;").unwrap() {
+            StopReply::Stopped { signal, tid, keys } => {
+                assert_eq!(signal, 5);
+                assert_eq!(tid, Some(0x1a));
+                assert_eq!(keys.get("20").map(String::as_str), Some("0011223344556677"));
+            }
+            other => panic!("expected Stopped, got {other:?}"),
         }
     }
 }

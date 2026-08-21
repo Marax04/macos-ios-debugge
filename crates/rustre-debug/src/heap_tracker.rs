@@ -88,7 +88,7 @@ impl HeapRecord {
     /// predicate — and `leak_report`, which is built on it — silently blind to
     /// that entire class of leak.
     #[must_use]
-    pub fn is_live(&self) -> bool {
+    pub const fn is_live(&self) -> bool {
         matches!(self.kind, HeapOpKind::Allocate | HeapOpKind::Reallocate)
             && !self.freed
             && self.returned_ptr != 0
@@ -463,7 +463,7 @@ pub enum HeapAbi {
 impl HeapAbi {
     /// The first four integer-argument registers, in order.
     #[must_use]
-    pub fn arg_regs(self) -> [&'static str; 4] {
+    pub const fn arg_regs(self) -> [&'static str; 4] {
         match self {
             Self::Win64 => ["rcx", "rdx", "r8", "r9"],
             // Taken from `ios::arm64::aapcs64`, which is the crate's single
@@ -477,7 +477,7 @@ impl HeapAbi {
 
     /// The integer return-value register.
     #[must_use]
-    pub fn return_reg(self) -> &'static str {
+    pub const fn return_reg(self) -> &'static str {
         match self {
             Self::Win64 => "rax",
             Self::Aapcs64 => crate::ios::arm64::aapcs64::INT_RETURN_REG,
@@ -504,7 +504,7 @@ fn args<const N: usize>(
 
 /// Extract `RtlAllocateHeap` arguments from an x64 register snapshot.
 ///
-/// - RCX = HeapHandle, RDX = Flags, R8 = Size
+/// - RCX = `HeapHandle`, RDX = Flags, R8 = Size
 ///
 /// Returns `None` if the snapshot does not carry all three — see
 /// [`alloc_args_with_abi`] for a non-x64 target.
@@ -525,7 +525,7 @@ pub fn alloc_args_with_abi(
 
 /// Extract `RtlFreeHeap` arguments from an x64 register snapshot.
 ///
-/// - RCX = HeapHandle, RDX = Flags, R8 = HeapBase (ptr to free)
+/// - RCX = `HeapHandle`, RDX = Flags, R8 = `HeapBase` (ptr to free)
 #[must_use]
 pub fn free_args_from_regs(regs: &std::collections::HashMap<String, u64>) -> Option<(u64, u32, u64)> {
     free_args_with_abi(regs, HeapAbi::Win64)
@@ -543,7 +543,7 @@ pub fn free_args_with_abi(
 
 /// Extract `RtlReAllocateHeap` arguments from an x64 register snapshot.
 ///
-/// - RCX = HeapHandle, RDX = Flags, R8 = MemoryPointer (old ptr), R9 = Size
+/// - RCX = `HeapHandle`, RDX = Flags, R8 = `MemoryPointer` (old ptr), R9 = Size
 #[must_use]
 pub fn realloc_args_from_regs(
     regs: &std::collections::HashMap<String, u64>,
@@ -805,7 +805,7 @@ mod tests {
     #[test]
     fn a_double_free_is_distinguished_from_a_free_of_untracked_memory() {
         let mut t = HeapTrackerState::new();
-        t.on_call(1, HeapOpKind::Allocate, 0x100, 0, 64, 0, vec![0x401000]);
+        t.on_call(1, HeapOpKind::Allocate, 0x100, 0, 64, 0, vec![0x0040_1000]);
         t.on_return(1, 0xAAAA);
         assert_eq!(t.live_bytes(), 64);
 
@@ -842,8 +842,8 @@ mod tests {
 
         // Thread 7 enters an allocation and its return is never observed,
         // then the same thread enters another one.
-        t.on_call(7, HeapOpKind::Allocate, 0x100, 0, 32, 0, vec![0x401000]);
-        t.on_call(7, HeapOpKind::Allocate, 0x100, 0, 48, 0, vec![0x401020]);
+        t.on_call(7, HeapOpKind::Allocate, 0x100, 0, 32, 0, vec![0x0040_1000]);
+        t.on_call(7, HeapOpKind::Allocate, 0x100, 0, 48, 0, vec![0x0040_1020]);
         t.on_return(7, 0xCCCC);
 
         assert_eq!(t.abandoned_calls(), 1);

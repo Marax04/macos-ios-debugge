@@ -160,7 +160,7 @@ impl Arm64RegisterView {
     /// A `None` leaves that register refused rather than answered with a zero
     /// the caller could not tell from a real one.
     #[must_use]
-    pub fn with_fp_control(mut self, fpsr: Option<u32>, fpcr: Option<u32>) -> Self {
+    pub const fn with_fp_control(mut self, fpsr: Option<u32>, fpcr: Option<u32>) -> Self {
         if let Some(v) = fpsr {
             self.file.fpsr = v;
             self.fpsr_read = true;
@@ -249,7 +249,7 @@ impl Arm64RegisterView {
     /// simulator, the other is the architectural model), so the conversion is
     /// explicit rather than a `Deref` that would let them drift.
     #[must_use]
-    pub fn from_mock(regs: &crate::ios::mock_debugserver::Arm64Registers) -> Self {
+    pub const fn from_mock(regs: &crate::ios::mock_debugserver::Arm64Registers) -> Self {
         let mut file = Arm64RegisterFile::new();
         file.x = regs.x;
         file.sp = regs.sp;
@@ -324,26 +324,23 @@ pub fn register_view_from_set(set: &crate::RegisterSet) -> Arm64RegisterView {
     let mut file = Arm64RegisterFile::new();
     let mut general_read = [false; NUM_GENERAL];
     for i in 0..NUM_GENERAL {
-        if let Some(v) = set.get(&format!("x{i}")) {
-            if let Some(slot) = file.x.get_mut(i) {
+        if let Some(v) = set.get(&format!("x{i}"))
+            && let Some(slot) = file.x.get_mut(i) {
                 *slot = v;
                 general_read[i] = true;
             }
-        }
     }
     // Roles win only where the numbered name was absent.
-    if set.get("x29").is_none() {
-        if let (Some(fp), Some(slot)) = (set.fp, file.x.get_mut(29)) {
+    if set.get("x29").is_none()
+        && let (Some(fp), Some(slot)) = (set.fp, file.x.get_mut(29)) {
             *slot = fp;
             general_read[29] = true;
         }
-    }
-    if set.get("x30").is_none() {
-        if let (Some(lr), Some(slot)) = (set.lr, file.x.get_mut(30)) {
+    if set.get("x30").is_none()
+        && let (Some(lr), Some(slot)) = (set.lr, file.x.get_mut(30)) {
             *slot = lr;
             general_read[30] = true;
         }
-    }
     file.sp = set.sp;
     file.pc = set.pc;
     let cpsr = set.get("cpsr");
@@ -582,11 +579,10 @@ pub fn symbols_from_symbolicator(
         for sym in image.symbols() {
             let addr = image.runtime_of(sym.static_address);
             out.insert(sym.name.clone(), addr);
-            if let Some(stripped) = sym.name.strip_prefix('_') {
-                if !stripped.is_empty() {
+            if let Some(stripped) = sym.name.strip_prefix('_')
+                && !stripped.is_empty() {
                     out.insert(stripped.to_string(), addr);
                 }
-            }
         }
     }
     out
@@ -1062,7 +1058,7 @@ mod tests {
     fn watches_report_changes_across_stops() {
         let mut s = session(regs_with(&[(0, 1)], 0, 0), 0, vec![]);
         let id = s.watch("$x0").unwrap();
-        assert!(id > 0 || id == 0);
+        assert!(id >= 0);
         let first = s.poll_watches();
         assert_eq!(first.len(), 1, "first evaluation reports the initial value");
         assert!(s.poll_watches().is_empty(), "unchanged value is not reported");

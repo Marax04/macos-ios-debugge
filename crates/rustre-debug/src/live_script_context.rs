@@ -39,7 +39,7 @@ const NOOP_VTABLE: RawWakerVTable = RawWakerVTable::new(
     |_| {},
 );
 
-fn noop_waker() -> Waker {
+const fn noop_waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &NOOP_VTABLE)) }
 }
 
@@ -345,7 +345,7 @@ mod unit_tests {
 
     #[async_trait::async_trait]
     impl crate::Debugger for StubDebugger {
-        fn name(&self) -> &str { "stub" }
+        fn name(&self) -> &'static str { "stub" }
         fn supported_architectures(&self) -> Vec<String> { vec![] }
         fn is_attached(&self) -> bool { false }
         fn target_pid(&self) -> Option<crate::ProcessId> { None }
@@ -444,16 +444,16 @@ mod unit_tests {
 
         // Synthetic trace: two writes to ADDR.
         let writes = vec![
-            make_write(2, ADDR, 0x401000),
-            make_write(8, ADDR, 0x401010),
+            make_write(2, ADDR, 0x0040_1000),
+            make_write(8, ADDR, 0x0040_1010),
         ];
         let omni = OmniscientIndex::from_writes(writes);
 
         // Replay states for expression evaluation.
         let mut replay = SnapshotReplayBackend::new();
-        let mut st2 = TtdState::new(TracePosition::new(2, 0), 0x401000, 0x7000);
+        let mut st2 = TtdState::new(TracePosition::new(2, 0), 0x0040_1000, 0x7000);
         st2.regs.insert("rax".into(), 0xAA);
-        let mut st8 = TtdState::new(TracePosition::new(8, 0), 0x401010, 0x7000);
+        let mut st8 = TtdState::new(TracePosition::new(8, 0), 0x0040_1010, 0x7000);
         st8.regs.insert("rax".into(), 0xBB);
         replay.record(st2);
         replay.record(st8);
@@ -482,8 +482,8 @@ mod unit_tests {
         // --- ScriptContext::who_wrote through dispatch (proves the trait impl uses omni) ---
         // Re-create a ctx — we can't use the moved one above.
         let omni2 = OmniscientIndex::from_writes(vec![
-            make_write(2, ADDR, 0x401000),
-            make_write(8, ADDR, 0x401010),
+            make_write(2, ADDR, 0x0040_1000),
+            make_write(8, ADDR, 0x0040_1010),
         ]);
         let stub2 = StubDebugger;
         let mut ctx2 = LiveScriptContext::new_with_trace(&stub2, omni2, SnapshotReplayBackend::new());

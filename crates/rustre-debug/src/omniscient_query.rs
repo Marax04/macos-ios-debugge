@@ -56,7 +56,7 @@ impl MemoryWrite {
     /// overflow after the lower-bound check. Third and fourth site of the shape
     /// first corrected in iter 273.
     
-    pub fn covers(&self, addr: Address) -> bool {
+    pub const fn covers(&self, addr: Address) -> bool {
         let start = self.address.as_u64();
         let a = addr.as_u64();
         a >= start && a - start < self.size
@@ -149,7 +149,7 @@ impl OmniscientIndex {
 
     /// Total number of indexed writes.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.writes.len()
     }
 
@@ -161,7 +161,7 @@ impl OmniscientIndex {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.writes.is_empty()
     }
 
@@ -195,7 +195,7 @@ impl OmniscientIndex {
                 hits.push(write);
             }
         }
-        hits.sort_by(|a, b| b.sequence.cmp(&a.sequence));
+        hits.sort_by_key(|b| std::cmp::Reverse(b.sequence));
         hits
     }
 
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn covers_checks_range() {
-        let write = w(0, 0x1000, 4, 0x400000, None);
+        let write = w(0, 0x1000, 4, 0x0040_0000, None);
         assert!(write.covers(Address::new(0x1000)));
         assert!(write.covers(Address::new(0x1003)));
         assert!(!write.covers(Address::new(0x1004)));
@@ -315,9 +315,9 @@ mod tests {
     #[test]
     fn who_wrote_returns_most_recent_first() {
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x1000, 8, 0x401000, None),
-            w(5, 0x1000, 8, 0x401010, None),
-            w(10, 0x1000, 8, 0x401020, None),
+            w(0, 0x1000, 8, 0x0040_1000, None),
+            w(5, 0x1000, 8, 0x0040_1010, None),
+            w(10, 0x1000, 8, 0x0040_1020, None),
         ]);
         let hits = idx.who_wrote(Address::new(0x1000), 100);
         assert_eq!(hits.len(), 3);
@@ -329,9 +329,9 @@ mod tests {
     #[test]
     fn who_wrote_respects_at_time_cutoff() {
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x1000, 8, 0x401000, None),
-            w(5, 0x1000, 8, 0x401010, None),
-            w(10, 0x1000, 8, 0x401020, None),
+            w(0, 0x1000, 8, 0x0040_1000, None),
+            w(5, 0x1000, 8, 0x0040_1010, None),
+            w(10, 0x1000, 8, 0x0040_1020, None),
         ]);
         let hits = idx.who_wrote(Address::new(0x1000), 5);
         assert_eq!(hits.len(), 2);
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn who_wrote_range_covering_write() {
-        let idx = OmniscientIndex::from_writes(vec![w(0, 0x2000, 16, 0x401000, None)]);
+        let idx = OmniscientIndex::from_writes(vec![w(0, 0x2000, 16, 0x0040_1000, None)]);
         let hits = idx.who_wrote(Address::new(0x2008), 100);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].address, Address::new(0x2000));
@@ -348,15 +348,15 @@ mod tests {
 
     #[test]
     fn who_wrote_empty_when_no_writer() {
-        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x401000, None)]);
+        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x0040_1000, None)]);
         assert!(idx.who_wrote(Address::new(0x9999), 100).is_empty());
     }
 
     #[test]
     fn last_writer_is_most_recent() {
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x1000, 8, 0x401000, None),
-            w(5, 0x1000, 8, 0x401010, None),
+            w(0, 0x1000, 8, 0x0040_1000, None),
+            w(5, 0x1000, 8, 0x0040_1010, None),
         ]);
         let lw = idx.last_writer(Address::new(0x1000), 100).unwrap();
         assert_eq!(lw.sequence, 5);
@@ -368,9 +368,9 @@ mod tests {
         // seq 4: 0x2000 <- copy of 0x3000
         // seq 8: 0x1000 <- copy of 0x2000
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x3000, 8, 0x401000, None),
-            w(4, 0x2000, 8, 0x401010, Some(0x3000)),
-            w(8, 0x1000, 8, 0x401020, Some(0x2000)),
+            w(0, 0x3000, 8, 0x0040_1000, None),
+            w(4, 0x2000, 8, 0x0040_1010, Some(0x3000)),
+            w(8, 0x1000, 8, 0x0040_1020, Some(0x2000)),
         ]);
         let hops = idx.trace_origin(Address::new(0x1000), 100);
         assert_eq!(hops.len(), 3);
@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn trace_origin_single_hop_no_source() {
-        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x401000, None)]);
+        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x0040_1000, None)]);
         let hops = idx.trace_origin(Address::new(0x1000), 100);
         assert_eq!(hops.len(), 1);
         assert!(hops[0].write.source_address.is_none());
@@ -405,8 +405,8 @@ mod tests {
         // earlier time than itself is impossible via `saturating_sub`, but
         // guard against A<-B<-A cycles terminating via the strict time cutoff.
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x1000, 8, 0x401000, Some(0x2000)),
-            w(1, 0x2000, 8, 0x401010, Some(0x1000)),
+            w(0, 0x1000, 8, 0x0040_1000, Some(0x2000)),
+            w(1, 0x2000, 8, 0x0040_1010, Some(0x1000)),
         ]);
         let hops = idx.trace_origin(Address::new(0x2000), 100);
         // seq1 (0x2000<-0x1000) -> search 0x1000 before seq1 -> seq0 (0x1000<-0x2000)
@@ -416,9 +416,9 @@ mod tests {
 
     #[test]
     fn writes_by_thread_filters() {
-        let mut w0 = w(0, 0x1000, 8, 0x401000, None);
+        let mut w0 = w(0, 0x1000, 8, 0x0040_1000, None);
         w0.tid = ThreadId(1);
-        let mut w1 = w(1, 0x1000, 8, 0x401000, None);
+        let mut w1 = w(1, 0x1000, 8, 0x0040_1000, None);
         w1.tid = ThreadId(2);
         let idx = OmniscientIndex::from_writes(vec![w0, w1]);
         assert_eq!(idx.writes_by_thread(ThreadId(1)).len(), 1);
@@ -428,20 +428,20 @@ mod tests {
     #[test]
     fn writes_from_pc_filters() {
         let idx = OmniscientIndex::from_writes(vec![
-            w(0, 0x1000, 8, 0x401000, None),
-            w(1, 0x1008, 8, 0x401000, None),
-            w(2, 0x1010, 8, 0x401999, None),
+            w(0, 0x1000, 8, 0x0040_1000, None),
+            w(1, 0x1008, 8, 0x0040_1000, None),
+            w(2, 0x1010, 8, 0x0040_1999, None),
         ]);
-        assert_eq!(idx.writes_from_pc(Address::new(0x401000)).len(), 2);
-        assert_eq!(idx.writes_from_pc(Address::new(0x401999)).len(), 1);
+        assert_eq!(idx.writes_from_pc(Address::new(0x0040_1000)).len(), 2);
+        assert_eq!(idx.writes_from_pc(Address::new(0x0040_1999)).len(), 1);
     }
 
     #[test]
     fn push_incrementally_builds_index() {
         let mut idx = OmniscientIndex::new();
         assert!(idx.is_empty());
-        idx.push(w(0, 0x1000, 8, 0x401000, None));
-        idx.push(w(1, 0x1000, 8, 0x401010, None));
+        idx.push(w(0, 0x1000, 8, 0x0040_1000, None));
+        idx.push(w(1, 0x1000, 8, 0x0040_1010, None));
         assert_eq!(idx.len(), 2);
         assert_eq!(idx.last_writer(Address::new(0x1000), 100).unwrap().sequence, 1);
     }
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn a_write_at_sequence_zero_does_not_trace_back_into_itself() {
         // A self-referential first write: x = f(x), recorded at sequence 0.
-        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x401000, Some(0x1000))]);
+        let idx = OmniscientIndex::from_writes(vec![w(0, 0x1000, 8, 0x0040_1000, Some(0x1000))]);
         let trace = idx.trace_origin_full(Address(0x1000), 10);
         assert_eq!(trace.hops.len(), 1, "one write can only produce one hop, not {} copies of itself", trace.hops.len());
         assert_eq!(trace.end, OriginEnd::NoEarlierWriter);
@@ -476,7 +476,7 @@ mod tests {
         for i in 0..(MAX_ORIGIN_CHAIN as u64 + 50) {
             let addr = 0x1000 + i * 8;
             let src = if i == 0 { None } else { Some(addr - 8) };
-            writes.push(w(i, addr, 8, 0x401000 + i, src));
+            writes.push(w(i, addr, 8, 0x0040_1000 + i, src));
         }
         writes.reverse();
         let idx = OmniscientIndex::from_writes(writes);
@@ -489,8 +489,8 @@ mod tests {
         // And a chain that DOES reach its origin says so - otherwise the flag
         // would be a constant.
         let short = OmniscientIndex::from_writes(vec![
-            w(1, 0x2000, 8, 0x401000, None),
-            w(2, 0x2008, 8, 0x401008, Some(0x2000)),
+            w(1, 0x2000, 8, 0x0040_1000, None),
+            w(2, 0x2008, 8, 0x0040_1008, Some(0x2000)),
         ]);
         let trace = short.trace_origin_full(Address(0x2008), 10);
         assert_eq!(trace.hops.len(), 2);

@@ -111,7 +111,7 @@ impl Timestamp {
     /// UNIX epoch (impossible on well-configured hardware), so mark it cold
     /// to let the compiler keep it out of the hot path.
     #[cold]
-    fn zero_wall() -> Duration { Duration::ZERO }
+    const fn zero_wall() -> Duration { Duration::ZERO }
 
     #[must_use]
     pub fn now() -> Self {

@@ -836,7 +836,7 @@ mod tests {
         }
     }
 
-    /// 0x1108 is `S_UDT`, not `S_REGREL32` — it must not decode as a RegRel.
+    /// 0x1108 is `S_UDT`, not `S_REGREL32` — it must not decode as a `RegRel`.
     #[test]
     fn parse_udt_kind_is_not_regrel() {
         let data = raw_record(0x1108, &[0u8; 16]);

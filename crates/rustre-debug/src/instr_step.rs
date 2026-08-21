@@ -38,7 +38,7 @@ pub enum StepArch {
     X86_64,
     /// 32-bit x86 (IA-32). Variable-length instructions.
     X86,
-    /// AArch64 / ARM64, A64 instruction set. Fixed 4-byte instructions.
+    /// `AArch64` / ARM64, A64 instruction set. Fixed 4-byte instructions.
     Aarch64,
 }
 
@@ -81,7 +81,7 @@ impl StepArch {
 pub fn next_pc(arch: StepArch, pc: u64, bytes: &[u8]) -> Option<u64> {
     match arch {
         StepArch::Aarch64 => {
-            if pc % A64_INSTRUCTION_SIZE != 0 {
+            if !pc.is_multiple_of(A64_INSTRUCTION_SIZE) {
                 return None;
             }
             pc.checked_add(A64_INSTRUCTION_SIZE)
@@ -147,7 +147,7 @@ pub const ALL_STEP_ARCHES: [StepArch; 3] = [StepArch::X86_64, StepArch::X86, Ste
 /// Does `name` denote the program counter on ANY architecture?
 ///
 /// The target's architecture is not always the host's. A debugger driving an
-/// arm64 iOS device from an x86_64 host receives a register map whose program
+/// arm64 iOS device from an `x86_64` host receives a register map whose program
 /// counter is spelled `pc`, and asking `pc_key(native_arch())` there answers
 /// `rip` — the host's spelling, about a machine that is not the host. These
 /// names do not collide across architectures, so recognising all of them is
@@ -165,7 +165,7 @@ pub fn is_sp_name(name: &str) -> bool {
 
 /// Does `name` denote the frame pointer on ANY architecture? See [`is_pc_name`].
 ///
-/// Includes the AArch64 role spelling `fp` alongside the architectural `x29`,
+/// Includes the `AArch64` role spelling `fp` alongside the architectural `x29`,
 /// because both are in live use — the same reason [`is_fp_name`] does.
 #[must_use]
 pub fn is_fp_name_any(name: &str) -> bool {
@@ -188,7 +188,7 @@ pub const fn ra_key(arch: StepArch) -> Option<&'static str> {
 
 /// Does `name` denote the link register on ANY architecture? See [`is_pc_name`].
 ///
-/// Both AArch64 spellings, for the same reason [`is_fp_name`] takes both: the
+/// Both `AArch64` spellings, for the same reason [`is_fp_name`] takes both: the
 /// role name `lr` and the architectural name `x30` are both in live use in this
 /// crate — `apple_debugger`'s `decode` resolves the typed `lr` field through
 /// `GenericRole::Ra` while `unwind` reads `get("x30").or_else(get("lr"))`.
@@ -204,14 +204,14 @@ pub fn is_ra_name_any(name: &str) -> bool {
 /// `regs.set("x29", …)` on the same read, and reads back with
 /// `get("x29").or_else(|| get("fp"))`. Matching only [`fp_key`] therefore
 /// answered "no" to half the names the crate itself produces — so a caller that
-/// wrote the frame pointer as `"fp"` on an AArch64 build updated the map and
+/// wrote the frame pointer as `"fp"` on an `AArch64` build updated the map and
 /// left the typed `RegisterSet::fp` untouched, and `backtrace`/`step_out`,
 /// which the crate's own comment says read the typed fields, saw no frame
 /// pointer at all.
 ///
 /// This deliberately does NOT pick which of the two names is canonical. That
 /// question is open and is not this function's to answer: `RegisterSchema`
-/// canonicalises AArch64 frame pointer to `x29` (with `fp` as the alias) while
+/// canonicalises `AArch64` frame pointer to `x29` (with `fp` as the alias) while
 /// `register_context::arm64_regs` canonicalises it to `fp` (with `x29` as the
 /// alias) — two tables in this crate that disagree about the same register.
 /// Recognising both names is correct under either resolution.

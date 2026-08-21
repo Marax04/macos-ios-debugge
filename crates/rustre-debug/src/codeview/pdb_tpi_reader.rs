@@ -159,19 +159,19 @@ impl std::error::Error for TpiError {}
 /// an out-of-line stub.
 #[cold]
 #[inline(never)]
-pub(super) fn tpi_err_header_too_short(available: usize) -> TpiError {
+pub(super) const fn tpi_err_header_too_short(available: usize) -> TpiError {
     TpiError::HeaderTooShort { available }
 }
 
 #[cold]
 #[inline(never)]
-pub(super) fn tpi_err_bad_version(v: u32) -> TpiError {
+pub(super) const fn tpi_err_bad_version(v: u32) -> TpiError {
     TpiError::BadVersion(v)
 }
 
 #[cold]
 #[inline(never)]
-pub(super) fn tpi_err_region_too_large(declared: usize, available: usize) -> TpiError {
+pub(super) const fn tpi_err_region_too_large(declared: usize, available: usize) -> TpiError {
     TpiError::RecordRegionTooLarge { declared, available }
 }
 
@@ -634,11 +634,10 @@ pub fn scan_type_names_zero_copy(
                 if name_off < tpi_record_bytes.len() {
                     let rest = &tpi_record_bytes[name_off..];
                     let nul = rest.iter().position(|&b| b == 0).unwrap_or(rest.len());
-                    if let Ok(s) = std::str::from_utf8(&rest[..nul]) {
-                        if !s.is_empty() && !s.starts_with("__") {
+                    if let Ok(s) = std::str::from_utf8(&rest[..nul])
+                        && !s.is_empty() && !s.starts_with("__") {
                             names.push(s);
                         }
-                    }
                 }
             }
         }

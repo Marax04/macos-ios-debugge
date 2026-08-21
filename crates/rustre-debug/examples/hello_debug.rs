@@ -1,4 +1,4 @@
-//! hello_debug — basic tutorial: attach, backtrace, kill.
+//! `hello_debug` — basic tutorial: attach, backtrace, kill.
 //!
 //! This example demonstrates the minimal workflow for a scripted debug session:
 //!

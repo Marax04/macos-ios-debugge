@@ -244,7 +244,7 @@ pub struct UsbmuxDebugserverFactory {
 impl UsbmuxDebugserverFactory {
     /// Use the host's usbmuxd; `udid` selects a device (`None` = the first).
     #[must_use]
-    pub fn new(udid: Option<String>, port: u16) -> Self {
+    pub const fn new(udid: Option<String>, port: u16) -> Self {
         Self { daemon_addr: None, udid, port }
     }
 
@@ -442,18 +442,16 @@ impl RegisterMap {
         // no such register is not reported as a failure of a request the caller
         // never explicitly made — the typed fields are populated by every read,
         // so `Some` does not mean "the caller asked for this".
-        if let Some(fp) = set.fp {
-            if let Some(r) = self.role_or_name(GenericRole::Fp, "fp") {
+        if let Some(fp) = set.fp
+            && let Some(r) = self.role_or_name(GenericRole::Fp, "fp") {
                 let name = r.name.clone();
                 apply(&name, fp, &mut dropped);
             }
-        }
-        if let Some(lr) = set.lr {
-            if let Some(r) = self.role_or_name(GenericRole::Ra, "lr") {
+        if let Some(lr) = set.lr
+            && let Some(r) = self.role_or_name(GenericRole::Ra, "lr") {
                 let name = r.name.clone();
                 apply(&name, lr, &mut dropped);
             }
-        }
         dropped
     }
 }
@@ -472,12 +470,35 @@ pub const CPU_TYPE_X86_64: u32 = 0x0100_0007;
 pub enum TargetArch {
     /// ARM64 without pointer authentication.
     Arm64,
-    /// ARM64e — return addresses carry a PAC and must be stripped.
+    /// `ARM64e` — return addresses carry a PAC and must be stripped.
     Arm64e,
     /// Intel.
     X86_64,
     /// Something this backend has no register or unwind model for.
     Other(u32),
+}
+
+/// The Objective-C ABI that matches a target architecture.
+///
+/// A third state on purpose: an architecture this backend has no model for is
+/// an explicit refusal, not a silent fallback to Arm64. Guessing here does not
+/// produce "maybe wrong output", it produces a memory error that blames the
+/// target for the debugger's assumption.
+///
+/// # Errors
+/// [`DebugError::Unsupported`] for an architecture with no Objective-C ABI here.
+pub(crate) fn objc_abi_for_arch(
+    arch: TargetArch,
+) -> Result<crate::ios::objc_runtime::ObjcAbi, DebugError> {
+    use crate::ios::objc_runtime::ObjcAbi;
+    match arch {
+        TargetArch::Arm64 | TargetArch::Arm64e => Ok(ObjcAbi::Arm64),
+        TargetArch::X86_64 => Ok(ObjcAbi::X86_64),
+        TargetArch::Other(cpu) => Err(DebugError::Unsupported(format!(
+            "no Objective-C ABI model for cputype {cpu} ({}): isa masks and              tagged-pointer layout are architecture-specific",
+            arch.name()
+        ))),
+    }
 }
 
 impl TargetArch {
@@ -693,11 +714,10 @@ impl Session {
     /// its silence is expected.
     fn abandon_inferior(&mut self) {
         let pid = self.pid;
-        if let Ok(reply) = self.text(format!("vKill;{:x}", pid.0).as_bytes(), "vKill") {
-            if reply.starts_with("OK") {
+        if let Ok(reply) = self.text(format!("vKill;{:x}", pid.0).as_bytes(), "vKill")
+            && reply.starts_with("OK") {
                 return;
             }
-        }
         let _ = self
             .client
             .transport_mut()
@@ -834,6 +854,41 @@ const fn stub_refused(e: &RspError) -> bool {
     matches!(e, RspError::Remote(_) | RspError::RemoteText(_))
 }
 
+/// The THIRD state: the disarm was neither confirmed nor refused -- nobody
+/// knows whether it landed, and the target may well be alive.
+///
+/// [`stub_refused`] answers a binary question, and the sweep that consults it
+/// reads "not refused" as "the target is gone, so a trap left in it harms
+/// nobody". `RspError::Timeout` belongs to neither half, and this crate had
+/// already settled that elsewhere: the variant's own documentation says a
+/// deadline means the reply may still be on its way -- the OPPOSITE of a closed
+/// socket -- and `a_read_timeout_does_not_make_the_connection_permanently_
+/// unusable` is built around exactly that, a live connection with a late
+/// answer. So an `M` that timed out leaves the target in the same state an
+/// `E01` does: the `BRK #0` this backend patched in is still in a running
+/// process, and after the `D` nothing is attached to handle the SIGTRAP it
+/// raises.
+///
+/// `Desynchronized` is here for the same reason, and follows from the first:
+/// once a request was abandoned with its reply still owed, the next disarm in
+/// the sweep is either refused before it reaches the wire or answered by bytes
+/// that belong to the previous command, so its outcome is unknown too.
+///
+/// Reading either as "gone" is this module's `unwrap_or(0)`: an ABSENT answer
+/// turned into a definite one. Erring the other way costs a record a later
+/// sweep retries and a detach reported as unclean; erring the way the code did
+/// costs the process.
+const fn disarm_outcome_unknown(e: &RspError) -> bool {
+    matches!(e, RspError::Timeout { .. } | RspError::Desynchronized(_))
+}
+
+/// Must the record be KEPT after a failed disarm -- because a live stub said
+/// no, or because nobody knows? One decoder for the sweep's three call sites,
+/// so a fourth cannot drift back to the binary question.
+const fn disarm_left_it_armed(e: &RspError) -> bool {
+    stub_refused(e) || disarm_outcome_unknown(e)
+}
+
 /// [`stub_refused`] through the hardware layer, which wraps the stub's answer
 /// in [`HwError::Stub`]. Every other `HwError` is bookkeeping on THIS side
 /// (nothing registered, slots exhausted, unencodable) -- no packet was sent, so
@@ -843,6 +898,19 @@ const fn hw_stub_refused(e: &HwError) -> bool {
         HwError::Stub { source, .. } => stub_refused(source),
         _ => false,
     }
+}
+
+/// [`disarm_left_it_armed`] through the hardware layer. `HwError::Rsp` is
+/// included alongside `Stub` because a debug-register clear that reached the
+/// wire reports its transport failures under that variant: a timed-out
+/// `z1`/`z2` leaves the register set exactly as unknown as a timed-out `M`
+/// leaves the patched code word.
+const fn hw_disarm_left_it_armed(e: &HwError) -> bool {
+    hw_stub_refused(e)
+        || match e {
+            HwError::Stub { source, .. } | HwError::Rsp(source) => disarm_outcome_unknown(source),
+            _ => false,
+        }
 }
 
 fn hw_err(e: HwError) -> DebugError {
@@ -917,7 +985,7 @@ pub struct AppleDebugger {
     /// answer — a silently wrong result, the worst failure shape available
     /// here. It lives under its own mutex, never the session mutex, which the
     /// runner is holding for the whole run.
-    resume_in_flight: Mutex<bool>,
+    resume_in_flight: Mutex<ResumeState>,
     /// Lock-free mirror of "is there a session", and of its pid.
     ///
     /// Same reasoning as `interrupter` and `resume_in_flight` above, applied to
@@ -945,6 +1013,22 @@ pub struct AppleDebugger {
     auto_load_attempts: AtomicUsize,
     /// Set when the resolver in `resolver` is the auto-built one.
     auto_installed: AtomicBool,
+    /// Memoized per-image unwind tables, together with the image set they were
+    /// parsed from (`(base, size)` per module, in load order).
+    ///
+    /// Building them reads `[base, base + size)` out of the target for EVERY
+    /// loaded image — the same bytes `maybe_auto_load_symbols` is latched
+    /// against reading twice — and `read_memory` is chunked by the stub's
+    /// `PacketSize`, so the cost is round trips, not bytes. Without this,
+    /// every `backtrace()` on every thread paid it again.
+    ///
+    /// The key is the image set rather than a bare latch because images come
+    /// and go (`dlopen`): a stale table would name frames after code that is
+    /// no longer mapped, which is worse than the cost it saves.
+    unwind_cache: RwLock<Option<(Vec<(u64, u64)>, Arc<Vec<crate::ios::unwind::ImageUnwindTables>>)>>,
+    /// How many times the unwind tables were actually read out of the target.
+    /// Observable so a test can prove the memoization, rather than assume it.
+    unwind_table_builds: AtomicUsize,
     /// dSYMs the caller offered for this target, in the order offered.
     ///
     /// They are held rather than attached immediately because a dSYM can only
@@ -988,14 +1072,59 @@ pub struct AppleDebugger {
     expr_symbols: RwLock<crate::ios::expr::AppleSymbols>,
 }
 
+/// What the session knows about the last resume it sent.
+///
+/// THREE states, not two. A boolean could only say "in flight" or "concluded",
+/// and the error exit of `resume_raw` was recorded as *concluded* -- the same
+/// value a real stop produces. But an abandoned resume is not a stop: when
+/// `text` fails with an expired read deadline it is the deadline that expired,
+/// not the target, which is still running. The RSP layer already draws that
+/// line ([`RspError::Timeout`] versus `Transport`, and
+/// [`RspClient::request_gated`] raising its owed-reply latch in exactly the
+/// first case), so collapsing it here left the two levels contradicting each
+/// other, with `pause()` deciding on the wrong one and answering `Ok(())`
+/// without interrupting a target that never stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ResumeState {
+    /// No resume outstanding: the target is stopped and an interrupt would
+    /// produce a stop reply owed to nothing.
+    Stopped,
+    /// A resume is on the wire with this session waiting for its stop reply.
+    InFlight,
+    /// A resume was ABANDONED with its reply still owed. Nobody is waiting for
+    /// the stop reply any more, but the target never stopped -- so this state
+    /// still needs the interrupt, which is why it cannot be a boolean.
+    Abandoned,
+}
+
+impl ResumeState {
+    /// Whether the target may still be RUNNING, which is the only question
+    /// `pause` and `release_parked_resume` have to answer.
+    const fn is_outstanding(self) -> bool {
+        !matches!(self, Self::Stopped)
+    }
+}
+
 /// Sets [`AppleDebugger::resume_in_flight`] for its lifetime.
 struct ResumeGuard<'a> {
-    flag: &'a Mutex<bool>,
+    flag: &'a Mutex<ResumeState>,
+    /// What the flag becomes when the guard goes away. `Stopped` unless the
+    /// resume was explicitly abandoned, so an early `?` or a panic can never
+    /// leave a resume recorded as outstanding by accident.
+    on_drop: ResumeState,
+}
+
+impl ResumeGuard<'_> {
+    /// Record that this resume left the target running: its reply is owed and
+    /// nothing is waiting for it.
+    const fn abandon(&mut self) {
+        self.on_drop = ResumeState::Abandoned;
+    }
 }
 
 impl Drop for ResumeGuard<'_> {
     fn drop(&mut self) {
-        *self.flag.lock() = false;
+        *self.flag.lock() = self.on_drop;
     }
 }
 
@@ -1044,7 +1173,7 @@ impl AppleDebugger {
             session: Mutex::new(None),
             breakpoints: RwLock::new(BTreeMap::new()),
             interrupter: RwLock::new(None),
-            resume_in_flight: Mutex::new(false),
+            resume_in_flight: Mutex::new(ResumeState::Stopped),
             attached: AtomicBool::new(false),
             pid: AtomicU32::new(0),
             resolver: RwLock::new(None),
@@ -1052,6 +1181,8 @@ impl AppleDebugger {
             auto_load_attempted: AtomicBool::new(false),
             auto_load_attempts: AtomicUsize::new(0),
             auto_installed: AtomicBool::new(false),
+            unwind_cache: RwLock::new(None),
+            unwind_table_builds: AtomicUsize::new(0),
             dsyms: RwLock::new(Vec::new()),
             source_roots: RwLock::new(SourceRootMapper::new()),
             dsym_errors: RwLock::new(Vec::new()),
@@ -1179,10 +1310,21 @@ impl AppleDebugger {
         self.auto_load_attempts.load(Ordering::SeqCst)
     }
 
+    /// How many times the per-image unwind tables were read out of the target
+    /// in this session. A second read for an unchanged image set is a bug, not
+    /// a tuning question.
+    #[must_use]
+    pub fn unwind_table_builds(&self) -> usize {
+        self.unwind_table_builds.load(Ordering::SeqCst)
+    }
+
     /// Re-arm the automatic load. Called when a session begins or ends, since
     /// a resolver built from one process describes nothing about the next.
     fn reset_auto_load(&self) {
         self.auto_load_attempted.store(false, Ordering::SeqCst);
+        // Unwind tables describe the mappings of a specific process.
+        *self.unwind_cache.write() = None;
+        self.unwind_table_builds.store(0, Ordering::SeqCst);
         self.auto_load_attempts.store(0, Ordering::SeqCst);
         // Symbols of a process this debugger is no longer talking to.
         *self.expr_symbols.write() = crate::ios::expr::AppleSymbols::new();
@@ -1413,11 +1555,10 @@ impl AppleDebugger {
                 })
                 .flatten()
         }) {
-            if let Some(rec) = self.breakpoints.write().get_mut(&(watched, BpClass::Data)) {
-                if rec.bp.enabled {
+            if let Some(rec) = self.breakpoints.write().get_mut(&(watched, BpClass::Data))
+                && rec.bp.enabled {
                     rec.bp.hit_count += 1;
                 }
-            }
             // `rwatch` is a read watch and can only have fired on a read.
             // `awatch` fires on either and the reply does not say which, so it
             // keeps the write-ish default rather than claiming a read.
@@ -1426,12 +1567,29 @@ impl AppleDebugger {
                 is_write: key != "rwatch",
             };
         }
-        if let Some(rec) = self.breakpoints.write().get_mut(&(pc, BpClass::Code)) {
-            if rec.bp.enabled {
+        // Same rule, second application: `reason:trace` is a DECLARATION that
+        // this stop is the completion of a single step, and it outranks the
+        // INFERENCE that the PC coincides with a tabled breakpoint.
+        //
+        // On AArch64 a `BRK` is precise, so the PC after executing one and the
+        // PC after a step that merely LANDED on one are the same number — the
+        // `reason` field is the only thing that separates them, and it was
+        // being read only after the table decided. A step onto the instruction
+        // after the current one, with a breakpoint armed there, came back as
+        // `Breakpoint` with `hit_count` bumped for a trap the target had not
+        // executed and would execute on the NEXT resume. The desktop backends
+        // do not have this shape: windows `classify_event` returns `SingleStep`
+        // for `EXCEPTION_SINGLE_STEP` whatever is registered at the address,
+        // and linux demands the executed-trap proof (the `0xCC` before the pc)
+        // rather than a table match.
+        if reason == Some("trace") {
+            return StopReason::SingleStep { address: addr };
+        }
+        if let Some(rec) = self.breakpoints.write().get_mut(&(pc, BpClass::Code))
+            && rec.bp.enabled {
                 rec.bp.hit_count += 1;
                 return StopReason::Breakpoint { address: addr, bp: rec.bp.clone() };
             }
-        }
         match reason {
             Some("trace") => StopReason::SingleStep { address: addr },
             // `reason:watchpoint` with no address key: the stub says a watchpoint
@@ -1453,8 +1611,8 @@ impl AppleDebugger {
     /// the resume cannot leave the flag stuck at `true` — which would make
     /// every later `pause()` fire `\x03` at a stopped target.
     fn resume_guard(&self) -> ResumeGuard<'_> {
-        *self.resume_in_flight.lock() = true;
-        ResumeGuard { flag: &self.resume_in_flight }
+        *self.resume_in_flight.lock() = ResumeState::InFlight;
+        ResumeGuard { flag: &self.resume_in_flight, on_drop: ResumeState::Stopped }
     }
 
     /// Resume and wait, with `vCont` and a `c`/`s` fallback for stubs that do
@@ -1462,7 +1620,7 @@ impl AppleDebugger {
     /// Step off a trap this backend patched in itself, so the target can get
     /// past its own breakpoint.
     ///
-    /// On AArch64 a `BRK` exception is PRECISE: the program counter stays on the
+    /// On `AArch64` a `BRK` exception is PRECISE: the program counter stays on the
     /// trap. Resuming therefore re-executes it and stops again at the same
     /// address, forever — the target could not pass any breakpoint it hit. The
     /// three native backends grew this step-off long ago; this fourth `Debugger`
@@ -1584,13 +1742,34 @@ impl AppleDebugger {
             // suffix: it resumes the stub's current selection.
             let action: (&str, Option<u64>) =
                 (verb, tid.filter(|t| t.0 != 0).map(|t| u64::from(t.0)));
-            let running = self.resume_guard();
-            let text = s.text(&commands::vcont(&[action]), "vCont")?;
+            let mut running = self.resume_guard();
+            // NOT `?`: a resume that FAILS is not a resume that stopped. Which
+            // of the two it was is decided by the RSP client itself -- the one
+            // place that still holds the `RspError` variant, since `rsp_err`
+            // renders it into a string -- so there is ONE decoder of "did a
+            // deadline expire on a live socket", not two that can disagree.
+            let text = match s.text(&commands::vcont(&[action]), "vCont") {
+                Ok(t) => t,
+                Err(e) => {
+                    if s.client.owes_reply() {
+                        running.abandon();
+                    }
+                    return Err(e);
+                }
+            };
             let raw = if text.is_empty() {
                 // Empty reply == "packet unsupported"; fall back to the legacy
                 // single-letter resume rather than reporting a phantom stop.
                 let legacy = if step { commands::step(None) } else { commands::cont(None) };
-                s.text(&legacy, verb)?
+                match s.text(&legacy, verb) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        if s.client.owes_reply() {
+                            running.abandon();
+                        }
+                        return Err(e);
+                    }
+                }
             } else {
                 text
             };
@@ -1826,10 +2005,18 @@ impl AppleDebugger {
     /// Best-effort: a transport with no out-of-band handle waits exactly as it
     /// did before, which is no worse than not calling this at all.
     fn release_parked_resume(&self) {
-        let gate = self.resume_in_flight.lock();
-        if *gate {
-            if let Some(interrupter) = self.interrupter.read().clone() {
-                let _ = interrupter.interrupt();
+        let mut gate = self.resume_in_flight.lock();
+        // `is_outstanding`, not "in flight": a resume ABANDONED on its read
+        // deadline left the target running just as surely, and this is the
+        // path `detach`/`kill` take -- without this the `D`/`k` goes to a
+        // process that is still executing, which is the exact situation this
+        // function exists for.
+        if gate.is_outstanding()
+            && let Some(interrupter) = self.interrupter.read().clone()
+        {
+            let _ = interrupter.interrupt();
+            if *gate == ResumeState::Abandoned {
+                *gate = ResumeState::Stopped;
             }
         }
     }
@@ -1865,8 +2052,12 @@ impl AppleDebugger {
     ///
     /// So the refusals are returned instead of discarded, keyed as the map keys
     /// them, and the caller decides what to keep and what to report. The
-    /// classification is [`stub_refused`]: `Exx` = the target is there and said
-    /// no; a transport/framing failure = the target is not there.
+    /// classification is [`disarm_left_it_armed`], and it is THREE-valued rather
+    /// than two: `Exx` = the target is there and said no; an expired deadline or
+    /// a desynchronised connection = nobody knows, and the target may well be
+    /// alive; a transport/framing failure = the target is not there. The middle
+    /// case is kept for the same reason as the first, because in the target it
+    /// is the same situation.
     fn disarm_all_breakpoints(&self, session: &mut Session) -> Vec<((u64, BpClass), BpRecord)> {
         let records: Vec<BpRecord> = self.breakpoints.read().values().cloned().collect();
         let mut hw = self.hw.lock();
@@ -1878,7 +2069,7 @@ impl AppleDebugger {
             // unconditional write is what this sweep has always done.
             if let Some(saved) = record.saved.as_ref() {
                 if let Err(e) = session.client.write_memory(a, saved)
-                    && stub_refused(&e)
+                    && disarm_left_it_armed(&e)
                 {
                     // The page refused the write (unwritable, JIT remapped) --
                     // the `BRK #0` this backend patched in is still executing
@@ -1901,7 +2092,7 @@ impl AppleDebugger {
                         _ => controller.clear_watchpoint(&mut session.client, hk, a).map(|_| ()),
                     };
                     if let Err(e) = outcome
-                        && hw_stub_refused(&e)
+                        && hw_disarm_left_it_armed(&e)
                     {
                         still_armed.push((key, record.clone()));
                     }
@@ -1914,7 +2105,7 @@ impl AppleDebugger {
                 // to go through this same checked call for this same reason --
                 // one decoder of "did the stub accept the `z`", not two.
                 if let Err(e) = session.client.remove_breakpoint(zkind, a, size)
-                    && stub_refused(&e)
+                    && disarm_left_it_armed(&e)
                 {
                     still_armed.push((key, record.clone()));
                 }
@@ -2076,7 +2267,17 @@ impl AppleDebugger {
     /// Propagates the runtime's own read/parse failures — an unmapped isa or
     /// a class chain that does not lead anywhere is reported, never guessed at.
     pub async fn describe_objc_object(&self, ptr: u64) -> Result<String, DebugError> {
-        use crate::ios::objc_runtime::{ObjcAbi, ObjcRuntime, ReaderMemory};
+        use crate::ios::objc_runtime::{ObjcRuntime, ReaderMemory};
+
+        // The ABI is READ off the session, never assumed: `ObjcAbi` exists
+        // precisely because the isa mask and the tagged-pointer format differ
+        // between arm64 and x86_64, and `Session::arch` already holds the
+        // answer `qProcessInfo` gave. Nailing this to `Arm64` made an Intel
+        // simulator's tagged `NSString` look like an ordinary object at an odd
+        // address, and the resulting read failure blamed the target's memory
+        // for the debugger's own guess.
+        let arch = self.target_arch().ok_or(DebugError::NotAttached)?;
+        let abi = objc_abi_for_arch(arch)?;
 
         // The runtime walks pointer chains, so it cannot be handed a
         // pre-fetched window: reads are demand-driven. `block_on` is safe here
@@ -2085,7 +2286,7 @@ impl AppleDebugger {
         let mem = ReaderMemory(|addr: u64, len: usize| {
             crate::scripting_api::block_on(self.read_memory(Address(addr), len)).ok()
         });
-        ObjcRuntime::new(&mem, ObjcAbi::Arm64)
+        ObjcRuntime::new(&mem, abi)
             .describe(ptr)
             .map_err(|e| DebugError::Os(format!("objc describe {ptr:#x}: {e}")))
     }
@@ -2096,8 +2297,17 @@ impl AppleDebugger {
     /// Empty is a legitimate answer, not an error: the unwinder degrades to
     /// the frame-pointer walk, which is exactly the behaviour that existed
     /// before — never worse, sometimes much better.
-    async fn unwind_images(&self) -> Vec<crate::ios::unwind::ImageUnwindTables> {
-        let Ok(modules) = self.modules().await else { return Vec::new() };
+    ///
+    /// Memoized per image set: the tables are parsed once and reused until the
+    /// set of loaded images changes. See [`Self::unwind_cache`].
+    async fn unwind_images(&self) -> Arc<Vec<crate::ios::unwind::ImageUnwindTables>> {
+        let Ok(modules) = self.modules().await else { return Arc::new(Vec::new()) };
+        let key: Vec<(u64, u64)> = modules.iter().map(|m| (m.base.as_u64(), m.size)).collect();
+        if let Some((cached_key, cached)) = self.unwind_cache.read().as_ref()
+            && *cached_key == key {
+                return Arc::clone(cached);
+            }
+        self.unwind_table_builds.fetch_add(1, Ordering::SeqCst);
         let mut chunks: Vec<(u64, usize, Option<Vec<u8>>)> = Vec::new();
         for m in &modules {
             let base = m.base.as_u64();
@@ -2107,12 +2317,14 @@ impl AppleDebugger {
             }
             chunks.push((base, len, self.read_memory(Address(base), len).await.ok()));
         }
-        crate::ios::unwind::unwind_images_from_modules(&modules, |addr, len| {
+        let images = Arc::new(crate::ios::unwind::unwind_images_from_modules(&modules, |addr, len| {
             chunks
                 .iter()
                 .find(|(b, l, _)| *b == addr && *l == len)
                 .and_then(|(_, _, bytes)| bytes.clone())
-        })
+        }));
+        *self.unwind_cache.write() = Some((key, Arc::clone(&images)));
+        images
     }
 
     /// Build a symbolicator from the target's own loaded images and install
@@ -2781,7 +2993,7 @@ impl Debugger for AppleDebugger {
         // a later `pause()` write 0x03 into a closed descriptor and report
         // success.
         *self.interrupter.write() = None;
-        *self.resume_in_flight.lock() = false;
+        *self.resume_in_flight.lock() = ResumeState::Stopped;
         // A resolver built from the departed process describes nothing about a
         // later one; `reset_auto_load` drops it (and only it — a resolver the
         // caller installed stays).
@@ -2838,8 +3050,7 @@ impl Debugger for AppleDebugger {
                 let addrs: Vec<String> =
                     still_armed.iter().map(|((a, _), _)| format!("{a:#x}")).collect();
                 Err(DebugError::DetachError(format!(
-                    "detached, but the target refused to disarm {} breakpoint(s) still armed \
-                     in it: {}",
+                    "detached, but {} breakpoint(s) were not confirmed disarmed and may still be \n                     armed in it (refused, or the reply never came): {}",
                     still_armed.len(),
                     addrs.join(", ")
                 )))
@@ -2888,7 +3099,7 @@ impl Debugger for AppleDebugger {
         // a later `pause()` write 0x03 into a closed descriptor and report
         // success.
         *self.interrupter.write() = None;
-        *self.resume_in_flight.lock() = false;
+        *self.resume_in_flight.lock() = ResumeState::Stopped;
         // A resolver built from the departed process describes nothing about a
         // later one; `reset_auto_load` drops it (and only it — a resolver the
         // caller installed stays).
@@ -3022,20 +3233,12 @@ impl Debugger for AppleDebugger {
             ))
         })?;
         let saved = self.read_memory(Address::new(saved_ret_slot), 8).await?;
-        // Zero is not a return address. Unchecked, `run_to_return_step` compares
-        // `pc == 0`, which never comes true, so the loop single-steps until the
-        // process EXITS and that exit is handed back as a successful step-out.
-        // Deferred at iteration 625 and landed here once the synthetic program
-        // this path is tested against stopped calling the wrong address.
-        let target = crate::step_out_target_from_frame(
-            step_out_return_target(u64::from_le_bytes(
-                saved
-                    .get(..8)
-                    .and_then(|b| <[u8; 8]>::try_from(b).ok())
-                    .ok_or_else(|| DebugError::StepError("step_out: short read".to_string()))?,
-            )),
-            saved_ret_slot,
-        )?;
+        let target = step_out_return_target(u64::from_le_bytes(
+            saved
+                .get(..8)
+                .and_then(|b| <[u8; 8]>::try_from(b).ok())
+                .ok_or_else(|| DebugError::StepError("step_out: short read".to_string()))?,
+        ));
         let mut event = self.single_step(tid).await?;
         for _ in 0..self.max_step_out_instructions {
             // Ordering matters and is not ours to re-derive: the hub crate owns
@@ -3124,10 +3327,12 @@ impl Debugger for AppleDebugger {
                 ))
             });
         };
-        let gate = self.resume_in_flight.lock();
-        if !*gate {
+        let mut gate = self.resume_in_flight.lock();
+        if !gate.is_outstanding() {
             // Already stopped: nothing to interrupt, and injecting the byte
-            // would leave an unmatched stop reply behind.
+            // would leave an unmatched stop reply behind. `Abandoned` is NOT
+            // this case -- there the deadline expired and the target kept
+            // running -- so it falls through to the interrupt below.
             return Ok(());
         }
         interrupter.interrupt().map_err(|e| {
@@ -3136,6 +3341,14 @@ impl Debugger for AppleDebugger {
                 interrupter.description()
             ))
         })?;
+        if *gate == ResumeState::Abandoned {
+            // Nobody is parked on a read for this one, so no runner will clear
+            // the state when the stop reply lands -- and that stop reply IS the
+            // owed reply `RspClient` drains before its next command. Clearing
+            // it here, still under the mutex, is what stops a second `pause`
+            // from firing a second interrupt at a target this one just stopped.
+            *gate = ResumeState::Stopped;
+        }
         drop(gate);
         Ok(())
     }
@@ -3245,8 +3458,16 @@ impl Debugger for AppleDebugger {
                 .ok_or_else(|| DebugError::RegisterError(format!("no register named {name:?}")))?;
             let (regnum, size) = (info.regnum, info.byte_size() as usize);
             if size > 8 {
+                // NOT "write it through set_registers": that door is shut too.
+                // `RegisterSet` carries `u64` values and `encode_into` drops
+                // every `size > 8` name, so the block path refuses the very
+                // same register a second time (see
+                // `set_registers_refuses_a_name_it_cannot_actually_write`).
+                // Pointing there advertised a capability no door of this
+                // backend has, and cost the reader a hunt for a bug of their
+                // own. Say what `get_register` says: this value does not fit.
                 return Err(DebugError::RegisterError(format!(
-                    "{name} is {} bits wide; write it through set_registers",
+                    "{name} is {} bits wide and does not fit a u64; this backend cannot write registers wider than 64 bits",
                     info.bitsize
                 )));
             }
@@ -3566,7 +3787,6 @@ impl Debugger for AppleDebugger {
 
         let mut out = Vec::with_capacity(images.len());
         for img in images {
-            let base = img.get("load_address").and_then(serde_json::Value::as_u64).unwrap_or(0);
             let path = img
                 .get("pathname")
                 .and_then(serde_json::Value::as_str)
@@ -3576,6 +3796,24 @@ impl Debugger for AppleDebugger {
                 .get("mach_header")
                 .and_then(|h| h.get("filetype"))
                 .and_then(serde_json::Value::as_u64);
+            // Three states, not two. A missing (or unparseable) `load_address`
+            // is "I do not know where this image is", and `ModuleInfo.base`
+            // has no spelling for that: a 0 would be read as a CLAIM that the
+            // library is mapped at address 0, which silently poisons every
+            // consumer that picks an image by containment or computes
+            // `runtime_base - preferred_base` (a slide of `-preferred_base`,
+            // i.e. systematically wrong symbolication for that image). The
+            // rest of this function already refuses to invent — an empty reply
+            // is `Unsupported`, a missing `images` array is an error — so the
+            // unknown image is dropped from the list and the reason logged,
+            // rather than published at a fabricated address.
+            let Some(base) = image_load_address(img) else {
+                tracing::warn!(
+                    module = %path,
+                    "image has no usable `load_address`; omitting it instead of reporting it loaded at 0"
+                );
+                continue;
+            };
             // Size is not in the reply, so it is MEASURED — from the image's
             // own segments first, exactly as `macos_debugger` does. The VM
             // region containing the header is the fallback, not the answer:
@@ -3636,7 +3874,8 @@ impl Debugger for AppleDebugger {
         let images = self.unwind_images().await;
         let mut frames: Vec<StackFrame> = self.with_session(|s| {
             let unwinder = images
-                .into_iter()
+                .iter()
+                .cloned()
                 .fold(AppleUnwinder::new(), AppleUnwinder::with_image);
             let mem = RspMemory { client: Mutex::new(&mut s.client) };
             Ok(unwinder
@@ -3672,7 +3911,7 @@ impl Debugger for AppleDebugger {
     }
 }
 
-/// Normalise a raw AArch64 return address into the value `step_out` may compare
+/// Normalise a raw `AArch64` return address into the value `step_out` may compare
 /// the PC against.
 ///
 /// The `g` packet never reports a signed PC, but on arm64e the return address
@@ -3695,6 +3934,29 @@ impl Debugger for AppleDebugger {
 #[must_use]
 pub const fn step_out_return_target(raw_return_address: u64) -> u64 {
     arm64::strip_pac(raw_return_address)
+}
+
+/// Decode the `load_address` of one image out of a
+/// `jGetLoadedDynamicLibrariesInfos` reply, keeping ABSENT distinct from ZERO.
+///
+/// `None` means the stub did not tell us where the image is: the key is
+/// missing, `null`, or carries something no address can be read out of. `Some`
+/// is a value the stub actually reported — including a real `0`.
+///
+/// Both JSON encodings seen from `debugserver` are accepted: a JSON number,
+/// and a string holding either `0x`-prefixed hex or decimal digits. A string
+/// is a KNOWN address awkwardly spelled, so treating it as absent would throw
+/// away information just as surely as `unwrap_or(0)` invented it.
+#[must_use]
+pub fn image_load_address(img: &serde_json::Value) -> Option<u64> {
+    let field = img.get("load_address")?;
+    if let Some(n) = field.as_u64() {
+        return Some(n);
+    }
+    let text = field.as_str()?.trim();
+    text.strip_prefix("0x")
+        .or_else(|| text.strip_prefix("0X"))
+        .map_or_else(|| text.parse::<u64>().ok(), |hex| u64::from_str_radix(hex, 16).ok())
 }
 
 // ---------------------------------------------------------------------------
@@ -4059,6 +4321,58 @@ mod tests {
         );
     }
 
+    /// The refusal of a 128-bit register must not send the caller to a door
+    /// that is itself locked.
+    ///
+    /// `set_register` refused `v0` with "write it through `set_registers`", but
+    /// `set_registers` cannot write it either: `encode_into` drops every
+    /// `size > 8` name and the caller is refused a second time, by
+    /// `set_registers_refuses_a_name_it_cannot_actually_write` above. The
+    /// message therefore advertised a capability no door of this backend has,
+    /// at the exact point the user was already stopped once — the cost is
+    /// diagnosis: the reader concludes the backend can write `v0` and hunts a
+    /// bug of their own. `get_register` states the truth for the same class;
+    /// the write path must state it too.
+    #[tokio::test]
+    async fn refusing_a_128_bit_register_does_not_point_at_a_door_that_is_also_shut() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        let tid = dbg.current_thread().await.expect("current thread");
+
+        let map = dbg.register_map().expect("register map");
+        let v0 = map.by_name("v0").expect("the target enumerates v0");
+        assert!(
+            v0.byte_size() > 8,
+            "v0 is {} bytes here, so this test no longer exercises the >64-bit shape",
+            v0.byte_size()
+        );
+
+        let err = dbg
+            .set_register(tid, "v0", 0xDEAD)
+            .await
+            .expect_err("a 128-bit register cannot be written through a u64 and must be refused");
+        let msg = err.to_string();
+
+        // Proof, in this same test, that the advertised route is shut: the very
+        // call the old message told the user to make.
+        let mut wide = dbg.get_registers(tid).await.expect("get_registers");
+        wide.set("v0", 0xDEAD);
+        let via_block = dbg.set_registers(tid, wide).await;
+        assert!(
+            via_block.is_err(),
+            "set_registers now writes v0; if that is real, set_register may legitimately redirect here"
+        );
+
+        assert!(
+            !msg.contains("set_registers"),
+            "set_register redirects to set_registers, which refuses the same register ({via_block:?}): {msg}"
+        );
+        assert!(
+            msg.contains("does not fit a u64"),
+            "the write path must state the same truth get_register states for this class: {msg}"
+        );
+    }
+
     /// A target KILLED by a signal is gone, and must be reported as gone.
     ///
     /// RSP has two endings: `W` (exited with a status) and `X` (killed by a
@@ -4197,7 +4511,7 @@ mod tests {
 
     /// The target must be able to get PAST a breakpoint it is standing on.
     ///
-    /// On AArch64 a `BRK` exception is precise: the program counter stays on the
+    /// On `AArch64` a `BRK` exception is precise: the program counter stays on the
     /// trap. So resuming from a stop caused by one of our own self-patched
     /// breakpoints re-executes it and stops again at the same address, forever —
     /// the target can never pass its own breakpoint. The three native backends
@@ -4333,6 +4647,54 @@ mod tests {
         );
     }
 
+    /// A step that LANDS on a breakpoint is a step, not a hit.
+    ///
+    /// `stop_reason_at` looked the arrival PC up in its own breakpoint table
+    /// BEFORE reading the stub's `reason` field, so any enabled code
+    /// breakpoint at the landing address turned a `reason:trace` stop into
+    /// `StopReason::Breakpoint` and incremented `hit_count` for a `BRK` the
+    /// target never executed. On `AArch64` the `BRK` exception is precise, so a
+    /// real hit and a step that lands there report the SAME pc: `reason` is the
+    /// only thing that separates them, and it is a DECLARATION by the stub
+    /// while the table match is an INFERENCE — the same ordering rule the
+    /// comment above `stop_reason_at` states for `watch:`.
+    #[tokio::test]
+    async fn a_step_that_lands_on_a_breakpoint_is_a_step_and_does_not_count_a_hit() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        let tid = dbg.current_thread().await.unwrap();
+        dbg.set_register(tid, "pc", TEXT_BASE).await.unwrap();
+        let landing = Address::new(TEXT_BASE + 4);
+        dbg.set_breakpoint(landing, BreakpointKind::Software).await.unwrap();
+
+        let event = dbg.single_step(tid).await.unwrap();
+
+        // Precondition: the step really did land on the breakpoint address,
+        // otherwise the assertion below would pass for the wrong reason.
+        assert_eq!(
+            dbg.get_register(tid, "pc").await.unwrap(),
+            landing.0,
+            "precondition: the step was expected to land on the breakpoint address"
+        );
+        assert!(
+            matches!(event.reason, StopReason::SingleStep { .. }),
+            "the stub said `reason:trace` and the BRK was never executed, yet the stop was reported as {:?}",
+            event.reason
+        );
+        let counted = dbg
+            .breakpoints()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|b| b.address == landing)
+            .expect("the breakpoint is still listed")
+            .hit_count;
+        assert_eq!(
+            counted, 0,
+            "a breakpoint that never fired was credited with {counted} hit(s); an `ignore N` built on this count would consume a pass that did not happen"
+        );
+    }
+
     /// `step_over` must decode the instruction, not the trap sitting on it.
     ///
     /// `instruction_at` fed `step_over`'s call detection, and it read RAW memory.
@@ -4380,7 +4742,7 @@ mod tests {
     /// A caller must never see this backend's own `BRK` in the memory it reads,
     /// and a write over one must not destroy it.
     ///
-    /// On AArch64 the trap is FOUR bytes, so an unmasked read does not corrupt a
+    /// On `AArch64` the trap is FOUR bytes, so an unmasked read does not corrupt a
     /// byte of the caller's view — it replaces a whole instruction with a
     /// different one. Everything downstream is misled in the same breath: a
     /// disassembly, a step that measures instruction length, an expression that
@@ -5383,7 +5745,7 @@ mod tests {
         let runner = Arc::clone(&dbg);
         let running = tokio::task::spawn(async move { runner.continue_execution().await });
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -5425,7 +5787,7 @@ mod tests {
         let runner = Arc::clone(&dbg);
         let running = tokio::task::spawn(async move { runner.continue_execution().await });
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -5473,7 +5835,7 @@ mod tests {
         let runner = Arc::clone(&dbg);
         let running = tokio::task::spawn(async move { runner.continue_execution().await });
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -5530,7 +5892,7 @@ mod tests {
         let runner = Arc::clone(&dbg);
         let running = tokio::task::spawn(async move { runner.continue_execution().await });
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -5602,7 +5964,7 @@ mod tests {
         // `pause` consults is deliberate: it proves the interrupt is sent in
         // the running state rather than racing an already-stopped target.
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -5623,7 +5985,7 @@ mod tests {
             other => panic!("expected a SIGINT signal stop, got {other:?}"),
         }
         assert!(
-            !*dbg.resume_in_flight.lock(),
+            !dbg.resume_in_flight.lock().is_outstanding(),
             "the run flag must be cleared once the stop reply arrives"
         );
 
@@ -5635,6 +5997,50 @@ mod tests {
 
         drop(dbg);
         let _ = server.join();
+    }
+
+    /// A resume ABANDONED on an expired read deadline still leaves the target
+    /// running, and `pause()` must interrupt it.
+    ///
+    /// `resume_in_flight` used to be a boolean cleared unconditionally by
+    /// `ResumeGuard::drop`, so the error exit of `resume_raw` was recorded as
+    /// "nothing in flight" — the same state a clean stop produces. But a
+    /// `RspError::Timeout` means the DEADLINE expired, not the peer: the crate
+    /// says so itself, and `RspClient::request_gated` marks the reply as still
+    /// owed in exactly that case. `pause()` then read the gate as `false`,
+    /// returned `Ok(())` without writing a byte, and reported a successful
+    /// interruption of a process that never stopped.
+    ///
+    /// The stub is the witness: it is asked here whether it ever saw the
+    /// `\x03`, not the debugger's own bookkeeping.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pause_interrupts_a_target_whose_resume_was_abandoned_on_the_read_deadline() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.run_until_interrupt = true;
+        let (addr, server) = srv.spawn_tcp().expect("spawn tcp mock");
+
+        // Short on purpose: this test is ABOUT the deadline expiring while the
+        // target keeps running.
+        let dbg = AppleDebugger::tcp(addr, Some(std::time::Duration::from_millis(300)));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+
+        let abandoned = dbg.continue_execution().await;
+        assert!(
+            abandoned.is_err(),
+            "the mock never answers a continue, so the resume must time out; got {abandoned:?}"
+        );
+
+        dbg.pause().await.expect("pause after an abandoned resume");
+
+        // Close the socket so the mock's thread hands its state back.
+        drop(dbg);
+        let srv = server.join().expect("mock thread");
+        let stops: Vec<_> = srv.threads().iter().map(|t| t.stop.clone()).collect();
+        assert!(
+            stops.iter().any(|s| matches!(s, crate::ios::mock_debugserver::StopKind::Signal(2))),
+            "the stub never received the \x03: pause reported success on a running target \
+             (thread stops: {stops:?})"
+        );
     }
 
     /// Re-arming a stub-managed trap must not be reported on the strength of
@@ -6082,7 +6488,7 @@ mod tests {
     /// `client.insert_breakpoint`, which turns the empty `Z0` reply into
     /// `RspError::Framing` — so stepping over a call failed outright on stubs
     /// this backend otherwise fully supported. The gap was invisible because
-    /// every other step_over test runs against the permissive mock.
+    /// every other `step_over` test runs against the permissive mock.
     #[tokio::test]
     async fn step_over_falls_back_when_the_stub_refuses_z0() {
         let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
@@ -6125,6 +6531,88 @@ mod tests {
         }
         let tid = dbg.current_thread().await.unwrap();
         assert_eq!(dbg.get_registers(tid).await.unwrap().pc, target.as_u64());
+    }
+
+    /// An image whose `load_address` the stub did not report must NOT be
+    /// published as a module loaded at address 0.
+    ///
+    /// `ModuleInfo.base` has no spelling for "unknown", so an absent field
+    /// used to be degraded into `0` by `unwrap_or(0)` — the one degradation
+    /// the rest of `modules()` refuses to make everywhere else (an empty
+    /// reply is `Unsupported`, a missing `images` array is an error, an
+    /// unmeasurable size is left at 0 but LOGGED). A base of 0 is not a
+    /// missing value, it is a claim: any consumer picking an image by
+    /// containment, or computing `runtime_base - preferred_base`, gets a
+    /// slide of `-preferred_base` and symbolicates that image wrongly, in
+    /// silence. The third state is expressed by leaving the image out of the
+    /// list.
+    #[tokio::test]
+    async fn image_without_a_load_address_is_not_published_at_zero() {
+        // Compile-anchored on the production decoder, so a rename breaks the
+        // build rather than leaving this test passing on the old path.
+        let _anchor: fn(&serde_json::Value) -> Option<u64> = image_load_address;
+
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.add_raw_image_json(
+            "{\"pathname\":\"/usr/lib/libnoaddr.dylib\",             \"mach_header\":{\"filetype\":6}}",
+        );
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+
+        let mods = dbg.modules().await.unwrap();
+        assert!(
+            mods.iter().all(|m| m.base.as_u64() != 0),
+            "an image with no `load_address` was published as loaded at 0: {:?}",
+            mods.iter().map(|m| (m.path.clone(), m.base.as_u64())).collect::<Vec<_>>()
+        );
+        assert!(
+            !mods.iter().any(|m| m.name == "libnoaddr.dylib"),
+            "an image whose load address is unknown must be omitted, not invented"
+        );
+        // The well-formed image next to it is still reported: the guard drops
+        // one entry, not the list.
+        assert!(mods.iter().any(|m| m.name == "mock.dylib"), "{mods:?}");
+    }
+
+    /// A `load_address` emitted as a hex STRING is a known value, not an
+    /// absent one, and must be decoded rather than dropped.
+    #[tokio::test]
+    async fn load_address_emitted_as_a_hex_string_is_decoded() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        srv.add_raw_image_json(
+            "{\"load_address\":\"0x140000000\",             \"pathname\":\"/usr/lib/libhex.dylib\",             \"mach_header\":{\"filetype\":6}}",
+        );
+        let dbg = AppleDebugger::new(Arc::new(LoopbackFactory::new(srv, 7)));
+        dbg.attach(ProcessId(4242)).await.unwrap();
+
+        let mods = dbg.modules().await.unwrap();
+        let hex = mods
+            .iter()
+            .find(|m| m.name == "libhex.dylib")
+            .expect("an image with a string-encoded load address must still be reported");
+        assert_eq!(hex.base.as_u64(), 0x1_4000_0000);
+    }
+
+    /// The decoder itself: three states, not two.
+    #[test]
+    fn image_load_address_distinguishes_absent_from_zero() {
+        let f: fn(&serde_json::Value) -> Option<u64> = image_load_address;
+        let num: serde_json::Value = serde_json::from_str(r#"{"load_address":4294967296}"#).unwrap();
+        assert_eq!(f(&num), Some(0x1_0000_0000));
+        let hex: serde_json::Value = serde_json::from_str(r#"{"load_address":"0x100000000"}"#).unwrap();
+        assert_eq!(f(&hex), Some(0x1_0000_0000));
+        let dec: serde_json::Value = serde_json::from_str(r#"{"load_address":"4294967296"}"#).unwrap();
+        assert_eq!(f(&dec), Some(0x1_0000_0000));
+        // A genuine zero is a value, and stays one.
+        let zero: serde_json::Value = serde_json::from_str(r#"{"load_address":0}"#).unwrap();
+        assert_eq!(f(&zero), Some(0));
+        // Absent, null and unparseable are all "I do not know".
+        assert_eq!(f(&serde_json::from_str::<serde_json::Value>(r"{}").unwrap()), None);
+        assert_eq!(f(&serde_json::from_str::<serde_json::Value>(r#"{"load_address":null}"#).unwrap()), None);
+        assert_eq!(
+            f(&serde_json::from_str::<serde_json::Value>(r#"{"load_address":"later"}"#).unwrap()),
+            None
+        );
     }
 
     #[tokio::test]
@@ -6265,6 +6753,41 @@ mod tests {
             "automatic load ran more than once (attempts={})",
             dbg.auto_load_attempts()
         );
+    }
+
+    /// Reading every loaded image out of the target is expensive enough that
+    /// the symbol load is latched against doing it twice; the unwind tables
+    /// read the SAME bytes from the SAME `backtrace()` and must be memoized
+    /// too. A per-thread stack panel calls `backtrace()` once per thread after
+    /// every stop, so an unmemoized read is paid hundreds of times per stop.
+    #[tokio::test]
+    async fn unwind_tables_are_read_once_and_reused_across_backtraces() {
+        let dbg = debugger();
+        let tid = stopped_in_callee(&dbg).await;
+        assert_eq!(dbg.unwind_table_builds(), 0, "nothing read before a backtrace is asked for");
+
+        let first = dbg.backtrace(tid).await.unwrap();
+        assert!(!first.is_empty());
+        assert_eq!(dbg.unwind_table_builds(), 1, "the first backtrace must read the images once");
+
+        let second = dbg.backtrace(tid).await.unwrap();
+        let third = dbg.backtrace(tid).await.unwrap();
+        assert_eq!(
+            dbg.unwind_table_builds(),
+            1,
+            "unwind tables re-read per backtrace (builds={})",
+            dbg.unwind_table_builds()
+        );
+        // Memoization that changed the answer would be a worse defect than the
+        // cost it saves.
+        let pcs = |f: &[StackFrame]| f.iter().map(|x| x.pc.as_u64()).collect::<Vec<_>>();
+        assert_eq!(pcs(&first), pcs(&second), "cached tables produced a different walk");
+        assert_eq!(pcs(&first), pcs(&third));
+
+        // And they describe a specific process: a new session must not inherit
+        // the previous one's mappings.
+        dbg.detach().await.unwrap();
+        assert_eq!(dbg.unwind_table_builds(), 0, "unwind cache survived detach");
     }
 
     #[tokio::test]
@@ -6457,6 +6980,36 @@ mod tests {
             dbg.step_out(ThreadId(1)).await,
             Err(DebugError::Unsupported(_))
         ));
+    }
+
+    /// `describe_objc_object` must read the ABI off the SESSION, not nail it
+    /// to Arm64: on an `x86_64` target (Intel simulator / macOS Intel process,
+    /// which `qProcessInfo` reports and `TargetArch::X86_64` models) a tagged
+    /// pointer carries its tag in bit 0, not bit 63.
+    #[tokio::test]
+    async fn describe_objc_object_uses_the_session_architecture_for_the_objc_abi() {
+        let dbg = debugger();
+        dbg.attach(ProcessId(4242)).await.unwrap();
+        if let Some(s) = dbg.session.lock().as_mut() {
+            s.arch = TargetArch::X86_64;
+        }
+        // x86_64 tagged __NSCFNumber: tag bit 0, slot 3 in bits 1..3,
+        // payload = ptr >> 4 = 0x2A3 -> type nibble 3 (int32), value 42.
+        let out = dbg
+            .describe_objc_object(0x2A37)
+            .await
+            .expect("an x86_64 tagged pointer needs no memory at all to decode");
+        assert_eq!(out, "__NSCFNumber(42)", "wrong ABI used for the decode");
+        // And the Arm64 reading of the same word is NOT what we got: under
+        // Arm64 bit 63 is clear, so it would not be tagged at all.
+        assert!(
+            crate::ios::objc_runtime::decode_tagged_pointer(
+                0x2A37,
+                crate::ios::objc_runtime::ObjcAbi::Arm64
+            )
+            .is_none(),
+            "the test value must be ambiguous only if the ABI is ignored"
+        );
     }
 
     #[tokio::test]
@@ -7515,7 +8068,7 @@ mod tests {
         let runner = Arc::clone(&dbg);
         let running = tokio::task::spawn(async move { runner.continue_execution().await });
         let mut waited = 0u32;
-        while !*dbg.resume_in_flight.lock() {
+        while !dbg.resume_in_flight.lock().is_outstanding() {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             waited += 1;
             assert!(waited < 2000, "the continue never became outstanding");
@@ -7669,9 +8222,9 @@ mod tests {
     /// outcomes: the process exited, or pc==lr above the entry sp. Every other
     /// stop — SIGSEGV, a user breakpoint, a watchpoint hit — fell into
     /// `KeepGoing`, and the loop re-issued `vCont;s` on the very instruction
-    /// that had just faulted. On AArch64 a data abort is PRECISE, so the pc
+    /// that had just faulted. On `AArch64` a data abort is PRECISE, so the pc
     /// does not move: the same load faults again, forever, for
-    /// `max_step_out_instructions` iterations (200_000 by default, each 3-4 RSP
+    /// `max_step_out_instructions` iterations (`200_000` by default, each 3-4 RSP
     /// round trips, with the session mutex held throughout) — and the call then
     /// returned an error that LIES: "did not return within N instructions",
     /// about a crash it observed on the very first step and threw away.
@@ -7717,7 +8270,7 @@ mod tests {
     }
 
     /// A program whose breakpoint sits AFTER a call, which is where a
-    /// breakpoint normally sits: on AArch64 `lr` then no longer holds the
+    /// breakpoint normally sits: on `AArch64` `lr` then no longer holds the
     /// return address of the current function, it holds an address *inside*
     /// it (just after that `bl`).
     ///
@@ -7820,10 +8373,44 @@ mod tests {
         );
     }
 
+    /// A single step that LANDS on a breakpoint is a step, not a hit.
+    ///
+    /// On `AArch64` the PC after a precise `BRK` and the PC after a step that
+    /// stopped ON that `BRK` are the same number: `reason:trace` is the only
+    /// thing that tells them apart. Looking the PC up in our own table first
+    /// discarded it — an INFERENCE beating the stub's DECLARATION, the very
+    /// rule `stop_reason_at` states for watchpoints — and credited a `BRK` the
+    /// target never executed with a hit.
+    #[test]
+    fn a_step_that_lands_on_a_breakpoint_is_a_step_not_a_hit() {
+        let dbg = debugger();
+        let pc: u64 = TEXT_BASE + 4;
+        dbg.breakpoints.write().insert(
+            (pc, BpClass::Code),
+            BpRecord {
+                bp: Breakpoint::new_software(Address::new(pc)),
+                saved: None,
+                hw_size: None,
+            },
+        );
+        let pairs = vec![("thread".to_string(), "1".to_string())];
+        match dbg.stop_reason_at(pc, 5, Some("trace"), &pairs) {
+            StopReason::SingleStep { address } => assert_eq!(address.as_u64(), pc),
+            other => panic!(
+                "the stub said reason:trace; the BRK at the landing address was never executed: {other:?}"
+            ),
+        }
+        assert_eq!(
+            dbg.breakpoints.read().get(&(pc, BpClass::Code)).expect("code record").bp.hit_count,
+            0,
+            "a breakpoint the target stopped OVER, never ON, was credited with a hit"
+        );
+    }
+
     /// An explicit `watch:` key from the stub OUTRANKS a code breakpoint that
     /// merely happens to sit at the reported PC.
     ///
-    /// On AArch64 a write-watchpoint exception is reported with the PC on the
+    /// On `AArch64` a write-watchpoint exception is reported with the PC on the
     /// instruction AFTER the store. If the user also has a breakpoint on that
     /// next line, `T05watch:1000;...` used to be classified by looking the PC
     /// up in the table FIRST: the code record was found, its `hit_count`
@@ -7886,4 +8473,125 @@ mod tests {
         );
     }
 
+
+    /// A transport that lets the whole session through and then withholds the
+    /// reply to ONE memory write, the way a loaded device reached through a
+    /// usbmux tunnel does when the answer to an `M` arrives after the read
+    /// deadline. The request is not forwarded either, so the word really does
+    /// stay unwritten in the simulated target.
+    struct StallOneMemoryWrite {
+        inner: crate::ios::mock_client::LoopbackTransport,
+        armed: Arc<std::sync::atomic::AtomicBool>,
+        stalled: Arc<std::sync::atomic::AtomicBool>,
+        owe_timeout: bool,
+    }
+
+    impl RspTransport for StallOneMemoryWrite {
+        fn send(&mut self, data: &[u8]) -> std::io::Result<()> {
+            if self.armed.load(Ordering::SeqCst)
+                && !self.stalled.load(Ordering::SeqCst)
+                && data.windows(2).any(|w| w == b"$M")
+            {
+                self.stalled.store(true, Ordering::SeqCst);
+                self.owe_timeout = true;
+                // Swallowed: the stub never sees it, and never answers.
+                return Ok(());
+            }
+            RspTransport::send(&mut self.inner, data)
+        }
+        fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.owe_timeout {
+                self.owe_timeout = false;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "read deadline passed with no reply",
+                ));
+            }
+            RspTransport::recv(&mut self.inner, buf)
+        }
+        fn description(&self) -> String {
+            "stall-one-memory-write".to_string()
+        }
+    }
+
+    struct StallingFactory {
+        server: Mutex<Option<MockDebugserver>>,
+        armed: Arc<std::sync::atomic::AtomicBool>,
+        stalled: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl TransportFactory for StallingFactory {
+        fn connect(
+            &self,
+            _request: &ConnectRequest<'_>,
+        ) -> Result<Box<dyn RspTransport>, DebugError> {
+            let server = self
+                .server
+                .lock()
+                .take()
+                .ok_or_else(|| DebugError::Os("already connected".to_string()))?;
+            Ok(Box::new(StallOneMemoryWrite {
+                inner: crate::ios::mock_client::LoopbackTransport::new(server).with_chunk(7),
+                armed: Arc::clone(&self.armed),
+                stalled: Arc::clone(&self.stalled),
+                owe_timeout: false,
+            }))
+        }
+    }
+
+    /// A disarm that TIMED OUT is not a disarm that succeeded, and not a dead
+    /// target either — it is the third state, and `detach` used to file it
+    /// under "the process is gone".
+    ///
+    /// `disarm_all_breakpoints` classifies with `stub_refused`, which is true
+    /// only for `Exx`. Everything else was read as "the target is not there,
+    /// and a trap in a dead process harms nobody", so the record fell through
+    /// and `detach`'s `breakpoints.write().clear()` erased the only trace of
+    /// the address. `RspError::Timeout` is documented in `rsp.rs` as the
+    /// OPPOSITE of a dead socket ("the reply may still be on its way"), so the
+    /// live-target premise the `still_armed` mechanism exists for holds
+    /// exactly as it does for `E01`: a self-patched `BRK #0` is still in a
+    /// running process, and after the `D` nothing is attached to handle the
+    /// SIGTRAP it raises.
+    #[tokio::test]
+    async fn detach_keeps_the_record_of_a_breakpoint_whose_disarm_timed_out() {
+        let mut srv = MockDebugserver::with_program(4242, TEXT_BASE, &program());
+        // No server-managed `Z0`, so this backend patches `BRK #0` in itself
+        // and the disarm is a memory WRITE — the packet that will time out.
+        srv.refuse_software_breakpoints();
+        let armed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stalled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dbg = AppleDebugger::new(Arc::new(StallingFactory {
+            server: Mutex::new(Some(srv)),
+            armed: Arc::clone(&armed),
+            stalled: Arc::clone(&stalled),
+        }));
+        dbg.attach(ProcessId(4242)).await.expect("attach");
+        dbg.set_breakpoint(Address(TEXT_BASE), BreakpointKind::Software)
+            .await
+            .expect("set_breakpoint");
+        assert!(
+            dbg.breakpoints.read().get(&(TEXT_BASE, BpClass::Code)).is_some_and(|r| r.saved.is_some()),
+            "premise: the trap must be SELF-PATCHED, so its disarm is an `M` write"
+        );
+
+        armed.store(true, Ordering::SeqCst);
+        let outcome = dbg.detach().await;
+        let tracked = dbg.breakpoints.read().len();
+
+        assert!(
+            stalled.load(Ordering::SeqCst),
+            "premise: no memory write was withheld, so this test never exercised a timeout"
+        );
+        assert_eq!(
+            tracked, 1,
+            "the restoring write TIMED OUT — the `BRK #0` is still in a live process — yet \
+             the record was erased, so no later sweep can ever retry that address"
+        );
+        assert!(
+            outcome.is_err(),
+            "detach reported a clean detach while a `BRK #0` this backend patched in is \
+             still armed in the target"
+        );
+    }
 }

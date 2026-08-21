@@ -218,7 +218,7 @@ pub(crate) const CPU_TYPE_ARM64: u32 = 0x0100_000c;
 ///
 /// A flavour tag is meaningless on its own: the numbers are per-architecture
 /// and they COLLIDE. 6 is `ARM_THREAD_STATE64` on arm64 but
-/// `x86_EXCEPTION_STATE64` on x86_64; 4 is `x86_THREAD_STATE64` on x86_64 but
+/// `x86_EXCEPTION_STATE64` on `x86_64`; 4 is `x86_THREAD_STATE64` on `x86_64` but
 /// `ARM_DEBUG_STATE` on arm64. Reading a fixed slot out of the wrong layout
 /// does not fail visibly — it returns whatever register or fault address lies
 /// at that offset, as a confident entry point no caller can tell from a real
@@ -227,7 +227,7 @@ pub(crate) const CPU_TYPE_ARM64: u32 = 0x0100_000c;
 ///
 /// An architecture this module does not model yields `None` for the same
 /// reason an unmodelled flavour does: no guess is better than no answer.
-fn thread_state_pc_slot(cputype: u32, flavour: u32) -> Option<usize> {
+const fn thread_state_pc_slot(cputype: u32, flavour: u32) -> Option<usize> {
     match (cputype, flavour) {
         (CPU_TYPE_X86_64, X86_THREAD_STATE64_FLAVOUR) => Some(X86_THREAD_STATE64_RIP_SLOT),
         (CPU_TYPE_ARM64, ARM_THREAD_STATE64_FLAVOUR) => Some(ARM_THREAD_STATE64_PC_SLOT),
@@ -388,7 +388,7 @@ mod tests {
     /// `ncmds` so hostile headers can be built. Defaults to an `x86_64`
     /// `cputype`: a thread-state flavour has no meaning without one (flavour
     /// 6 is `ARM_THREAD_STATE64` on arm64 and `x86_EXCEPTION_STATE64` on
-    /// x86_64), so a header claiming no architecture cannot carry a readable
+    /// `x86_64`), so a header claiming no architecture cannot carry a readable
     /// `LC_UNIXTHREAD` entry point.
     fn header_with(ncmds: u32, cmds: &[u8]) -> Vec<u8> {
         header_with_cpu(CPU_TYPE_X86_64, ncmds, cmds)
@@ -599,7 +599,7 @@ mod tests {
         b
     }
 
-    /// The same rule as the LC_MAIN test below, on the size path — where the
+    /// The same rule as the `LC_MAIN` test below, on the size path — where the
     /// consequence is worse.
     ///
     /// A truncated `LC_SEGMENT_64` had its `segname` and `vmsize` read out of
@@ -807,7 +807,7 @@ mod tests {
         let cmd = lc_unixthread_pairs(&[
             // x86_FLOAT_STATE64 = 5: present, unmodelled, and NOT the end of
             // the command.
-            (5, state_words(&vec![0u64; 8])),
+            (5, state_words(&[0u64; 8])),
             (X86_THREAD_STATE64_FLAVOUR, state_words(&rip_state)),
         ]);
         let buf = header_with_cpu(CPU_TYPE_X86_64, 1, &cmd);
@@ -851,7 +851,7 @@ mod tests {
     /// A flavour number means nothing without the header's `cputype`.
     ///
     /// 6 is `ARM_THREAD_STATE64` on arm64 and `x86_EXCEPTION_STATE64` on
-    /// x86_64; 4 is `x86_THREAD_STATE64` on x86_64 and `ARM_DEBUG_STATE` on
+    /// `x86_64`; 4 is `x86_THREAD_STATE64` on `x86_64` and `ARM_DEBUG_STATE` on
     /// arm64. Interpreting the tag alone reads a fixed slot out of a state
     /// with a completely different layout and hands the result back as an
     /// entry point — the exact failure the unmodelled-flavour arm exists to

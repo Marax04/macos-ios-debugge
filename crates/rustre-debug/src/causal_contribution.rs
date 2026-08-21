@@ -98,7 +98,7 @@ pub struct CausalContributionReport {
     pub truncated: bool,
 }
 
-fn default_origin_end() -> OriginEnd {
+const fn default_origin_end() -> OriginEnd {
     OriginEnd::LimitReached
 }
 
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn single_write_full_contribution() {
-        let index = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000, None)]);
+        let index = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000, None)]);
         let report = rank_causal_contributions(&index, Address(0x1000), u64::MAX, 10);
         assert_eq!(report.chain_length, 1);
         assert!(report.chain_complete);
@@ -240,8 +240,8 @@ mod tests {
         // Seq 1 writes 0x1000 (root).
         // Seq 2 writes 0x2000 sourced from 0x1000.
         let writes = vec![
-            w(1, 0x1000, 0x401000, None),
-            w(2, 0x2000, 0x401010, Some(0x1000)),
+            w(1, 0x1000, 0x0040_1000, None),
+            w(2, 0x2000, 0x0040_1010, Some(0x1000)),
         ];
         let index = OmniscientIndex::from_writes(writes);
         let report = rank_causal_contributions(&index, Address(0x2000), u64::MAX, 10);
@@ -278,7 +278,7 @@ mod tests {
         for i in 0..6u64 {
             let addr = 0x1000 + i * 8;
             let src = if i == 0 { None } else { Some(addr - 8) };
-            writes.push(w(i, addr, 0x401000 + i, src));
+            writes.push(w(i, addr, 0x0040_1000 + i, src));
         }
         writes.reverse();
         let index = OmniscientIndex::from_writes(writes);
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn a_chain_with_no_earlier_writer_is_not_reported_as_truncated() {
         // One write that claims a source nothing ever wrote.
-        let index = OmniscientIndex::from_writes(vec![w(5, 0x2000, 0x401000, Some(0x9999))]);
+        let index = OmniscientIndex::from_writes(vec![w(5, 0x2000, 0x0040_1000, Some(0x9999))]);
         let report = rank_causal_contributions(&index, Address(0x2000), u64::MAX, 32);
         assert_eq!(report.chain_length, 1);
         assert!(!report.truncated, "nothing was dropped by the depth limit");

@@ -836,7 +836,7 @@ impl SharedTtdSession {
 ///
 /// It is built by `record`ing a live session's state at successive positions
 /// (e.g. from the MCP `debug.ttd_record` path). Unlike a proprietary replay
-/// engine (WinDbg TTD, rr, QEMU), it needs no external trace format — it simply
+/// engine (`WinDbg` TTD, rr, QEMU), it needs no external trace format — it simply
 /// serves the states it was given. This is the first concrete `TtdBackend` in
 /// the crate, so `TtdSession::reverse_step`/`seek`/… can return real recorded
 /// registers instead of a synthetic `pc=0` state.
@@ -889,13 +889,13 @@ impl SnapshotReplayBackend {
 
     /// Number of recorded states.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.states.len()
     }
 
     /// True if nothing has been recorded.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
 
@@ -917,7 +917,7 @@ impl SnapshotReplayBackend {
 }
 
 impl TtdBackend for SnapshotReplayBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "snapshot-replay"
     }
 
@@ -1197,7 +1197,7 @@ mod tests {
         let mut s = make_session();
         s.record_snapshot(make_snapshot(2, 0));
         s.current = TracePosition::new(5, 10);
-        s.add_reverse_breakpoint(0x401000);
+        s.add_reverse_breakpoint(0x0040_1000);
 
         let err = s.reverse_continue().unwrap_err();
         assert!(
@@ -1215,11 +1215,11 @@ mod tests {
     #[test]
     fn reverse_continue_stops_at_a_recorded_breakpoint_position() {
         let mut s = make_session();
-        s.add_reverse_breakpoint(0x401000);
+        s.add_reverse_breakpoint(0x0040_1000);
         // Walk forward through positions, recording the pc seen at each.
-        s.record_history(TracePosition::new(1, 0), 0x400000);
-        s.record_history(TracePosition::new(3, 0), 0x401000); // the breakpoint
-        s.record_history(TracePosition::new(7, 0), 0x402000);
+        s.record_history(TracePosition::new(1, 0), 0x0040_0000);
+        s.record_history(TracePosition::new(3, 0), 0x0040_1000); // the breakpoint
+        s.record_history(TracePosition::new(7, 0), 0x0040_2000);
         s.current = TracePosition::new(9, 0);
 
         let state = s.reverse_continue().expect("the history proves this position was visited");

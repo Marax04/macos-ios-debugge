@@ -31,7 +31,7 @@ use crate::circuit_breaker::CircuitBreaker;
 /// Global circuit breaker for the Microsoft Symbol Server: after 3 consecutive
 /// HTTP failures within 60 s, stops issuing requests for 60 s.
 pub static SYM_SERVER_BREAKER: LazyLock<CircuitBreaker> =
-    LazyLock::new(|| CircuitBreaker::new(3, Duration::from_secs(60)));
+    LazyLock::new(|| CircuitBreaker::new(3, Duration::from_mins(1)));
 
 /// Errors produced by the PDB symbol server client.
 #[derive(Debug, Error)]
@@ -54,7 +54,7 @@ pub enum SymSrvError {
 
 // ── CodeView / RSDS record ────────────────────────────────────────────────────
 
-/// The GUID + Age extracted from a PE's CodeView "RSDS" debug directory entry.
+/// The GUID + Age extracted from a PE's `CodeView` "RSDS" debug directory entry.
 ///
 /// This is the key for locating the matching PDB on a symbol server.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -96,7 +96,7 @@ impl PdbIdentity {
         }
     }
 
-    /// Parse a CodeView "RSDS" record from raw bytes.
+    /// Parse a `CodeView` "RSDS" record from raw bytes.
     ///
     /// The RSDS structure is:
     /// - 4 bytes: signature `"RSDS"`
@@ -133,7 +133,7 @@ impl PdbIdentity {
         // Windows backslash separators even when parsed on Linux, so we strip
         // by both '/' and '\\' rather than relying on std::path::Path.
         let pdb_name = pdb_path
-            .rsplit(|c| c == '/' || c == '\\')
+            .rsplit(['/', '\\'])
             .next()
             .filter(|s| !s.is_empty())
             .unwrap_or(pdb_path)
@@ -328,7 +328,7 @@ pub async fn download_async(
     tokio::task::spawn_blocking(move || {
         SYM_SERVER_BREAKER
             .call(|| download_http(&url, &dest_clone))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .map_err(std::io::Error::other)
     })
     .await
     .map_err(|e| SymSrvError::Http(e.to_string()))?
@@ -414,9 +414,7 @@ fn download_http_once(url: &str, dest: &Path) -> Result<Option<String>, std::io:
     let path = format!("/{path}");
     let port: u16 = if scheme == "https" { 443 } else { 80 };
     let host = host_port.split(':').next().unwrap_or(host_port);
-    let port = host_port
-        .splitn(2, ':')
-        .nth(1)
+    let port = host_port.split_once(':').map(|x| x.1)
         .and_then(|p| p.parse().ok())
         .unwrap_or(port);
 
@@ -463,8 +461,7 @@ fn download_http_once(url: &str, dest: &Path) -> Result<Option<String>, std::io:
         ));
     }
     if status != 200 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             format!("symbol server returned HTTP {status}"),
         ));
     }
@@ -520,8 +517,8 @@ fn download_http_once(url: &str, dest: &Path) -> Result<Option<String>, std::io:
 
 /// Extract the [`PdbIdentity`] from a PE image's debug directory.
 ///
-/// Scans the PE's debug directory for a CodeView "RSDS" entry and decodes it.
-/// Returns `None` if the PE has no CodeView debug directory or the image
+/// Scans the PE's debug directory for a `CodeView` "RSDS" entry and decodes it.
+/// Returns `None` if the PE has no `CodeView` debug directory or the image
 /// is not a valid PE.
 #[must_use]
 pub fn identity_from_pe(pe_bytes: &[u8]) -> Option<PdbIdentity> {
@@ -750,7 +747,7 @@ mod tests {
     #[test]
     fn the_cache_directory_can_be_overridden() {
         // Held for the whole test: the cache root is process-global.
-        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let id = PdbIdentity::new(&[0x11; 16], 3, "over.pdb");
         let dir = std::env::temp_dir().join(format!("rustre-pdb-{}", std::process::id()));
         // SAFETY: the write itself is unsynchronised process-global state,
@@ -795,8 +792,8 @@ mod tests {
     #[test]
     fn a_poisoned_cache_entry_is_not_returned() {
         // Held for the whole test: the cache root is process-global.
-        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let id = PdbIdentity::new(&[0xAB; 16], 1, &format!("poisoned-{}.pdb", std::process::id()));
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let id = PdbIdentity::new(&[0xAB; 16], 1, format!("poisoned-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
         if std::fs::create_dir_all(&parent).is_err() {
@@ -819,8 +816,8 @@ mod tests {
     #[test]
     fn a_valid_cache_entry_is_still_returned() {
         // Held for the whole test: the cache root is process-global.
-        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let id = PdbIdentity::new(&[0xCD; 16], 2, &format!("valid-{}.pdb", std::process::id()));
+        let _guard = CACHE_ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let id = PdbIdentity::new(&[0xCD; 16], 2, format!("valid-{}.pdb", std::process::id()));
         let Ok(path) = cache_path(&id) else { return };
         let Some(parent) = path.parent().map(std::path::Path::to_path_buf) else { return };
         if std::fs::create_dir_all(&parent).is_err() {

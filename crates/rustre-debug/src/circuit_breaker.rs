@@ -59,7 +59,7 @@ struct BreakerInner {
     /// A half-open probe is running right now.
     ///
     /// The doc of [`BreakerState::HalfOpen`] says "ONE probe call is allowed",
-    /// and nothing enforced it: `call` simply did not reject in HalfOpen, so
+    /// and nothing enforced it: `call` simply did not reject in `HalfOpen`, so
     /// every caller that arrived during that window ran `op()`. On a debugger
     /// resolving symbols from several threads that is the whole fleet hitting
     /// an already-unhealthy server at the same instant — the exact behaviour
@@ -73,7 +73,7 @@ impl CircuitBreaker {
     ///
     /// - `max_failures`: consecutive failures within `open_duration` that trip
     ///   the breaker.
-    /// - `open_duration`: how long the breaker stays Open (and HalfOpen probe
+    /// - `open_duration`: how long the breaker stays Open (and `HalfOpen` probe
     ///   interval).
     #[must_use]
     pub fn new(max_failures: u32, open_duration: Duration) -> Self {
@@ -94,7 +94,7 @@ impl CircuitBreaker {
     /// Return the current state.
     #[must_use]
     pub fn state(&self) -> BreakerState {
-        let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut g = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         self.advance_state(&mut g);
         g.state
     }
@@ -104,7 +104,7 @@ impl CircuitBreaker {
     pub fn failure_count(&self) -> u32 {
         self.inner
             .lock()
-            .unwrap_or_else(|p| p.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .failures
     }
 
@@ -121,7 +121,7 @@ impl CircuitBreaker {
     ) -> Result<T, String> {
         let was_half_open;
         {
-            let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+            let mut g = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             self.advance_state(&mut g);
             was_half_open = g.state == BreakerState::HalfOpen;
             if g.state == BreakerState::Open {
@@ -146,7 +146,7 @@ impl CircuitBreaker {
 
         match op() {
             Ok(v) => {
-                let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+                let mut g = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 g.failures = 0;
                 g.state = BreakerState::Closed;
                 g.probe_in_flight = false;
@@ -154,7 +154,7 @@ impl CircuitBreaker {
             }
             Err(e) => {
                 let msg = e.to_string();
-                let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+                let mut g = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                 // A failed HALF-OPEN probe re-opens immediately, without
                 // consulting the failure counter. Going through the counter
                 // could never work here: `window == open_duration`, and we
@@ -192,13 +192,11 @@ impl CircuitBreaker {
     }
 
     fn advance_state(&self, g: &mut BreakerInner) {
-        if g.state == BreakerState::Open {
-            if let Some(opened) = g.opened_at {
-                if opened.elapsed() >= self.open_duration {
+        if g.state == BreakerState::Open
+            && let Some(opened) = g.opened_at
+                && opened.elapsed() >= self.open_duration {
                     g.state = BreakerState::HalfOpen;
                 }
-            }
-        }
     }
 }
 
@@ -210,13 +208,13 @@ mod tests {
 
     #[test]
     fn starts_closed() {
-        let cb = CircuitBreaker::new(3, Duration::from_secs(60));
+        let cb = CircuitBreaker::new(3, Duration::from_mins(1));
         assert_eq!(cb.state(), BreakerState::Closed);
     }
 
     #[test]
     fn trips_after_max_failures() {
-        let cb = CircuitBreaker::new(3, Duration::from_secs(60));
+        let cb = CircuitBreaker::new(3, Duration::from_mins(1));
         for _ in 0..3 {
             let _ = cb.call(|| Err::<(), &str>("err"));
         }
@@ -225,7 +223,7 @@ mod tests {
 
     #[test]
     fn rejects_when_open() {
-        let cb = CircuitBreaker::new(2, Duration::from_secs(60));
+        let cb = CircuitBreaker::new(2, Duration::from_mins(1));
         for _ in 0..2 {
             let _ = cb.call(|| Err::<(), &str>("err"));
         }
@@ -234,15 +232,15 @@ mod tests {
         assert!(r.unwrap_err().contains("circuit breaker open"));
     }
 
-    /// After `open_duration` the breaker goes HalfOpen and lets one probe
+    /// After `open_duration` the breaker goes `HalfOpen` and lets one probe
     /// through. If that probe FAILS the breaker must go straight back to
     /// Open — that is the entire point of the state.
     ///
     /// It did not: the window reset in the failure path fires here by
-    /// construction (`window == open_duration`, and we only reach HalfOpen
+    /// construction (`window == open_duration`, and we only reach `HalfOpen`
     /// because `open_duration` elapsed), so `failures` was zeroed and then
     /// incremented back to 1 — below `max_failures`, leaving the breaker
-    /// HalfOpen. HalfOpen is not rejected by `call`, so a dead service kept
+    /// `HalfOpen`. `HalfOpen` is not rejected by `call`, so a dead service kept
     /// getting hammered by every subsequent call instead of being shielded.
     #[test]
     fn a_failed_half_open_probe_reopens_the_breaker() {
@@ -288,14 +286,14 @@ mod tests {
 
     #[test]
     fn resets_on_success() {
-        let cb = CircuitBreaker::new(3, Duration::from_secs(60));
+        let cb = CircuitBreaker::new(3, Duration::from_mins(1));
         let _ = cb.call(|| Err::<(), &str>("err"));
         let _ = cb.call(|| Ok::<(), &str>(()));
         assert_eq!(cb.failure_count(), 0);
         assert_eq!(cb.state(), BreakerState::Closed);
     }
 
-    /// HalfOpen must admit exactly ONE probe, not one per caller.
+    /// `HalfOpen` must admit exactly ONE probe, not one per caller.
     ///
     /// `BreakerState::HalfOpen` is documented as "one probe call is allowed to
     /// test recovery", and nothing enforced it: `call` only rejected in Open,
@@ -319,7 +317,7 @@ mod tests {
         // inner call happens while the outer probe is still running.
         let mut inner_result: Option<Result<(), String>> = None;
         let outer = cb.call(|| {
-            inner_result = Some(cb.call(|| Ok::<(), &str>(())).map(|()| ()));
+            inner_result = Some(cb.call(|| Ok::<(), &str>(())));
             Ok::<(), &str>(())
         });
         assert!(outer.is_ok(), "the probe itself must be allowed through");

@@ -79,7 +79,7 @@ pub fn parse_thread_extra_info(reply: &str) -> Result<Option<String>, DebugError
             "qThreadExtraInfo rejected by stub: {trimmed}"
         )));
     }
-    if trimmed.len() % 2 != 0 {
+    if !trimmed.len().is_multiple_of(2) {
         return Err(DebugError::Os(format!(
             "qThreadExtraInfo payload has odd length {}: {trimmed:?}",
             trimmed.len()
@@ -699,15 +699,15 @@ mod tests {
     fn program() -> Vec<u32> {
         vec![
             0xA9BF_7BFD, // stp x29, x30, [sp, #-16]!
-            0x910003FD, // mov x29, sp
+            0x9100_03FD, // mov x29, sp
             0x9400_0004, // bl +0x10
             0xA8C1_7BFD, // ldp x29, x30, [sp], #16
             0xD65F_03C0, // ret
             0xD503_201F, // nop  (padding)
             0xD503_201F, // nop
             0xD503_201F, // nop
-            0xD10043FF, // sub sp, sp, #0x10  (callee)
-            0x910043FF, // add sp, sp, #0x10
+            0xD100_43FF, // sub sp, sp, #0x10  (callee)
+            0x9100_43FF, // add sp, sp, #0x10
             0xD65F_03C0, // ret
         ]
     }

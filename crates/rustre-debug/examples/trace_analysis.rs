@@ -1,4 +1,4 @@
-//! trace_analysis — build a synthetic omniscient write log, run a
+//! `trace_analysis` — build a synthetic omniscient write log, run a
 //! natural-language query, and print the result.
 //!
 //! Demonstrates the high-level trace-analysis pipeline:

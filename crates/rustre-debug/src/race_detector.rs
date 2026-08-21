@@ -34,7 +34,7 @@ pub struct MemoryAccess {
 }
 
 impl MemoryAccess {
-    fn end(&self) -> u64 {
+    const fn end(&self) -> u64 {
         self.address.as_u64().saturating_add(self.size)
     }
 
@@ -47,7 +47,7 @@ impl MemoryAccess {
     /// the two starts is exact everywhere and cannot overflow — the same
     /// correction made for `Symbol::contains` and the watchpoint coverage test
     /// in iter 273, which is where this shape was first found.
-    fn overlaps(&self, other: &Self) -> bool {
+    const fn overlaps(&self, other: &Self) -> bool {
         let (a, b) = (self.address.as_u64(), other.address.as_u64());
         if a <= b {
             b - a < self.size
@@ -262,7 +262,7 @@ mod tests {
         let a = access(5, 0x1000, 4, 1, AccessKind::Write);
         let b = access(0, 0x1000, 4, 2, AccessKind::Write);
         let c = access(9, 0x1000, 4, 3, AccessKind::Write);
-        let races = detect_races(&[a.clone(), b.clone(), c.clone()]);
+        let races = detect_races(&[a, b, c]);
 
         // Every pair is internally ordered by sequence.
         for r in &races {

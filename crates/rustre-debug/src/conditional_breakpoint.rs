@@ -812,7 +812,7 @@ pub struct Tracepoint {
 
 impl Tracepoint {
     #[must_use]
-    pub fn new(address: Address, format: TracepointFormat) -> Self {
+    pub const fn new(address: Address, format: TracepointFormat) -> Self {
         Self {
             address,
             conditions: Vec::new(),

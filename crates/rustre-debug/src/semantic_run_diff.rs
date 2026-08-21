@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn identical_runs_no_divergence() {
-        let writes = vec![w(1, 0x1000, 0x401000), w(2, 0x2000, 0x401010)];
+        let writes = vec![w(1, 0x1000, 0x0040_1000), w(2, 0x2000, 0x0040_1010)];
         let a = OmniscientIndex::from_writes(writes.clone());
         let b = OmniscientIndex::from_writes(writes);
         let diff = diff_runs(&a, &b);
@@ -261,20 +261,20 @@ mod tests {
 
     #[test]
     fn detects_pc_divergence() {
-        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000)]);
-        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x402000)]);
+        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000)]);
+        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_2000)]);
         let diff = diff_runs(&a, &b);
         assert!(diff.first_divergence.is_some());
         let dp = diff.first_divergence.unwrap();
         assert_eq!(dp.address, Address(0x1000));
-        assert_eq!(dp.pc_run_a, Some(Address(0x401000)));
-        assert_eq!(dp.pc_run_b, Some(Address(0x402000)));
+        assert_eq!(dp.pc_run_a, Some(Address(0x0040_1000)));
+        assert_eq!(dp.pc_run_b, Some(Address(0x0040_2000)));
     }
 
     #[test]
     fn detects_one_sided_write() {
-        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000), w(2, 0x1000, 0x401010)]);
-        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000)]);
+        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000), w(2, 0x1000, 0x0040_1010)]);
+        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000)]);
         let diff = diff_runs(&a, &b);
         assert!(diff.first_divergence.is_some());
         assert!(diff.first_divergence.unwrap().one_sided);
@@ -312,8 +312,8 @@ mod tests {
 
         // With pcs on both sides the same diff IS conclusive, so the flag is
         // not a constant.
-        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000)]);
-        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x401000)]);
+        let a = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000)]);
+        let b = OmniscientIndex::from_writes(vec![w(1, 0x1000, 0x0040_1000)]);
         let diff = diff_runs(&a, &b);
         assert!(diff.is_conclusive());
         assert!(diff.divergences.is_empty());
@@ -327,14 +327,14 @@ mod tests {
     /// purpose is answering "why did these two runs differ".
     #[test]
     fn a_write_from_another_thread_or_of_another_width_is_a_divergence() {
-        let a = OmniscientIndex::from_writes(vec![w_full(1, 0x1000, Some(0x401000), 1, 8)]);
-        let b = OmniscientIndex::from_writes(vec![w_full(1, 0x1000, Some(0x401000), 2, 8)]);
+        let a = OmniscientIndex::from_writes(vec![w_full(1, 0x1000, Some(0x0040_1000), 1, 8)]);
+        let b = OmniscientIndex::from_writes(vec![w_full(1, 0x1000, Some(0x0040_1000), 2, 8)]);
         let diff = diff_runs(&a, &b);
         assert_eq!(diff.divergences.len(), 1, "a different thread wrote it: that is a divergence");
         assert!(diff.is_conclusive());
 
-        let a = OmniscientIndex::from_writes(vec![w_full(1, 0x2000, Some(0x401000), 1, 4)]);
-        let b = OmniscientIndex::from_writes(vec![w_full(1, 0x2000, Some(0x401000), 1, 8)]);
+        let a = OmniscientIndex::from_writes(vec![w_full(1, 0x2000, Some(0x0040_1000), 1, 4)]);
+        let b = OmniscientIndex::from_writes(vec![w_full(1, 0x2000, Some(0x0040_1000), 1, 8)]);
         let diff = diff_runs(&a, &b);
         assert_eq!(diff.divergences.len(), 1, "a different width is a different write");
     }

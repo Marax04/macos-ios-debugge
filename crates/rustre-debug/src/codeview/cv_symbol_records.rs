@@ -1509,7 +1509,7 @@ mod tests {
     /// Four other places treat **335 as RSP** and 334 as RBP
     /// (`is_stack_relative`, and the synthetic records in
     /// `codeview_symbol_parser` and `cv_function_info`), which matches the real
-    /// CodeView order: RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP for 328..=335.
+    /// `CodeView` order: RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP for 328..=335.
     /// `CvReg` instead used the classic x86 order (AX, CX, DX, BX, SP, BP, SI,
     /// DI) on those numbers, so seven of the eight were wrong — only RAX lined
     /// up.

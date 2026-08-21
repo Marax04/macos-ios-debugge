@@ -379,9 +379,8 @@ impl Watchpoint {
             // Only the value-dependent conditions are affected; the others fall
             // through to the normal path below with a placeholder they ignore.
             return match &self.condition {
-                Some(WatchpointCondition::ValueEquals { .. })
-                | Some(WatchpointCondition::ValueChangesTo { .. })
-                | Some(WatchpointCondition::AnyChange) => true,
+                Some(WatchpointCondition::ValueEquals { .. } |
+WatchpointCondition::ValueChangesTo { .. } | WatchpointCondition::AnyChange) => true,
                 _ => self.should_stop(Some(0), regs),
             };
         };
@@ -648,7 +647,7 @@ impl Arm64DbgwcrBuilder {
         // `address % 8`. But this is a `pub` method on a `pub` type: the
         // guarantee has to live where the value is built, not in whichever
         // caller happens to check first.
-        if offset % size != 0 {
+        if !offset.is_multiple_of(size) {
             return false;
         }
         self.value &= !(0xff << 5);
@@ -690,7 +689,7 @@ impl Arm64DbgwcrBuilder {
 /// the caller.
 #[cold]
 #[inline(never)]
-fn cold_alignment_err(addr: u64, size: u8) -> WatchpointError {
+const fn cold_alignment_err(addr: u64, size: u8) -> WatchpointError {
     WatchpointError::AlignmentError(addr, size)
 }
 
@@ -698,7 +697,7 @@ fn cold_alignment_err(addr: u64, size: u8) -> WatchpointError {
 /// handful of times per session, never in a tight loop.
 #[cold]
 #[inline(never)]
-fn cold_already_exists_err(addr: u64) -> WatchpointError {
+const fn cold_already_exists_err(addr: u64) -> WatchpointError {
     WatchpointError::AlreadyExists(addr)
 }
 
@@ -1076,9 +1075,8 @@ impl WatchpointEngine {
         // on that basis would destroy it for a match nobody verified.
         let needs_value = matches!(
             wp.condition,
-            Some(WatchpointCondition::ValueEquals { .. })
-                | Some(WatchpointCondition::ValueChangesTo { .. })
-                | Some(WatchpointCondition::AnyChange)
+            Some(WatchpointCondition::ValueEquals { .. } |
+WatchpointCondition::ValueChangesTo { .. } | WatchpointCondition::AnyChange)
         );
         let missing_register = match &wp.condition {
             Some(WatchpointCondition::RegisterEquals { name, .. }) => !regs.contains_key(name),
@@ -1182,7 +1180,7 @@ impl WatchpointEngine {
     /// (disabled). Pair each entry with the matching
     /// [`Self::hw_register_addresses`] element, which is the DBGWVR value.
     #[must_use]
-    pub fn arm64_dbgwcr(&self) -> [u32; 4] {
+    pub const fn arm64_dbgwcr(&self) -> [u32; 4] {
         [
             self.dbgwcr[0].value,
             self.dbgwcr[1].value,
@@ -1335,7 +1333,8 @@ pub struct FieldLayout {
 }
 
 /// The offset/size layout of one struct/class type, keyed by field name.
-/// Callers build this from DWARF (`rustre-symbols`) or CodeView
+///
+/// Callers build this from DWARF (`rustre-symbols`) or `CodeView`
 /// (`crate::codeview`) type records; this module has no parser dependency.
 #[derive(Debug, Clone, Default)]
 pub struct TypeLayout {
@@ -1521,7 +1520,7 @@ mod tests {
     ///
     /// The length check alone accepts a four-byte watch at offset 2 —
     /// `BAS = 0x3C`, eight contiguous bits — which is CONSTRAINED UNPREDICTABLE
-    /// on ARMv8: in practice a watchpoint that may fire on the wrong access, or
+    /// on `ARMv8`: in practice a watchpoint that may fire on the wrong access, or
     /// not at all. Unreachable through `add()`, which validates alignment
     /// first, but `set_bas` is public and the guarantee belongs where the value
     /// is built.
@@ -1535,7 +1534,7 @@ mod tests {
                 let ok = ctl.set_bas(offset, size);
                 assert_eq!(
                     ok,
-                    offset % size == 0,
+                    offset.is_multiple_of(size),
                     "size {size} at offset {offset}: only naturally aligned selections are architecturally defined"
                 );
                 offset += 1;

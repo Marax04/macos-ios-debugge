@@ -16,10 +16,10 @@ use std::ops::Range;
 // the callee is `#[cold]`.  `likely` is a transparent no-op at this level —
 // the hint comes from marking the *unlikely* branches instead.
 #[inline(always)]
-fn likely(b: bool) -> bool { b }
+const fn likely(b: bool) -> bool { b }
 #[cold]
 #[inline(always)]
-fn unlikely(b: bool) -> bool { b }
+const fn unlikely(b: bool) -> bool { b }
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 
@@ -39,12 +39,12 @@ pub enum SearchError {
 // opt-8: keep error-construction code off hot instruction paths.
 #[cold]
 #[inline(never)]
-fn cold_invalid_pattern(msg: String) -> SearchError {
+const fn cold_invalid_pattern(msg: String) -> SearchError {
     SearchError::InvalidPattern(msg)
 }
 #[cold]
 #[inline(never)]
-fn cold_empty_pattern() -> SearchError {
+const fn cold_empty_pattern() -> SearchError {
     SearchError::EmptyPattern
 }
 
@@ -388,14 +388,13 @@ impl MemorySearch {
                     start = offset + 1;
                     continue;
                 }
-                if let Some((lo, hi)) = addr_range {
-                    if unlikely(addr < lo || addr >= hi) {
+                if let Some((lo, hi)) = addr_range
+                    && unlikely(addr < lo || addr >= hi) {
                         start = offset + 1;
                         continue;
                     }
-                }
-                if likely(offset + pat_len <= data.len()) {
-                    if let Some(matched) = compiled.try_match(&data[offset..]) {
+                if likely(offset + pat_len <= data.len())
+                    && let Some(matched) = compiled.try_match(&data[offset..]) {
                         results.push(SearchResult::new(
                             addr,
                             offset,
@@ -409,7 +408,6 @@ impl MemorySearch {
                             return Ok(results);
                         }
                     }
-                }
                 start = offset + 1;
             }
         } else {
@@ -421,12 +419,11 @@ impl MemorySearch {
                     offset += 1;
                     continue;
                 }
-                if let Some((lo, hi)) = addr_range {
-                    if unlikely(addr < lo || addr >= hi) {
+                if let Some((lo, hi)) = addr_range
+                    && unlikely(addr < lo || addr >= hi) {
                         offset += 1;
                         continue;
                     }
-                }
                 if let Some(matched) = compiled.try_match(&data[offset..]) {
                     results.push(SearchResult::new(
                         addr,
@@ -967,7 +964,7 @@ mod tests {
     #[test]
     fn search_all_regions_basic() {
         let memory = vec![0x00_u8; 64];
-        let mut mem = memory.clone();
+        let mut mem = memory;
         mem[32] = 0xDE;
         mem[33] = 0xAD;
         let region = simple_region(0, 64);

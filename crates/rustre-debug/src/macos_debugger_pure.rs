@@ -13,7 +13,7 @@
 //! The impure half stays in `macos_debugger.rs`: enumerating the target's VM
 //! regions and dyld images, both of which need a live Mach task port.
 
-use crate::{Address, MemoryMap, ModuleInfo};
+use crate::{MemoryMap, ModuleInfo};
 
 /// Attach module names/paths to memory regions by containment.
 ///
@@ -58,6 +58,7 @@ pub fn label_maps(maps: &mut [MemoryMap], images: &[ModuleInfo]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Address;
 
     fn map_at(base: u64) -> MemoryMap {
         MemoryMap {

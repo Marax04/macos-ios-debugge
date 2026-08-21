@@ -387,7 +387,7 @@ mod tests {
         write_msf(stream_payloads)
     }
 
-    /// Minimal TPI stream: 56-byte header + one LF_STRUCTURE record.
+    /// Minimal TPI stream: 56-byte header + one `LF_STRUCTURE` record.
     fn tiny_tpi_stream() -> Vec<u8> {
         // LF_STRUCTURE record for "Point", size 8.
         let mut body = vec![0u8; 16];

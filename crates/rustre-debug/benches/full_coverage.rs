@@ -29,18 +29,18 @@
 //! code, not in the machine.
 //!
 //! Groups:
-//!   1.  memory_search      — pattern scanning (exact / wildcard / miss)
-//!   2.  omniscient         — who_wrote / last_writer / trace_origin scaling
-//!   3.  omniscient_ingest  — cost of RECORDING writes (the write path)
-//!   4.  expr_parse         — expression parsing (per conditional-bp hit)
-//!   5.  expr_eval          — expression evaluation, incl. parse-vs-cached
+//!   1.  `memory_search`      — pattern scanning (exact / wildcard / miss)
+//!   2.  omniscient         — `who_wrote` / `last_writer` / `trace_origin` scaling
+//!   3.  `omniscient_ingest`  — cost of RECORDING writes (the write path)
+//!   4.  `expr_parse`         — expression parsing (per conditional-bp hit)
+//!   5.  `expr_eval`          — expression evaluation, incl. parse-vs-cached
 //!   6.  watchpoints        — DR slot allocation, DR7 encoding, scanning
 //!   7.  ttd                — trace recording + reverse seek
 //!   8.  heatmap            — execution heatmap bucketing
-//!   9.  race_detector      — O(n²)-shaped race scan, scaling
-//!   10. dataflow_dsl       — query parse + execute
-//!   11. root_cause         — Bayesian prefilter + causal slice
-//!   12. registers          — RegisterSet get/set/enumerate (every tool call)
+//!   9.  `race_detector`      — O(n²)-shaped race scan, scaling
+//!   10. `dataflow_dsl`       — query parse + execute
+//!   11. `root_cause`         — Bayesian prefilter + causal slice
+//!   12. registers          — `RegisterSet` get/set/enumerate (every tool call)
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;

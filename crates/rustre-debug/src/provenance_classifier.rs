@@ -107,7 +107,7 @@ impl ModuleBaseline {
         self.expected_hashes.insert(range_start, (range_len, expected_hash));
     }
 
-    fn contains(&self, addr: u64) -> bool {
+    const fn contains(&self, addr: u64) -> bool {
         addr >= self.start && addr < self.end
     }
 
@@ -174,7 +174,7 @@ impl CodeBaseline {
 }
 
 /// One write annotated with its writer's provenance.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ProvenanceTaggedWrite {
     pub write: MemoryWrite,
     pub provenance: Provenance,
@@ -234,7 +234,7 @@ pub fn classify_writes<'a>(
         .into_iter()
         .map(|w| {
             let provenance = match w.writer_pc {
-                Some(pc) => baseline.classify(pc, |s, l| current_hash_lookup(s, l)),
+                Some(pc) => baseline.classify(pc, &mut current_hash_lookup),
                 None => Provenance::Unknown,
             };
             ProvenanceTaggedWrite { write: w.clone(), provenance }
@@ -326,7 +326,7 @@ mod tests {
         };
         // The PC is in a.dll, whose own range matches: proved clean.
         assert_eq!(
-            classify_from_specs(Address(0x1508), &[a.clone(), b.clone()]),
+            classify_from_specs(Address(0x1508), &[a, b]),
             Provenance::Original { module: "a.dll".into() }
         );
 

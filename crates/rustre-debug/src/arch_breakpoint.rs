@@ -15,14 +15,14 @@
 pub enum BpArch {
     /// x86-64: one-byte `int3`.
     X86_64,
-    /// AArch64: four-byte `BRK #0`.
+    /// `AArch64`: four-byte `BRK #0`.
     Arm64,
 }
 
 /// `int3`, taken from the single encoder rather than typed again here.
 const X86_TRAP: &[u8] = &[crate::ios::arm64::X86_64_INT3];
 
-/// `BRK #0`, DERIVED from the crate's one AArch64 encoder.
+/// `BRK #0`, DERIVED from the crate's one `AArch64` encoder.
 ///
 /// It used to be the literal `[0x00, 0x00, 0x20, 0xD4]`. Correct — and a third
 /// independent copy of a fact this crate already holds twice
@@ -55,7 +55,7 @@ pub const fn trap_len(arch: BpArch) -> usize {
 /// Program counter of the trapping instruction, given the PC reported on trap.
 ///
 /// x86 reports the address *after* the executed `int3`, so the breakpoint
-/// address is one byte back. AArch64 reports the address *of* the `BRK`, so no
+/// address is one byte back. `AArch64` reports the address *of* the `BRK`, so no
 /// adjustment is applied — subtracting there would silently point one
 /// instruction earlier and resume execution at the wrong place.
 ///
@@ -70,14 +70,14 @@ pub const fn pc_after_trap(pc: u64, arch: BpArch) -> u64 {
 
 /// May a trap be implanted at `addr`?
 ///
-/// AArch64 instructions are four bytes and four-byte aligned: an unaligned
+/// `AArch64` instructions are four bytes and four-byte aligned: an unaligned
 /// implant would straddle two instructions and destroy both. x86 instructions
 /// have no alignment requirement.
 #[must_use]
 pub const fn is_aligned_for_trap(addr: u64, arch: BpArch) -> bool {
     match arch {
         BpArch::X86_64 => true,
-        BpArch::Arm64 => addr % 4 == 0,
+        BpArch::Arm64 => addr.is_multiple_of(4),
     }
 }
 
@@ -118,7 +118,7 @@ mod tests {
     /// a wrong register table shipped in an earlier iteration of this crate.
     #[test]
     fn arm64_trap_is_brk_zero_little_endian() {
-        let brk0: u32 = 0xD420_0000 | (0u32 << 5);
+        let brk0: u32 = 0xD420_0000;
         assert_eq!(trap_bytes(BpArch::Arm64), brk0.to_le_bytes());
         assert_eq!(trap_bytes(BpArch::Arm64), &[0x00, 0x00, 0x20, 0xD4]);
         assert_eq!(trap_bytes(BpArch::X86_64), &[0xCC]);

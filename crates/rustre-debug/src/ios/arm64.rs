@@ -157,7 +157,7 @@ pub fn word_from_le(bytes: &[u8]) -> Option<u32> {
 /// # Errors
 /// [`Arm64Error::UnalignedInstruction`] if `addr` is not a multiple of 4.
 pub const fn check_instruction_alignment(addr: u64) -> Result<(), Arm64Error> {
-    if addr % INSTRUCTION_SIZE == 0 {
+    if addr.is_multiple_of(INSTRUCTION_SIZE) {
         Ok(())
     } else {
         Err(Arm64Error::UnalignedInstruction(addr))
@@ -398,9 +398,9 @@ pub const NUM_GENERAL: usize = 31;
 /// Number of SIMD registers `v0`..`v31`.
 pub const NUM_VECTOR: usize = 32;
 
-/// DWARF number of `sp` on AArch64.
+/// DWARF number of `sp` on `AArch64`.
 pub const DWARF_SP: u16 = 31;
-/// DWARF number of the PC pseudo-register on AArch64.
+/// DWARF number of the PC pseudo-register on `AArch64`.
 pub const DWARF_PC: u16 = 32;
 /// DWARF number of `RA_SIGN_STATE` (pointer-authentication unwind state).
 pub const DWARF_RA_SIGN_STATE: u16 = 34;
@@ -634,7 +634,7 @@ pub mod pstate {
     pub const SS: u32 = 1 << 21;
     /// Illegal execution state.
     pub const IL: u32 = 1 << 20;
-    /// Execution state: 1 = AArch32.
+    /// Execution state: 1 = `AArch32`.
     pub const NRW: u32 = 1 << 4;
 }
 
@@ -921,7 +921,7 @@ pub mod hw {
     /// # Errors
     /// [`Arm64Error::UnalignedInstruction`] if `addr` is not 4-byte aligned.
     pub const fn breakpoint(addr: u64, priv_ctl: PrivilegeControl) -> Result<HwBreakpoint, Arm64Error> {
-        if addr % INSTRUCTION_SIZE != 0 {
+        if !addr.is_multiple_of(INSTRUCTION_SIZE) {
             return Err(Arm64Error::UnalignedInstruction(addr));
         }
         let dbgbcr = bits::ENABLE
@@ -946,7 +946,7 @@ pub mod hw {
         if !matches!(size, 1 | 2 | 4 | 8) {
             return Err(Arm64Error::UnsupportedWatchpointSize(size));
         }
-        if addr % (size as u64) != 0 {
+        if !addr.is_multiple_of(size as u64) {
             return Err(Arm64Error::UnalignedWatchpoint { addr, size });
         }
         let offset = addr % WATCHPOINT_GRANULE;
@@ -1177,7 +1177,7 @@ pub mod aapcs64 {
 
     /// The `f64` return value of a function returning a `double`.
     #[must_use]
-    pub fn double_return(regs: &Arm64RegisterFile) -> f64 {
+    pub const fn double_return(regs: &Arm64RegisterFile) -> f64 {
         f64::from_bits(fp_return_bits(regs))
     }
 

@@ -180,7 +180,7 @@ pub struct SProc32 {
 /// function is one a debugger will not plant a return breakpoint in.
 ///
 /// This file already carries the scar of the same class: iteration 342 found
-/// seven of eight CodeView AMD64 registers wrong, unnoticed because nothing
+/// seven of eight `CodeView` AMD64 registers wrong, unnoticed because nothing
 /// read them.
 pub mod cv_procflags {
     /// Frame pointer present (NOT "inlined", NOT "noreturn").
@@ -437,7 +437,7 @@ pub enum CompileLanguage {
     ILAsm,
     /// Java.
     Java,
-    /// JScript.
+    /// `JScript`.
     JScript,
     /// MSIL netmodule.
     Msil,
@@ -538,7 +538,7 @@ impl SFrameProc {
     pub const fn security_checks(&self) -> bool {
         self.flags & 0x0100 != 0
     }
-    /// True if the function was compiled with /EHa asynchronous exception handling.
+    /// True if the function was compiled with /`EHa` asynchronous exception handling.
     #[must_use]
     pub const fn async_eh(&self) -> bool {
         self.flags & 0x0200 != 0
@@ -890,7 +890,7 @@ mod tests {
     }
 
     /// Regression: `S_LPROC32` is 0x110F and `S_REGREL32` is 0x1111 per the
-    /// CodeView symbol table (LLVM `CVSymbolTypes.def`). The crate previously
+    /// `CodeView` symbol table (LLVM `CVSymbolTypes.def`). The crate previously
     /// mapped 0x1111 to `Lproc32` and gave `Regrel32` a synthetic 0xF111
     /// discriminant, dropping static functions and decoding register-relative
     /// locals as procedures.
@@ -972,11 +972,11 @@ mod tests {
         };
         assert!(l.is_noreturn());
 
-        let nofpo = SLabel32 { flags: 0x01, ..l.clone() };
+        let nofpo = SLabel32 { flags: 0x01, ..l };
         assert!(!nofpo.is_noreturn(), "NOFPO says nothing about returning");
     }
 
-    /// The three CV_PROCFLAGS decoders in this crate must answer the same
+    /// The three `CV_PROCFLAGS` decoders in this crate must answer the same
     /// question the same way. They did not: two read bit 0 and one read bit 1.
     #[test]
     fn the_three_procflags_decoders_agree() {
@@ -1000,7 +1000,7 @@ mod tests {
             parent: 0, end: 0, next: 0, len: u32::MAX, debug_start: 0, debug_end: 0,
             type_index: crate::codeview::cv_types::TypeIndex(0), offset: u32::MAX, segment: 1, flags: 0, is_global: true, name: "p".into(),
         };
-        assert_eq!(p.end_addr(), u32::MAX as u64 * 2);
+        assert_eq!(p.end_addr(), u64::from(u32::MAX) * 2);
     }
 
     // --- SLocal ---

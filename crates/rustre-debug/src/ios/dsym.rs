@@ -564,7 +564,7 @@ impl DwarfSections {
 
     /// `true` when no DWARF section at all was found.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.debug_info.is_empty() && self.debug_line.is_empty() && self.debug_abbrev.is_empty()
     }
 
@@ -1260,11 +1260,10 @@ pub fn candidate_bundle_paths(binary_path: &Path) -> Vec<PathBuf> {
         return out;
     };
     out.push(parent.join(format!("{name}.dSYM")));
-    if let Some(stem) = binary_path.file_stem().and_then(|s| s.to_str()) {
-        if stem != name {
+    if let Some(stem) = binary_path.file_stem().and_then(|s| s.to_str())
+        && stem != name {
             out.push(parent.join(format!("{stem}.dSYM")));
         }
-    }
     // A `.app` bundle keeps its dSYM one level up, beside the bundle.
     if let Some(grandparent) = parent.parent() {
         out.push(grandparent.join(format!("{name}.dSYM")));
@@ -1553,6 +1552,7 @@ impl DsymBundle {
     /// unparseable: the line section is self-delimiting, so line mapping does
     /// not actually require `.debug_info` — only the `DW_AT_comp_dir` niceness
     /// does.
+    #[must_use]
     pub fn line_programs(&self) -> Vec<LineProgram> {
         let mut out = Vec::new();
         let mut offset = 0u64;
@@ -1923,7 +1923,7 @@ impl DsymLineMapper {
     /// this address" only when this is `true`; otherwise it may mean "the unit
     /// holding this address failed to decode".
     #[must_use]
-    pub fn is_complete(&self) -> bool {
+    pub const fn is_complete(&self) -> bool {
         self.skipped.is_empty()
     }
 
@@ -2088,7 +2088,7 @@ mod tests {
     }
 
     /// `.debug_abbrev` with one abbreviation: a compile unit carrying
-    /// name/comp_dir as inline strings and stmt_list as a sec_offset.
+    /// `name/comp_dir` as inline strings and `stmt_list` as a `sec_offset`.
     fn build_debug_abbrev() -> Vec<u8> {
         let mut out = Vec::new();
         uleb(1, &mut out); // code
@@ -2430,7 +2430,7 @@ mod tests {
     /// root DIE is parsed against a cursor over the whole `__debug_info`. A unit
     /// that declares 8 bytes but whose DIE needs 12 therefore reads its last
     /// attribute out of the NEXT unit's header and reports it as its own — a
-    /// wrong `DW_AT_stmt_list` maps every address in the unit to a file:line
+    /// wrong `DW_AT_stmt_list` maps every address in the unit to a <file:line>
     /// from another translation unit, which is exactly the silent-wrong-answer
     /// class this module exists to avoid.
     #[test]
@@ -2508,7 +2508,7 @@ mod tests {
 
     // ── line program ────────────────────────────────────────────────────────
 
-    /// A v4 file_names table whose terminating NUL falls outside the declared
+    /// A v4 `file_names` table whose terminating NUL falls outside the declared
     /// header must be refused, not silently completed from the opcode stream.
     ///
     /// `header_length` names the exclusive end of the header (`program_start`).
@@ -3376,7 +3376,7 @@ mod tests {
     /// Because the per-entry loop consumes nothing, an uncapped decoder walks
     /// the count to completion against a fixed cursor, then finds the file
     /// table exactly where it left it and returns `Ok` — a `LineProgram`
-    /// carrying 999_999 phantom directories decoded out of a header that is
+    /// carrying `999_999` phantom directories decoded out of a header that is
     /// only a few dozen bytes long. That makes the failure a value assertion
     /// rather than a hang, and it costs ~100 MB instead of all of RAM.
     fn build_debug_line_v5_zero_format_count(dirs_count: u64) -> Vec<u8> {
@@ -3487,7 +3487,7 @@ mod tests {
     /// DIE harvested the bytes of the NEXT unit's header and reported them as
     /// its own attributes. A `stmt_list` scavenged that way names another
     /// translation unit's line program, so every address in the unit gets a
-    /// file:line from the wrong source file: confidently wrong, never a
+    /// <file:line> from the wrong source file: confidently wrong, never a
     /// failure. Same discipline the line-program header is already bounded by.
     #[test]
     fn truncated_compile_unit_does_not_read_into_the_next_unit() {

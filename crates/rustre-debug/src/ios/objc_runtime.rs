@@ -263,11 +263,10 @@ where
         if lo == 0 {
             // One byte is the only length the search above never tries when
             // `len == 1`, and the case worth distinguishing from "unmapped".
-            if let Some(b) = (self.0)(addr, 1) {
-                if !b.is_empty() {
+            if let Some(b) = (self.0)(addr, 1)
+                && !b.is_empty() {
                     return Some(b);
                 }
-            }
             return None;
         }
         best
@@ -362,12 +361,12 @@ impl ObjcMemory for SparseMemory {
 // ---------------------------------------------------------------------------
 
 /// Architettura del target: cambia le maschere `isa` e il formato dei tagged
-/// pointer, che non sono gli stessi su arm64 e x86_64.
+/// pointer, che non sono gli stessi su arm64 e `x86_64`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ObjcAbi {
     /// arm64 / arm64e (iOS, macOS Apple Silicon).
     Arm64,
-    /// x86_64 (macOS Intel, simulatore iOS).
+    /// `x86_64` (macOS Intel, simulatore iOS).
     X86_64,
 }
 
@@ -375,7 +374,7 @@ impl ObjcAbi {
     /// Maschera che estrae il puntatore a classe da una `isa` non-pointer.
     ///
     /// arm64: `ISA_MASK = 0x0000_000f_ffff_fff8`.
-    /// x86_64: `ISA_MASK = 0x0000_7fff_ffff_fff8`.
+    /// `x86_64`: `ISA_MASK = 0x0000_7fff_ffff_fff8`.
     #[must_use]
     pub const fn isa_mask(self) -> u64 {
         match self {
@@ -392,7 +391,7 @@ impl ObjcAbi {
 
     /// Bit che marca un tagged pointer.
     ///
-    /// Su arm64 è il bit **alto** (63), su x86_64 il bit **basso** (0).
+    /// Su arm64 è il bit **alto** (63), su `x86_64` il bit **basso** (0).
     #[must_use]
     pub const fn tag_mask(self) -> u64 {
         match self {
@@ -414,7 +413,7 @@ impl ObjcAbi {
     /// vale 7: objc4 `_OBJC_TAG_EXT_INDEX_SHIFT`.
     ///
     /// arm64: 52 (l'indice sta appena sotto lo slot a 60..62).
-    /// x86_64: 4 (l'indice sta appena sopra i 4 bit di tag+slot).
+    /// `x86_64`: 4 (l'indice sta appena sopra i 4 bit di tag+slot).
     #[must_use]
     pub const fn tag_ext_index_shift(self) -> u32 {
         match self {
@@ -523,7 +522,7 @@ pub struct TaggedPointer {
 
 /// Decodifica `ptr` come tagged pointer, o `None` se è un puntatore normale.
 #[must_use]
-pub fn decode_tagged_pointer(ptr: u64, abi: ObjcAbi) -> Option<TaggedPointer> {
+pub const fn decode_tagged_pointer(ptr: u64, abi: ObjcAbi) -> Option<TaggedPointer> {
     if ptr == 0 || ptr & abi.tag_mask() == 0 {
         return None;
     }
@@ -871,7 +870,7 @@ impl ObjcClass {
     }
 }
 
-/// Ispettore del runtime ObjC su una memoria data.
+/// Ispettore del runtime `ObjC` su una memoria data.
 #[derive(Debug, Clone, Copy)]
 pub struct ObjcRuntime<'m, M: ObjcMemory + ?Sized> {
     mem: &'m M,

@@ -128,7 +128,7 @@ pub fn parse_kv(reply: &str) -> BTreeMap<String, String> {
 /// `hostname` and region `name` so they cannot contain `;` or `:`).
 #[must_use]
 pub fn hex_to_ascii(hex: &str) -> Option<String> {
-    if hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !hex.len().is_multiple_of(2) || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let bytes: Vec<u8> = (0..hex.len())
@@ -676,7 +676,7 @@ pub fn parse_threads_info(reply: &str) -> Result<Vec<ThreadInfo>> {
                 .and_then(serde_json::Value::as_u64)
                 .and_then(|v| u32::try_from(v).ok()),
             registers,
-        })
+        });
     }
     Ok(out)
 }
@@ -799,7 +799,7 @@ impl MemoryRegionInfo {
             });
         }
 
-        let perms = kv.get("permissions").map(String::as_str).unwrap_or("");
+        let perms = kv.get("permissions").map_or("", String::as_str);
         let mut extra = kv.clone();
         for k in ["start", "size", "permissions", "name", "error"] {
             extra.remove(k);

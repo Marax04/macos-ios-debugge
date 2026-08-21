@@ -737,7 +737,7 @@ fn source_map_error_display() {
         line: 5,
     };
     assert!(e2.to_string().contains("x.c"));
-    assert!(e2.to_string().contains("5"));
+    assert!(e2.to_string().contains('5'));
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -754,7 +754,7 @@ fn v2_session_ids_are_unique_and_increasing() {
     }
     // All distinct.
     let mut sorted = ids.clone();
-    sorted.sort();
+    sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), 10);
     // Strictly increasing.

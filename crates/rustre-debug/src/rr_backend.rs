@@ -57,7 +57,7 @@ pub struct RrBackend {
     rr_process: Child,
     /// TCP connection to rr's GDB stub.
     conn: TcpStream,
-    /// Current rr FrameTime (maps to `TracePosition::sequence`).
+    /// Current rr `FrameTime` (maps to `TracePosition::sequence`).
     current_frame: u64,
     /// Approximate trace extent (populated at open time via RSP queries).
     extent: (TracePosition, TracePosition),
@@ -164,14 +164,14 @@ impl RrBackend {
         Ok(())
     }
 
-    /// Query the current rr FrameTime via `qRRCmd,when`.
+    /// Query the current rr `FrameTime` via `qRRCmd,when`.
     fn query_frame_time(&mut self) -> Result<u64, TtdError> {
         let reply = self.rsp_send_recv("qRRCmd,when")?;
         // rr replies with the decimal FrameTime directly.
         parse_frame_time(&reply)
     }
 
-    /// Seek to a FrameTime via `RRWhen,<frame>`.
+    /// Seek to a `FrameTime` via `RRWhen,<frame>`.
     fn seek_frame(&mut self, frame: u64) -> Result<(), TtdError> {
         let packet = format!("RRWhen,{frame}");
         let _reply = self.rsp_send_recv(&packet)?;
@@ -186,7 +186,7 @@ impl RrBackend {
     /// Each register is 8 bytes; rip is register index 16, rsp is 7.
     fn read_pc_sp(&mut self) -> Result<(u64, u64), TtdError> {
         let reply = self.rsp_send_recv("g")?;
-        let bytes = hex_decode_le(&reply).map_err(|e| TtdError::Backend(e))?;
+        let bytes = hex_decode_le(&reply).map_err(TtdError::Backend)?;
         // Each general-purpose register is 8 bytes; rsp is reg 7, rip is reg 16.
         let sp = read_u64_le(&bytes, 7 * 8);
         let pc = read_u64_le(&bytes, 16 * 8);
@@ -237,7 +237,7 @@ impl Drop for RrBackend {
 }
 
 impl TtdBackend for RrBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "rr"
     }
 
@@ -336,7 +336,7 @@ pub fn rsp_breakpoint_packets(addresses: &[u64], insert: bool) -> Vec<String> {
 // ── RSP framing helpers ───────────────────────────────────────────────────────
 
 fn rsp_encode(data: &str) -> String {
-    let cksum: u8 = data.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
+    let cksum: u8 = data.bytes().fold(0u8, u8::wrapping_add);
     format!("${data}#{cksum:02x}")
 }
 
@@ -355,7 +355,7 @@ fn rsp_decode(raw: &str) -> String {
 /// Decode a hex string (rr register dump) into a byte vector (little-endian
 /// per-register).  The hex string is pairs of hex digits; no 0x prefix.
 fn hex_decode_le(hex: &str) -> Result<Vec<u8>, String> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return Err(format!("odd-length hex string ({})", hex.len()));
     }
     (0..hex.len() / 2)
@@ -374,7 +374,7 @@ fn parse_frame_time(reply: &str) -> Result<u64, TtdError> {
     reply
         .trim()
         .parse::<u64>()
-        .map_err(|e| TtdError::Backend(format!("cannot parse FrameTime from {:?}: {e}", reply)))
+        .map_err(|e| TtdError::Backend(format!("cannot parse FrameTime from {reply:?}: {e}")))
 }
 
 // ── Port / connection helpers ─────────────────────────────────────────────────
@@ -407,10 +407,9 @@ fn wait_for_rr(addr: &str) -> Result<TcpStream, TtdError> {
         },
         || TcpStream::connect(&addr_owned),
     )
-    .map(|conn| {
+    .inspect(|conn| {
         conn.set_read_timeout(Some(Duration::from_secs(10))).ok();
         conn.set_write_timeout(Some(Duration::from_secs(10))).ok();
-        conn
     })
     .map_err(|e| {
         TtdError::Backend(format!(
@@ -485,13 +484,13 @@ mod tests {
     /// in iteration 460; the real backend kept it.
     #[test]
     fn reverse_breakpoints_become_real_rsp_packets() {
-        let armed = rsp_breakpoint_packets(&[0x401000, 0x7fff_1234], true);
+        let armed = rsp_breakpoint_packets(&[0x0040_1000, 0x7fff_1234], true);
         assert_eq!(armed, vec!["Z0,401000,1".to_string(), "Z0,7fff1234,1".to_string()]);
 
         // And they are removed again, or a breakpoint left in the RSP session
         // would silently stop a LATER reverse-continue asking for something
         // else.
-        let cleared = rsp_breakpoint_packets(&[0x401000], false);
+        let cleared = rsp_breakpoint_packets(&[0x0040_1000], false);
         assert_eq!(cleared, vec!["z0,401000,1".to_string()]);
 
         // No stop addresses means no packets: a plain reverse-continue must

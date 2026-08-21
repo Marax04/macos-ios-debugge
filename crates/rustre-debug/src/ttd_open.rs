@@ -20,7 +20,7 @@ use crate::windbg_ttd_backend::WinDbgTtdBackend;
 /// The kind of trace detected at a path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TraceKind {
-    /// WinDbg TTD `.run` + `.idx` pair.
+    /// `WinDbg` TTD `.run` + `.idx` pair.
     WinDbgTtd,
     /// Mozilla `rr` trace directory.
     Rr,
@@ -43,7 +43,7 @@ pub fn detect_trace_kind(path: &Path) -> Option<TraceKind> {
 /// Open a trace at `path` and return a boxed [`crate::time_travel_debug::TtdBackend`].
 ///
 /// Detection order:
-/// 1. WinDbg TTD (`.run` / `.idx` extension or sibling files).
+/// 1. `WinDbg` TTD (`.run` / `.idx` extension or sibling files).
 /// 2. rr trace directory (`version` / `events` sentinel files).
 ///
 /// # Errors

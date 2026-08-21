@@ -20,7 +20,7 @@ use rustre_debug::codeview::{
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -82,7 +82,7 @@ fn random_noise_never_panics() {
     }
 }
 
-/// Record-shaped noise: plausible `(len, kind)` CodeView headers followed by
+/// Record-shaped noise: plausible `(len, kind)` `CodeView` headers followed by
 /// random payloads — probes each record decoder's length handling.
 #[test]
 fn record_shaped_noise_never_panics() {

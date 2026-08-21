@@ -59,7 +59,7 @@ pub struct ResolvedFrameSymbol {
 impl ResolvedFrameSymbol {
     /// True when nothing was resolved — used to skip pointless frame writes.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.function.is_none() && self.file.is_none() && self.line.is_none()
     }
 }
@@ -74,7 +74,7 @@ pub trait FrameSymbolResolver: Send + Sync {
 
 impl FrameSymbolResolver for CodeViewProvider {
     /// `lookup_nearest` is *nearest preceding* and completely unbounded — it
-    /// has no size to consult (every CodeView `Symbol` here is built with
+    /// has no size to consult (every `CodeView` `Symbol` here is built with
     /// `size: None`) and no module extent. Handing its answer straight back as
     /// "the function containing `pc`" is a claim it cannot support: a `pc` past
     /// the last symbol — another module, a corrupted return address, data
@@ -96,8 +96,7 @@ impl FrameSymbolResolver for CodeViewProvider {
         let sym = self.lookup_nearest(pc)?;
         let (file, line) = self
             .source_line_for_address(pc)
-            .map(|loc| (Some(loc.file), Some(loc.line)))
-            .unwrap_or((None, None));
+            .map_or((None, None), |loc| (Some(loc.file), Some(loc.line)));
         let bounded = match sym.size {
             Some(n) if n > 0 => pc - sym.address < n,
             // No size: a later symbol bounds this one, because
@@ -473,7 +472,7 @@ mod tests {
             s
         }
         impl SymbolProvider for Two {
-            fn name(&self) -> &str { "fixture" }
+            fn name(&self) -> &'static str { "fixture" }
             fn lookup_name(&self, _n: &str) -> Option<Symbol> { None }
             fn lookup_address(&self, _a: u64) -> Option<Symbol> { None }
             fn lookup_nearest(&self, addr: u64) -> Option<Symbol> {

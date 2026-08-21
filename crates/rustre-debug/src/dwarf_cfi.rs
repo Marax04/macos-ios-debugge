@@ -89,6 +89,7 @@ pub struct CieInfo {
 /// `CIE_id` marker — i.e. starting at `Version`). Only CIE `Version == 1`
 /// is interpreted (the version essentially every `.eh_frame` in practice
 /// uses); anything else bails.
+#[must_use]
 pub fn parse_cie(cie: &[u8]) -> Option<CieInfo> {
     let mut pos = 0usize;
     let version = *cie.get(pos)?;
@@ -183,6 +184,7 @@ pub struct FdeInfo {
 /// [`DW_EH_PE_PCREL_SDATA4`]'s relative encoding into an absolute
 /// address) — the caller must compute this from wherever the FDE bytes
 /// were actually read from in the live process.
+#[must_use]
 pub fn parse_fde(fde: &[u8], fde_field_vaddr: u64, pointer_encoding: u8) -> Option<FdeInfo> {
     if pointer_encoding != DW_EH_PE_PCREL_SDATA4 {
         return None;
@@ -222,7 +224,7 @@ pub struct CfaRule {
 
 /// DWARF register number for x86-64 `rsp` (System V AMD64 psABI).
 pub const DW_REG_RSP: u8 = 7;
-/// DWARF register number for AArch64 `sp` (AAdwarf64: x0-x30 = 0..=30, sp = 31).
+/// DWARF register number for `AArch64` `sp` (`AAdwarf64`: x0-x30 = 0..=30, sp = 31).
 /// Matches the tables already used elsewhere in this crate
 /// (`ios/lldb_ext.rs::dwarf_regnum`, `ios/mock_debugserver.rs`).
 pub const DW_REG_AARCH64_SP: u8 = 31;
@@ -241,6 +243,7 @@ pub const DW_REG_AARCH64_SP: u8 = 31;
 /// opcodes with a statically-known operand shape this function still
 /// recognizes enough to skip correctly, or causes a bail (`None`) if the
 /// operand shape itself isn't known — see the `_ =>` arm.
+#[must_use]
 pub fn run_cfi_to_offset(
     initial_instrs: &[u8],
     fde_instrs: &[u8],
@@ -262,10 +265,11 @@ pub fn run_cfi_to_offset(
 /// `DW_CFA_def_cfa_offset` that arrives before any `DW_CFA_def_cfa` is a
 /// parameter instead of a hardcoded x86-64 `rsp`.
 ///
-/// Pass [`DW_REG_AARCH64_SP`] for AArch64 `.eh_frame`. Note this only matters
+/// Pass [`DW_REG_AARCH64_SP`] for `AArch64` `.eh_frame`. Note this only matters
 /// for *malformed* CFI: every real CIE emits `DW_CFA_def_cfa` in its initial
 /// instructions, which overrides the default outright. This is robustness, not
 /// a newly decodable binary.
+#[must_use]
 pub fn run_cfi_to_offset_with_default(
     initial_instrs: &[u8],
     fde_instrs: &[u8],
@@ -403,6 +407,7 @@ fn run_instructions(
 /// full section-header-table bytes (`e_shnum` entries of `e_shentsize`
 /// bytes each, as `elf_section_header_table_location` describes).
 /// Pure byte-buffer parser — no live process needed.
+#[must_use]
 pub fn find_elf_section(shdrs: &[u8], shentsize: usize, shstrtab: &[u8], name: &str) -> Option<(u64, u64, u64)> {
     if shentsize < 64 {
         return None;
@@ -428,6 +433,7 @@ pub fn find_elf_section(shdrs: &[u8], shentsize: usize, shstrtab: &[u8], name: &
 /// ELF64 header — everything [`find_elf_section`]'s caller needs to know
 /// where the section-header table and its string table live in the file.
 /// Pure byte-buffer parser.
+#[must_use]
 pub fn parse_elf_section_header_location(header: &[u8]) -> Option<(u64, u16, u16, u16)> {
     if header.len() < 64 || header[0] != 0x7F || &header[1..4] != b"ELF" {
         return None;
@@ -564,7 +570,7 @@ pub fn find_macho_section(image: &[u8], segment: &str, section: &str) -> Option<
         let cmd = u32::from_le_bytes(image[pos..pos + 4].try_into().ok()?);
         let cmdsize = u32::from_le_bytes(image[pos + 4..pos + 8].try_into().ok()?) as usize;
         // A zero or unaligned cmdsize would loop forever or walk off by a byte.
-        if cmdsize < 8 || cmdsize % 8 != 0 || pos + cmdsize > end {
+        if cmdsize < 8 || !cmdsize.is_multiple_of(8) || pos + cmdsize > end {
             return None;
         }
         if cmd == LC_SEGMENT_64 && cmdsize >= 72 {
@@ -616,7 +622,7 @@ pub fn macho_text_vmaddr(image: &[u8]) -> Option<u64> {
         }
         let cmd = u32::from_le_bytes(image[pos..pos + 4].try_into().ok()?);
         let cmdsize = u32::from_le_bytes(image[pos + 4..pos + 8].try_into().ok()?) as usize;
-        if cmdsize < 8 || cmdsize % 8 != 0 || pos + cmdsize > end {
+        if cmdsize < 8 || !cmdsize.is_multiple_of(8) || pos + cmdsize > end {
             return None;
         }
         if cmd == LC_SEGMENT_64 && cmdsize >= 72 && cstr16_eq(image.get(pos + 8..pos + 24)?, "__TEXT")
@@ -644,7 +650,7 @@ fn cstr16_eq(field: &[u8], name: &str) -> bool {
 /// architecture this build targets.
 ///
 /// These are **not** portable constants: x86-64 numbers `rsp` 7 and `rbp` 6,
-/// while AArch64 numbers `sp` 31 and `x29` 29 (DWARF for the Arm 64-bit
+/// while `AArch64` numbers `sp` 31 and `x29` 29 (DWARF for the Arm 64-bit
 /// architecture, table 3). Reusing the x86 pair on ARM64 makes every CFA rule
 /// look like it names some other register, so [`unwind_one_frame_with_cfi`]
 /// finds a covering FDE, runs its instructions correctly, and then discards the
@@ -666,7 +672,7 @@ pub const fn dwarf_sp_fp_regnums() -> (u8, u8) {
 /// `target_pc`, run the CFI program up to that PC, and return the CFA.
 ///
 /// Shared by every backend that has unwind data: the ELF and Mach-O paths
-/// differ only in where the bytes come from. Per the x86-64 and AArch64
+/// differ only in where the bytes come from. Per the x86-64 and `AArch64`
 /// conventions alike the return address sits at `CFA - 8` and the caller's `sp`
 /// equals the CFA; the caller does that final read, since this function has no
 /// memory reader.
@@ -805,7 +811,7 @@ mod tests {
 
     /// The exact CIE body `readelf --debug-dump=frames /bin/sh` reported
     /// on a real Ubuntu 24.04 x86-64 binary (iter 194): `zR` augmentation,
-    /// code_alignment_factor=1, data_alignment_factor=-8, return_address_
+    /// `code_alignment_factor=1`, data_alignment_factor=-8, `return_address`_
     /// register=16, FDE pointer encoding 0x1b (pcrel|sdata4),
     /// `DW_CFA_def_cfa r7 ofs 8` + `DW_CFA_offset r16 at cfa-8` as its
     /// initial instructions. Hand-encoded byte-for-byte from that real
@@ -906,7 +912,7 @@ mod tests {
     /// own instructions up to (not past) the target offset.
     /// The default CFA register only ever applies when NO `DW_CFA_def_cfa`
     /// ran. Once one has, `DW_CFA_def_cfa_offset` must keep that register —
-    /// including a non-x86 number such as AArch64 `sp` (31) — and must not
+    /// including a non-x86 number such as `AArch64` `sp` (31) — and must not
     /// fall back to the x86-64 default. Complements
     /// `the_default_cfa_register_is_architecture_selectable`, which covers
     /// the (malformed-input) fallback path.
@@ -951,7 +957,7 @@ mod tests {
 
     /// `DW_CFA_def_cfa_offset` "keeps the register" — but when no register has
     /// been established yet, the fallback was the hardcoded x86-64 `rsp` (7)
-    /// regardless of architecture, so an AArch64 unwind would silently name an
+    /// regardless of architecture, so an `AArch64` unwind would silently name an
     /// x86 register.
     ///
     /// Honest scope: this input is malformed DWARF — every real CIE emits
@@ -1262,7 +1268,7 @@ mod tests {
     }
 
     /// The CFA register numbers are per-architecture. Hardcoding the x86 pair
-    /// makes every AArch64 CFA rule look like it names an unrelated register,
+    /// makes every `AArch64` CFA rule look like it names an unrelated register,
     /// so the unwinder finds the right FDE, runs it correctly, and throws the
     /// answer away — a backtrace that silently stops at the frame-pointer
     /// chain on the platform whose libraries most need CFI.

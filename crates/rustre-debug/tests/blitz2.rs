@@ -6,9 +6,9 @@ use rustre_core::address::Address;
 use std::sync::Arc;
 use std::thread;
 
-fn lcg_seed() -> u64 { 0xDEAD_BEEF_CAFE_BABE }
-fn lcg_next(s: &mut u64) -> u64 {
-    *s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+const fn lcg_seed() -> u64 { 0xDEAD_BEEF_CAFE_BABE }
+const fn lcg_next(s: &mut u64) -> u64 {
+    *s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
     *s
 }
 
@@ -385,12 +385,12 @@ fn search_masked_wildcards() {
 
 #[test]
 fn search_int_le_vs_be() {
-    let v: u32 = 0x11223344;
+    let v: u32 = 0x1122_3344;
     let mut hay = Vec::new();
     hay.extend_from_slice(&v.to_le_bytes());
     hay.extend_from_slice(&v.to_be_bytes());
-    assert_eq!(search_int(&hay, v as u64, IntWidth::U32Le), vec![0]);
-    assert_eq!(search_int(&hay, v as u64, IntWidth::U32Be), vec![4]);
+    assert_eq!(search_int(&hay, u64::from(v), IntWidth::U32Le), vec![0]);
+    assert_eq!(search_int(&hay, u64::from(v), IntWidth::U32Be), vec![4]);
 }
 
 #[test]
@@ -398,7 +398,7 @@ fn search_int_widths() {
     let hay: Vec<u8> = vec![0xAB, 0xCD, 0xEF, 0x01, 0x02, 0x03, 0x04, 0x05];
     assert_eq!(search_int(&hay, 0xAB, IntWidth::U8), vec![0]);
     let u16le: u16 = u16::from_le_bytes([0xAB, 0xCD]);
-    assert_eq!(search_int(&hay, u16le as u64, IntWidth::U16Le), vec![0]);
+    assert_eq!(search_int(&hay, u64::from(u16le), IntWidth::U16Le), vec![0]);
 }
 
 #[test]

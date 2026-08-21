@@ -39,7 +39,7 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    fn new(data: &'a [u8]) -> Self {
+    const fn new(data: &'a [u8]) -> Self {
         Self { cur: Cursor::new(data) }
     }
 
@@ -48,7 +48,7 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    fn pos(&mut self) -> u64 {
+    const fn pos(&mut self) -> u64 {
         self.cur.position()
     }
 
@@ -82,7 +82,7 @@ impl<'a> Reader<'a> {
         Ok(buf)
     }
 
-    /// Read a Windows UTF-16LE MINIDUMP_STRING (u32 length-prefix in bytes,
+    /// Read a Windows UTF-16LE `MINIDUMP_STRING` (u32 length-prefix in bytes,
     /// then that many bytes of UTF-16LE chars — NOT null-terminated counted).
     fn minidump_string(&mut self, offset: u32) -> Result<String, MinidumpError> {
         self.seek(u64::from(offset))?;
@@ -115,7 +115,7 @@ const STREAM_MEMORY64_LIST: u32 = 9;
 
 // ── public data model ────────────────────────────────────────────────────────
 
-/// CPU architecture extracted from the minidump SystemInfo stream.
+/// CPU architecture extracted from the minidump `SystemInfo` stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CpuArch {
     X86,
@@ -162,7 +162,7 @@ pub struct ThreadContext {
     pub registers: HashMap<String, u64>,
 }
 
-/// Exception record from the ExceptionStream.
+/// Exception record from the `ExceptionStream`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExceptionRecord {
     pub thread_id: u32,
@@ -173,7 +173,7 @@ pub struct ExceptionRecord {
     pub exception_information: Vec<u64>,
 }
 
-/// A loaded module from the ModuleList stream.
+/// A loaded module from the `ModuleList` stream.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ModuleEntry {
     pub base_address: u64,
@@ -185,7 +185,7 @@ pub struct ModuleEntry {
     pub cv_record_size: u32,
 }
 
-/// A memory descriptor (raw region) from the MemoryList stream.
+/// A memory descriptor (raw region) from the `MemoryList` stream.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryDescriptor {
     pub start_address: u64,
@@ -193,7 +193,7 @@ pub struct MemoryDescriptor {
     pub file_offset: u32,
 }
 
-/// A 64-bit memory descriptor from the Memory64List stream.
+/// A 64-bit memory descriptor from the `Memory64List` stream.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryDescriptor64 {
     pub start_address: u64,
@@ -212,15 +212,15 @@ pub struct MinidumpView {
     pub modules: Vec<ModuleEntry>,
     pub memory_regions: Vec<MemoryDescriptor>,
     pub memory64_regions: Vec<MemoryDescriptor64>,
-    /// Process ID from MiscInfo (if available).
+    /// Process ID from `MiscInfo` (if available).
     pub process_id: Option<u32>,
-    /// Machine uptime seconds from MiscInfo (if available).
+    /// Machine uptime seconds from `MiscInfo` (if available).
     pub uptime_secs: Option<u32>,
 }
 
 impl MinidumpView {
     /// Return the thread context for the crashing thread (the one referenced
-    /// by the ExceptionStream), if any.
+    /// by the `ExceptionStream`), if any.
     #[must_use]
     pub fn crashing_thread(&self) -> Option<&ThreadContext> {
         let ex_tid = self.exception.as_ref()?.thread_id;
@@ -230,7 +230,7 @@ impl MinidumpView {
     /// Return the instruction pointer of the crashing thread, whatever this
     /// dump's architecture calls it.
     ///
-    /// `pc` was missing from this list, and the parser above stores the AArch64
+    /// `pc` was missing from this list, and the parser above stores the `AArch64`
     /// program counter under exactly that name (there is even a test pinning
     /// it). So every Windows-on-ARM64 minidump — a shipping platform, and one
     /// this module parses in full — answered `None`, and
@@ -425,8 +425,8 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
             // address so a caller can read the bytes directly.
             let mut registers: HashMap<String, u64> = HashMap::new();
             let saved = r.pos();
-            if ctx_rva != 0 && ctx_size >= 8 {
-                if let Ok(()) = r.seek(u64::from(ctx_rva)) {
+            if ctx_rva != 0 && ctx_size >= 8
+                && matches!(r.seek(u64::from(ctx_rva)), Ok(())) {
                     // `ContextFlags` does NOT sit at offset 0 in every CONTEXT.
                     // AMD64's begins with the six `P?Home` slots and puts
                     // ContextFlags at 0x30; only ARM64_NT_CONTEXT has it at 0.
@@ -497,11 +497,10 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
                             ("rip", 248),
                         ];
                         for (name, byte_offset) in amd64_regs {
-                            if let Ok(()) = r.seek(u64::from(ctx_rva) + byte_offset) {
-                                if let Ok(val) = r.u64() {
+                            if matches!(r.seek(u64::from(ctx_rva) + byte_offset), Ok(()))
+                                && let Ok(val) = r.u64() {
                                     registers.insert((*name).to_string(), val);
                                 }
-                            }
                         }
                     } else if looks_arm64 && arm64_flags & CONTEXT_ARM64 != 0 && ctx_size >= 0x390 {
                         // ARM64_NT_CONTEXT (winnt.h). A completely different
@@ -514,13 +513,13 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
                         // came back with an EMPTY register map: no pc, no sp,
                         // nothing for post-mortem analysis to start from, and
                         // no indication that anything had been skipped.
-                        if let Ok(()) = r.seek(u64::from(ctx_rva) + 4)
+                        if matches!(r.seek(u64::from(ctx_rva) + 4), Ok(()))
                             && let Ok(cpsr) = r.u32()
                         {
                             registers.insert("cpsr".to_string(), u64::from(cpsr));
                         }
                         for i in 0..29u64 {
-                            if let Ok(()) = r.seek(u64::from(ctx_rva) + 8 + i * 8)
+                            if matches!(r.seek(u64::from(ctx_rva) + 8 + i * 8), Ok(()))
                                 && let Ok(val) = r.u64()
                             {
                                 registers.insert(format!("x{i}"), val);
@@ -532,7 +531,7 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
                         let named: &[(&str, u64)] =
                             &[("fp", 0xF0), ("lr", 0xF8), ("sp", 0x100), ("pc", 0x108)];
                         for (name, off) in named {
-                            if let Ok(()) = r.seek(u64::from(ctx_rva) + off)
+                            if matches!(r.seek(u64::from(ctx_rva) + off), Ok(()))
                                 && let Ok(val) = r.u64()
                             {
                                 registers.insert((*name).to_string(), val);
@@ -564,7 +563,7 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
                             ("cs", 0xBC), ("eflags", 0xC0), ("esp", 0xC4), ("ss", 0xC8),
                         ];
                         for (name, off) in i386_regs {
-                            if let Ok(()) = r.seek(u64::from(ctx_rva) + off)
+                            if matches!(r.seek(u64::from(ctx_rva) + off), Ok(()))
                                 && let Ok(val) = r.u32()
                             {
                                 registers.insert((*name).to_string(), u64::from(val));
@@ -572,7 +571,6 @@ pub fn parse(data: &[u8]) -> Result<MinidumpView, MinidumpError> {
                         }
                     }
                 }
-            }
             let _ = r.seek(saved);
 
             threads.push(ThreadContext {
@@ -757,9 +755,9 @@ pub fn read_memory<'a>(
     // their sum could wrap on 32-bit targets.
     let end = start
         .checked_add(desc.size as usize)
-        .ok_or(MinidumpError::Truncated(desc.file_offset as u64))?;
+        .ok_or(MinidumpError::Truncated(u64::from(desc.file_offset)))?;
     if end > file_data.len() {
-        return Err(MinidumpError::Truncated(desc.file_offset as u64));
+        return Err(MinidumpError::Truncated(u64::from(desc.file_offset)));
     }
     Ok(&file_data[start..end])
 }
@@ -770,8 +768,8 @@ pub fn read_memory<'a>(
 mod tests {
     use super::*;
 
-    /// Build a minimal synthetic minidump: MINIDUMP_HEADER + 1 stream directory
-    /// entry pointing to a SystemInfo stream, nothing else.
+    /// Build a minimal synthetic minidump: `MINIDUMP_HEADER` + 1 stream directory
+    /// entry pointing to a `SystemInfo` stream, nothing else.
     /// The clamp itself, including the header each list really has.
     ///
     /// Three of the four list streams put a 4-byte count in front of their
@@ -879,7 +877,7 @@ mod tests {
 
     /// A clear flag must skip a field, not shift the ones after it.
     ///
-    /// `MINIDUMP_MISC_INFO` has a FIXED layout — ProcessId at 8, the process
+    /// `MINIDUMP_MISC_INFO` has a FIXED layout — `ProcessId` at 8, the process
     /// times at 12/16/20, the processor block at 24 — and `Flags1` says which
     /// fields the writer FILLED IN, not which are present. Reading them
     /// sequentially made every field's position depend on the flags before it,
@@ -1224,7 +1222,7 @@ mod tests {
 
     /// Build a minidump for an i386 target with one thread and a real 32-bit
     /// `CONTEXT`, laid out per winnt.h: debug registers, then the 112-byte
-    /// FLOATING_SAVE_AREA at 0x1C, then the general registers from 0x9C.
+    /// `FLOATING_SAVE_AREA` at 0x1C, then the general registers from 0x9C.
     fn i386_minidump() -> Vec<u8> {
         const DIR: u32 = 32;
         const SYSINFO: u32 = DIR + 24;
@@ -1293,7 +1291,7 @@ mod tests {
     /// crate already expected a register that nothing ever produced.
     ///
     /// The i386 fields are DWORDs, not QWORDs, and the general registers only
-    /// begin at 0x9C because a 112-byte FLOATING_SAVE_AREA sits at 0x1C — the
+    /// begin at 0x9C because a 112-byte `FLOATING_SAVE_AREA` sits at 0x1C — the
     /// two things a reused x64 arm would have got wrong.
     #[test]
     fn an_i386_thread_context_is_decoded_and_crash_pc_finds_eip() {
@@ -1322,7 +1320,7 @@ mod tests {
     ///
     /// The second case is the nastier one: a `P1Home` carrying bit 0x400000 —
     /// an ordinary value for a stack address — steered an x64 context into the
-    /// ARM64 arm, which would report `x0`/`sp`/`pc` read at AArch64 offsets
+    /// ARM64 arm, which would report `x0`/`sp`/`pc` read at `AArch64` offsets
     /// from x64 bytes. Registers under the wrong names, from the wrong places.
     #[test]
     fn an_amd64_thread_context_is_decoded_and_not_mistaken_for_arm64() {
@@ -1345,7 +1343,7 @@ mod tests {
 
     /// An arm64 crash dump must yield registers, not an empty map.
     ///
-    /// The parser recognised `CpuArch::Arm64` in SystemInfo but decoded only the
+    /// The parser recognised `CpuArch::Arm64` in `SystemInfo` but decoded only the
     /// AMD64 `CONTEXT`, so every arm64 dump produced a thread with NO registers:
     /// no pc, no sp, no lr. Post-mortem analysis of a Windows-on-ARM crash had
     /// nothing to work from — and nothing said so, the thread was simply empty.
@@ -1498,9 +1496,9 @@ mod tests {
 
     /// The crash address must be reported whatever the architecture calls it.
     ///
-    /// The lookup was rip-then-eip. The parser above stores the AArch64
+    /// The lookup was rip-then-eip. The parser above stores the `AArch64`
     /// program counter under "pc" - there is a test pinning that - so every
-    /// Windows-on-ARM64 dump answered None and debug.minidump_analyze
+    /// Windows-on-ARM64 dump answered None and `debug.minidump_analyze`
     /// published a null crash address for a dump that contained it.
     #[test]
     fn the_crash_address_is_found_on_arm64_as_well_as_x86() {

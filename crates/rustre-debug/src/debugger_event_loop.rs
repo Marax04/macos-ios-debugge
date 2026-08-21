@@ -608,7 +608,7 @@ mod tests {
         loop_.register_handler(Box::new(LoggingHandler::new("log", log.clone()))).unwrap();
         loop_.enqueue(make_event(EventKind::Breakpoint)).unwrap();
         loop_.drain().unwrap();
-        let entries = log.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let entries = log.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
         assert_eq!(entries.len(), 1);
         assert!(entries[0].contains("Breakpoint"));
     }
@@ -621,7 +621,7 @@ mod tests {
         loop_.enqueue(make_event(EventKind::Breakpoint).with_address(0x4000)).unwrap();
         loop_.enqueue(make_event(EventKind::Breakpoint).with_address(0x5000)).unwrap();
         loop_.drain().unwrap();
-        let collected = hits.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let collected = hits.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
         assert_eq!(collected.len(), 2);
         assert_eq!(collected[0], 0x4000);
         assert_eq!(collected[1], 0x5000);
@@ -721,7 +721,7 @@ mod tests {
 
         let action = lp.drain().expect("drain should succeed");
         assert_eq!(action, EventAction::Stop, "the exit must still stop the loop");
-        let seen = log.lock().unwrap_or_else(|p| p.into_inner());
+        let seen = log.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         assert!(
             !seen.is_empty(),
             "the handler registered after the stopping one never saw the event"
@@ -737,7 +737,7 @@ mod tests {
     fn a_deadline_stops_the_loop_inside_a_long_queue() {
         struct SlowHandler;
         impl EventHandler for SlowHandler {
-            fn name(&self) -> &str { "slow" }
+            fn name(&self) -> &'static str { "slow" }
             fn on_event(&self, _e: &DebugEvent) -> EventAction {
                 std::thread::sleep(Duration::from_millis(2));
                 EventAction::Continue

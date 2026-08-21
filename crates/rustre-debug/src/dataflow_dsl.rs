@@ -154,7 +154,7 @@ pub fn parse(query: &str) -> Result<DslCommand, DslError> {
 }
 
 /// Result of executing a [`DslCommand`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DslResult {
     Origin(Vec<OriginHop>),
     Writes(Vec<MemoryWrite>),
@@ -166,11 +166,10 @@ pub fn execute(command: &DslCommand, index: &OmniscientIndex) -> DslResult {
     match command {
         DslCommand::TraceBackward { address, at_time, until_pc } => {
             let mut hops = index.trace_origin(*address, *at_time);
-            if let Some(pc) = until_pc {
-                if let Some(cut) = hops.iter().position(|h| h.write.writer_pc == Some(*pc)) {
+            if let Some(pc) = until_pc
+                && let Some(cut) = hops.iter().position(|h| h.write.writer_pc == Some(*pc)) {
                     hops.truncate(cut + 1);
                 }
-            }
             DslResult::Origin(hops)
         }
         DslCommand::FindWrites { address, before } => {
@@ -213,7 +212,7 @@ mod tests {
         let cmd = parse("trace 0x2000 backward until pc 0x401000").unwrap();
         assert_eq!(
             cmd,
-            DslCommand::TraceBackward { address: Address(0x2000), at_time: u64::MAX, until_pc: Some(Address(0x401000)) }
+            DslCommand::TraceBackward { address: Address(0x2000), at_time: u64::MAX, until_pc: Some(Address(0x0040_1000)) }
         );
     }
 
@@ -243,7 +242,7 @@ mod tests {
             DslCommand::TraceBackward {
                 address: Address(0x1000),
                 at_time: 7,
-                until_pc: Some(Address(0x401000))
+                until_pc: Some(Address(0x0040_1000))
             }
         );
 
@@ -264,9 +263,9 @@ mod tests {
     fn at_time_cutoff_changes_the_traced_chain() {
         // 0x1000 is written at seq 2 (copy of 0x2000) and again at seq 8.
         let idx = OmniscientIndex::from_writes(vec![
-            write(0, 0x2000, 0x401000, None),
-            write(2, 0x1000, 0x401010, Some(0x2000)),
-            write(8, 0x1000, 0x401020, None),
+            write(0, 0x2000, 0x0040_1000, None),
+            write(2, 0x1000, 0x0040_1010, Some(0x2000)),
+            write(8, 0x1000, 0x0040_1020, None),
         ]);
 
         // Without a cutoff the newest write (seq 8) is the origin.

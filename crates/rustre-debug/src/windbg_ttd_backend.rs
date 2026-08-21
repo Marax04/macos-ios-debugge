@@ -63,7 +63,7 @@ struct IndexEntry {
 
 // ── WinDbgTtdBackend ─────────────────────────────────────────────────────────
 
-/// A [`crate::time_travel_debug::TtdBackend`] that replays WinDbg TTD `.run` / `.idx` trace pairs.
+/// A [`crate::time_travel_debug::TtdBackend`] that replays `WinDbg` TTD `.run` / `.idx` trace pairs.
 ///
 /// # Open
 ///
@@ -102,7 +102,7 @@ impl fmt::Debug for WinDbgTtdBackend {
 }
 
 impl WinDbgTtdBackend {
-    /// Open a WinDbg TTD trace.
+    /// Open a `WinDbg` TTD trace.
     ///
     /// `path` may point to the `.run`, the `.idx`, or the base name (without
     /// extension). The sibling file is located automatically.
@@ -123,7 +123,7 @@ impl WinDbgTtdBackend {
         })
     }
 
-    /// Detect whether `path` looks like a WinDbg TTD trace (has a `.run` or
+    /// Detect whether `path` looks like a `WinDbg` TTD trace (has a `.run` or
     /// `.idx` extension, or a sibling `.idx` exists).
     #[must_use]
     pub fn is_ttd_trace(path: &Path) -> bool {
@@ -193,7 +193,7 @@ impl WinDbgTtdBackend {
 }
 
 impl TtdBackend for WinDbgTtdBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "WinDbg-TTD"
     }
 
@@ -402,6 +402,7 @@ fn parse_idx(path: &Path) -> Result<((TracePosition, TracePosition), Vec<IndexEn
 /// [52..]   entries: major(u64) minor(u64) offset(u64) ...
 /// ```
 #[cfg(test)]
+#[must_use]
 pub fn build_test_idx(
     first: TracePosition,
     last: TracePosition,
@@ -427,6 +428,7 @@ pub fn build_test_idx(
 ///
 /// Each "record" is 18 bytes: 2-byte type tag + 8-byte PC + 8-byte SP.
 #[cfg(test)]
+#[must_use]
 pub fn build_test_run(records: &[(u16, u64, u64)]) -> Vec<u8> {
     let mut out = Vec::new();
     for (tag, pc, sp) in records {

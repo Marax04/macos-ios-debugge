@@ -102,7 +102,7 @@ pub struct WindowsDebugger {
     current_tid: parking_lot::Mutex<Option<ThreadId>>,
     /// Address -> the bytes the trap replaced.
     ///
-    /// A `Vec`, not a `u8`: an x86 `int3` is one byte, but an AArch64
+    /// A `Vec`, not a `u8`: an x86 `int3` is one byte, but an `AArch64`
     /// `BRK #0` is four, and a map that can only remember one byte gives a
     /// 4-byte trap nowhere to record what it overwrote — which is why every
     /// backend simply refused to arm on arm64. See `crate::host_trap_bytes`.
@@ -415,7 +415,6 @@ impl WindowsDebugger {
                 }
                 crate::DebugRegisterState::Armed(_) => {}
             }
-
             regs.set("dr0", 0);
             regs.set("dr1", 0);
             regs.set("dr2", 0);
@@ -442,7 +441,7 @@ impl WindowsDebugger {
             // leave the session exactly as it was.
             return Err(DebugError::DetachError(format!(
                 "debug registers still armed on thread(s) {}; detaching now would leave the target trapping with no debugger to take the trap",
-                still_armed.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", ")
+                still_armed.iter().map(std::string::ToString::to_string).collect::<Vec<_>>().join(", ")
             )));
         }
         self.hw_watchpoints.lock().clear();
@@ -910,9 +909,7 @@ impl WindowsDebugger {
                     // report a clean stop for a target that cannot be resumed,
                     // so the failure replaces the event instead of riding
                     // alongside it.
-                    if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
-                        return Err(e);
-                    }
+                    self.rewind_past_own_breakpoint(ev).await?;
                     // A single step CAN be the process's last instruction, and
                     // the event loop returns just the same. Retiring only from
                     // `continue_execution` would leave that path stuck.
@@ -1061,8 +1058,8 @@ impl WindowsDebugger {
         // refused: `memory_maps` can legitimately miss freshly mapped code,
         // and refusing what we merely cannot see would break stepping out of
         // JIT-generated frames.
-        if let Ok(maps) = self.memory_maps().await {
-            if let Some(region) = maps
+        if let Ok(maps) = self.memory_maps().await
+            && let Some(region) = maps
                 .iter()
                 .find(|m| target.as_u64() >= m.base.as_u64() && target.as_u64() < m.base.as_u64().saturating_add(m.size))
                 && !region.executable
@@ -1071,7 +1068,6 @@ impl WindowsDebugger {
                     "run_to_return: {target:?} is not executable memory — the return address read                      from the stack does not point at code, and planting a breakpoint there would                      corrupt the target's data"
                 )));
             }
-        }
         // "Is a trap ARMED there", not "is that address in my map".
         //
         // `contains_key` is also true for a breakpoint the caller DISABLED —
@@ -1273,9 +1269,9 @@ fn enumerate_thread_ids(pid: DWORD) -> Vec<ThreadId> {
     loop {
         let ok = if first {
             first = false;
-            unsafe { Thread32First(snapshot, &mut entry) }
+            unsafe { Thread32First(snapshot, &raw mut entry) }
         } else {
-            unsafe { Thread32Next(snapshot, &mut entry) }
+            unsafe { Thread32Next(snapshot, &raw mut entry) }
         };
         if ok == FALSE {
             break;
@@ -1404,8 +1400,8 @@ fn do_launch(opts: &LaunchOptions) -> Result<(DWORD, HANDLE), DebugError> {
             DEBUG_PROCESS,
             std::ptr::null_mut(),
             std::ptr::null(),
-            &mut si,
-            &mut pi,
+            &raw mut si,
+            &raw mut pi,
         )
     };
     if ok == FALSE {
@@ -1514,7 +1510,7 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     }
                 }
                 let mut ev: DEBUG_EVENT = unsafe { zeroed() };
-                let ok = unsafe { WaitForDebugEvent(&mut ev, u32::MAX) };
+                let ok = unsafe { WaitForDebugEvent(&raw mut ev, u32::MAX) };
                 if ok == FALSE {
                     let _ = reply_tx.send(Reply::Event(Err(DebugError::MemoryError(
                         0,
@@ -1574,7 +1570,7 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                     }
                 }
                 let mut ev: DEBUG_EVENT = unsafe { zeroed() };
-                let ok = unsafe { WaitForDebugEvent(&mut ev, u32::MAX) };
+                let ok = unsafe { WaitForDebugEvent(&raw mut ev, u32::MAX) };
                 if ok == FALSE {
                     let _ = reply_tx.send(Reply::Event(Err(DebugError::StepError(
                         "WaitForDebugEvent failed during single-step".into(),
@@ -1622,7 +1618,7 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                         addr as *const _,
                         buf.as_mut_ptr().cast(),
                         size,
-                        &mut read,
+                        &raw mut read,
                     )
                 };
                 let result = if ok == TRUE && read == size {
@@ -1661,7 +1657,7 @@ fn debug_loop(cmd_rx: &Receiver<Command>, reply_tx: &Sender<Reply>) {
                         addr as *mut _,
                         data.as_ptr().cast(),
                         data.len(),
-                        &mut written,
+                        &raw mut written,
                     )
                 };
                 // A PARTIAL write is a failure, not a smaller success.
@@ -1791,7 +1787,7 @@ fn wide_to_string(buf: &[u16]) -> String {
 /// forever. Clearing it here is part of reading it correctly, not an extra.
 /// Which hardware watchpoint fired, from the x86 debug registers.
 ///
-/// Gated in 602: `DR6`/`DR7` do not exist in the AArch64 `CONTEXT`, whose debug
+/// Gated in 602: `DR6`/`DR7` do not exist in the `AArch64` `CONTEXT`, whose debug
 /// state is `Bcr`/`Bvr`/`Wcr`/`Wvr` — a different subsystem this backend does
 /// not program. The ARM64 counterpart below answers `None`, which is true
 /// rather than convenient: nothing armed a watchpoint there, so none can have
@@ -1805,7 +1801,7 @@ fn watchpoint_hit(tid: DWORD) -> Option<(Address, BreakpointKind)> {
         }
         let mut ctx: CONTEXT = std::mem::zeroed();
         ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-        if GetThreadContext(handle, &mut ctx) == 0 {
+        if GetThreadContext(handle, &raw mut ctx) == 0 {
             CloseHandle(handle);
             return None;
         }
@@ -1823,7 +1819,7 @@ fn watchpoint_hit(tid: DWORD) -> Option<(Address, BreakpointKind)> {
         if slot.is_some() {
             ctx.Dr6 = 0;
             ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-            let _ = SetThreadContext(handle, &ctx);
+            let _ = SetThreadContext(handle, &raw const ctx);
         }
         CloseHandle(handle);
         hit
@@ -2005,7 +2001,7 @@ fn classify_event(ev: &DEBUG_EVENT) -> StopReason {
     }
 }
 
-/// `winapi` 0.3.9's `CONTEXT` struct on x86_64 is missing the 16-byte
+/// `winapi` 0.3.9's `CONTEXT` struct on `x86_64` is missing the 16-byte
 /// alignment the real Win32 `CONTEXT` requires (its source carries a
 /// `// FIXME align 16` comment) — without it, the floating-point save area
 /// inside `CONTEXT` can land at the wrong offset relative to what
@@ -2026,7 +2022,7 @@ fn read_context(tid: DWORD) -> Option<CONTEXT> {
         // required for hardware watchpoints. The flags stay in the struct, so
         // the later SetThreadContext writes the DRs back too.
         aligned.0.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
-        let ok = GetThreadContext(handle, &mut aligned.0);
+        let ok = GetThreadContext(handle, &raw mut aligned.0);
         CloseHandle(handle);
         if ok == TRUE { Some(aligned.0) } else { None }
     }
@@ -2044,7 +2040,7 @@ fn write_context(tid: DWORD, ctx: &CONTEXT) -> bool {
         // SetThreadContext silently skips DR0-DR7. Force the full set so
         // hardware-watchpoint DR writes land (bug found 2026-07-18).
         aligned.0.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
-        let ok = SetThreadContext(handle, &aligned.0);
+        let ok = SetThreadContext(handle, &raw const aligned.0);
         CloseHandle(handle);
         let _ = &mut aligned; // keep alive/aligned through the call
         ok == TRUE
@@ -2506,7 +2502,7 @@ fn snapshot_with_retry<H: Copy + PartialEq>(
     Err(last_err)
 }
 
-fn classify_protection(protect: u32) -> (bool, bool, bool) {
+const fn classify_protection(protect: u32) -> (bool, bool, bool) {
     // `Protect` carries the base protection in its low byte plus modifier
     // FLAGS ORed on top: PAGE_GUARD (0x100), PAGE_NOCACHE (0x200),
     // PAGE_WRITECOMBINE (0x400). Comparing the whole field for equality made a
@@ -2532,7 +2528,7 @@ fn classify_protection(protect: u32) -> (bool, bool, bool) {
 
 #[async_trait::async_trait]
 impl crate::Debugger for WindowsDebugger {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "windows-debugapi"
     }
 
@@ -2721,9 +2717,7 @@ impl crate::Debugger for WindowsDebugger {
                 // surfaced before `arm_pending_breakpoints`, because arming
                 // more traps in a process parked mid-instruction only widens
                 // the damage.
-                if let Err(e) = self.rewind_past_own_breakpoint(ev).await {
-                    return Err(e);
-                }
+                self.rewind_past_own_breakpoint(ev).await?;
                 self.arm_pending_breakpoints(ev).await;
                 // A library event is RETURNED to the caller, not swallowed.
                 //
@@ -3055,9 +3049,9 @@ impl crate::Debugger for WindowsDebugger {
         loop {
             let ok = if first {
                 first = false;
-                unsafe { Thread32First(snapshot, &mut entry) }
+                unsafe { Thread32First(snapshot, &raw mut entry) }
             } else {
-                unsafe { Thread32Next(snapshot, &mut entry) }
+                unsafe { Thread32Next(snapshot, &raw mut entry) }
             };
             if ok == FALSE {
                 break;
@@ -3212,7 +3206,7 @@ impl crate::Debugger for WindowsDebugger {
         loop {
             let mut info: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
             let written = unsafe {
-                VirtualQueryEx(handle, addr as *const _, &mut info, size_of::<MEMORY_BASIC_INFORMATION>())
+                VirtualQueryEx(handle, addr as *const _, &raw mut info, size_of::<MEMORY_BASIC_INFORMATION>())
             };
             if written == 0 {
                 break;
@@ -3284,7 +3278,7 @@ impl crate::Debugger for WindowsDebugger {
         // `the_architecture_check_precedes_the_implant_in_every_backend`
         // states: a refusal that has already patched memory is not a refusal.
         let alignment = crate::host_trap_alignment();
-        if addr.as_u64() % alignment != 0 {
+        if !addr.as_u64().is_multiple_of(alignment) {
             return Err(DebugError::Unsupported(format!(
                 "a software breakpoint at {addr:?} is not {alignment}-byte aligned; on this                  architecture a trap there would straddle two instructions and corrupt both"
             )));
@@ -3812,9 +3806,9 @@ impl crate::Debugger for WindowsDebugger {
             loop {
                 let ok = if first {
                     first = false;
-                    unsafe { Module32FirstW(snapshot, &mut entry) }
+                    unsafe { Module32FirstW(snapshot, &raw mut entry) }
                 } else {
-                    unsafe { Module32NextW(snapshot, &mut entry) }
+                    unsafe { Module32NextW(snapshot, &raw mut entry) }
                 };
                 if ok == FALSE {
                     break;
@@ -3933,7 +3927,7 @@ impl crate::Debugger for WindowsDebugger {
                     };
                     let base = module.base.as_u64();
                     let Ok(rva) = u32::try_from(cur_pc - base) else { break };
-                    if !pdata_cache.contains_key(&base) {
+                    if let std::collections::hash_map::Entry::Vacant(e) = pdata_cache.entry(base) {
                         // Sanity bound on `exc_size` before it drives a
                         // buffer allocation + `ReadProcessMemory` call — a
                         // real `.pdata` directory is at most a few MB even
@@ -3950,7 +3944,7 @@ impl crate::Debugger for WindowsDebugger {
                             }
                             _ => None,
                         };
-                        pdata_cache.insert(base, pdata);
+                        e.insert(pdata);
                     }
                     let Some(pdata) = pdata_cache.get(&base).and_then(Option::as_ref) else { break };
                     let Some((func_begin, _, unwind_rva)) = find_runtime_function(pdata, rva) else { break };
@@ -4101,7 +4095,7 @@ mod live_tests {
         assert_eq!((got, n), (Ok(7), 1));
     }
 
-    /// `PAGE_GUARD` and friends are FLAGS ORed onto the protection, not values.
+    /// `PAGE_GUARD` and friends are FLAGS `ORed` onto the protection, not values.
     ///
     /// The decoding compared `Protect` for exact equality against the eight base
     /// constants. But Windows ORs modifier bits into that same field:
@@ -4789,7 +4783,7 @@ mod live_tests {
         }
         let addr = addr.expect("expected the initial system breakpoint");
 
-        let original = dbg.read_memory(addr, 1).await.expect("read_memory should succeed").to_vec();
+        let original = dbg.read_memory(addr, 1).await.expect("read_memory should succeed").clone();
 
         dbg.set_breakpoint(addr, BreakpointKind::Software)
             .await
@@ -4969,7 +4963,7 @@ mod live_tests {
                 return !want_active; // gone
             }
             let mut code: DWORD = 0;
-            let ok = GetExitCodeProcess(h, &mut code);
+            let ok = GetExitCodeProcess(h, &raw mut code);
             CloseHandle(h);
             let active = ok == TRUE && code == STILL_ACTIVE as DWORD;
             active == want_active
@@ -5155,7 +5149,7 @@ mod live_tests {
     /// Mirrors `linux_debugger::live_tests::run_to_return_returns_process_
     /// exit_instead_of_erroring` — this backend's `run_to_return` (shared
     /// by `step_over`/`step_out`) carries the identical exit-check-before-
-    /// get_registers fix (same code shape, same bug class), but never had
+    /// `get_registers` fix (same code shape, same bug class), but never had
     /// its own dedicated live test proving it directly: once the target
     /// process exits, `get_registers` on the now-gone process fails, and
     /// checking that BEFORE the `is_exit()` check would make a legitimate
@@ -5306,7 +5300,7 @@ mod live_tests {
                 false
             } else {
                 let mut code: DWORD = 0;
-                let ok = GetExitCodeProcess(h, &mut code);
+                let ok = GetExitCodeProcess(h, &raw mut code);
                 CloseHandle(h);
                 ok == TRUE && code == STILL_ACTIVE as DWORD
             }
@@ -6160,7 +6154,7 @@ mod live_tests {
                 )),
                 3000 as *mut _,
                 0,
-                &mut raw,
+                &raw mut raw,
             );
             assert!(!th.is_null(), "CreateRemoteThread");
             CloseHandle(th);
@@ -6262,7 +6256,7 @@ mod live_tests {
                 )),
                 3000 as *mut _,
                 0,
-                &mut raw,
+                &raw mut raw,
             );
             assert!(!th.is_null(), "CreateRemoteThread");
             CloseHandle(th);
@@ -6590,7 +6584,7 @@ mod live_tests {
                 base.cast::<u8>().add(page).cast(),
                 page,
                 PAGE_NOACCESS,
-                &mut old,
+                &raw mut old,
             );
             assert!(ok != 0, "VirtualProtectEx should succeed");
             CloseHandle(h);
@@ -7162,12 +7156,11 @@ mod live_tests {
             if ev.reason.is_exit() {
                 break;
             }
-            if let StopReason::Breakpoint { address, .. } = ev.reason {
-                if address == at {
+            if let StopReason::Breakpoint { address, .. } = ev.reason
+                && address == at {
                     fired = true;
                     break;
                 }
-            }
         }
         assert!(fired, "the hardware breakpoint never fired, so there is nothing to count");
 
@@ -7384,7 +7377,7 @@ mod live_tests {
             }
             let mut ctx: CONTEXT = std::mem::zeroed();
             ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-            let ok = GetThreadContext(h, &mut ctx);
+            let ok = GetThreadContext(h, &raw mut ctx);
             CloseHandle(h);
             if ok == 0 {
                 return;
@@ -7453,7 +7446,7 @@ mod live_tests {
             assert!(!h.is_null(), "OpenThread should succeed on the still-running target");
             let mut ctx: CONTEXT = std::mem::zeroed();
             ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-            let ok = GetThreadContext(h, &mut ctx);
+            let ok = GetThreadContext(h, &raw mut ctx);
             CloseHandle(h);
             assert!(ok != 0, "GetThreadContext should succeed");
             ctx.Dr7
@@ -7555,7 +7548,7 @@ mod live_tests {
                 code,
                 STUB.as_ptr().cast(),
                 STUB.len(),
-                &mut written,
+                &raw mut written,
             );
             assert!(ok != 0 && written == STUB.len(), "the stub should be written whole");
             let th = CreateRemoteThread(
@@ -7582,12 +7575,11 @@ mod live_tests {
             if ev.reason.is_exit() {
                 break;
             }
-            if let StopReason::Breakpoint { address, ref bp } = ev.reason {
-                if address == watch {
+            if let StopReason::Breakpoint { address, ref bp } = ev.reason
+                && address == watch {
                     hit = Some(bp.kind);
                     break;
                 }
-            }
         }
 
         let kind = hit.expect(
@@ -7658,12 +7650,11 @@ mod live_tests {
                 seen.push("ProcessExit".to_string());
                 break;
             }
-            if let StopReason::Breakpoint { address, ref bp } = ev.reason {
-                if address == at {
+            if let StopReason::Breakpoint { address, ref bp } = ev.reason
+                && address == at {
                     hit = Some(bp.kind);
                     break;
                 }
-            }
             seen.push(format!("{:?}", std::mem::discriminant(&ev.reason)));
         }
         let kind = hit.unwrap_or_else(|| {
@@ -7742,7 +7733,7 @@ mod live_tests {
                 )),
                 3000 as *mut _,
                 0,
-                &mut raw,
+                &raw mut raw,
             );
             assert!(!th.is_null(), "CreateRemoteThread should succeed");
             CloseHandle(th);
@@ -7830,7 +7821,7 @@ mod live_tests {
                 )),
                 3000 as *mut _,
                 0,
-                &mut raw,
+                &raw mut raw,
             );
             assert!(!th.is_null(), "CreateRemoteThread should succeed");
             CloseHandle(th);
@@ -7880,7 +7871,7 @@ mod live_tests {
     /// which forwards to `set_breakpoint`, which rejects everything that is
     /// not `Software` — so every hardware watchpoint request on this backend
     /// failed with "only software breakpoints are implemented" even though
-    /// `DR0`-`DR7` were already reachable through get/set_registers.
+    /// `DR0`-`DR7` were already reachable through `get/set_registers`.
     #[tokio::test]
     async fn a_hardware_watchpoint_is_programmed_into_the_debug_registers() {
         let dbg = WindowsDebugger::new();
@@ -8834,7 +8825,7 @@ mod live_tests {
                 )),
                 3000 as *mut _,
                 0,
-                &mut tid,
+                &raw mut tid,
             );
             assert!(!thread_handle.is_null(), "CreateRemoteThread should succeed");
             CloseHandle(thread_handle);

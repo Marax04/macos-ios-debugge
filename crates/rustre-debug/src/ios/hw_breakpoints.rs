@@ -358,7 +358,7 @@ impl HwSlotTable {
 
     /// Slots still free for `kind`.
     #[must_use]
-    pub fn free_slots(&self, kind: HwKind) -> usize {
+    pub const fn free_slots(&self, kind: HwKind) -> usize {
         let used = if kind.is_watchpoint() {
             self.watchpoints.len()
         } else {

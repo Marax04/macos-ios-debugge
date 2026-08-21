@@ -132,13 +132,13 @@ impl PendingBreakpoints {
 
     /// Number of requests still waiting.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.requests.len()
     }
 
     /// Whether nothing is waiting.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.requests.is_empty()
     }
 

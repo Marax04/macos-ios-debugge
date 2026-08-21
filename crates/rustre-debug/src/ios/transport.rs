@@ -113,9 +113,9 @@ pub enum PlistValue {
     /// `<data>` (base64 in the XML form)
     Data(Vec<u8>),
     /// `<array>`
-    Array(Vec<PlistValue>),
+    Array(Vec<Self>),
     /// `<dict>`; ordered so serialisation is deterministic and testable.
-    Dict(BTreeMap<String, PlistValue>),
+    Dict(BTreeMap<String, Self>),
 }
 
 impl PlistValue {
@@ -130,7 +130,7 @@ impl PlistValue {
 
     /// Interpret as a string.
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(s) => Some(s.as_str()),
             _ => None,
@@ -148,7 +148,7 @@ impl PlistValue {
 
     /// Interpret as raw data.
     #[must_use]
-    pub fn as_data(&self) -> Option<&[u8]> {
+    pub const fn as_data(&self) -> Option<&[u8]> {
         match self {
             Self::Data(d) => Some(d.as_slice()),
             _ => None,
@@ -157,7 +157,7 @@ impl PlistValue {
 
     /// Interpret as an array.
     #[must_use]
-    pub fn as_array(&self) -> Option<&[Self]> {
+    pub const fn as_array(&self) -> Option<&[Self]> {
         match self {
             Self::Array(a) => Some(a.as_slice()),
             _ => None,
@@ -893,7 +893,7 @@ impl<S: MuxStream> UsbmuxClient<S> {
         &self.description
     }
 
-    fn next_tag(&mut self) -> u32 {
+    const fn next_tag(&mut self) -> u32 {
         self.tag = self.tag.wrapping_add(1);
         self.tag
     }
@@ -1597,7 +1597,7 @@ mod tests {
         ])
     }
 
-    /// Start a MockMuxd on loopback; returns the address and the join handle.
+    /// Start a `MockMuxd` on loopback; returns the address and the join handle.
     fn spawn_mock(mock: MockMuxd) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
         let addr = listener.local_addr().expect("addr").to_string();
@@ -1849,12 +1849,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr").to_string();
         let handle = thread::spawn(move || {
-            if let Ok((mut sock, _)) = listener.accept() {
-                if read_mux_packet(&mut sock).is_ok() {
+            if let Ok((mut sock, _)) = listener.accept()
+                && read_mux_packet(&mut sock).is_ok() {
                     let reply = MockMuxd::result(0);
                     let _ = sock.write_all(&encode_mux_packet(0xdead, &reply.to_xml()));
                 }
-            }
         });
         let mut client = client_to(&addr);
         let err = client.list_devices().expect_err("must fail");

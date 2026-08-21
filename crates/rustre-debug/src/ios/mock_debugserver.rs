@@ -879,6 +879,10 @@ pub struct MockDebugserver {
     launch_working_dir: Option<String>,
     /// Loaded images reported by `jGetLoadedDynamicLibrariesInfos`.
     images: Vec<LoadedImage>,
+    /// Verbatim image objects appended to the `images` array, for shapes
+    /// [`LoadedImage`] cannot express — a stub that omits `load_address`
+    /// altogether, or emits it as a hex string rather than a JSON number.
+    raw_images: Vec<String>,
     /// Payload served by `qXfer:features:read:target.xml`.
     target_xml: String,
     faults: FaultInjection,
@@ -975,6 +979,7 @@ impl MockDebugserver {
             launch_env: Vec::new(),
             launch_working_dir: None,
             images: Vec::new(),
+            raw_images: Vec::new(),
             target_xml: default_target_xml(),
             faults: FaultInjection::default(),
             packets_answered: 0,
@@ -997,7 +1002,7 @@ impl MockDebugserver {
     }
 
     /// Enable `QSetWorkingDir` / `QEnvironmentHexEncoded` support.
-    pub fn set_launch_env_supported(&mut self, on: bool) {
+    pub const fn set_launch_env_supported(&mut self, on: bool) {
         self.launch_env_supported = on;
     }
 
@@ -1084,16 +1089,27 @@ impl MockDebugserver {
         self.images.push(image);
     }
 
+    /// Append a verbatim JSON object to the `images` array of the
+    /// `jGetLoadedDynamicLibrariesInfos` reply.
+    ///
+    /// Real stubs are not all shaped like [`LoadedImage`]: some omit
+    /// `load_address` for an image they could not read, and some spell it as a
+    /// hex string. A client must be tested against those replies, and they
+    /// cannot be produced by a struct whose field is a plain `u64`.
+    pub fn add_raw_image_json(&mut self, object: impl Into<String>) {
+        self.raw_images.push(object.into());
+    }
+
     pub fn set_target_xml(&mut self, xml: impl Into<String>) {
         self.target_xml = xml.into();
     }
 
-    pub fn set_faults(&mut self, faults: FaultInjection) {
+    pub const fn set_faults(&mut self, faults: FaultInjection) {
         self.faults = faults;
     }
 
     #[must_use]
-    pub fn faults_mut(&mut self) -> &mut FaultInjection {
+    pub const fn faults_mut(&mut self) -> &mut FaultInjection {
         &mut self.faults
     }
 
@@ -1445,7 +1461,7 @@ impl MockDebugserver {
         self.inbound.drain(..hash + 3);
         let got = hex_u8(&csum_hex)
             .ok_or(())
-            .map_err(|_| MockError::Framing(format!("non-hex checksum {csum_hex:?}")))?;
+            .map_err(|()| MockError::Framing(format!("non-hex checksum {csum_hex:?}")))?;
         let expected = checksum(&body);
         if expected != got {
             return Err(MockError::BadChecksum { expected, got });
@@ -1554,10 +1570,8 @@ impl MockDebugserver {
         if pkt == "qHostInfo" {
             // cputype 0x0100000C = CPU_TYPE_ARM64, subtype 2 = ARM64E.
             return (
-                format!(
-                    "cputype:16777228;cpusubtype:2;ostype:macosx;vendor:apple;\
-                     endian:little;ptrsize:8;os_version:14.5.0;watchpoint_exceptions_received:after;"
-                ),
+                "cputype:16777228;cpusubtype:2;ostype:macosx;vendor:apple;\
+                     endian:little;ptrsize:8;os_version:14.5.0;watchpoint_exceptions_received:after;".to_string(),
                 false,
             );
         }
@@ -2145,7 +2159,18 @@ impl MockDebugserver {
         if off >= bytes.len() {
             return "l".to_string();
         }
-        let end = (off + len).min(bytes.len());
+        // `off` and `len` are hex fields under the requester's control, and in
+        // release the overflow checks are OFF: `off + len` WRAPS rather than
+        // trapping, so `1,ffffffffffffffff` produced end = 0 and the slice
+        // `bytes[1..0]` — a panic, and with `panic = "abort"` the death of the
+        // process, reachable from the loopback socket `spawn_tcp` opens. A sum
+        // that does not exist is a THIRD state, distinct from a length that is
+        // merely larger than the payload: refuse it, rather than `saturating_add`
+        // inventing an end the client never asked for.
+        let Some(end_requested) = off.checked_add(len) else {
+            return "E00".to_string();
+        };
+        let end = end_requested.min(bytes.len());
         let chunk = String::from_utf8_lossy(&bytes[off..end]).to_string();
         // `m` = more follows, `l` = last chunk. Getting this backwards is the
         // classic qXfer bug, so the mock is strict about it.
@@ -2224,6 +2249,12 @@ impl MockDebugserver {
                  \"cpusubtype\":2,\"filetype\":6}},\"slide\":{}}}",
                 img.load_address, img.path, uuid, img.slide
             );
+        }
+        for (i, raw) in self.raw_images.iter().enumerate() {
+            if !self.images.is_empty() || i > 0 {
+                s.push(',');
+            }
+            s.push_str(raw);
         }
         s.push_str("]}");
         s
@@ -2510,6 +2541,23 @@ impl Arm64Interp {
         0xD420_0000 | ((imm as u32) << 5)
     }
 
+    /// `cbz Xt, <pc-relative>` for a byte displacement.
+    ///
+    /// The interpreter needs one conditional branch to be able to run a
+    /// terminating recursion, which is the only shape that can exercise a
+    /// return-site trap being hit in a DEEPER frame than the one the user
+    /// stepped from.
+    #[must_use]
+    pub const fn cbz(rt: u32, disp_bytes: i32) -> u32 {
+        0xB400_0000 | ((((disp_bytes >> 2) as u32) & 0x7_FFFF) << 5) | (rt & 0x1F)
+    }
+
+    /// `sub Xd, Xn, #imm12` (no shift).
+    #[must_use]
+    pub const fn sub_imm(rd: u32, rn: u32, imm: u16) -> u32 {
+        0xD100_0000 | ((imm as u32 & 0xFFF) << 10) | ((rn & 0x1F) << 5) | (rd & 0x1F)
+    }
+
     /// `movz xD, #imm16` (no shift).
     #[must_use]
     pub const fn movz(rd: u32, imm: u16) -> u32 {
@@ -2582,6 +2630,30 @@ impl Arm64Interp {
             let imm = u64::from((insn >> 5) & 0xFFFF);
             if rd < NUM_X_REGS {
                 regs.x[rd] = imm;
+            }
+            regs.pc = pc.wrapping_add(4);
+            return StepOutcome::Ran;
+        }
+        // cbz Xt, <label>: 19-bit signed word displacement.
+        if insn & 0xFF00_0000 == 0xB400_0000 {
+            let rt = (insn & 0x1F) as usize;
+            let imm19 = (insn >> 5) & 0x7_FFFF;
+            let signed = ((imm19 as i32) << 13) >> 13;
+            let taken = rt < NUM_X_REGS && regs.x[rt] == 0;
+            regs.pc = if taken {
+                pc.wrapping_add((i64::from(signed) * 4) as u64)
+            } else {
+                pc.wrapping_add(4)
+            };
+            return StepOutcome::Ran;
+        }
+        // sub Xd, Xn, #imm12, lsl #0
+        if insn & 0xFFC0_0000 == 0xD100_0000 {
+            let rd = (insn & 0x1F) as usize;
+            let rn = ((insn >> 5) & 0x1F) as usize;
+            let imm = u64::from((insn >> 10) & 0xFFF);
+            if rd < NUM_X_REGS && rn < NUM_X_REGS {
+                regs.x[rd] = regs.x[rn].wrapping_sub(imm);
             }
             regs.pc = pc.wrapping_add(4);
             return StepOutcome::Ran;
@@ -3182,7 +3254,7 @@ mod tests {
         assert_eq!(one_shot(&mut srv, "m4000,4"), "deadbeef");
         // Unmapped access must be a typed error, not empty data.
         assert_eq!(one_shot(&mut srv, "m9000,4"), "E09");
-        assert_eq!(one_shot(&mut srv, "qMemoryRegionInfo:4001").contains("permissions:rw"), true);
+        assert!(one_shot(&mut srv, "qMemoryRegionInfo:4001").contains("permissions:rw"));
     }
 
     /// `from_str_radix` accepts a leading `+` for unsigned types, so every hex
@@ -3587,7 +3659,7 @@ mod tests {
             for len in [1usize, 3, 4, 5, 6, 7, 8, 9, 14, 15, 96, 97, 98] {
                 payloads.push(vec![b; len]);
                 let mut led = vec![b'}'];
-                led.extend(std::iter::repeat(b).take(len));
+                led.extend(std::iter::repeat_n(b, len));
                 payloads.push(led);
             }
         }
@@ -3654,7 +3726,7 @@ mod tests {
             for b in [0u8, b'A', b'}', b'*', 0xFF, 0x03, 0x04, 0x0A, 0x5D] {
                 for len in [1usize, 3, 4, 7, 8, 14, 97, 98] {
                     let mut payload = vec![lead];
-                    payload.extend(std::iter::repeat(b).take(len));
+                    payload.extend(std::iter::repeat_n(b, len));
                     assert_eq!(
                         roundtrip(&payload),
                         payload,
@@ -3785,7 +3857,7 @@ mod tests {
 
     /// `_M size,perms` asks for a mapping with specific protection. Handing
     /// back `rw` whatever was requested means a client that allocates `rx` and
-    /// then writes there succeeds in-process and takes EXC_BAD_ACCESS on a
+    /// then writes there succeeds in-process and takes `EXC_BAD_ACCESS` on a
     /// device.
     #[test]
     fn allocation_honours_the_requested_permissions() {
@@ -3893,6 +3965,32 @@ mod tests {
             one_shot(&mut srv, "m4000,2"),
             "0000",
             "no refused write may have landed"
+        );
+    }
+
+    /// `off + len` are hex fields chosen by the requester. In release the
+    /// overflow checks are off, so `off = 1, len = 0xffff_ffff_ffff_ffff`
+    /// wrapped the sum to 0 and made the slice `bytes[1..0]` — a panic, and
+    /// with `panic = "abort"` the death of the whole process. `spawn_tcp`
+    /// exposes this parser on a loopback socket, so the packet arrives from
+    /// outside. A length that does not exist is a THIRD state: refuse it with
+    /// `E00`, never silently saturate it into a length the client never asked
+    /// for.
+    #[test]
+    fn qxfer_refuses_a_length_whose_end_offset_does_not_exist() {
+        let mut srv = MockDebugserver::new(1);
+        srv.set_target_xml("ABCDEFGHIJ");
+
+        let reply = one_shot(&mut srv, "qXfer:features:read:target.xml:1,ffffffffffffffff");
+        assert!(!reply.is_empty(), "a malformed qXfer must be answered, not fatal");
+        assert_eq!(reply, "E00", "an end offset that does not exist is refused, not clamped");
+
+        // The guard must not fire on a length that merely exceeds the payload:
+        // that one has a real end offset and is served as the last chunk.
+        assert_eq!(
+            one_shot(&mut srv, "qXfer:features:read:target.xml:8,100"),
+            "lIJ",
+            "an oversized but representable length still reads to the end"
         );
     }
 

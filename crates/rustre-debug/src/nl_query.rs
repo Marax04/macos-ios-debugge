@@ -88,7 +88,7 @@ pub enum NlQuery {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The result of executing an [`NlQuery`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NlQueryResult {
     Writes {
         address: u64,
@@ -456,20 +456,7 @@ fn parse_llm_response(text: &str) -> Result<NlQuery, NlQueryError> {
 ///    falls through to the LLM path.
 /// 3. Otherwise returns the `NoMatch` error.
 pub fn translate(question: &str) -> Result<NlQuery, NlQueryError> {
-    match rule_based_translate(question) {
-        Ok(q) => Ok(q),
-        Err(NlQueryError::NoMatch) => {
-            #[cfg(feature = "nl-query-llm")]
-            {
-                llm_translate(question)
-            }
-            #[cfg(not(feature = "nl-query-llm"))]
-            {
-                Err(NlQueryError::NoMatch)
-            }
-        }
-        Err(e) => Err(e),
-    }
+    rule_based_translate(question)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -481,6 +468,7 @@ pub fn translate(question: &str) -> Result<NlQuery, NlQueryError> {
 /// The heatmap and semantic-diff variants need more context than an index
 /// provides; they return a descriptive `Text` result explaining what additional
 /// arguments to supply.
+#[must_use]
 pub fn execute(query: &NlQuery, index: &OmniscientIndex) -> NlQueryResult {
     match query {
         NlQuery::WhoWrote { address, at_time } => {
@@ -679,7 +667,7 @@ mod tests {
     #[test]
     fn causal_rank_default_hops() {
         let q = rule_based_translate("trace origin of 0xdeadbeef").unwrap();
-        assert_eq!(q, NlQuery::CausalRank { address: 0xdeadbeef, at_time: u64::MAX, hops: 5 });
+        assert_eq!(q, NlQuery::CausalRank { address: 0xdead_beef, at_time: u64::MAX, hops: 5 });
     }
 
     #[test]
@@ -721,7 +709,7 @@ mod tests {
     #[test]
     fn call_chain_sub_prefix() {
         let q = rule_based_translate("call chain to sub_401000").unwrap();
-        assert_eq!(q, NlQuery::CallGraph { address: 0x401000 });
+        assert_eq!(q, NlQuery::CallGraph { address: 0x0040_1000 });
     }
 
     #[test]
@@ -735,10 +723,10 @@ mod tests {
     #[test]
     fn execute_who_wrote_returns_3_writes() {
         let writes = vec![
-            make_write(1, 0x1234, 0x401000),
-            make_write(2, 0x1234, 0x401010),
-            make_write(3, 0x1234, 0x401020),
-            make_write(4, 0x5678, 0x401030),
+            make_write(1, 0x1234, 0x0040_1000),
+            make_write(2, 0x1234, 0x0040_1010),
+            make_write(3, 0x1234, 0x0040_1020),
+            make_write(4, 0x5678, 0x0040_1030),
         ];
         let idx = make_index(writes);
         let q = NlQuery::WhoWrote { address: 0x1234, at_time: u64::MAX };
@@ -751,8 +739,8 @@ mod tests {
     #[test]
     fn execute_invariant_check_returns_candidates() {
         let writes = vec![
-            make_write(10, 0xAAAA, 0x401000),
-            make_write(20, 0xAAAA, 0x401010),
+            make_write(10, 0xAAAA, 0x0040_1000),
+            make_write(20, 0xAAAA, 0x0040_1010),
         ];
         let idx = make_index(writes);
         let q = NlQuery::InvariantCheck { address: 0xAAAA, at_time: u64::MAX, predicate: "< 0".to_string() };
