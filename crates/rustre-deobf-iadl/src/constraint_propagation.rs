@@ -173,14 +173,8 @@ impl DeobfConstraint {
     #[must_use] 
     pub fn primary_var(&self) -> &str {
         match self {
-            Self::Equals { var, .. } => var,
-            Self::InRange { var, .. } => var,
-            Self::NotEqual { var, .. } => var,
-            Self::AffineEqual { lhs, .. } => lhs,
-            Self::OneOf { var, .. } => var,
-            Self::GreaterThan { lhs, .. } => lhs,
-            Self::MustBeTrue { var } => var,
-            Self::MustBeFalse { var } => var,
+            Self::AffineEqual { lhs, .. } | Self::GreaterThan { lhs, .. } => lhs,
+            Self::Equals { var, .. } | Self::InRange { var, .. } | Self::NotEqual { var, .. } | Self::OneOf { var, .. } | Self::MustBeTrue { var } | Self::MustBeFalse { var } => var,
         }
     }
 
@@ -253,13 +247,7 @@ impl ConstraintGraph {
             .insert(idx);
         // Register secondary variables for affine / gt constraints.
         match &c {
-            DeobfConstraint::AffineEqual { rhs, .. } => {
-                self.var_to_constraints
-                    .entry(rhs.clone())
-                    .or_default()
-                    .insert(idx);
-            }
-            DeobfConstraint::GreaterThan { rhs, .. } => {
+            DeobfConstraint::AffineEqual { rhs, .. } | DeobfConstraint::GreaterThan { rhs, .. } => {
                 self.var_to_constraints
                     .entry(rhs.clone())
                     .or_default()

@@ -162,16 +162,16 @@ impl Default for DeobfuscationPipeline {
 
 pub struct ConstantFoldingPass;
 impl TransformPass for ConstantFoldingPass {
-    fn name(&self) -> &str { "constant-folding" }
+    fn name(&self) -> &'static str { "constant-folding" }
     fn is_idempotent(&self) -> bool { false }
 
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         let ids: Vec<InsnId> = func.insns.keys().copied().collect();
         for id in ids {
-            if let Some(insn) = func.insns.get(&id).cloned() {
-                if let Some(folded) = fold_constant(&insn) {
-                    if let Some(dst) = insn.dst {
+            if let Some(insn) = func.insns.get(&id).cloned()
+                && let Some(folded) = fold_constant(&insn)
+                    && let Some(dst) = insn.dst {
                         // Replace all uses of dst with constant
                         let uses: Vec<InsnId> = func.def_use.get(&dst).cloned().unwrap_or_default();
                         for use_id in uses {
@@ -191,49 +191,44 @@ impl TransformPass for ConstantFoldingPass {
                             stats.insns_simplified += 1;
                         }
                     }
-                }
-            }
         }
         changed
     }
 }
 
 fn fold_constant(insn: &IrInsn) -> Option<u64> {
-    if insn.src.len() < 1 { return None; }
+    if insn.src.is_empty() { return None; }
     match &insn.op {
-        IrOp::Move => {
-            if let IrValue::Const(c) = insn.src[0] { return Some(c); }
-        }
         IrOp::Add => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a.wrapping_add(*b));
             }
         }
         IrOp::Sub => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a.wrapping_sub(*b));
             }
         }
         IrOp::Mul => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a.wrapping_mul(*b));
             }
         }
         IrOp::And => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a & b);
             }
             // x & 0 = 0
-            if insn.src.iter().any(|s| *s == IrValue::Const(0)) { return Some(0); }
+            if insn.src.contains(&IrValue::Const(0)) { return Some(0); }
         }
         IrOp::Or => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a | b);
             }
             // x | 0 = x — not a constant unless other arg is const
         }
         IrOp::Xor => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a ^ b);
             }
             // x ^ x = 0
@@ -243,29 +238,28 @@ fn fold_constant(insn: &IrInsn) -> Option<u64> {
             if let IrValue::Const(a) = insn.src[0] { return Some(!a); }
         }
         IrOp::Shl => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a.wrapping_shl(*b as u32));
             }
-            if insn.src.get(1) == Some(&IrValue::Const(0)) {
-                if let IrValue::Const(a) = insn.src[0] { return Some(a); }
-            }
+            if insn.src.get(1) == Some(&IrValue::Const(0))
+                && let IrValue::Const(a) = insn.src[0] { return Some(a); }
         }
         IrOp::Lshr => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
                 return Some(a.wrapping_shr(*b as u32));
             }
         }
-        IrOp::ZExt { .. } => {
+        IrOp::Move | IrOp::ZExt { .. } => {
             if let IrValue::Const(c) = insn.src[0] { return Some(c); }
         }
         IrOp::CmpEq => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
-                return Some(if a == b { 1 } else { 0 });
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
+                return Some(u64::from(a == b));
             }
         }
         IrOp::CmpNe => {
-            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.get(0)?, &insn.src.get(1)?) {
-                return Some(if a != b { 1 } else { 0 });
+            if let (IrValue::Const(a), IrValue::Const(b)) = (&insn.src.first()?, &insn.src.get(1)?) {
+                return Some(u64::from(a != b));
             }
         }
         _ => {}
@@ -275,7 +269,7 @@ fn fold_constant(insn: &IrInsn) -> Option<u64> {
 
 pub struct DeadCodeElimination;
 impl TransformPass for DeadCodeElimination {
-    fn name(&self) -> &str { "dce" }
+    fn name(&self) -> &'static str { "dce" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         // Mark dead: any insn with a dst not used anywhere, unless it has side effects
@@ -284,14 +278,13 @@ impl TransformPass for DeadCodeElimination {
             if let Some(insn) = func.insns.get(&id) {
                 if insn.flags.is_dead { continue; }
                 if let Some(dst) = insn.dst {
-                    let uses = func.def_use.get(&dst).map(std::vec::Vec::len).unwrap_or(0);
-                    if uses == 0 && !has_side_effects(&insn.op) {
-                        if let Some(insn_mut) = func.insns.get_mut(&id) {
+                    let uses = func.def_use.get(&dst).map_or(0, std::vec::Vec::len);
+                    if uses == 0 && !has_side_effects(&insn.op)
+                        && let Some(insn_mut) = func.insns.get_mut(&id) {
                             insn_mut.flags.is_dead = true;
                             stats.insns_eliminated += 1;
                             changed = true;
                         }
-                    }
                 }
             }
         }
@@ -306,20 +299,18 @@ const fn has_side_effects(op: &IrOp) -> bool {
 
 pub struct CopyPropagation;
 impl TransformPass for CopyPropagation {
-    fn name(&self) -> &str { "copy-prop" }
+    fn name(&self) -> &'static str { "copy-prop" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         let mut copy_map: HashMap<VarId, IrValue> = HashMap::new();
 
         // Collect all copy assignments: dst = MOVE src_var
         for insn in func.insns.values() {
-            if insn.op == IrOp::Move {
-                if let Some(dst) = insn.dst {
-                    if let Some(src) = insn.src.first() {
+            if insn.op == IrOp::Move
+                && let Some(dst) = insn.dst
+                    && let Some(src) = insn.src.first() {
                         copy_map.insert(dst, src.clone());
                     }
-                }
-            }
         }
 
         // Propagate: replace Var(x) with its copy source if x is in copy_map
@@ -327,13 +318,12 @@ impl TransformPass for CopyPropagation {
         for id in ids {
             if let Some(insn) = func.insns.get_mut(&id) {
                 for src in &mut insn.src {
-                    if let IrValue::Var(v) = *src {
-                        if let Some(replacement) = copy_map.get(&v) {
+                    if let IrValue::Var(v) = *src
+                        && let Some(replacement) = copy_map.get(&v) {
                             *src = replacement.clone();
                             changed = true;
                             stats.constants_propagated += 1;
                         }
-                    }
                 }
             }
         }
@@ -343,7 +333,7 @@ impl TransformPass for CopyPropagation {
 
 pub struct CommonSubexpressionElim;
 impl TransformPass for CommonSubexpressionElim {
-    fn name(&self) -> &str { "cse" }
+    fn name(&self) -> &'static str { "cse" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         let mut expr_map: HashMap<(IrOp, Vec<IrValue>), VarId> = HashMap::new();
@@ -387,7 +377,7 @@ impl TransformPass for CommonSubexpressionElim {
 
 pub struct BooleanSimplification;
 impl TransformPass for BooleanSimplification {
-    fn name(&self) -> &str { "bool-simp" }
+    fn name(&self) -> &'static str { "bool-simp" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         let ids: Vec<InsnId> = func.insns.keys().copied().collect();
@@ -410,25 +400,20 @@ impl TransformPass for BooleanSimplification {
                     } else { None }
                 }
                 // x & x = x
-                IrOp::And if src.len() == 2 && src[0] == src[1] => Some(src[0].clone()),
+                IrOp::And | IrOp::Or if src.len() == 2 && src[0] == src[1] => Some(src[0].clone()),
                 // x | x = x
-                IrOp::Or if src.len() == 2 && src[0] == src[1] => Some(src[0].clone()),
                 // x ^ x = 0
                 IrOp::Xor if src.len() == 2 && src[0] == src[1] => Some(IrValue::Const(0)),
                 // x & ~x = 0
                 IrOp::And if src.len() == 2 => {
                     let is_not_pair = |a: &IrValue, b: &IrValue| -> bool {
-                        if let (IrValue::Var(va), IrValue::Var(vb)) = (a, b) {
-                            if let Some(def_b) = func.use_def.get(vb) {
-                                if let Some(def_insn) = func.insns.get(def_b) {
-                                    if def_insn.op == IrOp::Not {
-                                        if def_insn.src.first() == Some(&IrValue::Var(*va)) {
+                        if let (IrValue::Var(va), IrValue::Var(vb)) = (a, b)
+                            && let Some(def_b) = func.use_def.get(vb)
+                                && let Some(def_insn) = func.insns.get(def_b)
+                                    && def_insn.op == IrOp::Not
+                                        && def_insn.src.first() == Some(&IrValue::Var(*va)) {
                                             return true;
                                         }
-                                    }
-                                }
-                            }
-                        }
                         false
                     };
                     if is_not_pair(&src[0], &src[1]) || is_not_pair(&src[1], &src[0]) {
@@ -438,8 +423,8 @@ impl TransformPass for BooleanSimplification {
                 _ => None,
             };
 
-            if let Some(new_val) = simplified {
-                if let Some(insn) = func.insns.get_mut(&id) {
+            if let Some(new_val) = simplified
+                && let Some(insn) = func.insns.get_mut(&id) {
                     insn.op = IrOp::Move;
                     insn.src = vec![new_val];
                     insn.flags.was_obfuscated = true;
@@ -447,7 +432,6 @@ impl TransformPass for BooleanSimplification {
                     changed = true;
                     stats.insns_simplified += 1;
                 }
-            }
         }
         changed
     }
@@ -455,7 +439,7 @@ impl TransformPass for BooleanSimplification {
 
 pub struct XorChainSimplifier;
 impl TransformPass for XorChainSimplifier {
-    fn name(&self) -> &str { "xor-chain" }
+    fn name(&self) -> &'static str { "xor-chain" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         // Detect: v1 = x ^ k1; v2 = v1 ^ k2; ... -> vN = x ^ (k1^k2^...^kN)
         let mut changed = false;
@@ -464,7 +448,7 @@ impl TransformPass for XorChainSimplifier {
         for insn in func.insns.values() {
             if insn.op != IrOp::Xor { continue; }
             if let Some(dst) = insn.dst {
-                match (&insn.src.get(0), &insn.src.get(1)) {
+                match (&insn.src.first(), &insn.src.get(1)) {
                     (Some(IrValue::Var(v)), Some(IrValue::Const(c))) |
                     (Some(IrValue::Const(c)), Some(IrValue::Var(v))) => {
                         if let Some(&(base, prev_c)) = xor_chains.get(v) {
@@ -480,17 +464,15 @@ impl TransformPass for XorChainSimplifier {
 
         // Replace: if chain found, simplify to single XOR with accumulated constant
         for (var, (base, acc_const)) in &xor_chains {
-            if let Some(&def_id) = func.use_def.get(var) {
-                if let Some(insn) = func.insns.get_mut(&def_id) {
-                    if insn.op == IrOp::Xor {
+            if let Some(&def_id) = func.use_def.get(var)
+                && let Some(insn) = func.insns.get_mut(&def_id)
+                    && insn.op == IrOp::Xor {
                         insn.src = vec![IrValue::Var(*base), IrValue::Const(*acc_const)];
                         insn.flags.was_obfuscated = true;
                         insn.flags.deobf_note = Some(format!("XOR chain collapsed, const={acc_const:#x}"));
                         changed = true;
                         stats.insns_simplified += 1;
                     }
-                }
-            }
         }
         changed
     }
@@ -498,7 +480,7 @@ impl TransformPass for XorChainSimplifier {
 
 pub struct MbaSimplifier;
 impl TransformPass for MbaSimplifier {
-    fn name(&self) -> &str { "mba-simplifier" }
+    fn name(&self) -> &'static str { "mba-simplifier" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         // Detect and simplify Mixed Boolean Arithmetic expressions
         // e.g.: (a & b) + (a | b) = a + b
@@ -514,11 +496,11 @@ impl TransformPass for MbaSimplifier {
             };
             // Pattern: x XOR y where x and y have known MBA expansions
             // For now, detect (x | y) - (x & y) = x ^ y
-            if let IrOp::Sub = &op {
+            if matches!(&op, IrOp::Sub) {
                 // check if src[0] is (a | b) and src[1] is (a & b)
                 let result = try_resolve_mba_sub(func, &src);
-                if let Some((new_op, new_srcs)) = result {
-                    if let Some(insn) = func.insns.get_mut(&id) {
+                if let Some((new_op, new_srcs)) = result
+                    && let Some(insn) = func.insns.get_mut(&id) {
                         insn.op = new_op;
                         insn.src = new_srcs;
                         insn.flags.was_obfuscated = true;
@@ -526,7 +508,6 @@ impl TransformPass for MbaSimplifier {
                         changed = true;
                         stats.insns_simplified += 1;
                     }
-                }
             }
         }
         changed
@@ -534,7 +515,7 @@ impl TransformPass for MbaSimplifier {
 }
 
 fn try_resolve_mba_sub(func: &IrFunction, src: &[IrValue]) -> Option<(IrOp, Vec<IrValue>)> {
-    let (s0, s1) = (src.get(0)?, src.get(1)?);
+    let (s0, s1) = (src.first()?, src.get(1)?);
     let (v0, v1) = match (s0, s1) {
         (IrValue::Var(a), IrValue::Var(b)) => (*a, *b),
         _ => return None,
@@ -542,20 +523,18 @@ fn try_resolve_mba_sub(func: &IrFunction, src: &[IrValue]) -> Option<(IrOp, Vec<
     let insn0 = func.insns.get(func.use_def.get(&v0)?)?;
     let insn1 = func.insns.get(func.use_def.get(&v1)?)?;
     // (a | b) - (a & b) = a ^ b
-    if insn0.op == IrOp::Or && insn1.op == IrOp::And {
-        if insn0.src.len() == 2 && insn1.src.len() == 2 {
-            if (insn0.src[0] == insn1.src[0] && insn0.src[1] == insn1.src[1]) ||
-               (insn0.src[0] == insn1.src[1] && insn0.src[1] == insn1.src[0]) {
+    if insn0.op == IrOp::Or && insn1.op == IrOp::And
+        && insn0.src.len() == 2 && insn1.src.len() == 2
+            && ((insn0.src[0] == insn1.src[0] && insn0.src[1] == insn1.src[1]) ||
+               (insn0.src[0] == insn1.src[1] && insn0.src[1] == insn1.src[0])) {
                 return Some((IrOp::Xor, insn0.src.clone()));
             }
-        }
-    }
     None
 }
 
 pub struct OpaquePredicateElim;
 impl TransformPass for OpaquePredicateElim {
-    fn name(&self) -> &str { "opaque-pred" }
+    fn name(&self) -> &'static str { "opaque-pred" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         // Look for comparisons that always evaluate to the same value
@@ -586,27 +565,21 @@ impl TransformPass for OpaquePredicateElim {
 fn evaluate_opaque(func: &IrFunction, insn: &IrInsn) -> Option<u64> {
     // Only handle trivial cases: comparison of a known-zero expression with 0
     if insn.src.len() < 2 { return None; }
-    match (&insn.op, &insn.src[1]) {
-        (IrOp::CmpEq, IrValue::Const(0)) => {
-            // Is src[0] always 0? Check for x^x or x&~x
-            if let IrValue::Var(v) = &insn.src[0] {
-                if let Some(&def_id) = func.use_def.get(v) {
-                    if let Some(def) = func.insns.get(&def_id) {
-                        if def.op == IrOp::Xor && def.src.len() == 2 && def.src[0] == def.src[1] {
-                            return Some(1); // x^x == 0 is always true
-                        }
+    if matches!((&insn.op, &insn.src[1]), (IrOp::CmpEq, IrValue::Const(0))) {
+        // Is src[0] always 0? Check for x^x or x&~x
+        if let IrValue::Var(v) = &insn.src[0]
+            && let Some(&def_id) = func.use_def.get(v)
+                && let Some(def) = func.insns.get(&def_id)
+                    && def.op == IrOp::Xor && def.src.len() == 2 && def.src[0] == def.src[1] {
+                        return Some(1); // x^x == 0 is always true
                     }
-                }
-            }
-        }
-        _ => {}
     }
     None
 }
 
 pub struct BlockMerging;
 impl TransformPass for BlockMerging {
-    fn name(&self) -> &str { "block-merge" }
+    fn name(&self) -> &'static str { "block-merge" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         // Merge block A -> block B where A has one successor (B) and B has one predecessor (A)
@@ -620,8 +593,7 @@ impl TransformPass for BlockMerging {
             if !single_succ { continue; }
             if bid == succ_id { continue; }
             let single_pred = func.blocks.get(&succ_id)
-                .map(|b| b.predecessors.len() == 1 && b.predecessors[0] == bid)
-                .unwrap_or(false);
+                .is_some_and(|b| b.predecessors.len() == 1 && b.predecessors[0] == bid);
             if !single_pred { continue; }
 
             // Merge succ into bid
@@ -641,7 +613,7 @@ impl TransformPass for BlockMerging {
 
 pub struct PhiElimination;
 impl TransformPass for PhiElimination {
-    fn name(&self) -> &str { "phi-elim" }
+    fn name(&self) -> &'static str { "phi-elim" }
     fn run(&self, func: &mut IrFunction, stats: &mut PipelineStats) -> bool {
         let mut changed = false;
         // If a PHI has all identical args -> replace with simple move
@@ -654,14 +626,13 @@ impl TransformPass for PhiElimination {
             };
             if src.is_empty() { continue; }
             let first = &src[0];
-            if src.iter().all(|s| s == first) {
-                if let Some(insn) = func.insns.get_mut(&id) {
+            if src.iter().all(|s| s == first)
+                && let Some(insn) = func.insns.get_mut(&id) {
                     insn.op = IrOp::Move;
                     insn.src = vec![first.clone()];
                     changed = true;
                     stats.phis_simplified += 1;
                 }
-            }
         }
         changed
     }

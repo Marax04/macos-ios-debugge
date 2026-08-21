@@ -262,8 +262,8 @@ fn api_resolution_confidence_capped_at_100() {
 #[test]
 fn api_resolution_with_address() {
     let h = ApiHash::new(0, HashAlgorithm::Djb2, 0);
-    let r = ApiResolution::new(h, 0).with_address(0xDEADBEEF);
-    assert_eq!(r.resolved_address, Some(0xDEADBEEF));
+    let r = ApiResolution::new(h, 0).with_address(0xDEAD_BEEF);
+    assert_eq!(r.resolved_address, Some(0xDEAD_BEEF));
 }
 
 #[test]
@@ -631,7 +631,7 @@ fn iadl_error_display() {
 // Send + Sync invariants
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn trait_objects_are_send_sync() {
@@ -737,7 +737,7 @@ fn perturbation_effect_is_beneficial_threshold() {
     assert!(!e0.is_beneficial());
 }
 
-fn perturbation_effect_helper(q: f64) -> rustre_deobf_iadl::perturbation::PerturbationEffect {
+const fn perturbation_effect_helper(q: f64) -> rustre_deobf_iadl::perturbation::PerturbationEffect {
     use rustre_deobf_iadl::perturbation::PerturbationEffect;
     PerturbationEffect {
         kind: PerturbationType::NopElimination,
@@ -756,7 +756,7 @@ fn perturbation_effect_helper(q: f64) -> rustre_deobf_iadl::perturbation::Pertur
 struct DummyBinaryHypothesis;
 impl BinaryHypothesis for DummyBinaryHypothesis {
     fn id(&self) -> u64 { 0xDEAD }
-    fn name(&self) -> &str { "Dummy" }
+    fn name(&self) -> &'static str { "Dummy" }
     fn prior(&self, _s: &BinaryIadlState) -> f64 { 0.0 }
     fn apply(&self, _s: &BinaryIadlState) -> BinaryTentativeState {
         BinaryTentativeState {

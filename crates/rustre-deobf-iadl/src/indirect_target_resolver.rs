@@ -134,7 +134,7 @@ impl ValueSet {
             return self.values.contains(&v);
         }
         if self.stride > 0 {
-            v >= self.lower && v <= self.upper && (v - self.lower) % self.stride == 0
+            v >= self.lower && v <= self.upper && (v - self.lower).is_multiple_of(self.stride)
         } else {
             false
         }
@@ -228,7 +228,7 @@ impl TaintState {
     pub fn is_register_tainted(&self, reg: &str) -> bool {
         self.register_taints
             .get(reg)
-            .map_or(false, |s| !s.is_empty())
+            .is_some_and(|s| !s.is_empty())
     }
 
     /// Return `true` if a memory address is tainted.
@@ -236,7 +236,7 @@ impl TaintState {
     pub fn is_memory_tainted(&self, addr: u64) -> bool {
         self.memory_taints
             .get(&addr)
-            .map_or(false, |s| !s.is_empty())
+            .is_some_and(|s| !s.is_empty())
     }
 
     /// Propagate taint from source register to destination register.
@@ -728,12 +728,11 @@ impl IndirectTargetResolver {
         // 3. IAT pattern check.
         if let Some(instr) = self.instructions.get(&site_addr) {
             let iat_addr = self.compute_mem_target(instr);
-            if let Some(addr) = iat_addr {
-                if let Some(sym) = self.iat_map.get(&addr) {
+            if let Some(addr) = iat_addr
+                && let Some(sym) = self.iat_map.get(&addr) {
                     target.symbol = Some(sym.clone());
                     target.add_target(addr, ResolutionMethod::IatPointer, 0.85);
                 }
-            }
         }
 
         // 4. Vtable analysis.
@@ -762,13 +761,11 @@ impl IndirectTargetResolver {
         }
 
         // 7. ROP chain analysis.
-        if self.config.enable_rop {
-            if let Some(rop) = self.try_rop_analysis(site_addr) {
-                if let Some(final_t) = rop.final_target {
+        if self.config.enable_rop
+            && let Some(rop) = self.try_rop_analysis(site_addr)
+                && let Some(final_t) = rop.final_target {
                     target.add_target(final_t, ResolutionMethod::RopChain, rop.confidence);
                 }
-            }
-        }
 
         if target.targets.is_empty() {
             target.methods.push(ResolutionMethod::Unresolved);
@@ -816,11 +813,10 @@ impl IndirectTargetResolver {
                     }
                 }
             } else if i.mnemonic.to_ascii_lowercase().starts_with("add") {
-                if let (Some(dst), Some(imm)) = (&i.dst, i.imm) {
-                    if let Some(v) = state.get_reg(dst) {
+                if let (Some(dst), Some(imm)) = (&i.dst, i.imm)
+                    && let Some(v) = state.get_reg(dst) {
                         state.set_reg(dst.clone(), v.wrapping_add(imm));
                     }
-                }
             } else if !i.mnemonic.to_ascii_lowercase().starts_with("cmp") {
                 // Any other def kills the register.
                 if let Some(dst) = &i.dst {
@@ -898,7 +894,7 @@ impl IndirectTargetResolver {
         let mut possible_vals: BTreeSet<u64> = BTreeSet::new();
         let mut visited: HashSet<u64> = HashSet::new();
         let mut worklist: VecDeque<(u64, String, u32)> = VecDeque::new();
-        worklist.push_back((site_addr, base_reg.clone(), 0));
+        worklist.push_back((site_addr, base_reg, 0));
 
         while let Some((cur_addr, reg, depth)) = worklist.pop_front() {
             if depth > self.config.max_slice_depth {

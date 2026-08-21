@@ -2682,10 +2682,10 @@ mod tests {
     #[test]
     fn api_resolution_confidence() {
         let h = ApiHash::new(0, HashAlgorithm::Crc32, 0);
-        let r = ApiResolution::new(h, 0x401000).with_confidence(80);
+        let r = ApiResolution::new(h, 0x0040_1000).with_confidence(80);
         assert!(r.is_high_confidence());
         let h2 = ApiHash::new(0, HashAlgorithm::Crc32, 0);
-        let r2 = ApiResolution::new(h2, 0x402000).with_confidence(50);
+        let r2 = ApiResolution::new(h2, 0x0040_2000).with_confidence(50);
         assert!(!r2.is_high_confidence());
     }
 

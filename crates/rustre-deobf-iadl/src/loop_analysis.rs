@@ -311,7 +311,7 @@ impl Default for LoopBudget {
     fn default() -> Self {
         Self {
             max_iterations: 1000,
-            max_duration: Some(Duration::from_secs(300)),
+            max_duration: Some(Duration::from_mins(5)),
             max_memory_bytes: 512 * 1024 * 1024, // 512 MiB
         }
     }
@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn loop_budget_time_ok_when_just_started() {
         let budget = LoopBudget {
-            max_duration: Some(Duration::from_secs(3600)),
+            max_duration: Some(Duration::from_hours(1)),
             ..LoopBudget::default()
         };
         let start = Instant::now();

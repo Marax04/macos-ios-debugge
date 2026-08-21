@@ -653,7 +653,7 @@ impl CallGraphBuilder {
                     EdgeKind::TailCall
                 } else if ci.is_indirect {
                     EdgeKind::IndirectCall
-                } else if ci.direct_target.map_or(false, |t| self.is_in_stub_range(t)) {
+                } else if ci.direct_target.is_some_and(|t| self.is_in_stub_range(t)) {
                     EdgeKind::StubCall
                 } else {
                     EdgeKind::DirectCall

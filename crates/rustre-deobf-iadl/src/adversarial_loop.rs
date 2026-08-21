@@ -189,7 +189,7 @@ impl Default for IadlLoopConfig {
             max_iterations: 64,
             stuck_threshold: 3,
             progress_threshold: 1e-4,
-            time_budget: Duration::from_secs(300),
+            time_budget: Duration::from_mins(5),
             adversarial_mode: true,
         }
     }

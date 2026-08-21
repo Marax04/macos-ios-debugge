@@ -307,7 +307,7 @@ pub fn exponential_moving_average(history: &[f64], alpha: f64) -> Vec<f64> {
     ema.push(history[0]);
     for &v in &history[1..] {
         let prev = *ema.last().unwrap();
-        ema.push(alpha * v + (1.0 - alpha) * prev);
+        ema.push((1.0 - alpha).mul_add(prev, alpha * v));
     }
     ema
 }

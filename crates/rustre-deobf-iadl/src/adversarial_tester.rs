@@ -55,7 +55,7 @@ impl TestCase {
         id: u64,
         input: Vec<u8>,
         expected_output: Vec<u8>,
-        parent: &TestCase,
+        parent: &Self,
     ) -> Self {
         Self {
             id,
@@ -167,41 +167,41 @@ impl MutationOp {
     pub fn apply(&self, input: &[u8]) -> Vec<u8> {
         let mut out = input.to_vec();
         match self {
-            MutationOp::BitFlip { bit_offset } => {
+            Self::BitFlip { bit_offset } => {
                 let byte = bit_offset / 8;
                 let bit = bit_offset % 8;
                 if byte < out.len() {
                     out[byte] ^= 1 << bit;
                 }
             }
-            MutationOp::ByteSet { byte_offset, value } => {
+            Self::ByteSet { byte_offset, value } => {
                 if *byte_offset < out.len() {
                     out[*byte_offset] = *value;
                 }
             }
-            MutationOp::ByteXor { byte_offset, mask } => {
+            Self::ByteXor { byte_offset, mask } => {
                 if *byte_offset < out.len() {
                     out[*byte_offset] ^= mask;
                 }
             }
-            MutationOp::ByteInsert { byte_offset, value } => {
+            Self::ByteInsert { byte_offset, value } => {
                 let pos = (*byte_offset).min(out.len());
                 out.insert(pos, *value);
             }
-            MutationOp::ByteDelete { byte_offset } => {
+            Self::ByteDelete { byte_offset } => {
                 if *byte_offset < out.len() {
                     out.remove(*byte_offset);
                 }
             }
-            MutationOp::DwordSet { offset, value } => {
+            Self::DwordSet { offset, value } => {
                 if *offset + 4 <= out.len() {
                     out[*offset..*offset + 4].copy_from_slice(&value.to_le_bytes());
                 }
             }
-            MutationOp::Append { bytes } => {
+            Self::Append { bytes } => {
                 out.extend_from_slice(bytes);
             }
-            MutationOp::Truncate { len } => {
+            Self::Truncate { len } => {
                 out.truncate(*len);
             }
         }
@@ -456,7 +456,7 @@ impl AdversarialTester {
     fn deterministic_mutation(&mut self, seed: &TestCase, index: u64) -> MutationOp {
         self.mutation_sequence = self.mutation_sequence.wrapping_add(1);
         let seed_val = seed.id
-            .wrapping_mul(2654435761)
+            .wrapping_mul(2_654_435_761)
             .wrapping_add(index)
             .wrapping_add(self.mutation_sequence);
 
@@ -520,8 +520,8 @@ mod tests {
     #[test]
     fn test_mutation_op_bitflip() {
         let op = MutationOp::BitFlip { bit_offset: 0 };
-        let out = op.apply(&[0b00000000]);
-        assert_eq!(out, vec![0b00000001]);
+        let out = op.apply(&[0b0000_0000]);
+        assert_eq!(out, vec![0b0000_0001]);
     }
 
     #[test]

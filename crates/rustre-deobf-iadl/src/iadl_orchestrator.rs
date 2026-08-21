@@ -54,13 +54,13 @@ impl PhaseId {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
-            PhaseId::CallGraphReconstruction => "call-graph-reconstruction",
-            PhaseId::IndirectJumpResolution  => "indirect-jump-resolution",
-            PhaseId::ConstraintPropagation   => "constraint-propagation",
-            PhaseId::ObfuscationRemoval      => "obfuscation-removal",
-            PhaseId::IrNormalization         => "ir-normalization",
-            PhaseId::LoopNormalization       => "loop-normalization",
-            PhaseId::ConvergenceVerification => "convergence-verification",
+            Self::CallGraphReconstruction => "call-graph-reconstruction",
+            Self::IndirectJumpResolution  => "indirect-jump-resolution",
+            Self::ConstraintPropagation   => "constraint-propagation",
+            Self::ObfuscationRemoval      => "obfuscation-removal",
+            Self::IrNormalization         => "ir-normalization",
+            Self::LoopNormalization       => "loop-normalization",
+            Self::ConvergenceVerification => "convergence-verification",
         }
     }
 
@@ -68,13 +68,11 @@ impl PhaseId {
     #[must_use]
     pub const fn default_max_iter(&self) -> u32 {
         match self {
-            PhaseId::CallGraphReconstruction => 8,
-            PhaseId::IndirectJumpResolution  => 16,
-            PhaseId::ConstraintPropagation   => 32,
-            PhaseId::ObfuscationRemoval      => 24,
-            PhaseId::IrNormalization         => 16,
-            PhaseId::LoopNormalization       => 8,
-            PhaseId::ConvergenceVerification => 2,
+            Self::IndirectJumpResolution | Self::IrNormalization  => 16,
+            Self::ConstraintPropagation   => 32,
+            Self::ObfuscationRemoval      => 24,
+            Self::CallGraphReconstruction | Self::LoopNormalization       => 8,
+            Self::ConvergenceVerification => 2,
         }
     }
 }

@@ -15,8 +15,8 @@ fn make_lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -45,7 +45,7 @@ impl Hypothesis for FixedHyp {
 
 struct PassScorer;
 impl Scorer for PassScorer {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "pass"
     }
     fn weight(&self) -> f64 {
@@ -75,7 +75,7 @@ fn t01_compute_hash_all_algos_deterministic() {
         for inp in inputs {
             let a = compute_hash(inp, algo);
             let b = compute_hash(inp, algo);
-            assert_eq!(a, b, "non-deterministic {:?}", algo);
+            assert_eq!(a, b, "non-deterministic {algo:?}");
         }
     }
 }
@@ -178,10 +178,10 @@ fn t08_hashtable_roundtrip_50_inputs() {
     for i in 0..50 {
         names.push(format!("Api_{i}_{:x}", g() & 0xffff));
     }
-    let refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+    let refs: Vec<&str> = names.iter().map(std::string::String::as_str).collect();
     let table = HashTable::build(&refs, HashAlgorithm::Djb2);
     // We may have collisions; just ensure at least one entry per insert resolved.
-    assert!(table.len() >= 1);
+    assert!(!table.is_empty());
     for n in &names {
         let h = compute_hash(n.as_bytes(), HashAlgorithm::Djb2);
         assert!(table.resolve(h).is_some());
@@ -215,7 +215,7 @@ fn t11_apihash_builders() {
     let a = ApiHash::new(0x42, HashAlgorithm::Crc32, 0x100);
     assert!(!a.is_resolved());
     assert!(!a.is_fully_resolved());
-    let b = a.clone().with_name("X");
+    let b = a.with_name("X");
     assert!(b.is_resolved());
     assert!(!b.is_fully_resolved());
     let c = b.with_dll("kernel32.dll");
@@ -280,7 +280,7 @@ fn t18_detector_fuzz_no_panic() {
         let v: Vec<u8> = (0..n).map(|_| (g() & 0xff) as u8).collect();
         let _ = det.scan_hash_constants(&v);
         let _ = det.detect_loadlib_pattern(&v);
-        let _ = det.analyze(&v, 0x400000);
+        let _ = det.analyze(&v, 0x0040_0000);
     }
 }
 
@@ -723,7 +723,7 @@ fn t51_scorer_contribution_eq() {
 #[test]
 fn t52_iadl_error_display() {
     let e = IadlError::UnsupportedAlgorithm { name: "X".into() };
-    assert!(format!("{e}").contains("X"));
+    assert!(format!("{e}").contains('X'));
     let e2 = IadlError::NotFound;
     assert!(!format!("{e2}").is_empty());
     let e3 = IadlError::Analysis("err".into());
@@ -788,6 +788,6 @@ fn t54_detector_analyze_returns_resolutions_when_enough_hashes() {
         let h = compute_hash(name.as_bytes(), HashAlgorithm::Crc32) as u32;
         data.extend_from_slice(&h.to_le_bytes());
     }
-    let res = det.analyze(&data, 0x400000);
+    let res = det.analyze(&data, 0x0040_0000);
     assert!(!res.is_empty());
 }

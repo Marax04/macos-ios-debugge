@@ -57,16 +57,16 @@ impl StrategyFeature {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
-            StrategyFeature::OpaquePredDensity(_)  => "opaque_pred_density",
-            StrategyFeature::IndirectCallRatio(_)  => "indirect_call_ratio",
-            StrategyFeature::JunkInstrRatio(_)     => "junk_instr_ratio",
-            StrategyFeature::JumpOverJunkRatio(_)  => "jump_over_junk_ratio",
-            StrategyFeature::CodeBloatFactor(_)    => "code_bloat_factor",
-            StrategyFeature::HasVirtualisation(_)  => "has_virtualisation",
-            StrategyFeature::ObfPatternCount(_)    => "obf_pattern_count",
-            StrategyFeature::CurrentScore(_)       => "current_score",
-            StrategyFeature::CurrentComplexity(_)  => "current_complexity",
-            StrategyFeature::PlateauDetected(_)    => "plateau_detected",
+            Self::OpaquePredDensity(_)  => "opaque_pred_density",
+            Self::IndirectCallRatio(_)  => "indirect_call_ratio",
+            Self::JunkInstrRatio(_)     => "junk_instr_ratio",
+            Self::JumpOverJunkRatio(_)  => "jump_over_junk_ratio",
+            Self::CodeBloatFactor(_)    => "code_bloat_factor",
+            Self::HasVirtualisation(_)  => "has_virtualisation",
+            Self::ObfPatternCount(_)    => "obf_pattern_count",
+            Self::CurrentScore(_)       => "current_score",
+            Self::CurrentComplexity(_)  => "current_complexity",
+            Self::PlateauDetected(_)    => "plateau_detected",
         }
     }
 
@@ -74,17 +74,12 @@ impl StrategyFeature {
     #[must_use]
     pub fn as_f64(&self) -> f64 {
         match self {
-            StrategyFeature::OpaquePredDensity(v)  => *v,
-            StrategyFeature::IndirectCallRatio(v)  => *v,
-            StrategyFeature::JunkInstrRatio(v)     => *v,
-            StrategyFeature::JumpOverJunkRatio(v)  => *v,
-            StrategyFeature::CodeBloatFactor(v)    => (*v).min(10.0) / 10.0,
-            StrategyFeature::HasVirtualisation(b)  => if *b { 1.0 } else { 0.0 },
-            StrategyFeature::ObfPatternCount(n)    => (f64::from(*n) / 20.0).min(1.0),
-            StrategyFeature::CurrentScore(v)       => *v,
-            StrategyFeature::CurrentComplexity(c)  => (*c as f64 / 1_000_000.0).min(1.0),
-            StrategyFeature::PlateauDetected(b)    => if *b { 1.0 } else { 0.0 },
-        }
+            Self::CodeBloatFactor(v)    => (*v).min(10.0) / 10.0,
+            Self::HasVirtualisation(b) | Self::PlateauDetected(b)  => if *b { 1.0 } else { 0.0 },
+            Self::ObfPatternCount(n)    => (f64::from(*n) / 20.0).min(1.0),
+            Self::OpaquePredDensity(v) | Self::IndirectCallRatio(v) | Self::JunkInstrRatio(v) | Self::JumpOverJunkRatio(v) | Self::CurrentScore(v)       => *v,
+            Self::CurrentComplexity(c)  => (*c as f64 / 1_000_000.0).min(1.0),
+            }
     }
 }
 
@@ -174,32 +169,32 @@ impl DeobfStrategy {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
-            DeobfStrategy::OpaquePredicateElimination => "opaque-predicate-elimination",
-            DeobfStrategy::IndirectCallResolution      => "indirect-call-resolution",
-            DeobfStrategy::DeadCodeElimination         => "dead-code-elimination",
-            DeobfStrategy::JumpUnfolding               => "jump-unfolding",
-            DeobfStrategy::VirtualisationLifting       => "virtualisation-lifting",
-            DeobfStrategy::ConstantPropagation         => "constant-propagation",
-            DeobfStrategy::BlockMerging                => "block-merging",
-            DeobfStrategy::LoopReconstruction          => "loop-reconstruction",
-            DeobfStrategy::RegionStructuring           => "region-structuring",
-            DeobfStrategy::NoOp                        => "no-op",
+            Self::OpaquePredicateElimination => "opaque-predicate-elimination",
+            Self::IndirectCallResolution      => "indirect-call-resolution",
+            Self::DeadCodeElimination         => "dead-code-elimination",
+            Self::JumpUnfolding               => "jump-unfolding",
+            Self::VirtualisationLifting       => "virtualisation-lifting",
+            Self::ConstantPropagation         => "constant-propagation",
+            Self::BlockMerging                => "block-merging",
+            Self::LoopReconstruction          => "loop-reconstruction",
+            Self::RegionStructuring           => "region-structuring",
+            Self::NoOp                        => "no-op",
         }
     }
 
     /// All non-NoOp strategies.
     #[must_use]
-    pub const fn all() -> &'static [DeobfStrategy] {
+    pub const fn all() -> &'static [Self] {
         &[
-            DeobfStrategy::OpaquePredicateElimination,
-            DeobfStrategy::IndirectCallResolution,
-            DeobfStrategy::DeadCodeElimination,
-            DeobfStrategy::JumpUnfolding,
-            DeobfStrategy::VirtualisationLifting,
-            DeobfStrategy::ConstantPropagation,
-            DeobfStrategy::BlockMerging,
-            DeobfStrategy::LoopReconstruction,
-            DeobfStrategy::RegionStructuring,
+            Self::OpaquePredicateElimination,
+            Self::IndirectCallResolution,
+            Self::DeadCodeElimination,
+            Self::JumpUnfolding,
+            Self::VirtualisationLifting,
+            Self::ConstantPropagation,
+            Self::BlockMerging,
+            Self::LoopReconstruction,
+            Self::RegionStructuring,
         ]
     }
 }
@@ -298,8 +293,8 @@ impl DeobfStrategySelector {
 
         // Apply each scoring rule.
         for rule in Self::rules() {
-            if let Some(&val) = map.get(rule.feature) {
-                if val > rule.threshold {
+            if let Some(&val) = map.get(rule.feature)
+                && val > rule.threshold {
                     let weight = val - rule.threshold;
                     for &(strategy, boost) in rule.boosts {
                         let entry = scores.entry(strategy).or_default();
@@ -308,7 +303,6 @@ impl DeobfStrategySelector {
                         entry.1.insert(rule.label.to_string(), contribution);
                     }
                 }
-            }
         }
 
         // Blend in history-based scores.
@@ -340,7 +334,7 @@ impl DeobfStrategySelector {
     #[must_use]
     pub fn select_best(&self, features: &FeatureVector) -> DeobfStrategy {
         let scores = self.score_all(features);
-        scores.first().map(|s| s.strategy).unwrap_or(DeobfStrategy::NoOp)
+        scores.first().map_or(DeobfStrategy::NoOp, |s| s.strategy)
     }
 
     /// Select the top-N strategies.
@@ -355,13 +349,11 @@ impl DeobfStrategySelector {
 
     /// Record the outcome of applying a strategy (score delta, positive = good).
     pub fn record_outcome(&mut self, strategy: DeobfStrategy, outcome: f64) {
-        if self.history.len() >= self.max_history {
-            if let Some((old_strat, old_score)) = self.history.drain(..1).next() {
-                if let Some(acc) = self.success.get_mut(&old_strat) {
+        if self.history.len() >= self.max_history
+            && let Some((old_strat, old_score)) = self.history.drain(..1).next()
+                && let Some(acc) = self.success.get_mut(&old_strat) {
                     *acc -= old_score;
                 }
-            }
-        }
         self.history.push((strategy, outcome));
         *self.success.entry(strategy).or_insert(0.0) += outcome;
         *self.use_count.entry(strategy).or_insert(0) += 1;

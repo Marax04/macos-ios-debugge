@@ -512,89 +512,75 @@ impl ObfuscationClassifier {
         let mut result = ClassificationResult::new();
 
         // Run each detector.
-        if let Some(tr) = self.detect_cff(funcs) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_cff(funcs)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_opaque_predicates(funcs, stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_opaque_predicates(funcs, stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_junk_code(funcs) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_junk_code(funcs)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_instruction_substitution(funcs) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_instruction_substitution(funcs)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_constant_encoding(funcs) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_constant_encoding(funcs)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_string_encryption(funcs, stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_string_encryption(funcs, stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_api_hashing(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_api_hashing(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_mba(funcs) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_mba(funcs)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_anti_debug(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_anti_debug(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_anti_vm(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_anti_vm(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_packer(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_packer(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_virtualization(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_virtualization(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_code_transposition(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_code_transposition(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
-        if let Some(tr) = self.detect_rop_obfuscation(stats) {
-            if tr.confidence.value() >= self.config.min_confidence {
+        if let Some(tr) = self.detect_rop_obfuscation(stats)
+            && tr.confidence.value() >= self.config.min_confidence {
                 result.add_technique(tr);
             }
-        }
 
         result
     }
@@ -1030,7 +1016,7 @@ impl ObfuscationReport {
             .collect();
 
         // Sort by cyclomatic complexity descending, take top 20.
-        top_funcs.sort_by(|a, b| b.cyclomatic.cmp(&a.cyclomatic));
+        top_funcs.sort_by_key(|b| std::cmp::Reverse(b.cyclomatic));
         top_funcs.truncate(20);
 
         Self {
