@@ -1058,65 +1058,22 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                         bytes,
                     ))
                 }
-                3 if xlen >= 64 => {
-                    let rd_prime = ((hw >> 2) & 0x7) as usize + 8;
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let uimm = c_ld_imm(hw);
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.ld",
-                        format!("{}, {uimm}({})", xr(rd_prime), xr(rs1_prime)),
-                        InstrFlags::READ_MEM,
-                        bytes,
-                    ))
-                }
-                5 => {
-                    let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let uimm = c_lw_imm(hw);
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.fsd",
-                        format!("{}, {uimm}({})", fr(rs2_prime), xr(rs1_prime)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                6 => {
-                    let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let uimm = c_lw_imm(hw);
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.sw",
-                        format!("{}, {uimm}({})", xr(rs2_prime), xr(rs1_prime)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                7 if xlen >= 64 => {
-                    let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let uimm = c_ld_imm(hw);
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.sd",
-                        format!("{}, {uimm}({})", xr(rs2_prime), xr(rs1_prime)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                _ => Err(CoreError::InvalidFormat {
-                    message: "reserved C quadrant 0".into(),
-                }),
+                _ => decode_compressed_q0_rest(hw, xlen, addr),
             }
         }
 
         // ── Quadrant 1 ──────────────────────────────────────────────────────
+        _ => decode_compressed_q1(hw, xlen, addr),
+    }
+}
+
+/// Quadrants 1 and 2 of the compressed decoder.
+fn decode_compressed_q1(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let op = hw & 0x3; // quadrant (bits [1:0])
+    let funct3 = (hw >> 13) & 0x7;
+
+    match op {
         1 => {
             match funct3 {
                 0 => {
@@ -1175,146 +1132,22 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                         bytes,
                     ))
                 }
-                3 => {
-                    let rd = ((hw >> 7) & 0x1F) as usize;
-                    if rd == 2 {
-                        // C.ADDI16SP
-                        let imm = c_addi16sp_imm(hw);
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.addi16sp",
-                            format!("sp, {imm}"),
-                            InstrFlags::NONE,
-                            bytes,
-                        ))
-                    } else {
-                        // C.LUI
-                        let imm = c_lui_imm(hw);
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.lui",
-                            format!("{}, 0x{imm:x}", xr(rd)),
-                            InstrFlags::NONE,
-                            bytes,
-                        ))
-                    }
-                }
-                4 => {
-                    let funct2 = (hw >> 10) & 0x3;
-                    let rd_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    match funct2 {
-                        0 => {
-                            let shamt = c_shamt(hw);
-                            Ok(mk(
-                                addr,
-                                2,
-                                "c.srli",
-                                format!("{}, {shamt}", xr(rd_prime)),
-                                InstrFlags::NONE,
-                                bytes,
-                            ))
-                        }
-                        1 => {
-                            let shamt = c_shamt(hw);
-                            Ok(mk(
-                                addr,
-                                2,
-                                "c.srai",
-                                format!("{}, {shamt}", xr(rd_prime)),
-                                InstrFlags::NONE,
-                                bytes,
-                            ))
-                        }
-                        2 => {
-                            let imm = c_addi_imm(hw);
-                            Ok(mk(
-                                addr,
-                                2,
-                                "c.andi",
-                                format!("{}, {imm}", xr(rd_prime)),
-                                InstrFlags::NONE,
-                                bytes,
-                            ))
-                        }
-                        3 => {
-                            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
-                            let funct1 = (hw >> 12) & 1;
-                            let op_sub = (hw >> 5) & 0x3;
-                            let mn = match (funct1, op_sub) {
-                                (0, 0) => "c.sub",
-                                (0, 1) => "c.xor",
-                                (0, 2) => "c.or",
-                                (0, 3) => "c.and",
-                                (1, 0) => "c.subw",
-                                (1, 1) => "c.addw",
-                                _ => {
-                                    return Err(CoreError::InvalidFormat {
-                                        message: "reserved CA".into(),
-                                    });
-                                }
-                            };
-                            Ok(mk(
-                                addr,
-                                2,
-                                mn,
-                                format!("{}, {}", xr(rd_prime), xr(rs2_prime)),
-                                InstrFlags::NONE,
-                                bytes,
-                            ))
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                5 => {
-                    // C.J
-                    let offset = c_j_offset(hw);
-                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.j",
-                        format!("0x{target:x}"),
-                        InstrFlags::BRANCH,
-                        bytes,
-                    ))
-                }
-                6 => {
-                    // C.BEQZ
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let offset = c_b_offset(hw);
-                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.beqz",
-                        format!("{}, 0x{target:x}", xr(rs1_prime)),
-                        InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                        bytes,
-                    ))
-                }
-                7 => {
-                    // C.BNEZ
-                    let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
-                    let offset = c_b_offset(hw);
-                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.bnez",
-                        format!("{}, 0x{target:x}", xr(rs1_prime)),
-                        InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                        bytes,
-                    ))
-                }
-                _ => Err(CoreError::InvalidFormat {
-                    message: "reserved C1".into(),
-                }),
+                _ => decode_compressed_q1_rest(hw, addr),
             }
         }
 
         // ── Quadrant 2 ──────────────────────────────────────────────────────
+        _ => decode_compressed_q2(hw, xlen, addr),
+    }
+}
+
+/// Quadrant 2 of the compressed decoder.
+fn decode_compressed_q2(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let op = hw & 0x3; // quadrant (bits [1:0])
+    let funct3 = (hw >> 13) & 0x7;
+
+    match op {
         2 => {
             match funct3 {
                 0 => {
@@ -1365,101 +1198,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                         bytes,
                     ))
                 }
-                4 => {
-                    let funct1 = (hw >> 12) & 1;
-                    let rs1 = ((hw >> 7) & 0x1F) as usize;
-                    let rs2 = ((hw >> 2) & 0x1F) as usize;
-                    if funct1 == 0 && rs2 == 0 {
-                        // C.JR
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.jr",
-                            xr(rs1).into(),
-                            InstrFlags::BRANCH | InstrFlags::INDIRECT,
-                            bytes,
-                        ))
-                    } else if funct1 == 0 {
-                        // C.MV
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.mv",
-                            format!("{}, {}", xr(rs1), xr(rs2)),
-                            InstrFlags::NONE,
-                            bytes,
-                        ))
-                    } else if rs1 == 0 && rs2 == 0 {
-                        // C.EBREAK
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.ebreak",
-                            String::new(),
-                            InstrFlags::BARRIER,
-                            bytes,
-                        ))
-                    } else if rs2 == 0 {
-                        // C.JALR
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.jalr",
-                            xr(rs1).into(),
-                            InstrFlags::BRANCH | InstrFlags::CALL | InstrFlags::INDIRECT,
-                            bytes,
-                        ))
-                    } else {
-                        // C.ADD
-                        Ok(mk(
-                            addr,
-                            2,
-                            "c.add",
-                            format!("{}, {}", xr(rs1), xr(rs2)),
-                            InstrFlags::NONE,
-                            bytes,
-                        ))
-                    }
-                }
-                5 => {
-                    let uimm = c_fsdsp_imm(hw);
-                    let rs2 = ((hw >> 2) & 0x1F) as usize;
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.fsdsp",
-                        format!("{}, {uimm}(sp)", fr(rs2)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                6 => {
-                    let uimm = c_swsp_imm(hw);
-                    let rs2 = ((hw >> 2) & 0x1F) as usize;
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.swsp",
-                        format!("{}, {uimm}(sp)", xr(rs2)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                7 if xlen >= 64 => {
-                    let uimm = c_sdsp_imm(hw);
-                    let rs2 = ((hw >> 2) & 0x1F) as usize;
-                    Ok(mk(
-                        addr,
-                        2,
-                        "c.sdsp",
-                        format!("{}, {uimm}(sp)", xr(rs2)),
-                        InstrFlags::WRITE_MEM,
-                        bytes,
-                    ))
-                }
-                _ => Err(CoreError::InvalidFormat {
-                    message: "reserved C2".into(),
-                }),
+                _ => decode_compressed_q2_rest(hw, xlen, addr),
             }
         }
         _ => Err(CoreError::InvalidFormat {
@@ -8180,6 +7919,109 @@ const fn vmask(m: u32) -> &'static str {
 #[must_use]
 pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
     let funct3 = (word >> 12) & 7;
+    let vm = (word >> 25) & 1;
+    let vd = ((word >> 7) & 0x1F) as usize;
+    let vs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let rs1 = vs1;
+    let rd = vd;
+    let mask = vmask(vm);
+
+    // VSETVL family — funct3 == 7
+    if funct3 == 7 {
+        let b31 = (word >> 31) & 1;
+        let b30 = (word >> 30) & 1;
+        if b31 == 0 {
+            // VSETVLI: rd, rs1, vtypei[10:0]
+            let vtypei = (word >> 20) & 0x7FF;
+            let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
+            return Some(plain(address, "vsetvli", ops, bytes));
+        }
+        if b31 == 1 && b30 == 1 {
+            // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
+            let uimm5 = (word >> 15) & 0x1F;
+            let vtypei = (word >> 20) & 0x3FF;
+            let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
+            return Some(plain(address, "vsetivli", ops, bytes));
+        }
+        // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
+        let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
+        return Some(plain(address, "vsetvl", ops, bytes));
+    }
+
+    // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
+    let nf = (word >> 29) & 7;
+    let mew = (word >> 28) & 1;
+    let mop = (word >> 26) & 3;
+    let lumop = vs2; // for unit-stride
+    let width_bits: u32 = match (mew, (word >> 12) & 7) {
+        (0, 5) => 16,
+        (0, 6) => 32,
+        (0, 7) => 64,
+        _ => 8,
+    };
+
+    if (word & 0x7F) == 0x07 {
+        // Vector load
+        let base = xr(rs1);
+        let mn = match mop {
+            0 => {
+                // unit stride
+                match lumop {
+                    0 => format!("vle{width_bits}.v"),
+                    16 => format!("vlse{width_bits}.v"),
+                    _ => format!("vluxei{width_bits}.v"),
+                }
+            }
+            2 => format!("vlse{width_bits}.v"),
+            1 => format!("vluxei{width_bits}.v"),
+            3 => format!("vloxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vd))
+        };
+        let nf_str = if nf > 0 {
+            format!("  // nf={nf}")
+        } else {
+            String::new()
+        };
+        let _ = nf_str;
+        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
+    }
+    if (word & 0x7F) == 0x27 {
+        // Vector store
+        let base = xr(rs1);
+        let vs3 = vd;
+        let mn = match mop {
+            0 => format!("vse{width_bits}.v"),
+            2 => format!("vsse{width_bits}.v"),
+            1 => format!("vsuxei{width_bits}.v"),
+            3 => format!("vsoxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vs3))
+        };
+        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    }
+
+    // Arithmetic — opcode == 0x57
+    let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
+
+    match funct3 {
+        // OPIVV / OPIVX / OPIVI
+        _ => decode_rvv_mid(address, word, bytes),
+    }
+}
+
+/// Continuation of the RVV funct3 dispatch.
+fn decode_rvv_mid(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
+    let funct3 = (word >> 12) & 7;
     let funct6 = (word >> 26) & 0x3F;
     let vm = (word >> 25) & 1;
     let vd = ((word >> 7) & 0x1F) as usize;
@@ -8281,10 +8123,8 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
         let imm5 = rv_sign_ext((word >> 15) & 0x1f, 5);
         format!("{}, {}, {imm5}{}", vr(vd), vr(vs2), mask)
     };
-    let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
 
     match funct3 {
-        // OPIVV / OPIVX / OPIVI
         0 | 3 | 2 => {
             let mn: Option<&str> = match funct6 {
                 0x00 => Some("vadd"),
@@ -8444,9 +8284,7 @@ fn decode_rvv_rest(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
     }
 
     // Arithmetic — opcode == 0x57
-    let ops_vvv = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
     let ops_vec_scalar = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
-    let ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
     let ops_red = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
 
     match funct3 {
@@ -8540,6 +8378,111 @@ fn decode_rvv_rest(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
         }
 
         // OPFVV / OPFVF
+        _ => decode_rvv_tail(address, word, bytes),
+    }
+}
+
+/// Final part of the RVV funct3 dispatch.
+fn decode_rvv_tail(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
+    let funct3 = (word >> 12) & 7;
+    let funct6 = (word >> 26) & 0x3F;
+    let vm = (word >> 25) & 1;
+    let vd = ((word >> 7) & 0x1F) as usize;
+    let vs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let rs1 = vs1;
+    let rd = vd;
+    let mask = vmask(vm);
+
+    // VSETVL family — funct3 == 7
+    if funct3 == 7 {
+        let b31 = (word >> 31) & 1;
+        let b30 = (word >> 30) & 1;
+        if b31 == 0 {
+            // VSETVLI: rd, rs1, vtypei[10:0]
+            let vtypei = (word >> 20) & 0x7FF;
+            let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
+            return Some(plain(address, "vsetvli", ops, bytes));
+        }
+        if b31 == 1 && b30 == 1 {
+            // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
+            let uimm5 = (word >> 15) & 0x1F;
+            let vtypei = (word >> 20) & 0x3FF;
+            let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
+            return Some(plain(address, "vsetivli", ops, bytes));
+        }
+        // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
+        let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
+        return Some(plain(address, "vsetvl", ops, bytes));
+    }
+
+    // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
+    let nf = (word >> 29) & 7;
+    let mew = (word >> 28) & 1;
+    let mop = (word >> 26) & 3;
+    let lumop = vs2; // for unit-stride
+    let width_bits: u32 = match (mew, (word >> 12) & 7) {
+        (0, 5) => 16,
+        (0, 6) => 32,
+        (0, 7) => 64,
+        _ => 8,
+    };
+
+    if (word & 0x7F) == 0x07 {
+        // Vector load
+        let base = xr(rs1);
+        let mn = match mop {
+            0 => {
+                // unit stride
+                match lumop {
+                    0 => format!("vle{width_bits}.v"),
+                    16 => format!("vlse{width_bits}.v"),
+                    _ => format!("vluxei{width_bits}.v"),
+                }
+            }
+            2 => format!("vlse{width_bits}.v"),
+            1 => format!("vluxei{width_bits}.v"),
+            3 => format!("vloxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vd))
+        };
+        let nf_str = if nf > 0 {
+            format!("  // nf={nf}")
+        } else {
+            String::new()
+        };
+        let _ = nf_str;
+        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
+    }
+    if (word & 0x7F) == 0x27 {
+        // Vector store
+        let base = xr(rs1);
+        let vs3 = vd;
+        let mn = match mop {
+            0 => format!("vse{width_bits}.v"),
+            2 => format!("vsse{width_bits}.v"),
+            1 => format!("vsuxei{width_bits}.v"),
+            3 => format!("vsoxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vs3))
+        };
+        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    }
+
+    // Arithmetic — opcode == 0x57
+    let ops_vvv = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
+    let ops_vec_scalar = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
+    let ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
+
+    match funct3 {
         1 | 5 => {
             let mn: Option<&str> = match funct6 {
                 0x00 => Some("vfadd"),
@@ -9405,6 +9348,18 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
         },
 
         // Quadrant 1
+        _ => rv_lift_compressed_q1(pc, hw, xlen),
+    }
+}
+
+/// Quadrants 1 and 2 of the compressed lifter.
+fn rv_lift_compressed_q1(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
+    let op = hw & 3;
+    let funct3 = (hw >> 13) & 7;
+
+    // Many C instructions expand cleanly to a 32-bit equivalent.
+    // We handle the common ones directly and fall back for the rest.
+    match op {
         1 => match funct3 {
             0 => {
                 // C.NOP / C.ADDI
@@ -9559,6 +9514,18 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
         },
 
         // Quadrant 2
+        _ => rv_lift_compressed_q2(pc, hw, xlen),
+    }
+}
+
+/// Quadrant 2 of the compressed lifter.
+fn rv_lift_compressed_q2(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
+    let op = hw & 3;
+    let funct3 = (hw >> 13) & 7;
+
+    // Many C instructions expand cleanly to a 32-bit equivalent.
+    // We handle the common ones directly and fall back for the rest.
+    match op {
         2 => match funct3 {
             0 => {
                 // C.SLLI
@@ -11999,5 +11966,324 @@ mod completeness_tests {
         let w = itype(0xC00, 0, 7, 1, 0x73);
         let i = rv64().disassemble(addr(0), &le(w)).unwrap();
         assert_eq!(i.mnemonic, "csrrci");
+    }
+}
+
+fn decode_compressed_q0_rest(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        3 if xlen >= 64 => {
+            let rd_prime = ((hw >> 2) & 0x7) as usize + 8;
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let uimm = c_ld_imm(hw);
+            Ok(mk(
+                addr,
+                2,
+                "c.ld",
+                format!("{}, {uimm}({})", xr(rd_prime), xr(rs1_prime)),
+                InstrFlags::READ_MEM,
+                bytes,
+            ))
+        }
+        5 => {
+            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let uimm = c_lw_imm(hw);
+            Ok(mk(
+                addr,
+                2,
+                "c.fsd",
+                format!("{}, {uimm}({})", fr(rs2_prime), xr(rs1_prime)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        _ => decode_compressed_q0_tail(hw, xlen, addr),
+    }
+}
+
+fn decode_compressed_q1_rest(hw: u16, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        3 => {
+            let rd = ((hw >> 7) & 0x1F) as usize;
+            if rd == 2 {
+                // C.ADDI16SP
+                let imm = c_addi16sp_imm(hw);
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.addi16sp",
+                    format!("sp, {imm}"),
+                    InstrFlags::NONE,
+                    bytes,
+                ))
+            } else {
+                // C.LUI
+                let imm = c_lui_imm(hw);
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.lui",
+                    format!("{}, 0x{imm:x}", xr(rd)),
+                    InstrFlags::NONE,
+                    bytes,
+                ))
+            }
+        }
+        4 => {
+            let funct2 = (hw >> 10) & 0x3;
+            let rd_prime = ((hw >> 7) & 0x7) as usize + 8;
+            match funct2 {
+                0 => {
+                    let shamt = c_shamt(hw);
+                    Ok(mk(
+                        addr,
+                        2,
+                        "c.srli",
+                        format!("{}, {shamt}", xr(rd_prime)),
+                        InstrFlags::NONE,
+                        bytes,
+                    ))
+                }
+                1 => {
+                    let shamt = c_shamt(hw);
+                    Ok(mk(
+                        addr,
+                        2,
+                        "c.srai",
+                        format!("{}, {shamt}", xr(rd_prime)),
+                        InstrFlags::NONE,
+                        bytes,
+                    ))
+                }
+                2 => {
+                    let imm = c_addi_imm(hw);
+                    Ok(mk(
+                        addr,
+                        2,
+                        "c.andi",
+                        format!("{}, {imm}", xr(rd_prime)),
+                        InstrFlags::NONE,
+                        bytes,
+                    ))
+                }
+                3 => {
+                    let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
+                    let funct1 = (hw >> 12) & 1;
+                    let op_sub = (hw >> 5) & 0x3;
+                    let mn = match (funct1, op_sub) {
+                        (0, 0) => "c.sub",
+                        (0, 1) => "c.xor",
+                        (0, 2) => "c.or",
+                        (0, 3) => "c.and",
+                        (1, 0) => "c.subw",
+                        (1, 1) => "c.addw",
+                        _ => {
+                            return Err(CoreError::InvalidFormat {
+                                message: "reserved CA".into(),
+                            });
+                        }
+                    };
+                    Ok(mk(
+                        addr,
+                        2,
+                        mn,
+                        format!("{}, {}", xr(rd_prime), xr(rs2_prime)),
+                        InstrFlags::NONE,
+                        bytes,
+                    ))
+                }
+                _ => unreachable!(),
+            }
+        }
+        5 => {
+            // C.J
+            let offset = c_j_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.j",
+                format!("0x{target:x}"),
+                InstrFlags::BRANCH,
+                bytes,
+            ))
+        }
+        6 => {
+            // C.BEQZ
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let offset = c_b_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.beqz",
+                format!("{}, 0x{target:x}", xr(rs1_prime)),
+                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                bytes,
+            ))
+        }
+        7 => {
+            // C.BNEZ
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let offset = c_b_offset(hw);
+            let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
+            Ok(mk(
+                addr,
+                2,
+                "c.bnez",
+                format!("{}, 0x{target:x}", xr(rs1_prime)),
+                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                bytes,
+            ))
+        }
+        _ => Err(CoreError::InvalidFormat {
+            message: "reserved C1".into(),
+        }),
+    }
+}
+
+fn decode_compressed_q2_rest(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        4 => {
+            let funct1 = (hw >> 12) & 1;
+            let rs1 = ((hw >> 7) & 0x1F) as usize;
+            let rs2 = ((hw >> 2) & 0x1F) as usize;
+            if funct1 == 0 && rs2 == 0 {
+                // C.JR
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.jr",
+                    xr(rs1).into(),
+                    InstrFlags::BRANCH | InstrFlags::INDIRECT,
+                    bytes,
+                ))
+            } else if funct1 == 0 {
+                // C.MV
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.mv",
+                    format!("{}, {}", xr(rs1), xr(rs2)),
+                    InstrFlags::NONE,
+                    bytes,
+                ))
+            } else if rs1 == 0 && rs2 == 0 {
+                // C.EBREAK
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.ebreak",
+                    String::new(),
+                    InstrFlags::BARRIER,
+                    bytes,
+                ))
+            } else if rs2 == 0 {
+                // C.JALR
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.jalr",
+                    xr(rs1).into(),
+                    InstrFlags::BRANCH | InstrFlags::CALL | InstrFlags::INDIRECT,
+                    bytes,
+                ))
+            } else {
+                // C.ADD
+                Ok(mk(
+                    addr,
+                    2,
+                    "c.add",
+                    format!("{}, {}", xr(rs1), xr(rs2)),
+                    InstrFlags::NONE,
+                    bytes,
+                ))
+            }
+        }
+        5 => {
+            let uimm = c_fsdsp_imm(hw);
+            let rs2 = ((hw >> 2) & 0x1F) as usize;
+            Ok(mk(
+                addr,
+                2,
+                "c.fsdsp",
+                format!("{}, {uimm}(sp)", fr(rs2)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        6 => {
+            let uimm = c_swsp_imm(hw);
+            let rs2 = ((hw >> 2) & 0x1F) as usize;
+            Ok(mk(
+                addr,
+                2,
+                "c.swsp",
+                format!("{}, {uimm}(sp)", xr(rs2)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        7 if xlen >= 64 => {
+            let uimm = c_sdsp_imm(hw);
+            let rs2 = ((hw >> 2) & 0x1F) as usize;
+            Ok(mk(
+                addr,
+                2,
+                "c.sdsp",
+                format!("{}, {uimm}(sp)", xr(rs2)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        _ => Err(CoreError::InvalidFormat {
+            message: "reserved C2".into(),
+        }),
+    }
+}
+
+fn decode_compressed_q0_tail(hw: u16, xlen: u32, addr: Address) -> Result<Instruction, CoreError> {
+    let bytes = hw.to_le_bytes().to_vec();
+    let funct3 = (hw >> 13) & 0x7;
+
+    match funct3 {
+        6 => {
+            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let uimm = c_lw_imm(hw);
+            Ok(mk(
+                addr,
+                2,
+                "c.sw",
+                format!("{}, {uimm}({})", xr(rs2_prime), xr(rs1_prime)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        7 if xlen >= 64 => {
+            let rs2_prime = ((hw >> 2) & 0x7) as usize + 8;
+            let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
+            let uimm = c_ld_imm(hw);
+            Ok(mk(
+                addr,
+                2,
+                "c.sd",
+                format!("{}, {uimm}({})", xr(rs2_prime), xr(rs1_prime)),
+                InstrFlags::WRITE_MEM,
+                bytes,
+            ))
+        }
+        _ => Err(CoreError::InvalidFormat {
+            message: "reserved C quadrant 0".into(),
+        }),
     }
 }
