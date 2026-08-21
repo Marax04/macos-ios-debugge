@@ -745,7 +745,7 @@ mod tests {
         // F2 02 08 0 → vadd.i32 (synthetic: manually construct an approximate word)
         // Build: U=0, size=2, opc=8 (vshl), Q=0
         // bits[31:24]=0xF2, size=2 at [21:20], opc=8 at [11:8]
-        let word: u32 = 0xF2000800 | (2 << 20) | (8 << 8);
+        let word: u32 = 0xF200_0800 | (2 << 20) | (8 << 8);
         let r = decode_neon_dp(word);
         assert!(r.is_some());
         let instr = r.unwrap();
@@ -755,8 +755,8 @@ mod tests {
     #[test]
     fn test_decode_neon_dp_none() {
         // Not a NEON dp word
-        assert!(decode_neon_dp(0x00000000).is_none());
-        assert!(decode_neon_dp(0xE0000000).is_none());
+        assert!(decode_neon_dp(0x0000_0000).is_none());
+        assert!(decode_neon_dp(0xE000_0000).is_none());
     }
 
     #[test]
@@ -789,7 +789,7 @@ mod tests {
     #[test]
     fn test_decode_neon_shift_imm_vshl() {
         // l=0, imm6=0b100000 (size=32, shift=32), opc=5, u=0, q=0
-        let instr = decode_neon_shift_imm(0, 0b100000, 5, 0, 0, 0, 1);
+        let instr = decode_neon_shift_imm(0, 0b10_0000, 5, 0, 0, 0, 1);
         assert!(instr.mnemonic.contains("vshl") || instr.mnemonic.contains(".32"));
     }
 
@@ -819,7 +819,7 @@ mod tests {
 
     #[test]
     fn test_decode_neon_long_mul_vmull() {
-        let word: u32 = 0xF2000800 | (1 << 24) | (2 << 20) | (8 << 8);
+        let word: u32 = 0xF200_0800 | (1 << 24) | (2 << 20) | (8 << 8);
         let instr = decode_neon_long_mul(word);
         // Should be vmull.u32 or similar
         assert!(!instr.mnemonic.is_empty());
@@ -828,7 +828,7 @@ mod tests {
     #[test]
     fn test_decode_neon_fp_vadd() {
         // opc=0 → vadd.f32
-        let instr = decode_neon_fp(0xF3000D00);
+        let instr = decode_neon_fp(0xF300_0D00);
         assert!(instr.is_some());
         assert!(instr.unwrap().mnemonic.contains("vadd.f32"));
     }
@@ -836,7 +836,7 @@ mod tests {
     #[test]
     fn test_decode_neon_table() {
         // Build a VTBL.8 word
-        let word: u32 = 0xF3B00800;
+        let word: u32 = 0xF3B0_0800;
         let instr = decode_neon_table(word);
         assert!(instr.mnemonic.starts_with("vtbl") || instr.mnemonic.starts_with("vtbx"));
     }
@@ -844,7 +844,7 @@ mod tests {
     #[test]
     fn test_vdup_decode() {
         // b=0, e=0 → vdup.32
-        let word: u32 = 0xEE800B10; // approximate VDUP encoding
+        let word: u32 = 0xEE80_0B10; // approximate VDUP encoding
         // We just test the function doesn't panic
         let _ = decode_vdup(word);
     }

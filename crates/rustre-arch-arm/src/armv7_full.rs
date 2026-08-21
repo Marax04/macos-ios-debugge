@@ -1325,7 +1325,7 @@ mod tests {
     fn test_coprocessor_decode_mcr() {
         // MCR p10, 0, r1, c0, c0, 0 — E E E 0 1 0 00 0001 0001 1010 0001 0000
         // A32 MCR: cond=0xe, bits[27:25]=111, bit24=0, opc1=0, crn=0, rt=1, cp=10, opc2=0, bit4=1, crm=0
-        let word: u32 = 0xEE001A10; // typical MCR p10, 0, r1, c0, c0, 0
+        let word: u32 = 0xEE00_1A10; // typical MCR p10, 0, r1, c0, c0, 0
         let result = ArmCoprocessor::decode_a32(word);
         assert!(result.is_some());
         let c = result.unwrap();
@@ -1336,7 +1336,7 @@ mod tests {
     #[test]
     fn test_coprocessor_decode_none_for_unconditional() {
         // cond = 0xF → unconditional encoding, not a standard MCR
-        let word: u32 = 0xFF001A10;
+        let word: u32 = 0xFF00_1A10;
         assert!(ArmCoprocessor::decode_a32(word).is_none());
     }
 
@@ -1374,20 +1374,20 @@ mod tests {
     // ── 4. NeonFull decode ───────────────────────────────────────────────────
     #[test]
     fn test_neon_decode_none_for_non_neon() {
-        assert!(NeonFull::decode_a32(0xE1A00000).is_none()); // ARM MOV
+        assert!(NeonFull::decode_a32(0xE1A0_0000).is_none()); // ARM MOV
     }
 
     #[test]
     fn test_neon_decode_some_for_neon_space() {
         // F2 prefix = 0xF2 → NEON data processing
-        let word: u32 = 0xF2000010; // some NEON word
+        let word: u32 = 0xF200_0010; // some NEON word
         let result = NeonFull::decode_a32(word);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_neon_decode_f3_unsigned() {
-        let word: u32 = 0xF3000010;
+        let word: u32 = 0xF300_0010;
         let result = NeonFull::decode_a32(word);
         assert!(result.is_some());
         let n = result.unwrap();
@@ -1435,13 +1435,13 @@ mod tests {
     #[test]
     fn test_vfp_decode_none_for_non_vfp() {
         // ARM NOP (no VFP coprocessor)
-        assert!(VfpFull::decode_a32(0xE1A00000).is_none());
+        assert!(VfpFull::decode_a32(0xE1A0_0000).is_none());
     }
 
     #[test]
     fn test_vfp_decode_vldr() {
         // VLDR d0, [r0] — 0xED900B00
-        let word: u32 = 0xED900B00;
+        let word: u32 = 0xED90_0B00;
         let result = VfpFull::decode_a32(word);
         assert!(result.is_some());
         let v = result.unwrap();
@@ -1452,7 +1452,7 @@ mod tests {
     #[test]
     fn test_vfp_decode_vstr() {
         // VSTR d0, [r0] — 0xED800B00
-        let word: u32 = 0xED800B00;
+        let word: u32 = 0xED80_0B00;
         let result = VfpFull::decode_a32(word);
         assert!(result.is_some());
         let v = result.unwrap();
@@ -1501,7 +1501,7 @@ mod tests {
         let lifter = ArmV7Lifter;
         // BL +0 (from 0x1000: BL 0x1000 effectively)
         // 0xEB000000 = BL imm24=0 → offset=0 → target = 0x1000 + 8 = 0x1008
-        let word: u32 = 0xEB000000;
+        let word: u32 = 0xEB00_0000;
         let op = lifter.lift_a32(word, 0x1000);
         match op {
             V7LiftOp::Call(target) => assert_eq!(target, 0x1008),
@@ -1513,7 +1513,7 @@ mod tests {
     fn test_lifter_b_unconditional() {
         let lifter = ArmV7Lifter;
         // B +0 (cond=0xe, L=0): 0xEA000000
-        let op = lifter.lift_a32(0xEA000000, 0x2000);
+        let op = lifter.lift_a32(0xEA00_0000, 0x2000);
         match op {
             V7LiftOp::Branch(target) => assert_eq!(target, 0x2008),
             _ => panic!("expected Branch, got {op:?}"),
@@ -1524,7 +1524,7 @@ mod tests {
     fn test_lifter_b_conditional() {
         let lifter = ArmV7Lifter;
         // BEQ +0 (cond=0x0, L=0): 0x0A000000
-        let op = lifter.lift_a32(0x0A000000, 0x3000);
+        let op = lifter.lift_a32(0x0A00_0000, 0x3000);
         match op {
             V7LiftOp::CondBranch { cond, target } => {
                 assert_eq!(cond, 0x0);
@@ -1538,7 +1538,7 @@ mod tests {
     fn test_lifter_ldr() {
         let lifter = ArmV7Lifter;
         // LDR r1, [r0, #8] = 0xE5901008
-        let op = lifter.lift_a32(0xE5901008, 0x1000);
+        let op = lifter.lift_a32(0xE590_1008, 0x1000);
         match op {
             V7LiftOp::Load { dest, base, offset } => {
                 assert_eq!(base, 0); // r0
@@ -1553,7 +1553,7 @@ mod tests {
     fn test_lifter_str() {
         let lifter = ArmV7Lifter;
         // STR r1, [r0] = 0xE5801000
-        let op = lifter.lift_a32(0xE5801000, 0x1000);
+        let op = lifter.lift_a32(0xE580_1000, 0x1000);
         match op {
             V7LiftOp::Store { src, base, .. } => {
                 assert_eq!(base, 0);
@@ -1567,7 +1567,7 @@ mod tests {
     fn test_lifter_bx_lr_is_return() {
         let lifter = ArmV7Lifter;
         // BX LR = 0xE12FFF1E
-        let op = lifter.lift_a32(0xE12FFF1E, 0x1000);
+        let op = lifter.lift_a32(0xE12F_FF1E, 0x1000);
         assert_eq!(op, V7LiftOp::Return);
     }
 
@@ -1575,7 +1575,7 @@ mod tests {
     fn test_lifter_nop() {
         let lifter = ArmV7Lifter;
         // Undefined / unrecognised
-        let op = lifter.lift_a32(0x00000000, 0x0);
+        let op = lifter.lift_a32(0x0000_0000, 0x0);
         // Should return Nop or BinOp, not panic
         let _ = op;
     }
@@ -1612,8 +1612,8 @@ mod tests {
         let hw1: u16 = 0xF000;
         let hw2: u16 = 0xE800;
         let t = ThumbExpanded::decode(hw1, hw2);
-        assert_eq!(t.encoding >> 16, hw1 as u32);
-        assert_eq!(t.encoding & 0xffff, hw2 as u32);
+        assert_eq!(t.encoding >> 16, u32::from(hw1));
+        assert_eq!(t.encoding & 0xffff, u32::from(hw2));
     }
 
     // ── 10. ThumbExpandedKind all variants have a decode path ───────────────

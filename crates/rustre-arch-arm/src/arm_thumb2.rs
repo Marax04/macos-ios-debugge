@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn thumb2_instr_display() {
-        let instr = Thumb2Instr::new("add", "r0, r1, r2", 0xEB010002, Thumb2Kind::DataProcessing);
+        let instr = Thumb2Instr::new("add", "r0, r1, r2", 0xEB01_0002, Thumb2Kind::DataProcessing);
         assert!(instr.to_string().contains("add"));
     }
 

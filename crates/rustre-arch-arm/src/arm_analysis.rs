@@ -1078,7 +1078,7 @@ mod tests {
 
     #[test]
     fn test_thumb_interworking_arm_bx() {
-        let bx_r0: u32 = 0xE12FFF10; // BX R0 (AL condition)
+        let bx_r0: u32 = 0xE12F_FF10; // BX R0 (AL condition)
         let mut tw = ThumbInterworking::new();
         tw.scan_arm(0x1000, &bx_r0.to_le_bytes());
         assert_eq!(tw.events().len(), 1);
@@ -1087,7 +1087,7 @@ mod tests {
 
     #[test]
     fn test_thumb_interworking_arm_blx() {
-        let blx_r0: u32 = 0xE12FFF30; // BLX R0
+        let blx_r0: u32 = 0xE12F_FF30; // BLX R0
         let mut tw = ThumbInterworking::new();
         tw.scan_arm(0x1000, &blx_r0.to_le_bytes());
         assert_eq!(tw.call_count(), 1);
@@ -1167,7 +1167,7 @@ mod tests {
 
     #[test]
     fn test_function_profiler_arm_nop() {
-        let nop: u32 = 0xE320F000; // NOP (MOV R0, R0 in practice)
+        let nop: u32 = 0xE320_F000; // NOP (MOV R0, R0 in practice)
         let bytes = nop.to_le_bytes();
         let p = ArmFunctionProfiler::new().profile_arm(0x1000, &bytes);
         assert_eq!(p.mode, Some(IsaMode::Arm));
@@ -1176,8 +1176,8 @@ mod tests {
     #[test]
     fn test_function_profiler_push_pop() {
         // PUSH {LR}=0xE92D4000, POP {PC}=0xE8BD8000
-        let push: u32 = 0xE92D4000;
-        let pop: u32 = 0xE8BD8000;
+        let push: u32 = 0xE92D_4000;
+        let pop: u32 = 0xE8BD_8000;
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&push.to_le_bytes());
         bytes.extend_from_slice(&pop.to_le_bytes());
@@ -1196,7 +1196,7 @@ mod tests {
     #[test]
     fn test_abi_aapcs_no_vfp() {
         let det = ArmAbiDetector::new();
-        let nop: u32 = 0xE320F000;
+        let nop: u32 = 0xE320_F000;
         assert_eq!(det.detect(&nop.to_le_bytes(), false), ArmAbi::AAPCS);
     }
 

@@ -193,14 +193,14 @@ fn cpsr_irq() {
 
 #[test]
 fn ldr_pc_offset_add() {
-    let (off, add) = arm_ldr_pc_offset(0x008000ab);
+    let (off, add) = arm_ldr_pc_offset(0x0080_00ab);
     assert_eq!(off, 0xab);
     assert!(add);
 }
 
 #[test]
 fn ldr_pc_offset_sub() {
-    let (off, add) = arm_ldr_pc_offset(0x000000ab);
+    let (off, add) = arm_ldr_pc_offset(0x0000_00ab);
     assert_eq!(off, 0xab);
     assert!(!add);
 }

@@ -111,7 +111,7 @@ impl ConditionCode {
 
     /// Evaluate the condition against a [`CpsrFlags`] snapshot.
     #[must_use]
-    pub fn evaluate(self, flags: CpsrFlags) -> bool {
+    pub const fn evaluate(self, flags: CpsrFlags) -> bool {
         let n = flags.n();
         let z = flags.z();
         let c = flags.c();
@@ -217,7 +217,7 @@ impl CpsrFlags {
 
     /// Processor mode field (bits [4:0]).
     #[must_use]
-    pub fn mode(self) -> ProcessorMode {
+    pub const fn mode(self) -> ProcessorMode {
         ProcessorMode::from_bits((self.raw & cpsr_bits::MODE_MASK) as u8)
     }
 
@@ -300,7 +300,6 @@ impl ProcessorMode {
     #[must_use]
     pub const fn from_bits(bits: u8) -> Self {
         match bits & 0x1F {
-            0b10000 => Self::User,
             0b10001 => Self::Fiq,
             0b10010 => Self::Irq,
             0b10011 => Self::Supervisor,
@@ -502,7 +501,7 @@ pub struct AluResult {
 
 impl AluResult {
     #[must_use]
-    pub fn to_flags(self) -> CpsrFlags {
+    pub const fn to_flags(self) -> CpsrFlags {
         CpsrFlags::from_flags(self.n, self.z, self.c, self.v)
     }
 }
@@ -557,7 +556,7 @@ impl AluOps {
 
     /// AND — bitwise, updates NZ, C from shifter, V unchanged.
     #[must_use]
-    pub fn and(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn and(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -565,7 +564,7 @@ impl AluOps {
 
     /// ORR — bitwise OR.
     #[must_use]
-    pub fn orr(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn orr(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a | b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -573,7 +572,7 @@ impl AluOps {
 
     /// EOR — exclusive OR.
     #[must_use]
-    pub fn eor(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn eor(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -581,7 +580,7 @@ impl AluOps {
 
     /// BIC — bit clear (a AND NOT b).
     #[must_use]
-    pub fn bic(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn bic(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & !b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -589,14 +588,14 @@ impl AluOps {
 
     /// MOV — move (sets NZ, C from shifter).
     #[must_use]
-    pub fn mov(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn mov(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let (n, z) = Self::nz(b);
         AluResult { value: b, n, z, c: shifter_carry, v: old_v }
     }
 
     /// MVN — move NOT.
     #[must_use]
-    pub fn mvn(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn mvn(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         Self::mov(!b, shifter_carry, old_v)
     }
 
@@ -615,7 +614,7 @@ impl AluOps {
     /// TST — test (same as AND but result discarded).
     /// V flag is unchanged per the ARM Architecture Reference Manual.
     #[must_use]
-    pub fn tst(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn tst(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -624,7 +623,7 @@ impl AluOps {
     /// TEQ — test equivalence (same as EOR but result discarded).
     /// V flag is unchanged per the ARM Architecture Reference Manual.
     #[must_use]
-    pub fn teq(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
+    pub const fn teq(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: shifter_carry, v: old_v }
@@ -632,7 +631,7 @@ impl AluOps {
 
     /// MUL — 32-bit multiply (result is low 32 bits); N and Z updated, C and V unpredictable.
     #[must_use]
-    pub fn mul(a: u32, b: u32, old_c: bool, old_v: bool) -> AluResult {
+    pub const fn mul(a: u32, b: u32, old_c: bool, old_v: bool) -> AluResult {
         let value = a.wrapping_mul(b);
         let (n, z) = Self::nz(value);
         AluResult { value, n, z, c: old_c, v: old_v }
@@ -767,11 +766,11 @@ impl MemBarrier {
     }
 
     #[must_use]
-    pub fn dmb_sy() -> Self { Self::new(BarrierKind::Dmb, BarrierOption::Sy) }
+    pub const fn dmb_sy() -> Self { Self::new(BarrierKind::Dmb, BarrierOption::Sy) }
     #[must_use]
-    pub fn dsb_sy() -> Self { Self::new(BarrierKind::Dsb, BarrierOption::Sy) }
+    pub const fn dsb_sy() -> Self { Self::new(BarrierKind::Dsb, BarrierOption::Sy) }
     #[must_use]
-    pub fn isb_sy() -> Self { Self::new(BarrierKind::Isb, BarrierOption::Sy) }
+    pub const fn isb_sy() -> Self { Self::new(BarrierKind::Isb, BarrierOption::Sy) }
 }
 
 impl fmt::Display for MemBarrier {
@@ -945,7 +944,7 @@ impl ArmInstructionSemantics {
 
     /// Evaluate whether the given condition is true in the current CPSR.
     #[must_use]
-    pub fn condition_passes(&self, cond: ConditionCode) -> bool {
+    pub const fn condition_passes(&self, cond: ConditionCode) -> bool {
         cond.evaluate(self.cpsr)
     }
 
@@ -961,7 +960,7 @@ impl ArmInstructionSemantics {
     }
 
     /// Apply ALU flags to CPSR (when S bit is set).
-    pub fn apply_alu_flags(&mut self, result: AluResult) {
+    pub const fn apply_alu_flags(&mut self, result: AluResult) {
         self.cpsr = self.cpsr.with_nzcv(result.n, result.z, result.c, result.v);
     }
 
@@ -1291,7 +1290,7 @@ mod tests {
     #[test]
     fn test_smull_negative() {
         let (lo, hi) = AluOps::smull(0xFFFF_FFFF, 2); // -1 * 2 = -2
-        let combined = (lo as u64) | ((hi as u64) << 32);
+        let combined = u64::from(lo) | (u64::from(hi) << 32);
         assert_eq!(combined as i64, -2i64);
     }
 

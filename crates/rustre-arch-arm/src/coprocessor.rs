@@ -787,14 +787,14 @@ mod tests {
     #[test]
     fn test_decode_pkh() {
         // PKHBT r0, r1, r2
-        let word: u32 = 0xE6810012; // approximate
+        let word: u32 = 0xE681_0012; // approximate
         let i = decode_pkh(word);
         assert!(i.mnemonic.starts_with("pkhbt") || i.mnemonic.starts_with("pkhtb"));
     }
 
     #[test]
     fn test_decode_sel() {
-        let word: u32 = 0xE6800FB0; // approximate SEL encoding
+        let word: u32 = 0xE680_0FB0; // approximate SEL encoding
         let i = decode_sel(word);
         assert!(i.mnemonic.contains("sel"));
     }

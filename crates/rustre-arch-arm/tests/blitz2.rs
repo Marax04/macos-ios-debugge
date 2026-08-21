@@ -2,8 +2,8 @@
 //!
 //! Focus: pure-function helpers, decoders, branch helpers, IT decode,
 //! saturation, reglist formatting, exclusive decode, exception vectors,
-//! Neon/VFP helpers, parse_imm, strip_cond_suffix, and the LLIL lifter.
-//! Uses only a deterministic LCG (no rand, no std::time).
+//! Neon/VFP helpers, `parse_imm`, `strip_cond_suffix`, and the LLIL lifter.
+//! Uses only a deterministic LCG (no rand, no `std::time`).
 
 use rustre_arch_arm::*;
 use std::collections::hash_map::DefaultHasher;
@@ -13,20 +13,20 @@ use std::hash::{Hash, Hasher};
 // ---------- deterministic LCG ----------
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u32(&mut self) -> u32 {
+    const fn next_u32(&mut self) -> u32 {
         self.next() as u32
     }
-    fn next_u16(&mut self) -> u16 {
+    const fn next_u16(&mut self) -> u16 {
         self.next() as u16
     }
 }
@@ -86,23 +86,23 @@ fn qreg_format_correct() {
 
 #[test]
 fn arm_branch_offset_zero() {
-    assert_eq!(arm_branch_offset(0xea000000), 0);
+    assert_eq!(arm_branch_offset(0xea00_0000), 0);
 }
 
 #[test]
 fn arm_branch_offset_signs() {
     // Highest bit of imm24 set => negative
-    let neg = arm_branch_offset(0xea800000);
+    let neg = arm_branch_offset(0xea80_0000);
     assert!(neg < 0);
-    let pos = arm_branch_offset(0xea000001);
+    let pos = arm_branch_offset(0xea00_0001);
     assert_eq!(pos, 4);
 }
 
 #[test]
 fn arm_branch_target_pc_relative() {
     // pc=0x1000, offset=0, branch target = pc+8
-    assert_eq!(arm_branch_target(0x1000, 0xea000000), 0x1008);
-    assert_eq!(arm_branch_target(0x1000, 0xea000001), 0x100c);
+    assert_eq!(arm_branch_target(0x1000, 0xea00_0000), 0x1008);
+    assert_eq!(arm_branch_target(0x1000, 0xea00_0001), 0x100c);
 }
 
 #[test]
@@ -544,11 +544,11 @@ fn vfp_round_mode_all_decode() {
 #[test]
 fn arm_ldr_pc_offset_basic() {
     // U=1, imm12=4
-    let (o, add) = arm_ldr_pc_offset(0xe59f0004);
+    let (o, add) = arm_ldr_pc_offset(0xe59f_0004);
     assert_eq!(o, 4);
     assert!(add);
     // U=0, imm12=0xfff
-    let (o, add) = arm_ldr_pc_offset(0xe51f0fff);
+    let (o, add) = arm_ldr_pc_offset(0xe51f_0fff);
     assert_eq!(o, 0xfff);
     assert!(!add);
 }
@@ -693,8 +693,8 @@ fn cp15_lookup_fuzz_never_panics() {
 
 #[test]
 fn arm_cond_lookup_all_16() {
-    let entries: Vec<_> = (0u8..16).map(arm_cond_lookup).collect();
-    assert_eq!(entries.len(), 16);
+    
+    assert_eq!((0u8..16).map(arm_cond_lookup).count(), 16);
 }
 
 #[test]
