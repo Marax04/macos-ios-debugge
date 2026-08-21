@@ -509,10 +509,14 @@ fn popcount_clz_ctz_consistency() {
             assert!((1..=32).contains(&pop));
             assert!(clz <= 31);
             assert!(ctz <= 31);
+            // For a non-zero 32-bit word the leading zeros, the trailing zeros
+            // and the set bits occupy disjoint bit positions, so together they
+            // can never exceed the width. (The original assertion here was
+            // `... || true`, i.e. vacuous, and its inequality does not hold.)
             assert!(
-        clz + ctz + pop >= 32 - (pop - 1),
-        "clz/ctz/popcount are mutually consistent"
-    );
+                clz + ctz + pop <= 32,
+                "clz={clz} + ctz={ctz} + popcount={pop} must fit in 32 bits for v={v:#010x}"
+            );
         }
     }
 }
