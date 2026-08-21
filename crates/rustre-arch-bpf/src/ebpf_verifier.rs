@@ -251,11 +251,9 @@ fn join_types(a: &RegisterType, b: &RegisterType) -> RegisterType {
         }
         // Two differing constants, a constant meeting a scalar, and anything
         // meeting Null all widen to an unconstrained scalar.
-        (RegisterType::Constant(_), RegisterType::Constant(_))
-        | (RegisterType::Scalar, RegisterType::Constant(_))
-        | (RegisterType::Constant(_), RegisterType::Scalar)
-        | (RegisterType::Null, _)
-        | (_, RegisterType::Null) => RegisterType::Scalar,
+        (RegisterType::Constant(_) | RegisterType::Scalar, RegisterType::Constant(_))
+| (RegisterType::Constant(_), RegisterType::Scalar) | (RegisterType::Null, _)
+| (_, RegisterType::Null) => RegisterType::Scalar,
         (RegisterType::MapValue { map_id: a_id, .. }, RegisterType::MapValue { map_id: b_id, .. }) if a_id == b_id => {
             RegisterType::MapValue { map_id: *a_id, nullable: true }
         }

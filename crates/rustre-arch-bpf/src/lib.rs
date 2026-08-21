@@ -5420,7 +5420,7 @@ fn read_u32_le(data: &[u8], off: usize) -> Option<u32> {
 }
 
 fn read_i32_le(data: &[u8], off: usize) -> Option<i32> {
-    read_u32_le(data, off).map(|v| v.cast_signed())
+    read_u32_le(data, off).map(u32::cast_signed)
 }
 
 fn read_u64_le(data: &[u8], off: usize) -> Option<u64> {
@@ -6356,7 +6356,7 @@ pub fn apply_core_relocations(
             CoreRelocKind::FieldByteSize => {
                 parse_access_string(&reloc.access_str, effective_btf, reloc.type_id)
                     .and_then(|(ftype_id, _)| effective_btf.sizeof(ftype_id))
-                    .map(|sz| sz.cast_signed())
+                    .map(u32::cast_signed)
             }
 
             CoreRelocKind::FieldExists => {
@@ -6407,7 +6407,7 @@ pub fn apply_core_relocations(
                 Some(i32::from(exists))
             }
 
-            CoreRelocKind::TypeSize => effective_btf.sizeof(reloc.type_id).map(|sz| sz.cast_signed()),
+            CoreRelocKind::TypeSize => effective_btf.sizeof(reloc.type_id).map(u32::cast_signed),
 
             // â"€â"€ Enum relocations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             CoreRelocKind::EnumvalExists => {

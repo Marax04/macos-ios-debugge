@@ -11,7 +11,7 @@ use rustre_arch_jvm::{JvmArch, JvmDecodeError, JvmInstr, JvmLinearDisassembler};
 use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
-fn arch() -> JvmArch {
+const fn arch() -> JvmArch {
     JvmArch
 }
 

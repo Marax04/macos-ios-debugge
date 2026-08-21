@@ -65,7 +65,7 @@ fn read_u32(buf: &[u8], pos: &mut usize, attr: &str) -> Result<u32, AttrParseErr
 }
 
 fn read_i16(buf: &[u8], pos: &mut usize, attr: &str) -> Result<i16, AttrParseError> {
-    read_u16(buf, pos, attr).map(|v| v.cast_signed())
+    read_u16(buf, pos, attr).map(u16::cast_signed)
 }
 
 fn read_bytes<'a>(buf: &'a [u8], pos: &mut usize, len: usize, attr: &str) -> Result<&'a [u8], AttrParseError> {

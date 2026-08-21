@@ -839,7 +839,7 @@ enum SimPush {
 
 impl SimPush {
     /// Materialise the pushed value, or `None` when the opcode pushes nothing.
-    fn value(self) -> Option<JvmValue> {
+    const fn value(self) -> Option<JvmValue> {
         match self {
             Self::Nothing => None,
             Self::Null => Some(JvmValue::Null),
