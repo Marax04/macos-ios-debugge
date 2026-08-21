@@ -201,6 +201,19 @@ fn decode_cb(op: u8) -> Decoded {
 
 /// Decode an ED-prefixed instruction.
 fn decode_ed(op: u8, bytes: &[u8]) -> Decoded {
+    if op < 0xA0 {
+        return decode_ed_load_group(op, bytes);
+    }
+    decode_ed_block_group(op)
+}
+
+/// An ED opcode with no defined meaning: rendered as a data byte pair.
+fn ed_unknown(op: u8) -> (String, String, InstrFlags) {
+    ("DB".to_string(), format!("ED,${op:02X}"), InstrFlags::NONE)
+}
+
+/// ED opcodes below 0xA0: IN/OUT (C), 16-bit ADC/SBC, LD (nn),rp, IM, RRD/RLD.
+fn decode_ed_load_group(op: u8, bytes: &[u8]) -> Decoded {
     let mut size = 2usize;
     let (mnemonic, operands, flags) = match op {
         0x40 => ("IN".to_string(), "B,(C)".to_string(), InstrFlags::NONE),
@@ -341,6 +354,19 @@ fn decode_ed(op: u8, bytes: &[u8]) -> Decoded {
                 InstrFlags::READ_MEM,
             )
         }
+        _ => ed_unknown(op),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// ED opcodes 0xA0 and above: the block transfer, search and block I/O groups.
+fn decode_ed_block_group(op: u8) -> Decoded {
+    let (mnemonic, operands, flags) = match op {
         0xA0 => ("LDI".to_string(), String::new(), InstrFlags::NONE),
         0xA1 => ("CPI".to_string(), String::new(), InstrFlags::NONE),
         0xA2 => ("INI".to_string(), String::new(), InstrFlags::NONE),
@@ -357,12 +383,12 @@ fn decode_ed(op: u8, bytes: &[u8]) -> Decoded {
         0xB9 => ("CPDR".to_string(), String::new(), InstrFlags::NONE),
         0xBA => ("INDR".to_string(), String::new(), InstrFlags::NONE),
         0xBB => ("OTDR".to_string(), String::new(), InstrFlags::NONE),
-        _ => ("DB".to_string(), format!("ED,${op:02X}"), InstrFlags::NONE),
+        _ => ed_unknown(op),
     };
     Decoded {
         mnemonic,
         operands,
-        size,
+        size: 2,
         flags,
     }
 }
@@ -377,6 +403,19 @@ fn decode_index_prefix(op: u8, bytes: &[u8], idx: &str) -> Decoded {
     } else {
         format!("{idx}{disp_val}")
     };
+    if op < 0x46 {
+        return decode_index_arith_group(op, bytes, idx, &disp);
+    }
+    decode_index_memory_group(op, idx, &disp)
+}
+
+/// A DD/FD opcode with no indexed form: rendered as a data byte.
+fn index_unknown(op: u8) -> (String, String, usize, InstrFlags) {
+    ("DB".to_string(), format!("${op:02X}"), 2, InstrFlags::NONE)
+}
+
+/// DD/FD opcodes below 0x46: 16-bit ADD/INC/DEC, LD ix,nn and (nn) forms.
+fn decode_index_arith_group(op: u8, bytes: &[u8], idx: &str, disp: &str) -> Decoded {
     let (mnemonic, operands, size, flags) = match op {
         0x09 => ("ADD".to_string(), format!("{idx},BC"), 2, InstrFlags::NONE),
         0x19 => ("ADD".to_string(), format!("{idx},DE"), 2, InstrFlags::NONE),
@@ -449,6 +488,19 @@ fn decode_index_prefix(op: u8, bytes: &[u8], idx: &str) -> Decoded {
             )
         }
         0x39 => ("ADD".to_string(), format!("{idx},SP"), 2, InstrFlags::NONE),
+        _ => index_unknown(op),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// DD/FD opcodes 0x46 and above: the (ix+d) load, ALU and stack forms.
+fn decode_index_memory_group(op: u8, idx: &str, disp: &str) -> Decoded {
+    let (mnemonic, operands, size, flags) = match op {
         0x46 => (
             "LD".to_string(),
             format!("B,({disp})"),
@@ -601,7 +653,7 @@ fn decode_index_prefix(op: u8, bytes: &[u8], idx: &str) -> Decoded {
             InstrFlags::BRANCH.union(InstrFlags::INDIRECT),
         ),
         0xF9 => ("LD".to_string(), format!("SP,{idx}"), 2, InstrFlags::NONE),
-        _ => ("DB".to_string(), format!("${op:02X}"), 2, InstrFlags::NONE),
+        _ => index_unknown(op),
     };
     Decoded {
         mnemonic,
@@ -613,38 +665,19 @@ fn decode_index_prefix(op: u8, bytes: &[u8], idx: &str) -> Decoded {
 
 // ── Main decode ───────────────────────────────────────────────────────────────
 
-/// Decode an unprefixed Z80 instruction.
-///
-/// # Errors
-/// Returns `CoreError::InvalidInput` when the byte slice is too short.
-pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
-    if bytes.is_empty() {
-        return Err(CoreError::InvalidFormat {
-            message: "empty Z80 instruction".to_string(),
-        });
+/// An opcode byte with no defined meaning at this point in the table.
+fn undefined_byte(op: u8) -> Decoded {
+    Decoded {
+        mnemonic: "DB".to_string(),
+        operands: format!("${op:02X}"),
+        size: 1,
+        flags: InstrFlags::NONE,
     }
-    let op = bytes[0];
+}
 
-    // CB prefix — handled before general decoding
-    if op == 0xCB {
-        if bytes.len() < 2 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated CB prefix".to_string(),
-            });
-        }
-        return Ok(decode_cb(bytes[1]));
-    }
-
-    // Z80 opcode field decomposition (Zilog notation: x/y/z/p/q)
-    let xb = (op >> 6) & 3;
-    let yb = (op >> 3) & 7;
-    let zb = op & 7;
-    let pb = (yb >> 1) & 3;
-    let qb = yb & 1;
-
-    let result = match xb {
-        // x=0: misc loads, 16-bit INC/DEC/LD, 8-bit INC/DEC/LD, rotate accumulator
-        0 => match zb {
+/// x=0, z=0..1: relative jumps, EX AF, DJNZ and 16-bit loads.
+fn decode_x0_z01(op: u8, yb: u8, zb: u8, pb: u8, qb: u8, bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             0 => match yb {
                 0 => Decoded {
                     mnemonic: "NOP".to_string(),
@@ -739,6 +772,13 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::NONE,
                 },
             },
+        _ => undefined_byte(op),
+    })
+}
+
+/// x=0, z=2..3: indirect 8/16-bit loads and 16-bit INC/DEC.
+fn decode_x0_z23(op: u8, zb: u8, pb: u8, qb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             2 => {
                 let (mn, ops, fl) = match (qb, pb) {
                     (0, 0) => ("LD", "(BC),A".to_string(), InstrFlags::WRITE_MEM),
@@ -804,6 +844,13 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::NONE,
                 },
             },
+        _ => undefined_byte(op),
+    })
+}
+
+/// x=0, z=4..7: 8-bit INC/DEC, LD r,n and the accumulator ops.
+fn decode_x0_z47(yb: u8, zb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             4 => Decoded {
                 mnemonic: "INC".to_string(),
                 operands: reg8(yb).to_string(),
@@ -847,6 +894,44 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::NONE,
                 }
             }
+    })
+}
+
+/// Decode an unprefixed Z80 instruction.
+///
+/// # Errors
+/// Returns `CoreError::InvalidInput` when the byte slice is too short.
+pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
+    if bytes.is_empty() {
+        return Err(CoreError::InvalidFormat {
+            message: "empty Z80 instruction".to_string(),
+        });
+    }
+    let op = bytes[0];
+
+    // CB prefix — handled before general decoding
+    if op == 0xCB {
+        if bytes.len() < 2 {
+            return Err(CoreError::InvalidFormat {
+                message: "truncated CB prefix".to_string(),
+            });
+        }
+        return Ok(decode_cb(bytes[1]));
+    }
+
+    // Z80 opcode field decomposition (Zilog notation: x/y/z/p/q)
+    let xb = (op >> 6) & 3;
+    let yb = (op >> 3) & 7;
+    let zb = op & 7;
+    let pb = (yb >> 1) & 3;
+    let qb = yb & 1;
+
+    let result = match xb {
+        // x=0: misc loads, 16-bit INC/DEC/LD, 8-bit INC/DEC/LD, rotate accumulator
+        0 => match zb {
+            0 | 1 => decode_x0_z01(op, yb, zb, pb, qb, bytes, pc)?,
+            2 | 3 => decode_x0_z23(op, zb, pb, qb, bytes)?,
+            _ => decode_x0_z47(yb, zb, bytes)?,
         },
 
         // x=1: 8-bit LD r,r (or HALT for 0x76)

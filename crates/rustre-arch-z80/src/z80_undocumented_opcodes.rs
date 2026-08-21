@@ -343,6 +343,16 @@ fn decode_cb_undoc(bytes: &[u8], address: u64) -> Option<Z80UndocumentedOpcode> 
 
 // ── DDCB/FDCB combined bit-op + register load ────────────────────────────────
 
+/// The DD CB / FD CB "load" form does not exist for `BIT`.
+///
+/// `BIT b,(IX+d)` tests a bit and writes nothing back, so — unlike the rotate,
+/// `RES` and `SET` groups — there is no undocumented variant that also copies
+/// the result into a register. Named so the absence is documented at the one
+/// place that decides it.
+const fn bit_has_no_load_form() -> Option<Z80UndocumentedOpcode> {
+    None
+}
+
 fn decode_ddcb_load(bytes: &[u8], address: u64, idx: &str) -> Option<Z80UndocumentedOpcode> {
     if bytes.len() < 4 {
         return None;
@@ -385,7 +395,9 @@ fn decode_ddcb_load(bytes: &[u8], address: u64, idx: &str) -> Option<Z80Undocume
             };
             (mn.to_string(), format!("{dest_reg},({disp_str})"))
         }
-        1 => return None, // BIT — no load form
+        // BIT has no undocumented load form: it writes no register, so the
+        // DD CB / FD CB "load" variant simply does not exist for it.
+        1 => return bit_has_no_load_form(),
         2 => ("RES".to_string(), format!("{dest_reg},({disp_str}),$yb={yb}")),
         3 => ("SET".to_string(), format!("{dest_reg},({disp_str}),$yb={yb}")),
         _ => return None,

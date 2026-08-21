@@ -568,8 +568,10 @@ fn idiom_ld_self_detected() {
     let i = arch().disassemble(a(0), &[0x40]).unwrap();
     let id = z::identify_z80_idiom(&i);
     match id {
-        z::Z80Idiom::LdSelf(_) => {}
-        z::Z80Idiom::General => {} // tolerate either based on operand formatting
+        // Recognised: the operand text names the same register twice.
+        z::Z80Idiom::LdSelf(reg) => assert_eq!(reg, "B", "LD B,B must name register B"),
+        // Tolerated: operand formatting can hide the self-load from the matcher.
+        z::Z80Idiom::General => assert_eq!(i.bytes.first().copied(), Some(0x40)),
         other => panic!("unexpected idiom {other:?}"),
     }
 }
