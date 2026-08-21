@@ -76,7 +76,7 @@ impl InstructionFrequency {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<(u64, u64)> = self.counts.iter().map(|(a, c)| (*a, *c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }

@@ -744,7 +744,7 @@ impl TimeTravelQueryEngine {
             }
         }
         let mut pairs: Vec<(u32, usize)> = freq.into_iter().collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 
@@ -762,7 +762,7 @@ impl TimeTravelQueryEngine {
             .into_iter()
             .map(|((f, t), c)| (f, t, c))
             .collect();
-        triples.sort_by(|a, b| b.2.cmp(&a.2));
+        triples.sort_by_key(|b| std::cmp::Reverse(b.2));
         triples
     }
 
@@ -777,7 +777,7 @@ impl TimeTravelQueryEngine {
             }
         }
         let mut pairs: Vec<(u64, usize)> = freq.into_iter().collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 

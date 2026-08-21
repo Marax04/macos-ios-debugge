@@ -344,7 +344,7 @@ impl ExecGraph {
     #[must_use]
     pub fn hot_nodes(&self, n: usize) -> Vec<&ExecNode> {
         let mut ns: Vec<&ExecNode> = self.nodes.values().collect();
-        ns.sort_by(|a, b| b.exec_count.cmp(&a.exec_count));
+        ns.sort_by_key(|b| std::cmp::Reverse(b.exec_count));
         ns.truncate(n);
         ns
     }

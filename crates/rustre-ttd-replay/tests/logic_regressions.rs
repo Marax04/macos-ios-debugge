@@ -17,11 +17,11 @@ use rustre_ttd_replay::call_stack::{build_call_tree, CallEvent, CallEventKind};
 use rustre_ttd_replay::replay_analysis::{CallChainAnalysis, MemoryPatternAnalysis};
 use rustre_ttd_replay::time_travel_queries::TimeTravelQueryEngine;
 
-fn ev(seq: u64, kind: EventKind) -> TraceEvent {
+const fn ev(seq: u64, kind: EventKind) -> TraceEvent {
     TraceEvent::new(TracePosition::new(seq, 0), 1, kind)
 }
 
-fn call_ev(seq: u64, from: u64, to: u64) -> CallEvent {
+const fn call_ev(seq: u64, from: u64, to: u64) -> CallEvent {
     CallEvent {
         position: TracePosition::new(seq, 0),
         tid: 1,
