@@ -20,7 +20,7 @@ use rustre_arch_cil::{decode_compressed_int, decode_compressed_uint, CilInstr};
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;

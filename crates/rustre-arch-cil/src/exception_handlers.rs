@@ -503,7 +503,7 @@ mod tests {
     fn make_fat_section(clauses: &[Vec<u8>]) -> Vec<u8> {
         // flags: 0x41 = fat(0x40) | kind(0x01)
         // data_size: u24 = 4 (header) + clauses.len() * 24
-        let data_size: u32 = 4 + (clauses.len() as u32) * 24;
+        let data_size: u32 = 4 + u32::try_from(clauses.len()).expect("test fixture is small") * 24;
         let ds_bytes = data_size.to_le_bytes();
         let mut v = vec![0x41_u8, ds_bytes[0], ds_bytes[1], ds_bytes[2]];
         for c in clauses {

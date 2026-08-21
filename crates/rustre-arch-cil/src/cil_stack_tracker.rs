@@ -285,19 +285,13 @@ impl StackEffect {
 pub fn stack_effect_of(instr: &CilInstr) -> StackEffect {
     match instr.mnemonic.as_str() {
         // --- no effect ---
-        "nop" | "break" => StackEffect::none(),
-
         // --- load argument / local → push I4/O ---
-        "ldarg.0" | "ldarg.1" | "ldarg.2" | "ldarg.3" | "ldarg.s" | "ldarg" => {
+        "ldarg.0" | "ldarg.1" | "ldarg.2" | "ldarg.3" | "ldarg.s" | "ldarg" | "ldloc.0" | "ldloc.1" | "ldloc.2" | "ldloc.3" | "ldloc.s" | "ldloc" => {
             StackEffect::push1(StackType::Unknown)
         }
-        "ldloc.0" | "ldloc.1" | "ldloc.2" | "ldloc.3" | "ldloc.s" | "ldloc" => {
-            StackEffect::push1(StackType::Unknown)
-        }
-
         // --- store argument / local → pop 1 ---
         "starg.s" | "starg" | "stloc.0" | "stloc.1" | "stloc.2" | "stloc.3" | "stloc.s"
-        | "stloc" => StackEffect::pop1(),
+        | "stloc" | "pop" | "ret" | "brfalse" | "brfalse.s" | "brtrue" | "brtrue.s" | "switch" | "stsfld" | "throw" | "initobj" => StackEffect::pop1(),
 
         // --- load address → push managed ptr ---
         "ldarga.s" | "ldarga" | "ldloca.s" | "ldloca" => {
@@ -305,7 +299,7 @@ pub fn stack_effect_of(instr: &CilInstr) -> StackEffect {
         }
 
         // --- constants → push I4 ---
-        "ldnull" => StackEffect::push1(StackType::ObjectRef),
+        "ldnull" | "newobj" | "ldstr" => StackEffect::push1(StackType::ObjectRef),
         "ldc.i4.m1" | "ldc.i4.0" | "ldc.i4.1" | "ldc.i4.2" | "ldc.i4.3" | "ldc.i4.4"
         | "ldc.i4.5" | "ldc.i4.6" | "ldc.i4.7" | "ldc.i4.8" | "ldc.i4.s" | "ldc.i4" => {
             StackEffect::push1(StackType::Int32)
@@ -319,89 +313,51 @@ pub fn stack_effect_of(instr: &CilInstr) -> StackEffect {
             pops: 0,
             pushes: vec![StackType::Unknown, StackType::Unknown],
         },
-        "pop" => StackEffect::pop1(),
-
         // --- call / newobj / ret ---
         "call" | "callvirt" | "calli" => StackEffect {
             pops: 0, // variable; simplified
             pushes: vec![StackType::Unknown],
         },
-        "ret" => StackEffect::pop1(),
-        "newobj" => StackEffect::push1(StackType::ObjectRef),
-        "jmp" => StackEffect::none(),
-
         // --- branches --- consume 0–2 stack items, push nothing ---
-        "br" | "br.s" | "leave" | "leave.s" => StackEffect::none(),
-        "brfalse" | "brfalse.s" | "brtrue" | "brtrue.s" => StackEffect::pop1(),
         "beq" | "beq.s" | "bge" | "bge.s" | "bgt" | "bgt.s" | "ble" | "ble.s" | "blt"
         | "blt.s" | "bne.un" | "bne.un.s" | "bge.un" | "bge.un.s" | "bgt.un" | "bgt.un.s"
-        | "ble.un" | "ble.un.s" | "blt.un" | "blt.un.s" => StackEffect::pop2(),
-        "switch" => StackEffect::pop1(),
-
+        | "ble.un" | "ble.un.s" | "blt.un" | "blt.un.s" | "stind.ref" | "stind.i1" | "stind.i2" | "stind.i4" | "stind.i8" | "stind.r4"
+        | "stind.r8" | "stind.i" | "stfld" | "stobj" | "cpobj" => StackEffect::pop2(),
         // --- indirect loads --- pop ptr, push value ---
-        "ldind.i1" | "ldind.u1" | "ldind.i2" | "ldind.u2" | "ldind.i4" | "ldind.u4" => {
-            StackEffect::pop1_push1(StackType::Int32)
-        }
-        "ldind.i8" | "ldind.u8" => StackEffect::pop1_push1(StackType::Int64),
-        "ldind.i" => StackEffect::pop1_push1(StackType::NativeInt),
-        "ldind.r4" => StackEffect::pop1_push1(StackType::Float32),
-        "ldind.r8" => StackEffect::pop1_push1(StackType::Float64),
-        "ldind.ref" => StackEffect::pop1_push1(StackType::ObjectRef),
-
-        // --- indirect stores --- pop value + ptr ---
-        "stind.ref" | "stind.i1" | "stind.i2" | "stind.i4" | "stind.i8" | "stind.r4"
-        | "stind.r8" | "stind.i" => StackEffect::pop2(),
-
-        // --- arithmetic / logic --- pop2 push1 ---
-        "add" | "sub" | "mul" | "div" | "div.un" | "rem" | "rem.un" | "and" | "or" | "xor"
-        | "shl" | "shr" | "shr.un" => StackEffect::pop2_push1(StackType::Unknown),
-        "neg" | "not" => StackEffect::pop1_push1(StackType::Unknown),
-
-        // --- conversions --- pop1 push1 ---
-        "conv.i1" | "conv.i2" | "conv.i4" | "conv.u1" | "conv.u2" | "conv.u4"
+        "ldind.i1" | "ldind.u1" | "ldind.i2" | "ldind.u2" | "ldind.i4" | "ldind.u4" | "conv.i1" | "conv.i2" | "conv.i4" | "conv.u1" | "conv.u2" | "conv.u4"
         | "conv.ovf.i1" | "conv.ovf.i2" | "conv.ovf.i4" | "conv.ovf.u1" | "conv.ovf.u2"
         | "conv.ovf.u4" | "conv.ovf.i1.un" | "conv.ovf.i2.un" | "conv.ovf.i4.un"
         | "conv.ovf.u1.un" | "conv.ovf.u2.un" | "conv.ovf.u4.un" => {
             StackEffect::pop1_push1(StackType::Int32)
         }
-        "conv.i8" | "conv.u8" | "conv.ovf.i8" | "conv.ovf.u8" | "conv.ovf.i8.un"
+        "ldind.i8" | "ldind.u8" | "conv.i8" | "conv.u8" | "conv.ovf.i8" | "conv.ovf.u8" | "conv.ovf.i8.un"
         | "conv.ovf.u8.un" => StackEffect::pop1_push1(StackType::Int64),
-        "conv.r4" => StackEffect::pop1_push1(StackType::Float32),
-        "conv.r8" | "conv.r.un" => StackEffect::pop1_push1(StackType::Float64),
-        "conv.i" | "conv.u" | "conv.ovf.i" | "conv.ovf.u" | "conv.ovf.i.un"
-        | "conv.ovf.u.un" => StackEffect::pop1_push1(StackType::NativeInt),
+        "ldind.i" | "conv.i" | "conv.u" | "conv.ovf.i" | "conv.ovf.u" | "conv.ovf.i.un"
+        | "conv.ovf.u.un" | "ldvirtftn" | "ldlen" | "localloc" => StackEffect::pop1_push1(StackType::NativeInt),
+        "ldind.r4" | "conv.r4" => StackEffect::pop1_push1(StackType::Float32),
+        "ldind.r8" | "conv.r8" | "conv.r.un" | "ckfinite" => StackEffect::pop1_push1(StackType::Float64),
+        "ldind.ref" | "box" | "isinst" | "castclass" | "newarr" => StackEffect::pop1_push1(StackType::ObjectRef),
 
-        // --- object model ---
-        "ldfld" | "ldsfld" => StackEffect::pop1_push1(StackType::Unknown),
-        "stfld" => StackEffect::pop2(),
-        "stsfld" => StackEffect::pop1(),
-        "ldflda" | "ldsflda" => StackEffect::pop1_push1(StackType::ManagedPtr),
-        "ldobj" => StackEffect::pop1_push1(StackType::Unknown),
-        "stobj" => StackEffect::pop2(),
-        "box" => StackEffect::pop1_push1(StackType::ObjectRef),
-        "unbox" | "unbox.any" => StackEffect::pop1_push1(StackType::Unknown),
-        "isinst" | "castclass" => StackEffect::pop1_push1(StackType::ObjectRef),
-        "ldstr" => StackEffect::push1(StackType::ObjectRef),
-        "ldtoken" | "ldftn" => StackEffect::push1(StackType::NativeInt),
-        "ldvirtftn" => StackEffect::pop1_push1(StackType::NativeInt),
-        "cpobj" => StackEffect::pop2(),
-        "newarr" => StackEffect::pop1_push1(StackType::ObjectRef),
-        "ldlen" => StackEffect::pop1_push1(StackType::NativeInt),
-        "ldelema" => StackEffect::pop2_push1(StackType::ManagedPtr),
-        "ldelem" | "ldelem.i1" | "ldelem.u1" | "ldelem.i2" | "ldelem.u2" | "ldelem.i4"
+        // --- indirect stores --- pop value + ptr ---
+        // --- arithmetic / logic --- pop2 push1 ---
+        "add" | "sub" | "mul" | "div" | "div.un" | "rem" | "rem.un" | "and" | "or" | "xor"
+        | "shl" | "shr" | "shr.un" | "ldelem" | "ldelem.i1" | "ldelem.u1" | "ldelem.i2" | "ldelem.u2" | "ldelem.i4"
         | "ldelem.u4" | "ldelem.i8" | "ldelem.i" | "ldelem.r4" | "ldelem.r8"
         | "ldelem.ref" => StackEffect::pop2_push1(StackType::Unknown),
+        "neg" | "not" | "ldfld" | "ldsfld" | "ldobj" | "unbox" | "unbox.any" => StackEffect::pop1_push1(StackType::Unknown),
+
+        // --- conversions --- pop1 push1 ---
+        // --- object model ---
+        "ldflda" | "ldsflda" => StackEffect::pop1_push1(StackType::ManagedPtr),
+        "ldtoken" | "ldftn" | "arglist" => StackEffect::push1(StackType::NativeInt),
+        "ldelema" => StackEffect::pop2_push1(StackType::ManagedPtr),
         "stelem" | "stelem.i" | "stelem.i1" | "stelem.i2" | "stelem.i4" | "stelem.i8"
-        | "stelem.r4" | "stelem.r8" | "stelem.ref" => StackEffect {
+        | "stelem.r4" | "stelem.r8" | "stelem.ref" | "cpblk" | "initblk" => StackEffect {
             pops: 3,
             pushes: vec![],
         },
 
         // --- exception handling ---
-        "throw" => StackEffect::pop1(),
-        "rethrow" => StackEffect::none(),
-        "endfinally" | "endfilter" => StackEffect::none(),
-
         // --- overflow arithmetic ---
         "add.ovf" | "add.ovf.un" | "sub.ovf" | "sub.ovf.un" | "mul.ovf" | "mul.ovf.un" => {
             StackEffect::pop2_push1(StackType::Unknown)
@@ -413,22 +369,10 @@ pub fn stack_effect_of(instr: &CilInstr) -> StackEffect {
         }
 
         // --- misc ---
-        "localloc" => StackEffect::pop1_push1(StackType::NativeInt),
-        "arglist" => StackEffect::push1(StackType::NativeInt),
-        "ckfinite" => StackEffect::pop1_push1(StackType::Float64),
         "sizeof" => StackEffect::push1(StackType::Int32),
         "refanyval" | "mkrefany" | "refanytype" => {
             StackEffect::pop1_push1(StackType::Unknown)
         }
-        "cpblk" => StackEffect {
-            pops: 3,
-            pushes: vec![],
-        },
-        "initblk" => StackEffect {
-            pops: 3,
-            pushes: vec![],
-        },
-        "initobj" => StackEffect::pop1(),
         "constrained" | "volatile" | "unaligned" | "tail" | "readonly" | "no" => {
             StackEffect::none()
         }
@@ -524,7 +468,9 @@ impl StackVerifier {
                 });
             }
 
-            offset += size as u32;
+            // `size` is one decoded instruction length; the CIL encoding caps it far
+            // below `u32::MAX`, and a malformed value saturates instead of wrapping.
+            offset = offset.saturating_add(u32::try_from(size).unwrap_or(u32::MAX));
             // Record post-execution state so max_observed_depth includes the
             // depth reached after the last push (the final state would otherwise
             // be missed because `states` is keyed by pre-execution offsets).

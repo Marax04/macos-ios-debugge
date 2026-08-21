@@ -465,11 +465,11 @@ mod tests {
     #[test]
     fn test_decode_ldftn_with_token() {
         let mut buf = vec![0xfe_u8, 0x06];
-        buf.extend_from_slice(&0x06000003_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0600_0003_u32.to_le_bytes());
         let insn = decode_wide_prefix(&buf).unwrap();
         assert_eq!(insn.entry.mnemonic, "ldftn");
         assert_eq!(insn.size, 6);
-        assert_eq!(insn.operand_value, 0x06000003);
+        assert_eq!(insn.operand_value, 0x0600_0003);
     }
 
     #[test]

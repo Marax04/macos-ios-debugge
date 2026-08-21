@@ -3544,7 +3544,7 @@ mod tests {
     #[test]
     fn test_lj_const_variants() {
         let c_int = LjConst::Integer(42);
-        let c_flt = LjConst::Float(3.14_f64);
+        let c_flt = LjConst::Float(std::f64::consts::PI);
         let c_str = LjConst::String(b"hi".to_vec());
         let c_nil = LjConst::Nil;
         let c_bool = LjConst::Bool(true);

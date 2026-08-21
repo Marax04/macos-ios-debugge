@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn const_type() {
         assert_eq!(IrConst::Int(42).ir_type(), IrType::Int);
-        assert_eq!(IrConst::Num(3.14).ir_type(), IrType::Num);
+        assert_eq!(IrConst::Num(std::f64::consts::PI).ir_type(), IrType::Num);
         assert_eq!(IrConst::Nil.ir_type(), IrType::Nil);
     }
 

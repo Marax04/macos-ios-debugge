@@ -828,7 +828,7 @@ mod tests {
 
     #[test]
     fn test_ir_trace_knum() {
-        let instr = IrInstruction::knum(0, 3.14f64.to_bits());
+        let instr = IrInstruction::knum(0, std::f64::consts::PI.to_bits());
         assert_eq!(instr.op, IrOp::Knum);
         assert_eq!(instr.ty, IrType::Num);
         assert!(instr.annotation.is_some());

@@ -98,7 +98,12 @@ impl StackDepthAnalysis {
                 return Err(CilAnalysisError::StackUnderflow(offset));
             }
             if depth > 1024 {
-                return Err(CilAnalysisError::StackOverflow(offset, depth as usize));
+                // `depth` is > 1024 here and was proven non-negative just above,
+                // so the widening to `usize` is exact.
+                return Err(CilAnalysisError::StackOverflow(
+                    offset,
+                    usize::try_from(depth).unwrap_or(usize::MAX),
+                ));
             }
             result.depth_map.insert(offset, depth);
             result.max_depth = result.max_depth.max(depth);
@@ -639,7 +644,7 @@ mod tests {
     fn test_exception_finally_count() {
         let c1 = make_clause(0, 10, 10, 20);
         let c2 = ExceptionClause {
-            kind: ClauseKind::Catch(tok(0x01000001)),
+            kind: ClauseKind::Catch(tok(0x0100_0001)),
             try_start: 0,
             try_end: 10,
             handler_start: 20,
@@ -775,7 +780,7 @@ mod tests {
             handler_end: 12,
         };
         let calls = vec![(tok(1), tok(2))];
-        let type_refs = vec![(tok(0x01000001), 4)];
+        let type_refs = vec![(tok(0x0100_0001), 4)];
         a.analyze(
             tok(1),
             &stack_deltas,
@@ -841,7 +846,7 @@ mod tests {
     #[test]
     fn test_exception_clause_filter() {
         let catch = ExceptionClause {
-            kind: ClauseKind::Catch(tok(0x01000001)),
+            kind: ClauseKind::Catch(tok(0x0100_0001)),
             try_start: 0,
             try_end: 10,
             handler_start: 10,

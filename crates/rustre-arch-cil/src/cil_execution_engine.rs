@@ -34,12 +34,11 @@ impl CilValue {
     #[must_use]
     pub fn is_zero(&self) -> bool {
         match self {
-            CilValue::I32(v)       => *v == 0,
-            CilValue::I64(v)       => *v == 0,
-            CilValue::F64(v)       => *v == 0.0,
-            CilValue::NativeInt(v) => *v == 0,
-            CilValue::Ptr(v)       => *v == 0,
-            CilValue::Null         => true,
+            Self::I32(v)       => *v == 0,
+            Self::I64(v) | Self::NativeInt(v)       => *v == 0,
+            Self::F64(v)       => *v == 0.0,
+            Self::Ptr(v)       => *v == 0,
+            Self::Null         => true,
             _ => false,
         }
     }
@@ -48,11 +47,10 @@ impl CilValue {
     #[must_use]
     pub const fn to_i64(&self) -> Option<i64> {
         match self {
-            CilValue::I32(v)       => Some(*v as i64),
-            CilValue::I64(v)       => Some(*v),
-            CilValue::NativeInt(v) => Some(*v),
-            CilValue::Ptr(v)       => Some(*v as i64),
-            CilValue::Null         => Some(0),
+            Self::I32(v)       => Some(*v as i64),
+            Self::I64(v) | Self::NativeInt(v)       => Some(*v),
+            Self::Ptr(v)       => Some(v.cast_signed()),
+            Self::Null         => Some(0),
             _ => None,
         }
     }
@@ -61,9 +59,9 @@ impl CilValue {
     #[must_use]
     pub const fn to_f64(&self) -> Option<f64> {
         match self {
-            CilValue::F64(v)  => Some(*v),
-            CilValue::I32(v)  => Some(*v as f64),
-            CilValue::I64(v)  => Some(*v as f64),
+            Self::F64(v)  => Some(*v),
+            Self::I32(v)  => Some(*v as f64),
+            Self::I64(v)  => Some(*v as f64),
             _ => None,
         }
     }
@@ -71,7 +69,7 @@ impl CilValue {
     /// True if this is an Unknown or indeterminate value.
     #[must_use]
     pub const fn is_unknown(&self) -> bool {
-        matches!(self, CilValue::Unknown)
+        matches!(self, Self::Unknown)
     }
 }
 
@@ -230,8 +228,8 @@ impl CilExecutionEngine {
 
             match op {
                 // ── NOP / BRK ────────────────────────────────────────────
-                0x00 => { pc += 1; } // nop
-                0x01 => { pc += 1; } // break (debug breakpoint)
+                // nop
+                // break (debug breakpoint)
 
                 // ── ldarg short forms ────────────────────────────────────
                 0x02 => { stack.push(args.load(0)); pc += 1; }
@@ -291,7 +289,7 @@ impl CilExecutionEngine {
 
                 // ldc.i4.s <int8>
                 0x1F => {
-                    let v = i32::from(*opcodes.get(pc + 1)? as i8);
+                    let v = i32::from((*opcodes.get(pc + 1)?).cast_signed());
                     stack.push(CilValue::I32(v));
                     pc += 2;
                 }
@@ -353,29 +351,32 @@ impl CilExecutionEngine {
                     let off = i32::from_le_bytes([
                         opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
                     ]);
-                    let next = (pc + 5) as i64 + i64::from(off);
-                    if next < 0 || next as usize >= opcodes.len() { break; }
-                    pc = next as usize;
+                    let next = pc_as_i64(pc + 5) + i64::from(off);
+                    let Ok(next) = usize::try_from(next) else { break };
+                    if next >= opcodes.len() { break; }
+                    pc = next;
                     continue;
                 }
 
                 // br.s (short branch)
                 0x2B => {
-                    let off = i64::from(*opcodes.get(pc + 1)? as i8);
-                    let next = (pc + 2) as i64 + off;
-                    if next < 0 || next as usize >= opcodes.len() { break; }
-                    pc = next as usize;
+                    let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
+                    let next = pc_as_i64(pc + 2) + off;
+                    let Ok(next) = usize::try_from(next) else { break };
+                    if next >= opcodes.len() { break; }
+                    pc = next;
                     continue;
                 }
 
                 // ── conditional branches (short) ──────────────────────────
                 0x2C..=0x37 => {
-                    let off = i64::from(*opcodes.get(pc + 1)? as i8);
-                    let taken_pc = (pc + 2) as i64 + off;
+                    let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
+                    let taken_pc = pc_as_i64(pc + 2) + off;
                     let fallthrough = pc + 2;
-                    let cond = self.eval_branch_short(op, &mut stack);
-                    pc = if cond == Some(true) && taken_pc >= 0 && (taken_pc as usize) < opcodes.len() {
-                        taken_pc as usize
+                    let taken = in_range_pc(taken_pc, opcodes.len());
+                    let cond = Self::eval_branch_short(op, &mut stack);
+                    pc = if cond == Some(true) {
+                        taken.unwrap_or(fallthrough)
                     } else {
                         fallthrough
                     };
@@ -406,11 +407,12 @@ impl CilExecutionEngine {
                     let off = i64::from(i32::from_le_bytes([
                         opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
                     ]));
-                    let taken_pc = (pc + 5) as i64 + off;
+                    let taken_pc = pc_as_i64(pc + 5) + off;
                     let fallthrough = pc + 5;
+                    let taken = in_range_pc(taken_pc, opcodes.len());
                     let cond = self.eval_branch_long(op, &mut stack);
-                    pc = if cond == Some(true) && taken_pc >= 0 && (taken_pc as usize) < opcodes.len() {
-                        taken_pc as usize
+                    pc = if cond == Some(true) {
+                        taken.unwrap_or(fallthrough)
                     } else {
                         fallthrough
                     };
@@ -418,9 +420,9 @@ impl CilExecutionEngine {
                 }
 
                 // ── arithmetic ───────────────────────────────────────────
-                0x58 => { self.bin_op_i32(&mut stack, i32::wrapping_add); pc += 1; } // add
-                0x59 => { self.bin_op_i32(&mut stack, i32::wrapping_sub); pc += 1; } // sub
-                0x5A => { self.bin_op_i32(&mut stack, i32::wrapping_mul); pc += 1; } // mul
+                0x58 => { Self::bin_op_i32(&mut stack, i32::wrapping_add); pc += 1; } // add
+                0x59 => { Self::bin_op_i32(&mut stack, i32::wrapping_sub); pc += 1; } // sub
+                0x5A => { Self::bin_op_i32(&mut stack, i32::wrapping_mul); pc += 1; } // mul
                 0x5B => { // div
                     let b = stack.pop();
                     let a = stack.pop();
@@ -435,7 +437,7 @@ impl CilExecutionEngine {
                     let a = stack.pop();
                     match (a.to_i64(), b.to_i64()) {
                         (Some(av), Some(bv)) if bv != 0 => {
-                            stack.push(CilValue::I64((av as u64 / bv as u64) as i64));
+                            stack.push(CilValue::I64((av.cast_unsigned() / bv.cast_unsigned()).cast_signed()));
                         }
                         _ => stack.push(CilValue::Unknown),
                     }
@@ -450,9 +452,9 @@ impl CilExecutionEngine {
                     }
                     pc += 1;
                 }
-                0x5F => { self.bin_op_i64(&mut stack, |a, b| a & b); pc += 1; } // and
-                0x60 => { self.bin_op_i64(&mut stack, |a, b| a | b); pc += 1; } // or
-                0x61 => { self.bin_op_i64(&mut stack, |a, b| a ^ b); pc += 1; } // xor
+                0x5F => { Self::bin_op_i64(&mut stack, |a, b| a & b); pc += 1; } // and
+                0x60 => { Self::bin_op_i64(&mut stack, |a, b| a | b); pc += 1; } // or
+                0x61 => { Self::bin_op_i64(&mut stack, |a, b| a ^ b); pc += 1; } // xor
                 0x62 => { // shl
                     let b = stack.pop();
                     let a = stack.pop();
@@ -489,10 +491,10 @@ impl CilExecutionEngine {
                 }
 
                 // ── conv variants ─────────────────────────────────────────
-                0x67 => { self.conv_i(&mut stack, |v| i64::from(v as i8)); pc += 1; }  // conv.i1
-                0x68 => { self.conv_i(&mut stack, |v| i64::from(v as i16)); pc += 1; } // conv.i2
-                0x69 => { self.conv_i(&mut stack, |v| i64::from(v as i32)); pc += 1; } // conv.i4
-                0x6A => { pc += 1; } // conv.i8 (already i64 in abstract)
+                0x67 => { Self::conv_i(&mut stack, |v| i64::from(low_i8(v))); pc += 1; }  // conv.i1
+                0x68 => { Self::conv_i(&mut stack, |v| i64::from(low_i16(v))); pc += 1; } // conv.i2
+                0x69 => { Self::conv_i(&mut stack, |v| i64::from(low_i32(v))); pc += 1; } // conv.i4
+                // conv.i8 (already i64 in abstract)
                 0x6B => { // conv.r4
                     let a = stack.pop();
                     let v = f64::from(a.to_f64().unwrap_or(0.0) as f32);
@@ -505,8 +507,8 @@ impl CilExecutionEngine {
                     stack.push(CilValue::F64(v));
                     pc += 1;
                 }
-                0x6D => { self.conv_i(&mut stack, |v| i64::from(v as u32)); pc += 1; } // conv.u4
-                0x6E => { self.conv_i(&mut stack, |v| v as u64 as i64); pc += 1; } // conv.u8
+                0x6D => { Self::conv_i(&mut stack, |v| i64::from(low_u32(v))); pc += 1; } // conv.u4
+                0x6E => { Self::conv_i(&mut stack, |v| v.cast_unsigned().cast_signed()); pc += 1; } // conv.u8
 
                 // ── two-byte prefix opcodes (0xFE) ────────────────────────
                 0xFE => {
@@ -519,7 +521,7 @@ impl CilExecutionEngine {
                                 (Some(av), Some(bv)) => av == bv,
                                 _ => false,
                             };
-                            stack.push(CilValue::I32(if eq { 1 } else { 0 }));
+                            stack.push(CilValue::I32(i32::from(eq)));
                         }
                         0x02 => { // cgt
                             let b = stack.pop();
@@ -528,7 +530,7 @@ impl CilExecutionEngine {
                                 (Some(av), Some(bv)) => av > bv,
                                 _ => false,
                             };
-                            stack.push(CilValue::I32(if r { 1 } else { 0 }));
+                            stack.push(CilValue::I32(i32::from(r)));
                         }
                         0x04 => { // clt
                             let b = stack.pop();
@@ -537,7 +539,7 @@ impl CilExecutionEngine {
                                 (Some(av), Some(bv)) => av < bv,
                                 _ => false,
                             };
-                            stack.push(CilValue::I32(if r { 1 } else { 0 }));
+                            stack.push(CilValue::I32(i32::from(r)));
                         }
                         _ => {
                             // Unknown prefix opcode — push Unknown, skip 2 bytes.
@@ -548,23 +550,13 @@ impl CilExecutionEngine {
                 }
 
                 // ── call / callvirt (skip 4-byte token, push Unknown) ─────
-                0x28 | 0x6F => {
+                0x28 | 0x6F | 0x73 | 0x72 => {
                     pc += 5;
                     stack.push(CilValue::Unknown);
                 }
 
                 // ── newobj (skip 4-byte token, push Unknown) ──────────────
-                0x73 => {
-                    pc += 5;
-                    stack.push(CilValue::Unknown);
-                }
-
                 // ── ldstr (skip 4-byte token, push Unknown) ───────────────
-                0x72 => {
-                    pc += 5;
-                    stack.push(CilValue::Unknown);
-                }
-
                 // ── anything else: advance 1 byte ─────────────────────────
                 _ => {
                     pc += 1;
@@ -601,29 +593,28 @@ impl CilExecutionEngine {
         let args = Arguments::new(args_vec);
         let result = self.execute_method_abstract(opcodes, &mut locals, &args);
         let mut addresses = Vec::new();
-        if let Some(CilValue::Ptr(addr)) = result {
-            if addr >= 0xDEAD_0000 {
+        if let Some(CilValue::Ptr(addr)) = result
+            && addr >= 0xDEAD_0000 {
                 addresses.push(addr);
             }
-        }
         addresses
     }
 
     // ── Internal helpers ───────────────────────────────────────────────────
 
-    fn bin_op_i32<F>(&self, stack: &mut EvalStack, f: F)
+    fn bin_op_i32<F>(stack: &mut EvalStack, f: F)
     where
         F: Fn(i32, i32) -> i32,
     {
         let b = stack.pop();
         let a = stack.pop();
         match (a.to_i64(), b.to_i64()) {
-            (Some(av), Some(bv)) => stack.push(CilValue::I32(f(av as i32, bv as i32))),
+            (Some(av), Some(bv)) => stack.push(CilValue::I32(f(low_i32(av), low_i32(bv)))),
             _ => stack.push(CilValue::Unknown),
         }
     }
 
-    fn bin_op_i64<F>(&self, stack: &mut EvalStack, f: F)
+    fn bin_op_i64<F>(stack: &mut EvalStack, f: F)
     where
         F: Fn(i64, i64) -> i64,
     {
@@ -635,7 +626,7 @@ impl CilExecutionEngine {
         }
     }
 
-    fn conv_i<F>(&self, stack: &mut EvalStack, f: F)
+    fn conv_i<F>(stack: &mut EvalStack, f: F)
     where
         F: Fn(i64) -> i64,
     {
@@ -647,7 +638,7 @@ impl CilExecutionEngine {
     }
 
     /// Returns Some(true) if the short branch should be taken, None for unknown.
-    fn eval_branch_short(&self, op: u8, stack: &mut EvalStack) -> Option<bool> {
+    fn eval_branch_short(op: u8, stack: &mut EvalStack) -> Option<bool> {
         match op {
             0x2C => { // brfalse.s
                 let a = stack.pop();
@@ -689,7 +680,7 @@ impl CilExecutionEngine {
     fn eval_branch_long(&self, op: u8, stack: &mut EvalStack) -> Option<bool> {
         // Long forms 0x39–0x46 mirror 0x2C–0x37
         let short_op = op - 0x39 + 0x2C;
-        self.eval_branch_short(short_op, stack)
+        Self::eval_branch_short(short_op, stack)
     }
 }
 
@@ -698,6 +689,50 @@ impl Default for CilExecutionEngine {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+// Width / sign helpers
+//
+// The CIL `conv.*` opcodes are *defined* to keep the low N bits of the operand
+// and reinterpret them at the requested width. Going through `to_le_bytes`
+// states that truncation explicitly, so it can never be confused with an
+// accidental narrowing introduced by a plain `as`.
+
+/// CIL `conv.i1`: low 8 bits of `v`, reinterpreted as signed.
+const fn low_i8(v: i64) -> i8 {
+    v.to_le_bytes()[0].cast_signed()
+}
+
+/// CIL `conv.i2`: low 16 bits of `v`, reinterpreted as signed.
+const fn low_i16(v: i64) -> i16 {
+    let b = v.to_le_bytes();
+    i16::from_le_bytes([b[0], b[1]])
+}
+
+/// CIL `conv.i4`: low 32 bits of `v`, reinterpreted as signed.
+const fn low_i32(v: i64) -> i32 {
+    let b = v.to_le_bytes();
+    i32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// CIL `conv.u4`: low 32 bits of `v`, reinterpreted as unsigned.
+const fn low_u32(v: i64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// A program counter widened to `i64` so a signed branch displacement can be
+/// added to it. `pc` indexes a byte slice, so it is at most `isize::MAX` and
+/// the conversion cannot fail on any supported target; the saturating fallback
+/// exists only so untrusted input can never panic here.
+fn pc_as_i64(pc: usize) -> i64 {
+    i64::try_from(pc).unwrap_or(i64::MAX)
+}
+
+/// A computed branch target, accepted only if it lands inside `len`.
+/// Negative and out-of-range targets yield `None` instead of wrapping.
+fn in_range_pc(target: i64, len: usize) -> Option<usize> {
+    usize::try_from(target).ok().filter(|&t| t < len)
+}
 
 #[cfg(test)]
 mod tests {

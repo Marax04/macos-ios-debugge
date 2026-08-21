@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::{CilDecodeError, CilInstr};
+use std::fmt::Write as _;
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
@@ -137,11 +138,10 @@ impl fmt::Display for CSharpExpr {
             Self::FloatLit(v) => write!(f, "{v}"),
             Self::StringLit(s) => write!(f, "\"{s}\""),
             Self::Null => write!(f, "null"),
-            Self::Local(n) => write!(f, "{n}"),
-            Self::Arg(n) => write!(f, "{n}"),
+            Self::Local(n) | Self::Arg(n) => write!(f, "{n}"),
             Self::Field { obj, field } => write!(f, "{obj}.{field}"),
             Self::StaticField { type_name, field } => write!(f, "{type_name}.{field}"),
-            Self::Call { obj, method, args } => {
+            Self::Call { obj, method, args } | Self::VirtCall { obj, method, args } => {
                 write!(f, "{obj}.{method}(")?;
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
@@ -157,16 +157,6 @@ impl fmt::Display for CSharpExpr {
                 args,
             } => {
                 write!(f, "{type_name}.{method}(")?;
-                for (i, a) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{a}")?;
-                }
-                write!(f, ")")
-            }
-            Self::VirtCall { obj, method, args } => {
-                write!(f, "{obj}.{method}(")?;
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -462,7 +452,6 @@ impl ExpressionBuilder {
     /// Process a single CIL instruction and update the expression stack.
     pub fn process(&mut self, instr: &CilInstr) -> Result<Option<CSharpStmt>, DecompileError> {
         match instr.mnemonic.as_str() {
-            "nop" => Ok(None),
             "ldnull" => {
                 self.push(CSharpExpr::Null);
                 Ok(None)
@@ -507,17 +496,7 @@ impl ExpressionBuilder {
                 self.push(CSharpExpr::IntLit(-1));
                 Ok(None)
             }
-            "ldc.i4.s" => {
-                let v = instr.operands.trim().parse::<i64>().unwrap_or(0);
-                self.push(CSharpExpr::IntLit(v));
-                Ok(None)
-            }
-            "ldc.i4" => {
-                let v = instr.operands.trim().parse::<i64>().unwrap_or(0);
-                self.push(CSharpExpr::IntLit(v));
-                Ok(None)
-            }
-            "ldc.i8" => {
+            "ldc.i4.s" | "ldc.i4" | "ldc.i8" => {
                 let v = instr.operands.trim().parse::<i64>().unwrap_or(0);
                 self.push(CSharpExpr::IntLit(v));
                 Ok(None)
@@ -917,27 +896,29 @@ impl CSharpCodeGenerator {
     ) -> String {
         let mut code = String::new();
         if method.is_async {
-            code.push_str(&format!(
+            write!(code, 
                 "{}async {} {}()\n",
                 self.indent_str(),
                 return_type,
                 name
-            ));
+            )
+                .expect("writing to a String is infallible");
         } else {
-            code.push_str(&format!(
+            write!(code, 
                 "{}{} {}()\n",
                 self.indent_str(),
                 return_type,
                 name
-            ));
+            )
+                .expect("writing to a String is infallible");
         }
-        code.push_str(&format!("{}{{\n", self.indent_str()));
+        write!(code, "{}{{\n", self.indent_str()).expect("writing to a String is infallible");
         self.push_indent();
         for stmt in &method.stmts {
-            code.push_str(&format!("{}{}", self.indent_str(), stmt));
+            write!(code, "{}{}", self.indent_str(), stmt).expect("writing to a String is infallible");
         }
         self.pop_indent();
-        code.push_str(&format!("{}}}\n", self.indent_str()));
+        write!(code, "{}}}\n", self.indent_str()).expect("writing to a String is infallible");
         code
     }
 
@@ -947,7 +928,7 @@ impl CSharpCodeGenerator {
         let mut code = String::new();
         self.push_indent();
         for stmt in &method.stmts {
-            code.push_str(&format!("{}{}", self.indent_str(), stmt));
+            write!(code, "{}{}", self.indent_str(), stmt).expect("writing to a String is infallible");
         }
         self.pop_indent();
         code
@@ -1095,7 +1076,7 @@ impl DecompiledMethod {
             s.push_str("// [LINQ query pattern]\n");
         }
         for stmt in &self.stmts {
-            s.push_str(&format!("{stmt}"));
+            write!(s, "{stmt}").expect("writing to a String is infallible");
         }
         s
     }

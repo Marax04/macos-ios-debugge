@@ -132,15 +132,15 @@ pub enum CilType {
     /// CLASS token → type name
     Class(String),
     /// PTR modifier
-    Ptr(Box<CilType>),
+    Ptr(Box<Self>),
     /// BYREF modifier
-    ByRef(Box<CilType>),
+    ByRef(Box<Self>),
     /// Single-dimensional zero-lower-bound array (SZARRAY)
-    SzArray(Box<CilType>),
+    SzArray(Box<Self>),
     /// Multi-dimensional array (ARRAY)
-    Array { element: Box<CilType>, rank: u32 },
+    Array { element: Box<Self>, rank: u32 },
     /// GENERICINST — class/struct name + type args
-    Generic(String, Vec<CilType>),
+    Generic(String, Vec<Self>),
     /// MVAR — method type parameter index
     MVar(u32),
     /// VAR — type parameter index
@@ -152,30 +152,30 @@ pub enum CilType {
 impl fmt::Display for CilType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CilType::Void        => write!(f, "void"),
-            CilType::Boolean     => write!(f, "bool"),
-            CilType::Char        => write!(f, "char"),
-            CilType::Int8        => write!(f, "int8"),
-            CilType::UInt8       => write!(f, "uint8"),
-            CilType::Int16       => write!(f, "int16"),
-            CilType::UInt16      => write!(f, "uint16"),
-            CilType::Int32       => write!(f, "int32"),
-            CilType::UInt32      => write!(f, "uint32"),
-            CilType::Int64       => write!(f, "int64"),
-            CilType::UInt64      => write!(f, "uint64"),
-            CilType::Single      => write!(f, "float32"),
-            CilType::Double      => write!(f, "float64"),
-            CilType::String      => write!(f, "string"),
-            CilType::Object      => write!(f, "object"),
-            CilType::TypedRef    => write!(f, "typedref"),
-            CilType::IntPtr      => write!(f, "native int"),
-            CilType::UIntPtr     => write!(f, "native uint"),
-            CilType::ValueType(n) => write!(f, "valuetype {n}"),
-            CilType::Class(n)    => write!(f, "class {n}"),
-            CilType::Ptr(t)      => write!(f, "{t}*"),
-            CilType::ByRef(t)    => write!(f, "{t}&"),
-            CilType::SzArray(t)  => write!(f, "{t}[]"),
-            CilType::Array { element, rank } => {
+            Self::Void        => write!(f, "void"),
+            Self::Boolean     => write!(f, "bool"),
+            Self::Char        => write!(f, "char"),
+            Self::Int8        => write!(f, "int8"),
+            Self::UInt8       => write!(f, "uint8"),
+            Self::Int16       => write!(f, "int16"),
+            Self::UInt16      => write!(f, "uint16"),
+            Self::Int32       => write!(f, "int32"),
+            Self::UInt32      => write!(f, "uint32"),
+            Self::Int64       => write!(f, "int64"),
+            Self::UInt64      => write!(f, "uint64"),
+            Self::Single      => write!(f, "float32"),
+            Self::Double      => write!(f, "float64"),
+            Self::String      => write!(f, "string"),
+            Self::Object      => write!(f, "object"),
+            Self::TypedRef    => write!(f, "typedref"),
+            Self::IntPtr      => write!(f, "native int"),
+            Self::UIntPtr     => write!(f, "native uint"),
+            Self::ValueType(n) => write!(f, "valuetype {n}"),
+            Self::Class(n)    => write!(f, "class {n}"),
+            Self::Ptr(t)      => write!(f, "{t}*"),
+            Self::ByRef(t)    => write!(f, "{t}&"),
+            Self::SzArray(t)  => write!(f, "{t}[]"),
+            Self::Array { element, rank } => {
                 write!(f, "{element}")?;
                 write!(f, "[")?;
                 for i in 0..*rank {
@@ -183,7 +183,7 @@ impl fmt::Display for CilType {
                 }
                 write!(f, "]")
             }
-            CilType::Generic(name, args) => {
+            Self::Generic(name, args) => {
                 write!(f, "{name}<")?;
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 { write!(f, ",")?; }
@@ -191,9 +191,9 @@ impl fmt::Display for CilType {
                 }
                 write!(f, ">")
             }
-            CilType::MVar(n) => write!(f, "!!{n}"),
-            CilType::Var(n)  => write!(f, "!{n}"),
-            CilType::Unknown(b) => write!(f, "unknown({b:#04x})"),
+            Self::MVar(n) => write!(f, "!!{n}"),
+            Self::Var(n)  => write!(f, "!{n}"),
+            Self::Unknown(b) => write!(f, "unknown({b:#04x})"),
         }
     }
 }
@@ -204,22 +204,22 @@ impl CilType {
     pub const fn is_value_type(&self) -> bool {
         matches!(
             self,
-            CilType::Boolean
-                | CilType::Char
-                | CilType::Int8
-                | CilType::UInt8
-                | CilType::Int16
-                | CilType::UInt16
-                | CilType::Int32
-                | CilType::UInt32
-                | CilType::Int64
-                | CilType::UInt64
-                | CilType::Single
-                | CilType::Double
-                | CilType::IntPtr
-                | CilType::UIntPtr
-                | CilType::TypedRef
-                | CilType::ValueType(_)
+            Self::Boolean
+                | Self::Char
+                | Self::Int8
+                | Self::UInt8
+                | Self::Int16
+                | Self::UInt16
+                | Self::Int32
+                | Self::UInt32
+                | Self::Int64
+                | Self::UInt64
+                | Self::Single
+                | Self::Double
+                | Self::IntPtr
+                | Self::UIntPtr
+                | Self::TypedRef
+                | Self::ValueType(_)
         )
     }
 
@@ -228,32 +228,32 @@ impl CilType {
     pub const fn is_reference_type(&self) -> bool {
         matches!(
             self,
-            CilType::String
-                | CilType::Object
-                | CilType::Class(_)
-                | CilType::SzArray(_)
-                | CilType::Array { .. }
-                | CilType::Generic(_, _)
+            Self::String
+                | Self::Object
+                | Self::Class(_)
+                | Self::SzArray(_)
+                | Self::Array { .. }
+                | Self::Generic(_, _)
         )
     }
 
     /// True if the type is a managed pointer (`ByRef`).
     #[must_use]
     pub const fn is_by_ref(&self) -> bool {
-        matches!(self, CilType::ByRef(_))
+        matches!(self, Self::ByRef(_))
     }
 
     /// True if the type is an unmanaged pointer (Ptr).
     #[must_use]
     pub const fn is_ptr(&self) -> bool {
-        matches!(self, CilType::Ptr(_))
+        matches!(self, Self::Ptr(_))
     }
 
     /// Strip one level of pointer/byref indirection.
     #[must_use]
-    pub fn pointee(&self) -> Option<&CilType> {
+    pub fn pointee(&self) -> Option<&Self> {
         match self {
-            CilType::Ptr(inner) | CilType::ByRef(inner) => Some(inner.as_ref()),
+            Self::Ptr(inner) | Self::ByRef(inner) => Some(inner.as_ref()),
             _ => None,
         }
     }
@@ -264,15 +264,14 @@ impl CilType {
 #[must_use]
 pub const fn type_size_in_bytes(t: &CilType) -> Option<u32> {
     match t {
-        CilType::Void        => None,
         CilType::Boolean | CilType::Int8 | CilType::UInt8 => Some(1),
         CilType::Char | CilType::Int16 | CilType::UInt16  => Some(2),
         CilType::Int32 | CilType::UInt32 | CilType::Single => Some(4),
-        CilType::Int64 | CilType::UInt64 | CilType::Double => Some(8),
-        CilType::IntPtr | CilType::UIntPtr
+        CilType::Int64 | CilType::UInt64 | CilType::Double | CilType::IntPtr | CilType::UIntPtr
         | CilType::Ptr(_) | CilType::ByRef(_)
         | CilType::String | CilType::Object
-        | CilType::Class(_) | CilType::SzArray(_) | CilType::Array { .. } => Some(8), // 64-bit ptr
+        | CilType::Class(_) | CilType::SzArray(_) | CilType::Array { .. } => Some(8),
+        // 64-bit ptr
         CilType::TypedRef    => Some(16), // two pointers
         _ => None,
     }
@@ -462,14 +461,14 @@ impl CallingConv {
     pub const fn from_byte(b: u8) -> Self {
         // Mask off HAS_THIS / EXPLICIT_THIS for base calling conv.
         match b & 0x0F {
-            0x00 => CallingConv::Default,
-            0x01 => CallingConv::C,
-            0x02 => CallingConv::StdCall,
-            0x03 => CallingConv::ThisCall,
-            0x04 => CallingConv::FastCall,
-            0x05 => CallingConv::VarArg,
-            0x10 => CallingConv::Generic,
-            _ => CallingConv::Unknown(b),
+            0x00 => Self::Default,
+            0x01 => Self::C,
+            0x02 => Self::StdCall,
+            0x03 => Self::ThisCall,
+            0x04 => Self::FastCall,
+            0x05 => Self::VarArg,
+            0x10 => Self::Generic,
+            _ => Self::Unknown(b),
         }
     }
 }
@@ -489,11 +488,10 @@ pub fn parse_method_sig(bytes: &[u8]) -> (CallingConv, Vec<CilType>, CilType) {
 
     // If GENERIC, skip generic param count.
     let is_generic = (conv_byte & 0x10) != 0;
-    if is_generic {
-        if let Some((_, n)) = decode_compressed_uint(bytes, pos) {
+    if is_generic
+        && let Some((_, n)) = decode_compressed_uint(bytes, pos) {
             pos += n;
         }
-    }
 
     // Param count.
     let (param_count, n) = decode_compressed_uint(bytes, pos).unwrap_or((0, 1));
@@ -569,7 +567,7 @@ mod tests {
     #[test]
     fn cor_element_type_roundtrip() {
         for b in [0x01u8, 0x08, 0x0E, 0x12, 0x1D] {
-            assert!(CorElementType::from_byte(b).is_some(), "byte {:#04x} not found", b);
+            assert!(CorElementType::from_byte(b).is_some(), "byte {b:#04x} not found");
         }
     }
 

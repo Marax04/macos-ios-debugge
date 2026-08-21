@@ -1,11 +1,11 @@
-//! Fuzz-lite: deterministic pseudo-random inputs thrown at the LuaJIT bytecode
+//! Fuzz-lite: deterministic pseudo-random inputs thrown at the `LuaJIT` bytecode
 //! decoder. Invariant under test: no panic, no runaway allocation, terminates
 //! fast. Return values are irrelevant.
 //!
 //! Pattern mirrors `rustre-loader-pe/tests/fuzz_lite.rs` (xorshift64* PRNG,
 //! fixed seeds, no external crates).
 //!
-//! LuaJIT instructions are fixed 32-bit words, so the decoder takes `u32`
+//! `LuaJIT` instructions are fixed 32-bit words, so the decoder takes `u32`
 //! rather than a byte slice. The whole 32-bit space is too large to enumerate,
 //! but the *opcode* field is only the low byte — so all 256 opcodes are swept
 //! exhaustively against extreme values of the remaining operand fields, which
@@ -18,7 +18,7 @@ use rustre_arch_luajit::{decode_lj_instruction, disassemble_listing};
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;

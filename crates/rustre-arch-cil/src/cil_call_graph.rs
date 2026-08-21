@@ -156,8 +156,7 @@ impl CallGraphNode {
             .filter(|cs| {
                 cs.target
                     .as_ref()
-                    .map(|_| self.callees.contains(&target_id))
-                    .unwrap_or(false)
+                    .is_some_and(|_| self.callees.contains(&target_id))
             })
             .collect()
     }
@@ -269,7 +268,7 @@ impl CilCallGraph {
     pub fn post_order(&self) -> Vec<usize> {
         let mut visited = HashSet::new();
         let mut order = Vec::new();
-        for root in self.root_nodes().iter().map(|n| n.id).collect::<Vec<_>>() {
+        for root in self.root_nodes().iter().map(|n| n.id) {
             self.dfs_post(root, &mut visited, &mut order);
         }
         // Also visit any unvisited nodes (not reachable from roots).
@@ -320,8 +319,8 @@ impl CilCallGraph {
 
     /// Compute call depth from roots (BFS).
     pub fn compute_depths(&mut self) {
-        let roots: Vec<usize> = self.nodes.iter().filter(|n| n.is_root).map(|n| n.id).collect();
-        let mut queue: VecDeque<(usize, u32)> = roots.into_iter().map(|id| (id, 0)).collect();
+        
+        let mut queue: VecDeque<(usize, u32)> = self.nodes.iter().filter(|n| n.is_root).map(|n| n.id).map(|id| (id, 0)).collect();
         let mut visited = HashSet::new();
         while let Some((id, depth)) = queue.pop_front() {
             if !visited.insert(id) {
@@ -491,20 +490,17 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
             let is_tail = tail_prefix;
             tail_prefix = false;
 
-            let token = match instr.method_token() {
-                Some(t) => t,
-                None => {
-                    // `calli` uses a signature token, not a method token.
-                    let site = CallSite {
-                        offset: instr.offset,
-                        token: 0,
-                        target: None,
-                        call_kind,
-                        is_tail,
-                    };
-                    self.graph.nodes[caller_id].call_sites.push(site);
-                    continue;
-                }
+            let token = if let Some(t) = instr.method_token() { t } else {
+                // `calli` uses a signature token, not a method token.
+                let site = CallSite {
+                    offset: instr.offset,
+                    token: 0,
+                    target: None,
+                    call_kind,
+                    is_tail,
+                };
+                self.graph.nodes[caller_id].call_sites.push(site);
+                continue;
             };
 
             let resolved = self.resolver.resolve(token);
@@ -532,19 +528,15 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
                 && self.devirtualize
             {
                 if let Some(ref sig) = resolved {
-                    if let Some(subtypes) = self.type_hierarchy.get(&sig.declaring_type) {
-                        subtypes
+                    self.type_hierarchy.get(&sig.declaring_type).map_or_else(|| vec![], |subtypes| subtypes
                             .iter()
                             .filter_map(|sub| {
                                 let mut subsig = sig.clone();
-                                subsig.declaring_type = sub.clone();
+                                subsig.declaring_type.clone_from(sub);
                                 let key = subsig.display();
                                 self.graph.sig_to_node.get(&key).copied()
                             })
-                            .collect()
-                    } else {
-                        vec![]
-                    }
+                            .collect())
                 } else {
                     vec![]
                 }

@@ -563,8 +563,10 @@ fn proto_default_is_empty() {
 
 #[test]
 fn proto_is_vararg_flag() {
-    let mut p = LuaJitProto::default();
-    p.flags = 0x02;
+    let mut p = LuaJitProto {
+        flags: 0x02,
+        ..Default::default()
+    };
     assert!(p.is_vararg());
     p.flags = 0x00;
     assert!(!p.is_vararg());
@@ -572,20 +574,24 @@ fn proto_is_vararg_flag() {
 
 #[test]
 fn proto_iter_instructions_pairs() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![10, 20, 30];
+    let p = LuaJitProto {
+        instructions: vec![10, 20, 30],
+        ..Default::default()
+    };
     let pairs: Vec<_> = p.iter_instructions().collect();
     assert_eq!(pairs, vec![(0, 10u32), (1, 20), (2, 30)]);
 }
 
 #[test]
 fn proto_category_histogram_arithmetic() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![
+    let p = LuaJitProto {
+        instructions: vec![
         make_lj_ad(LjOp::Mov as u8, 0, 1),     // Arithmetic
         make_lj_abc(LjOp::Addvv as u8, 0, 1, 2), // Arithmetic
         make_lj_ad(LjOp::Ret0 as u8, 0, 0),    // Return
-    ];
+    ],
+        ..Default::default()
+    };
     let h = p.category_histogram();
     assert_eq!(h[InstrCategory::Arithmetic as usize], 2);
     assert_eq!(h[InstrCategory::Return as usize], 1);
@@ -593,12 +599,14 @@ fn proto_category_histogram_arithmetic() {
 
 #[test]
 fn proto_used_opcodes_unique_sorted() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![
+    let p = LuaJitProto {
+        instructions: vec![
         make_lj_ad(LjOp::Mov as u8, 0, 1),
         make_lj_ad(LjOp::Mov as u8, 1, 2),
         make_lj_ad(LjOp::Ret0 as u8, 0, 0),
-    ];
+    ],
+        ..Default::default()
+    };
     let ops = p.used_opcodes();
     assert_eq!(ops.len(), 2);
     assert!(ops.contains(&(LjOp::Mov as u8)));
@@ -611,13 +619,15 @@ fn proto_used_opcodes_unique_sorted() {
 
 #[test]
 fn proto_string_constants_filters_strings() {
-    let mut p = LuaJitProto::default();
-    p.constants = vec![
+    let p = LuaJitProto {
+        constants: vec![
         LjConst::Integer(1),
         LjConst::String(b"hi".to_vec()),
         LjConst::Nil,
         LjConst::String(b"world".to_vec()),
-    ];
+    ],
+        ..Default::default()
+    };
     let strs = p.string_constants();
     assert_eq!(strs.len(), 2);
     assert_eq!(strs[0], b"hi");
@@ -626,11 +636,13 @@ fn proto_string_constants_filters_strings() {
 
 #[test]
 fn proto_branches_includes_jmp() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![
+    let p = LuaJitProto {
+        instructions: vec![
         make_lj_ad(LjOp::Mov as u8, 0, 1),
         make_lj_ad_signed(LjOp::Jmp as u8, 0, 0),
-    ];
+    ],
+        ..Default::default()
+    };
     let br = p.branches();
     assert!(!br.is_empty());
     assert!(br.iter().any(|b| b.op == LjOp::Jmp as u8));

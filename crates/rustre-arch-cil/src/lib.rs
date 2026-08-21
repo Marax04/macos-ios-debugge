@@ -1518,7 +1518,7 @@ mod tests {
     #[test]
     fn test_call_5_bytes() {
         let mut buf = vec![0x28u8];
-        buf.extend_from_slice(&0x06000001_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0600_0001_u32.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 5);
         assert_eq!(i.mnemonic, "call");
@@ -1528,7 +1528,7 @@ mod tests {
     #[test]
     fn test_callvirt_indirect() {
         let mut buf = vec![0x6f_u8];
-        buf.extend_from_slice(&0x0a000002_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0a00_0002_u32.to_le_bytes());
         let (i, _) = CilInstr::decode(&buf).unwrap();
         assert_eq!(i.mnemonic, "callvirt");
         assert!(i.flags.contains(InstrFlags::INDIRECT));
@@ -1577,7 +1577,7 @@ mod tests {
     #[test]
     fn test_ldftn() {
         let mut buf = vec![0xfe_u8, 0x06];
-        buf.extend_from_slice(&0x06000003_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0600_0003_u32.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 6);
         assert_eq!(i.mnemonic, "ldftn");
@@ -1586,7 +1586,7 @@ mod tests {
     #[test]
     fn test_initobj() {
         let mut buf = vec![0xfe_u8, 0x15];
-        buf.extend_from_slice(&0x01000001_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0100_0001_u32.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 6);
         assert_eq!(i.mnemonic, "initobj");
@@ -1595,7 +1595,7 @@ mod tests {
     #[test]
     fn test_sizeof() {
         let mut buf = vec![0xfe_u8, 0x1c];
-        buf.extend_from_slice(&0x01000002_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0100_0002_u32.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 6);
         assert_eq!(i.mnemonic, "sizeof");
@@ -4242,7 +4242,7 @@ impl CilMethodBuilder {
     /// Emit `ldc.i4.s imm8`.
     pub fn ldc_i4_s(&mut self, v: i8) -> &mut Self {
         self.buf.push(0x1f);
-        self.buf.push(v as u8);
+        self.buf.push(v.cast_unsigned());
         self
     }
 
@@ -4298,21 +4298,21 @@ impl CilMethodBuilder {
     /// Emit `br.s offset` (short branch).
     pub fn br_s(&mut self, offset: i8) -> &mut Self {
         self.buf.push(0x2b);
-        self.buf.push(offset as u8);
+        self.buf.push(offset.cast_unsigned());
         self
     }
 
     /// Emit `brfalse.s offset`.
     pub fn brfalse_s(&mut self, offset: i8) -> &mut Self {
         self.buf.push(0x2c);
-        self.buf.push(offset as u8);
+        self.buf.push(offset.cast_unsigned());
         self
     }
 
     /// Emit `brtrue.s offset`.
     pub fn brtrue_s(&mut self, offset: i8) -> &mut Self {
         self.buf.push(0x2d);
-        self.buf.push(offset as u8);
+        self.buf.push(offset.cast_unsigned());
         self
     }
 
@@ -4399,14 +4399,14 @@ pub fn decode_compressed_int(data: &[u8]) -> Result<(i32, usize), CilDecodeError
     let (raw, n) = decode_compressed_uint(data)?;
     // Rotate right by 1 and sign-extend
     let signed = if raw & 1 == 0 {
-        (raw >> 1) as i32
+        (raw >> 1).cast_signed()
     } else {
         let shift = match n {
             1 => 6,
             2 => 13,
             _ => 28,
         };
-        ((raw >> 1) as i32) | (-1_i32 << shift)
+        (raw >> 1).cast_signed() | (-1_i32 << shift)
     };
     Ok((signed, n))
 }
@@ -4623,7 +4623,7 @@ mod cil_extra_tests {
     #[test]
     fn test_builder_call() {
         let mut b = CilMethodBuilder::new();
-        b.call(0x0a000001);
+        b.call(0x0a00_0001);
         let code = b.finish();
         assert_eq!(code[0], 0x28);
     }
@@ -5109,8 +5109,8 @@ pub fn cil_fold_i32(mne: &str, a: i32, b: i32) -> Option<i32> {
         "and" => a & b,
         "or" => a | b,
         "xor" => a ^ b,
-        "shl" => a.wrapping_shl(b as u32),
-        "shr" => a >> (b as u32 & 31),
+        "shl" => a.wrapping_shl(b.cast_unsigned()),
+        "shr" => a >> (b.cast_unsigned() & 31),
         _ => return None,
     })
 }

@@ -8,7 +8,7 @@ use rustre_core::endian::Endian;
 fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
-        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -54,7 +54,7 @@ fn rt_all_simple_singleton_opcodes_roundtrip() {
 #[test]
 fn rt_ldc_i4_short_negative_and_positive() {
     for v in [i8::MIN, -50, -1, 0, 1, 50, i8::MAX] {
-        let buf = [0x1f, v as u8];
+        let buf = [0x1f, v.cast_unsigned()];
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 2);
         assert_eq!(i.mnemonic, "ldc.i4.s");
@@ -88,7 +88,7 @@ fn rt_ldc_i8_boundary_values() {
 
 #[test]
 fn rt_ldc_r4_finite_values() {
-    for v in [0.0f32, -0.0, 1.5, -3.14, f32::MIN, f32::MAX] {
+    for v in [0.0f32, -0.0, 1.5, -std::f32::consts::PI, f32::MIN, f32::MAX] {
         let mut buf = vec![0x22u8];
         buf.extend_from_slice(&v.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
@@ -99,7 +99,7 @@ fn rt_ldc_r4_finite_values() {
 
 #[test]
 fn rt_ldc_r8_finite_values() {
-    for v in [0.0f64, -0.0, 2.71828, f64::MIN, f64::MAX] {
+    for v in [0.0f64, -0.0, std::f64::consts::E, f64::MIN, f64::MAX] {
         let mut buf = vec![0x23u8];
         buf.extend_from_slice(&v.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
@@ -132,7 +132,7 @@ fn short_branches_all_off_values() {
     ];
     for &(op, mne) in ops {
         for off in [i8::MIN, -1, 0, 1, i8::MAX] {
-            let buf = [op, off as u8];
+            let buf = [op, off.cast_unsigned()];
             let (i, sz) = CilInstr::decode(&buf).unwrap();
             assert_eq!(sz, 2);
             assert_eq!(i.mnemonic, mne);
@@ -346,7 +346,7 @@ fn fuzz_random_single_byte_never_panics() {
 fn fuzz_random_long_input_never_panics() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() % 32) + 1) as usize;
+        let len = small_len(g() % 32 + 1);
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -359,7 +359,7 @@ fn fuzz_random_long_input_never_panics() {
 fn fuzz_fe_prefix_inputs_never_panic() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() % 8) + 2) as usize;
+        let len = small_len(g() % 8 + 2);
         let mut buf = vec![0xfeu8];
         for _ in 1..len {
             buf.push((g() & 0xff) as u8);
@@ -376,7 +376,7 @@ fn fuzz_switch_inputs_never_panic() {
         let mut buf = vec![0x45u8];
         buf.extend_from_slice(&n.to_le_bytes());
         for _ in 0..n {
-            let t = g() as u32;
+            let t = low32(g());
             buf.extend_from_slice(&t.to_le_bytes());
         }
         let r = CilInstr::decode(&buf);
@@ -397,7 +397,7 @@ fn fuzz_arch_disassemble_never_panics() {
     let mut g = lcg();
     let arch = CilArch::new_64();
     for _ in 0..500 {
-        let len = ((g() % 16) + 1) as usize;
+        let len = small_len(g() % 16 + 1);
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -553,11 +553,11 @@ fn get_branches_short_branch_all_offsets() {
     let base = 0x1000u64;
     for off in [i8::MIN, -10, -1, 0, 1, 10, i8::MAX] {
         let instr = arch
-            .disassemble(Address::new(base), &[0x2b, off as u8])
+            .disassemble(Address::new(base), &[0x2b, off.cast_unsigned()])
             .unwrap();
         let b = arch.get_branches(&instr);
         assert_eq!(b.len(), 1);
-        let expected = (base + 2).wrapping_add_signed(off as i64);
+        let expected = (base + 2).wrapping_add_signed(i64::from(off));
         assert_eq!(b[0].target, Some(expected));
     }
 }
@@ -627,7 +627,7 @@ fn linear_disasm_truncated_tail_returns_error() {
     let results: Vec<_> = dis.collect();
     // Each step advances by 1 on error; should produce 3 errors.
     assert_eq!(results.len(), 3);
-    assert!(results.iter().all(|r| r.is_err()));
+    assert!(results.iter().all(std::result::Result::is_err));
 }
 
 #[test]
@@ -635,7 +635,7 @@ fn linear_disasm_fuzz_random_bytes_never_panics() {
     let mut g = lcg();
     let arch = CilArch::new_64();
     for _ in 0..200 {
-        let len = ((g() % 64) + 1) as usize;
+        let len = small_len(g() % 64 + 1);
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -676,7 +676,7 @@ fn cil_arch_threaded_stress() {
 
 #[test]
 fn cil_arch_default_is_64bit() {
-    let a: CilArch = Default::default();
+    let a: CilArch = CilArch::default();
     assert_eq!(a.bitness, 64);
 }
 
@@ -780,7 +780,7 @@ fn fe_prefix_ldarg_starg_4byte_consumed() {
 fn fe_prefix_ldftn_ldvirtftn_6byte_consumed() {
     for &(op2, mne) in &[(0x06_u8, "ldftn"), (0x07, "ldvirtftn")] {
         let mut buf = vec![0xfe, op2];
-        buf.extend_from_slice(&0xCAFEBABE_u32.to_le_bytes());
+        buf.extend_from_slice(&0xCAFE_BABE_u32.to_le_bytes());
         let (i, sz) = CilInstr::decode(&buf).unwrap();
         assert_eq!(sz, 6);
         assert_eq!(i.mnemonic, mne);
@@ -805,4 +805,19 @@ fn raw_bytes_match_input_slice_after_decode() {
         }
     }
     assert!(count_ok > 0, "expected some successful decodes from fuzzing");
+}
+
+/// A small generated length, always well under `usize::MAX`.
+///
+/// The caller derives `n` from `value % K` with a tiny `K`, so the conversion
+/// is exact; the fallback keeps a future change to `K` from panicking.
+fn small_len(n: u64) -> usize {
+    usize::try_from(n).unwrap_or(usize::MAX)
+}
+
+/// Low 32 bits of a generated 64-bit value, taken explicitly rather than by a
+/// narrowing `as` so the intent (use half the PRNG output) stays visible.
+const fn low32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }

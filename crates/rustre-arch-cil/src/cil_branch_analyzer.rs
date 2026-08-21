@@ -56,7 +56,7 @@ impl ExceptionRegion {
         offset >= self.handler_start && offset < self.handler_end
     }
     #[must_use]
-    pub const fn overlaps_try(&self, other: &ExceptionRegion) -> bool {
+    pub const fn overlaps_try(&self, other: &Self) -> bool {
         self.try_start < other.try_end && other.try_start < self.try_end
     }
 }
@@ -213,7 +213,7 @@ impl CilCfg {
         order
     }
 
-    fn dfs_post(&self, start: usize, visited: &mut Vec<bool>, out: &mut Vec<usize>) {
+    fn dfs_post(&self, start: usize, visited: &mut [bool], out: &mut Vec<usize>) {
         // Iterative post-order DFS to avoid stack overflow on deep attacker-controlled CFGs.
         let mut stack: Vec<(usize, usize)> = Vec::new();
         if !visited[start] {
@@ -278,7 +278,7 @@ impl CfgBuilder {
             }
         }
 
-        let max_offset = self.instrs.last().map(|i| i.offset + i.size).unwrap_or(0);
+        let max_offset = self.instrs.last().map_or(0, |i| i.offset + i.size);
 
         for instr in &self.instrs {
             match instr.opcode {
@@ -380,11 +380,11 @@ impl CfgBuilder {
             .iter()
             .enumerate()
             .map(|(id, &(start, ref instrs)): (usize, &(u32, Vec<DecodedCilInstr>))| {
-                let end = instrs.last().map(|i| i.offset + i.size).unwrap_or(start);
-                let is_exit = instrs.last().map(|i| matches!(
+                let end = instrs.last().map_or(start, |i| i.offset + i.size);
+                let is_exit = instrs.last().is_some_and(|i| matches!(
                     i.opcode,
                     Opcode::Ret | Opcode::Throw | Opcode::Rethrow | Opcode::Endfinally
-                )).unwrap_or(false);
+                ));
                 CilBlock {
                     id,
                     start_offset: start,
@@ -423,25 +423,23 @@ impl CfgBuilder {
                     // no successors
                 }
                 Opcode::Br | Opcode::BrS => {
-                    if let Some(tgt) = last.branch_target() {
-                        if let Some(b) = find_block(tgt) {
+                    if let Some(tgt) = last.branch_target()
+                        && let Some(b) = find_block(tgt) {
                             succs.push(CfgEdge { target_block: b, kind: EdgeKind::Unconditional });
                         }
-                    }
                 }
                 Opcode::Leave | Opcode::LeaveS => {
-                    if let Some(tgt) = last.branch_target() {
-                        if let Some(b) = find_block(tgt) {
+                    if let Some(tgt) = last.branch_target()
+                        && let Some(b) = find_block(tgt) {
                             succs.push(CfgEdge { target_block: b, kind: EdgeKind::Leave });
                         }
-                    }
                 }
                 Opcode::Switch => {
                     for (case, tgt) in last.switch_targets().into_iter().enumerate() {
                         if let Some(b) = find_block(tgt) {
                             succs.push(CfgEdge {
                                 target_block: b,
-                                kind: EdgeKind::Switch(case as u32),
+                                kind: EdgeKind::Switch(u32::try_from(case).unwrap_or(u32::MAX)),
                             });
                         }
                     }
@@ -478,7 +476,7 @@ impl CfgBuilder {
 
         // Step 6: assign exception regions.
         for (ri, region) in self.regions.iter().enumerate() {
-            for block in blocks.iter_mut() {
+            for block in &mut blocks {
                 if region.contains_handler(block.start_offset)
                     || region.contains_try(block.start_offset)
                 {
@@ -535,7 +533,7 @@ fn compute_idoms(blocks: &[CilBlock], n: usize) -> Vec<Option<usize>> {
     let mut changed = true;
     while changed {
         changed = false;
-        for &b in rpo.iter() {
+        for &b in &rpo {
             if b == 0 {
                 continue;
             }
@@ -585,7 +583,7 @@ fn intersect(a: usize, b: usize, idoms: &[Option<usize>], rpo_num: &[usize]) -> 
     x
 }
 
-fn dfs_post_order(blocks: &[CilBlock], start: usize, visited: &mut Vec<bool>, out: &mut Vec<usize>) {
+fn dfs_post_order(blocks: &[CilBlock], start: usize, visited: &mut [bool], out: &mut Vec<usize>) {
     // Iterative post-order DFS — avoids stack overflow on adversarially deep CFGs
     // where recursive DFS would exhaust the native call stack.
     // Each entry is (block_index, next_successor_edge_index).
@@ -716,11 +714,10 @@ impl LivenessInfo {
 
         for (bi, block) in cfg.blocks.iter().enumerate() {
             for instr in &block.instrs {
-                if let Some(local) = instr.local_load_index() {
-                    if !def_sets[bi].contains(&local) {
+                if let Some(local) = instr.local_load_index()
+                    && !def_sets[bi].contains(&local) {
                         use_sets[bi].insert(local);
                     }
-                }
                 if let Some(local) = instr.local_store_index() {
                     def_sets[bi].insert(local);
                 }
@@ -759,7 +756,7 @@ impl LivenessInfo {
             }
         }
 
-        LivenessInfo { live_in, live_out }
+        Self { live_in, live_out }
     }
 }
 
@@ -778,7 +775,9 @@ pub struct CfgStats {
 impl CfgStats {
     #[must_use]
     pub fn from(cfg: &CilCfg) -> Self {
-        let cyclomatic_complexity = cfg.edge_count() as i64 - cfg.block_count() as i64 + 2;
+        let cyclomatic_complexity = i64::try_from(cfg.edge_count()).unwrap_or(i64::MAX)
+            - i64::try_from(cfg.block_count()).unwrap_or(i64::MAX)
+            + 2;
         let loop_header_offsets = cfg
             .loop_headers()
             .iter()
@@ -1017,11 +1016,10 @@ mod tests {
         let instrs = vec![switch_instr, ret_instr(10)];
         let cfg = CfgBuilder::new(instrs, vec![]).build().unwrap();
         // Block 0 should have Switch edges.
-        let switch_edges: Vec<_> = cfg.blocks[0]
+        
+        assert!(!cfg.blocks[0]
             .succs
             .iter()
-            .filter(|e| matches!(e.kind, EdgeKind::Switch(_)))
-            .collect();
-        assert!(!switch_edges.is_empty());
+            .filter(|e| matches!(e.kind, EdgeKind::Switch(_))).next().is_none());
     }
 }

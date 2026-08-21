@@ -160,8 +160,8 @@ mod tests {
 
     #[test]
     fn method_token_only_for_token_operand() {
-        let c = mk(Opcode::Call, Operand::MethodToken(0xDEADBEEF));
-        assert_eq!(c.method_token(), Some(0xDEADBEEF));
+        let c = mk(Opcode::Call, Operand::MethodToken(0xDEAD_BEEF));
+        assert_eq!(c.method_token(), Some(0xDEAD_BEEF));
         let n = mk(Opcode::Call, Operand::None);
         assert_eq!(n.method_token(), None);
         let b = mk(Opcode::Call, Operand::BranchTarget(5));

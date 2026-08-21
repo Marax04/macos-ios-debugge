@@ -358,7 +358,7 @@ impl CilLifter {
         let i8_op = |off: usize| {
             bytes
                 .get(off)
-                .map(|&b| b as i8)
+                .map(|&b| b.cast_signed())
                 .ok_or(CilLiftError::Truncated)
         };
         let i32_op = |off: usize| -> Result<i32, CilLiftError> {
@@ -424,12 +424,8 @@ impl CilLifter {
 
         match op {
             // nop
-            0x00 => {
-                out.push(CilILInsn::Nop);
-                return Ok((out, 1));
-            }
             // break
-            0x01 => {
+            0x00 | 0x01 => {
                 out.push(CilILInsn::Nop);
                 return Ok((out, 1));
             }
@@ -632,7 +628,7 @@ impl CilLifter {
                 return Ok((out, 5));
             }
             // call <token>
-            0x28 => {
+            0x28 | 0x29 => {
                 let token = u32_op(1)?;
                 out.push(CilILInsn::Call {
                     method_token: token,
@@ -642,15 +638,6 @@ impl CilLifter {
                 return Ok((out, 5));
             }
             // calli <token>
-            0x29 => {
-                let token = u32_op(1)?;
-                out.push(CilILInsn::Call {
-                    method_token: token,
-                    args: vec![],
-                    has_result: true,
-                });
-                return Ok((out, 5));
-            }
             // ret
             0x2a => {
                 let val = self.stack.pop().map(|s| s.reg);
@@ -1186,7 +1173,7 @@ mod tests {
     #[test]
     fn test_ldc_i4_0_through_8() {
         for n in 0i32..=8 {
-            let op = 0x16u8 + n as u8;
+            let op = 0x16u8 + u8::try_from(n).expect("loop runs over 0..=8");
             let insns = lift(&[op]);
             assert!(
                 matches!(insns[0], CilILInsn::Assign { expr: CilILExpr::ConstI32(v), .. } if v == n)
@@ -1339,12 +1326,12 @@ mod tests {
     #[test]
     fn test_call() {
         let mut buf = vec![0x28u8];
-        buf.extend_from_slice(&0x06000001_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0600_0001_u32.to_le_bytes());
         let insns = lift(&buf);
         assert!(matches!(
             insns[0],
             CilILInsn::Call {
-                method_token: 0x06000001,
+                method_token: 0x0600_0001,
                 ..
             }
         ));
@@ -1353,12 +1340,12 @@ mod tests {
     #[test]
     fn test_callvirt() {
         let mut buf = vec![0x6f_u8];
-        buf.extend_from_slice(&0x0a000002_u32.to_le_bytes());
+        buf.extend_from_slice(&0x0a00_0002_u32.to_le_bytes());
         let insns = lift(&buf);
         assert!(matches!(
             insns[0],
             CilILInsn::CallVirt {
-                method_token: 0x0a000002,
+                method_token: 0x0a00_0002,
                 ..
             }
         ));

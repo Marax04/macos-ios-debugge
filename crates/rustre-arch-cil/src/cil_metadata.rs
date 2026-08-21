@@ -236,7 +236,7 @@ mod tests {
         buf.extend_from_slice(&1u16.to_le_bytes()); // major
         buf.extend_from_slice(&1u16.to_le_bytes()); // minor
         buf.extend_from_slice(&0u32.to_le_bytes()); // reserved
-        buf.extend_from_slice(&(padded_len as u32).to_le_bytes()); // version_len
+        buf.extend_from_slice(&u32::try_from(padded_len).expect("version string fits in u32").to_le_bytes()); // version_len
         let mut vbytes = version_bytes.to_vec();
         vbytes.resize(padded_len, 0);
         buf.extend_from_slice(&vbytes);

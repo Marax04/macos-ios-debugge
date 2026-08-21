@@ -31,20 +31,20 @@ pub enum Pattern {
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Pattern::StringEncryption    => write!(f, "StringEncryption"),
-            Pattern::ReflectionCall      => write!(f, "ReflectionCall"),
-            Pattern::DynamicCodeLoad     => write!(f, "DynamicCodeLoad"),
-            Pattern::AntiDebug           => write!(f, "AntiDebug"),
-            Pattern::ResourceExtract     => write!(f, "ResourceExtract"),
-            Pattern::RegistryAccess      => write!(f, "RegistryAccess"),
-            Pattern::NetworkConnect      => write!(f, "NetworkConnect"),
-            Pattern::FileSystemOp        => write!(f, "FileSystemOp"),
-            Pattern::SqlQuery            => write!(f, "SqlQuery"),
-            Pattern::ThreadCreation      => write!(f, "ThreadCreation"),
-            Pattern::ProcessSpawn        => write!(f, "ProcessSpawn"),
-            Pattern::DllInjection        => write!(f, "DllInjection"),
-            Pattern::PInvoke(dll)        => write!(f, "PInvoke({dll})"),
-            Pattern::UnsafePointerArith  => write!(f, "UnsafePointerArith"),
+            Self::StringEncryption    => write!(f, "StringEncryption"),
+            Self::ReflectionCall      => write!(f, "ReflectionCall"),
+            Self::DynamicCodeLoad     => write!(f, "DynamicCodeLoad"),
+            Self::AntiDebug           => write!(f, "AntiDebug"),
+            Self::ResourceExtract     => write!(f, "ResourceExtract"),
+            Self::RegistryAccess      => write!(f, "RegistryAccess"),
+            Self::NetworkConnect      => write!(f, "NetworkConnect"),
+            Self::FileSystemOp        => write!(f, "FileSystemOp"),
+            Self::SqlQuery            => write!(f, "SqlQuery"),
+            Self::ThreadCreation      => write!(f, "ThreadCreation"),
+            Self::ProcessSpawn        => write!(f, "ProcessSpawn"),
+            Self::DllInjection        => write!(f, "DllInjection"),
+            Self::PInvoke(dll)        => write!(f, "PInvoke({dll})"),
+            Self::UnsafePointerArith  => write!(f, "UnsafePointerArith"),
         }
     }
 }
@@ -127,13 +127,13 @@ impl CilPatternRecognizer {
             // Look for: xor (0x61) preceded by ldc.i4 variants and followed by stelem (0x9E)
             if code[i] == 0x61 {
                 // xor
-                let has_ldc = self.scan_back_for_ldc(code, i, 8);
-                let has_stelem = self.scan_forward_for(code, i, &[0x9E, 0xA4], 4);
+                let has_ldc = Self::scan_back_for_ldc(code, i, 8);
+                let has_stelem = Self::scan_forward_for(code, i, &[0x9E, 0xA4], 4);
                 if has_ldc && has_stelem {
                     let confidence = 0.75;
                     matches.push(PatternMatch::new(
                         Pattern::StringEncryption,
-                        i as u32,
+                        offset_u32(i),
                         confidence,
                         vec![
                             format!("XOR at offset {:#x}", i),
@@ -144,12 +144,12 @@ impl CilPatternRecognizer {
                 }
             }
             // Also look for: ldc.i4 followed immediately by xor (simple XOR key)
-            if self.is_ldc_i4(code[i]) && i + 1 < code.len() && code[i + 1] == 0x61 {
+            if Self::is_ldc_i4(code[i]) && i + 1 < code.len() && code[i + 1] == 0x61 {
                 // Check for loop structure: branch back before this
-                if self.has_backward_branch_near(code, i, 12) {
+                if Self::has_backward_branch_near(code, i, 12) {
                     matches.push(PatternMatch::new(
                         Pattern::StringEncryption,
-                        i as u32,
+                        offset_u32(i),
                         0.65,
                         vec![
                             format!("ldc.i4 + xor at offset {:#x}", i),
@@ -171,7 +171,7 @@ impl CilPatternRecognizer {
         while i + 5 < code.len() {
             // ldstr (0x72) followed within 10 bytes by call (0x28) or callvirt (0x6F)
             if code[i] == 0x72 {
-                let call_off = self.scan_forward_for(code, i + 5, &[0x28, 0x6F], 12);
+                let call_off = Self::scan_forward_for(code, i + 5, &[0x28, 0x6F], 12);
                 if call_off {
                     let evidence = vec![
                         format!("ldstr at {:#x}", i),
@@ -179,7 +179,7 @@ impl CilPatternRecognizer {
                     ];
                     matches.push(PatternMatch::new(
                         Pattern::ReflectionCall,
-                        i as u32,
+                        offset_u32(i),
                         0.60,
                         evidence,
                     ));
@@ -198,12 +198,12 @@ impl CilPatternRecognizer {
         while i + 5 < code.len() {
             // newobj (0x73) followed by callvirt (0x6F) twice — AssemblyBuilder pattern
             if code[i] == 0x73 {
-                let cw1 = self.scan_forward_for(code, i + 5, &[0x6F], 12);
-                let cw2 = if cw1 { self.scan_forward_for(code, i + 10, &[0x6F], 20) } else { false };
+                let cw1 = Self::scan_forward_for(code, i + 5, &[0x6F], 12);
+                let cw2 = if cw1 { Self::scan_forward_for(code, i + 10, &[0x6F], 20) } else { false };
                 if cw1 && cw2 {
                     matches.push(PatternMatch::new(
                         Pattern::DynamicCodeLoad,
-                        i as u32,
+                        offset_u32(i),
                         0.55,
                         vec![
                             format!("newobj at {:#x}", i),
@@ -216,7 +216,7 @@ impl CilPatternRecognizer {
             if i + 1 < code.len() && code[i] == 0xFE && code[i + 1] == 0x06 {
                 matches.push(PatternMatch::new(
                     Pattern::DynamicCodeLoad,
-                    i as u32,
+                    offset_u32(i),
                     0.50,
                     vec![format!("ldftn at {:#x} — function pointer indirection", i)],
                 ));
@@ -234,11 +234,11 @@ impl CilPatternRecognizer {
         while i + 1 < code.len() {
             // call (0x28) followed by conditional branch — characteristic of IsAttached check
             if code[i] == 0x28 && i + 5 < code.len() {
-                let branch = self.scan_forward_for(code, i + 5, &[0x2C, 0x2D, 0x39, 0x3A], 4);
+                let branch = Self::scan_forward_for(code, i + 5, &[0x2C, 0x2D, 0x39, 0x3A], 4);
                 if branch {
                     matches.push(PatternMatch::new(
                         Pattern::AntiDebug,
-                        i as u32,
+                        offset_u32(i),
                         0.65,
                         vec![
                             format!("call at {:#x} followed by conditional branch", i),
@@ -249,11 +249,11 @@ impl CilPatternRecognizer {
             }
             // ldsfld (0x7E) + brfalse/brtrue: reading a static field then branching
             if code[i] == 0x7E && i + 5 < code.len() {
-                let branch = self.scan_forward_for(code, i + 5, &[0x2C, 0x2D], 3);
+                let branch = Self::scan_forward_for(code, i + 5, &[0x2C, 0x2D], 3);
                 if branch {
                     matches.push(PatternMatch::new(
                         Pattern::AntiDebug,
-                        i as u32,
+                        offset_u32(i),
                         0.45,
                         vec![
                             format!("ldsfld at {:#x} + branch", i),
@@ -279,7 +279,7 @@ impl CilPatternRecognizer {
                 // calli — unmanaged indirect call
                 matches.push(PatternMatch::new(
                     Pattern::PInvoke("(unmanaged calli)".to_string()),
-                    i as u32,
+                    offset_u32(i),
                     0.70,
                     vec![format!("calli opcode at {:#x}", i)],
                 ));
@@ -290,12 +290,12 @@ impl CilPatternRecognizer {
         let mut i = 0;
         while i + 6 < code.len() {
             if code[i] == 0x72 {
-                let call1 = self.scan_forward_for(code, i + 5, &[0x28, 0x6F], 8);
-                let calli = self.scan_forward_for(code, i + 8, &[0x29], 16);
+                let call1 = Self::scan_forward_for(code, i + 5, &[0x28, 0x6F], 8);
+                let calli = Self::scan_forward_for(code, i + 8, &[0x29], 16);
                 if call1 && calli {
                     matches.push(PatternMatch::new(
                         Pattern::PInvoke("LoadLibrary/GetProcAddress".to_string()),
-                        i as u32,
+                        offset_u32(i),
                         0.80,
                         vec![
                             format!("ldstr + call + calli sequence at {:#x}", i),
@@ -319,7 +319,7 @@ impl CilPatternRecognizer {
             if code[i] == 0x6D && i + 1 < code.len() && code[i + 1] == 0x58 {
                 matches.push(PatternMatch::new(
                     Pattern::UnsafePointerArith,
-                    i as u32,
+                    offset_u32(i),
                     0.70,
                     vec![format!("conv.u + add at {:#x}", i)],
                 ));
@@ -330,7 +330,7 @@ impl CilPatternRecognizer {
                 if prev_is_ptr_op {
                     matches.push(PatternMatch::new(
                         Pattern::UnsafePointerArith,
-                        i as u32,
+                        offset_u32(i),
                         0.60,
                         vec![format!("ldind at {:#x} after pointer operation", i)],
                     ));
@@ -342,7 +342,7 @@ impl CilPatternRecognizer {
             {
                 matches.push(PatternMatch::new(
                     Pattern::UnsafePointerArith,
-                    i as u32,
+                    offset_u32(i),
                     0.85,
                     vec![format!("{} at {:#x}", if code[i+1]==0x17 {"cpblk"} else {"initblk"}, i)],
                 ));
@@ -360,12 +360,12 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         while i + 10 < code.len() {
             if code[i] == 0x73 {
-                let v1 = self.scan_forward_for(code, i + 5, &[0x6F], 10);
-                let v2 = if v1 { self.scan_forward_for(code, i + 9, &[0x6F], 15) } else { false };
+                let v1 = Self::scan_forward_for(code, i + 5, &[0x6F], 10);
+                let v2 = if v1 { Self::scan_forward_for(code, i + 9, &[0x6F], 15) } else { false };
                 if v1 && v2 {
                     matches.push(PatternMatch::new(
                         Pattern::NetworkConnect,
-                        i as u32,
+                        offset_u32(i),
                         0.50,
                         vec![format!("newobj+callvirt*2 at {:#x} — possible network call", i)],
                     ));
@@ -383,10 +383,10 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         // FileStream constructor: newobj (0x73) after ldstr (0x72)
         while i + 6 < code.len() {
-            if code[i] == 0x72 && self.scan_forward_for(code, i + 5, &[0x73], 8) {
+            if code[i] == 0x72 && Self::scan_forward_for(code, i + 5, &[0x73], 8) {
                 matches.push(PatternMatch::new(
                     Pattern::FileSystemOp,
-                    i as u32,
+                    offset_u32(i),
                     0.55,
                     vec![format!("ldstr + newobj at {:#x} — possible FileStream", i)],
                 ));
@@ -403,12 +403,12 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         // ldsfld (0x7E) + ldstr (0x72) + callvirt (0x6F) — Registry.GetValue pattern
         while i + 10 < code.len() {
-            if code[i] == 0x7E && self.scan_forward_for(code, i + 5, &[0x72], 6) {
-                let cv = self.scan_forward_for(code, i + 10, &[0x6F], 10);
+            if code[i] == 0x7E && Self::scan_forward_for(code, i + 5, &[0x72], 6) {
+                let cv = Self::scan_forward_for(code, i + 10, &[0x6F], 10);
                 if cv {
                     matches.push(PatternMatch::new(
                         Pattern::RegistryAccess,
-                        i as u32,
+                        offset_u32(i),
                         0.55,
                         vec![format!("ldsfld+ldstr+callvirt at {:#x} — possible registry access", i)],
                     ));
@@ -426,16 +426,15 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         while i + 10 < code.len() {
             // ldftn (0xFE 0x06) + newobj (0x73) — Thread constructor with ThreadStart delegate
-            if code[i] == 0xFE && i + 1 < code.len() && code[i + 1] == 0x06 {
-                if self.scan_forward_for(code, i + 2, &[0x73], 8) {
+            if code[i] == 0xFE && i + 1 < code.len() && code[i + 1] == 0x06
+                && Self::scan_forward_for(code, i + 2, &[0x73], 8) {
                     matches.push(PatternMatch::new(
                         Pattern::ThreadCreation,
-                        i as u32,
+                        offset_u32(i),
                         0.70,
                         vec![format!("ldftn + newobj at {:#x} — thread creation", i)],
                     ));
                 }
-            }
             i += 1;
         }
         matches
@@ -448,12 +447,12 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         // ldstr + ldstr + call (static Process.Start(filename, args))
         while i + 12 < code.len() {
-            if code[i] == 0x72 && self.scan_forward_for(code, i + 5, &[0x72], 6) {
-                let call = self.scan_forward_for(code, i + 10, &[0x28], 8);
+            if code[i] == 0x72 && Self::scan_forward_for(code, i + 5, &[0x72], 6) {
+                let call = Self::scan_forward_for(code, i + 10, &[0x28], 8);
                 if call {
                     matches.push(PatternMatch::new(
                         Pattern::ProcessSpawn,
-                        i as u32,
+                        offset_u32(i),
                         0.60,
                         vec![format!("ldstr+ldstr+call at {:#x} — Process.Start pattern", i)],
                     ));
@@ -471,10 +470,10 @@ impl CilPatternRecognizer {
         let mut i = 0usize;
         // call (0x28) / callvirt (0x6F) with ldstr before it — GetManifestResourceStream
         while i + 6 < code.len() {
-            if code[i] == 0x72 && self.scan_forward_for(code, i + 5, &[0x6F, 0x28], 6) {
+            if code[i] == 0x72 && Self::scan_forward_for(code, i + 5, &[0x6F, 0x28], 6) {
                 matches.push(PatternMatch::new(
                     Pattern::ResourceExtract,
-                    i as u32,
+                    offset_u32(i),
                     0.45,
                     vec![format!("ldstr+call at {:#x} — possible resource access", i)],
                 ));
@@ -494,7 +493,7 @@ impl CilPatternRecognizer {
             if code[i] == 0x72 && code[i + 5] == 0x72 && code[i + 10] == 0x72 {
                 matches.push(PatternMatch::new(
                     Pattern::SqlQuery,
-                    i as u32,
+                    offset_u32(i),
                     0.50,
                     vec![format!(
                         "Three consecutive ldstr opcodes at {:#x} — possible SQL concatenation",
@@ -512,15 +511,15 @@ impl CilPatternRecognizer {
     // ── Helpers ────────────────────────────────────────────────────────────
 
     /// True if `opcode` is any ldc.i4 short form (0x15–0x1E) or ldc.i4.s/ldc.i4.
-    fn is_ldc_i4(&self, opcode: u8) -> bool {
+    fn is_ldc_i4(opcode: u8) -> bool {
         (0x15..=0x20).contains(&opcode)
     }
 
     /// Scan backwards from `pos` for an ldc.i4 variant within `window` bytes.
-    fn scan_back_for_ldc(&self, code: &[u8], pos: usize, window: usize) -> bool {
+    fn scan_back_for_ldc(code: &[u8], pos: usize, window: usize) -> bool {
         let start = pos.saturating_sub(window);
         for j in start..pos {
-            if self.is_ldc_i4(code[j]) {
+            if Self::is_ldc_i4(code[j]) {
                 return true;
             }
         }
@@ -528,7 +527,7 @@ impl CilPatternRecognizer {
     }
 
     /// Scan forwards from `pos` for any opcode in `targets` within `window` bytes.
-    fn scan_forward_for(&self, code: &[u8], pos: usize, targets: &[u8], window: usize) -> bool {
+    fn scan_forward_for(code: &[u8], pos: usize, targets: &[u8], window: usize) -> bool {
         let end = (pos + window).min(code.len());
         for &b in &code[pos..end] {
             if targets.contains(&b) {
@@ -539,13 +538,13 @@ impl CilPatternRecognizer {
     }
 
     /// Check for a backward branch (short or long) within `window` bytes before `pos`.
-    fn has_backward_branch_near(&self, code: &[u8], pos: usize, window: usize) -> bool {
+    fn has_backward_branch_near(code: &[u8], pos: usize, window: usize) -> bool {
         let start = pos.saturating_sub(window);
         for j in start..pos {
             // Short backward branch: offset byte is negative (>= 0x80 when cast to i8)
             if (code[j] == 0x2B || (0x2C..=0x37).contains(&code[j]))
                 && j + 1 < code.len()
-                && (code[j + 1] as i8) < 0
+                && code[j + 1].cast_signed() < 0
             {
                 return true;
             }
@@ -559,6 +558,16 @@ impl Default for CilPatternRecognizer {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+/// Byte offset within a CIL method body, as stored in [`PatternMatch::offset`].
+///
+/// ECMA-335 encodes a method body's `CodeSize` as a `u32`, so no well-formed
+/// method body can be longer than `u32::MAX` bytes and the conversion is exact.
+/// A malformed slice longer than that is clamped to `u32::MAX` rather than
+/// truncated silently or panicking on untrusted input.
+fn offset_u32(i: usize) -> u32 {
+    u32::try_from(i).unwrap_or(u32::MAX)
+}
 
 #[cfg(test)]
 mod tests {

@@ -126,8 +126,19 @@ impl RenameObfuscation {
         if self.total_analyzed == 0 {
             0.0
         } else {
-            self.obfuscated.len() as f64 / self.total_analyzed as f64
+            count_f64(self.obfuscated.len()) / count_f64(self.total_analyzed)
         }
+    }
+
+    /// Share of analysed identifiers that look obfuscated, as a whole
+    /// percentage in `0..=100`.
+    ///
+    /// Computed in integer arithmetic: unlike `obfuscation_ratio() * 100.0`
+    /// it involves no float round-trip, so it can neither lose precision on
+    /// large counts nor produce a value outside `0..=100`.
+    #[must_use]
+    pub fn obfuscation_percent(&self) -> u8 {
+        percent_u8(self.obfuscated.len(), self.total_analyzed)
     }
 
     /// Whether significant rename obfuscation is present.
@@ -228,8 +239,9 @@ impl ControlFlowObfuscation {
         if total == 0 {
             return 0;
         }
-        let ratio = self.unconditional_branches as f64 / total as f64;
-        (ratio * 100.0) as u8
+        // Computed in integer arithmetic, so there is no float round-trip and
+        // the result is 0..=100 by construction.
+        percent_u8(self.unconditional_branches, total)
     }
 
     /// Whether significant CF obfuscation was detected.
@@ -305,7 +317,7 @@ impl StringEncryption {
         for &b in bytes {
             freq[b as usize] += 1;
         }
-        let len = bytes.len() as f64;
+        let len = count_f64(bytes.len());
         freq.iter()
             .filter(|&&c| c > 0)
             .map(|&c| {
@@ -459,7 +471,7 @@ impl ObfuscationScore {
         strings: &StringEncryption,
         vm: &VirtualMachineObf,
     ) -> Self {
-        let rename_score = (rename.obfuscation_ratio() * 100.0) as u8;
+        let rename_score = rename.obfuscation_percent();
         let cf_score = if cf.is_obfuscated() {
             cf.spaghetti_score().max(50)
         } else {
@@ -471,7 +483,9 @@ impl ObfuscationScore {
             + u32::from(cf_score) * 3
             + u32::from(string_score) * 2
             + u32::from(vm_score) * 2)
-            / 10) as u8;
+            / 10)
+            .try_into()
+            .unwrap_or(u8::MAX);
         Self {
             rename_score,
             cf_score,
@@ -607,6 +621,28 @@ impl CilObfuscation {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/// `part / whole` expressed as a whole percentage, clamped to `0..=100`.
+///
+/// Integer-only, so it is exact for every `usize` input and cannot panic:
+/// a zero `whole` yields 0 rather than dividing by zero.
+fn percent_u8(part: usize, whole: usize) -> u8 {
+    if whole == 0 {
+        return 0;
+    }
+    let pct = part.saturating_mul(100) / whole;
+    u8::try_from(pct.min(100)).unwrap_or(100)
+}
+
+/// A count widened to `f64` for a ratio.
+///
+/// Clamped to `u32::MAX` first, so the widening is *exact*: every `u32` is
+/// representable in an `f64`. No CIL artefact carries more than four billion
+/// identifiers or bytes, and clamping is preferable to the silent rounding a
+/// direct `usize as f64` would perform above 2^53.
+fn count_f64(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap_or(u32::MAX))
+}
 
 #[cfg(test)]
 mod tests {
@@ -757,7 +793,7 @@ mod tests {
     #[test]
     fn test_string_encryption_record_candidate() {
         let mut se = StringEncryption::new();
-        let bytes: Vec<u8> = (0..200).map(|i| i as u8).collect();
+        let bytes: Vec<u8> = (0..200u8).collect();
         se.record_candidate(0x1000, &bytes, StringDecryptMethod::XorConstant);
         assert_eq!(se.candidates.len(), 1);
     }
@@ -884,7 +920,7 @@ mod tests {
     #[test]
     fn test_cil_record_encrypted_string() {
         let mut c = CilObfuscation::new();
-        let high_entropy: Vec<u8> = (0..200).map(|i| i as u8).collect();
+        let high_entropy: Vec<u8> = (0..200u8).collect();
         c.record_encrypted_string(0x1000, &high_entropy);
         assert_eq!(c.findings.len(), 1);
     }

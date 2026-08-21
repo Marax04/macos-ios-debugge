@@ -424,8 +424,10 @@ fn t42_proto_defaults_and_helpers() {
 
 #[test]
 fn t43_proto_is_vararg_flag() {
-    let mut p = LuaJitProto::default();
-    p.flags = 0x02;
+    let mut p = LuaJitProto {
+        flags: 0x02,
+        ..Default::default()
+    };
     assert!(p.is_vararg());
     p.flags = 0;
     assert!(!p.is_vararg());
@@ -433,31 +435,37 @@ fn t43_proto_is_vararg_flag() {
 
 #[test]
 fn t44_proto_iter_instructions() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![1, 2, 3];
+    let p = LuaJitProto {
+        instructions: vec![1, 2, 3],
+        ..Default::default()
+    };
     let v: Vec<_> = p.iter_instructions().collect();
     assert_eq!(v, vec![(0, 1u32), (1, 2), (2, 3)]);
 }
 
 #[test]
 fn t45_proto_string_constants() {
-    let mut p = LuaJitProto::default();
-    p.constants = vec![
+    let p = LuaJitProto {
+        constants: vec![
         LjConst::String(b"hi".to_vec()),
         LjConst::Integer(7),
         LjConst::String(b"bye".to_vec()),
-    ];
+    ],
+        ..Default::default()
+    };
     let s = p.string_constants();
     assert_eq!(s.len(), 2);
 }
 
 #[test]
 fn t46_proto_category_histogram() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![
+    let p = LuaJitProto {
+        instructions: vec![
         make_lj_ad(LjOp::Mov as u8, 0, 0),
         make_lj_ad(LjOp::Ret0 as u8, 0, 0),
-    ];
+    ],
+        ..Default::default()
+    };
     let h = p.category_histogram();
     assert_eq!(h.len(), 11);
     assert_eq!(h[InstrCategory::Arithmetic as usize], 1);
@@ -466,12 +474,14 @@ fn t46_proto_category_histogram() {
 
 #[test]
 fn t47_proto_used_opcodes_unique() {
-    let mut p = LuaJitProto::default();
-    p.instructions = vec![
+    let p = LuaJitProto {
+        instructions: vec![
         make_lj_ad(LjOp::Mov as u8, 0, 0),
         make_lj_ad(LjOp::Mov as u8, 1, 0),
         make_lj_ad(LjOp::Ret0 as u8, 0, 0),
-    ];
+    ],
+        ..Default::default()
+    };
     let ops = p.used_opcodes();
     assert_eq!(ops.len(), 2);
 }
