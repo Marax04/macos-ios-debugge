@@ -173,6 +173,23 @@ impl Arguments {
 
 // ── Method call result ────────────────────────────────────────────────────────
 
+
+/// What one decoded instruction asks the abstract interpreter to do next.
+///
+/// Introduced when the opcode table was split out of
+/// [`CilExecutionEngine::execute_method_abstract`]: inside a helper, `break`
+/// and "not my opcode" have to be values rather than control flow.
+enum Step {
+    /// The opcode was executed; continue from this program counter.
+    Next(usize),
+    /// Stop interpreting (truncated or malformed instruction stream).
+    Stop,
+    /// This slice does not handle the opcode; try the next slice.
+    Unhandled,
+    /// The method returned; this is its result.
+    Done(Option<CilValue>),
+}
+
 /// Result of abstractly executing a method.
 #[derive(Debug)]
 pub struct MethodCallResult {
@@ -218,342 +235,555 @@ impl CilExecutionEngine {
             steps += 1;
             let op = opcodes[pc];
 
-            match op {
-                // ── NOP / BRK ────────────────────────────────────────────
-                // nop
-                // break (debug breakpoint)
-
-                // ── ldarg short forms ────────────────────────────────────
-                0x02 => { stack.push(args.load(0)); pc += 1; }
-                0x03 => { stack.push(args.load(1)); pc += 1; }
-                0x04 => { stack.push(args.load(2)); pc += 1; }
-                0x05 => { stack.push(args.load(3)); pc += 1; }
-                0x0E => { // ldarg.s <uint8>
-                    let idx = *opcodes.get(pc + 1)? as usize;
-                    stack.push(args.load(idx));
-                    pc += 2;
-                }
-
-                // ── ldloc short forms ────────────────────────────────────
-                0x06 => { stack.push(locals.load(0)); pc += 1; }
-                0x07 => { stack.push(locals.load(1)); pc += 1; }
-                0x08 => { stack.push(locals.load(2)); pc += 1; }
-                0x09 => { stack.push(locals.load(3)); pc += 1; }
-                0x11 => { // ldloc.s <uint8>
-                    let idx = *opcodes.get(pc + 1)? as usize;
-                    stack.push(locals.load(idx));
-                    pc += 2;
-                }
-
-                // ── stloc short forms ────────────────────────────────────
-                0x0A => { let v = stack.pop(); locals.store(0, v); pc += 1; }
-                0x0B => { let v = stack.pop(); locals.store(1, v); pc += 1; }
-                0x0C => { let v = stack.pop(); locals.store(2, v); pc += 1; }
-                0x0D => { let v = stack.pop(); locals.store(3, v); pc += 1; }
-                0x13 => { // stloc.s <uint8>
-                    let idx = *opcodes.get(pc + 1)? as usize;
-                    let v = stack.pop();
-                    locals.store(idx, v);
-                    pc += 2;
-                }
-
-                // ── starg.s ──────────────────────────────────────────────
-                0x10 => {
-                    let _idx = *opcodes.get(pc + 1)? as usize;
-                    let _ = stack.pop(); // starg — drop; args are immutable in abstract exec
-                    pc += 2;
-                }
-
-                // ── ldnull ───────────────────────────────────────────────
-                0x14 => { stack.push(CilValue::Null); pc += 1; }
-
-                // ── ldc.i4 short forms ───────────────────────────────────
-                0x15 => { stack.push(CilValue::I32(-1)); pc += 1; }
-                0x16 => { stack.push(CilValue::I32(0));  pc += 1; }
-                0x17 => { stack.push(CilValue::I32(1));  pc += 1; }
-                0x18 => { stack.push(CilValue::I32(2));  pc += 1; }
-                0x19 => { stack.push(CilValue::I32(3));  pc += 1; }
-                0x1A => { stack.push(CilValue::I32(4));  pc += 1; }
-                0x1B => { stack.push(CilValue::I32(5));  pc += 1; }
-                0x1C => { stack.push(CilValue::I32(6));  pc += 1; }
-                0x1D => { stack.push(CilValue::I32(7));  pc += 1; }
-                0x1E => { stack.push(CilValue::I32(8));  pc += 1; }
-
-                // ldc.i4.s <int8>
-                0x1F => {
-                    let v = i32::from((*opcodes.get(pc + 1)?).cast_signed());
-                    stack.push(CilValue::I32(v));
-                    pc += 2;
-                }
-
-                // ldc.i4 <int32>
-                0x20 => {
-                    if pc + 4 >= opcodes.len() { break; }
-                    let bytes = [opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]];
-                    stack.push(CilValue::I32(i32::from_le_bytes(bytes)));
-                    pc += 5;
-                }
-
-                // ldc.i8 <int64>
-                0x21 => {
-                    if pc + 8 >= opcodes.len() { break; }
-                    let bytes = [
-                        opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4],
-                        opcodes[pc+5], opcodes[pc+6], opcodes[pc+7], opcodes[pc+8],
-                    ];
-                    stack.push(CilValue::I64(i64::from_le_bytes(bytes)));
-                    pc += 9;
-                }
-
-                // ldc.r4 <float32>
-                0x22 => {
-                    if pc + 4 >= opcodes.len() { break; }
-                    let bytes = [opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]];
-                    let f = f64::from(f32::from_le_bytes(bytes));
-                    stack.push(CilValue::F64(f));
-                    pc += 5;
-                }
-
-                // ldc.r8 <float64>
-                0x23 => {
-                    if pc + 8 >= opcodes.len() { break; }
-                    let bytes = [
-                        opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4],
-                        opcodes[pc+5], opcodes[pc+6], opcodes[pc+7], opcodes[pc+8],
-                    ];
-                    stack.push(CilValue::F64(f64::from_le_bytes(bytes)));
-                    pc += 9;
-                }
-
-                // ── dup / pop ────────────────────────────────────────────
-                0x25 => { stack.dup(); pc += 1; }
-                0x26 => { let _ = stack.pop(); pc += 1; }
-
-                // ── ret ──────────────────────────────────────────────────
-                0x2A => {
-                    if stack.depth() > 0 {
-                        return Some(stack.pop());
-                    }
-                    return None;
-                }
-
-                // ── br (unconditional branch) ────────────────────────────
-                0x38 => {
-                    if pc + 4 >= opcodes.len() { break; }
-                    let off = i32::from_le_bytes([
-                        opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
-                    ]);
-                    let next = pc_as_i64(pc + 5) + i64::from(off);
-                    let Ok(next) = usize::try_from(next) else { break };
-                    if next >= opcodes.len() { break; }
+            match Self::step_group1(opcodes, op, pc, &mut stack, locals, args)? {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
                     pc = next;
+                    continue;
                 }
-
-                // br.s (short branch)
-                0x2B => {
-                    let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
-                    let next = pc_as_i64(pc + 2) + off;
-                    let Ok(next) = usize::try_from(next) else { break };
-                    if next >= opcodes.len() { break; }
-                    pc = next;
-                }
-
-                // ── conditional branches (short) ──────────────────────────
-                0x2C..=0x37 => {
-                    let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
-                    let taken_pc = pc_as_i64(pc + 2) + off;
-                    let fallthrough = pc + 2;
-                    let taken = in_range_pc(taken_pc, opcodes.len());
-                    let cond = Self::eval_branch_short(op, &mut stack);
-                    pc = if cond == Some(true) {
-                        taken.unwrap_or(fallthrough)
-                    } else {
-                        fallthrough
-                    };
-                }
-
-                // ── switch (0x45): count + n*4 byte table, pops 1 value ──
-                0x45 => {
-                    if pc + 4 >= opcodes.len() { break; }
-                    let n = u32::from_le_bytes([
-                        opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
-                    ]) as usize;
-                    stack.pop();
-                    // skip opcode byte + 4-byte count + n*4 offset entries
-                    // Use checked arithmetic to prevent integer overflow on large n.
-                    let Some(next_pc) = n.checked_mul(4).and_then(|v| v.checked_add(pc + 5))
-                    else {
-                        break;
-                    };
-                    if next_pc >= opcodes.len() { break; }
-                    pc = next_pc;
-                }
-
-                // ── conditional branches (long) ───────────────────────────
-                0x39..=0x44 | 0x46 => {
-                    if pc + 4 >= opcodes.len() { break; }
-                    let off = i64::from(i32::from_le_bytes([
-                        opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
-                    ]));
-                    let taken_pc = pc_as_i64(pc + 5) + off;
-                    let fallthrough = pc + 5;
-                    let taken = in_range_pc(taken_pc, opcodes.len());
-                    let cond = Self::eval_branch_long(op, &mut stack);
-                    pc = if cond == Some(true) {
-                        taken.unwrap_or(fallthrough)
-                    } else {
-                        fallthrough
-                    };
-                }
-
-                // ── arithmetic ───────────────────────────────────────────
-                0x58 => { Self::bin_op_i32(&mut stack, i32::wrapping_add); pc += 1; } // add
-                0x59 => { Self::bin_op_i32(&mut stack, i32::wrapping_sub); pc += 1; } // sub
-                0x5A => { Self::bin_op_i32(&mut stack, i32::wrapping_mul); pc += 1; } // mul
-                0x5B => { // div
-                    let b = stack.pop();
-                    let a = stack.pop();
-                    match (a.to_i64(), b.to_i64()) {
-                        (Some(av), Some(bv)) if bv != 0 => stack.push(CilValue::I64(av / bv)),
-                        _ => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x5C => { // div.un
-                    let b = stack.pop();
-                    let a = stack.pop();
-                    match (a.to_i64(), b.to_i64()) {
-                        (Some(av), Some(bv)) if bv != 0 => {
-                            stack.push(CilValue::I64((av.cast_unsigned() / bv.cast_unsigned()).cast_signed()));
-                        }
-                        _ => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x5D => { // rem
-                    let b = stack.pop();
-                    let a = stack.pop();
-                    match (a.to_i64(), b.to_i64()) {
-                        (Some(av), Some(bv)) if bv != 0 => stack.push(CilValue::I64(av % bv)),
-                        _ => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x5F => { Self::bin_op_i64(&mut stack, |a, b| a & b); pc += 1; } // and
-                0x60 => { Self::bin_op_i64(&mut stack, |a, b| a | b); pc += 1; } // or
-                0x61 => { Self::bin_op_i64(&mut stack, |a, b| a ^ b); pc += 1; } // xor
-                0x62 => { // shl
-                    let b = stack.pop();
-                    let a = stack.pop();
-                    match (a.to_i64(), b.to_i64()) {
-                        (Some(av), Some(bv)) => stack.push(CilValue::I64(av << (bv & 63))),
-                        _ => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x63 => { // shr
-                    let b = stack.pop();
-                    let a = stack.pop();
-                    match (a.to_i64(), b.to_i64()) {
-                        (Some(av), Some(bv)) => stack.push(CilValue::I64(av >> (bv & 63))),
-                        _ => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x65 => { // neg
-                    let a = stack.pop();
-                    match a.to_i64() {
-                        Some(v) => stack.push(CilValue::I64(-v)),
-                        None    => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-                0x66 => { // not (bitwise)
-                    let a = stack.pop();
-                    match a.to_i64() {
-                        Some(v) => stack.push(CilValue::I64(!v)),
-                        None    => stack.push(CilValue::Unknown),
-                    }
-                    pc += 1;
-                }
-
-                // ── conv variants ─────────────────────────────────────────
-                0x67 => { Self::conv_i(&mut stack, |v| i64::from(low_i8(v))); pc += 1; }  // conv.i1
-                0x68 => { Self::conv_i(&mut stack, |v| i64::from(low_i16(v))); pc += 1; } // conv.i2
-                0x69 => { Self::conv_i(&mut stack, |v| i64::from(low_i32(v))); pc += 1; } // conv.i4
-                // conv.i8 (already i64 in abstract)
-                0x6B => { // conv.r4
-                    let a = stack.pop();
-                    let v = f64::from(a.to_f64().unwrap_or(0.0) as f32);
-                    stack.push(CilValue::F64(v));
-                    pc += 1;
-                }
-                0x6C => { // conv.r8
-                    let a = stack.pop();
-                    let v = a.to_f64().unwrap_or(0.0);
-                    stack.push(CilValue::F64(v));
-                    pc += 1;
-                }
-                0x6D => { Self::conv_i(&mut stack, |v| i64::from(low_u32(v))); pc += 1; } // conv.u4
-                0x6E => { Self::conv_i(&mut stack, |v| v.cast_unsigned().cast_signed()); pc += 1; } // conv.u8
-
-                // ── two-byte prefix opcodes (0xFE) ────────────────────────
-                0xFE => {
-                    let sub = *opcodes.get(pc + 1)?;
-                    match sub {
-                        0x01 => { // ceq
-                            let b = stack.pop();
-                            let a = stack.pop();
-                            let eq = match (a.to_i64(), b.to_i64()) {
-                                (Some(av), Some(bv)) => av == bv,
-                                _ => false,
-                            };
-                            stack.push(CilValue::I32(i32::from(eq)));
-                        }
-                        0x02 => { // cgt
-                            let b = stack.pop();
-                            let a = stack.pop();
-                            let r = match (a.to_i64(), b.to_i64()) {
-                                (Some(av), Some(bv)) => av > bv,
-                                _ => false,
-                            };
-                            stack.push(CilValue::I32(i32::from(r)));
-                        }
-                        0x04 => { // clt
-                            let b = stack.pop();
-                            let a = stack.pop();
-                            let r = match (a.to_i64(), b.to_i64()) {
-                                (Some(av), Some(bv)) => av < bv,
-                                _ => false,
-                            };
-                            stack.push(CilValue::I32(i32::from(r)));
-                        }
-                        _ => {
-                            // Unknown prefix opcode — push Unknown, skip 2 bytes.
-                            stack.push(CilValue::Unknown);
-                        }
-                    }
-                    pc += 2;
-                }
-
-                // ── call / callvirt (skip 4-byte token, push Unknown) ─────
-                0x28 | 0x6F | 0x73 | 0x72 => {
-                    pc += 5;
-                    stack.push(CilValue::Unknown);
-                }
-
-                // ── newobj (skip 4-byte token, push Unknown) ──────────────
-                // ── ldstr (skip 4-byte token, push Unknown) ───────────────
-                // ── anything else: advance 1 byte ─────────────────────────
-                _ => {
-                    pc += 1;
-                }
+                Step::Unhandled => {}
             }
+
+            match Self::step_group2(opcodes, op, pc, &mut stack, locals, args)? {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            match Self::step_group3(opcodes, op, pc, &mut stack, locals, args)? {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            match Self::step_group4(opcodes, op, pc, &mut stack, locals, args)? {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            match Self::step_group5(opcodes, op, pc, &mut stack, locals, args) {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            match Self::step_group6(opcodes, op, pc, &mut stack, locals, args) {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            match Self::step_group7(opcodes, op, pc, &mut stack, locals, args)? {
+                Step::Stop => break,
+                Step::Done(v) => return v,
+                Step::Next(next) => {
+                    pc = next;
+                    continue;
+                }
+                Step::Unhandled => {}
+            }
+
+            // Not handled by any slice above.
+    pc += 1;
         }
+
 
         // Implicit return.
         if stack.depth() > 0 { Some(stack.pop()) } else { None }
     }
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group1(
+        opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        locals: &mut LocalVars,
+        args: &Arguments,
+    ) -> Option<Step> {
+        let mut pc = pc_in;
+        match op {
+            0x02 => { stack.push(args.load(0)); pc += 1; }
+            0x03 => { stack.push(args.load(1)); pc += 1; }
+            0x04 => { stack.push(args.load(2)); pc += 1; }
+            0x05 => { stack.push(args.load(3)); pc += 1; }
+            0x0E => { // ldarg.s <uint8>
+                let idx = *opcodes.get(pc + 1)? as usize;
+                stack.push(args.load(idx));
+                pc += 2;
+            }
+
+            // ── ldloc short forms ────────────────────────────────────
+            0x06 => { stack.push(locals.load(0)); pc += 1; }
+            0x07 => { stack.push(locals.load(1)); pc += 1; }
+            0x08 => { stack.push(locals.load(2)); pc += 1; }
+            0x09 => { stack.push(locals.load(3)); pc += 1; }
+            0x11 => { // ldloc.s <uint8>
+                let idx = *opcodes.get(pc + 1)? as usize;
+                stack.push(locals.load(idx));
+                pc += 2;
+            }
+
+            // ── stloc short forms ────────────────────────────────────
+            0x0A => { let v = stack.pop(); locals.store(0, v); pc += 1; }
+            0x0B => { let v = stack.pop(); locals.store(1, v); pc += 1; }
+            0x0C => { let v = stack.pop(); locals.store(2, v); pc += 1; }
+            0x0D => { let v = stack.pop(); locals.store(3, v); pc += 1; }
+            0x13 => { // stloc.s <uint8>
+                let idx = *opcodes.get(pc + 1)? as usize;
+                let v = stack.pop();
+                locals.store(idx, v);
+                pc += 2;
+            }
+
+            // ── starg.s ──────────────────────────────────────────────
+            0x10 => {
+                let _idx = *opcodes.get(pc + 1)? as usize;
+                let _ = stack.pop(); // starg — drop; args are immutable in abstract exec
+                pc += 2;
+            }
+
+            // ── ldnull ───────────────────────────────────────────────
+            0x14 => { stack.push(CilValue::Null); pc += 1; }
+
+            // ── ldc.i4 short forms ───────────────────────────────────
+            0x15 => { stack.push(CilValue::I32(-1)); pc += 1; }
+            0x16 => { stack.push(CilValue::I32(0));  pc += 1; }
+            0x17 => { stack.push(CilValue::I32(1));  pc += 1; }
+            0x18 => { stack.push(CilValue::I32(2));  pc += 1; }
+            0x19 => { stack.push(CilValue::I32(3));  pc += 1; }
+            0x1A => { stack.push(CilValue::I32(4));  pc += 1; }
+            _ => return Some(Step::Unhandled),
+        }
+
+        Some(Step::Next(pc))
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group2(
+        opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Option<Step> {
+        let mut pc = pc_in;
+        match op {
+            0x1B => { stack.push(CilValue::I32(5));  pc += 1; }
+            0x1C => { stack.push(CilValue::I32(6));  pc += 1; }
+            0x1D => { stack.push(CilValue::I32(7));  pc += 1; }
+            0x1E => { stack.push(CilValue::I32(8));  pc += 1; }
+
+            // ldc.i4.s <int8>
+            0x1F => {
+                let v = i32::from((*opcodes.get(pc + 1)?).cast_signed());
+                stack.push(CilValue::I32(v));
+                pc += 2;
+            }
+
+            // ldc.i4 <int32>
+            0x20 => {
+                if pc + 4 >= opcodes.len() { return Some(Step::Stop); }
+                let bytes = [opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]];
+                stack.push(CilValue::I32(i32::from_le_bytes(bytes)));
+                pc += 5;
+            }
+
+            // ldc.i8 <int64>
+            0x21 => {
+                if pc + 8 >= opcodes.len() { return Some(Step::Stop); }
+                let bytes = [
+                    opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4],
+                    opcodes[pc+5], opcodes[pc+6], opcodes[pc+7], opcodes[pc+8],
+                ];
+                stack.push(CilValue::I64(i64::from_le_bytes(bytes)));
+                pc += 9;
+            }
+
+            // ldc.r4 <float32>
+            0x22 => {
+                if pc + 4 >= opcodes.len() { return Some(Step::Stop); }
+                let bytes = [opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]];
+                let f = f64::from(f32::from_le_bytes(bytes));
+                stack.push(CilValue::F64(f));
+                pc += 5;
+            }
+
+            // ldc.r8 <float64>
+            _ => return Some(Step::Unhandled),
+        }
+
+        Some(Step::Next(pc))
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group3(
+        opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Option<Step> {
+        let mut pc = pc_in;
+        match op {
+            0x23 => {
+                if pc + 8 >= opcodes.len() { return Some(Step::Stop); }
+                let bytes = [
+                    opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4],
+                    opcodes[pc+5], opcodes[pc+6], opcodes[pc+7], opcodes[pc+8],
+                ];
+                stack.push(CilValue::F64(f64::from_le_bytes(bytes)));
+                pc += 9;
+            }
+
+            // ── dup / pop ────────────────────────────────────────────
+            0x25 => { stack.dup(); pc += 1; }
+            0x26 => { let _ = stack.pop(); pc += 1; }
+
+            // ── ret ──────────────────────────────────────────────────
+            0x2A => {
+                // `ret` ends the method: hand the top of stack back to the caller.
+                let v = if stack.depth() > 0 { Some(stack.pop()) } else { None };
+                return Some(Step::Done(v));
+            }
+
+            // ── br (unconditional branch) ────────────────────────────
+            0x38 => {
+                if pc + 4 >= opcodes.len() { return Some(Step::Stop); }
+                let off = i32::from_le_bytes([
+                    opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
+                ]);
+                let next = pc_as_i64(pc + 5) + i64::from(off);
+                let Ok(next) = usize::try_from(next) else {
+                    return Some(Step::Stop);
+                };
+                if next >= opcodes.len() { return Some(Step::Stop); }
+                pc = next;
+            }
+
+            // br.s (short branch)
+            0x2B => {
+                let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
+                let next = pc_as_i64(pc + 2) + off;
+                let Ok(next) = usize::try_from(next) else {
+                    return Some(Step::Stop);
+                };
+                if next >= opcodes.len() { return Some(Step::Stop); }
+                pc = next;
+            }
+
+            // ── conditional branches (short) ──────────────────────────
+            _ => return Some(Step::Unhandled),
+        }
+
+        Some(Step::Next(pc))
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group4(
+        opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Option<Step> {
+        let mut pc = pc_in;
+        match op {
+            0x2C..=0x37 => {
+                let off = i64::from((*opcodes.get(pc + 1)?).cast_signed());
+                let taken_pc = pc_as_i64(pc + 2) + off;
+                let fallthrough = pc + 2;
+                let taken = in_range_pc(taken_pc, opcodes.len());
+                let cond = Self::eval_branch_short(op, &mut *stack);
+                pc = if cond == Some(true) {
+                    taken.unwrap_or(fallthrough)
+                } else {
+                    fallthrough
+                };
+            }
+
+            // ── switch (0x45): count + n*4 byte table, pops 1 value ──
+            0x45 => {
+                if pc + 4 >= opcodes.len() { return Some(Step::Stop); }
+                let n = u32::from_le_bytes([
+                    opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
+                ]) as usize;
+                stack.pop();
+                // skip opcode byte + 4-byte count + n*4 offset entries
+                // Use checked arithmetic to prevent integer overflow on large n.
+                let Some(next_pc) = n.checked_mul(4).and_then(|v| v.checked_add(pc + 5))
+                else {
+                    return Some(Step::Stop);
+                };
+                if next_pc >= opcodes.len() { return Some(Step::Stop); }
+                pc = next_pc;
+            }
+
+            // ── conditional branches (long) ───────────────────────────
+            0x39..=0x44 | 0x46 => {
+                if pc + 4 >= opcodes.len() { return Some(Step::Stop); }
+                let off = i64::from(i32::from_le_bytes([
+                    opcodes[pc+1], opcodes[pc+2], opcodes[pc+3], opcodes[pc+4]
+                ]));
+                let taken_pc = pc_as_i64(pc + 5) + off;
+                let fallthrough = pc + 5;
+                let taken = in_range_pc(taken_pc, opcodes.len());
+                let cond = Self::eval_branch_long(op, &mut *stack);
+                pc = if cond == Some(true) {
+                    taken.unwrap_or(fallthrough)
+                } else {
+                    fallthrough
+                };
+            }
+
+            // ── arithmetic ───────────────────────────────────────────
+            0x58 => { Self::bin_op_i32(&mut *stack, i32::wrapping_add); pc += 1; } // add
+            0x59 => { Self::bin_op_i32(&mut *stack, i32::wrapping_sub); pc += 1; } // sub
+            _ => return Some(Step::Unhandled),
+        }
+
+        Some(Step::Next(pc))
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group5(
+        _opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Step {
+        let mut pc = pc_in;
+        match op {
+            0x5A => { Self::bin_op_i32(&mut *stack, i32::wrapping_mul); pc += 1; } // mul
+            0x5B => { // div
+                let b = stack.pop();
+                let a = stack.pop();
+                match (a.to_i64(), b.to_i64()) {
+                    (Some(av), Some(bv)) if bv != 0 => stack.push(CilValue::I64(av / bv)),
+                    _ => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            0x5C => { // div.un
+                let b = stack.pop();
+                let a = stack.pop();
+                match (a.to_i64(), b.to_i64()) {
+                    (Some(av), Some(bv)) if bv != 0 => {
+                        stack.push(CilValue::I64((av.cast_unsigned() / bv.cast_unsigned()).cast_signed()));
+                    }
+                    _ => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            0x5D => { // rem
+                let b = stack.pop();
+                let a = stack.pop();
+                match (a.to_i64(), b.to_i64()) {
+                    (Some(av), Some(bv)) if bv != 0 => stack.push(CilValue::I64(av % bv)),
+                    _ => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            0x5F => { Self::bin_op_i64(&mut *stack, |a, b| a & b); pc += 1; } // and
+            0x60 => { Self::bin_op_i64(&mut *stack, |a, b| a | b); pc += 1; } // or
+            0x61 => { Self::bin_op_i64(&mut *stack, |a, b| a ^ b); pc += 1; } // xor
+            0x62 => { // shl
+                let b = stack.pop();
+                let a = stack.pop();
+                match (a.to_i64(), b.to_i64()) {
+                    (Some(av), Some(bv)) => stack.push(CilValue::I64(av << (bv & 63))),
+                    _ => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            _ => return Step::Unhandled,
+        }
+
+        Step::Next(pc)
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group6(
+        _opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Step {
+        let mut pc = pc_in;
+        match op {
+            0x63 => { // shr
+                let b = stack.pop();
+                let a = stack.pop();
+                match (a.to_i64(), b.to_i64()) {
+                    (Some(av), Some(bv)) => stack.push(CilValue::I64(av >> (bv & 63))),
+                    _ => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            0x65 => { // neg
+                let a = stack.pop();
+                match a.to_i64() {
+                    Some(v) => stack.push(CilValue::I64(-v)),
+                    None    => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+            0x66 => { // not (bitwise)
+                let a = stack.pop();
+                match a.to_i64() {
+                    Some(v) => stack.push(CilValue::I64(!v)),
+                    None    => stack.push(CilValue::Unknown),
+                }
+                pc += 1;
+            }
+
+            // ── conv variants ─────────────────────────────────────────
+            0x67 => { Self::conv_i(&mut *stack, |v| i64::from(low_i8(v))); pc += 1; }  // conv.i1
+            0x68 => { Self::conv_i(&mut *stack, |v| i64::from(low_i16(v))); pc += 1; } // conv.i2
+            0x69 => { Self::conv_i(&mut *stack, |v| i64::from(low_i32(v))); pc += 1; } // conv.i4
+            // conv.i8 (already i64 in abstract)
+            0x6B => { // conv.r4
+                let a = stack.pop();
+                let v = f64::from(a.to_f64().unwrap_or(0.0) as f32);
+                stack.push(CilValue::F64(v));
+                pc += 1;
+            }
+            0x6C => { // conv.r8
+                let a = stack.pop();
+                let v = a.to_f64().unwrap_or(0.0);
+                stack.push(CilValue::F64(v));
+                pc += 1;
+            }
+            0x6D => { Self::conv_i(&mut *stack, |v| i64::from(low_u32(v))); pc += 1; } // conv.u4
+            0x6E => { Self::conv_i(&mut *stack, |v| v.cast_unsigned().cast_signed()); pc += 1; } // conv.u8
+
+            // ── two-byte prefix opcodes (0xFE) ────────────────────────
+            _ => return Step::Unhandled,
+        }
+
+        Step::Next(pc)
+    }
+
+    /// One slice of the abstract-interpreter opcode table.
+    ///
+    /// Returns [`Step::Unhandled`] when `op` belongs to another slice, and
+    /// `None` when the stream is truncated - the same outcome the `?`
+    /// operators produced inside `execute_method_abstract`.
+    fn step_group7(
+        opcodes: &[u8],
+        op: u8,
+        pc_in: usize,
+        stack: &mut EvalStack,
+        _locals: &mut LocalVars,
+        _args: &Arguments,
+    ) -> Option<Step> {
+        let mut pc = pc_in;
+        match op {
+            0xFE => {
+                let sub = *opcodes.get(pc + 1)?;
+                match sub {
+                    0x01 => { // ceq
+                        let b = stack.pop();
+                        let a = stack.pop();
+                        let eq = match (a.to_i64(), b.to_i64()) {
+                            (Some(av), Some(bv)) => av == bv,
+                            _ => false,
+                        };
+                        stack.push(CilValue::I32(i32::from(eq)));
+                    }
+                    0x02 => { // cgt
+                        let b = stack.pop();
+                        let a = stack.pop();
+                        let r = match (a.to_i64(), b.to_i64()) {
+                            (Some(av), Some(bv)) => av > bv,
+                            _ => false,
+                        };
+                        stack.push(CilValue::I32(i32::from(r)));
+                    }
+                    0x04 => { // clt
+                        let b = stack.pop();
+                        let a = stack.pop();
+                        let r = match (a.to_i64(), b.to_i64()) {
+                            (Some(av), Some(bv)) => av < bv,
+                            _ => false,
+                        };
+                        stack.push(CilValue::I32(i32::from(r)));
+                    }
+                    _ => {
+                        // Unknown prefix opcode — push Unknown, skip 2 bytes.
+                        stack.push(CilValue::Unknown);
+                    }
+                }
+                pc += 2;
+            }
+
+            // ── call / callvirt (skip 4-byte token, push Unknown) ─────
+            0x28 | 0x6F | 0x73 | 0x72 => {
+                pc += 5;
+                stack.push(CilValue::Unknown);
+            }
+
+            // ── newobj (skip 4-byte token, push Unknown) ──────────────
+            // ── ldstr (skip 4-byte token, push Unknown) ───────────────
+            // ── anything else: advance 1 byte ─────────────────────────
+            _ => return Some(Step::Unhandled),
+        }
+
+        Some(Step::Next(pc))
+    }
+
 
     // ── Taint tracking ─────────────────────────────────────────────────────
 
