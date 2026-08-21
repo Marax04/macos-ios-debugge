@@ -9029,124 +9029,7 @@ fn rv_lift_compressed_q1(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 let imm = i64::from(c_addi_imm(hw));
                 vec![llil_set(&xabi(rd_raw), llil_const(imm))]
             }
-            3 => {
-                let rd_raw = ((hw >> 7) & 0x1F) as usize;
-                if rd_raw == 2 {
-                    // C.ADDI16SP
-                    let imm = i64::from(c_addi16sp_imm(hw));
-                    let expr = llil_add(llil_reg("sp"), llil_const(imm));
-                    vec![llil_set("sp", expr)]
-                } else {
-                    // C.LUI
-                    let imm = i64::from(c_lui_imm(hw));
-                    vec![llil_set(&xabi(rd_raw), llil_const(imm))]
-                }
-            }
-            4 => {
-                let funct2 = (hw >> 10) & 3;
-                let rd_p = ((hw >> 7) & 7) as usize + 8;
-                let rs2_p = ((hw >> 2) & 7) as usize + 8;
-                match funct2 {
-                    0 => {
-                        let sh = i64::from(c_shamt(hw));
-                        vec![llil_set(
-                            &xabi(rd_p),
-                            llil_binop(LlilBinOp::LShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
-                        )]
-                    }
-                    1 => {
-                        let sh = i64::from(c_shamt(hw));
-                        vec![llil_set(
-                            &xabi(rd_p),
-                            llil_binop(LlilBinOp::AShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
-                        )]
-                    }
-                    2 => {
-                        let imm = i64::from(c_addi_imm(hw));
-                        vec![llil_set(
-                            &xabi(rd_p),
-                            llil_binop(LlilBinOp::And, llil_reg(&xabi(rd_p)), llil_const(imm)),
-                        )]
-                    }
-                    3 => {
-                        let funct1 = (hw >> 12) & 1;
-                        let op_sub = (hw >> 5) & 3;
-                        let expr = match (funct1, op_sub) {
-                            (0, 0) => llil_binop(
-                                LlilBinOp::Sub,
-                                llil_reg(&xabi(rd_p)),
-                                llil_reg(&xabi(rs2_p)),
-                            ),
-                            (0, 1) => llil_binop(
-                                LlilBinOp::Xor,
-                                llil_reg(&xabi(rd_p)),
-                                llil_reg(&xabi(rs2_p)),
-                            ),
-                            (0, 2) => llil_binop(
-                                LlilBinOp::Or,
-                                llil_reg(&xabi(rd_p)),
-                                llil_reg(&xabi(rs2_p)),
-                            ),
-                            (0, 3) => llil_binop(
-                                LlilBinOp::And,
-                                llil_reg(&xabi(rd_p)),
-                                llil_reg(&xabi(rs2_p)),
-                            ),
-                            (1, 0) => llil_sext(
-                                llil_binop(
-                                    LlilBinOp::Sub,
-                                    llil_low(llil_reg(&xabi(rd_p)), 4),
-                                    llil_low(llil_reg(&xabi(rs2_p)), 4),
-                                ),
-                                4,
-                            ),
-                            (1, 1) => llil_sext(
-                                llil_add(
-                                    llil_low(llil_reg(&xabi(rd_p)), 4),
-                                    llil_low(llil_reg(&xabi(rs2_p)), 4),
-                                ),
-                                4,
-                            ),
-                            _ => return vec![LlilOp::Nop],
-                        };
-                        vec![llil_set(&xabi(rd_p), expr)]
-                    }
-                    _ => vec![LlilOp::Nop],
-                }
-            }
-            5 => {
-                // C.J
-                let offset = i64::from(c_j_offset(hw));
-                let target = pc.wrapping_add(offset.cast_unsigned());
-                vec![LlilOp::Jump { target }]
-            }
-            6 => {
-                // C.BEQZ
-                let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let offset = i64::from(c_b_offset(hw));
-                let taken = pc.wrapping_add(offset.cast_unsigned());
-                let fallthrough = pc.wrapping_add(2);
-                let cond = llil_cmp(LlilCmpOp::Eq, llil_reg(&xabi(rs1_p)), llil_const(0));
-                vec![LlilOp::If {
-                    cond: Box::new(cond),
-                    taken,
-                    fallthrough,
-                }]
-            }
-            7 => {
-                // C.BNEZ
-                let rs1_p = ((hw >> 7) & 7) as usize + 8;
-                let offset = i64::from(c_b_offset(hw));
-                let taken = pc.wrapping_add(offset.cast_unsigned());
-                let fallthrough = pc.wrapping_add(2);
-                let cond = llil_cmp(LlilCmpOp::Ne, llil_reg(&xabi(rs1_p)), llil_const(0));
-                vec![LlilOp::If {
-                    cond: Box::new(cond),
-                    taken,
-                    fallthrough,
-                }]
-            }
-            _ => vec![LlilOp::Nop],
+            _ => rv_lift_compressed_q1_rest(pc, hw),
         },
 
         // Quadrant 2
@@ -12171,5 +12054,130 @@ const fn rvv_vfunary_mnemonic(vs1: usize) -> &'static str {
     20 => "vfncvt.f.f.w",
     23 => "vfncvt.rod.f.f.w",
     _ => "vmfne", // fallback: treat as vmfne for funct3!=1
+    }
+}
+
+/// Continuation of the quadrant-1 dispatch in the compressed lifter.
+fn rv_lift_compressed_q1_rest(pc: u64, hw: u16) -> Vec<LlilOp> {
+    let funct3 = (hw >> 13) & 7;
+    match funct3 {
+    3 => {
+        let rd_raw = ((hw >> 7) & 0x1F) as usize;
+        if rd_raw == 2 {
+            // C.ADDI16SP
+            let imm = i64::from(c_addi16sp_imm(hw));
+            let expr = llil_add(llil_reg("sp"), llil_const(imm));
+            vec![llil_set("sp", expr)]
+        } else {
+            // C.LUI
+            let imm = i64::from(c_lui_imm(hw));
+            vec![llil_set(&xabi(rd_raw), llil_const(imm))]
+        }
+    }
+    4 => {
+        let funct2 = (hw >> 10) & 3;
+        let rd_p = ((hw >> 7) & 7) as usize + 8;
+        let rs2_p = ((hw >> 2) & 7) as usize + 8;
+        match funct2 {
+            0 => {
+                let sh = i64::from(c_shamt(hw));
+                vec![llil_set(
+                    &xabi(rd_p),
+                    llil_binop(LlilBinOp::LShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
+                )]
+            }
+            1 => {
+                let sh = i64::from(c_shamt(hw));
+                vec![llil_set(
+                    &xabi(rd_p),
+                    llil_binop(LlilBinOp::AShr, llil_reg(&xabi(rd_p)), llil_const(sh)),
+                )]
+            }
+            2 => {
+                let imm = i64::from(c_addi_imm(hw));
+                vec![llil_set(
+                    &xabi(rd_p),
+                    llil_binop(LlilBinOp::And, llil_reg(&xabi(rd_p)), llil_const(imm)),
+                )]
+            }
+            3 => {
+                let funct1 = (hw >> 12) & 1;
+                let op_sub = (hw >> 5) & 3;
+                let expr = match (funct1, op_sub) {
+                    (0, 0) => llil_binop(
+                        LlilBinOp::Sub,
+                        llil_reg(&xabi(rd_p)),
+                        llil_reg(&xabi(rs2_p)),
+                    ),
+                    (0, 1) => llil_binop(
+                        LlilBinOp::Xor,
+                        llil_reg(&xabi(rd_p)),
+                        llil_reg(&xabi(rs2_p)),
+                    ),
+                    (0, 2) => llil_binop(
+                        LlilBinOp::Or,
+                        llil_reg(&xabi(rd_p)),
+                        llil_reg(&xabi(rs2_p)),
+                    ),
+                    (0, 3) => llil_binop(
+                        LlilBinOp::And,
+                        llil_reg(&xabi(rd_p)),
+                        llil_reg(&xabi(rs2_p)),
+                    ),
+                    (1, 0) => llil_sext(
+                        llil_binop(
+                            LlilBinOp::Sub,
+                            llil_low(llil_reg(&xabi(rd_p)), 4),
+                            llil_low(llil_reg(&xabi(rs2_p)), 4),
+                        ),
+                        4,
+                    ),
+                    (1, 1) => llil_sext(
+                        llil_add(
+                            llil_low(llil_reg(&xabi(rd_p)), 4),
+                            llil_low(llil_reg(&xabi(rs2_p)), 4),
+                        ),
+                        4,
+                    ),
+                    _ => return vec![LlilOp::Nop],
+                };
+                vec![llil_set(&xabi(rd_p), expr)]
+            }
+            _ => vec![LlilOp::Nop],
+        }
+    }
+    5 => {
+        // C.J
+        let offset = i64::from(c_j_offset(hw));
+        let target = pc.wrapping_add(offset.cast_unsigned());
+        vec![LlilOp::Jump { target }]
+    }
+    6 => {
+        // C.BEQZ
+        let rs1_p = ((hw >> 7) & 7) as usize + 8;
+        let offset = i64::from(c_b_offset(hw));
+        let taken = pc.wrapping_add(offset.cast_unsigned());
+        let fallthrough = pc.wrapping_add(2);
+        let cond = llil_cmp(LlilCmpOp::Eq, llil_reg(&xabi(rs1_p)), llil_const(0));
+        vec![LlilOp::If {
+            cond: Box::new(cond),
+            taken,
+            fallthrough,
+        }]
+    }
+    7 => {
+        // C.BNEZ
+        let rs1_p = ((hw >> 7) & 7) as usize + 8;
+        let offset = i64::from(c_b_offset(hw));
+        let taken = pc.wrapping_add(offset.cast_unsigned());
+        let fallthrough = pc.wrapping_add(2);
+        let cond = llil_cmp(LlilCmpOp::Ne, llil_reg(&xabi(rs1_p)), llil_const(0));
+        vec![LlilOp::If {
+            cond: Box::new(cond),
+            taken,
+            fallthrough,
+        }]
+    }
+    _ => vec![LlilOp::Nop],
     }
 }
