@@ -354,61 +354,447 @@ impl CilLifter {
         }
         let op = bytes[0];
 
-        let u8_op = |off: usize| bytes.get(off).copied().ok_or(CilLiftError::Truncated);
-        let i8_op = |off: usize| {
-            bytes
-                .get(off)
-                .map(|&b| b.cast_signed())
-                .ok_or(CilLiftError::Truncated)
-        };
-        let i32_op = |off: usize| -> Result<i32, CilLiftError> {
-            if bytes.len() < off + 4 {
-                return Err(CilLiftError::Truncated);
-            }
-            Ok(i32::from_le_bytes([
-                bytes[off],
-                bytes[off + 1],
-                bytes[off + 2],
-                bytes[off + 3],
-            ]))
-        };
-        let i64_op = |off: usize| -> Result<i64, CilLiftError> {
-            if bytes.len() < off + 8 {
-                return Err(CilLiftError::Truncated);
-            }
-            Ok(i64::from_le_bytes([
-                bytes[off],
-                bytes[off + 1],
-                bytes[off + 2],
-                bytes[off + 3],
-                bytes[off + 4],
-                bytes[off + 5],
-                bytes[off + 6],
-                bytes[off + 7],
-            ]))
-        };
-        let u32_op = |off: usize| -> Result<u32, CilLiftError> {
-            if bytes.len() < off + 4 {
-                return Err(CilLiftError::Truncated);
-            }
-            Ok(u32::from_le_bytes([
-                bytes[off],
-                bytes[off + 1],
-                bytes[off + 2],
-                bytes[off + 3],
-            ]))
-        };
-        let f32_op = |off: usize| -> Result<f32, CilLiftError> {
-            if bytes.len() < off + 4 {
-                return Err(CilLiftError::Truncated);
-            }
-            Ok(f32::from_le_bytes([bytes[off], bytes[off+1], bytes[off+2], bytes[off+3]]))
-        };
-        let f64_op = |off: usize| -> Result<f64, CilLiftError> {
-            let raw = i64_op(off)?;
-            Ok(f64::from_le_bytes(raw.to_le_bytes()))
-        };
+        if let Some(r) = self.lift_group1(bytes, op)? {
+            return Ok(r);
+        }
 
+        if let Some(r) = self.lift_group2(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group3(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group4(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group5(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group6(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group7(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group8(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group9(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group10(bytes, op)? {
+            return Ok(r);
+        }
+
+        if let Some(r) = self.lift_group11(bytes, op)? {
+            return Ok(r);
+        }
+
+        // Not handled by any slice above.
+        Err(CilLiftError::Unimplemented(op))
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group1(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
+            0x00 | 0x01 => {
+                out.push(CilILInsn::Nop);
+                Ok(Some((out, 1)))
+            }
+
+            // ldarg.0 … ldarg.3
+            0x02..=0x05 => {
+                let idx = u16::from(op - 0x02);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Arg(idx),
+                });
+                Ok(Some((out, 1)))
+            }
+            // ldloc.0 … ldloc.3
+            0x06..=0x09 => {
+                let idx = u16::from(op - 0x06);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Local(idx),
+                });
+                Ok(Some((out, 1)))
+            }
+            // stloc.0 … stloc.3
+            0x0a..=0x0d => {
+                let idx = u16::from(op - 0x0a);
+                let src_slot = pop!();
+                out.push(CilILInsn::StLoc {
+                    index: idx,
+                    src: src_slot.reg,
+                });
+                Ok(Some((out, 1)))
+            }
+
+            // ldarg.s <uint8>
+            0x0e => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Arg(idx),
+                });
+                Ok(Some((out, 2)))
+            }
+            // ldarga.s <uint8>
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group2(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
+            0x0f => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let r = self.stack.push(SlotWidth::ManagedPtr);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Arg(idx),
+                });
+                Ok(Some((out, 2)))
+            }
+            // starg.s <uint8>
+            0x10 => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let src_slot = pop!();
+                out.push(CilILInsn::StArg {
+                    index: idx,
+                    src: src_slot.reg,
+                });
+                Ok(Some((out, 2)))
+            }
+            // ldloc.s <uint8>
+            0x11 => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Local(idx),
+                });
+                Ok(Some((out, 2)))
+            }
+            // ldloca.s <uint8>
+            0x12 => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let r = self.stack.push(SlotWidth::ManagedPtr);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Local(idx),
+                });
+                Ok(Some((out, 2)))
+            }
+            // stloc.s <uint8>
+            0x13 => {
+                let idx = u16::from(u8_op(bytes, 1)?);
+                let src_slot = pop!();
+                out.push(CilILInsn::StLoc {
+                    index: idx,
+                    src: src_slot.reg,
+                });
+                Ok(Some((out, 2)))
+            }
+
+            // ldnull
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group3(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+
+        let mut out = Vec::new();
+
+        match op {
+            0x14 => {
+                let r = self.stack.push(SlotWidth::Ref);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::Null,
+                });
+                Ok(Some((out, 1)))
+            }
+            // ldc.i4.m1
+            0x15 => {
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstI32(-1),
+                });
+                Ok(Some((out, 1)))
+            }
+            // ldc.i4.0 … ldc.i4.8
+            0x16..=0x1e => {
+                let val = i32::from(op - 0x16);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstI32(val),
+                });
+                Ok(Some((out, 1)))
+            }
+            // ldc.i4.s <int8>
+            0x1f => {
+                let val = i32::from(i8_op(bytes, 1)?);
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstI32(val),
+                });
+                Ok(Some((out, 2)))
+            }
+            // ldc.i4 <int32>
+            0x20 => {
+                let val = i32_op(bytes, 1)?;
+                let r = self.stack.push(SlotWidth::I32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstI32(val),
+                });
+                Ok(Some((out, 5)))
+            }
+            // ldc.i8 <int64>
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group4(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
+            0x21 => {
+                let val = i64_op(bytes, 1)?;
+                let r = self.stack.push(SlotWidth::I64);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstI64(val),
+                });
+                Ok(Some((out, 9)))
+            }
+            // ldc.r4 <float32>
+            0x22 => {
+                let val = f32_op(bytes, 1)?;
+                let r = self.stack.push(SlotWidth::F32);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstF32(val),
+                });
+                Ok(Some((out, 5)))
+            }
+            // ldc.r8 <float64>
+            0x23 => {
+                let val = f64_op(bytes, 1)?;
+                let r = self.stack.push(SlotWidth::F64);
+                out.push(CilILInsn::Assign {
+                    dest: r,
+                    expr: CilILExpr::ConstF64(val),
+                });
+                Ok(Some((out, 9)))
+            }
+
+            // dup
+            0x25 => {
+                let top = *self
+                    .stack
+                    .peek()
+                    .ok_or(CilLiftError::StackUnderflow)?;
+                let r = self.stack.push(top.width);
+                out.push(CilILInsn::Dup {
+                    dest: r,
+                    src: top.reg,
+                });
+                Ok(Some((out, 1)))
+            }
+            // pop
+            0x26 => {
+                let s = pop!();
+                out.push(CilILInsn::Pop { src: s.reg });
+                Ok(Some((out, 1)))
+            }
+
+            // jmp <token>
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group5(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
+            0x27 => {
+                let _token = u32_op(bytes, 1)?;
+                out.push(CilILInsn::Goto { offset: 0 });
+                Ok(Some((out, 5)))
+            }
+            // call <token>
+            0x28 | 0x29 => {
+                let token = u32_op(bytes, 1)?;
+                out.push(CilILInsn::Call {
+                    method_token: token,
+                    args: vec![],
+                    has_result: true,
+                });
+                Ok(Some((out, 5)))
+            }
+            // calli <token>
+            // ret
+            0x2a => {
+                let val = self.stack.pop().map(|s| s.reg);
+                out.push(CilILInsn::Return { val });
+                Ok(Some((out, 1)))
+            }
+
+            // br.s <int8>
+            0x2b => {
+                let off = i32::from(i8_op(bytes, 1)?);
+                out.push(CilILInsn::Goto { offset: off });
+                Ok(Some((out, 2)))
+            }
+            // brfalse.s / brtrue.s / beq.s … blt.un.s
+            0x2c => {
+                let off = i32::from(i8_op(bytes, 1)?);
+                let s = pop!();
+                out.push(CilILInsn::Branch {
+                    cond: BranchCond::False,
+                    lhs: s.reg,
+                    rhs: 0,
+                    offset: off,
+                });
+                Ok(Some((out, 2)))
+            }
+            0x2d => {
+                let off = i32::from(i8_op(bytes, 1)?);
+                let s = pop!();
+                out.push(CilILInsn::Branch {
+                    cond: BranchCond::True,
+                    lhs: s.reg,
+                    rhs: 0,
+                    offset: off,
+                });
+                Ok(Some((out, 2)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group6(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
         macro_rules! pop {
             () => {
                 self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
@@ -423,259 +809,8 @@ impl CilLifter {
         let mut out = Vec::new();
 
         match op {
-            // nop
-            // break
-            0x00 | 0x01 => {
-                out.push(CilILInsn::Nop);
-                return Ok((out, 1));
-            }
-
-            // ldarg.0 … ldarg.3
-            0x02..=0x05 => {
-                let idx = u16::from(op - 0x02);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Arg(idx),
-                });
-                return Ok((out, 1));
-            }
-            // ldloc.0 … ldloc.3
-            0x06..=0x09 => {
-                let idx = u16::from(op - 0x06);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Local(idx),
-                });
-                return Ok((out, 1));
-            }
-            // stloc.0 … stloc.3
-            0x0a..=0x0d => {
-                let idx = u16::from(op - 0x0a);
-                let src_slot = pop!();
-                out.push(CilILInsn::StLoc {
-                    index: idx,
-                    src: src_slot.reg,
-                });
-                return Ok((out, 1));
-            }
-
-            // ldarg.s <uint8>
-            0x0e => {
-                let idx = u16::from(u8_op(1)?);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Arg(idx),
-                });
-                return Ok((out, 2));
-            }
-            // ldarga.s <uint8>
-            0x0f => {
-                let idx = u16::from(u8_op(1)?);
-                let r = self.stack.push(SlotWidth::ManagedPtr);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Arg(idx),
-                });
-                return Ok((out, 2));
-            }
-            // starg.s <uint8>
-            0x10 => {
-                let idx = u16::from(u8_op(1)?);
-                let src_slot = pop!();
-                out.push(CilILInsn::StArg {
-                    index: idx,
-                    src: src_slot.reg,
-                });
-                return Ok((out, 2));
-            }
-            // ldloc.s <uint8>
-            0x11 => {
-                let idx = u16::from(u8_op(1)?);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Local(idx),
-                });
-                return Ok((out, 2));
-            }
-            // ldloca.s <uint8>
-            0x12 => {
-                let idx = u16::from(u8_op(1)?);
-                let r = self.stack.push(SlotWidth::ManagedPtr);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Local(idx),
-                });
-                return Ok((out, 2));
-            }
-            // stloc.s <uint8>
-            0x13 => {
-                let idx = u16::from(u8_op(1)?);
-                let src_slot = pop!();
-                out.push(CilILInsn::StLoc {
-                    index: idx,
-                    src: src_slot.reg,
-                });
-                return Ok((out, 2));
-            }
-
-            // ldnull
-            0x14 => {
-                let r = self.stack.push(SlotWidth::Ref);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::Null,
-                });
-                return Ok((out, 1));
-            }
-            // ldc.i4.m1
-            0x15 => {
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstI32(-1),
-                });
-                return Ok((out, 1));
-            }
-            // ldc.i4.0 … ldc.i4.8
-            0x16..=0x1e => {
-                let val = i32::from(op - 0x16);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstI32(val),
-                });
-                return Ok((out, 1));
-            }
-            // ldc.i4.s <int8>
-            0x1f => {
-                let val = i32::from(i8_op(1)?);
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstI32(val),
-                });
-                return Ok((out, 2));
-            }
-            // ldc.i4 <int32>
-            0x20 => {
-                let val = i32_op(1)?;
-                let r = self.stack.push(SlotWidth::I32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstI32(val),
-                });
-                return Ok((out, 5));
-            }
-            // ldc.i8 <int64>
-            0x21 => {
-                let val = i64_op(1)?;
-                let r = self.stack.push(SlotWidth::I64);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstI64(val),
-                });
-                return Ok((out, 9));
-            }
-            // ldc.r4 <float32>
-            0x22 => {
-                let val = f32_op(1)?;
-                let r = self.stack.push(SlotWidth::F32);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstF32(val),
-                });
-                return Ok((out, 5));
-            }
-            // ldc.r8 <float64>
-            0x23 => {
-                let val = f64_op(1)?;
-                let r = self.stack.push(SlotWidth::F64);
-                out.push(CilILInsn::Assign {
-                    dest: r,
-                    expr: CilILExpr::ConstF64(val),
-                });
-                return Ok((out, 9));
-            }
-
-            // dup
-            0x25 => {
-                let top = *self
-                    .stack
-                    .peek()
-                    .ok_or(CilLiftError::StackUnderflow)?;
-                let r = self.stack.push(top.width);
-                out.push(CilILInsn::Dup {
-                    dest: r,
-                    src: top.reg,
-                });
-                return Ok((out, 1));
-            }
-            // pop
-            0x26 => {
-                let s = pop!();
-                out.push(CilILInsn::Pop { src: s.reg });
-                return Ok((out, 1));
-            }
-
-            // jmp <token>
-            0x27 => {
-                let _token = u32_op(1)?;
-                out.push(CilILInsn::Goto { offset: 0 });
-                return Ok((out, 5));
-            }
-            // call <token>
-            0x28 | 0x29 => {
-                let token = u32_op(1)?;
-                out.push(CilILInsn::Call {
-                    method_token: token,
-                    args: vec![],
-                    has_result: true,
-                });
-                return Ok((out, 5));
-            }
-            // calli <token>
-            // ret
-            0x2a => {
-                let val = self.stack.pop().map(|s| s.reg);
-                out.push(CilILInsn::Return { val });
-                return Ok((out, 1));
-            }
-
-            // br.s <int8>
-            0x2b => {
-                let off = i32::from(i8_op(1)?);
-                out.push(CilILInsn::Goto { offset: off });
-                return Ok((out, 2));
-            }
-            // brfalse.s / brtrue.s / beq.s … blt.un.s
-            0x2c => {
-                let off = i32::from(i8_op(1)?);
-                let s = pop!();
-                out.push(CilILInsn::Branch {
-                    cond: BranchCond::False,
-                    lhs: s.reg,
-                    rhs: 0,
-                    offset: off,
-                });
-                return Ok((out, 2));
-            }
-            0x2d => {
-                let off = i32::from(i8_op(1)?);
-                let s = pop!();
-                out.push(CilILInsn::Branch {
-                    cond: BranchCond::True,
-                    lhs: s.reg,
-                    rhs: 0,
-                    offset: off,
-                });
-                return Ok((out, 2));
-            }
             0x2e..=0x37 => {
-                let off = i32::from(i8_op(1)?);
+                let off = i32::from(i8_op(bytes, 1)?);
                 let cond = short_branch_cond(op);
                 let (lhs, rhs) = pop2!();
                 out.push(CilILInsn::Branch {
@@ -684,17 +819,17 @@ impl CilLifter {
                     rhs: rhs.reg,
                     offset: off,
                 });
-                return Ok((out, 2));
+                Ok(Some((out, 2)))
             }
             // br <int32>
             0x38 => {
-                let off = i32_op(1)?;
+                let off = i32_op(bytes, 1)?;
                 out.push(CilILInsn::Goto { offset: off });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
             // brfalse <int32>
             0x39 => {
-                let off = i32_op(1)?;
+                let off = i32_op(bytes, 1)?;
                 let s = pop!();
                 out.push(CilILInsn::Branch {
                     cond: BranchCond::False,
@@ -702,11 +837,11 @@ impl CilLifter {
                     rhs: 0,
                     offset: off,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
             // brtrue <int32>
             0x3a => {
-                let off = i32_op(1)?;
+                let off = i32_op(bytes, 1)?;
                 let s = pop!();
                 out.push(CilILInsn::Branch {
                     cond: BranchCond::True,
@@ -714,10 +849,37 @@ impl CilLifter {
                     rhs: 0,
                     offset: off,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group7(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop2 {
+            () => {
+                self.stack.pop2().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
             0x3b..=0x44 => {
-                let off = i32_op(1)?;
+                let off = i32_op(bytes, 1)?;
                 let cond = long_branch_cond(op);
                 let (lhs, rhs) = pop2!();
                 out.push(CilILInsn::Branch {
@@ -726,103 +888,157 @@ impl CilLifter {
                     rhs: rhs.reg,
                     offset: off,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
 
             // Arithmetic / logic (all pop 2, push 1)
             0x58 => {
-                return self.lift_binop(CilBinOp::Add, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Add, SlotWidth::I32).map(Some)
             } // add
             0x59 => {
-                return self.lift_binop(CilBinOp::Sub, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Sub, SlotWidth::I32).map(Some)
             } // sub
             0x5a => {
-                return self.lift_binop(CilBinOp::Mul, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Mul, SlotWidth::I32).map(Some)
             } // mul
             0x5b => {
-                return self.lift_binop(CilBinOp::Div, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Div, SlotWidth::I32).map(Some)
             } // div
             0x5c => {
-                return self.lift_binop(CilBinOp::DivUn, SlotWidth::I32);
+                self.lift_binop(CilBinOp::DivUn, SlotWidth::I32).map(Some)
             }
             0x5d => {
-                return self.lift_binop(CilBinOp::Rem, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Rem, SlotWidth::I32).map(Some)
             }
             0x5e => {
-                return self.lift_binop(CilBinOp::RemUn, SlotWidth::I32);
+                self.lift_binop(CilBinOp::RemUn, SlotWidth::I32).map(Some)
             }
             0x5f => {
-                return self.lift_binop(CilBinOp::And, SlotWidth::I32);
+                self.lift_binop(CilBinOp::And, SlotWidth::I32).map(Some)
             }
             0x60 => {
-                return self.lift_binop(CilBinOp::Or, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Or, SlotWidth::I32).map(Some)
             }
             0x61 => {
-                return self.lift_binop(CilBinOp::Xor, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Xor, SlotWidth::I32).map(Some)
             }
             0x62 => {
-                return self.lift_binop(CilBinOp::Shl, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Shl, SlotWidth::I32).map(Some)
             }
             0x63 => {
-                return self.lift_binop(CilBinOp::Shr, SlotWidth::I32);
+                self.lift_binop(CilBinOp::Shr, SlotWidth::I32).map(Some)
             }
             0x64 => {
-                return self.lift_binop(CilBinOp::ShrUn, SlotWidth::I32);
+                self.lift_binop(CilBinOp::ShrUn, SlotWidth::I32).map(Some)
             }
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group8(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
             0x65 => {
-                return self.lift_unop(CilUnOp::Neg, SlotWidth::I32);
+                self.lift_unop(CilUnOp::Neg, SlotWidth::I32).map(Some)
             } // neg
             0x66 => {
-                return self.lift_unop(CilUnOp::Not, SlotWidth::I32);
+                self.lift_unop(CilUnOp::Not, SlotWidth::I32).map(Some)
             } // not
 
             // conv.*
             0x67 => {
-                return self.lift_unop(CilUnOp::ConvI1, SlotWidth::I32);
+                self.lift_unop(CilUnOp::ConvI1, SlotWidth::I32).map(Some)
             }
             0x68 => {
-                return self.lift_unop(CilUnOp::ConvI2, SlotWidth::I32);
+                self.lift_unop(CilUnOp::ConvI2, SlotWidth::I32).map(Some)
             }
             0x69 => {
-                return self.lift_unop(CilUnOp::ConvI4, SlotWidth::I32);
+                self.lift_unop(CilUnOp::ConvI4, SlotWidth::I32).map(Some)
             }
             0x6a => {
-                return self.lift_unop(CilUnOp::ConvI8, SlotWidth::I64);
+                self.lift_unop(CilUnOp::ConvI8, SlotWidth::I64).map(Some)
             }
             0x6b => {
-                return self.lift_unop(CilUnOp::ConvR4, SlotWidth::F32);
+                self.lift_unop(CilUnOp::ConvR4, SlotWidth::F32).map(Some)
             }
             0x6c => {
-                return self.lift_unop(CilUnOp::ConvR8, SlotWidth::F64);
+                self.lift_unop(CilUnOp::ConvR8, SlotWidth::F64).map(Some)
             }
             0x6d => {
-                return self.lift_unop(CilUnOp::ConvU4, SlotWidth::I32);
+                self.lift_unop(CilUnOp::ConvU4, SlotWidth::I32).map(Some)
             }
             0x6e => {
-                return self.lift_unop(CilUnOp::ConvU8, SlotWidth::I64);
+                self.lift_unop(CilUnOp::ConvU8, SlotWidth::I64).map(Some)
             }
 
             // callvirt <token>
             0x6f => {
-                let token = u32_op(1)?;
+                let token = u32_op(bytes, 1)?;
                 out.push(CilILInsn::CallVirt {
                     method_token: token,
                     args: vec![],
                     has_result: true,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
 
             // throw
             0x7a => {
                 let s = pop!();
                 out.push(CilILInsn::Throw { obj: s.reg });
-                return Ok((out, 1));
+                Ok(Some((out, 1)))
             }
 
             // ldfld <token>
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group9(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
             0x7b => {
-                let token = u32_op(1)?;
+                let token = u32_op(bytes, 1)?;
                 let obj_slot = pop!();
                 let r = self.stack.push(SlotWidth::I32);
                 out.push(CilILInsn::Assign {
@@ -832,11 +1048,11 @@ impl CilLifter {
                         token,
                     },
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
             // stfld <token>
             0x7d => {
-                let token = u32_op(1)?;
+                let token = u32_op(bytes, 1)?;
                 let val_slot = pop!();
                 let obj_slot = pop!();
                 out.push(CilILInsn::StFld {
@@ -844,30 +1060,58 @@ impl CilLifter {
                     field_token: token,
                     val: val_slot.reg,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
             // ldsfld <token>
             0x7e => {
-                let token = u32_op(1)?;
+                let token = u32_op(bytes, 1)?;
                 let r = self.stack.push(SlotWidth::I32);
                 out.push(CilILInsn::Assign {
                     dest: r,
                     expr: CilILExpr::LdSFld { token },
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
             // stsfld <token>
             0x80 => {
-                let token = u32_op(1)?;
+                let token = u32_op(bytes, 1)?;
                 let val_slot = pop!();
                 out.push(CilILInsn::StSFld {
                     field_token: token,
                     val: val_slot.reg,
                 });
-                return Ok((out, 5));
+                Ok(Some((out, 5)))
             }
 
             // ldlen
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group10(
+        &mut self,
+        // This slice has no instructions with operands.
+        _bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+        macro_rules! pop {
+            () => {
+                self.stack.pop().ok_or(CilLiftError::StackUnderflow)?
+            };
+        }
+
+        let mut out = Vec::new();
+
+        match op {
             0x8e => {
                 let s = pop!();
                 let r = self.stack.push(SlotWidth::I32);
@@ -875,7 +1119,7 @@ impl CilLifter {
                     dest: r,
                     expr: CilILExpr::LdLen(Box::new(CilILExpr::Reg(s.reg, s.width))),
                 });
-                return Ok((out, 1));
+                Ok(Some((out, 1)))
             }
 
             // ldelem.*
@@ -892,7 +1136,7 @@ impl CilLifter {
                         width: w,
                     },
                 });
-                return Ok((out, 1));
+                Ok(Some((out, 1)))
             }
 
             // stelem.*
@@ -907,27 +1151,49 @@ impl CilLifter {
                     val: val_slot.reg,
                     width: w,
                 });
-                return Ok((out, 1));
+                Ok(Some((out, 1)))
             }
 
             // overflow arithmetic
             0xd6 => {
-                return self.lift_binop(CilBinOp::AddOvf, SlotWidth::I32);
+                self.lift_binop(CilBinOp::AddOvf, SlotWidth::I32).map(Some)
             }
             0xd7 => {
-                return self.lift_binop(CilBinOp::AddOvfUn, SlotWidth::I32);
+                self.lift_binop(CilBinOp::AddOvfUn, SlotWidth::I32).map(Some)
             }
             0xd8 => {
-                return self.lift_binop(CilBinOp::MulOvf, SlotWidth::I32);
+                self.lift_binop(CilBinOp::MulOvf, SlotWidth::I32).map(Some)
             }
             0xd9 => {
-                return self.lift_binop(CilBinOp::MulOvfUn, SlotWidth::I32);
+                self.lift_binop(CilBinOp::MulOvfUn, SlotWidth::I32).map(Some)
             }
+            _ => Ok(None),
+        }
+    }
+
+    /// One slice of the CIL opcode table for [`Self::lift_one`].
+    ///
+    /// `Ok(None)` means this slice does not handle `op`, so the caller can try
+    /// the next one. Falling out of the match means the opcode was handled and
+    /// is one byte long.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CilLiftError`] on a truncated operand or a stack underflow.
+    fn lift_group11(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+    ) -> Result<Option<(Vec<CilILInsn>, usize)>, CilLiftError> {
+
+        let mut out = Vec::new();
+
+        match op {
             0xda => {
-                return self.lift_binop(CilBinOp::SubOvf, SlotWidth::I32);
+                return self.lift_binop(CilBinOp::SubOvf, SlotWidth::I32).map(Some);
             }
             0xdb => {
-                return self.lift_binop(CilBinOp::SubOvfUn, SlotWidth::I32);
+                return self.lift_binop(CilBinOp::SubOvfUn, SlotWidth::I32).map(Some);
             }
 
             // endfinally
@@ -936,28 +1202,28 @@ impl CilLifter {
             }
             // leave <int32>
             0xdd => {
-                let off = i32_op(1)?;
+                let off = i32_op(bytes, 1)?;
                 out.push(CilILInsn::Leave { offset: off });
-                return Ok((out, 5));
+                return Ok(Some((out, 5)));
             }
             // leave.s <int8>
             0xde => {
-                let off = i32::from(i8_op(1)?);
+                let off = i32::from(i8_op(bytes, 1)?);
                 out.push(CilILInsn::Leave { offset: off });
-                return Ok((out, 2));
+                return Ok(Some((out, 2)));
             }
 
             // 0xFE prefix
             0xfe => {
-                let op2 = u8_op(1)?;
-                return self.lift_fe_prefix(op2, bytes);
+                let op2 = u8_op(bytes, 1)?;
+                return self.lift_fe_prefix(op2, bytes).map(Some);
             }
-
-            _ => return Err(CilLiftError::Unimplemented(op)),
+            _ => return Ok(None),
         }
 
-        Ok((out, 1))
+        Ok(Some((out, 1)))
     }
+
 
     fn lift_binop(
         &mut self,
@@ -1125,6 +1391,83 @@ const fn stelem_width(op: u8) -> SlotWidth {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+
+// Operand readers for the CIL instruction stream.
+//
+// These were closures inside `lift_one`; they became module functions so the
+// opcode table could be split into several helpers without duplicating them.
+
+/// Read the unsigned byte operand at `off`.
+fn u8_op(bytes: &[u8], off: usize) -> Result<u8, CilLiftError> {
+    bytes.get(off).copied().ok_or(CilLiftError::Truncated)
+}
+
+/// Read the signed byte operand at `off`.
+fn i8_op(bytes: &[u8], off: usize) -> Result<i8, CilLiftError> {
+    bytes.get(off).map(|&b| b.cast_signed()).ok_or(CilLiftError::Truncated)
+}
+
+/// Read the little-endian `i32` operand at `off`.
+fn i32_op(bytes: &[u8], off: usize) -> Result<i32, CilLiftError> {
+    if bytes.len() < off + 4 {
+        return Err(CilLiftError::Truncated);
+    }
+    Ok(i32::from_le_bytes([
+        bytes[off],
+        bytes[off + 1],
+        bytes[off + 2],
+        bytes[off + 3],
+    ]))
+}
+
+/// Read the little-endian `i64` operand at `off`.
+fn i64_op(bytes: &[u8], off: usize) -> Result<i64, CilLiftError> {
+    if bytes.len() < off + 8 {
+        return Err(CilLiftError::Truncated);
+    }
+    Ok(i64::from_le_bytes([
+        bytes[off],
+        bytes[off + 1],
+        bytes[off + 2],
+        bytes[off + 3],
+        bytes[off + 4],
+        bytes[off + 5],
+        bytes[off + 6],
+        bytes[off + 7],
+    ]))
+}
+
+/// Read the little-endian `u32` operand (a metadata token) at `off`.
+fn u32_op(bytes: &[u8], off: usize) -> Result<u32, CilLiftError> {
+    if bytes.len() < off + 4 {
+        return Err(CilLiftError::Truncated);
+    }
+    Ok(u32::from_le_bytes([
+        bytes[off],
+        bytes[off + 1],
+        bytes[off + 2],
+        bytes[off + 3],
+    ]))
+}
+
+/// Read the little-endian `f32` operand at `off`.
+fn f32_op(bytes: &[u8], off: usize) -> Result<f32, CilLiftError> {
+    if bytes.len() < off + 4 {
+        return Err(CilLiftError::Truncated);
+    }
+    Ok(f32::from_le_bytes([
+        bytes[off],
+        bytes[off + 1],
+        bytes[off + 2],
+        bytes[off + 3],
+    ]))
+}
+
+/// Read the little-endian `f64` operand at `off`.
+fn f64_op(bytes: &[u8], off: usize) -> Result<f64, CilLiftError> {
+    Ok(f64::from_le_bytes(i64_op(bytes, off)?.to_le_bytes()))
+}
 
 #[cfg(test)]
 mod tests {
