@@ -630,9 +630,6 @@ impl BpfVerifier {
     fn verify_load(&mut self, pc: usize, insn: BpfInsn, next_state: &mut VerifierState) {
         let src_ty = *next_state.reg(insn.src_reg);
         match &src_ty {
-            RegisterType::PtrToCtx => {
-                next_state.mark_scalar(insn.dst_reg);
-            }
             RegisterType::PtrToStack { frame_offset } => {
                 let slot_off = *frame_offset + i32::from(insn.off);
                 if matches!(next_state.read_stack(slot_off), StackSlotState::Uninitialised) {
@@ -651,6 +648,8 @@ impl BpfVerifier {
                     format!("r{} is uninit in load", insn.src_reg),
                 ));
             }
+            // PtrToCtx and every other source type simply yield a scalar in
+            // the destination register.
             _ => {
                 next_state.mark_scalar(insn.dst_reg);
             }

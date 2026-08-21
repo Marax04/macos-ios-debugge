@@ -249,8 +249,10 @@ fn join_types(a: &RegisterType, b: &RegisterType) -> RegisterType {
         (RegisterType::Constant(x), RegisterType::Constant(y)) if x == y => {
             RegisterType::Constant(*x)
         }
-        (RegisterType::Constant(_), RegisterType::Constant(_)) => RegisterType::Scalar,
-        (RegisterType::Scalar, RegisterType::Constant(_))
+        // Two differing constants, a constant meeting a scalar, and anything
+        // meeting Null all widen to an unconstrained scalar.
+        (RegisterType::Constant(_), RegisterType::Constant(_))
+        | (RegisterType::Scalar, RegisterType::Constant(_))
         | (RegisterType::Constant(_), RegisterType::Scalar)
         | (RegisterType::Null, _)
         | (_, RegisterType::Null) => RegisterType::Scalar,

@@ -3715,20 +3715,33 @@ impl BtfParser {
     ///
     /// See `include/uapi/linux/btf.h` for the per-kind trailing data.
     const fn kind_extra_bytes(kind: u32, vlen: usize) -> usize {
-        match kind {
-            1 => 4,          // BTF_KIND_INT: one u32 encoding
-            3 => 12,         // BTF_KIND_ARRAY: struct btf_array (3Ã—u32)
-            4 => vlen * 12,  // BTF_KIND_STRUCT: vlen Ã— btf_member
-            5 => vlen * 12,  // BTF_KIND_UNION
-            6 => vlen * 8,   // BTF_KIND_ENUM: vlen Ã— btf_enum
-            13 => vlen * 8,  // BTF_KIND_FUNC_PROTO: vlen Ã— btf_param
-            15 => vlen * 12, // BTF_KIND_DATASEC: vlen Ã— btf_var_secinfo
-            17 => 4,         // BTF_KIND_DECL_TAG: one s32 component_idx
-            19 => vlen * 12, // BTF_KIND_ENUM64: vlen Ã— btf_enum64
-            _ => 0,
+        let mut i = 0;
+        while i < BTF_KIND_EXTRA_TABLE.len() {
+            let (k, fixed, per_vlen) = BTF_KIND_EXTRA_TABLE[i];
+            if k == kind {
+                return fixed + vlen * per_vlen;
+            }
+            i += 1;
         }
+        0
     }
 }
+
+/// Ordered `(kind, fixed_bytes, bytes_per_vlen)` rows for the trailing data
+/// that follows the 12-byte `btf_type` base struct, one row per BTF kind.
+///
+/// See `include/uapi/linux/btf.h`. A kind with no row has no trailing data.
+const BTF_KIND_EXTRA_TABLE: &[(u32, usize, usize)] = &[
+    (1, 4, 0),   // BTF_KIND_INT: one u32 encoding
+    (3, 12, 0),  // BTF_KIND_ARRAY: struct btf_array (3 x u32)
+    (4, 0, 12),  // BTF_KIND_STRUCT: vlen x btf_member
+    (5, 0, 12),  // BTF_KIND_UNION: vlen x btf_member
+    (6, 0, 8),   // BTF_KIND_ENUM: vlen x btf_enum
+    (13, 0, 8),  // BTF_KIND_FUNC_PROTO: vlen x btf_param
+    (15, 0, 12), // BTF_KIND_DATASEC: vlen x btf_var_secinfo
+    (17, 4, 0),  // BTF_KIND_DECL_TAG: one s32 component_idx
+    (19, 0, 12), // BTF_KIND_ENUM64: vlen x btf_enum64
+];
 
 // ---------------------------------------------------------------------------
 // BPF Helper Database
@@ -5877,15 +5890,18 @@ impl BtfSection {
         }
         let t = self.get_type(type_id)?;
         match &t.kind {
-            BtfTypeKind::Void => None,
-            BtfTypeKind::Fwd => None,
+            // Void, forward declarations and function prototypes have no size.
+            BtfTypeKind::Void | BtfTypeKind::Fwd | BtfTypeKind::FuncProto { .. } => None,
             BtfTypeKind::Int { bits, .. } => Some((*bits).div_ceil(8)),
-            BtfTypeKind::Float { size } => Some(*size),
             BtfTypeKind::Ptr { .. } => Some(8), // all pointers are 64-bit in eBPF
-            BtfTypeKind::Struct { size, .. } | BtfTypeKind::Union { size, .. } => Some(*size),
-            BtfTypeKind::Enum { size, .. } => Some(*size),
-            BtfTypeKind::Enum64 { size, .. } => Some(*size),
-            BtfTypeKind::DataSec { size, .. } => Some(*size),
+            // Floats, aggregates, enums and data sections all record their own
+            // size: Float, Struct, Union, Enum, Enum64, DataSec.
+            BtfTypeKind::Float { size }
+            | BtfTypeKind::Struct { size, .. }
+            | BtfTypeKind::Union { size, .. }
+            | BtfTypeKind::Enum { size, .. }
+            | BtfTypeKind::Enum64 { size, .. }
+            | BtfTypeKind::DataSec { size, .. } => Some(*size),
             BtfTypeKind::Array {
                 type_id: elem,
                 nelems,
@@ -5902,7 +5918,6 @@ impl BtfSection {
             | BtfTypeKind::TypeTag { type_id }
             | BtfTypeKind::DeclTag { type_id, .. }
             | BtfTypeKind::Var { type_id, .. } => self.sizeof_depth(*type_id, depth + 1),
-            BtfTypeKind::FuncProto { .. } => None,
         }
     }
 
@@ -6715,8 +6730,8 @@ impl BpfSecurityAnalysis {
 
             // Any instruction clears r0_is_ptr if it writes r0 with a non-pointer.
             let writes_r0 = match cls {
-                0x07 | 0x04 => instr.dst_reg == 0, // ALU
-                0x01 => instr.dst_reg == 0,        // LDX
+                // ALU (0x07 / 0x04) and LDX (0x01) all write their dst_reg.
+                0x07 | 0x04 | 0x01 => instr.dst_reg == 0,
                 0x05 if code == 0x80 => true,      // CALL writes r0
                 _ => false,
             };

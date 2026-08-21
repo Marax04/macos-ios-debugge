@@ -348,34 +348,24 @@ impl EbpfJitAnalyzer {
                     (0, b0)
                 };
                 let base = match b0 {
-                    0x90 => 1,           // NOP
-                    0xC3 | 0xC9 => 1,   // RET / LEAVE
-                    0x55 | 0x5D => 1,   // PUSH/POP rbp
-                    0x53..=0x5F => 1,   // PUSH/POP r8–r15
-                    0xEB => 2,           // JMP short
-                    0x72..=0x77 => 2, // Jcc short
-                    0xE9 => 5,           // JMP rel32
-                    0xE8 => 5,           // CALL rel32
-                    0x89 | 0x8B => 3,   // MOV r/m, r (ModRM)
+                    // Group 1 immediate: 0x83 takes imm8, 0x81 takes imm32.
                     0x83 | 0x81 => {
                         let imm = if b0 == 0x83 { 1 } else { 4 };
                         2 + imm
                     }
-                    0xB8..=0xBF => 5,   // MOV rXX, imm32
-                    0xFF => 2,           // indirect call/jmp
+                    // Two-byte opcode escape.
                     0x0F if bytes.len() > prefix_len + 1 => {
-                        // Two-byte opcode
                         match bytes[prefix_len + 1] {
                             0x84 | 0x85 | 0x8C..=0x8F => 6, // Jcc rel32
                             _ => 3,
                         }
                     }
-                    _ => 1,
+                    other => x86_base_len(other),
                 };
                 prefix_len + base
             }
-            JitArch::Aarch64 => 4, // fixed 4-byte instructions
-            JitArch::Powerpc64 => 4,
+            // Aarch64 and Powerpc64 both use fixed 4-byte instructions.
+            JitArch::Aarch64 | JitArch::Powerpc64 => 4,
             _ => 1,
         }
     }
@@ -464,6 +454,41 @@ impl fmt::Display for JitStat {
             self.branch_count,
         )
     }
+}
+
+/// Ordered `(lo, hi, len)` rows giving the base length (excluding any REX
+/// prefix) of the single-byte x86-64 opcodes this analyser recognises. Scanned
+/// in order by [`x86_base_len`]; the first row containing the opcode wins, so
+/// each opcode keeps its own row and its own comment. Opcodes with no row are
+/// assumed to be one byte long.
+const X86_BASE_LEN_TABLE: &[(u8, u8, usize)] = &[
+    (0x90, 0x90, 1), // NOP
+    (0xC3, 0xC3, 1), // RET
+    (0xC9, 0xC9, 1), // LEAVE
+    (0x55, 0x55, 1), // PUSH rbp
+    (0x5D, 0x5D, 1), // POP rbp
+    (0x53, 0x5F, 1), // PUSH/POP r8-r15
+    (0xEB, 0xEB, 2), // JMP short
+    (0x72, 0x77, 2), // Jcc short
+    (0xE9, 0xE9, 5), // JMP rel32
+    (0xE8, 0xE8, 5), // CALL rel32
+    (0x89, 0x89, 3), // MOV r/m, r (ModRM)
+    (0x8B, 0x8B, 3), // MOV r, r/m (ModRM)
+    (0xB8, 0xBF, 5), // MOV rXX, imm32
+    (0xFF, 0xFF, 2), // indirect call/jmp
+];
+
+/// Base length of a single-byte x86-64 opcode, defaulting to one byte.
+const fn x86_base_len(op: u8) -> usize {
+    let mut i = 0;
+    while i < X86_BASE_LEN_TABLE.len() {
+        let (lo, hi, len) = X86_BASE_LEN_TABLE[i];
+        if op >= lo && op <= hi {
+            return len;
+        }
+        i += 1;
+    }
+    1
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

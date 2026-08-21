@@ -653,8 +653,9 @@ impl VerifierState {
             let actual = &self.regs[reg as usize].reg_type;
             let ok = match expected {
                 ArgType::Anything => true,
-                ArgType::ConstMapPtr => matches!(actual, RegType::PtrToCtx), // simplified
-                ArgType::PtrToCtx => matches!(actual, RegType::PtrToCtx),
+                // ConstMapPtr is checked as a context pointer (simplified),
+                // which is exactly the PtrToCtx check.
+                ArgType::ConstMapPtr | ArgType::PtrToCtx => matches!(actual, RegType::PtrToCtx),
                 ArgType::PtrToMem | ArgType::PtrToUninitMem =>
                     actual.is_ptr() && !actual.may_be_null(),
                 ArgType::ConstSizeOrZero => matches!(actual, RegType::ScalarValue),
