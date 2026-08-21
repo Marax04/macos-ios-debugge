@@ -478,7 +478,7 @@ fn linear_disasm_two_instrs() {
     let dis = BpfLinearDisassembler::new(&a, &bytes, Address::new(0));
     let res: Vec<_> = dis.collect();
     assert_eq!(res.len(), 2);
-    assert!(res.iter().all(|r| r.is_ok()));
+    assert!(res.iter().all(std::result::Result::is_ok));
 }
 
 #[test]

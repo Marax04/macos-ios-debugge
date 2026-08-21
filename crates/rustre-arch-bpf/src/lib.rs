@@ -7090,7 +7090,7 @@ mod btf_section_tests {
         blob
     }
 
-    /// Encode a single btf_type header.
+    /// Encode a single `btf_type` header.
     fn btf_type_hdr(name_off: u32, kind: u32, vlen: u32, size_or_type: u32) -> Vec<u8> {
         let info = (kind << 24) | (vlen & 0xffff);
         let mut v = Vec::new();

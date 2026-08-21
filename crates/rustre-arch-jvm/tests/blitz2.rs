@@ -1,12 +1,12 @@
 //! Deep adversarial integration tests for `rustre-arch-jvm`.
 //!
-//! Covers public API: decode/decode_at, JvmArch, JvmLinearDisassembler,
-//! ConstantPoolTag, ClassFileHeader, FieldDescriptor, parse_method_descriptor,
-//! parse_method_descriptor_typed, opcode_info, jvm_instruction_size,
-//! jvm_stack_effect, jvm_is_*, jvm_max_stack_depth, jvm_count_invocations,
-//! jvm_count_allocations, jvm_cyclomatic_complexity, jvm_build_cfg,
-//! JvmDisassembler, JvmExceptionEntry, JvmTypeDesc, VerificationTypeFull,
-//! access_flags, newarray_type.
+//! Covers public API: `decode/decode_at`, `JvmArch`, `JvmLinearDisassembler`,
+//! `ConstantPoolTag`, `ClassFileHeader`, `FieldDescriptor`, `parse_method_descriptor`,
+//! `parse_method_descriptor_typed`, `opcode_info`, `jvm_instruction_size`,
+//! `jvm_stack_effect`, `jvm_is`_*, `jvm_max_stack_depth`, `jvm_count_invocations`,
+//! `jvm_count_allocations`, `jvm_cyclomatic_complexity`, `jvm_build_cfg`,
+//! `JvmDisassembler`, `JvmExceptionEntry`, `JvmTypeDesc`, `VerificationTypeFull`,
+//! `access_flags`, `newarray_type`.
 
 
 use rustre_arch_jvm::*;
@@ -655,7 +655,7 @@ fn t48_exception_entry_covers_and_finally() {
     assert!(e.covers(19));
     assert!(!e.covers(20));
     assert!(!e.covers(9));
-    let e2 = JvmExceptionEntry { catch_type: 5, ..e.clone() };
+    let e2 = JvmExceptionEntry { catch_type: 5, ..e };
     assert!(!e2.is_finally());
 
     // Hash/Eq consistency

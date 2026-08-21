@@ -639,7 +639,7 @@ fn arch_send_sync_threaded_disassemble() {
     for tid in 0..4u32 {
         let a = Arc::clone(&a);
         handles.push(thread::spawn(move || {
-            let mut s: u64 = 0xDEAD_BEEF ^ (tid as u64).wrapping_mul(0x9E37_79B1);
+            let mut s: u64 = 0xDEAD_BEEF ^ u64::from(tid).wrapping_mul(0x9E37_79B1);
             for _ in 0..100 {
                 s = s.wrapping_mul(6_364_136_223_846_793_005)
                      .wrapping_add(1_442_695_040_888_963_407);

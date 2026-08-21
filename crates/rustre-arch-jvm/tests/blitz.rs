@@ -48,8 +48,8 @@ fn decode_aconst_null_through_dconst_1() {
     ];
     for (op, expected) in mnes {
         let (i, sz) = JvmInstr::decode(&[op]).unwrap();
-        assert_eq!(sz, 1, "op {:#x}", op);
-        assert_eq!(i.mnemonic, expected, "op {:#x}", op);
+        assert_eq!(sz, 1, "op {op:#x}");
+        assert_eq!(i.mnemonic, expected, "op {op:#x}");
     }
 }
 
@@ -162,7 +162,7 @@ fn decode_wide_iinc_needs_6_bytes() {
 fn decode_wide_unknown_sub_opcode() {
     // 0x00 (nop) is not a valid wide sub-opcode.
     let r = JvmInstr::decode(&[0xc4, 0x00]);
-    assert!(matches!(r, Err(JvmDecodeError::UnknownOpcode(0x00))), "{:?}", r);
+    assert!(matches!(r, Err(JvmDecodeError::UnknownOpcode(0x00))), "{r:?}");
 }
 
 #[test]
@@ -171,9 +171,7 @@ fn decode_reserved_opcodes_all() {
         let r = JvmInstr::decode(&[op as u8]);
         assert!(
             matches!(r, Err(JvmDecodeError::Reserved(b)) if b == op as u8),
-            "op {:#x}: {:?}",
-            op,
-            r
+            "op {op:#x}: {r:?}"
         );
     }
 }
@@ -406,11 +404,11 @@ fn jvminstr_clone_eq() {
 #[test]
 fn jvm_decode_error_display() {
     let e = JvmDecodeError::Reserved(0xff);
-    assert!(format!("{}", e).contains("0xff"));
+    assert!(format!("{e}").contains("0xff"));
     let e2 = JvmDecodeError::UnknownOpcode(0x01);
-    assert!(format!("{}", e2).contains("0x01"));
+    assert!(format!("{e2}").contains("0x01"));
     let e3 = JvmDecodeError::Truncated;
-    assert!(format!("{}", e3).to_lowercase().contains("truncated"));
+    assert!(format!("{e3}").to_lowercase().contains("truncated"));
 }
 
 // ---------------------------------------------------------------------------
@@ -451,7 +449,7 @@ fn cp_parse_float() {
     let (cp, _) = JvmConstantPool::parse(&v, 2).unwrap();
     match cp.get(1).unwrap() {
         ConstantEntry::Float(f) => assert!((*f - 3.5).abs() < f32::EPSILON),
-        e => panic!("expected Float, got {:?}", e),
+        e => panic!("expected Float, got {e:?}"),
     }
 }
 
@@ -472,7 +470,7 @@ fn cp_parse_double_takes_two_slots() {
     let (cp, _) = JvmConstantPool::parse(&v, 3).unwrap();
     match cp.get(1).unwrap() {
         ConstantEntry::Double(d) => assert!((*d - 2.5).abs() < f64::EPSILON),
-        e => panic!("got {:?}", e),
+        e => panic!("got {e:?}"),
     }
     assert_eq!(cp.get(2), Some(&ConstantEntry::Unusable));
 }
@@ -620,7 +618,7 @@ fn cp_tag_counts() {
 #[test]
 fn constant_tag_from_u8_round_trip() {
     for v in [1u8, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 20] {
-        let t = ConstantTag::from_u8(v).unwrap_or_else(|| panic!("tag {} should map", v));
+        let t = ConstantTag::from_u8(v).unwrap_or_else(|| panic!("tag {v} should map"));
         assert_eq!(t as u8, v);
     }
 }
@@ -680,7 +678,7 @@ fn cp_parse_error_display() {
     assert!(format!("{}", CpParseError::Truncated { at: 7 }).contains('7'));
     let s = format!("{}", CpParseError::UnknownTag { tag: 99, index: 4 });
     // Display uses hex for the tag (0x63 == 99) and decimal for the index.
-    assert!(s.contains("63") && s.contains('4'), "got {}", s);
+    assert!(s.contains("63") && s.contains('4'), "got {s}");
 }
 
 #[test]
@@ -719,10 +717,9 @@ fn decoder_classifies_every_byte() {
         match op {
             0xca..=0xff => assert!(
                 matches!(r, Err(JvmDecodeError::Reserved(b)) if b == op),
-                "op {:#x}",
-                op
+                "op {op:#x}"
             ),
-            _ => assert!(r.is_ok(), "op {:#x} should decode: {:?}", op, r),
+            _ => assert!(r.is_ok(), "op {op:#x} should decode: {r:?}"),
         }
     }
 }

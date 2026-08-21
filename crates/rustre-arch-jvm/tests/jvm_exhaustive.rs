@@ -104,7 +104,7 @@ fn consumed_length_matches_the_raw_bytes() {
 fn an_empty_slice_is_truncated() {
     assert!(matches!(
         JvmInstr::decode(&[]),
-        Err(JvmDecodeError::Truncated { .. })
+        Err(JvmDecodeError::Truncated)
     ));
 }
 
