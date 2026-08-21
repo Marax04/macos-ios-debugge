@@ -23,7 +23,7 @@ use rustre_ttd_replayer::{
 // NOT a `const fn`: `Vec<u8>` has a destructor, which is not permitted in a
 // const context, so const-ness here could never have compiled regardless of
 // the duplicated keyword this replaces.
-fn write(addr: u64, data: Vec<u8>) -> MemWriteRecord {
+const fn write(addr: u64, data: Vec<u8>) -> MemWriteRecord {
     MemWriteRecord::new(addr, data)
 }
 

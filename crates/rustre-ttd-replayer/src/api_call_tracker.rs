@@ -312,7 +312,7 @@ impl ApiCallSummary {
             .into_iter()
             .map(|(f, c)| (f.to_owned(), c))
             .collect();
-        most_called.sort_by(|a, b| b.1.cmp(&a.1));
+        most_called.sort_by_key(|b| std::cmp::Reverse(b.1));
         most_called.truncate(20);
 
         Self { total_calls, unique_functions, most_called, category_counts: cat_counts, interesting_count }
