@@ -277,18 +277,14 @@ impl Z80Decoder {
 
     // ── Main unprefixed table ────────────────────────────────────────────────
 
-    fn decode_main(pc: u16, opcode: u8, bytes: &[u8]) -> Z80Instr {
-        let x = (opcode >> 6) & 3;
-        let y = (opcode >> 3) & 7;
-        let z = opcode & 7;
-
-        let mut instr = match (x, y, z) {
-            // x=0 block
+    /// x=0: NOP/EX, relative jumps, 16-bit loads, INC/DEC and the accumulator ops.
+    fn decode_main_x0(pc: u16, x: u8, y: u8, z: u8, bytes: &[u8]) -> Result<Z80Instr, Z80Instr> {
+        Ok(match (x, y, z) {
             (0, 0, 0) => Z80Instr::new(Z80Prefix::None, "NOP", 1),
             (0, 1, 0) => Z80Instr::new(Z80Prefix::None, "EX", 1)
                 .op0(Z80Operand::RegAF).op1(Z80Operand::RegAF2),
             (0, 2, 0) => { // DJNZ e
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let off = bytes[1].cast_signed();
                 let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "DJNZ", 2)
@@ -296,14 +292,14 @@ impl Z80Decoder {
                     .raw(bytes)
             }
             (0, 3, 0) => { // JR e
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let off = bytes[1].cast_signed();
                 let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "JR", 2)
                     .op0(Z80Operand::Rel8(off)).branch().target(target).raw(bytes)
             }
             (0, cc @ 4..=7, 0) => { // JR cc,e  (cc=NZ/Z/NC/C → bits 0..3)
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let off = bytes[1].cast_signed();
                 let target = pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned());
                 Z80Instr::new(Z80Prefix::None, "JR", 2)
@@ -312,7 +308,7 @@ impl Z80Decoder {
                     .branch().cond().target(target).raw(bytes)
             }
             (0, rr, 1) if z == 1 && (y & 1) == 0 => { // LD rr,nn
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
                 Z80Instr::new(Z80Prefix::None, "LD", 3)
                     .op0(Z80Operand::Reg16(rr >> 1)).op1(Z80Operand::Imm16(nn)).raw(bytes)
@@ -326,22 +322,22 @@ impl Z80Decoder {
             (0, 2, 2) => Z80Instr::new(Z80Prefix::None, "LD", 1).op0(Z80Operand::MemDE).op1(Z80Operand::A),
             (0, 3, 2) => Z80Instr::new(Z80Prefix::None, "LD", 1).op0(Z80Operand::A).op1(Z80Operand::MemDE),
             (0, 4, 2) => { // LD (nn),HL
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
                 Z80Instr::new(Z80Prefix::None, "LD", 3).op0(Z80Operand::MemNN(nn)).op1(Z80Operand::Reg16(2)).raw(bytes)
             }
             (0, 5, 2) => { // LD HL,(nn)
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
                 Z80Instr::new(Z80Prefix::None, "LD", 3).op0(Z80Operand::Reg16(2)).op1(Z80Operand::MemNN(nn)).raw(bytes)
             }
             (0, 6, 2) => { // LD (nn),A
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
                 Z80Instr::new(Z80Prefix::None, "LD", 3).op0(Z80Operand::MemNN(nn)).op1(Z80Operand::A).raw(bytes)
             }
             (0, 7, 2) => { // LD A,(nn)
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
                 Z80Instr::new(Z80Prefix::None, "LD", 3).op0(Z80Operand::A).op1(Z80Operand::MemNN(nn)).raw(bytes)
             }
@@ -354,7 +350,7 @@ impl Z80Decoder {
             (0, r, 5) => // DEC r
                 Z80Instr::new(Z80Prefix::None, "DEC", 1).op0(Z80Operand::Reg8(r)),
             (0, r, 6) => { // LD r,n
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
                 Z80Instr::new(Z80Prefix::None, "LD", 2)
                     .op0(Z80Operand::Reg8(r)).op1(Z80Operand::Imm8(bytes[1])).raw(bytes)
             }
@@ -367,6 +363,97 @@ impl Z80Decoder {
             (0, 6, 7) => Z80Instr::new(Z80Prefix::None, "SCF",  1),
             (0, 7, 7) => Z80Instr::new(Z80Prefix::None, "CCF",  1),
 
+            _ => Z80Instr::new(Z80Prefix::None, "???", 1),
+        })
+    }
+
+    /// x=3: RET/POP/PUSH, JP and CALL, the I/O forms, ALU A,n and RST.
+    fn decode_main_x3(x: u8, y: u8, z: u8, bytes: &[u8]) -> Result<Z80Instr, Z80Instr> {
+        Ok(match (x, y, z) {
+            (3, cc, 0) => // RET cc
+                Z80Instr::new(Z80Prefix::None, "RET", 1).op0(Z80Operand::Cond(cc)).ret().cond(),
+            (3, rr, 1) if z == 1 && (y & 1) == 0 => { // POP rr (uses rp2: p=3 → AF not SP)
+                let op0 = if rr >> 1 == 3 { Z80Operand::RegAF } else { Z80Operand::Reg16(rr >> 1) };
+                Z80Instr::new(Z80Prefix::None, "POP", 1).op0(op0)
+            }
+            (3, 1, 1) => // RET
+                Z80Instr::new(Z80Prefix::None, "RET", 1).ret(),
+            (3, 3, 1) => // EXX
+                Z80Instr::new(Z80Prefix::None, "EXX", 1),
+            (3, 5, 1) => // JP (HL)
+                Z80Instr::new(Z80Prefix::None, "JP", 1).op0(Z80Operand::MemHL).branch(),
+            (3, 7, 1) => // LD SP,HL
+                Z80Instr::new(Z80Prefix::None, "LD", 1).op0(Z80Operand::Reg16(3)).op1(Z80Operand::Reg16(2)),
+            (3, cc, 2) => { // JP cc,nn
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
+                Z80Instr::new(Z80Prefix::None, "JP", 3)
+                    .op0(Z80Operand::Cond(cc)).op1(Z80Operand::Abs16(nn))
+                    .branch().cond().target(nn).raw(bytes)
+            }
+            (3, 0, 3) => { // JP nn
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
+                Z80Instr::new(Z80Prefix::None, "JP", 3)
+                    .op0(Z80Operand::Abs16(nn)).branch().target(nn).raw(bytes)
+            }
+            (3, 2, 3) => { // OUT (n),A
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                Z80Instr::new(Z80Prefix::None, "OUT", 2)
+                    .op0(Z80Operand::PortImm(bytes[1])).op1(Z80Operand::A).raw(bytes)
+            }
+            (3, 3, 3) => { // IN A,(n)
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                Z80Instr::new(Z80Prefix::None, "IN", 2)
+                    .op0(Z80Operand::A).op1(Z80Operand::PortImm(bytes[1])).raw(bytes)
+            }
+            (3, 4, 3) => Z80Instr::new(Z80Prefix::None, "EX", 1).op0(Z80Operand::MemSP).op1(Z80Operand::Reg16(2)),
+            (3, 5, 3) => Z80Instr::new(Z80Prefix::None, "EX", 1).op0(Z80Operand::Reg16(1)).op1(Z80Operand::Reg16(2)),
+            (3, 6, 3) => Z80Instr::new(Z80Prefix::None, "DI",  1),
+            (3, 7, 3) => Z80Instr::new(Z80Prefix::None, "EI",  1),
+            (3, cc, 4) => { // CALL cc,nn
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
+                Z80Instr::new(Z80Prefix::None, "CALL", 3)
+                    .op0(Z80Operand::Cond(cc)).op1(Z80Operand::Abs16(nn))
+                    .call().cond().target(nn).raw(bytes)
+            }
+            (3, rr, 5) if z == 5 && (y & 1) == 0 => { // PUSH rr (uses rp2: p=3 → AF not SP)
+                let op0 = if rr >> 1 == 3 { Z80Operand::RegAF } else { Z80Operand::Reg16(rr >> 1) };
+                Z80Instr::new(Z80Prefix::None, "PUSH", 1).op0(op0)
+            }
+            (3, 1, 5) => { // CALL nn
+                if bytes.len() < 3 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
+                Z80Instr::new(Z80Prefix::None, "CALL", 3)
+                    .op0(Z80Operand::Abs16(nn)).call().target(nn).raw(bytes)
+            }
+            (3, op, 6) => { // ALU A,n
+                if bytes.len() < 2 { return Err(Z80Instr::new(Z80Prefix::None, "???", 1)); }
+                let mne = alu_mnemonic(op);
+                Z80Instr::new(Z80Prefix::None, mne, 2)
+                    .op0(Z80Operand::A).op1(Z80Operand::Imm8(bytes[1])).raw(bytes)
+            }
+            (3, t, 7) => { // RST
+                let target = u16::from(t) * 8;
+                Z80Instr::new(Z80Prefix::None, "RST", 1)
+                    .op0(Z80Operand::RstTarget(t * 8)).call().target(target)
+            }
+            _ => Z80Instr::new(Z80Prefix::None, "???", 1),
+        })
+    }
+
+    fn decode_main(pc: u16, opcode: u8, bytes: &[u8]) -> Z80Instr {
+        let x = (opcode >> 6) & 3;
+        let y = (opcode >> 3) & 7;
+        let z = opcode & 7;
+
+        let mut instr = match (x, y, z) {
+            // x=0 block
+            (0, _, _) => match Self::decode_main_x0(pc, x, y, z, bytes) {
+                Ok(i) => i,
+                Err(i) => return i,
+            },
             // x=1: LD r,r' / HALT
             (1, 6, 6) => Z80Instr::new(Z80Prefix::None, "HALT", 1).halt(),
             (1, dst, src) =>
@@ -384,75 +471,10 @@ impl Z80Decoder {
             }
 
             // x=3 block
-            (3, cc, 0) => // RET cc
-                Z80Instr::new(Z80Prefix::None, "RET", 1).op0(Z80Operand::Cond(cc)).ret().cond(),
-            (3, rr, 1) if z == 1 && (y & 1) == 0 => { // POP rr (uses rp2: p=3 → AF not SP)
-                let op0 = if rr >> 1 == 3 { Z80Operand::RegAF } else { Z80Operand::Reg16(rr >> 1) };
-                Z80Instr::new(Z80Prefix::None, "POP", 1).op0(op0)
-            }
-            (3, 1, 1) => // RET
-                Z80Instr::new(Z80Prefix::None, "RET", 1).ret(),
-            (3, 3, 1) => // EXX
-                Z80Instr::new(Z80Prefix::None, "EXX", 1),
-            (3, 5, 1) => // JP (HL)
-                Z80Instr::new(Z80Prefix::None, "JP", 1).op0(Z80Operand::MemHL).branch(),
-            (3, 7, 1) => // LD SP,HL
-                Z80Instr::new(Z80Prefix::None, "LD", 1).op0(Z80Operand::Reg16(3)).op1(Z80Operand::Reg16(2)),
-            (3, cc, 2) => { // JP cc,nn
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
-                Z80Instr::new(Z80Prefix::None, "JP", 3)
-                    .op0(Z80Operand::Cond(cc)).op1(Z80Operand::Abs16(nn))
-                    .branch().cond().target(nn).raw(bytes)
-            }
-            (3, 0, 3) => { // JP nn
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
-                Z80Instr::new(Z80Prefix::None, "JP", 3)
-                    .op0(Z80Operand::Abs16(nn)).branch().target(nn).raw(bytes)
-            }
-            (3, 2, 3) => { // OUT (n),A
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                Z80Instr::new(Z80Prefix::None, "OUT", 2)
-                    .op0(Z80Operand::PortImm(bytes[1])).op1(Z80Operand::A).raw(bytes)
-            }
-            (3, 3, 3) => { // IN A,(n)
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                Z80Instr::new(Z80Prefix::None, "IN", 2)
-                    .op0(Z80Operand::A).op1(Z80Operand::PortImm(bytes[1])).raw(bytes)
-            }
-            (3, 4, 3) => Z80Instr::new(Z80Prefix::None, "EX", 1).op0(Z80Operand::MemSP).op1(Z80Operand::Reg16(2)),
-            (3, 5, 3) => Z80Instr::new(Z80Prefix::None, "EX", 1).op0(Z80Operand::Reg16(1)).op1(Z80Operand::Reg16(2)),
-            (3, 6, 3) => Z80Instr::new(Z80Prefix::None, "DI",  1),
-            (3, 7, 3) => Z80Instr::new(Z80Prefix::None, "EI",  1),
-            (3, cc, 4) => { // CALL cc,nn
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
-                Z80Instr::new(Z80Prefix::None, "CALL", 3)
-                    .op0(Z80Operand::Cond(cc)).op1(Z80Operand::Abs16(nn))
-                    .call().cond().target(nn).raw(bytes)
-            }
-            (3, rr, 5) if z == 5 && (y & 1) == 0 => { // PUSH rr (uses rp2: p=3 → AF not SP)
-                let op0 = if rr >> 1 == 3 { Z80Operand::RegAF } else { Z80Operand::Reg16(rr >> 1) };
-                Z80Instr::new(Z80Prefix::None, "PUSH", 1).op0(op0)
-            }
-            (3, 1, 5) => { // CALL nn
-                if bytes.len() < 3 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let nn = u16::from(bytes[1]) | (u16::from(bytes[2]) << 8);
-                Z80Instr::new(Z80Prefix::None, "CALL", 3)
-                    .op0(Z80Operand::Abs16(nn)).call().target(nn).raw(bytes)
-            }
-            (3, op, 6) => { // ALU A,n
-                if bytes.len() < 2 { return Z80Instr::new(Z80Prefix::None, "???", 1); }
-                let mne = alu_mnemonic(op);
-                Z80Instr::new(Z80Prefix::None, mne, 2)
-                    .op0(Z80Operand::A).op1(Z80Operand::Imm8(bytes[1])).raw(bytes)
-            }
-            (3, t, 7) => { // RST
-                let target = u16::from(t) * 8;
-                Z80Instr::new(Z80Prefix::None, "RST", 1)
-                    .op0(Z80Operand::RstTarget(t * 8)).call().target(target)
-            }
+            (3, _, _) => match Self::decode_main_x3(x, y, z, bytes) {
+                Ok(i) => i,
+                Err(i) => return i,
+            },
             _ => Z80Instr::new(Z80Prefix::None, "???", 1),
         };
         if instr.bytes[0] == 0 { instr.bytes[0] = opcode; }
