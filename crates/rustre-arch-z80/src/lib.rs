@@ -1140,74 +1140,128 @@ impl CycleInfo {
     }
 }
 
+/// One row of the Z80 T-state table: the opcodes it covers and their timing.
+///
+/// Kept as an ordered table rather than a flat `match` so that every opcode
+/// group keeps its own row (and its own comment) even when two groups happen
+/// to take the same number of T-states.
+struct CycleRow {
+    /// Opcodes covered by this row.
+    opcodes: &'static [u8],
+    /// Timing for those opcodes.
+    info: CycleInfo,
+}
+
+impl CycleRow {
+    const fn simple(opcodes: &'static [u8], c: u8) -> Self {
+        Self {
+            opcodes,
+            info: CycleInfo::simple(c),
+        }
+    }
+    const fn branch(opcodes: &'static [u8], not_taken: u8, taken: u8) -> Self {
+        Self {
+            opcodes,
+            info: CycleInfo::branch(not_taken, taken),
+        }
+    }
+    /// True when `op` belongs to this row.
+    const fn covers(&self, op: u8) -> bool {
+        let mut i = 0;
+        while i < self.opcodes.len() {
+            if self.opcodes[i] == op {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+}
+
+/// T-state counts for the single-byte opcodes, one row per instruction group.
+static CYCLE_TABLE: &[CycleRow] = &[
+    CycleRow::simple(&[0x00], 4),                                     // NOP
+    CycleRow::simple(&[0x01, 0x11, 0x21, 0x31], 10),                  // LD rp,nn
+    CycleRow::simple(&[0x02, 0x12], 7),                               // LD (rp),A
+    CycleRow::simple(&[0x03, 0x13, 0x23, 0x33], 6),                   // INC rp
+    CycleRow::simple(&[0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x3C], 4), // INC r
+    CycleRow::simple(&[0x34], 11),                                    // INC (HL)
+    CycleRow::simple(&[0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x3D], 4), // DEC r
+    CycleRow::simple(&[0x35], 11),                                    // DEC (HL)
+    CycleRow::simple(&[0x06, 0x0E, 0x16, 0x1E, 0x26, 0x2E, 0x3E], 7), // LD r,n
+    CycleRow::simple(&[0x36], 10),                                    // LD (HL),n
+    CycleRow::simple(&[0x07, 0x0F, 0x17, 0x1F], 4),                   // RLCA/RRCA/RLA/RRA
+    CycleRow::simple(&[0x08], 4),                                     // EX AF,AF'
+    CycleRow::simple(&[0x09, 0x19, 0x29, 0x39], 11),                  // ADD HL,rp
+    CycleRow::simple(&[0x0A, 0x1A], 7),                               // LD A,(rp)
+    CycleRow::simple(&[0x0B, 0x1B, 0x2B, 0x3B], 6),                   // DEC rp
+    CycleRow::branch(&[0x10], 8, 13),                                 // DJNZ
+    CycleRow::simple(&[0x18], 12),                                    // JR e
+    CycleRow::branch(&[0x20, 0x28, 0x30, 0x38], 7, 12),               // JR cc,e
+    CycleRow::branch(&[0xC0, 0xC8, 0xD0, 0xD8, 0xE0, 0xE8, 0xF0, 0xF8], 5, 11), // RET cc
+    CycleRow::simple(&[0xC1, 0xD1, 0xE1, 0xF1], 10),                  // POP rp
+    CycleRow::branch(&[0xC2, 0xCA, 0xD2, 0xDA, 0xE2, 0xEA, 0xF2, 0xFA], 10, 10), // JP cc,nn
+    CycleRow::simple(&[0xC3], 10),                                    // JP nn
+    CycleRow::branch(&[0xC4, 0xCC, 0xD4, 0xDC, 0xE4, 0xEC, 0xF4, 0xFC], 10, 17), // CALL cc,nn
+    CycleRow::simple(&[0xC5, 0xD5, 0xE5, 0xF5], 11),                  // PUSH rp
+    CycleRow::simple(&[0xC6, 0xCE, 0xD6, 0xDE, 0xE6, 0xEE, 0xF6, 0xFE], 7), // ALU A,n
+    CycleRow::simple(&[0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF], 11), // RST
+    CycleRow::simple(&[0xC9], 10),                                    // RET
+    CycleRow::simple(&[0xCD], 17),                                    // CALL nn
+    CycleRow::simple(&[0xD3], 11),                                    // OUT (n),A
+    CycleRow::simple(&[0xDB], 11),                                    // IN A,(n)
+    CycleRow::simple(&[0xD9], 4),                                     // EXX
+    CycleRow::simple(&[0xE3], 19),                                    // EX (SP),HL
+    CycleRow::simple(&[0xE9], 4),                                     // JP (HL)
+    CycleRow::simple(&[0xEB], 4),                                     // EX DE,HL
+    CycleRow::simple(&[0xF3], 4),                                     // DI
+    CycleRow::simple(&[0xF9], 6),                                     // LD SP,HL
+    CycleRow::simple(&[0xFB], 4),                                     // EI
+    CycleRow::simple(&[0xCB], 8),                                     // CB prefix (bit/rotate ops)
+    CycleRow::simple(&[0xED], 8),                                     // ED prefix (extended ops)
+    CycleRow::simple(&[0xDD, 0xFD], 8),                               // DD/FD prefix (IX/IY ops)
+];
+
+/// Timing of the LD r,r block (0x40..=0x7F), which is regular enough to compute.
+const fn ld_block_cycles(op: u8) -> CycleInfo {
+    if op == 0x76 {
+        // HALT
+        CycleInfo::simple(4)
+    } else if op & 7 == 6 || (op >> 3) & 7 == 6 {
+        // one operand is (HL)
+        CycleInfo::simple(7)
+    } else {
+        CycleInfo::simple(4)
+    }
+}
+
+/// Timing of the ALU A,r block (0x80..=0xBF).
+const fn alu_block_cycles(op: u8) -> CycleInfo {
+    if op & 7 == 6 {
+        // ALU A,(HL)
+        CycleInfo::simple(7)
+    } else {
+        CycleInfo::simple(4)
+    }
+}
+
 /// Look up the approximate T-state count for a single-byte opcode.
 #[must_use]
 pub const fn opcode_cycles(op: u8) -> CycleInfo {
-    match op {
-        0x00 => CycleInfo::simple(4),                       // NOP
-        0x01 | 0x11 | 0x21 | 0x31 => CycleInfo::simple(10), // LD rp,nn
-        0x02 | 0x12 => CycleInfo::simple(7),                // LD (rp),A
-        0x03 | 0x13 | 0x23 | 0x33 => CycleInfo::simple(6),  // INC rp
-        0x04 | 0x0C | 0x14 | 0x1C | 0x24 | 0x2C | 0x3C => CycleInfo::simple(4), // INC r
-        0x34 => CycleInfo::simple(11),                      // INC (HL)
-        0x05 | 0x0D | 0x15 | 0x1D | 0x25 | 0x2D | 0x3D => CycleInfo::simple(4), // DEC r
-        0x35 => CycleInfo::simple(11),                      // DEC (HL)
-        0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => CycleInfo::simple(7), // LD r,n
-        0x36 => CycleInfo::simple(10),                      // LD (HL),n
-        0x07 | 0x0F | 0x17 | 0x1F => CycleInfo::simple(4),  // RLCA/RRCA/RLA/RRA
-        0x08 => CycleInfo::simple(4),                       // EX AF,AF'
-        0x09 | 0x19 | 0x29 | 0x39 => CycleInfo::simple(11), // ADD HL,rp
-        0x0A | 0x1A => CycleInfo::simple(7),                // LD A,(rp)
-        0x0B | 0x1B | 0x2B | 0x3B => CycleInfo::simple(6),  // DEC rp
-        0x10 => CycleInfo::branch(8, 13),                   // DJNZ
-        0x18 => CycleInfo::simple(12),                      // JR e
-        0x20 | 0x28 | 0x30 | 0x38 => CycleInfo::branch(7, 12), // JR cc,e
-        // LD r,r (registers) - columns 0x40..0x7F
-        0x40..=0x7F => {
-            if op == 0x76 {
-                CycleInfo::simple(4)
-            }
-            // HALT
-            else if op & 7 == 6 || (op >> 3) & 7 == 6 {
-                CycleInfo::simple(7)
-            }
-            // (HL)
-            else {
-                CycleInfo::simple(4)
-            }
-        }
-        // ALU A,r
-        0x80..=0xBF => {
-            if op & 7 == 6 {
-                CycleInfo::simple(7)
-            } else {
-                CycleInfo::simple(4)
-            }
-        }
-        0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => CycleInfo::branch(5, 11), // RET cc
-        0xC1 | 0xD1 | 0xE1 | 0xF1 => CycleInfo::simple(10),                                // POP rp
-        0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => CycleInfo::branch(10, 10), // JP cc,nn
-        0xC3 => CycleInfo::simple(10),                                                      // JP nn
-        0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => CycleInfo::branch(10, 17), // CALL cc,nn
-        0xC5 | 0xD5 | 0xE5 | 0xF5 => CycleInfo::simple(11), // PUSH rp
-        0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE => CycleInfo::simple(7), // ALU A,n
-        0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => CycleInfo::simple(11), // RST
-        0xC9 => CycleInfo::simple(10),                      // RET
-        0xCD => CycleInfo::simple(17),                      // CALL nn
-        0xD3 => CycleInfo::simple(11),                      // OUT (n),A
-        0xDB => CycleInfo::simple(11),                      // IN A,(n)
-        0xD9 => CycleInfo::simple(4),                       // EXX
-        0xE3 => CycleInfo::simple(19),                      // EX (SP),HL
-        0xE9 => CycleInfo::simple(4),                       // JP (HL)
-        0xEB => CycleInfo::simple(4),                       // EX DE,HL
-        0xF3 => CycleInfo::simple(4),                       // DI
-        0xF9 => CycleInfo::simple(6),                       // LD SP,HL
-        0xFB => CycleInfo::simple(4),                       // EI
-        0xCB => CycleInfo::simple(8),                       // CB prefix (bit/rotate ops)
-        0xED => CycleInfo::simple(8),                       // ED prefix (extended ops)
-        0xDD | 0xFD => CycleInfo::simple(8),                // DD/FD prefix (IX/IY ops)
-        _ => CycleInfo::simple(4),
+    if op >= 0x40 && op <= 0x7F {
+        return ld_block_cycles(op);
     }
+    if op >= 0x80 && op <= 0xBF {
+        return alu_block_cycles(op);
+    }
+    let mut i = 0;
+    while i < CYCLE_TABLE.len() {
+        if CYCLE_TABLE[i].covers(op) {
+            return CYCLE_TABLE[i].info;
+        }
+        i += 1;
+    }
+    CycleInfo::simple(4)
 }
 
 // ── Interrupt modes ───────────────────────────────────────────────────────────
