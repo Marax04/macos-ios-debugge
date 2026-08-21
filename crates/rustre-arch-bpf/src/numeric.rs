@@ -97,10 +97,19 @@ pub fn count_to_f64(v: usize) -> f64 {
 }
 
 /// Convert a `u64` count to `f64` for a statistic or percentage.
+///
+/// Values above [`u32::MAX`] clamp rather than wrap; the counts this is used
+/// for (instruction and byte counts of a single JIT-compiled program) are far
+/// below that bound.
 #[inline]
 #[must_use]
 pub fn u64_to_f64(v: u64) -> f64 {
-    f64::from(u64_to_u32(v))
+    let clamped = if v > u64::from(u32::MAX) {
+        u32::MAX
+    } else {
+        low_u32(v)
+    };
+    f64::from(clamped)
 }
 
 // ── deliberate, bit-exact truncations ────────────────────────────────────────

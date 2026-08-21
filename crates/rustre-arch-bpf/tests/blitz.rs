@@ -20,7 +20,7 @@ fn enc(op: u8, dst: u8, src: u8, off: i16, imm: i32) -> Vec<u8> {
 }
 
 fn enc_lddw(dst: u8, value: i64) -> Vec<u8> {
-    let lo = value as i32;
+    let lo = numeric::trunc_i64_i32(value);
     let hi = (value >> 32) as i32;
     let mut v = enc(0x18, dst, 0, 0, lo);
     v.extend_from_slice(&[0u8; 4]);

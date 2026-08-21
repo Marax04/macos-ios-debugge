@@ -13,6 +13,7 @@
 //! * Helper call argument type constraints.
 //! * Explanation of why a simulated instruction would be rejected.
 
+use crate::numeric;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -141,7 +142,7 @@ impl ScalarBounds {
     pub const fn exact(v: u64) -> Self {
         Self {
             umin: v, umax: v,
-            smin: v as i64, smax: v as i64,
+            smin: v.cast_signed(), smax: v.cast_signed(),
             tnum_value: v, tnum_mask: 0,
         }
     }
@@ -648,7 +649,7 @@ impl VerifierState {
 
         // Validate argument types.
         for (i, expected) in desc.args.iter().enumerate() {
-            let reg = (i + 1) as u8;
+            let reg = numeric::trunc_usize_u8(i + 1);
             if reg > 5 { break; }
             let actual = &self.regs[reg as usize].reg_type;
             let ok = match expected {

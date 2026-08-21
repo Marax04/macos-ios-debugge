@@ -4,6 +4,7 @@
 //! `bpf_convert_filter()` (net/core/filter.c), translating each cBPF
 //! instruction into one or more eBPF instructions.
 
+use crate::numeric;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -211,8 +212,8 @@ fn cbpf_m_stack_offset(k: u32, warnings: &mut Vec<String>) -> Option<i16> {
         return None;
     }
     // k fits in [0, 15], so k as i32 * 4 fits in [0, 60] — no overflow.
-    let off = i32::from(CBPF_M_STACK_OFF) + k as i32 * 4;
-    Some(off as i16)
+    let off = i32::from(CBPF_M_STACK_OFF) + k.cast_signed() * 4;
+    Some(numeric::trunc_i32_i16(off))
 }
 
 // ─── eBPF opcodes used by the migrator ───────────────────────────────────────
@@ -351,7 +352,7 @@ impl CbpfToEbpf {
         let expansion = if cbpf.is_empty() {
             0.0
         } else {
-            ebpf.len() as f64 / cbpf.len() as f64
+            numeric::count_to_f64(ebpf.len()) / numeric::count_to_f64(cbpf.len())
         };
 
         let report = MigrationReport {
@@ -395,7 +396,7 @@ impl CbpfToEbpf {
                 let size = code & 0x18;
                 match mode {
                     m if m == IMM => {
-                        out.push(EbpfInsn::new(MOV64_IMM, REG_A, 0, 0, k as i32));
+                        out.push(EbpfInsn::new(MOV64_IMM, REG_A, 0, 0, k.cast_signed()));
                     }
                     m if m == ABS => {
                         let op = match size {
@@ -403,7 +404,7 @@ impl CbpfToEbpf {
                             s if s == H => LD_ABS_H,
                             _ => LD_ABS_B,
                         };
-                        out.push(EbpfInsn::new(op, REG_A, 0, 0, k as i32));
+                        out.push(EbpfInsn::new(op, REG_A, 0, 0, k.cast_signed()));
                     }
                     m if m == IND => {
                         let op = match size {
@@ -411,7 +412,7 @@ impl CbpfToEbpf {
                             s if s == H => LD_IND_H,
                             _ => LD_IND_B,
                         };
-                        out.push(EbpfInsn::new(op, REG_A, REG_X, 0, k as i32));
+                        out.push(EbpfInsn::new(op, REG_A, REG_X, 0, k.cast_signed()));
                     }
                     m if m == MEM => {
                         if let Some(off) = cbpf_m_stack_offset(k, warnings) {
@@ -425,7 +426,7 @@ impl CbpfToEbpf {
                     }
                     m if m == MSH => {
                         // MSH: X = 4*(packet[k] & 0x0F)
-                        out.push(EbpfInsn::new(LD_ABS_B, REG_TMP, 0, 0, k as i32));
+                        out.push(EbpfInsn::new(LD_ABS_B, REG_TMP, 0, 0, k.cast_signed()));
                         out.push(EbpfInsn::new(AND64_IMM, REG_TMP, 0, 0, 0x0F));
                         out.push(EbpfInsn::new(0x27 /* MUL64_IMM */, REG_TMP, 0, 0, 4));
                         out.push(EbpfInsn::new(MOV64_REG, REG_X, REG_TMP, 0, 0));
@@ -440,7 +441,7 @@ impl CbpfToEbpf {
                 let mode = code & 0xE0;
                 match mode {
                     m if m == IMM => {
-                        out.push(EbpfInsn::new(MOV64_IMM, REG_X, 0, 0, k as i32));
+                        out.push(EbpfInsn::new(MOV64_IMM, REG_X, 0, 0, k.cast_signed()));
                     }
                     m if m == MEM => {
                         if let Some(off) = cbpf_m_stack_offset(k, warnings) {
@@ -489,7 +490,7 @@ impl CbpfToEbpf {
                     }
                 };
                 if op_k {
-                    out.push(EbpfInsn::new(opcode_k, REG_A, 0, 0, k as i32));
+                    out.push(EbpfInsn::new(opcode_k, REG_A, 0, 0, k.cast_signed()));
                 } else {
                     out.push(EbpfInsn::new(opcode_x, REG_A, REG_X, 0, 0));
                 }
@@ -517,7 +518,7 @@ impl CbpfToEbpf {
                         // Placeholder offsets filled by fixup_jumps.
                         let opcode = if use_x { op_x } else { op_k };
                         let src = if use_x { REG_X } else { 0 };
-                        out.push(EbpfInsn::new(opcode, REG_A, src, 0, k as i32));
+                        out.push(EbpfInsn::new(opcode, REG_A, src, 0, k.cast_signed()));
                     }
                 }
             }
@@ -525,7 +526,7 @@ impl CbpfToEbpf {
             c if c == RET => {
                 let rval = code & 0x18;
                 if rval == rval::K {
-                    out.push(EbpfInsn::new(MOV64_IMM, REG_A, 0, 0, k as i32));
+                    out.push(EbpfInsn::new(MOV64_IMM, REG_A, 0, 0, k.cast_signed()));
                 }
                 // If rval::A, A is already in R0.
                 out.push(EbpfInsn::new(EXIT, 0, 0, 0, 0));
@@ -579,13 +580,13 @@ impl CbpfToEbpf {
                     continue;
                 }
                 let target_ebpf = insn_map[target_cbpf];
-                let off = target_ebpf as i64 - ebpf_pc as i64 - 1;
+                let off = numeric::usize_to_i64(target_ebpf) - numeric::usize_to_i64(ebpf_pc) - 1;
                 if off < i64::from(i16::MIN) || off > i64::from(i16::MAX) {
                     warnings.push(format!(
                         "JA at cBPF[{ci}]: eBPF jump offset {off} overflows i16; program will misbehave"
                     ));
                 }
-                ebpf[ebpf_pc].off = off as i16;
+                ebpf[ebpf_pc].off = numeric::trunc_i64_i16(off);
             } else {
                 // Conditional jump: true target = ci+1+jt, false target = ci+1+jf.
                 let jt_cbpf = ci + 1 + cbpf_insn.jt as usize;
@@ -598,7 +599,7 @@ impl CbpfToEbpf {
                 // We model jt as the branch offset and insert an unconditional
                 // jump to the false target after the conditional.
                 let cond_pc = ebpf_pc;
-                let jt_off = jt_ebpf as i64 - cond_pc as i64 - 1;
+                let jt_off = numeric::usize_to_i64(jt_ebpf) - numeric::usize_to_i64(cond_pc) - 1;
 
                 if jt_off < i64::from(i16::MIN) || jt_off > i64::from(i16::MAX) {
                     warnings.push(format!(
@@ -606,7 +607,7 @@ impl CbpfToEbpf {
                     ));
                 }
                 // Patch the conditional jump's offset (true branch).
-                ebpf[cond_pc].off = jt_off as i16;
+                ebpf[cond_pc].off = numeric::trunc_i64_i16(jt_off);
 
                 // Insert a JA for the false branch only if it's not the next insn.
                 let fall_through = cond_pc + 1;

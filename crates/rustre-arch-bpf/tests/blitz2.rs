@@ -25,7 +25,7 @@ fn enc(op: u8, dst: u8, src: u8, off: i16, imm: i32) -> Vec<u8> {
 }
 
 fn enc_lddw(dst: u8, value: i64) -> Vec<u8> {
-    let lo = value as i32;
+    let lo = numeric::trunc_i64_i32(value);
     let hi = (value >> 32) as i32;
     let mut v = enc(0x18, dst, 0, 0, lo);
     v.extend_from_slice(&[0u8; 4]);
@@ -42,8 +42,8 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u8(&mut self) -> u8 { self.next_u64() as u8 }
-    fn next_u32(&mut self) -> u32 { self.next_u64() as u32 }
+    fn next_u8(&mut self) -> u8 { numeric::trunc_u64_u8(self.next_u64()) }
+    fn next_u32(&mut self) -> u32 { numeric::low_u32(self.next_u64()) }
 }
 
 fn hash_of<T: Hash>(t: &T) -> u64 {
@@ -170,7 +170,7 @@ fn decode_register_nibble_round_trip() {
 fn decode_lddw_wide_imm_round_trip_50() {
     let mut lcg = Lcg::new(0xDEAD_BEEF_CAFE_BABE);
     for _ in 0..50 {
-        let val = lcg.next_u64() as i64;
+        let val = (lcg.next_u64()).cast_signed();
         let bytes = enc_lddw((lcg.next_u8() & 0x0f).min(10), val);
         let (i, sz) = BpfInstruction::decode(&bytes).unwrap();
         assert_eq!(sz, 16);
@@ -208,7 +208,7 @@ fn decode_lcg_fuzz_no_panic() {
     for _ in 0..2000 {
         // Random length 0..=24
         let len = (g() % 25) as usize;
-        let bytes: Vec<u8> = (0..len).map(|_| g() as u8).collect();
+        let bytes: Vec<u8> = (0..len).map(|_| numeric::trunc_u64_u8(g())).collect();
         let r = BpfInstruction::decode(&bytes);
         match r {
             Ok((instr, sz)) => {
@@ -230,14 +230,14 @@ fn disasm_lcg_fuzz_no_panic() {
         s
     };
     for _ in 0..1000 {
-        let mut op = g() as u8;
+        let mut op = numeric::trunc_u64_u8(g());
         // Skip the wide-immediate opcode which needs 16 bytes — this fuzzer
         // only encodes 8-byte instructions.
         if op == 0x18 { op = 0x07; }
         let dst = (g() as u8) & 0x0f;
         let src = (g() as u8) & 0x0f;
-        let off = g() as i16;
-        let imm = g() as i32;
+        let off = numeric::trunc_u64_i16(g());
+        let imm = numeric::trunc_u64_i32(g());
         let bytes = enc(op, dst, src, off, imm);
         let (instr, _) = BpfInstruction::decode(&bytes).unwrap();
         let r = disasm_instr(&instr, &helpers);
@@ -257,7 +257,7 @@ fn cbpf_decode_lcg_fuzz_no_panic() {
     };
     for _ in 0..1000 {
         let len = (g() % 16) as usize;
-        let bytes: Vec<u8> = (0..len).map(|_| g() as u8).collect();
+        let bytes: Vec<u8> = (0..len).map(|_| numeric::trunc_u64_u8(g())).collect();
         let r = CbpfInstruction::decode(&bytes);
         if bytes.len() >= 8 {
             let i = r.unwrap();
@@ -279,7 +279,7 @@ fn btf_type_header_lcg_fuzz_no_panic() {
     };
     for _ in 0..500 {
         let len = (g() % 24) as usize;
-        let bytes: Vec<u8> = (0..len).map(|_| g() as u8).collect();
+        let bytes: Vec<u8> = (0..len).map(|_| numeric::trunc_u64_u8(g())).collect();
         let r = BtfTypeHeader::decode(&bytes);
         match r {
             Ok(h) => {
@@ -302,7 +302,7 @@ fn obj_parser_lcg_fuzz_no_panic() {
     };
     for _ in 0..200 {
         let len = (g() % 256) as usize;
-        let mut bytes: Vec<u8> = (0..len).map(|_| g() as u8).collect();
+        let mut bytes: Vec<u8> = (0..len).map(|_| numeric::trunc_u64_u8(g())).collect();
         // Sometimes start with ELF magic.
         if !bytes.is_empty() && (g() & 1) == 1 && bytes.len() >= 4 {
             bytes[0..4].copy_from_slice(b"\x7fELF");
@@ -326,8 +326,8 @@ fn analyzer_lcg_fuzz_no_panic() {
         s
     };
     for _ in 0..200 {
-        let len = ((g() % 32) * 8) as usize;
-        let bytes: Vec<u8> = (0..len).map(|_| g() as u8).collect();
+        let len = numeric::u64_to_usize((g() % 32) * 8);
+        let bytes: Vec<u8> = (0..len).map(|_| numeric::trunc_u64_u8(g())).collect();
         let report = BpfProgramAnalyzer::analyze(&bytes);
         assert!(report.complexity >= 1);
     }
@@ -438,7 +438,7 @@ fn disasm_call_unknown_helper_id_says_unknown() {
 #[test]
 fn cbpf_alu_all_ops_disasm_distinct() {
     let mnemonics: HashSet<String> = (0..=0xa0).step_by(0x10).map(|code| {
-        let i = CbpfInstruction { opcode: 0x04 | code as u16, jt: 0, jf: 0, k: 1 };
+        let i = CbpfInstruction { opcode: 0x04 | numeric::trunc_i32_u16(code), jt: 0, jf: 0, k: 1 };
         i.disasm().split_whitespace().next().unwrap().to_string()
     }).collect();
     // 11 ALU ops up to XOR.
@@ -449,7 +449,7 @@ fn cbpf_alu_all_ops_disasm_distinct() {
 fn cbpf_round_trip_50_random() {
     let mut lcg = Lcg::new(0x9E37_79B9_7F4A_7C15);
     for _ in 0..50 {
-        let opcode = lcg.next_u32() as u16;
+        let opcode = numeric::low_u16(lcg.next_u32());
         let jt = lcg.next_u8();
         let jf = lcg.next_u8();
         let k = lcg.next_u32();
@@ -556,7 +556,7 @@ fn bpf_instruction_eq_implies_hash_equal_30_pairs() {
     for _ in 0..30 {
         let op = 0x07u8; // valid alu64
         let dst = (lcg.next_u8() & 0x0f).min(10);
-        let imm = lcg.next_u32() as i32;
+        let imm = (lcg.next_u32()).cast_signed();
         let bytes = enc(op, dst, 0, 0, imm);
         let (a, _) = BpfInstruction::decode(&bytes).unwrap();
         let (b, _) = BpfInstruction::decode(&bytes).unwrap();
@@ -644,7 +644,7 @@ fn arch_send_sync_threaded_disassemble() {
                 s = s.wrapping_mul(6_364_136_223_846_793_005)
                      .wrapping_add(1_442_695_040_888_963_407);
                 // Use a valid opcode: alu64 add imm
-                let imm = s as i32;
+                let imm = numeric::trunc_u64_i32(s);
                 let bytes = enc(0x07, 0, 0, 0, imm);
                 let i = a.disassemble(Address::new(0), &bytes).unwrap();
                 assert_eq!(i.mnemonic, "add");
@@ -856,7 +856,7 @@ fn decode_imm_wrap_does_not_panic() {
 
 #[test]
 fn lddw_with_negative_lo_high_round_trip() {
-    let vals = [i64::MIN, -1, 0, 1, i64::MAX, 0x8000_0000_0000_0000_u64 as i64];
+    let vals = [i64::MIN, -1, 0, 1, i64::MAX, (0x8000_0000_0000_0000_u64).cast_signed()];
     for v in vals {
         let bytes = enc_lddw(0, v);
         let (i, _) = BpfInstruction::decode(&bytes).unwrap();

@@ -31,6 +31,9 @@ pub mod ebpf_verifier;
 pub mod ebpf_jit_analyzer;
 pub mod cbpf_to_ebpf;
 
+/// Checked, panic-free numeric conversions shared by the eBPF decoders.
+pub mod numeric;
+
 use std::collections::HashMap;
 
 use rustre_core::arch::{
@@ -348,7 +351,7 @@ impl BpfInstruction {
             }
             let imm_hi = i32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]);
             // Mask to u32 before widening to avoid sign-extension polluting the high 32 bits.
-            let wide = (i64::from(imm as u32)) | ((i64::from(imm_hi as u32)) << 32);
+            let wide = (i64::from(imm.cast_unsigned())) | ((i64::from(imm_hi.cast_unsigned())) << 32);
             return Ok((
                 Self {
                     raw: bytes[..16].to_vec(),
@@ -1589,7 +1592,7 @@ impl Architecture for BpfArch {
             let offset = i16::from_le_bytes([instr.bytes[2], instr.bytes[3]]);
             let next = instr.address + instr.size as u64;
             let target =
-                Address::new(next.as_u64().wrapping_add((i64::from(offset) * 8) as u64)).as_u64();
+                Address::new(next.as_u64().wrapping_add((i64::from(offset) * 8).cast_unsigned())).as_u64();
             if instr.flags.contains(InstrFlags::CONDITIONAL) {
                 return vec![BranchInfo::conditional_jump(
                     target,
@@ -2216,7 +2219,7 @@ mod tests {
     #[test]
     fn test_btf_type_header_decode() {
         let mut buf = vec![0u8; 12];
-        buf[4] = (4 << 4) as u8; // kind=4 (Struct) in info bits [28:24]
+        buf[4] = crate::numeric::trunc_i32_u8(4 << 4); // kind=4 (Struct) in info bits [28:24]
         // Actually BTF kind is in bits [28:24] of info, which is byte [7..4]
         // info = kind << 24 | vlen
         let kind: u32 = 4; // BtfKind::Struct
@@ -2804,15 +2807,15 @@ impl BpfProgramAnalyzer {
                 // Detect lddw (wide immediate) used to load map fd into r1.
                 if op == 0x18 && instr.dst_reg == 1 {
                     if let Some(wide) = instr.wide_imm {
-                        last_map_fd = wide as u32;
+                        last_map_fd = crate::numeric::trunc_i64_u32(wide);
                     } else {
-                        last_map_fd = instr.imm as u32;
+                        last_map_fd = instr.imm.cast_unsigned();
                     }
                 }
 
                 // Detect helper calls: BPF_JMP | BPF_CALL (0x85).
                 if cls == 0x05 && code == 0x80 {
-                    let helper_id = instr.imm as u32;
+                    let helper_id = instr.imm.cast_unsigned();
                     helper_calls.push(helper_id);
 
                     // Map-touching helpers.
@@ -3043,7 +3046,7 @@ impl BpfDisassembler {
     pub fn disassemble(bytecode: &[u8], helpers: &[BpfHelper]) -> String {
         // Build a fast lookup map from the provided helper slice.
         let helper_map: HashMap<i32, &'static str> =
-            helpers.iter().map(|h| (h.id as i32, h.name)).collect();
+            helpers.iter().map(|h| (h.id.cast_signed(), h.name)).collect();
 
         let mut lines = Vec::new();
         let mut offset = 0usize;
@@ -3421,7 +3424,7 @@ impl BpfObjectParser {
         }
 
         // ELF64 header fields.
-        let e_shoff = Self::read_u64(data, 40)? as usize;
+        let e_shoff = crate::numeric::u64_to_usize(Self::read_u64(data, 40)?);
         let e_shentsize = Self::read_u16(data, 58)? as usize;
         let e_shnum = Self::read_u16(data, 60)? as usize;
         let e_shstrndx = Self::read_u16(data, 62)? as usize;
@@ -3441,8 +3444,8 @@ impl BpfObjectParser {
             }
             let sh_name = Self::read_u32(data, sh_off)? as usize;
             let sh_type = Self::read_u32(data, sh_off + 4)?;
-            let sh_offset = Self::read_u64(data, sh_off + 24)? as usize;
-            let sh_size = Self::read_u64(data, sh_off + 32)? as usize;
+            let sh_offset = crate::numeric::u64_to_usize(Self::read_u64(data, sh_off + 24)?);
+            let sh_size = crate::numeric::u64_to_usize(Self::read_u64(data, sh_off + 32)?);
             sections.push((String::new(), sh_type, sh_offset, sh_size));
             let _ = sh_name; // resolved below
         }
@@ -3468,8 +3471,8 @@ impl BpfObjectParser {
             }
             let sh_name_off = Self::read_u32(data, sh_off)? as usize;
             let sh_type = Self::read_u32(data, sh_off + 4)?;
-            let sh_offset = Self::read_u64(data, sh_off + 24)? as usize;
-            let sh_size = Self::read_u64(data, sh_off + 32)? as usize;
+            let sh_offset = crate::numeric::u64_to_usize(Self::read_u64(data, sh_off + 24)?);
+            let sh_size = crate::numeric::u64_to_usize(Self::read_u64(data, sh_off + 32)?);
             let name = Self::read_cstr(strtab_data, sh_name_off);
             named.push((name, sh_type, sh_offset, sh_size));
         }
@@ -5417,7 +5420,7 @@ fn read_u32_le(data: &[u8], off: usize) -> Option<u32> {
 }
 
 fn read_i32_le(data: &[u8], off: usize) -> Option<i32> {
-    read_u32_le(data, off).map(|v| v as i32)
+    read_u32_le(data, off).map(|v| v.cast_signed())
 }
 
 fn read_u64_le(data: &[u8], off: usize) -> Option<u64> {
@@ -5755,7 +5758,7 @@ impl BtfSection {
                         let e_name_off = read_u32_le(type_bytes, base).unwrap();
                         let val_lo = u64::from(read_u32_le(type_bytes, base + 4).unwrap());
                         let val_hi = u64::from(read_u32_le(type_bytes, base + 8).unwrap());
-                        let e_val = ((val_hi << 32) | val_lo) as i64;
+                        let e_val = ((val_hi << 32) | val_lo).cast_signed();
                         let e_name = cstr_at(&str_bytes, e_name_off as usize).to_owned();
                         values.push((e_name, e_val));
                     }
@@ -6894,7 +6897,7 @@ impl BpfSecurityAnalysis {
             let cls = instr.opcode & 0x07;
             let code = instr.opcode & 0xf0;
             if cls == 0x05 && code != 0x80 && code != 0x90 {
-                let target = (idx as i64) + 1 + i64::from(instr.offset);
+                let target =crate::numeric::usize_to_i64(idx) + 1 + i64::from(instr.offset);
                 if target >= 0 {
                     targets.insert(target as usize);
                 }

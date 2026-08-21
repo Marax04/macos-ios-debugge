@@ -4,6 +4,7 @@
 //! (`/sys/kernel/debug/bpf/<prog_id>/jited_insns`) and maps each native
 //! code range back to the originating eBPF instruction index.
 
+use crate::numeric;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -62,8 +63,8 @@ impl JitMapping {
     /// Average bytes per BPF instruction for this mapping (always 1.0 for a
     /// single BPF insn → many native insns mapping).
     #[must_use] 
-    pub const fn expansion_ratio(&self) -> f64 {
-        self.native_size() as f64
+    pub fn expansion_ratio(&self) -> f64 {
+        numeric::u64_to_f64(self.native_size())
     }
 }
 
@@ -203,7 +204,7 @@ impl JitDump {
         if self.mappings.is_empty() {
             0.0
         } else {
-            self.total_native_bytes as f64 / self.mappings.len() as f64
+            numeric::u64_to_f64(self.total_native_bytes) / numeric::count_to_f64(self.mappings.len())
         }
     }
 
@@ -274,7 +275,7 @@ impl EbpfJitAnalyzer {
             } else {
                 native_bytes.len() as u64
             };
-            let start = native_start as usize;
+            let start = numeric::u64_to_usize(native_start);
             let end = (native_end as usize).min(native_bytes.len());
             let chunk = if start < end {
                 native_bytes[start..end].to_vec()
@@ -433,7 +434,7 @@ impl JitStat {
         Self {
             bpf_insn_count: n,
             native_byte_count: dump.total_native_bytes,
-            avg_bytes_per_insn: dump.total_native_bytes as f64 / n as f64,
+            avg_bytes_per_insn: numeric::u64_to_f64(dump.total_native_bytes) / numeric::count_to_f64(n),
             min_native,
             max_native,
             branch_count,
