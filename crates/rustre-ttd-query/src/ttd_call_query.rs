@@ -277,7 +277,7 @@ impl CallStats {
     #[must_use]
     pub fn top_callees(&self, n: usize) -> Vec<(u64, usize)> {
         let mut v: Vec<(u64, usize)> = self.call_counts.iter().map(|(&a, &c)| (a, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -535,11 +535,9 @@ mod tests {
 
     #[test]
     fn test_call_query_limit() {
-        let records = vec![
-            make_record(1, 0x1000, None, 0x500, 1, 0),
+        let records = [make_record(1, 0x1000, None, 0x500, 1, 0),
             make_record(2, 0x1000, None, 0x501, 1, 0),
-            make_record(3, 0x1000, None, 0x502, 1, 0),
-        ];
+            make_record(3, 0x1000, None, 0x502, 1, 0)];
         let q = CallQuery::all().to_address(0x1000).limit(2);
         let filtered: Vec<_> = records.iter().filter(|r| q.matches(r)).cloned().collect();
         // limit is enforced by execute(), not matches(); just check matches works.

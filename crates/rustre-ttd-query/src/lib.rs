@@ -1140,7 +1140,7 @@ impl QueryEngine {
             }
         }
         let mut result: Vec<(u64, u64)> = counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 
@@ -1372,8 +1372,7 @@ impl QueryEngine {
 
         for event in &events {
             let rip = match &event.kind {
-                EventKind::Call { to, .. } => Some(*to),
-                EventKind::Return { to, .. } => Some(*to),
+                EventKind::Call { to, .. } | EventKind::Return { to, .. } => Some(*to),
                 EventKind::Breakpoint { addr } => Some(*addr),
                 _ => None,
             };
@@ -1457,7 +1456,7 @@ impl QueryEngine {
             }
         }
         let mut result: Vec<(u64, u64)> = counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result.truncate(top_n);
         result
     }
@@ -1551,8 +1550,7 @@ impl QueryEngine {
         events
             .into_iter()
             .filter(|e| match &e.kind {
-                EventKind::MemRead { addr, .. } => *addr >= start && *addr < end,
-                EventKind::MemWrite { addr, .. } => *addr >= start && *addr < end,
+                EventKind::MemRead { addr, .. } | EventKind::MemWrite { addr, .. } => *addr >= start && *addr < end,
                 _ => false,
             })
             .collect()
@@ -1581,8 +1579,7 @@ impl QueryEngine {
         events
             .into_iter()
             .filter(|e| match &e.kind {
-                EventKind::MemRead { addr: a, .. } => *a == addr,
-                EventKind::MemWrite { addr: a, .. } => *a == addr,
+                EventKind::MemRead { addr: a, .. } | EventKind::MemWrite { addr: a, .. } => *a == addr,
                 _ => false,
             })
             .collect()
@@ -2574,15 +2571,11 @@ impl DiffAnalyzer {
 /// operation on the same primary address / number.
 fn events_equivalent(a: &EventKind, b: &EventKind) -> bool {
     match (a, b) {
-        (EventKind::MemRead { addr: a1, .. }, EventKind::MemRead { addr: a2, .. }) => a1 == a2,
         (
             EventKind::MemWrite { addr: a1, data: d1 },
             EventKind::MemWrite { addr: a2, data: d2 },
         ) => a1 == a2 && d1 == d2,
-        (EventKind::Call { from: f1, to: t1 }, EventKind::Call { from: f2, to: t2 }) => {
-            f1 == f2 && t1 == t2
-        }
-        (EventKind::Return { from: f1, to: t1 }, EventKind::Return { from: f2, to: t2 }) => {
+        (EventKind::Call { from: f1, to: t1 }, EventKind::Call { from: f2, to: t2 }) | (EventKind::Return { from: f1, to: t1 }, EventKind::Return { from: f2, to: t2 }) => {
             f1 == f2 && t1 == t2
         }
         (EventKind::SyscallEnter { nr: n1, .. }, EventKind::SyscallEnter { nr: n2, .. }) => {
@@ -2601,7 +2594,7 @@ fn events_equivalent(a: &EventKind, b: &EventKind) -> bool {
             EventKind::ThreadExit { tid: t1, code: c1 },
             EventKind::ThreadExit { tid: t2, code: c2 },
         ) => t1 == t2 && c1 == c2,
-        (EventKind::Breakpoint { addr: a1 }, EventKind::Breakpoint { addr: a2 }) => a1 == a2,
+        (EventKind::MemRead { addr: a1, .. }, EventKind::MemRead { addr: a2, .. }) | (EventKind::Breakpoint { addr: a1 }, EventKind::Breakpoint { addr: a2 }) => a1 == a2,
         _ => false,
     }
 }
@@ -3760,9 +3753,9 @@ mod tests {
         let event = TraceEvent {
             position: TracePosition::new(0, 0),
             thread_id: 1,
-            kind: EventKind::Breakpoint { addr: 0xdeadbeef },
+            kind: EventKind::Breakpoint { addr: 0xdead_beef },
         };
-        assert!(EventPattern::Breakpoint(0xdeadbeef).matches(&event));
+        assert!(EventPattern::Breakpoint(0xdead_beef).matches(&event));
         assert!(EventPattern::AnyException.matches(&TraceEvent {
             position: TracePosition::new(0, 0),
             thread_id: 1,
@@ -4335,7 +4328,7 @@ mod tests {
         let trace = build_query_test_trace();
         let idx = TraceIndex::open_in_memory().unwrap();
         idx.build_from_trace(&trace).unwrap();
-        let writes = idx.query_memory_writes(0xdeadbeef).unwrap();
+        let writes = idx.query_memory_writes(0xdead_beef).unwrap();
         assert!(writes.is_empty());
     }
 
@@ -4382,7 +4375,7 @@ mod tests {
     fn query_filter_exception_code() {
         let trace = build_query_test_trace();
         let events = trace.all_events();
-        let f = QueryFilter::ExceptionCode { code: 0xc0000005 };
+        let f = QueryFilter::ExceptionCode { code: 0xc000_0005 };
         assert_eq!(events.iter().filter(|e| f.matches(e)).count(), 1);
     }
 
@@ -4781,7 +4774,7 @@ mod tests {
     fn executor_find_exceptions_specific() {
         let trace = build_query_test_trace();
         let q = TtdQueryExpr::FindExceptions {
-            code: Some(0xc0000005),
+            code: Some(0xc000_0005),
         };
         let results = QueryExecutor::execute(&q, &trace);
         assert_eq!(results.len(), 1);
@@ -4859,7 +4852,7 @@ mod tests {
     #[test]
     fn executor_find_value_origin_not_found() {
         let trace = build_query_test_trace();
-        let origin = QueryExecutor::find_value_origin(&trace, 0x2000, 0xdeadbeef_cafebabe);
+        let origin = QueryExecutor::find_value_origin(&trace, 0x2000, 0xdead_beef_cafe_babe);
         assert!(origin.is_none());
     }
 
@@ -5156,7 +5149,7 @@ mod tests {
         assert_eq!(
             q,
             TtdQuery::FindCall {
-                addr: 0x401000,
+                addr: 0x0040_1000,
                 after: None
             }
         );
@@ -5169,7 +5162,7 @@ mod tests {
         assert_eq!(
             q,
             TtdQuery::FindCall {
-                addr: 0x401000,
+                addr: 0x0040_1000,
                 after: Some(TracePosition::new(1, 0)),
             }
         );
@@ -5182,7 +5175,7 @@ mod tests {
         assert_eq!(
             q,
             TtdQuery::FindWrite {
-                addr: 0x7fff1234,
+                addr: 0x7fff_1234,
                 between: Some((TracePosition::new(5, 0), TracePosition::new(10, 0))),
             }
         );
@@ -5291,7 +5284,7 @@ mod tests {
     #[test]
     fn ttd_query_executor_no_match() {
         let trace = build_query_test_trace();
-        let q = TtdQuery::FindRead { addr: 0xdeadbeef };
+        let q = TtdQuery::FindRead { addr: 0xdead_beef };
         let result = TtdQueryExecutor::execute(&q, &trace);
         assert!(result.is_empty());
     }
@@ -5309,7 +5302,7 @@ mod tests {
     #[test]
     fn report_generator_call_tree_missing_root() {
         let trace = build_query_test_trace();
-        let report = TtdReportGenerator::generate_call_tree(&trace, 0xdeadbeef);
+        let report = TtdReportGenerator::generate_call_tree(&trace, 0xdead_beef);
         // Nothing matches; only the header line is emitted.
         assert!(report.starts_with("[call tree for 0xdeadbeef]"));
         assert_eq!(report.lines().count(), 1);

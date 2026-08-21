@@ -8,11 +8,11 @@ use rustre_ttd_query::*;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn pos(s: u64, st: u64) -> TracePosition {
+const fn pos(s: u64, st: u64) -> TracePosition {
     TracePosition::new(s, st)
 }
 
-fn ev(s: u64, st: u64, tid: u32, kind: EventKind) -> TraceEvent {
+const fn ev(s: u64, st: u64, tid: u32, kind: EventKind) -> TraceEvent {
     TraceEvent::new(pos(s, st), tid, kind)
 }
 
@@ -20,8 +20,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -36,7 +36,7 @@ fn mixed_trace() -> Arc<TtdTrace> {
     t.add_event(ev(4, 0, 1, EventKind::SyscallEnter { nr: 42, args: [1, 2, 3, 4, 5, 6] }));
     t.add_event(ev(5, 0, 1, EventKind::SyscallExit { nr: 42, ret: 0 }));
     t.add_event(ev(6, 0, 1, EventKind::Return { from: 0x200, to: 0x100 }));
-    t.add_event(ev(7, 0, 1, EventKind::Exception { code: 0xC0000005, addr: 0xDEAD }));
+    t.add_event(ev(7, 0, 1, EventKind::Exception { code: 0xC000_0005, addr: 0xDEAD }));
     t.add_event(ev(8, 0, 3, EventKind::Breakpoint { addr: 0x300 }));
     t.add_event(ev(9, 0, 1, EventKind::Call { from: 0x100, to: 0x500 }));
     t.add_event(ev(10, 0, 1, EventKind::Call { from: 0x500, to: 0x500 }));
@@ -75,7 +75,7 @@ fn timerange_round_trip_50_inputs() {
         let r = TimeRange::new(pos(a, 0), pos(b, 0));
         assert!(r.contains(&pos(a, 0)));
         assert!(r.contains(&pos(b, 0)));
-        assert!(r.contains(&pos((a + b) / 2, 0)));
+        assert!(r.contains(&pos(u64::midpoint(a, b), 0)));
         let s = format!("{r}");
         assert!(s.starts_with('[') && s.ends_with(']'));
     }
@@ -166,7 +166,7 @@ fn pattern_display_round_trip_smoke() {
         EventPattern::CallTo(0xFF),
         EventPattern::ReturnFrom(0xAB),
         EventPattern::SyscallNr(99),
-        EventPattern::Exception(0xC0000005),
+        EventPattern::Exception(0xC000_0005),
         EventPattern::ThreadId(7),
         EventPattern::Breakpoint(0x42),
         EventPattern::AnyException,
@@ -229,7 +229,7 @@ fn eventkindfilter_specific_kinds() {
 #[test]
 fn engine_execute_allevents_returns_all() {
     let t = mixed_trace();
-    let e = QueryEngine::new(t.clone());
+    let e = QueryEngine::new(t);
     let r = e.execute(&Query::AllEvents);
     assert_eq!(r.len(), 13);
     assert_eq!(r.events_scanned, 13);
@@ -694,7 +694,7 @@ fn parse_query_invalid_input_errors() {
 #[test]
 fn parse_query_syscall_nr_overflow_errors() {
     // u32::MAX + 1 won't fit
-    let big = format!("find syscall {}", (u32::MAX as u64) + 1);
+    let big = format!("find syscall {}", u64::from(u32::MAX) + 1);
     assert!(parse_query(&big).is_err());
 }
 
@@ -720,7 +720,7 @@ fn ttdqueryexpr_display_all_variants() {
         TtdQueryExpr::FindReturns { from_addr: 0x10 },
         TtdQueryExpr::FindSyscalls { nr: Some(5) },
         TtdQueryExpr::FindSyscalls { nr: None },
-        TtdQueryExpr::FindExceptions { code: Some(0xC0000005) },
+        TtdQueryExpr::FindExceptions { code: Some(0xC000_0005) },
         TtdQueryExpr::FindExceptions { code: None },
         TtdQueryExpr::AtTick { seq: 1, step: 2 },
         TtdQueryExpr::InRange {
@@ -747,7 +747,7 @@ fn ttdqueryexpr_display_all_variants() {
 #[test]
 fn queryindex_lookup_helpers_consistent() {
     let t = mixed_trace();
-    let e = QueryEngine::new(t.clone());
+    let e = QueryEngine::new(t);
     // execute calls_to_address lookup is exposed through find_calls_to.
     assert!(e.find_calls_to(0x200).is_some());
     assert!(e.find_calls_to(0xDEAD_BEEF).is_none());

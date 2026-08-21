@@ -1118,7 +1118,7 @@ mod tests {
 
     #[test]
     fn test_engine_select_exceptions() {
-        let trace = build_trace(vec![ev_exc(0xC0000005, 0x1000, 1)]);
+        let trace = build_trace(vec![ev_exc(0xC000_0005, 0x1000, 1)]);
         let mut engine = TtdSqlEngine::new(trace);
         let result = engine.select_exceptions().unwrap();
         assert_eq!(result.row_count(), 1);

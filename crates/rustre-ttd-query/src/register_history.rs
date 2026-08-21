@@ -808,7 +808,7 @@ impl RegisterHistory {
         }
 
         let mut result: Vec<(Vec<u64>, u64)> = counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 }

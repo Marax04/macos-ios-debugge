@@ -830,8 +830,7 @@ impl MemoryTimeline {
         let mut last_code_addr: Option<u64> = None;
         for ev in original_events {
             match &ev.kind {
-                EventKind::Call { to, .. } => last_code_addr = Some(*to),
-                EventKind::Return { to, .. } => last_code_addr = Some(*to),
+                EventKind::Call { to, .. } | EventKind::Return { to, .. } => last_code_addr = Some(*to),
                 EventKind::MemRead { .. } | EventKind::MemWrite { .. } => {
                     if let Some(code_addr) = last_code_addr {
                         *result.entry(code_addr).or_default() += 1;

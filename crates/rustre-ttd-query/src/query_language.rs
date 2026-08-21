@@ -474,8 +474,7 @@ impl QueryParser {
 /// Known fields per entity.
 fn entity_fields(entity: &str) -> Option<&'static [&'static str]> {
     match entity {
-        "memory_write" => Some(&["address", "size", "value", "pid", "tid", "time"]),
-        "memory_read" => Some(&["address", "size", "value", "pid", "tid", "time"]),
+        "memory_write" | "memory_read" => Some(&["address", "size", "value", "pid", "tid", "time"]),
         "call" => Some(&["address", "callee", "pid", "tid", "time", "depth"]),
         "thread" => Some(&["tid", "pid", "state", "time"]),
         "module" => Some(&["name", "base", "size", "time"]),

@@ -861,7 +861,7 @@ pub fn top_n_gaps(
     }
 
     let mut gaps = compute_gaps(&matched, &all_events, &None);
-    gaps.sort_by(|a, b| b.gap_ticks.cmp(&a.gap_ticks));
+    gaps.sort_by_key(|b| std::cmp::Reverse(b.gap_ticks));
     gaps.truncate(n);
     gaps
 }

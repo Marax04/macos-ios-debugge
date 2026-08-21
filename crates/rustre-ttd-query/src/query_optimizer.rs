@@ -64,14 +64,7 @@ impl PlanNode {
     #[must_use]
     pub const fn estimated_rows(&self) -> u64 {
         match self {
-            Self::Scan { estimated_rows } => *estimated_rows,
-            Self::IndexScan { estimated_rows, .. } => *estimated_rows,
-            Self::IndexRangeScan { estimated_rows, .. } => *estimated_rows,
-            Self::Filter { estimated_rows, .. } => *estimated_rows,
-            Self::Sort { estimated_rows, .. } => *estimated_rows,
-            Self::Limit { estimated_rows, .. } => *estimated_rows,
-            Self::Join { estimated_rows, .. } => *estimated_rows,
-            Self::Aggregate { estimated_rows, .. } => *estimated_rows,
+            Self::Scan { estimated_rows } | Self::IndexScan { estimated_rows, .. } | Self::IndexRangeScan { estimated_rows, .. } | Self::Filter { estimated_rows, .. } | Self::Sort { estimated_rows, .. } | Self::Limit { estimated_rows, .. } | Self::Join { estimated_rows, .. } | Self::Aggregate { estimated_rows, .. } => *estimated_rows,
         }
     }
 
@@ -114,11 +107,8 @@ impl PlanNode {
     pub fn uses_index(&self) -> bool {
         match self {
             Self::IndexScan { .. } | Self::IndexRangeScan { .. } => true,
-            Self::Filter { child, .. } => child.uses_index(),
-            Self::Sort { child, .. } => child.uses_index(),
-            Self::Limit { child, .. } => child.uses_index(),
+            Self::Filter { child, .. } | Self::Sort { child, .. } | Self::Limit { child, .. } | Self::Aggregate { child, .. } => child.uses_index(),
             Self::Join { left, right, .. } => left.uses_index() || right.uses_index(),
-            Self::Aggregate { child, .. } => child.uses_index(),
             Self::Scan { .. } => false,
         }
     }

@@ -6,11 +6,11 @@ use rustre_trace::TraceFilter;
 use rustre_ttd::{EventKind, TraceEvent, TraceMetadata, TracePosition, TtdTrace};
 use rustre_ttd_query::*;
 
-fn pos(s: u64, st: u64) -> TracePosition {
+const fn pos(s: u64, st: u64) -> TracePosition {
     TracePosition::new(s, st)
 }
 
-fn ev(s: u64, st: u64, tid: u32, kind: EventKind) -> TraceEvent {
+const fn ev(s: u64, st: u64, tid: u32, kind: EventKind) -> TraceEvent {
     TraceEvent::new(pos(s, st), tid, kind)
 }
 
@@ -29,7 +29,7 @@ fn mixed_trace() -> Arc<TtdTrace> {
     t.add_event(ev(5, 0, 1, EventKind::SyscallExit { nr: 42, ret: 0 }));
     t.add_event(ev(6, 0, 1, EventKind::SyscallExit { nr: 99, ret: u64::MAX })); // negative as i64
     t.add_event(ev(7, 0, 1, EventKind::Return { from: 0x200, to: 0x100 }));
-    t.add_event(ev(8, 0, 1, EventKind::Exception { code: 0xC0000005, addr: 0xDEAD }));
+    t.add_event(ev(8, 0, 1, EventKind::Exception { code: 0xC000_0005, addr: 0xDEAD }));
     t.add_event(ev(9, 0, 3, EventKind::Breakpoint { addr: 0x300 }));
     t.add_event(ev(10, 0, 3, EventKind::ThreadCreate { tid: 4 }));
     t.add_event(ev(11, 0, 4, EventKind::ThreadExit { tid: 4, code: 0 }));
@@ -130,8 +130,8 @@ fn filter_in_time_range() {
 
 #[test]
 fn filter_exception_thread_lifecycle() {
-    let f = QueryFilter::ExceptionCode { code: 0xC0000005 };
-    assert!(f.matches(&ev(0, 0, 1, EventKind::Exception { code: 0xC0000005, addr: 0 })));
+    let f = QueryFilter::ExceptionCode { code: 0xC000_0005 };
+    assert!(f.matches(&ev(0, 0, 1, EventKind::Exception { code: 0xC000_0005, addr: 0 })));
     let tc = QueryFilter::ThreadCreate;
     assert!(tc.matches(&ev(0, 0, 1, EventKind::ThreadCreate { tid: 5 })));
     let te = QueryFilter::ThreadExit;
@@ -151,7 +151,7 @@ fn querylogic_and_or_not_single() {
     let e = ev(0, 0, 1, EventKind::MemRead { addr: 0x10, len: 1 });
     let f1 = QueryFilter::MemoryRead { addr: 0x10, range_bytes: None };
     let f2 = QueryFilter::Thread { tid: 1 };
-    assert!(QueryLogic::And(vec![f1.clone(), f2.clone()]).matches(&e));
+    assert!(QueryLogic::And(vec![f1.clone(), f2]).matches(&e));
     assert!(QueryLogic::Or(vec![f1.clone(), QueryFilter::Thread { tid: 99 }]).matches(&e));
     assert!(!QueryLogic::Not(Box::new(f1.clone())).matches(&e));
     assert!(QueryLogic::Single(f1).matches(&e));
@@ -260,7 +260,7 @@ fn query_index_build_populates_indices() {
     assert!(!idx.accesses_to_address(0x1000).is_empty());
     assert!(!idx.events_for_thread(1).is_empty());
     assert!(idx.events_for_thread(999).is_empty());
-    assert!(idx.calls_to_address(0xdeadbeef).is_empty());
+    assert!(idx.calls_to_address(0xdead_beef).is_empty());
 }
 
 #[test]
@@ -731,7 +731,7 @@ fn find_calls_to_returns_first_hit_or_none() {
     let eng = QueryEngine::new(mixed_trace());
     let e = eng.find_calls_to(0x200).expect("call to 0x200 exists");
     assert!(matches!(e.kind, EventKind::Call { to: 0x200, .. }));
-    assert!(eng.find_calls_to(0xDEADBEEF).is_none());
+    assert!(eng.find_calls_to(0xDEAD_BEEF).is_none());
 }
 
 #[test]

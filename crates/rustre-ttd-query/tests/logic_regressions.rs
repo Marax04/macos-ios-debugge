@@ -24,7 +24,7 @@ fn trace(events: Vec<(u64, u32, EventKind)>) -> TtdTrace {
     t
 }
 
-fn call(from: u64, to: u64) -> EventKind {
+const fn call(from: u64, to: u64) -> EventKind {
     EventKind::Call { from, to }
 }
 
@@ -324,7 +324,7 @@ fn disjoint_writes_from_two_threads_are_not_flagged() {
 use rustre_ttd_query::ttd_call_stack_query::TtdCallStackQuery;
 use rustre_ttd_query::ttd_memory_query::MemoryPosition;
 
-fn mp(seq: u64) -> MemoryPosition {
+const fn mp(seq: u64) -> MemoryPosition {
     MemoryPosition::new(seq, 0)
 }
 

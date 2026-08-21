@@ -242,14 +242,14 @@ impl IndexBuilder {
 
 fn describe_exception(code: u32) -> String {
     match code {
-        0xC0000005 => "Access Violation".to_string(),
-        0xC0000094 => "Integer Divide By Zero".to_string(),
-        0xC0000096 => "Privileged Instruction".to_string(),
-        0xC000001D => "Illegal Instruction".to_string(),
-        0x80000003 => "Breakpoint".to_string(),
-        0x80000004 => "Single Step".to_string(),
-        0xC0000374 => "Heap Corruption".to_string(),
-        0xC00000FD => "Stack Overflow".to_string(),
+        0xC000_0005 => "Access Violation".to_string(),
+        0xC000_0094 => "Integer Divide By Zero".to_string(),
+        0xC000_0096 => "Privileged Instruction".to_string(),
+        0xC000_001D => "Illegal Instruction".to_string(),
+        0x8000_0003 => "Breakpoint".to_string(),
+        0x8000_0004 => "Single Step".to_string(),
+        0xC000_0374 => "Heap Corruption".to_string(),
+        0xC000_00FD => "Stack Overflow".to_string(),
         _ => format!("Exception {code:#010x}"),
     }
 }
@@ -341,7 +341,7 @@ impl<'a> IndexQueryEngine<'a> {
                 module: sym.module.clone(),
             });
         }
-        frames.sort_by(|a, b| b.value.cmp(&a.value));
+        frames.sort_by_key(|b| std::cmp::Reverse(b.value));
         frames
     }
 }
