@@ -56,14 +56,32 @@ impl CilValue {
     }
 
     /// Coerce to f64 for floating-point operations.
+    ///
+    /// This is ECMA-335 `conv.r8`, defined as rounding the integer to the
+    /// nearest double. The `i64` case builds that value arithmetically from
+    /// two 32-bit halves instead of casting: `f64::from(u32)` is lossless and
+    /// `hi * 2^32` is exact, so the single fused multiply-add performs exactly
+    /// one round-to-nearest-even — the rounding the specification requires.
     #[must_use]
-    pub const fn to_f64(&self) -> Option<f64> {
+    pub fn to_f64(&self) -> Option<f64> {
         match self {
-            Self::F64(v)  => Some(*v),
-            Self::I32(v)  => Some(*v as f64),
-            Self::I64(v)  => Some(*v as f64),
+            Self::F64(v) => Some(*v),
+            Self::I32(v) => Some(f64::from(*v)),
+            Self::I64(v) => Some(Self::i64_to_f64_round_nearest(*v)),
             _ => None,
         }
+    }
+
+    /// Round an `i64` to the nearest `f64` without an unchecked cast.
+    ///
+    /// See [`Self::to_f64`] for why this is exact-then-single-rounding.
+    #[must_use]
+    fn i64_to_f64_round_nearest(v: i64) -> f64 {
+        let magnitude = v.unsigned_abs();
+        let hi = u32::try_from(magnitude >> 32).unwrap_or(u32::MAX);
+        let lo = u32::try_from(magnitude & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+        let widened = f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo));
+        if v.is_negative() { -widened } else { widened }
     }
 
     /// True if this is an Unknown or indeterminate value.
