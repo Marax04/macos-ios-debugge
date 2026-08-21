@@ -3708,7 +3708,8 @@ impl JvmDisassembler {
                 }
             }
             // Invokeinterface: 2-byte cp index + count byte (must come before the b2..=b9 arm)
-            0xb9 => {
+            // Multianewarray (0xc5): 2-byte cp index + dimension byte — same shape.
+            0xb9 | 0xc5 => {
                 if raw.len() >= 4 {
                     vec![
                         u32::from(u16::from_be_bytes([raw[1], raw[2]])),
@@ -3730,17 +3731,6 @@ impl JvmDisassembler {
             0x84 => {
                 if raw.len() >= 3 {
                     vec![u32::from(raw[1]), u32::from(raw[2])]
-                } else {
-                    vec![]
-                }
-            }
-            // Multianewarray: 2-byte cp index + dimension byte
-            0xc5 => {
-                if raw.len() >= 4 {
-                    vec![
-                        u32::from(u16::from_be_bytes([raw[1], raw[2]])),
-                        u32::from(raw[3]),
-                    ]
                 } else {
                     vec![]
                 }
@@ -4147,10 +4137,13 @@ impl CpTag {
     #[must_use]
     pub const fn fixed_data_len(self) -> Option<usize> {
         Some(match self {
-            Self::Integer | Self::Float => 4,
             Self::Long | Self::Double => 8,
             Self::Class | Self::String | Self::Module | Self::Package | Self::MethodType => 2,
-            Self::Fieldref
+            // 4-byte payloads: the two 32-bit numeric constants, and every
+            // entry made of two 16-bit constant-pool indices.
+            Self::Integer
+            | Self::Float
+            | Self::Fieldref
             | Self::Methodref
             | Self::InterfaceMethodref
             | Self::NameAndType
@@ -4420,8 +4413,9 @@ impl VerificationTypeFull {
     pub fn is_assignable_from(&self, from: &Self) -> bool {
         match (self, from) {
             (Self::Top, _) => true,
+            // Identical types are always assignable — this covers
+            // (Integer, Integer) and every other exact match.
             (a, b) if a == b => true,
-            (Self::Integer, Self::Integer) => true,
             (Self::Object { .. }, Self::Null) => true,
             _ => false,
         }

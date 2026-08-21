@@ -245,9 +245,9 @@ impl CpCategory {
             | CpEntry::Dynamic { .. }
             | CpEntry::InvokeDynamic { .. } => Self::Metadata,
             CpEntry::Module { .. } | CpEntry::Package { .. } => Self::ModuleInfo,
-            CpEntry::Utf8(_) => Self::Raw,
+            // Utf8 payloads and unrecognised tags are both raw byte content.
+            CpEntry::Utf8(_) | CpEntry::Unknown(_) => Self::Raw,
             CpEntry::Wide => Self::Placeholder,
-            CpEntry::Unknown(_) => Self::Raw,
         }
     }
 }
@@ -430,15 +430,10 @@ impl CpBytecodeScanner {
                     i += 2;
                 }
                 // invokeinterface: 4 bytes extra (index2, count, 0)
-                0xB9 => {
-                    if i + 2 < bytecode.len() {
-                        let idx = u16::from_be_bytes([bytecode[i + 1], bytecode[i + 2]]);
-                        refs.record(idx, i as u32);
-                    }
-                    i += 5;
-                }
-                // invokedynamic: 4 bytes (index2, 0, 0)
-                0xBA => {
+                // invokedynamic:   4 bytes       (index2, 0, 0)
+                // Both carry the constant-pool index in the first two operand
+                // bytes and are five bytes long in total.
+                0xB9 | 0xBA => {
                     if i + 2 < bytecode.len() {
                         let idx = u16::from_be_bytes([bytecode[i + 1], bytecode[i + 2]]);
                         refs.record(idx, i as u32);

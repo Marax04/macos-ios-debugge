@@ -66,7 +66,8 @@ impl TypeInfo {
             (Self::Reference(n1), Self::Reference(n2)) if n1 == n2 => Self::Reference(n1.clone()),
             // Different reference types — fall back to java/lang/Object.
             (Self::Reference(_), Self::Reference(_)) => Self::Reference("java/lang/Object".into()),
-            (Self::Unknown, _) | (_, Self::Unknown) => Self::Unknown,
+            // Unknown on either side, and any other incompatible pairing,
+            // widen to Unknown.
             _ => Self::Unknown,
         }
     }

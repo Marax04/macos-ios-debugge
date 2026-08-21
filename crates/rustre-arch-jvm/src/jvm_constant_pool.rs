@@ -223,6 +223,19 @@ pub struct JvmConstantPool {
 }
 
 impl JvmConstantPool {
+    /// Largest valid 1-based constant-pool index.
+    ///
+    /// `constant_pool_count` is a `u16`, so a maximal 65536-entry pool would
+    /// make `entries.len() as u16` wrap to `0` and the following `- 1`
+    /// underflow — a panic in debug and a wrap in release, reachable from
+    /// attacker-supplied class-file bytes. Both steps are saturating here.
+    #[must_use]
+    pub fn max_index(&self) -> u16 {
+        u16::try_from(self.entries.len())
+            .unwrap_or(u16::MAX)
+            .saturating_sub(1)
+    }
+
     /// Parse the constant pool from `bytes`, which must start **at the first
     /// constant-pool entry** (i.e. immediately after the `constant_pool_count`
     /// field in the class file).
@@ -411,8 +424,8 @@ impl JvmConstantPool {
         if index == 0 { return Err(CpParseError::ZeroIndex); }
         match self.entries.get(index as usize) {
             Some(ConstantEntry::Utf8(s)) => Ok(s.as_str()),
-            Some(_) => Err(CpParseError::InvalidIndex { index, max: self.entries.len() as u16 - 1 }),
-            None => Err(CpParseError::InvalidIndex { index, max: self.entries.len() as u16 - 1 }),
+            // Wrong tag and out-of-range index are the same diagnostic.
+            Some(_) | None => Err(CpParseError::InvalidIndex { index, max: self.max_index() }),
         }
     }
 
@@ -423,7 +436,7 @@ impl JvmConstantPool {
         }
         let name_index = match self.entries.get(index as usize) {
             Some(ConstantEntry::Class(i)) => *i,
-            _ => return Err(CpParseError::InvalidIndex { index, max: self.entries.len() as u16 - 1 }),
+            _ => return Err(CpParseError::InvalidIndex { index, max: self.max_index() }),
         };
         let name = self.resolve_utf8(name_index)?.to_owned();
         self.class_name_cache.insert(index, name.clone());
@@ -436,7 +449,7 @@ impl JvmConstantPool {
             Some(ConstantEntry::NameAndType(n, d)) => {
                 Ok((self.resolve_utf8(*n)?, self.resolve_utf8(*d)?))
             }
-            _ => Err(CpParseError::InvalidIndex { index, max: self.entries.len() as u16 - 1 }),
+            _ => Err(CpParseError::InvalidIndex { index, max: self.max_index() }),
         }
     }
 
@@ -444,7 +457,7 @@ impl JvmConstantPool {
     pub fn resolve_method_ref(&mut self, index: u16) -> Result<(u16, String, String), CpParseError> {
         let (class_index, nat_index) = match self.entries.get(index as usize) {
             Some(ConstantEntry::Methodref(c, n) | ConstantEntry::InterfaceMethodref(c, n)) => (*c, *n),
-            _ => return Err(CpParseError::InvalidIndex { index, max: self.entries.len() as u16 - 1 }),
+            _ => return Err(CpParseError::InvalidIndex { index, max: self.max_index() }),
         };
         let (name, desc) = self.resolve_name_and_type(nat_index)?;
         let (name, desc) = (name.to_owned(), desc.to_owned());

@@ -191,7 +191,8 @@ impl StackMapFrame {
     fn parse(buf: &[u8], pos: &mut usize) -> Result<Self, AttrParseError> {
         let frame_type = read_u8(buf, pos, "StackMapTable")?;
         match frame_type {
-            0..=63 => Ok(Self { frame_type, locals: vec![], stack: vec![] }),
+            // 0..=63 (same_frame) carries no extra data, exactly like the
+            // reserved/unknown frame types handled by the final arm.
             64..=127 => {
                 let vti = VerificationTypeInfo::parse(buf, pos)?;
                 Ok(Self { frame_type, locals: vec![], stack: vec![vti] })
@@ -201,11 +202,9 @@ impl StackMapFrame {
                 let vti = VerificationTypeInfo::parse(buf, pos)?;
                 Ok(Self { frame_type, locals: vec![], stack: vec![vti] })
             }
-            248..=250 => {
-                let _offset_delta = read_u16(buf, pos, "StackMapTable")?;
-                Ok(Self { frame_type, locals: vec![], stack: vec![] })
-            }
-            251 => {
+            // 248..=250 (chop_frame) and 251 (same_frame_extended) both carry
+            // only an offset_delta and describe no locals or stack entries.
+            248..=251 => {
                 let _offset_delta = read_u16(buf, pos, "StackMapTable")?;
                 Ok(Self { frame_type, locals: vec![], stack: vec![] })
             }
@@ -236,6 +235,7 @@ impl StackMapFrame {
                 }
                 Ok(Self { frame_type, locals, stack })
             }
+            // same_frame (0..=63) plus reserved / unrecognised frame types.
             _ => Ok(Self { frame_type, locals: vec![], stack: vec![] }),
         }
     }
