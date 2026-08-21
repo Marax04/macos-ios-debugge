@@ -75,8 +75,7 @@ impl SimplifyResult {
     #[must_use]
     pub const fn live_branch(&self) -> Option<u64> {
         match self {
-            Self::AlwaysTaken { dead_branch, .. } => Some(dead_branch.live_target),
-            Self::NeverTaken { dead_branch, .. } => Some(dead_branch.live_target),
+            Self::AlwaysTaken { dead_branch, .. } | Self::NeverTaken { dead_branch, .. } => Some(dead_branch.live_target),
             Self::Indeterminate { .. } => None,
         }
     }

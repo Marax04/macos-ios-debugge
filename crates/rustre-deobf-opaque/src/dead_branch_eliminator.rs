@@ -198,7 +198,7 @@ impl fmt::Display for EliminationResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Instruction in a simplified CFG block.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CfgInstr {
     /// Conditional branch: if cond != 0 goto `true_block`, else `false_block`.
     CondBr { cond_var: u32, true_block: u32, false_block: u32 },
@@ -499,8 +499,8 @@ impl DeadBranchEliminator {
         let mut initially_dead: HashSet<u32> = HashSet::new();
 
         for db in dead_branches {
-            if let Some(block) = cfg.block_by_id(db.block_id) {
-                if let Some(idx) = block.branch_instr_idx() {
+            if let Some(block) = cfg.block_by_id(db.block_id)
+                && let Some(idx) = block.branch_instr_idx() {
                     patch.branch_patches.push(BranchPatch {
                         block_id: db.block_id,
                         instr_idx: idx,
@@ -511,7 +511,6 @@ impl DeadBranchEliminator {
                     patch.new_edges.push((db.block_id, db.live_target));
                     initially_dead.insert(db.dead_target);
                 }
-            }
         }
 
         let unreachable = self.find_unreachable(cfg, &initially_dead);
@@ -706,7 +705,7 @@ mod tests {
             confidence: 0.95,
         };
         let s = db.to_string();
-        assert!(s.contains("5"));
+        assert!(s.contains('5'));
         assert!(s.contains("always-true"));
     }
 

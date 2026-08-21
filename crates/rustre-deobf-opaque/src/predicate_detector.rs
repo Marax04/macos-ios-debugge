@@ -173,9 +173,8 @@ impl PredicateExpr {
                 b.collect_vars(out);
             }
             Self::Not(a) | Self::Neg(a) | Self::BitCount(a)
-            | Self::Abs(a) | Self::Square(a) => a.collect_vars(out),
-            Self::Shl(a, _) | Self::Shr(a, _) => a.collect_vars(out),
-        }
+            | Self::Abs(a) | Self::Square(a) | Self::Shl(a, _) | Self::Shr(a, _) => a.collect_vars(out),
+            }
     }
 
     /// Evaluate with variable bindings.
@@ -289,11 +288,10 @@ impl PredicateExpr {
                 // Use checked_abs to preserve the same semantics as eval(),
                 // which also uses checked_abs. For i64::MIN, checked_abs
                 // returns None so we leave the node unsimplified.
-                if let Some(c) = a.as_const() {
-                    if let Some(abs_val) = c.checked_abs() {
+                if let Some(c) = a.as_const()
+                    && let Some(abs_val) = c.checked_abs() {
                         return Self::Const(abs_val);
                     }
-                }
                 Self::Abs(Self::bx(a))
             }
             Self::Square(a) => {
@@ -414,17 +412,15 @@ impl PredicateExpr {
             Self::Mod(a, b) => {
                 let a = a.simplify();
                 let b = b.simplify();
-                if let (Some(ca), Some(cb)) = (a.as_const(), b.as_const()) {
-                    if cb != 0 { return Self::Const(ca.wrapping_rem(cb)); }
-                }
+                if let (Some(ca), Some(cb)) = (a.as_const(), b.as_const())
+                    && cb != 0 { return Self::Const(ca.wrapping_rem(cb)); }
                 Self::Mod(Self::bx(a), Self::bx(b))
             }
             Self::Div(a, b) => {
                 let a = a.simplify();
                 let b = b.simplify();
-                if let (Some(ca), Some(cb)) = (a.as_const(), b.as_const()) {
-                    if cb != 0 { return Self::Const(ca.wrapping_div(cb)); }
-                }
+                if let (Some(ca), Some(cb)) = (a.as_const(), b.as_const())
+                    && cb != 0 { return Self::Const(ca.wrapping_div(cb)); }
                 Self::Div(Self::bx(a), Self::bx(b))
             }
             Self::Shl(a, n) => {
@@ -539,32 +535,28 @@ fn is_square_expr(e: &PredicateExpr, var: &PredicateExpr) -> bool {
 
 fn is_x_times_x_minus_1(e: &PredicateExpr) -> bool {
     if let PredicateExpr::Mul(a, b) = e {
-        if let PredicateExpr::Sub(inner_a, inner_b) = b.as_ref() {
-            if a.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
+        if let PredicateExpr::Sub(inner_a, inner_b) = b.as_ref()
+            && a.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
                 return true;
             }
-        }
-        if let PredicateExpr::Sub(inner_a, inner_b) = a.as_ref() {
-            if b.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
+        if let PredicateExpr::Sub(inner_a, inner_b) = a.as_ref()
+            && b.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
                 return true;
             }
-        }
     }
     false
 }
 
 fn is_x_times_x_plus_1(e: &PredicateExpr) -> bool {
     if let PredicateExpr::Mul(a, b) = e {
-        if let PredicateExpr::Add(inner_a, inner_b) = b.as_ref() {
-            if a.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
+        if let PredicateExpr::Add(inner_a, inner_b) = b.as_ref()
+            && a.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
                 return true;
             }
-        }
-        if let PredicateExpr::Add(inner_a, inner_b) = a.as_ref() {
-            if b.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
+        if let PredicateExpr::Add(inner_a, inner_b) = a.as_ref()
+            && b.structurally_equal(inner_a) && matches!(inner_b.as_ref(), PredicateExpr::Const(1)) {
                 return true;
             }
-        }
     }
     false
 }
@@ -577,11 +569,10 @@ fn is_x_sq_plus_x(e: &PredicateExpr) -> bool {
 }
 
 fn is_or_one(e: &PredicateExpr) -> bool {
-    if let PredicateExpr::Or(a, b) = e {
-        if matches!(a.as_ref(), PredicateExpr::Const(1)) || matches!(b.as_ref(), PredicateExpr::Const(1)) {
+    if let PredicateExpr::Or(a, b) = e
+        && (matches!(a.as_ref(), PredicateExpr::Const(1)) || matches!(b.as_ref(), PredicateExpr::Const(1))) {
             return true;
         }
-    }
     false
 }
 
@@ -670,11 +661,10 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::XorSelf,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if is_xor_self(lhs) && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && is_xor_self(lhs) && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
                         return Some(BoolValue::AlwaysTrue);
                     }
-                }
                 None
             },
         },
@@ -684,11 +674,10 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::TrivialIdentity,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if is_sub_self(lhs) && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && is_sub_self(lhs) && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
                         return Some(BoolValue::AlwaysTrue);
                     }
-                }
                 None
             },
         },
@@ -698,18 +687,16 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::SquareNonNeg,
             matcher: |e| {
-                if let PredicateExpr::Ge(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
+                if let PredicateExpr::Ge(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
                         if matches!(lhs.as_ref(), PredicateExpr::Square(_)) {
                             return Some(BoolValue::AlwaysTrue);
                         }
-                        if let PredicateExpr::Mul(a, b) = lhs.as_ref() {
-                            if a.structurally_equal(b) {
+                        if let PredicateExpr::Mul(a, b) = lhs.as_ref()
+                            && a.structurally_equal(b) {
                                 return Some(BoolValue::AlwaysTrue);
                             }
-                        }
                     }
-                }
                 None
             },
         },
@@ -719,15 +706,12 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::ConsecutiveProduct,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
-                        if let PredicateExpr::Mod(inner, div) = lhs.as_ref() {
-                            if matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_times_x_minus_1(inner) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(0))
+                        && let PredicateExpr::Mod(inner, div) = lhs.as_ref()
+                            && matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_times_x_minus_1(inner) {
                                 return Some(BoolValue::AlwaysTrue);
                             }
-                        }
-                    }
-                }
                 None
             },
         },
@@ -737,15 +721,12 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::ConsecutiveProduct,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
-                        if let PredicateExpr::Mod(inner, div) = lhs.as_ref() {
-                            if matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_times_x_plus_1(inner) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(0))
+                        && let PredicateExpr::Mod(inner, div) = lhs.as_ref()
+                            && matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_times_x_plus_1(inner) {
                                 return Some(BoolValue::AlwaysTrue);
                             }
-                        }
-                    }
-                }
                 None
             },
         },
@@ -755,15 +736,12 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::ConsecutiveProduct,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
-                        if let PredicateExpr::Mod(inner, div) = lhs.as_ref() {
-                            if matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_sq_plus_x(inner) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(0))
+                        && let PredicateExpr::Mod(inner, div) = lhs.as_ref()
+                            && matches!(div.as_ref(), PredicateExpr::Const(2)) && is_x_sq_plus_x(inner) {
                                 return Some(BoolValue::AlwaysTrue);
                             }
-                        }
-                    }
-                }
                 None
             },
         },
@@ -773,12 +751,11 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::PopcountNonNeg,
             matcher: |e| {
-                if let PredicateExpr::Ge(lhs, rhs) = e {
-                    if matches!(lhs.as_ref(), PredicateExpr::BitCount(_))
+                if let PredicateExpr::Ge(lhs, rhs) = e
+                    && matches!(lhs.as_ref(), PredicateExpr::BitCount(_))
                         && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
                         return Some(BoolValue::AlwaysTrue);
                     }
-                }
                 None
             },
         },
@@ -788,12 +765,11 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::AbsNonNeg,
             matcher: |e| {
-                if let PredicateExpr::Ge(lhs, rhs) = e {
-                    if matches!(lhs.as_ref(), PredicateExpr::Abs(_))
+                if let PredicateExpr::Ge(lhs, rhs) = e
+                    && matches!(lhs.as_ref(), PredicateExpr::Abs(_))
                         && matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
                         return Some(BoolValue::AlwaysTrue);
                     }
-                }
                 None
             },
         },
@@ -803,9 +779,9 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::MathInvariant,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(-1)) {
-                        if let PredicateExpr::Or(a, b) = lhs.as_ref() {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(-1))
+                        && let PredicateExpr::Or(a, b) = lhs.as_ref() {
                             let check = |x: &PredicateExpr, y: &PredicateExpr| {
                                 if let PredicateExpr::Not(inner) = y {
                                     return x.structurally_equal(inner);
@@ -816,8 +792,6 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
                                 return Some(BoolValue::AlwaysTrue);
                             }
                         }
-                    }
-                }
                 None
             },
         },
@@ -827,9 +801,9 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::MathInvariant,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(0)) {
-                        if let PredicateExpr::And(a, b) = lhs.as_ref() {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(0))
+                        && let PredicateExpr::And(a, b) = lhs.as_ref() {
                             let check = |x: &PredicateExpr, y: &PredicateExpr| {
                                 if let PredicateExpr::Not(inner) = y {
                                     return x.structurally_equal(inner);
@@ -840,8 +814,6 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
                                 return Some(BoolValue::AlwaysTrue);
                             }
                         }
-                    }
-                }
                 None
             },
         },
@@ -851,9 +823,9 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::OrOneOdd,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if matches!(rhs.as_ref(), PredicateExpr::Const(1)) {
-                        if let PredicateExpr::And(a, b) = lhs.as_ref() {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && matches!(rhs.as_ref(), PredicateExpr::Const(1))
+                        && let PredicateExpr::And(a, b) = lhs.as_ref() {
                             let check = |x: &PredicateExpr, c: &PredicateExpr| {
                                 matches!(c, PredicateExpr::Const(1)) && is_or_one(x)
                             };
@@ -861,8 +833,6 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
                                 return Some(BoolValue::AlwaysTrue);
                             }
                         }
-                    }
-                }
                 None
             },
         },
@@ -919,13 +889,11 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::BitwiseIdempotency,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if let PredicateExpr::And(a, b) = lhs.as_ref() {
-                        if a.structurally_equal(b) && rhs.structurally_equal(a) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && let PredicateExpr::And(a, b) = lhs.as_ref()
+                        && a.structurally_equal(b) && rhs.structurally_equal(a) {
                             return Some(BoolValue::AlwaysTrue);
                         }
-                    }
-                }
                 None
             },
         },
@@ -935,13 +903,11 @@ pub fn build_patterns() -> Vec<PredicatePattern> {
             outcome: BoolValue::AlwaysTrue,
             kind: PredicateKind::BitwiseIdempotency,
             matcher: |e| {
-                if let PredicateExpr::Eq(lhs, rhs) = e {
-                    if let PredicateExpr::Or(a, b) = lhs.as_ref() {
-                        if a.structurally_equal(b) && rhs.structurally_equal(a) {
+                if let PredicateExpr::Eq(lhs, rhs) = e
+                    && let PredicateExpr::Or(a, b) = lhs.as_ref()
+                        && a.structurally_equal(b) && rhs.structurally_equal(a) {
                             return Some(BoolValue::AlwaysTrue);
                         }
-                    }
-                }
                 None
             },
         },

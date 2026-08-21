@@ -37,19 +37,19 @@ pub enum SmtExpr {
     /// Binary operation.
     BinOp {
         op: SmtBinOp,
-        lhs: Box<SmtExpr>,
-        rhs: Box<SmtExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Unary operation.
     UnaryOp {
         op: SmtUnaryOp,
-        inner: Box<SmtExpr>,
+        inner: Box<Self>,
     },
     /// Comparison: returns 0 or 1.
     Cmp {
         op: SmtCmpOp,
-        lhs: Box<SmtExpr>,
-        rhs: Box<SmtExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
 }
 
@@ -107,7 +107,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn add(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn add(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::Add,
             lhs: Box::new(lhs),
@@ -116,7 +116,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn sub(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn sub(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::Sub,
             lhs: Box::new(lhs),
@@ -125,7 +125,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn mul(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn mul(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::Mul,
             lhs: Box::new(lhs),
@@ -134,7 +134,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn and(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn and(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::And,
             lhs: Box::new(lhs),
@@ -143,7 +143,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn or(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn or(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::Or,
             lhs: Box::new(lhs),
@@ -152,7 +152,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn xor(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn xor(lhs: Self, rhs: Self) -> Self {
         Self::BinOp {
             op: SmtBinOp::Xor,
             lhs: Box::new(lhs),
@@ -161,7 +161,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn not(inner: SmtExpr) -> Self {
+    pub fn not(inner: Self) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Not,
             inner: Box::new(inner),
@@ -169,7 +169,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn neg(inner: SmtExpr) -> Self {
+    pub fn neg(inner: Self) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Neg,
             inner: Box::new(inner),
@@ -177,7 +177,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn square(inner: SmtExpr) -> Self {
+    pub fn square(inner: Self) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Square,
             inner: Box::new(inner),
@@ -185,7 +185,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn eq(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn eq(lhs: Self, rhs: Self) -> Self {
         Self::Cmp {
             op: SmtCmpOp::Eq,
             lhs: Box::new(lhs),
@@ -194,7 +194,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn ne(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn ne(lhs: Self, rhs: Self) -> Self {
         Self::Cmp {
             op: SmtCmpOp::Ne,
             lhs: Box::new(lhs),
@@ -203,7 +203,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn sge(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn sge(lhs: Self, rhs: Self) -> Self {
         // x ≥ rhs  →  NOT (x < rhs)
         Self::UnaryOp {
             op: SmtUnaryOp::Not,
@@ -216,7 +216,7 @@ impl SmtExpr {
     }
 
     #[must_use]
-    pub fn uge(lhs: SmtExpr, rhs: SmtExpr) -> Self {
+    pub fn uge(lhs: Self, rhs: Self) -> Self {
         Self::UnaryOp {
             op: SmtUnaryOp::Not,
             inner: Box::new(Self::Cmp {
@@ -240,15 +240,11 @@ impl SmtExpr {
     fn collect_vars(&self, out: &mut Vec<(String, u8)>) {
         match self {
             Self::Var { name, width } => out.push((name.clone(), *width)),
-            Self::BinOp { lhs, rhs, .. } => {
+            Self::BinOp { lhs, rhs, .. } | Self::Cmp { lhs, rhs, .. } => {
                 lhs.collect_vars(out);
                 rhs.collect_vars(out);
             }
             Self::UnaryOp { inner, .. } => inner.collect_vars(out),
-            Self::Cmp { lhs, rhs, .. } => {
-                lhs.collect_vars(out);
-                rhs.collect_vars(out);
-            }
             Self::Const(_) => {}
         }
     }
@@ -457,87 +453,65 @@ impl SmtProver {
     fn algebraic_simplify(&self, expr: &SmtExpr) -> Option<(PredicateValue, f32)> {
         if let SmtExpr::Cmp { op, lhs, rhs } = expr {
             // x² < 0 (or unsigned) — always false
-            if matches!(op, SmtCmpOp::Slt | SmtCmpOp::Ult) {
-                if matches!(rhs.as_ref(), SmtExpr::Const(0)) {
-                    if matches!(lhs.as_ref(), SmtExpr::UnaryOp { op: SmtUnaryOp::Square, .. }) {
+            if matches!(op, SmtCmpOp::Slt | SmtCmpOp::Ult)
+                && matches!(rhs.as_ref(), SmtExpr::Const(0))
+                    && matches!(lhs.as_ref(), SmtExpr::UnaryOp { op: SmtUnaryOp::Square, .. }) {
                         return Some((PredicateValue::AlwaysFalse, 0.85));
                     }
-                }
-            }
 
             if *op == SmtCmpOp::Eq {
                 // x - x == 0
                 if matches!(rhs.as_ref(), SmtExpr::Const(0)) {
-                    if let SmtExpr::BinOp { op: SmtBinOp::Sub, lhs: bl, rhs: br } = lhs.as_ref() {
-                        if let (SmtExpr::Var { name: n1, .. }, SmtExpr::Var { name: n2, .. }) =
+                    if let SmtExpr::BinOp { op: SmtBinOp::Sub, lhs: bl, rhs: br } = lhs.as_ref()
+                        && let (SmtExpr::Var { name: n1, .. }, SmtExpr::Var { name: n2, .. }) =
                             (bl.as_ref(), br.as_ref())
-                        {
-                            if n1 == n2 {
+                            && n1 == n2 {
                                 return Some((PredicateValue::AlwaysTrue, 0.99));
                             }
-                        }
-                    }
                     // x ^ x == 0
-                    if let SmtExpr::BinOp { op: SmtBinOp::Xor, lhs: bl, rhs: br } = lhs.as_ref() {
-                        if let (SmtExpr::Var { name: n1, .. }, SmtExpr::Var { name: n2, .. }) =
+                    if let SmtExpr::BinOp { op: SmtBinOp::Xor, lhs: bl, rhs: br } = lhs.as_ref()
+                        && let (SmtExpr::Var { name: n1, .. }, SmtExpr::Var { name: n2, .. }) =
                             (bl.as_ref(), br.as_ref())
-                        {
-                            if n1 == n2 {
+                            && n1 == n2 {
                                 return Some((PredicateValue::AlwaysTrue, 0.99));
                             }
-                        }
-                    }
                     // x & ~x == 0
-                    if let SmtExpr::BinOp { op: SmtBinOp::And, lhs: bl, rhs: br } = lhs.as_ref() {
-                        if let (
+                    if let SmtExpr::BinOp { op: SmtBinOp::And, lhs: bl, rhs: br } = lhs.as_ref()
+                        && let (
                             SmtExpr::Var { name: n1, .. },
                             SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner },
                         ) = (bl.as_ref(), br.as_ref())
-                        {
-                            if let SmtExpr::Var { name: n2, .. } = inner.as_ref() {
-                                if n1 == n2 {
+                            && let SmtExpr::Var { name: n2, .. } = inner.as_ref()
+                                && n1 == n2 {
                                     return Some((PredicateValue::AlwaysTrue, 0.97));
                                 }
-                            }
-                        }
-                    }
                 }
 
                 // x | ~x == -1
-                if matches!(rhs.as_ref(), SmtExpr::Const(-1)) {
-                    if let SmtExpr::BinOp { op: SmtBinOp::Or, lhs: bl, rhs: br } = lhs.as_ref() {
-                        if let (
+                if matches!(rhs.as_ref(), SmtExpr::Const(-1))
+                    && let SmtExpr::BinOp { op: SmtBinOp::Or, lhs: bl, rhs: br } = lhs.as_ref()
+                        && let (
                             SmtExpr::Var { name: n1, .. },
                             SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner },
                         ) = (bl.as_ref(), br.as_ref())
-                        {
-                            if let SmtExpr::Var { name: n2, .. } = inner.as_ref() {
-                                if n1 == n2 {
+                            && let SmtExpr::Var { name: n2, .. } = inner.as_ref()
+                                && n1 == n2 {
                                     return Some((PredicateValue::AlwaysTrue, 0.97));
                                 }
-                            }
-                        }
-                    }
-                }
 
                 // ~~x == x (double NOT)
-                if let SmtExpr::Var { name: n2, .. } = rhs.as_ref() {
-                    if let SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner: outer_inner } = lhs.as_ref() {
-                        if let SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner: inner_inner } =
+                if let SmtExpr::Var { name: n2, .. } = rhs.as_ref()
+                    && let SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner: outer_inner } = lhs.as_ref()
+                        && let SmtExpr::UnaryOp { op: SmtUnaryOp::Not, inner: inner_inner } =
                             outer_inner.as_ref()
-                        {
-                            if let SmtExpr::Var { name: n1, .. } = inner_inner.as_ref() {
-                                if n1 == n2 {
+                            && let SmtExpr::Var { name: n1, .. } = inner_inner.as_ref()
+                                && n1 == n2 {
                                     return Some((PredicateValue::AlwaysTrue, 0.98));
                                 }
-                            }
-                        }
-                    }
-                }
 
                 // (x & 1) | (~x & 1) == 1  — LSB tautology
-                if matches!(rhs.as_ref(), SmtExpr::Const(1)) {
-                    if let SmtExpr::BinOp { op: SmtBinOp::Or, lhs: bl, rhs: br } = lhs.as_ref() {
+                if matches!(rhs.as_ref(), SmtExpr::Const(1))
+                    && let SmtExpr::BinOp { op: SmtBinOp::Or, lhs: bl, rhs: br } = lhs.as_ref() {
                         let lhs_is_and1 = matches!(bl.as_ref(),
                             SmtExpr::BinOp { op: SmtBinOp::And, rhs, .. }
                             if matches!(rhs.as_ref(), SmtExpr::Const(1))
@@ -554,16 +528,14 @@ impl SmtProver {
                             return Some((PredicateValue::AlwaysTrue, 0.92));
                         }
                     }
-                }
             }
         }
 
         // x == x (trivial self-equality)
-        if let SmtExpr::Cmp { op: SmtCmpOp::Eq, lhs, rhs } = expr {
-            if lhs == rhs {
+        if let SmtExpr::Cmp { op: SmtCmpOp::Eq, lhs, rhs } = expr
+            && lhs == rhs {
                 return Some((PredicateValue::AlwaysTrue, 0.99));
             }
-        }
 
         None
     }
@@ -579,11 +551,10 @@ impl SmtProver {
             // This pattern check has been intentionally removed to prevent false positives.
 
             // Wrapping add/sub identity: (x ± c) == x chain
-            if let SmtExpr::Var { name: rhs_name, .. } = rhs.as_ref() {
-                if is_identity_chain(lhs, rhs_name) {
+            if let SmtExpr::Var { name: rhs_name, .. } = rhs.as_ref()
+                && is_identity_chain(lhs, rhs_name) {
                     return Some((PredicateValue::AlwaysTrue, 0.80));
                 }
-            }
         }
 
         None
@@ -652,10 +623,10 @@ impl SmtProver {
         let false_ratio = always_false_count as f32 / total as f32;
 
         if true_ratio >= 0.999 {
-            let conf = 0.60 + (total as f32 / self.sample_count as f32) * 0.30;
+            let conf = (total as f32 / self.sample_count as f32).mul_add(0.30, 0.60);
             (PredicateValue::AlwaysTrue, conf.min(0.90))
         } else if false_ratio >= 0.999 {
-            let conf = 0.60 + (total as f32 / self.sample_count as f32) * 0.30;
+            let conf = (total as f32 / self.sample_count as f32).mul_add(0.30, 0.60);
             (PredicateValue::AlwaysFalse, conf.min(0.90))
         } else {
             (PredicateValue::Unknown, 0.0)
@@ -667,13 +638,13 @@ impl SmtProver {
         let mut env: HashMap<String, i64> =
             vars.iter().map(|(n, _)| (n.clone(), 0)).collect();
 
-        if expr.eval(&env).map_or(false, |v| v == 0) {
+        if expr.eval(&env) == Some(0) {
             return env;
         }
 
         for (name, _) in vars {
             env.insert(name.clone(), 1);
-            if expr.eval(&env).map_or(false, |v| v == 0) {
+            if expr.eval(&env) == Some(0) {
                 return env;
             }
         }

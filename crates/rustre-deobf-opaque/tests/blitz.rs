@@ -13,13 +13,13 @@ use std::collections::HashMap;
 fn v(name: &str) -> OpaqueExpr {
     OpaqueExpr::Var(name.to_string())
 }
-fn c(n: i64) -> OpaqueExpr {
+const fn c(n: i64) -> OpaqueExpr {
     OpaqueExpr::Const(n)
 }
 fn b(e: OpaqueExpr) -> Box<OpaqueExpr> {
     Box::new(e)
 }
-fn addr(a: u64) -> Address {
+const fn addr(a: u64) -> Address {
     Address::new(a)
 }
 fn env1(name: &str, val: i64) -> HashMap<String, i64> {

@@ -104,7 +104,7 @@ impl RewriterBlock {
     pub fn successors(&self) -> Vec<Address> {
         let mut s = Vec::new();
         if let Some(t) = self.taken { s.push(t); }
-        if let Some(f) = self.fallthrough { if !s.contains(&f) { s.push(f); } }
+        if let Some(f) = self.fallthrough && !s.contains(&f) { s.push(f); }
         s
     }
 
@@ -326,12 +326,11 @@ impl OpaqueRewriter {
         let mut dead = Vec::new();
 
         for addr in all_addrs {
-            if !reachable.contains(&addr) {
-                if let Some(block) = blocks.get_mut(&addr) {
+            if !reachable.contains(&addr)
+                && let Some(block) = blocks.get_mut(&addr) {
                     block.is_dead = true;
                     dead.push(addr);
                 }
-            }
         }
 
         dead
@@ -367,9 +366,9 @@ impl OpaqueRewriter {
 
             // Propagate from this block's known constants to successors
             for succ in succs {
-                let prev_count = ctx.block_consts.get(&succ).map(std::collections::HashMap::len).unwrap_or(0);
+                let prev_count = ctx.block_consts.get(&succ).map_or(0, std::collections::HashMap::len);
                 ctx.merge_from(succ, *addr);
-                let new_count = ctx.block_consts.get(&succ).map(std::collections::HashMap::len).unwrap_or(0);
+                let new_count = ctx.block_consts.get(&succ).map_or(0, std::collections::HashMap::len);
                 propagated += (new_count.saturating_sub(prev_count)) as u32;
             }
         }

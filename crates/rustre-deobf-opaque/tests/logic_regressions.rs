@@ -37,7 +37,7 @@ fn diamond() -> Cfg {
     cfg
 }
 
-fn always_true_branch() -> DeadBranch {
+const fn always_true_branch() -> DeadBranch {
     DeadBranch {
         block_id: 0,
         instr_idx: usize::MAX,
@@ -185,7 +185,7 @@ fn classify(e: &OpaqueExpr) -> Option<PredicateValue> {
 /// not: `%` follows the SIGN of its left operand in Rust (and C), so for
 /// x = -3 we get `-3 | 1 == -3` and `-3 % 2 == -1`, which is not 1.
 ///
-/// Declaring it AlwaysTrue lets a deobfuscator delete a branch that really is
+/// Declaring it `AlwaysTrue` lets a deobfuscator delete a branch that really is
 /// taken whenever the variable is negative — it does not merely mislabel the
 /// predicate, it removes live code.
 #[test]

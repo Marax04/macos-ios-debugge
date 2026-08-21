@@ -299,9 +299,8 @@ impl TautologyEvaluator {
         match (seen_true, seen_false) {
             (true, false) => TautologyClassification::AlwaysTrue,
             (false, true) => TautologyClassification::AlwaysFalse,
-            (true, true) => TautologyClassification::Unknown,
-            (false, false) => TautologyClassification::Unknown,
-        }
+            (true, true) | (false, false) => TautologyClassification::Unknown,
+            }
     }
 }
 
@@ -376,15 +375,15 @@ impl TautologyPattern {
         } else {
             (1i64 << bits) - 1
         };
-        let mut seed: u64 = 0xABCDEF12_34567890;
+        let mut seed: u64 = 0xABCD_EF12_3456_7890;
 
         let mut env: HashMap<String, i64> = HashMap::with_capacity(vars.len());
         for _ in 0..samples {
             env.clear();
             for v in &vars {
                 seed = seed
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
                 env.insert(v.clone(), (seed >> 33) as i64 & mask);
             }
             if let Some(val) = self.expr.eval(&env) {
@@ -1397,7 +1396,7 @@ impl TautologyOptimizer {
                 Some((complexity, addr, name))
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
         scored
             .into_iter()
             .take(self.max_removals_per_function)
@@ -1489,8 +1488,7 @@ impl TautologyMatcher {
                     true
                 }
             }
-            (Not(sa), Not(pb)) => self.structural_match(sa, pb, bindings),
-            (Neg(sa), Neg(pb)) => self.structural_match(sa, pb, bindings),
+            (Not(sa), Not(pb)) | (Neg(sa), Neg(pb)) => self.structural_match(sa, pb, bindings),
             (And(sl, sr), And(pl, pr))
             | (Or(sl, sr), Or(pl, pr))
             | (Xor(sl, sr), Xor(pl, pr))

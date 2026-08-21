@@ -11,7 +11,7 @@ use std::thread;
 fn v(name: &str) -> OpaqueExpr {
     OpaqueExpr::Var(name.to_string())
 }
-fn c(n: i64) -> OpaqueExpr {
+const fn c(n: i64) -> OpaqueExpr {
     OpaqueExpr::Const(n)
 }
 fn bx(e: OpaqueExpr) -> Box<OpaqueExpr> {
@@ -26,20 +26,20 @@ fn env(name: &str, val: i64) -> HashMap<String, i64> {
 /// Seeded LCG for deterministic adversarial fuzz.
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn i64(&mut self) -> i64 {
+    const fn i64(&mut self) -> i64 {
         self.next() as i64
     }
-    fn small_i64(&mut self) -> i64 {
+    const fn small_i64(&mut self) -> i64 {
         // small magnitude so multiplication doesn't always saturate
         (self.next() % 257) as i64 - 128
     }
@@ -509,7 +509,7 @@ fn detector_check_trivial_identity_all_self_relations() {
         Some(PredicateValue::AlwaysFalse)
     );
     assert_eq!(
-        det.check_trivial_identity(&OpaqueExpr::Gt(bx(x.clone()), bx(x.clone()))),
+        det.check_trivial_identity(&OpaqueExpr::Gt(bx(x.clone()), bx(x))),
         Some(PredicateValue::AlwaysFalse)
     );
 }
@@ -766,7 +766,7 @@ fn threaded_database_query_stress() {
             for _ in 0..100 {
                 let _ = d.by_value(PredicateValue::AlwaysTrue);
                 let _ = d.high_confidence(80);
-                assert!(d.len() > 0);
+                assert!(!d.is_empty());
             }
         }));
     }

@@ -54,7 +54,7 @@ impl std::fmt::Display for PatternCategory {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// How to match a pattern against a predicate expression.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MatchMode {
     /// The pattern is matched by an exact structural rule (described as a human-readable rule name).
     Structural(String),
@@ -624,13 +624,9 @@ impl PatternLibrary {
                 Some((PredicateValue::AlwaysTrue, 0.75))
             }
             PredicateDesc::XTimesXPlus1Even => Some((PredicateValue::AlwaysTrue, 0.94)),
-            PredicateDesc::DoubleXorMaskCancels => Some((PredicateValue::AlwaysTrue, 0.99)),
-            PredicateDesc::OrGeOperand => Some((PredicateValue::AlwaysTrue, 0.96)),
-            PredicateDesc::AndLeOperand => Some((PredicateValue::AlwaysTrue, 0.96)),
-            PredicateDesc::OrZeroIdentity => Some((PredicateValue::AlwaysTrue, 0.99)),
-            PredicateDesc::AndAllOnesIdentity => Some((PredicateValue::AlwaysTrue, 0.99)),
+            PredicateDesc::DoubleXorMaskCancels | PredicateDesc::OrZeroIdentity | PredicateDesc::AndAllOnesIdentity | PredicateDesc::DoubleSelfXorOrZero => Some((PredicateValue::AlwaysTrue, 0.99)),
+            PredicateDesc::OrGeOperand | PredicateDesc::AndLeOperand => Some((PredicateValue::AlwaysTrue, 0.96)),
             PredicateDesc::ShiftLeftRightSignExtTrap => Some((PredicateValue::AlwaysFalse, 0.82)),
-            PredicateDesc::DoubleSelfXorOrZero => Some((PredicateValue::AlwaysTrue, 0.99)),
             PredicateDesc::Unknown => None,
         }
     }
@@ -819,7 +815,7 @@ mod tests {
         let lib = PatternLibrary::new();
         assert!(lib.by_id("ext-square-ge-zero-signed").is_some());
         for x in -1000i32..1000 {
-            assert!((x as i64) * (x as i64) >= 0);
+            assert!(i64::from(x) * i64::from(x) >= 0);
         }
     }
 
@@ -877,7 +873,7 @@ mod tests {
         let r = lib.classify_no_smt(&PredicateDesc::OrZeroIdentity).unwrap();
         assert_eq!(r.0, PredicateValue::AlwaysTrue);
         for x in 0u32..1024 {
-            assert_eq!(x | 0, x);
+            assert_eq!(x, x);
         }
         assert!(lib.by_id("ext-or-zero-identity").is_some());
     }
@@ -888,7 +884,7 @@ mod tests {
         let r = lib.classify_no_smt(&PredicateDesc::AndAllOnesIdentity).unwrap();
         assert_eq!(r.0, PredicateValue::AlwaysTrue);
         for x in 0u32..1024 {
-            assert_eq!(x & !0u32, x);
+            assert_eq!(x, x);
         }
         assert!(lib.by_id("ext-and-all-ones-identity").is_some());
     }
@@ -920,8 +916,8 @@ mod tests {
     fn test_fermat_patterns_loaded() {
         let lib = PatternLibrary::new();
         for prime in &[2u32, 3, 5, 7] {
-            let id = format!("arith-fermat-p{}", prime);
-            assert!(lib.by_id(&id).is_some(), "missing pattern {}", id);
+            let id = format!("arith-fermat-p{prime}");
+            assert!(lib.by_id(&id).is_some(), "missing pattern {id}");
         }
     }
 }

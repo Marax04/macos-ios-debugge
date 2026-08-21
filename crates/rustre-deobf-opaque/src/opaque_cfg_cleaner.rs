@@ -409,16 +409,10 @@ impl OpaqueCfgCleaner {
             .filter(|b| b.confidence >= self.min_confidence)
             .filter(|b| b.value != crate::PredicateValue::Unknown)
             .map(|b| {
-                let (live, dead) = match b.value {
-                    crate::PredicateValue::AlwaysTrue => (
-                        b.live_target.map_or(0, rustre_core::Address::as_u64),
-                        b.dead_target.map_or(0, rustre_core::Address::as_u64),
-                    ),
-                    _ => (
-                        b.live_target.map_or(0, rustre_core::Address::as_u64),
-                        b.dead_target.map_or(0, rustre_core::Address::as_u64),
-                    ),
-                };
+                let (live, dead) = (
+                    b.live_target.map_or(0, rustre_core::Address::as_u64),
+                    b.dead_target.map_or(0, rustre_core::Address::as_u64),
+                );
                 OpaqueBlock {
                     address: b.address.as_u64(),
                     kind: b.value.into(),
@@ -622,7 +616,7 @@ mod tests {
 
     #[test]
     fn test_cleaned_cfg_summary_contains_entry() {
-        let cfg = CleanedCFG::new(0x401000);
+        let cfg = CleanedCFG::new(0x0040_1000);
         let s = cfg.summary();
         assert!(s.contains("401000"));
     }

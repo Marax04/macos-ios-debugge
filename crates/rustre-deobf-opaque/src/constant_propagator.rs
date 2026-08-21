@@ -231,7 +231,7 @@ impl BasicBlock {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Propagation state: a mapping from variable id to lattice element.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PropState {
     pub values: HashMap<VarId, ConstLattice>,
 }
@@ -361,12 +361,11 @@ impl ConstPropPass {
             if state != exit_states[idx] {
                 exit_states[idx] = state;
                 for &succ_id in &block.succs {
-                    if let Some(&succ_idx) = id_to_idx.get(&succ_id) {
-                        if !in_worklist[succ_idx] {
+                    if let Some(&succ_idx) = id_to_idx.get(&succ_id)
+                        && !in_worklist[succ_idx] {
                             worklist.push_back(succ_idx);
                             in_worklist[succ_idx] = true;
                         }
-                    }
                 }
             }
         }
@@ -376,8 +375,8 @@ impl ConstPropPass {
         for (idx, block) in blocks.iter().enumerate() {
             let state = &exit_states[idx];
             for instr in &block.instrs {
-                if let IrInstr::CondBr { cond, true_block: _, false_block: _ } = instr {
-                    if let ConstLattice::Const(c) = state.get(*cond) {
+                if let IrInstr::CondBr { cond, true_block: _, false_block: _ } = instr
+                    && let ConstLattice::Const(c) = state.get(*cond) {
                         invariants.push(InvariantCond {
                             block_idx: block.id,
                             cond_var: *cond,
@@ -387,7 +386,6 @@ impl ConstPropPass {
                             address_hint: block.address,
                         });
                     }
-                }
             }
         }
 
@@ -446,21 +444,18 @@ impl ConstPropPass {
                     BinOpKind::Or  => Some(a | b),
                     BinOpKind::Xor => Some(a ^ b),
                     BinOpKind::Shl => {
-                        if b < 0 || b >= 64 { None } else { Some(a.wrapping_shl(b as u32)) }
+                        if (0..64).contains(&b) { Some(a.wrapping_shl(b as u32)) } else { None }
                     }
                     BinOpKind::Shr => {
-                        if b < 0 || b >= 64 { None } else { Some(a.wrapping_shr(b as u32)) }
+                        if (0..64).contains(&b) { Some(a.wrapping_shr(b as u32)) } else { None }
                     }
                 };
                 result.map_or(ConstLattice::Top, ConstLattice::Const)
             }
             // Identities that allow partial evaluation:
-            (ConstLattice::Const(0), _) if op == BinOpKind::Mul => ConstLattice::Const(0),
-            (_, ConstLattice::Const(0)) if op == BinOpKind::Mul => ConstLattice::Const(0),
-            (ConstLattice::Const(0), _) if op == BinOpKind::And => ConstLattice::Const(0),
-            (_, ConstLattice::Const(0)) if op == BinOpKind::And => ConstLattice::Const(0),
-            (ConstLattice::Const(-1), _) if op == BinOpKind::Or => ConstLattice::Const(-1),
-            (_, ConstLattice::Const(-1)) if op == BinOpKind::Or => ConstLattice::Const(-1),
+            (ConstLattice::Const(0), _) | (_, ConstLattice::Const(0)) if op == BinOpKind::Mul => ConstLattice::Const(0),
+            (ConstLattice::Const(0), _) | (_, ConstLattice::Const(0)) if op == BinOpKind::And => ConstLattice::Const(0),
+            (ConstLattice::Const(-1), _) | (_, ConstLattice::Const(-1)) if op == BinOpKind::Or => ConstLattice::Const(-1),
             _ => ConstLattice::Top,
         }
     }

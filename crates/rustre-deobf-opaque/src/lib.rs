@@ -294,13 +294,10 @@ impl OpaqueExpr {
                 a.collect_vars(out);
                 b.collect_vars(out);
             }
-            Self::Not(a) | Self::Neg(a) | Self::BitCount(a) | Self::Abs(a) | Self::Square(a) => {
+            Self::Not(a) | Self::Neg(a) | Self::BitCount(a) | Self::Abs(a) | Self::Square(a) | Self::Shl(a, _) | Self::Shr(a, _) => {
                 a.collect_vars(out);
             }
-            Self::Shl(a, _) | Self::Shr(a, _) => {
-                a.collect_vars(out);
             }
-        }
     }
 
     /// Light-weight constant folding / algebraic simplification.
@@ -2418,7 +2415,7 @@ impl MbaOpaqueDetector {
         // product over every distinct variable. This avoids the bug where extra
         // variables (neither "x" nor "y") were aliased to the x loop variable,
         // which could hide non-constant expressions in 3+-variable expressions.
-        let vars_vec: Vec<String> = vars.iter().cloned().collect();
+        let vars_vec: Vec<String> = vars;
         let n = vars_vec.len();
         let domain_len = self.sample_domain.len();
         // Total iterations = domain_len ^ n — cap to prevent usize overflow and

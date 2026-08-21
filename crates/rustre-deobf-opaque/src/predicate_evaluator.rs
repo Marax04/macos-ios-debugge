@@ -98,27 +98,27 @@ pub enum Expr {
     /// A named variable (e.g. a register or flag name).
     Var(String),
     /// Bitwise AND.
-    And(Box<Expr>, Box<Expr>),
+    And(Box<Self>, Box<Self>),
     /// Bitwise OR.
-    Or(Box<Expr>, Box<Expr>),
+    Or(Box<Self>, Box<Self>),
     /// Bitwise XOR.
-    Xor(Box<Expr>, Box<Expr>),
+    Xor(Box<Self>, Box<Self>),
     /// Arithmetic add.
-    Add(Box<Expr>, Box<Expr>),
+    Add(Box<Self>, Box<Self>),
     /// Arithmetic sub.
-    Sub(Box<Expr>, Box<Expr>),
+    Sub(Box<Self>, Box<Self>),
     /// Arithmetic mul.
-    Mul(Box<Expr>, Box<Expr>),
+    Mul(Box<Self>, Box<Self>),
     /// Logical NOT.
-    Not(Box<Expr>),
+    Not(Box<Self>),
     /// Equal.
-    Eq(Box<Expr>, Box<Expr>),
+    Eq(Box<Self>, Box<Self>),
     /// Not equal.
-    Ne(Box<Expr>, Box<Expr>),
+    Ne(Box<Self>, Box<Self>),
     /// Less than (signed).
-    Lt(Box<Expr>, Box<Expr>),
+    Lt(Box<Self>, Box<Self>),
     /// Greater than or equal (signed).
-    Ge(Box<Expr>, Box<Expr>),
+    Ge(Box<Self>, Box<Self>),
 }
 
 impl Expr {
@@ -136,10 +136,10 @@ impl Expr {
             Self::Sub(a, b) => Some(a.const_fold(env)?.wrapping_sub(b.const_fold(env)?)),
             Self::Mul(a, b) => Some(a.const_fold(env)?.wrapping_mul(b.const_fold(env)?)),
             Self::Not(a) => Some(!a.const_fold(env)?),
-            Self::Eq(a, b) => Some(if a.const_fold(env)? == b.const_fold(env)? { 1 } else { 0 }),
-            Self::Ne(a, b) => Some(if a.const_fold(env)? != b.const_fold(env)? { 1 } else { 0 }),
-            Self::Lt(a, b) => Some(if a.const_fold(env)? < b.const_fold(env)? { 1 } else { 0 }),
-            Self::Ge(a, b) => Some(if a.const_fold(env)? >= b.const_fold(env)? { 1 } else { 0 }),
+            Self::Eq(a, b) => Some(i64::from(a.const_fold(env)? == b.const_fold(env)?)),
+            Self::Ne(a, b) => Some(i64::from(a.const_fold(env)? != b.const_fold(env)?)),
+            Self::Lt(a, b) => Some(i64::from(a.const_fold(env)? < b.const_fold(env)?)),
+            Self::Ge(a, b) => Some(i64::from(a.const_fold(env)? >= b.const_fold(env)?)),
         }
     }
 }
@@ -281,55 +281,47 @@ impl PredicateEvaluator {
                     branch_address,
                 });
                 return PredicateResult::AlwaysTrue;
-            } else {
-                self.always_false.push(AlwaysFalse {
-                    reason: format!("constant fold → 0"),
-                    branch_address,
-                });
-                return PredicateResult::AlwaysFalse;
             }
+            self.always_false.push(AlwaysFalse {
+                reason: "constant fold → 0".to_string(),
+                branch_address,
+            });
+            return PredicateResult::AlwaysFalse;
         }
 
         // Pattern: XOR of same variable is always 0.
-        if let Expr::Xor(a, b) = expr {
-            if let (Expr::Var(va), Expr::Var(vb)) = (a.as_ref(), b.as_ref()) {
-                if va == vb {
+        if let Expr::Xor(a, b) = expr
+            && let (Expr::Var(va), Expr::Var(vb)) = (a.as_ref(), b.as_ref())
+                && va == vb {
                     self.always_false.push(AlwaysFalse {
                         reason: format!("{va} ^ {vb} == 0 always"),
                         branch_address,
                     });
                     return PredicateResult::AlwaysFalse;
                 }
-            }
-        }
 
         // Pattern: `v == v` is always true.
-        if let Expr::Eq(a, b) = expr {
-            if let (Expr::Var(va), Expr::Var(vb)) = (a.as_ref(), b.as_ref()) {
-                if va == vb {
+        if let Expr::Eq(a, b) = expr
+            && let (Expr::Var(va), Expr::Var(vb)) = (a.as_ref(), b.as_ref())
+                && va == vb {
                     self.always_true.push(AlwaysTrue {
                         reason: format!("{va} == {vb} always"),
                         branch_address,
                     });
                     return PredicateResult::AlwaysTrue;
                 }
-            }
-        }
 
         // Pattern: `(x & 0) == 0` always.
-        if let Expr::Eq(and_expr, zero) = expr {
-            if let Expr::Const(0) = zero.as_ref() {
-                if let Expr::And(_, mask) = and_expr.as_ref() {
-                    if let Expr::Const(0) = mask.as_ref() {
+        if let Expr::Eq(and_expr, zero) = expr
+            && matches!(zero.as_ref(), Expr::Const(0))
+                && let Expr::And(_, mask) = and_expr.as_ref()
+                    && matches!(mask.as_ref(), Expr::Const(0)) {
                         self.always_true.push(AlwaysTrue {
                             reason: "x & 0 == 0 always".to_owned(),
                             branch_address,
                         });
                         return PredicateResult::AlwaysTrue;
                     }
-                }
-            }
-        }
 
         PredicateResult::Indeterminate
     }
