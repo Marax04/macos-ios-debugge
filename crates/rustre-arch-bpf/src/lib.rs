@@ -6100,7 +6100,7 @@ impl BtfSection {
 
     /// Return an iterator over all types paired with their `type_id`.
     pub fn iter_types(&self) -> impl Iterator<Item = (u32, &BtfType)> {
-        self.types.iter().enumerate().map(|(i, t)| (i as u32, t))
+        self.types.iter().enumerate().map(|(i, t)| (numeric::usize_to_u32(i), t))
     }
 
     /// Collect all struct `type_ids` whose name equals `name`.
@@ -6113,7 +6113,7 @@ impl BtfSection {
                 if let BtfTypeKind::Struct { .. } = &t.kind
                     && t.name.as_deref() == Some(name)
                 {
-                    return Some(i as u32);
+                    return Some(numeric::usize_to_u32(i));
                 }
                 None
             })
@@ -6350,13 +6350,13 @@ pub fn apply_core_relocations(
             // â"€â"€ Field relocations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             CoreRelocKind::FieldByteOffset => {
                 parse_access_string(&reloc.access_str, effective_btf, reloc.type_id)
-                    .map(|(_, off)| off as i32)
+                    .map(|(_, off)| off.cast_signed())
             }
 
             CoreRelocKind::FieldByteSize => {
                 parse_access_string(&reloc.access_str, effective_btf, reloc.type_id)
                     .and_then(|(ftype_id, _)| effective_btf.sizeof(ftype_id))
-                    .map(|sz| sz as i32)
+                    .map(|sz| sz.cast_signed())
             }
 
             CoreRelocKind::FieldExists => {
@@ -6389,17 +6389,17 @@ pub fn apply_core_relocations(
                 // For a non-bitfield: rshift = 64 - byte_size*8.
                 parse_access_string(&reloc.access_str, effective_btf, reloc.type_id)
                     .and_then(|(ftype_id, _)| effective_btf.sizeof(ftype_id))
-                    .map(|sz| (64u32.saturating_sub(sz * 8)) as i32)
+                    .map(|sz| (64u32.saturating_sub(sz * 8)).cast_signed())
             }
 
             // â"€â"€ Type relocations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-            CoreRelocKind::TypeIdLocal => Some(reloc.type_id as i32),
+            CoreRelocKind::TypeIdLocal => Some(reloc.type_id.cast_signed()),
 
             CoreRelocKind::TypeIdTarget => {
                 // In a real loader this looks up the matching type in the kernel
                 // BTF by structural equivalence.  Here we use the local type_id
                 // as a best-effort stand-in.
-                Some(reloc.type_id as i32)
+                Some(reloc.type_id.cast_signed())
             }
 
             CoreRelocKind::TypeExists => {
@@ -6407,7 +6407,7 @@ pub fn apply_core_relocations(
                 Some(i32::from(exists))
             }
 
-            CoreRelocKind::TypeSize => effective_btf.sizeof(reloc.type_id).map(|sz| sz as i32),
+            CoreRelocKind::TypeSize => effective_btf.sizeof(reloc.type_id).map(|sz| sz.cast_signed()),
 
             // â"€â"€ Enum relocations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             CoreRelocKind::EnumvalExists => {
@@ -6438,7 +6438,7 @@ pub fn apply_core_relocations(
                         BtfTypeKind::Enum64 { values, .. } => values
                             .iter()
                             .find(|(n, _)| n == &reloc.access_str)
-                            .map(|(_, v)| *v as i32),
+                            .map(|(_, v)| numeric::trunc_i64_i32(*v)),
                         _ => None,
                     })
             }
@@ -6454,7 +6454,7 @@ pub fn apply_core_relocations(
                 instr.raw[7] = imm_bytes[3];
             }
             instr.imm = imm;
-            patched.push(insn_idx as u32);
+            patched.push(numeric::usize_to_u32(insn_idx));
         }
     }
 
@@ -6589,7 +6589,7 @@ impl BpfSecurityAnalysis {
             if cls == 0x05 && code != 0x80 && code != 0x90 && instr.offset < 0 {
                 return Some(SecurityFinding::new(
                     Severity::Medium,
-                    idx as u32,
+                    numeric::usize_to_u32(idx),
                     format!(
                         "backward branch at insn {idx} (offset {:+}): \
                              possible unbounded loop —  rejected by verifier on kernels < 5.3",
@@ -6621,7 +6621,7 @@ impl BpfSecurityAnalysis {
             // BPF_CALL to helper 1 (bpf_map_lookup_elem) —" result in r0.
             if cls == 0x05 && code == 0x80 && instr.imm == 1 {
                 r0_checked = false;
-                last_lookup = idx as u32;
+                last_lookup = numeric::usize_to_u32(idx);
                 continue;
             }
 
@@ -6639,7 +6639,7 @@ impl BpfSecurityAnalysis {
                 findings.push(
                     SecurityFinding::new(
                         Severity::High,
-                        idx as u32,
+                        numeric::usize_to_u32(idx),
                         format!(
                             "insn {idx}: map value pointer (r0 from lookup at insn {last_lookup}) \
                              used as memory operand without prior null-check —  \
@@ -6655,7 +6655,7 @@ impl BpfSecurityAnalysis {
                 findings.push(
                     SecurityFinding::new(
                         Severity::High,
-                        idx as u32,
+                        numeric::usize_to_u32(idx),
                         format!(
                             "insn {idx}: store through r0 (map value from insn {last_lookup}) \
                              without null-check"
@@ -6705,7 +6705,7 @@ impl BpfSecurityAnalysis {
                         findings.push(
                             SecurityFinding::new(
                                 Severity::High,
-                                idx as u32,
+                                numeric::usize_to_u32(idx),
                                 format!(
                                     "insn {idx}: large immediate arithmetic (+{imm:#x}) on r0 \
                                      (possible map value pointer) —  verifier bypass pattern",
@@ -6722,7 +6722,7 @@ impl BpfSecurityAnalysis {
                 {
                     findings.push(SecurityFinding::new(
                         Severity::Medium,
-                        idx as u32,
+                        numeric::usize_to_u32(idx),
                         format!(
                             "insn {idx}: ALU op {code:#x} applied to r0 that may be a \
                                  map value pointer without prior null-check"
@@ -6761,7 +6761,7 @@ impl BpfSecurityAnalysis {
                 36 => Some(
                     SecurityFinding::new(
                         Severity::Critical,
-                        idx as u32,
+                        numeric::usize_to_u32(idx),
                         format!(
                             "insn {idx}: bpf_probe_write_user (#36) can overwrite arbitrary \
                          user-space memory —  requires CAP_SYS_ADMIN but is a strong \
@@ -6775,7 +6775,7 @@ impl BpfSecurityAnalysis {
                 158 => Some(
                     SecurityFinding::new(
                         Severity::Critical,
-                        idx as u32,
+                        numeric::usize_to_u32(idx),
                         format!(
                             "insn {idx}: bpf_sys_bpf (#158) allows arbitrary BPF syscall from \
                          within a BPF program —  can be used to load additional programs \
@@ -6788,7 +6788,7 @@ impl BpfSecurityAnalysis {
                 // bpf_trace_printk —" data leak via trace log.
                 6 => Some(SecurityFinding::new(
                     Severity::Low,
-                    idx as u32,
+                    numeric::usize_to_u32(idx),
                     format!(
                         "insn {idx}: bpf_trace_printk (#6) writes to the trace log —  \
                          may leak sensitive kernel data to unprivileged readers of \
@@ -6799,7 +6799,7 @@ impl BpfSecurityAnalysis {
                 // bpf_get_current_task —" raw task_struct pointer.
                 35 => Some(SecurityFinding::new(
                     Severity::Medium,
-                    idx as u32,
+                    numeric::usize_to_u32(idx),
                     format!(
                         "insn {idx}: bpf_get_current_task (#35) returns a raw \
                          task_struct pointer —  can be used to read/write kernel \
@@ -6810,7 +6810,7 @@ impl BpfSecurityAnalysis {
                 // bpf_override_return —" alters function return value (kprobes only).
                 58 => Some(SecurityFinding::new(
                     Severity::High,
-                    idx as u32,
+                    numeric::usize_to_u32(idx),
                     format!(
                         "insn {idx}: bpf_override_return (#58) modifies the return \
                          value of a kprobed kernel function —  powerful security bypass"
@@ -6820,7 +6820,7 @@ impl BpfSecurityAnalysis {
                 // bpf_copy_from_user —" reads from user-space; verify size is bounded.
                 148 => Some(SecurityFinding::new(
                     Severity::Low,
-                    idx as u32,
+                    numeric::usize_to_u32(idx),
                     format!(
                         "insn {idx}: bpf_copy_from_user (#148) —  ensure size argument \
                          in r3 is statically bounded"
@@ -6852,7 +6852,7 @@ impl BpfSecurityAnalysis {
                     findings.push(
                         SecurityFinding::new(
                             Severity::High,
-                            idx as u32,
+                            numeric::usize_to_u32(idx),
                             format!(
                                 "insn {idx}: stack access at r10+({off}) is outside the \
                              valid range [-512, 0] —  verifier will reject this program"
@@ -6899,7 +6899,7 @@ impl BpfSecurityAnalysis {
             if cls == 0x05 && code != 0x80 && code != 0x90 {
                 let target =crate::numeric::usize_to_i64(idx) + 1 + i64::from(instr.offset);
                 if target >= 0 {
-                    targets.insert(target as usize);
+                    targets.insert(numeric::i64_to_usize(target));
                 }
             }
         }
@@ -6913,7 +6913,7 @@ impl BpfSecurityAnalysis {
                 if next < prog.len() && !targets.contains(&next) {
                     findings.push(SecurityFinding::new(
                         Severity::Info,
-                        next as u32,
+                        numeric::usize_to_u32(next),
                         format!(
                             "insn {next}: possibly unreachable —  follows unconditional ja at \
                              insn {idx} and is not a known branch target"
@@ -6939,7 +6939,7 @@ impl BpfSecurityAnalysis {
                 continue;
             }
 
-            let helper_id = instr.imm as u32;
+            let helper_id = instr.imm.cast_unsigned();
 
             // XDP programs must not use socket-filter helpers.
             if prog_type == BpfProgType::Xdp {
@@ -6948,7 +6948,7 @@ impl BpfSecurityAnalysis {
                     9..=13 | 18..=22 | 26 | 29..=34 | 38..=45 => {
                         findings.push(SecurityFinding::new(
                             Severity::High,
-                            idx as u32,
+                            numeric::usize_to_u32(idx),
                             format!(
                                 "insn {idx}: helper #{helper_id} is an skb-based helper \
                                  but this program is of type XDP —  verifier will reject"
@@ -6966,7 +6966,7 @@ impl BpfSecurityAnalysis {
                     4 | 36 | 58 => {
                         findings.push(SecurityFinding::new(
                             Severity::Medium,
-                            idx as u32,
+                            numeric::usize_to_u32(idx),
                             format!(
                                 "insn {idx}: helper #{helper_id} is a tracing helper and \
                                  may not be available in socket_filter programs"
@@ -7055,7 +7055,7 @@ pub fn extract_map_usages(prog: &[BpfInstruction]) -> Vec<MapUsage> {
         usages.push(MapUsage {
             map_reg,
             operation: op,
-            at_insn: idx as u32,
+            at_insn: numeric::usize_to_u32(idx),
         });
     }
 
@@ -7089,9 +7089,9 @@ mod btf_section_tests {
         //       + type_off(4) + type_len(4) + str_off(4) + str_len(4) = 24 bytes
         let hdr_len: u32 = 24;
         let type_off: u32 = 0;
-        let type_len = types_section.len() as u32;
+        let type_len = numeric::usize_to_u32(types_section.len());
         let str_off = type_len; // strings immediately after types
-        let str_len = strings_section.len() as u32;
+        let str_len = numeric::usize_to_u32(strings_section.len());
 
         let mut blob = Vec::new();
         // magic 0xEB9F in LE = [0x9F, 0xEB]
@@ -7152,7 +7152,7 @@ mod btf_section_tests {
         // Build: strings = "\0u32\0", type = BTF_KIND_INT (size=4, bits=32, unsigned)
         let mut strs = Vec::new();
         strs.push(0u8); // offset 0 = ""
-        let u32_off = strs.len() as u32;
+        let u32_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut types_sec = Vec::new();
@@ -7178,7 +7178,7 @@ mod btf_section_tests {
     #[test]
     fn test_btf_sizeof_int() {
         let mut strs: Vec<u8> = vec![0];
-        let off = strs.len() as u32;
+        let off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u64\0");
 
         let mut types_sec = Vec::new();
@@ -7194,7 +7194,7 @@ mod btf_section_tests {
     #[test]
     fn test_btf_sizeof_ptr() {
         let mut strs: Vec<u8> = vec![0];
-        let void_off = strs.len() as u32;
+        let void_off = numeric::usize_to_u32(strs.len());
         strs.push(0); // empty string
 
         let mut types_sec = Vec::new();
@@ -7236,7 +7236,7 @@ mod btf_section_tests {
     #[test]
     fn test_btf_to_c_declaration_int() {
         let mut strs: Vec<u8> = vec![0];
-        let off = strs.len() as u32;
+        let off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"__u32\0");
 
         let mut types_sec = Vec::new();
@@ -7263,13 +7263,13 @@ mod btf_section_tests {
         // type_id 1 = u32 (INT, size=4)
         // type_id 2 = struct { a at bit_off=0, b at bit_off=32 }
         let mut strs: Vec<u8> = vec![0];
-        let a_off = strs.len() as u32;
+        let a_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"a\0");
-        let b_off = strs.len() as u32;
+        let b_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"b\0");
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"my_struct\0");
-        let u32_name_off = strs.len() as u32;
+        let u32_name_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut types_sec = Vec::new();
@@ -7300,7 +7300,7 @@ mod btf_section_tests {
     #[test]
     fn test_btf_sizeof_struct() {
         let mut strs: Vec<u8> = vec![0];
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"s\0");
 
         let mut types_sec = Vec::new();
@@ -7318,7 +7318,7 @@ mod btf_section_tests {
         // type_id 2 = CONST -> 1
         // type_id 3 = VOLATILE -> 2
         let mut strs: Vec<u8> = vec![0];
-        let u32_off = strs.len() as u32;
+        let u32_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut types_sec = Vec::new();
@@ -7338,9 +7338,9 @@ mod btf_section_tests {
     #[test]
     fn test_btf_find_struct_by_name() {
         let mut strs: Vec<u8> = vec![0];
-        let foo_off = strs.len() as u32;
+        let foo_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"foo\0");
-        let bar_off = strs.len() as u32;
+        let bar_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"bar\0");
 
         let mut types_sec = Vec::new();
@@ -7367,11 +7367,11 @@ mod btf_section_tests {
         // "0" alone â†' root type, offset 0.
         // type_id 1 = struct { u32 x; } (size=4)
         let mut strs: Vec<u8> = vec![0];
-        let x_off = strs.len() as u32;
+        let x_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"x\0");
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
-        let u_off = strs.len() as u32;
+        let u_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut ts = Vec::new();
@@ -7394,13 +7394,13 @@ mod btf_section_tests {
         // struct S { u32 a; u32 b; }
         // access "0:1" â†' field b at byte offset 4.
         let mut strs: Vec<u8> = vec![0];
-        let a_off = strs.len() as u32;
+        let a_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"a\0");
-        let b_off = strs.len() as u32;
+        let b_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"b\0");
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
-        let u_off = strs.len() as u32;
+        let u_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut ts = Vec::new();
@@ -7424,7 +7424,7 @@ mod btf_section_tests {
     #[test]
     fn test_parse_access_string_out_of_range() {
         let mut strs: Vec<u8> = vec![0];
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
 
         let mut ts = Vec::new();
@@ -7475,13 +7475,13 @@ mod btf_section_tests {
     fn test_core_reloc_field_byte_offset() {
         // struct S { u32 a; u32 b; }  —" offset of b = 4.
         let mut strs: Vec<u8> = vec![0];
-        let a_off = strs.len() as u32;
+        let a_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"a\0");
-        let b_off = strs.len() as u32;
+        let b_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"b\0");
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
-        let u_off = strs.len() as u32;
+        let u_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut ts = Vec::new();
@@ -7515,7 +7515,7 @@ mod btf_section_tests {
     #[test]
     fn test_core_reloc_type_size() {
         let mut strs: Vec<u8> = vec![0];
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
 
         let mut ts = Vec::new();
@@ -7540,11 +7540,11 @@ mod btf_section_tests {
     #[test]
     fn test_core_reloc_field_exists_yes() {
         let mut strs: Vec<u8> = vec![0];
-        let a_off = strs.len() as u32;
+        let a_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"a\0");
-        let s_off = strs.len() as u32;
+        let s_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"S\0");
-        let u_off = strs.len() as u32;
+        let u_off = numeric::usize_to_u32(strs.len());
         strs.extend_from_slice(b"u32\0");
 
         let mut ts = Vec::new();
