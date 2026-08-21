@@ -3895,8 +3895,6 @@ impl LinearMbaDetector {
             }
 
             // Constants are not bitwise terms.
-            MbaExpr::Const(_) => Vec::new(),
-
             _ => Vec::new(),
         }
     }

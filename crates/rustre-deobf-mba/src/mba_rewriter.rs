@@ -119,7 +119,7 @@ pub fn standard_rewrite_rules() -> Vec<RewriteRule> {
     rules.extend(identity_rewrites());
     rules.extend(mba_idiom_rewrites());
     rules.extend(normalization_rewrites());
-    rules.sort_unstable_by(|a, b| b.priority.cmp(&a.priority));
+    rules.sort_unstable_by_key(|b| std::cmp::Reverse(b.priority));
     rules
 }
 
@@ -504,7 +504,7 @@ impl MbaRewriter {
     #[must_use]
     pub fn with_rules(rules: Vec<RewriteRule>) -> Self {
         let mut r = rules;
-        r.sort_unstable_by(|a, b| b.priority.cmp(&a.priority));
+        r.sort_unstable_by_key(|b| std::cmp::Reverse(b.priority));
         Self { rules: r, config: RewriterConfig::default() }
     }
 
@@ -720,7 +720,7 @@ mod tests {
     #[test]
     fn rewrite_cached_agrees_with_rewrite() {
         let x = var("x");
-        let expr = MbaExpr::mk_add(MbaExpr::mk_xor(x.clone(), x.clone()), con(5));
+        let expr = MbaExpr::mk_add(MbaExpr::mk_xor(x.clone(), x), con(5));
         let rw = MbaRewriter::new();
         let a = rw.rewrite(expr.clone()).expr;
         let b = rw.rewrite_cached(expr);

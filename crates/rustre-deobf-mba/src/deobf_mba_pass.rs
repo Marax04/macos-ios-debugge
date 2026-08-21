@@ -839,7 +839,7 @@ mod tests {
         let e = IrExpr::Add(Box::new(and_xy), Box::new(or_xy));
         let (simplified, changed) = p.simplify_expr(&e);
         if changed {
-            assert!(simplified.to_string().contains("x"));
+            assert!(simplified.to_string().contains('x'));
         } else {
             assert_eq!(simplified, e);
         }

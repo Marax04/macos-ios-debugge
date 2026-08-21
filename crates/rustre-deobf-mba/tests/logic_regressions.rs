@@ -142,7 +142,7 @@ use rustre_deobf_mba::deobf_mba_pass::{translate_ir_to_mba, translate_mba_to_ir}
 /// one — `MbaExpr::eval` keeps them distinct (`logical_shr` vs signed `>>`).
 /// Translating both to `IrExpr::Shr` silently drops the sign extension, so
 /// simplified IR handed back to the caller means something different for
-/// negative operands: `-8 >> 1` becomes 0x7FFF_FFFF_FFFF_FFFC instead of -4.
+/// negative operands: `-8 >> 1` becomes `0x7FFF_FFFF_FFFF_FFFC` instead of -4.
 #[test]
 fn arithmetic_and_logical_shifts_do_not_collapse() {
     let x = MbaExpr::Var("x".to_string());
@@ -163,7 +163,7 @@ fn the_shift_kind_survives_a_round_trip() {
     let x = MbaExpr::Var("x".to_string());
     for original in [
         MbaExpr::Sar(Box::new(x.clone()), 3),
-        MbaExpr::Shr(Box::new(x.clone()), 3),
+        MbaExpr::Shr(Box::new(x), 3),
     ] {
         let back = translate_ir_to_mba(&translate_mba_to_ir(&original));
         let same_kind = matches!(

@@ -196,7 +196,6 @@ fn substitute(expr: &MbaExpr, var: &str, value: bool) -> MbaExpr {
     let val = if value { MbaExpr::Const(1) } else { MbaExpr::Const(0) };
     match expr {
         MbaExpr::Var(v) if v == var => val,
-        MbaExpr::Var(_) | MbaExpr::Const(_) => expr.clone(),
         MbaExpr::Not(e) => MbaExpr::Not(Box::new(substitute(e, var, value))),
         MbaExpr::Neg(e) => MbaExpr::Neg(Box::new(substitute(e, var, value))),
         MbaExpr::And(a, b) => MbaExpr::And(

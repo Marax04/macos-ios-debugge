@@ -1038,8 +1038,8 @@ impl VerificationOracle {
             env.clear();
             for var in &all_vars {
                 seed = seed
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
                 let idx = (seed >> 33) as usize % domain.len();
                 env.insert(var.clone(), domain[idx] & mask);
             }
@@ -1065,14 +1065,14 @@ impl VerificationOracle {
             (1i64 << self.bits) - 1
         };
         let mut first: Option<i64> = None;
-        let mut seed: u64 = 0xFEDCBA9876543210;
+        let mut seed: u64 = 0xFEDC_BA98_7654_3210;
         let mut env: HashMap<String, i64> = HashMap::with_capacity(vars.len());
         for _ in 0..self.samples {
             env.clear();
             for var in &vars {
                 seed = seed
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
                 env.insert(var.clone(), (seed >> 33) as i64 & mask);
             }
             if let Some(v) = expr.eval(&env) {

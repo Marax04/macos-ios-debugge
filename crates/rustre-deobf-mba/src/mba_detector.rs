@@ -494,7 +494,7 @@ impl MbaDetector {
     #[must_use] 
     pub fn top_obfuscated<'a>(&self, exprs: &'a [MbaExpr], n: usize) -> Vec<(&'a MbaExpr, MbaScore)> {
         let mut scored: Vec<(&'a MbaExpr, MbaScore)> = exprs.iter().map(|e| (e, self.score(e))).collect();
-        scored.sort_unstable_by(|a, b| b.1.score.cmp(&a.1.score));
+        scored.sort_unstable_by_key(|b| std::cmp::Reverse(b.1.score));
         scored.truncate(n);
         scored
     }

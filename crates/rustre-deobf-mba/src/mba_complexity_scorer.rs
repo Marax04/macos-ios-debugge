@@ -384,7 +384,7 @@ impl MbaComplexityScorer {
     #[must_use]
     pub fn score_batch(&self, exprs: Vec<MbaExpr>) -> Vec<ExprScoringResult> {
         let mut results: Vec<ExprScoringResult> = exprs.into_iter().map(|e| self.score(e)).collect();
-        results.sort_unstable_by(|a, b| b.priority.cmp(&a.priority));
+        results.sort_unstable_by_key(|b| std::cmp::Reverse(b.priority));
         results
     }
 
