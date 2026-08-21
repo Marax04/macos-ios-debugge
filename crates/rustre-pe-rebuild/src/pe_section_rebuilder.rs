@@ -760,18 +760,34 @@ impl PeSectionRebuilder {
     /// Consume the rebuilder and return the rebuilt PE bytes.
     ///
     /// # Errors
-    /// Currently infallible but returns `Result` for forward compatibility.
+    /// Returns [`SectionRebuildError::SectionDataOutOfBounds`] if a section's
+    /// raw range cannot be represented as a file offset.
     pub fn finish(mut self) -> Result<Vec<u8>, SectionRebuildError> {
         // Write section data into the output buffer at the correct raw offsets
         for s in &self.sections {
             if s.raw_size == 0 { continue; }
-            let end = s.raw_offset as usize + s.raw_size as usize;
+            // `raw_size` is a header field with no backing in the buffer: a
+            // section declaring 0xFFFF_FFF0 raw bytes it does not own used to
+            // drive `resize` to a 4 GiB allocation. Grow only by what is
+            // actually written, which is bounded by the section's own data.
+            let copy_len = s.data.len().min(s.raw_size as usize);
+            if copy_len == 0 { continue; }
+            let start = s.raw_offset as usize;
+            let end = start
+                .checked_add(copy_len)
+                .filter(|e| u32::try_from(*e).is_ok())
+                .ok_or_else(|| SectionRebuildError::SectionDataOutOfBounds {
+                    name: String::from_utf8_lossy(&s.name)
+                        .trim_end_matches('\0')
+                        .to_string(),
+                    offset: s.raw_offset,
+                    size: s.raw_size,
+                })?;
             if end > self.data.len() {
                 self.data.resize(end, 0u8);
             }
-            let copy_len = s.data.len().min(s.raw_size as usize);
-            self.data[s.raw_offset as usize..s.raw_offset as usize + copy_len]
-                .copy_from_slice(&s.data[..copy_len]);
+            // `end <= self.data.len()` is proven by the resize above.
+            self.data[start..end].copy_from_slice(&s.data[..copy_len]);
         }
         Ok(self.data)
     }
