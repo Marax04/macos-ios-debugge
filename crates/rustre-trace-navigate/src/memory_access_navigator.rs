@@ -406,7 +406,7 @@ impl MemoryAccessNavigator {
             .iter()
             .map(|(addr, idxs)| (*addr, idxs.len()))
             .collect();
-        counts.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        counts.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         counts.truncate(top_n);
         counts
     }

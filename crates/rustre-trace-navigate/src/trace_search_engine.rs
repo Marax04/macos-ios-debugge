@@ -351,7 +351,7 @@ impl TraceSearchEngine {
             .iter()
             .map(|(addr, indices)| (*addr, indices.len()))
             .collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }
@@ -364,7 +364,7 @@ impl TraceSearchEngine {
             .iter()
             .map(|(m, v)| (m.clone(), v.len()))
             .collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 

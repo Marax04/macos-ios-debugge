@@ -156,7 +156,7 @@ impl MemIndex {
     /// Hot addresses sorted by visit count descending.
     fn hot_addresses(&self, limit: usize) -> Vec<(Ip, u64)> {
         let mut v: Vec<_> = self.ip_hit_count.iter().map(|(k, v)| (*k, *v)).collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(limit);
         v
     }

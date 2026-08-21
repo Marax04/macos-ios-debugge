@@ -175,7 +175,7 @@ impl ExecutionGraph {
     #[must_use]
     pub fn nodes_by_hotness(&self) -> Vec<&ExecNode> {
         let mut nodes: Vec<&ExecNode> = self.nodes.values().collect();
-        nodes.sort_by(|a, b| b.visit_count.cmp(&a.visit_count));
+        nodes.sort_by_key(|b| std::cmp::Reverse(b.visit_count));
         nodes
     }
 

@@ -468,7 +468,7 @@ impl FunctionCallNavigator {
     #[must_use]
     pub fn top_callees(&self, n: usize) -> Vec<(Address, usize)> {
         let mut freq: Vec<(Address, usize)> = self.call_frequency().into_iter().collect();
-        freq.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        freq.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         freq.truncate(n);
         freq
     }

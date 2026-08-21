@@ -8,7 +8,7 @@ use rustre_trace_navigate::trace_slice_extractor::{
 };
 use rustre_trace_navigate::{EntryKind, ExecutionTrace, TraceEntry};
 
-fn entry(idx: usize, pc: u64, kind: EntryKind) -> TraceEntry {
+const fn entry(idx: usize, pc: u64, kind: EntryKind) -> TraceEntry {
     TraceEntry {
         idx,
         pc,

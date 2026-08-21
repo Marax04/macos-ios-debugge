@@ -1045,7 +1045,7 @@ impl CoverageStats {
     pub fn hot_blocks(&self, top_n: usize) -> Vec<(Address, usize)> {
         let mut pairs: Vec<(Address, usize)> =
             self.block_counts.iter().map(|(&a, &c)| (a, c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(top_n);
         pairs
     }
@@ -2217,7 +2217,7 @@ impl LoopDetector {
     #[must_use]
     pub fn top_loops(&self, n: usize) -> Vec<(Address, usize)> {
         let mut sorted = self.loops.clone();
-        sorted.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         sorted.truncate(n);
         sorted
     }
@@ -4150,7 +4150,7 @@ impl TraceIndex {
     pub fn hot_pcs(&self, n: usize) -> Vec<(Address, usize)> {
         let mut pairs: Vec<(Address, usize)> =
             self.by_pc.iter().map(|(&pc, v)| (pc, v.len())).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }

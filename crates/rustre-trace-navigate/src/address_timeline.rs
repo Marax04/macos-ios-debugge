@@ -129,7 +129,7 @@ impl FrequencyMap {
     pub fn top_n(&self, n: usize) -> Vec<(Address, usize)> {
         let mut pairs: Vec<(Address, usize)> = self.inner.iter()
             .map(|(&a, &(c, _, _))| (a, c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }

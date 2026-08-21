@@ -603,7 +603,7 @@ impl HeatmapDelta {
     #[must_use]
     pub fn top_delta(&self, n: usize) -> Vec<(Address, i64)> {
         let mut sorted = self.entries.clone();
-        sorted.sort_by(|a, b| b.3.unsigned_abs().cmp(&a.3.unsigned_abs()));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.3.unsigned_abs()));
         sorted.truncate(n);
         sorted.into_iter().map(|(addr, _, _, d)| (addr, d)).collect()
     }
