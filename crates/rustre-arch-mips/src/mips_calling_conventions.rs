@@ -320,7 +320,7 @@ impl MipsCallingConvention {
     ///
     /// Returns `None` if the argument is passed in a register.
     #[must_use]
-    pub fn stack_arg_offset(self, arg_index: usize) -> Option<i32> {
+    pub const fn stack_arg_offset(self, arg_index: usize) -> Option<i32> {
         stack_arg_offset(self, arg_index)
     }
 }

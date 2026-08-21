@@ -2452,82 +2452,82 @@ pub const fn encode_nop() -> u32 {
 }
 /// ADDU rd, rs, rt
 #[must_use]
-pub fn encode_addu(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_addu(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x21)
 }
 /// SUBU rd, rs, rt
 #[must_use]
-pub fn encode_subu(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_subu(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x23)
 }
 /// AND rd, rs, rt
 #[must_use]
-pub fn encode_and(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_and(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x24)
 }
 /// OR rd, rs, rt
 #[must_use]
-pub fn encode_or(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_or(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x25)
 }
 /// XOR rd, rs, rt
 #[must_use]
-pub fn encode_xor(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_xor(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x26)
 }
 /// NOR rd, rs, rt
 #[must_use]
-pub fn encode_nor(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_nor(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x27)
 }
 /// SLT rd, rs, rt
 #[must_use]
-pub fn encode_slt(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_slt(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x2A)
 }
 /// SLTU rd, rs, rt
 #[must_use]
-pub fn encode_sltu(rd: u32, rs: u32, rt: u32) -> u32 {
+pub const fn encode_sltu(rd: u32, rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, rd, 0, 0x2B)
 }
 /// MULT rs, rt
 #[must_use]
-pub fn encode_mult(rs: u32, rt: u32) -> u32 {
+pub const fn encode_mult(rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, 0, 0, 0x18)
 }
 /// DIV rs, rt
 #[must_use]
-pub fn encode_div(rs: u32, rt: u32) -> u32 {
+pub const fn encode_div(rs: u32, rt: u32) -> u32 {
     encode_rtype(rs, rt, 0, 0, 0x1A)
 }
 /// MFHI rd
 #[must_use]
-pub fn encode_mfhi(rd: u32) -> u32 {
+pub const fn encode_mfhi(rd: u32) -> u32 {
     encode_rtype(0, 0, rd, 0, 0x10)
 }
 /// MFLO rd
 #[must_use]
-pub fn encode_mflo(rd: u32) -> u32 {
+pub const fn encode_mflo(rd: u32) -> u32 {
     encode_rtype(0, 0, rd, 0, 0x12)
 }
 /// JR rs
 #[must_use]
-pub fn encode_jr(rs: u32) -> u32 {
+pub const fn encode_jr(rs: u32) -> u32 {
     encode_rtype(rs, 0, 0, 0, 0x08)
 }
 /// JALR rd, rs
 #[must_use]
-pub fn encode_jalr(rd: u32, rs: u32) -> u32 {
+pub const fn encode_jalr(rd: u32, rs: u32) -> u32 {
     encode_rtype(rs, 0, rd, 0, 0x09)
 }
 /// JAL target26
 #[must_use]
-pub fn encode_jal(target26: u32) -> u32 {
+pub const fn encode_jal(target26: u32) -> u32 {
     encode_jtype(0x03, target26)
 }
 /// J target26
 #[must_use]
-pub fn encode_j(target26: u32) -> u32 {
+pub const fn encode_j(target26: u32) -> u32 {
     encode_jtype(0x02, target26)
 }
 /// LUI rt, imm
@@ -9006,7 +9006,7 @@ pub mod cp0_status {
 
     /// Is the CPU in kernel mode?
     #[must_use]
-    pub fn is_kernel_mode(status: u32) -> bool {
+    pub const fn is_kernel_mode(status: u32) -> bool {
         !test(status, UM) || test(status, EXL) || test(status, ERL)
     }
 }

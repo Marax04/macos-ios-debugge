@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread;
 
-fn addr(v: u64) -> Address {
+const fn addr(v: u64) -> Address {
     Address::new(v)
 }
 

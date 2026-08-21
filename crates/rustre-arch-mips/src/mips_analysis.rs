@@ -177,7 +177,7 @@ impl MipsInsn {
     /// True for branch instructions (BEQ/BNE/BLEZ/BGTZ/BLTZ/BGEZ and variants,
     /// plus COP1 FPU conditional branches BC1F/BC1T/BC1FL/BC1TL).
     #[must_use]
-    pub fn is_branch(self) -> bool {
+    pub const fn is_branch(self) -> bool {
         if matches!(self.op(), 0x01 | 0x04 | 0x05 | 0x06 | 0x07) {
             return true;
         }
@@ -191,13 +191,13 @@ impl MipsInsn {
 
     /// True for jump instructions (J/JAL).
     #[must_use]
-    pub fn is_jump(self) -> bool {
+    pub const fn is_jump(self) -> bool {
         matches!(self.op(), 0x02 | 0x03)
     }
 
     /// True for JR / JALR (SPECIAL funct 0x08 / 0x09).
     #[must_use]
-    pub fn is_jr_jalr(self) -> bool {
+    pub const fn is_jr_jalr(self) -> bool {
         self.op() == 0x00 && matches!(self.funct(), 0x08 | 0x09)
     }
 
@@ -209,7 +209,7 @@ impl MipsInsn {
 
     /// True for GP-relative load/store (LW/SW/LH/SH/LB/SB with rs=$gp).
     #[must_use]
-    pub fn is_gp_relative(self) -> bool {
+    pub const fn is_gp_relative(self) -> bool {
         matches!(
             self.op(),
             0x23 | 0x21 | 0x20 | 0x25 | 0x24 | 0x28 | 0x29 | 0x2B
@@ -218,19 +218,19 @@ impl MipsInsn {
 
     /// True for SYSCALL.
     #[must_use]
-    pub fn is_syscall(self) -> bool {
+    pub const fn is_syscall(self) -> bool {
         self.op() == 0x00 && self.funct() == 0x0C
     }
 
     /// True for MFC0/MTC0 (coprocessor 0 moves — used for TLB).
     #[must_use]
-    pub fn is_cop0(self) -> bool {
+    pub const fn is_cop0(self) -> bool {
         self.op() == 0x10
     }
 
     /// True for TLBWI/TLBWR/TLBR/TLBP.
     #[must_use]
-    pub fn is_tlb_op(self) -> bool {
+    pub const fn is_tlb_op(self) -> bool {
         self.op() == 0x10 && self.rs() == 0x10 && matches!(self.funct(), 0x01 | 0x02 | 0x06 | 0x08)
     }
 
@@ -243,7 +243,7 @@ impl MipsInsn {
 
     /// Jump target (j-type absolute in 256 MB page).
     #[must_use]
-    pub fn jump_target(self, pc: u32) -> u32 {
+    pub const fn jump_target(self, pc: u32) -> u32 {
         (pc & 0xF000_0000) | (self.instr_index() << 2)
     }
 }

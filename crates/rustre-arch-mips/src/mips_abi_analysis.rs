@@ -692,7 +692,7 @@ impl MipsAbiAnalysis {
     }
 
     /// Set the GOT base address.
-    pub fn set_got_base(&mut self, base: u64) {
+    pub const fn set_got_base(&mut self, base: u64) {
         self.got.base = base;
         self.gp_usage.set_gp(base);
     }

@@ -28,7 +28,7 @@ fn low32(v: u64) -> u32 {
 struct Rng(u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -39,7 +39,7 @@ impl Rng {
 }
 
 /// All four architecture configurations.
-fn archs() -> [MipsArch; 4] {
+const fn archs() -> [MipsArch; 4] {
     [
         MipsArch::mips32_le(),
         MipsArch::mips32_be(),

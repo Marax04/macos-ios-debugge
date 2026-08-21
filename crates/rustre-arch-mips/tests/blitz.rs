@@ -6,7 +6,7 @@ use rustre_arch_mips::*;
 use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
-fn addr(v: u64) -> Address {
+const fn addr(v: u64) -> Address {
     Address::new(v)
 }
 

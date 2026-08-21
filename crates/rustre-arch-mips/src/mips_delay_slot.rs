@@ -272,7 +272,7 @@ impl BranchWithDelay {
     /// `branch_taken` is the runtime decision; if `false` and the branch is
     /// annulled, the delay slot is skipped.
     #[must_use]
-    pub fn annul_check(&self, branch_taken: bool) -> AnnulDecision {
+    pub const fn annul_check(&self, branch_taken: bool) -> AnnulDecision {
         annul_check(self, branch_taken)
     }
 
