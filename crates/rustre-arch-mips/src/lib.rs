@@ -8853,6 +8853,31 @@ pub struct TlbEntry {
     pub global: bool,
 }
 
+/// The dirty and valid bit of ONE page of a TLB entry pair.
+///
+/// Mirrors the two writable state bits of a single `EntryLo` register.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TlbPageFlags {
+    /// Page has been written to and must be written back.
+    pub dirty: bool,
+    /// Translation for this page is valid.
+    pub valid: bool,
+}
+
+impl TlbPageFlags {
+    /// A page that is both valid and dirty (writable, resident).
+    #[must_use]
+    pub const fn valid_dirty() -> Self {
+        Self { dirty: true, valid: true }
+    }
+
+    /// A page with neither bit set (no translation).
+    #[must_use]
+    pub const fn none() -> Self {
+        Self { dirty: false, valid: false }
+    }
+}
+
 /// The dirty and valid bits of a TLB entry's even/odd page pair.
 ///
 /// The four bits travel together in hardware (EntryLo0/EntryLo1), so they are
@@ -8870,23 +8895,34 @@ impl TlbFlags {
     /// Valid bit of the odd page.
     pub const VALID1: u8 = 1 << 3;
 
-    /// Build a flag set from the four hardware bits.
+    /// Build a flag set from the even and the odd page's bits.
+    ///
+    /// The bits are grouped per PAGE rather than passed as four loose
+    /// booleans, which is both how the hardware stores them (one `EntryLo`
+    /// register per page) and what stops a caller from silently swapping
+    /// `dirty1` with `valid0` at a call site.
     #[must_use]
-    pub const fn new(dirty0: bool, dirty1: bool, valid0: bool, valid1: bool) -> Self {
+    pub const fn new(even: TlbPageFlags, odd: TlbPageFlags) -> Self {
         let mut bits = 0u8;
-        if dirty0 {
+        if even.dirty {
             bits |= Self::DIRTY0;
         }
-        if dirty1 {
+        if odd.dirty {
             bits |= Self::DIRTY1;
         }
-        if valid0 {
+        if even.valid {
             bits |= Self::VALID0;
         }
-        if valid1 {
+        if odd.valid {
             bits |= Self::VALID1;
         }
         Self(bits)
+    }
+
+    /// Build a flag set directly from the raw bit pattern.
+    #[must_use]
+    pub const fn from_bits(bits: u8) -> Self {
+        Self(bits & (Self::DIRTY0 | Self::DIRTY1 | Self::VALID0 | Self::VALID1))
     }
 
     /// The raw bits.
@@ -8941,7 +8977,11 @@ impl TlbEntry {
             pfn1: if odd { pfn } else { pfn + 1 },
             c0: 3, // cacheable, non-coherent, write-back
             c1: 3,
-            flags: TlbFlags::new(!odd, odd, !odd, odd),
+            flags: if odd {
+                TlbFlags::new(TlbPageFlags::none(), TlbPageFlags::valid_dirty())
+            } else {
+                TlbFlags::new(TlbPageFlags::valid_dirty(), TlbPageFlags::none())
+            },
             global: false,
         }
     }
