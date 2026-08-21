@@ -331,7 +331,7 @@ impl LambdaMetafactory {
         let is_alt = bsm.method_ref.name == "altMetafactory";
         let flags = if is_alt {
             match bsm.static_args.get(3) {
-                Some(BootstrapArg::Int(f)) => *f as u32,
+                Some(BootstrapArg::Int(f)) => (*f).cast_unsigned(),
                 _ => 0,
             }
         } else {

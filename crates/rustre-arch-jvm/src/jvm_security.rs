@@ -778,7 +778,7 @@ mod tests {
     fn test_privileged_is_suspicious_many_calls() {
         let mut pb = PrivilegedBlock::new();
         for i in 0..6 {
-            pb.record(i as u64, false, false);
+            pb.record(crate::numeric::i32_to_u64(i), false, false);
         }
         assert!(pb.is_suspicious());
     }

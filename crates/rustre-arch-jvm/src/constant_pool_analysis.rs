@@ -9,6 +9,7 @@
 //! * [`CpStats`] — aggregate statistics.
 //! * [`ConstantPoolAnalysis`] — top-level facade.
 
+use crate::numeric;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -418,14 +419,14 @@ impl CpBytecodeScanner {
                 | 0xC0 | 0xC1 => {
                     if i + 2 < bytecode.len() {
                         let idx = u16::from_be_bytes([bytecode[i + 1], bytecode[i + 2]]);
-                        refs.record(idx, i as u32);
+                        refs.record(idx, numeric::usize_to_u32(i));
                     }
                     i += 3;
                 }
                 // 1-byte CP index: ldc
                 0x12 => {
                     if i + 1 < bytecode.len() {
-                        refs.record(u16::from(bytecode[i + 1]), i as u32);
+                        refs.record(u16::from(bytecode[i + 1]), numeric::usize_to_u32(i));
                     }
                     i += 2;
                 }
@@ -436,7 +437,7 @@ impl CpBytecodeScanner {
                 0xB9 | 0xBA => {
                     if i + 2 < bytecode.len() {
                         let idx = u16::from_be_bytes([bytecode[i + 1], bytecode[i + 2]]);
-                        refs.record(idx, i as u32);
+                        refs.record(idx, numeric::usize_to_u32(i));
                     }
                     i += 5;
                 }

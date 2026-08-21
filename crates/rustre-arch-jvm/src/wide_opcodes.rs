@@ -2257,15 +2257,15 @@ mod tests {
     fn meta_lookup_full_range_no_panic() {
         for op in 0u16..=0xFF {
             // Must never panic on any single byte
-            let _ = OpcodeMeta::lookup(op as u8);
+            let _ = OpcodeMeta::lookup(crate::numeric::trunc_u16_u8(op));
         }
     }
 
     #[test]
     fn meta_reserved_byte_count_within_bounds() {
         let reserved: Vec<u8> = (0u16..=0xFFu16)
-            .filter(|&op| OpcodeMeta::lookup(op as u8).is_none())
-            .map(|op| op as u8)
+            .filter(|&op| OpcodeMeta::lookup(crate::numeric::trunc_u16_u8(op)).is_none())
+            .map(|op| crate::numeric::trunc_u16_u8(op))
             .collect();
         // The JVM assigns opcodes 0x00..=0xc9; everything from 0xca upwards is
         // `breakpoint`/`impdep1`/`impdep2` plus the unassigned range, which this
@@ -2274,7 +2274,7 @@ mod tests {
         //
         // Assert the exact set rather than a loose upper bound: a bound of "< 20"
         // contradicted the documented contract and could not hold.
-        let expected: Vec<u8> = (0xCAu16..=0xFFu16).map(|op| op as u8).collect();
+        let expected: Vec<u8> = (0xCAu16..=0xFFu16).map(|op| crate::numeric::trunc_u16_u8(op)).collect();
         assert_eq!(
             reserved, expected,
             "the reserved set must be exactly 0xca..=0xff"

@@ -6,6 +6,7 @@
 //! `constant_pool_count` field.  Individual entries can be resolved with
 //! [`JvmConstantPool::resolve_utf8`], [`JvmConstantPool::resolve_class`], etc.
 
+use crate::numeric;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -471,7 +472,7 @@ impl JvmConstantPool {
     pub fn all_utf8(&self) -> Vec<(u16, &str)> {
         self.entries.iter().enumerate().filter_map(|(i, e)| {
             if let ConstantEntry::Utf8(s) = e {
-                Some((i as u16, s.as_str()))
+                Some((numeric::usize_to_u16(i), s.as_str()))
             } else {
                 None
             }

@@ -33,6 +33,9 @@ pub mod jvm_constant_pool;
 pub mod jvm_attribute_parser;
 pub mod jvm_bytecode_verifier;
 
+/// Checked, panic-free numeric conversions shared by the JVM decoders.
+pub mod numeric;
+
 use rustre_core::arch::{
     Architecture, BranchInfo, CallingConvention, InstrFlags, Instruction, RegisterInfo,
 };
@@ -918,7 +921,7 @@ impl Architecture for JvmArch {
     }
 
     fn disassemble(&self, address: Address, bytes: &[u8]) -> Result<Instruction, CoreError> {
-        let pc_offset = address.as_u64() as usize;
+        let pc_offset = crate::numeric::u64_to_usize(address.as_u64());
         let (decoded, consumed) = JvmInstr::decode_at(bytes, pc_offset).map_err(|e| CoreError::PluginError {
             plugin: "jvm".into(),
             message: e.to_string(),
@@ -3739,7 +3742,7 @@ impl JvmDisassembler {
             0xc8 | 0xc9 => {
                 if raw.len() >= 5 {
                     let v = i32::from_be_bytes([raw[1], raw[2], raw[3], raw[4]]);
-                    vec![v as u32]
+                    vec![v.cast_unsigned()]
                 } else {
                     vec![]
                 }
@@ -3756,7 +3759,7 @@ impl JvmDisassembler {
                         raw[base + 2],
                         raw[base + 3],
                     ]);
-                    vec![default_off as u32]
+                    vec![default_off.cast_unsigned()]
                 } else {
                     vec![]
                 }
@@ -4230,7 +4233,7 @@ impl ConstantPool {
     /// Push a new entry and return its 1-based index.
     pub fn push(&mut self, entry: CpEntry) -> u16 {
         let double = matches!(entry, CpEntry::Long(_) | CpEntry::Double(_));
-        let idx = self.entries.len() as u16;
+        let idx = crate::numeric::usize_to_u16(self.entries.len());
         self.entries.push(Some(entry));
         if double {
             self.entries.push(Some(CpEntry::Unused));
@@ -4463,7 +4466,7 @@ pub fn jvm_build_cfg(bytecode: &[u8]) -> Vec<JvmBlock> {
 
         if (is_cond_branch || is_uncond_branch)
             && let Some(&offset_raw) = instr.operands.first() {
-                let target = (off as i64 + i64::from(offset_raw as i32)) as usize;
+                let target = crate::numeric::i64_to_usize(numeric::usize_to_i64(off) + i64::from(offset_raw.cast_signed()));
                 leaders.insert(target);
             }
         if (is_cond_branch || is_return) && off + 1 < bytecode.len() {
@@ -4496,7 +4499,7 @@ pub fn jvm_build_cfg(bytecode: &[u8]) -> Vec<JvmBlock> {
             if !is_return {
                 // Unconditional or conditional branch.
                 if let Some(&offset_raw) = last.operands.first() {
-                    let target = (off as i64 + i64::from(offset_raw as i32)) as usize;
+                    let target = crate::numeric::i64_to_usize(numeric::usize_to_i64(off) + i64::from(offset_raw.cast_signed()));
                     if target < bytecode.len() {
                         successors.push(target);
                     }
@@ -4847,7 +4850,7 @@ pub fn jvm_cyclomatic_complexity(bytecode: &[u8]) -> u32 {
         .iter()
         .filter(|i| matches!(i.opcode, 0x99..=0xa6 | 0xaa | 0xab | 0xc6 | 0xc7))
         .count();
-    1 + cond as u32
+    1 + crate::numeric::usize_to_u32(cond)
 }
 
 // ---------------------------------------------------------------------------

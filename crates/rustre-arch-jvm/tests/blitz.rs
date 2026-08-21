@@ -168,9 +168,9 @@ fn decode_wide_unknown_sub_opcode() {
 #[test]
 fn decode_reserved_opcodes_all() {
     for op in 0xca..=0xffu16 {
-        let r = JvmInstr::decode(&[op as u8]);
+        let r = JvmInstr::decode(&[rustre_arch_jvm::numeric::trunc_u16_u8(op)]);
         assert!(
-            matches!(r, Err(JvmDecodeError::Reserved(b)) if b == op as u8),
+            matches!(r, Err(JvmDecodeError::Reserved(b)) if b == rustre_arch_jvm::numeric::trunc_u16_u8(op)),
             "op {op:#x}: {r:?}"
         );
     }
@@ -703,7 +703,7 @@ fn decoder_classifies_every_byte() {
     // tableswitch/lookupswitch (0xaa/0xab) are variable; we don't fuzz those here.
     let pad: Vec<u8> = vec![0; 32];
     for op in 0..=0xff_u16 {
-        let op = op as u8;
+        let op = rustre_arch_jvm::numeric::trunc_u16_u8(op);
         if op == 0xaa || op == 0xab {
             continue; // exercised elsewhere
         }

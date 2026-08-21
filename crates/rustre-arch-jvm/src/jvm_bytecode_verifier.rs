@@ -7,6 +7,7 @@
 //!
 //! Entry point: [`JvmBytecodeVerifier::verify_method`].
 
+use crate::numeric;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fmt;
 
@@ -430,14 +431,14 @@ impl JvmBytecodeVerifier {
             0x99..=0xA4 => { // ifeq..if_icmple
                 st.pop()?;
                 if op >= 0x9F { st.pop()?; } // if_icmp* pop two
-                let branch_i32 = offset as i32 + i16at!(1);
+                let branch_i32 = offset.cast_signed() + i16at!(1);
                 let branch = u32::try_from(branch_i32).map_err(|_| VerifyError::InvalidBranchTarget(branch_i32))?;
                 let next = offset + 3;
                 (3, vec![next, branch])
             }
             0xA5 | 0xA6 => { // if_acmpeq, if_acmpne
                 st.pop()?; st.pop()?;
-                let branch_i32 = offset as i32 + i16at!(1);
+                let branch_i32 = offset.cast_signed() + i16at!(1);
                 let branch = u32::try_from(branch_i32).map_err(|_| VerifyError::InvalidBranchTarget(branch_i32))?;
                 let next = offset + 3;
                 (3, vec![next, branch])
@@ -445,12 +446,12 @@ impl JvmBytecodeVerifier {
 
             // Goto
             0xA7 => {
-                let target_i32 = offset as i32 + i16at!(1);
+                let target_i32 = offset.cast_signed() + i16at!(1);
                 let target = u32::try_from(target_i32).map_err(|_| VerifyError::InvalidBranchTarget(target_i32))?;
                 (3, vec![target])
             }
             0xC8 => {
-                let target_i32 = offset as i32 + i32at!(1);
+                let target_i32 = offset.cast_signed() + i32at!(1);
                 let target = u32::try_from(target_i32).map_err(|_| VerifyError::InvalidBranchTarget(target_i32))?;
                 (5, vec![target])
             } // goto_w
@@ -466,7 +467,7 @@ impl JvmBytecodeVerifier {
             }
 
             // Object creation
-            0xBB => { let idx = u16at!(1); st.push(TypeInfo::UninitializedRef(pc as u32)); let _ = idx; (3, vec![]) } // new
+            0xBB => { let idx = u16at!(1); st.push(TypeInfo::UninitializedRef(numeric::usize_to_u32(pc))); let _ = idx; (3, vec![]) } // new
 
             // Multianewarray
             0xC5 => { let dims = u8at!(3) as usize; for _ in 0..dims { st.pop()?; } st.push(TypeInfo::Reference("[[Ljava/lang/Object;".into())); (4, vec![]) }
@@ -474,7 +475,7 @@ impl JvmBytecodeVerifier {
             // ifnull / ifnonnull
             0xC6 | 0xC7 => {
                 st.pop()?;
-                let branch_i32 = offset as i32 + i16at!(1);
+                let branch_i32 = offset.cast_signed() + i16at!(1);
                 let branch = u32::try_from(branch_i32).map_err(|_| VerifyError::InvalidBranchTarget(branch_i32))?;
                 let next = offset + 3;
                 (3, vec![next, branch])
@@ -497,7 +498,7 @@ impl JvmBytecodeVerifier {
             && op != 0xB1 && op != 0xBF && op != 0xA7 && op != 0xC8
             && !(0xAA..=0xAB).contains(&op)
         {
-            let next = (offset as usize + instr_len) as u32;
+            let next = numeric::usize_to_u32(offset as usize + instr_len);
             if (next as usize) < code.len() {
                 succs.push(next);
             }
