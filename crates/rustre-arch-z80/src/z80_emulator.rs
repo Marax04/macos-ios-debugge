@@ -152,6 +152,22 @@ pub struct Z80State {
     pub mem: Z80Memory,
 }
 
+/// Fetch one byte at `pc` and advance it.
+fn fetch8(mem: &Z80Memory, pc: &mut u16) -> u8 {
+    let b = mem.read8(*pc);
+    *pc = pc.wrapping_add(1);
+    b
+}
+
+/// Fetch a little-endian 16-bit word at `pc` and advance it past both bytes.
+fn fetch16(mem: &Z80Memory, pc: &mut u16) -> u16 {
+    let lo = mem.read8(*pc);
+    *pc = pc.wrapping_add(1);
+    let hi = mem.read8(*pc);
+    *pc = pc.wrapping_add(1);
+    u16::from(lo) | (u16::from(hi) << 8)
+}
+
 impl Z80State {
     /// Create a new Z80 state (all registers zeroed, SP = 0xFFFF).
     #[must_use]
@@ -433,20 +449,7 @@ impl Z80State {
     }
 
     fn execute(&mut self, op: u8, pc0: u16, io: &mut dyn IoPortHandler) -> Result<u32, String> {
-        let fetch8 = |mem: &Z80Memory, pc: &mut u16| -> u8 {
-            let b = mem.read8(*pc);
-            *pc = pc.wrapping_add(1);
-            b
-        };
-        let fetch16 = |mem: &Z80Memory, pc: &mut u16| -> u16 {
-            let lo = mem.read8(*pc);
-            *pc = pc.wrapping_add(1);
-            let hi = mem.read8(*pc);
-            *pc = pc.wrapping_add(1);
-            u16::from(lo) | (u16::from(hi) << 8)
-        };
         let _ = pc0;
-
         match u16::from(op) {
             // NOP
             0x00 => Ok(4),
@@ -558,6 +561,13 @@ impl Z80State {
                 Ok(4)
             }
             // EX AF,AF'
+            _ => self.execute_x0_high(op, io),
+        }
+    }
+
+    /// x=0 opcodes from EX AF,AF' onwards: relative jumps, 16-bit ADD and (nn) loads.
+    fn execute_x0_high(&mut self, op: u8, io: &mut dyn IoPortHandler) -> Result<u32, String> {
+        match u16::from(op) {
             0x08 => {
                 std::mem::swap(&mut self.a, &mut self.a2);
                 std::mem::swap(&mut self.f, &mut self.f2);
@@ -660,6 +670,13 @@ impl Z80State {
                 Ok(4)
             }
             // LD r,r' (x=1)
+            _ => self.execute_x1_x2(op, io),
+        }
+    }
+
+    /// The x=1 register loads, the x=2 ALU block and the x=3 stack/jump forms.
+    fn execute_x1_x2(&mut self, op: u8, io: &mut dyn IoPortHandler) -> Result<u32, String> {
+        match u16::from(op) {
             0x40..=0x7F => {
                 let y = (op >> 3) & 7;
                 let z = op & 7;
@@ -771,6 +788,13 @@ impl Z80State {
                 Ok(4)
             }
             // CALL cc,nn (x=3, z=4)
+            _ => self.execute_x3_high(op, io),
+        }
+    }
+
+    /// The remaining x=3 opcodes: CALL, PUSH, ALU A,n, RST, DAA/CPL/SCF/CCF and prefixes.
+    fn execute_x3_high(&mut self, op: u8, io: &mut dyn IoPortHandler) -> Result<u32, String> {
+        match u16::from(op) {
             0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
                 let y = (op >> 3) & 7;
                 let nn = fetch16(&self.mem, &mut self.pc);
