@@ -342,6 +342,26 @@ impl MipsArch {
                 bytes,
             ),
 
+            0x20..=0x3F => Self::decode_mem(address, opcode, rs, rt, simm16, bytes),
+
+            _ => unknown(address, bytes),
+        }
+    }
+
+    /// Primary opcodes `0x20..=0x3F`: every load and store, integer and
+    /// coprocessor, plain and linked.
+    ///
+    /// Split out of `decode_word` for length only; the dispatch there is still
+    /// one flat match over the primary opcode.
+    fn decode_mem(
+        address: Address,
+        opcode: u32,
+        rs: usize,
+        rt: usize,
+        simm16: i64,
+        bytes: Vec<u8>,
+    ) -> Instruction {
+        match opcode {
             // Integer loads
             0x20 => mem_op(address, "lb", rt, rs, simm16, InstrFlags::READ_MEM, bytes),
             0x21 => mem_op(address, "lh", rt, rs, simm16, InstrFlags::READ_MEM, bytes),
@@ -437,7 +457,7 @@ impl MipsArch {
         f: SpecialFields,
         bytes: Vec<u8>,
     ) -> Instruction {
-        let SpecialFields { word, funct, rs, rt, rd, shamt } = f;
+        let SpecialFields { funct, rs, rt, rd, shamt, .. } = f;
         match funct {
             // ── Shifts by shamt ──────────────────────────────────────────
             0x00 => rtype(
@@ -514,6 +534,27 @@ impl MipsArch {
                 bytes,
             ),
 
+            0x08..=0x0F => Self::decode_special_jump_trap(address, f, bytes),
+
+            0x10..=0x1F => Self::decode_special_muldiv(address, f, bytes),
+
+            0x20..=0x2F => Self::decode_special_alu(address, f, bytes),
+
+            0x30..=0x3F => Self::decode_special_high(address, f, bytes),
+
+            _ => unknown(address, bytes),
+        }
+    }
+
+
+
+
+    /// SPECIAL arms `0x08..=0x0F`: jumps, conditional moves, SYSCALL/BREAK/SYNC.
+    ///
+    /// Split out of `decode_special` for length only.
+    fn decode_special_jump_trap(address: Address, f: SpecialFields, bytes: Vec<u8>) -> Instruction {
+        let SpecialFields { word, funct, rs, rt, rd, shamt } = f;
+        match funct {
             // ── Jumps ────────────────────────────────────────────────────
             0x08 => {
                 let mut flags = InstrFlags::BRANCH | InstrFlags::INDIRECT;
@@ -567,6 +608,16 @@ impl MipsArch {
             }
             0x0F => rtype(address, "sync", format!("{shamt}"), bytes),
 
+            _ => unknown(address, bytes),
+        }
+    }
+    /// SPECIAL arms `0x10..=0x1F`: HI/LO moves, MIPS64 variable shifts and
+    /// the multiply/divide group.
+    ///
+    /// Split out of `decode_special` for length only.
+    fn decode_special_muldiv(address: Address, f: SpecialFields, bytes: Vec<u8>) -> Instruction {
+        let SpecialFields { funct, rs, rt, rd, .. } = f;
+        match funct {
             // ── HI/LO transfers ──────────────────────────────────────────
             0x10 => rtype(address, "mfhi", gpr(rd).to_string(), bytes),
             0x11 => rtype(address, "mthi", gpr(rs).to_string(), bytes),
@@ -610,6 +661,16 @@ impl MipsArch {
             0x1E => rtype(address, "ddiv", format!("{}, {}", gpr(rs), gpr(rt)), bytes),
             0x1F => rtype(address, "ddivu", format!("{}, {}", gpr(rs), gpr(rt)), bytes),
 
+            _ => unknown(address, bytes),
+        }
+    }
+    /// SPECIAL arms `0x20..=0x2F`: the 32- and 64-bit integer ALU.
+    ///
+    /// Split out of `decode_special` for length; the dispatch above is
+    /// still one flat match over `funct`.
+    fn decode_special_alu(address: Address, f: SpecialFields, bytes: Vec<u8>) -> Instruction {
+        let SpecialFields { funct, rs, rt, rd, .. } = f;
+        match funct {
             // ── Integer ALU ───────────────────────────────────────────────
             0x20 => rtype(
                 address,
@@ -698,6 +759,16 @@ impl MipsArch {
                 bytes,
             ),
 
+            _ => unknown(address, bytes),
+        }
+    }
+    /// SPECIAL arms with `funct >= 0x30`: traps and the MIPS64 shifts.
+    ///
+    /// Split out of `decode_special` so neither half is an unreviewably long
+    /// function; the dispatch is still one flat match over `funct`.
+    fn decode_special_high(address: Address, f: SpecialFields, bytes: Vec<u8>) -> Instruction {
+        let SpecialFields { funct, rs, rt, rd, shamt, .. } = f;
+        match funct {
             // ── Traps ─────────────────────────────────────────────────────
             0x30 => rtype(address, "tge", format!("{}, {}", gpr(rs), gpr(rt)), bytes),
             0x31 => rtype(address, "tgeu", format!("{}, {}", gpr(rs), gpr(rt)), bytes),
@@ -1042,7 +1113,6 @@ impl MipsArch {
         let idx = ((word >> 16) & 0x1F) as usize;
         let fs = ((word >> 11) & 0x1F) as usize;
         let fd = ((word >> 6) & 0x1F) as usize;
-        let fr = base;
         match funct {
             0x00 => rtype(
                 address,
@@ -1098,6 +1168,21 @@ impl MipsArch {
                 format!("$f{fd}, $f{fs}, $f{idx}, {}", gpr(base)),
                 bytes,
             ),
+            0x20..=0x3F => Self::decode_cop1x_madd(address, word, bytes),
+            _ => unknown(address, bytes),
+        }
+    }
+
+    /// COP1X functions `0x20..=0x3F`: the fused multiply-add family.
+    ///
+    /// Split out of `decode_cop1x` for length only.
+    fn decode_cop1x_madd(address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
+        let funct = word & 0x3F;
+        let fr = ((word >> 21) & 0x1F) as usize;
+        let idx = ((word >> 16) & 0x1F) as usize;
+        let fs = ((word >> 11) & 0x1F) as usize;
+        let fd = ((word >> 6) & 0x1F) as usize;
+        match funct {
             0x20 => rtype(
                 address,
                 "madd.s",
