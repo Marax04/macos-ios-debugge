@@ -139,14 +139,8 @@ impl AntiDebugTechnique {
     pub const fn bypass_difficulty(self) -> u8 {
         match self {
             Self::IsDebuggerPresent | Self::BeingDebugged => 1,
-            Self::CheckRemoteDebuggerPresent | Self::NtGlobalFlag => 2,
-            Self::HeapFlags | Self::ProcessHeap | Self::GetTickCount => 2,
-            Self::NtQueryInformationProcess | Self::HardwareBreakpoints => 3,
-            Self::Rdtsc | Self::QueryPerformanceCounter => 3,
-            Self::Int3Exception | Self::Int1Exception => 2,
-            Self::CpuidHypervisorBit | Self::CpuidVmString => 3,
+            Self::NtQueryInformationProcess | Self::HardwareBreakpoints | Self::Rdtsc | Self::QueryPerformanceCounter | Self::CpuidHypervisorBit | Self::CpuidVmString | Self::SeDebugPrivilege => 3,
             Self::TlsCallback | Self::SelfDebugging => 4,
-            Self::SeDebugPrivilege => 3,
             _ => 2,
         }
     }
@@ -272,7 +266,7 @@ impl AntiDebugDetector {
                 }
             }
         }
-        hits.sort_by(|a, b| a.offset.cmp(&b.offset));
+        hits.sort_by_key(|a| a.offset);
         hits
     }
 
@@ -963,7 +957,7 @@ mod tests {
     fn test_patchset_frida_script() {
         let mut ps = PatchSet::new();
         ps.add_unchecked(BypassPatch {
-            address: 0x401000,
+            address: 0x0040_1000,
             offset: 0,
             original_bytes: vec![0x0F],
             patch_bytes: vec![0x90],

@@ -1130,7 +1130,7 @@ impl EvasionRiskAssessment {
 
         let mut top: Vec<(&'static str, u8)> =
             matches.iter().map(|m| (m.name, m.confidence)).collect();
-        top.sort_by(|a, b| b.1.cmp(&a.1));
+        top.sort_by_key(|b| std::cmp::Reverse(b.1));
         top.dedup_by_key(|t| t.0);
         top.truncate(5);
 

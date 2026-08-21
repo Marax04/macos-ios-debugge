@@ -2,9 +2,9 @@
 //!
 //! Covers:
 //! - CPUID-based VM presence tests (hypervisor bit, vendor strings, leaf counts)
-//! - Registry key probing (HKLM\SOFTWARE\VMware Inc., VirtualBox, etc.)
-//! - Driver/device name probing (\\.\vmhgfs, \\.\VBoxGuest, etc.)
-//! - MAC-address vendor prefix checks (VMware 00:0C:29, VBox 08:00:27)
+//! - Registry key probing (HKLM\SOFTWARE\VMware Inc., `VirtualBox`, etc.)
+//! - Driver/device name probing (\\.\vmhgfs, \\.\`VBoxGuest`, etc.)
+//! - MAC-address vendor prefix checks (`VMware` 00:0C:29, `VBox` 08:00:27)
 //! - Memory/disk-size heuristics (< 512 MB RAM, < 20 GB disk)
 //! - Timing anomaly cross-correlation with VM presence
 
@@ -43,7 +43,7 @@ pub enum VmArtifactKind {
     Cpuid,
     /// Registry key path lookup.
     RegistryKey,
-    /// Device/driver name (CreateFile / DeviceIoControl).
+    /// Device/driver name (`CreateFile` / `DeviceIoControl`).
     DeviceName,
     /// MAC address vendor OUI check.
     MacAddress,
@@ -57,7 +57,7 @@ pub enum VmArtifactKind {
     DiskSize,
     /// Screen resolution heuristic.
     ScreenResolution,
-    /// File path (guest additions, VMware tools, etc.).
+    /// File path (guest additions, `VMware` tools, etc.).
     FilePath,
 }
 
@@ -527,7 +527,7 @@ impl VmDetectionNeutralizer {
                 }
             }
             // Also search as UTF-16LE (interleaved with 0x00 bytes).
-            let utf16: Vec<u8> = sig_str.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+            let utf16: Vec<u8> = sig_str.encode_utf16().flat_map(u16::to_le_bytes).collect();
             let mut pos16 = 0usize;
             while pos16 + utf16.len() <= binary.len() {
                 if binary[pos16..pos16 + utf16.len()] == utf16[..] {
@@ -749,7 +749,7 @@ mod tests {
     #[test]
     fn test_utf16le_string_scan() {
         let sig_str = "vmtoolsd.exe";
-        let utf16: Vec<u8> = sig_str.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let utf16: Vec<u8> = sig_str.encode_utf16().flat_map(u16::to_le_bytes).collect();
         let n = VmDetectionNeutralizer::new();
         let artifacts = n.scan(&utf16);
         assert!(artifacts.iter().any(|a| a.kind == VmArtifactKind::ProcessName));

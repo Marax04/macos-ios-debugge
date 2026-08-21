@@ -1,8 +1,8 @@
 
 //! VM-detection neutralizer.
 //!
-//! Detects and neutralises CPUID hypervisor-bit checks, VMware I/O-port
-//! backdoor checks (0x5658), VirtualBox RDTSC anomaly checks, SIDT/SGDT
+//! Detects and neutralises CPUID hypervisor-bit checks, `VMware` I/O-port
+//! backdoor checks (0x5658), `VirtualBox` RDTSC anomaly checks, SIDT/SGDT
 //! red-pill checks, and registry-key string artefacts for VM products.
 
 use std::collections::HashMap;
@@ -17,13 +17,13 @@ use std::fmt;
 pub enum VmCheck {
     /// CPUID leaf 0x40000000: hypervisor-present bit (ECX bit 31 on leaf 1).
     CpuidHypervisorBit,
-    /// CPUID with hypervisor vendor string (e.g. "VMwareVMware", "KVMKVMKVM").
+    /// CPUID with hypervisor vendor string (e.g. "`VMwareVMware`", "KVMKVMKVM").
     CpuidVendorString,
-    /// VMware I/O-port backdoor at port 0x5658 ("VMXh").
+    /// `VMware` I/O-port backdoor at port 0x5658 ("`VMXh`").
     VmwareIoPort,
-    /// VirtualBox RDTSC anomaly (unusually fast RDTSC in guest).
+    /// `VirtualBox` RDTSC anomaly (unusually fast RDTSC in guest).
     VboxRdtscAnomaly,
-    /// SIDT red-pill: SIDT result address ≥ 0xD0000000 on VMware (x86).
+    /// SIDT red-pill: SIDT result address ≥ 0xD0000000 on `VMware` (x86).
     SidtRedPill,
     /// SGDT red-pill: GDT base > certain threshold.
     SgdtRedPill,
@@ -89,7 +89,7 @@ impl CpuidCheck {
     /// Return `true` if this check uses the hypervisor vendor leaf (0x40000000+).
     #[must_use]
     pub fn is_hypervisor_leaf(&self) -> bool {
-        self.leaf.map_or(false, |l| l >= 0x4000_0000)
+        self.leaf.is_some_and(|l| l >= 0x4000_0000)
     }
 }
 
@@ -97,7 +97,7 @@ impl CpuidCheck {
 // IoPortCheck — I/O port access for VM detection
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// An I/O-port-based VM detection check (primarily VMware backdoor).
+/// An I/O-port-based VM detection check (primarily `VMware` backdoor).
 #[derive(Debug, Clone)]
 pub struct IoPortCheck {
     /// Byte offset of the `IN EAX, DX` / `IN EAX, 0x5658` instruction.
@@ -113,7 +113,7 @@ pub struct IoPortCheck {
 }
 
 impl IoPortCheck {
-    /// Return `true` if this matches the VMware backdoor port (0x5658).
+    /// Return `true` if this matches the `VMware` backdoor port (0x5658).
     #[must_use]
     pub const fn is_vmware_backdoor(&self) -> bool {
         self.port == 0x5658
@@ -232,7 +232,7 @@ impl fmt::Display for NeutralizationPatch {
 fn find_all(data: &[u8], pattern: &[u8]) -> Vec<usize> {
     let plen = pattern.len();
     (0..data.len().saturating_sub(plen.saturating_sub(1)))
-        .filter(|&off| data.get(off..off + plen).map_or(false, |s| s == pattern))
+        .filter(|&off| data.get(off..off + plen) == Some(pattern))
         .collect()
 }
 
@@ -240,7 +240,7 @@ fn find_masked(data: &[u8], pattern: &[u8], mask: &[u8]) -> Vec<usize> {
     let plen = pattern.len();
     (0..data.len().saturating_sub(plen.saturating_sub(1)))
         .filter(|&off| {
-            data.get(off..off + plen).map_or(false, |s| {
+            data.get(off..off + plen).is_some_and(|s| {
                 s.iter()
                     .zip(pattern.iter().zip(mask.iter()))
                     .all(|(&b, (&p, &m))| m == 0 || (b & m) == (p & m))
@@ -332,7 +332,7 @@ impl VmCheckNeutralizer {
 
     // ── VMware I/O port ───────────────────────────────────────────────────
 
-    /// Scan for VMware I/O-port backdoor patterns.
+    /// Scan for `VMware` I/O-port backdoor patterns.
     #[must_use]
     pub fn scan_vmware_io_port(&self, data: &[u8]) -> Vec<IoPortCheck> {
         let mut checks = Vec::new();
@@ -748,7 +748,7 @@ mod tests {
             description: "test".to_string(),
             check: VmCheck::CpuidHypervisorBit,
         };
-        let mut buf = data.clone();
+        let mut buf = data;
         assert!(patch.apply(&mut buf));
         assert_eq!(buf[0], 0x31);
         assert!(patch.rollback(&mut buf));

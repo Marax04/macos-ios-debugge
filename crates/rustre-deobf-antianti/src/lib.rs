@@ -508,10 +508,10 @@ impl DeobfPass for AntiAntiPass {
             transformations.push(format!("patched {} at offset {:#x}", hit.name, hit.offset));
         }
 
-        let confidence = if !hits.is_empty() {
-            0.85
-        } else {
+        let confidence = if hits.is_empty() {
             0.0
+        } else {
+            0.85
         };
         Ok(DeobfResult::new(
             patches_applied,

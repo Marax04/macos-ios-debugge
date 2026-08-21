@@ -1,7 +1,7 @@
 //! `timing_patchers` — Anti-timing technique detection and patching.
 //!
-//! Patches RDTSC, GetTickCount, QueryPerformanceCounter, Sleep/NtDelayExecution,
-//! GetSystemTime spoofing, and timing-check bypass via emulation hooks.
+//! Patches RDTSC, `GetTickCount`, `QueryPerformanceCounter`, Sleep/NtDelayExecution,
+//! `GetSystemTime` spoofing, and timing-check bypass via emulation hooks.
 
 use crate::AntiDebugTechnique;
 use serde::{Deserialize, Serialize};
@@ -241,11 +241,11 @@ pub struct TimingPatchConfig {
     pub fake_tsc_hi: u32,
     /// Whether to NOP RDTSC instructions (true) or replace with constant return (false).
     pub nop_rdtsc: bool,
-    /// Whether to patch Sleep / NtDelayExecution calls.
+    /// Whether to patch Sleep / `NtDelayExecution` calls.
     pub patch_sleep: bool,
-    /// Whether to patch GetTickCount calls.
+    /// Whether to patch `GetTickCount` calls.
     pub patch_gettickcount: bool,
-    /// Whether to patch QueryPerformanceCounter.
+    /// Whether to patch `QueryPerformanceCounter`.
     pub patch_qpc: bool,
 }
 
@@ -366,19 +366,19 @@ impl TimingPatcher {
         lines.push(String::new());
 
         if self.config.patch_gettickcount {
-            lines.push(r#"
+            lines.push(r"
 const GetTickCount = Module.findExportByName('kernel32.dll', 'GetTickCount');
 if (GetTickCount) {
     Interceptor.replace(GetTickCount, new NativeCallback(function () {
         return 0x10000000;
     }, 'uint32', []));
     console.log('[+] Hooked GetTickCount → constant 0x10000000');
-}"#.trim().to_string());
+}".trim().to_string());
             lines.push(String::new());
         }
 
         if self.config.patch_qpc {
-            lines.push(r#"
+            lines.push(r"
 const QueryPerformanceCounter = Module.findExportByName('kernel32.dll', 'QueryPerformanceCounter');
 if (QueryPerformanceCounter) {
     Interceptor.attach(QueryPerformanceCounter, {
@@ -389,19 +389,19 @@ if (QueryPerformanceCounter) {
         }
     });
     console.log('[+] Hooked QueryPerformanceCounter → constant');
-}"#.trim().to_string());
+}".trim().to_string());
             lines.push(String::new());
         }
 
         if self.config.patch_sleep {
-            lines.push(r#"
+            lines.push(r"
 const Sleep = Module.findExportByName('kernel32.dll', 'Sleep');
 if (Sleep) {
     Interceptor.replace(Sleep, new NativeCallback(function (dwMilliseconds) {
         // NOP: return instantly
     }, 'void', ['uint32']));
     console.log('[+] Hooked Sleep → instant return');
-}"#.trim().to_string());
+}".trim().to_string());
         }
 
         lines.join("\n")
@@ -443,7 +443,7 @@ pub fn detect_rdtsc_delta_checks(data: &[u8]) -> Vec<RdtscDeltaCheck> {
         let (off1, off2) = (pair[0], pair[1]);
         let gap = off2 - off1;
         // Reasonable gap: 10..500 bytes between the two RDTSC instructions
-        if gap < 10 || gap > 500 {
+        if !(10..=500).contains(&gap) {
             continue;
         }
         // Search for a CMP instruction in the range [off2+2, off2+50]

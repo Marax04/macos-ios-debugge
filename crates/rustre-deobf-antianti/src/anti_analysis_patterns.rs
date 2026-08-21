@@ -73,22 +73,11 @@ impl AntiAnalysisPattern {
     #[must_use]
     pub const fn cleaning_difficulty(self) -> u8 {
         match self {
-            Self::JunkCode => 2,
-            Self::SpaghettiCode => 3,
-            Self::BogusCall => 2,
-            Self::OpaqueJump => 3,
-            Self::IndirectJump => 4,
-            Self::MixedDataCode => 3,
-            Self::ObfuscatedConstant => 3,
-            Self::StackString => 2,
-            Self::XorEncoding => 2,
-            Self::SelfModifying => 5,
-            Self::ExceptionCF => 4,
-            Self::FakeApiCall => 2,
-            Self::OverlappingInstructions => 4,
-            Self::ObfuscatedLoop => 3,
-            Self::VmProtectedRegion => 5,
-        }
+            Self::SpaghettiCode | Self::OpaqueJump | Self::MixedDataCode | Self::ObfuscatedConstant | Self::ObfuscatedLoop => 3,
+            Self::IndirectJump | Self::ExceptionCF | Self::OverlappingInstructions => 4,
+            Self::SelfModifying | Self::VmProtectedRegion => 5,
+            Self::JunkCode | Self::BogusCall | Self::StackString | Self::XorEncoding | Self::FakeApiCall => 2,
+            }
     }
 
     /// Return `true` if this pattern typically requires dynamic analysis to clean.
@@ -211,7 +200,7 @@ impl PatternDetector {
                 }
             }
         }
-        hits.sort_by(|a, b| a.offset.cmp(&b.offset));
+        hits.sort_by_key(|a| a.offset);
         hits
     }
 
@@ -854,11 +843,11 @@ mod tests {
     #[test]
     fn test_detector_base_address() {
         let mut d = PatternDetector::new();
-        d.set_base_address(0x400000);
+        d.set_base_address(0x0040_0000);
         let data = vec![0xE8, 0x00, 0x00, 0x00, 0x00];
         let hits = d.detect(&data);
         for h in &hits {
-            assert!(h.address >= 0x400000);
+            assert!(h.address >= 0x0040_0000);
         }
     }
 

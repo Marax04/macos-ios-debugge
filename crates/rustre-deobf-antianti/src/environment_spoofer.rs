@@ -1,13 +1,13 @@
 //! `environment_spoofer` — Environment spoofing for anti-debug bypass.
 //!
 //! Generates patches and Frida hook scripts to spoof:
-//! - IsDebuggerPresent → false
-//! - CheckRemoteDebuggerPresent → false
-//! - NtQueryInformationProcess ProcessDebugPort → 0
-//! - NtQuerySystemInformation SystemKernelDebuggerInformation → non-debugged
-//! - Heap flags (NtGlobalFlag → 0)
+//! - `IsDebuggerPresent` → false
+//! - `CheckRemoteDebuggerPresent` → false
+//! - `NtQueryInformationProcess` `ProcessDebugPort` → 0
+//! - `NtQuerySystemInformation` `SystemKernelDebuggerInformation` → non-debugged
+//! - Heap flags (`NtGlobalFlag` → 0)
 //! - PEB.BeingDebugged → 0
-//! - HEAP_TAIL_CHECKING_ENABLED clear
+//! - `HEAP_TAIL_CHECKING_ENABLED` clear
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -225,7 +225,7 @@ impl EnvironmentSpoofer {
 
     fn frida_peb_patch(&self, layout: PebLayout) -> String {
         format!(
-            r#"
+            r"
 // Patch PEB.BeingDebugged at startup
 const pebOffset = {being_debugged};
 try {{
@@ -238,23 +238,23 @@ try {{
     }}
 }} catch(e) {{
     console.warn('[-] PEB patch failed:', e.message);
-}}"#,
+}}",
             being_debugged = layout.being_debugged_offset
         )
     }
 
     fn frida_fragment(&self, target: SpoofTarget) -> Option<FridaHookFragment> {
         let js = match target {
-            SpoofTarget::IsDebuggerPresent => r#"
+            SpoofTarget::IsDebuggerPresent => r"
 const IsDebuggerPresent = Module.findExportByName('kernel32.dll', 'IsDebuggerPresent');
 if (IsDebuggerPresent) {
     Interceptor.replace(IsDebuggerPresent, new NativeCallback(function() {
         return 0; // always false
     }, 'int', []));
     console.log('[+] Hooked IsDebuggerPresent → 0');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::CheckRemoteDebuggerPresent => r#"
+            SpoofTarget::CheckRemoteDebuggerPresent => r"
 const CheckRemoteDebuggerPresent = Module.findExportByName('kernel32.dll', 'CheckRemoteDebuggerPresent');
 if (CheckRemoteDebuggerPresent) {
     Interceptor.attach(CheckRemoteDebuggerPresent, {
@@ -265,9 +265,9 @@ if (CheckRemoteDebuggerPresent) {
         }
     });
     console.log('[+] Hooked CheckRemoteDebuggerPresent → FALSE');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::NtQueryInformationProcess => r#"
+            SpoofTarget::NtQueryInformationProcess => r"
 const NtQueryInformationProcess = Module.findExportByName('ntdll.dll', 'NtQueryInformationProcess');
 if (NtQueryInformationProcess) {
     Interceptor.attach(NtQueryInformationProcess, {
@@ -290,9 +290,9 @@ if (NtQueryInformationProcess) {
         }
     });
     console.log('[+] Hooked NtQueryInformationProcess (ProcessDebugPort/Flags)');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::NtQuerySystemInformation => r#"
+            SpoofTarget::NtQuerySystemInformation => r"
 const NtQuerySystemInformation = Module.findExportByName('ntdll.dll', 'NtQuerySystemInformation');
 if (NtQuerySystemInformation) {
     Interceptor.attach(NtQuerySystemInformation, {
@@ -307,9 +307,9 @@ if (NtQuerySystemInformation) {
         }
     });
     console.log('[+] Hooked NtQuerySystemInformation (SystemKernelDebuggerInformation)');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::HeapFlags => r#"
+            SpoofTarget::HeapFlags => r"
 // Hook RtlCreateHeap to clear debug flags on returned heap handle
 const RtlCreateHeap = Module.findExportByName('ntdll.dll', 'RtlCreateHeap');
 if (RtlCreateHeap) {
@@ -321,18 +321,18 @@ if (RtlCreateHeap) {
         }
     });
     console.log('[+] Hooked RtlCreateHeap to clear debug heap flags');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::OutputDebugString => r#"
+            SpoofTarget::OutputDebugString => r"
 const OutputDebugStringA = Module.findExportByName('kernel32.dll', 'OutputDebugStringA');
 if (OutputDebugStringA) {
     Interceptor.replace(OutputDebugStringA, new NativeCallback(function(lpOutputString) {
         // Silently drop the output (no timing side-channel)
     }, 'void', ['pointer']));
     console.log('[+] Hooked OutputDebugStringA → silent NOP');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
-            SpoofTarget::CloseHandle => r#"
+            SpoofTarget::CloseHandle => r"
 const CloseHandle = Module.findExportByName('kernel32.dll', 'CloseHandle');
 if (CloseHandle) {
     Interceptor.attach(CloseHandle, {
@@ -345,7 +345,7 @@ if (CloseHandle) {
         }
     });
     console.log('[+] Hooked CloseHandle to neutralise INVALID_HANDLE_VALUE check');
-}"#.trim().to_string(),
+}".trim().to_string(),
 
             _ => return None,
         };

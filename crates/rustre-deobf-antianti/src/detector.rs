@@ -842,7 +842,7 @@ impl StaticAntiDebugDetector {
             entry.1 += 1;
         }
         let mut result: Vec<(DetectedTechnique, usize)> = counts.into_values().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 }

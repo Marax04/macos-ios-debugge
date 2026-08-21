@@ -1,8 +1,8 @@
 
 //! Anti-debug patcher: detects and patches common anti-debugging checks in
-//! binary data.  Covers IsDebuggerPresent, CheckRemoteDebuggerPresent,
-//! NtQueryInformationProcess (ProcessDebugPort), heap-flag checks, and
-//! NtGlobalFlag checks, all implemented using only `std`.
+//! binary data.  Covers `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`,
+//! `NtQueryInformationProcess` (`ProcessDebugPort`), heap-flag checks, and
+//! `NtGlobalFlag` checks, all implemented using only `std`.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -26,7 +26,7 @@ pub enum AntiDebugTechnique {
     NtGlobalFlag,
     /// PEB `BeingDebugged` byte directly accessed via FS/GS.
     BeingDebugged,
-    /// Hardware breakpoint registers (DR0–DR7) read via MOV Rd, DRn.
+    /// Hardware breakpoint registers (DR0–DR7) read via MOV Rd, `DRn`.
     HardwareBreakpoints,
     /// `CloseHandle(INVALID_HANDLE_VALUE)` — raises exception under debugger.
     CloseInvalidHandle,
@@ -516,13 +516,6 @@ impl AntiDebugPatcher {
                 // Replace test eax,100h with xor eax,eax + NOPs
                 PatchBytes::xor_eax_eax_nops(len)
             }
-            AntiDebugTechnique::Rdtsc => PatchBytes::nop_sled(len),
-            AntiDebugTechnique::CloseInvalidHandle => PatchBytes::nop_sled(len),
-            AntiDebugTechnique::IsDebuggerPresent
-            | AntiDebugTechnique::CheckRemoteDebuggerPresent
-            | AntiDebugTechnique::NtQueryInformationProcess
-            | AntiDebugTechnique::OutputDebugString
-            | AntiDebugTechnique::PtraceME => PatchBytes::nop_sled(len),
             _ => PatchBytes::nop_sled(len),
         }
     }
@@ -657,7 +650,7 @@ impl IsDebuggerPresentPatcher {
     }
 }
 
-/// Patches `NtQueryInformationProcess` ProcessDebugPort calls.
+/// Patches `NtQueryInformationProcess` `ProcessDebugPort` calls.
 #[derive(Debug, Clone, Default)]
 pub struct NtQipDebugPortPatcher;
 
@@ -773,7 +766,7 @@ mod tests {
         let data = vec![0x0F_u8, 0x31, 0x90, 0x90];
         let pb = PatchBytes::nop_sled(2);
         let entry = PatchEntry::new(0, vec![0x0F, 0x31], pb, AntiDebugTechnique::Rdtsc);
-        let mut buf = data.clone();
+        let mut buf = data;
         assert!(entry.apply(&mut buf));
         assert_eq!(buf[0], 0x90);
         assert_eq!(buf[1], 0x90);
@@ -784,7 +777,7 @@ mod tests {
         let data = vec![0x0F_u8, 0x31, 0x90];
         let pb = PatchBytes::nop_sled(2);
         let entry = PatchEntry::new(0, vec![0x0F, 0x31], pb, AntiDebugTechnique::Rdtsc);
-        let mut buf = data.clone();
+        let mut buf = data;
         entry.apply(&mut buf);
         entry.rollback(&mut buf);
         assert_eq!(&buf[..2], &[0x0F, 0x31]);
@@ -923,7 +916,7 @@ mod tests {
         let data = vec![0x0F_u8, 0x31, 0x90];
         let pb = PatchBytes::nop_sled(2);
         let entry = PatchEntry::new(0, vec![0x0F, 0x31], pb, AntiDebugTechnique::Rdtsc);
-        let mut buf = data.clone();
+        let mut buf = data;
         entry.apply(&mut buf);
         assert!(!AntiDebugPatcher::verify_original(&entry, &buf));
     }

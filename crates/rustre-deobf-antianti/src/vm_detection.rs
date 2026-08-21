@@ -421,14 +421,13 @@ fn convert_to_vm_site(site: DetectionSite) -> Option<VmDetectionSite> {
                 AntiVmTechnique::HyperVCpuid | AntiVmTechnique::QemuCpuid => {
                     VmCheckType::CpuidCheck
                 }
-                AntiVmTechnique::SandboxArtifacts => VmCheckType::FileArtifactCheck,
+                AntiVmTechnique::SandboxArtifacts | AntiVmTechnique::MouseMovementCheck => VmCheckType::FileArtifactCheck,
                 AntiVmTechnique::SuspiciousProcessList => VmCheckType::ProcessNameCheck,
                 AntiVmTechnique::NetworkAdapterCheck => VmCheckType::MacAddressCheck,
                 AntiVmTechnique::CpuCountCheck => VmCheckType::CpuCountCheck,
                 AntiVmTechnique::DiskSizeCheck => VmCheckType::DiskSizeCheck,
                 AntiVmTechnique::UptimeCheck => VmCheckType::UptimeCheck,
-                AntiVmTechnique::MouseMovementCheck => VmCheckType::FileArtifactCheck,
-            };
+                };
             let target = match t {
                 AntiVmTechnique::VmwarePortCheck | AntiVmTechnique::VmwareCpuid => "VMware",
                 AntiVmTechnique::VboxRegistry => "VirtualBox",

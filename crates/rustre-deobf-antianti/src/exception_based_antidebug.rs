@@ -22,7 +22,7 @@ pub enum ExceptionCheckKind {
     Int3Breakpoint,
     /// `INT1` (0xF1) — single-step trap.
     Int1Icebp,
-    /// `INT 0x2D` — DbgBreakPoint in kernel; debugger swallows the exception.
+    /// `INT 0x2D` — `DbgBreakPoint` in kernel; debugger swallows the exception.
     Int2D,
     /// PUSHF + OR byte [esp], 0x100 + POPF — sets Trap Flag.
     TrapFlagSet,

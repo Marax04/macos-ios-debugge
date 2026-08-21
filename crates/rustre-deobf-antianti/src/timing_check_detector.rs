@@ -1,8 +1,8 @@
 
 //! Timing-based anti-analysis detector.
 //!
-//! Identifies RDTSC instruction patterns, GetTickCount delta loops,
-//! Sleep(0) ping-pong, and QueryPerformanceCounter threshold checks.
+//! Identifies RDTSC instruction patterns, `GetTickCount` delta loops,
+//! Sleep(0) ping-pong, and `QueryPerformanceCounter` threshold checks.
 //! Suggests NOP replacements or constant-value substitutions for each hit.
 
 use std::collections::HashMap;
@@ -402,21 +402,18 @@ impl TimingCheckDetector {
             let b = window[i];
             if b == 0x3D {
                 // CMP EAX, imm32
-                if let Some(v) = read_u32_le(window, i + 1) {
-                    if v > 0x100 {
+                if let Some(v) = read_u32_le(window, i + 1)
+                    && v > 0x100 {
                         return Some(ThresholdValue::new(u64::from(v), start + i + 1, 4));
                     }
-                }
             } else if b == 0x81 && i + 5 < window.len() {
                 // 81 /7 imm32 = CMP r/m, imm32
                 let modrm = window[i + 1];
-                if (modrm >> 3) & 7 == 7 {
-                    if let Some(v) = read_u32_le(window, i + 2) {
-                        if v > 0x100 {
+                if (modrm >> 3) & 7 == 7
+                    && let Some(v) = read_u32_le(window, i + 2)
+                        && v > 0x100 {
                             return Some(ThresholdValue::new(u64::from(v), start + i + 2, 4));
                         }
-                    }
-                }
             }
         }
         None
@@ -579,14 +576,13 @@ impl TimingCheckDetector {
     pub fn sleep_checks(&self, data: &[u8]) -> Vec<SleepCheck> {
         let mut checks = Vec::new();
         for i in 0..data.len().saturating_sub(4) {
-            if data[i] == 0x68 {
-                if let Some(v) = read_u32_le(data, i + 1) {
+            if data[i] == 0x68
+                && let Some(v) = read_u32_le(data, i + 1) {
                     let d = u64::from(v);
                     if d == 0 || d >= self.sleep_threshold_ms {
                         checks.push(SleepCheck::new(i, d));
                     }
                 }
-            }
         }
         checks
     }
