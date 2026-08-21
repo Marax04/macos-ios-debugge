@@ -57,7 +57,7 @@ fn accepted_bytes_are_self_consistent() {
 /// consumer reading that pair either drops a real atom or invents one.
 ///
 /// It is left failing rather than "fixed" because deciding *which* side is
-/// wrong — the count or the mask — requires ARM IHI0064H (ETMv4), and guessing
+/// wrong — the count or the mask — requires ARM IHI0064H (`ETMv4`), and guessing
 /// the encoding would be worse than recording the inconsistency.  The same
 /// document is needed to settle two doc-vs-code contradictions found alongside
 /// it: `AtomFormat::F4` is documented as "four atoms" while the code emits

@@ -922,7 +922,7 @@ mod tests {
         let mut dec = Etm4Decoder::new(EtmVersion::Etm4);
         dec.feed(&data);
         let r = dec.next_packet().unwrap().unwrap();
-        assert_eq!(r.kind, CsPacketKind::Address { addr: addr as u64 });
+        assert_eq!(r.kind, CsPacketKind::Address { addr: u64::from(addr) });
     }
 
     #[test]
@@ -964,7 +964,7 @@ mod tests {
         let mut dec = Etm3PacketDecoder::new();
         dec.feed(&data);
         let r = dec.next_packet().unwrap().unwrap();
-        assert_eq!(r.kind, CsPacketKind::Address { addr: addr as u64 });
+        assert_eq!(r.kind, CsPacketKind::Address { addr: u64::from(addr) });
     }
 
     #[test]

@@ -9,19 +9,19 @@ struct Lcg {
     s: u64,
 }
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             s: 0xDEAD_BEEF_CAFE_BABE,
         }
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.s = self
             .s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.s
     }
-    fn byte(&mut self) -> u8 {
+    const fn byte(&mut self) -> u8 {
         (self.next() >> 24) as u8
     }
     fn bytes(&mut self, n: usize) -> Vec<u8> {

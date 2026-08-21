@@ -1171,7 +1171,7 @@ mod tests {
         dec.feed(&[0x03, 0xDE, 0xAD, 0xBE, 0xEF]);
         let pkts = dec.drain_packets();
         assert_eq!(pkts.len(), 1);
-        assert_eq!(pkts[0].as_u32(), Some(0xEFBEADDE));
+        assert_eq!(pkts[0].as_u32(), Some(0xEFBE_ADDE));
     }
 
     #[test]

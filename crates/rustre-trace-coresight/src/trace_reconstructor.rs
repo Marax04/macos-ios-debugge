@@ -430,7 +430,7 @@ impl FunctionTraceAggregator {
     #[must_use]
     pub fn top_functions_by_insns(&self, n: usize) -> Vec<&FunctionTrace> {
         let mut v: Vec<_> = self.functions.values().collect();
-        v.sort_by(|a, b| b.inclusive_insns.cmp(&a.inclusive_insns));
+        v.sort_by_key(|b| std::cmp::Reverse(b.inclusive_insns));
         v.truncate(n);
         v
     }
@@ -513,7 +513,7 @@ impl SequenceDetector {
             .filter(|&(_, &c)| c >= min_count)
             .map(|(k, &c)| (k.as_slice(), c))
             .collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 }

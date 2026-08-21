@@ -902,11 +902,11 @@ mod tests {
         let mut parser = PttTraceParser::new();
         parser.synchronised = true;
         let mut data = vec![0x19u8];
-        data.extend_from_slice(&0x0102030405060708u64.to_le_bytes()[..7]);
+        data.extend_from_slice(&0x0102_0304_0506_0708_u64.to_le_bytes()[..7]);
         parser.feed(&data);
         let pkt = parser.next_packet().unwrap().unwrap();
         if let TracePacketKind::Tsc(ts) = pkt.kind {
-            assert_eq!(ts, 0x0102030405060708u64 & 0x00FF_FFFF_FFFF_FFFF);
+            assert_eq!(ts, 0x0102_0304_0506_0708_u64 & 0x00FF_FFFF_FFFF_FFFF);
         } else {
             panic!("expected TSC packet, got {:?}", pkt.kind);
         }

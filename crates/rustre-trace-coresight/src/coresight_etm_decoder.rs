@@ -566,11 +566,11 @@ mod tests {
     fn decode_timestamp() {
         let mut dec = CoreSightEtmDecoder::new();
         let mut data = vec![0x43u8];
-        data.extend_from_slice(&12345678u64.to_le_bytes());
+        data.extend_from_slice(&12_345_678_u64.to_le_bytes());
         dec.feed(&data);
         let pkts = dec.decode_all();
-        assert!(pkts.iter().any(|p| matches!(p.packet, EtmPacket::Timestamp { value: 12345678 })));
-        assert_eq!(dec.context.timestamp, 12345678);
+        assert!(pkts.iter().any(|p| matches!(p.packet, EtmPacket::Timestamp { value: 12_345_678 })));
+        assert_eq!(dec.context.timestamp, 12_345_678);
     }
 
     #[test]
@@ -585,10 +585,10 @@ mod tests {
     fn decode_context_id() {
         let mut dec = CoreSightEtmDecoder::new();
         let mut data = vec![0x50u8];
-        data.extend_from_slice(&0xABCD1234u32.to_le_bytes());
+        data.extend_from_slice(&0xABCD_1234_u32.to_le_bytes());
         dec.feed(&data);
         let pkts = dec.decode_all();
-        assert!(pkts.iter().any(|p| matches!(p.packet, EtmPacket::ContextId { id: 0xABCD1234 })));
+        assert!(pkts.iter().any(|p| matches!(p.packet, EtmPacket::ContextId { id: 0xABCD_1234 })));
     }
 
     #[test]

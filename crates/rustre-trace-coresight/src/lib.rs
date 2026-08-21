@@ -2094,7 +2094,7 @@ impl TraceHeatmap {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut pairs: Vec<(u64, u64)> = self.counts.iter().map(|(&k, &v)| (k, v)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }
@@ -3253,7 +3253,7 @@ mod tests {
 
     #[test]
     fn test_display_address() {
-        let s = CsPacketKind::Address { addr: 0x401000 }.to_string();
+        let s = CsPacketKind::Address { addr: 0x0040_1000 }.to_string();
         assert!(s.contains("401000"));
     }
 

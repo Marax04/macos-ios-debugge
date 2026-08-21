@@ -1,8 +1,8 @@
 //! Exhaustive blitz tests for `rustre-trace-coresight`.
 //!
 //! These tests target the public API surface of `lib.rs`:
-//! decoders (CsDecoder, CoreSightDecoder, EtmDecoder, PtmDecoder, Etm3Decoder,
-//! EteDecoder), packet & enum types, ROM table parsing, ETB/TMI buffers,
+//! decoders (`CsDecoder`, `CoreSightDecoder`, `EtmDecoder`, `PtmDecoder`, `Etm3Decoder`,
+//! `EteDecoder`), packet & enum types, ROM table parsing, ETB/TMI buffers,
 //! topology, filters, heatmap, branch trace, exec trace, shared index, and
 //! reconstructor — including malformed/adversarial inputs and boundary cases.
 
@@ -129,7 +129,7 @@ fn cs_packet_kind_display_data_value() {
 
 #[test]
 fn cs_packet_kind_display_qelement_branch_future_indirect() {
-    assert!(CsPacketKind::QElement { count: 7 }.to_string().contains("7"));
+    assert!(CsPacketKind::QElement { count: 7 }.to_string().contains('7'));
     assert!(CsPacketKind::BranchFuture { target: 0xCAFE }.to_string().contains("cafe"));
     assert!(CsPacketKind::IndirectBranch { target: 0xBEEF }.to_string().contains("beef"));
     assert_eq!(CsPacketKind::ExceptionReturn.to_string(), "ExceptionReturn");
@@ -566,7 +566,7 @@ fn cs_decoder_unknown_byte_overflow() {
 
 // ─── EtmTrace ─────────────────────────────────────────────────────────────
 
-fn pk(kind: CsPacketKind) -> CsPacket {
+const fn pk(kind: CsPacketKind) -> CsPacket {
     CsPacket { kind, byte_offset: 0 }
 }
 

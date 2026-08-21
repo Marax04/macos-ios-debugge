@@ -792,9 +792,8 @@ mod tests {
             if val == 0 {
                 v.push(byte);
                 break;
-            } else {
-                v.push(byte | 0x80);
             }
+            v.push(byte | 0x80);
         }
         v
     }
