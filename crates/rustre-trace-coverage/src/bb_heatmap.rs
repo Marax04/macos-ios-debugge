@@ -275,7 +275,7 @@ impl HottestFunctions {
     #[must_use]
     pub fn sorted_by_heat(&self) -> Vec<&FunctionHeat> {
         let mut v: Vec<&FunctionHeat> = self.functions.values().collect();
-        v.sort_unstable_by(|a, b| b.total_hits.cmp(&a.total_hits));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.total_hits));
         v
     }
 

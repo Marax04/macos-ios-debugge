@@ -703,9 +703,9 @@ mod tests {
         let line = " 0, 0x400000, 0x410000, 0x401000, /bin/target";
         let m = DrcovModule::parse_text_line(line).unwrap();
         assert_eq!(m.id, 0);
-        assert_eq!(m.base, 0x400000);
-        assert_eq!(m.end, 0x410000);
-        assert_eq!(m.entry, 0x401000);
+        assert_eq!(m.base, 0x0040_0000);
+        assert_eq!(m.end, 0x0041_0000);
+        assert_eq!(m.entry, 0x0040_1000);
         assert_eq!(m.path, "/bin/target");
     }
 
@@ -821,8 +821,8 @@ mod tests {
     fn drcov_file_to_coverage_map() {
         let f = DrcovReader::parse_text(sample_text_drcov()).unwrap();
         let map = f.to_coverage_map();
-        assert!(map.contains_key(&(0x400000 + 0x1000)));
-        assert!(map.contains_key(&(0x400000 + 0x2000)));
+        assert!(map.contains_key(&(0x0040_0000 + 0x1000)));
+        assert!(map.contains_key(&(0x0040_0000 + 0x2000)));
     }
 
     // ── ModuleBase ───────────────────────────────────────────────────────────
@@ -917,7 +917,7 @@ mod tests {
         let text = "DRCOV VERSION: 2\nDRCOV FLAVOR: dynamorio\nModule Table: version 2, count 1\nid, base, end, entry, path\n 0, 0x400000, 0x410000, 0x401000, /bin/target\nBB Table: 1 bbs\n0x0, 4, 0\n";
         let f = DrcovReader::parse_text(text).unwrap();
         let bm = CoverageBitmap::from_drcov_file(&f, 0).unwrap();
-        assert!(bm.is_covered(0x400000));
+        assert!(bm.is_covered(0x0040_0000));
     }
 
     // ── DrcovFile helpers ────────────────────────────────────────────────────
@@ -942,7 +942,7 @@ mod tests {
     fn drcov_file_module_containing() {
         let text = "DRCOV VERSION: 2\nDRCOV FLAVOR: dynamorio\nModule Table: version 2, count 1\nid, base, end, entry, path\n 0, 0x400000, 0x410000, 0x401000, /bin/target\nBB Table: 0 bbs\n";
         let f = DrcovReader::parse_text(text).unwrap();
-        assert!(f.module_containing(0x405000).is_some());
+        assert!(f.module_containing(0x0040_5000).is_some());
         assert!(f.module_containing(0x1000).is_none());
     }
 

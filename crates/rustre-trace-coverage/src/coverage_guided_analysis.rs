@@ -129,7 +129,7 @@ pub fn find_dead_code(functions: &[FunctionInfo], cov: &CoverageMap) -> DeadCode
         }
     }
 
-    dead_functions.sort_by(|a, b| b.bb_count.cmp(&a.bb_count));
+    dead_functions.sort_by_key(|b| std::cmp::Reverse(b.bb_count));
     DeadCodeResult { dead_functions, dead_bb_count, total_bb_count, dead_bytes, total_bytes }
 }
 
@@ -178,7 +178,7 @@ pub fn find_hot_paths(cov: &CoverageMap, max_paths: usize, max_depth: usize) -> 
         .filter(|(_, r)| r.covered)
         .map(|(&addr, r)| (addr, r.total_hits))
         .collect();
-    bb_hits.sort_by(|a, b| b.1.cmp(&a.1));
+    bb_hits.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     // Build outgoing edge map: src → [(dst, hits)]
     let mut outgoing: HashMap<u64, Vec<(u64, u64)>> = HashMap::new();
@@ -186,7 +186,7 @@ pub fn find_hot_paths(cov: &CoverageMap, max_paths: usize, max_depth: usize) -> 
         outgoing.entry(key.src).or_default().push((key.dst, rec.total_hits));
     }
     for v in outgoing.values_mut() {
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
     }
 
     let mut paths = Vec::new();
@@ -477,7 +477,7 @@ pub fn generate_suggestions(report: &CoverageAnalysisReport) -> Vec<CoverageSugg
         });
     }
 
-    suggestions.sort_by(|a, b| b.priority.cmp(&a.priority));
+    suggestions.sort_by_key(|b| std::cmp::Reverse(b.priority));
     suggestions
 }
 

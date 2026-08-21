@@ -443,7 +443,7 @@ pub fn rank_seeds_by_unique_coverage(cov: &CoverageMap) -> Vec<SeedRanking> {
         SeedRanking { seed_id, unique_bbs: unique, total_bbs: total, unique_ratio: ratio }
     }).collect();
 
-    rankings.sort_by(|a, b| b.unique_bbs.cmp(&a.unique_bbs));
+    rankings.sort_by_key(|b| std::cmp::Reverse(b.unique_bbs));
     rankings
 }
 

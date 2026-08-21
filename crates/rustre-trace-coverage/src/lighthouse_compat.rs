@@ -622,12 +622,12 @@ mod tests {
         let text = "DRCOV VERSION: 2\nModule Table: version 2, count 1\nColumns: id, base, end, entry, path\n0, 0x400000, 0x401000, 0x400500, /bin/target\nBB Table: 2 bbs\n0x100, 10, 0\n0x200, 8, 0\n";
         let (mods, bbs) = parse_drcov_text(text).unwrap();
         assert_eq!(mods.len(), 1);
-        assert_eq!(mods[0].base, 0x400000);
+        assert_eq!(mods[0].base, 0x0040_0000);
         assert_eq!(bbs.len(), 2);
         let mut cov = CoverageMap::new();
         let n = load_drcov_into_map(&mods, &bbs, 1, &mut cov);
         assert_eq!(n, 2);
-        assert!(cov.bbs.contains_key(&(0x400000 + 0x100)));
+        assert!(cov.bbs.contains_key(&(0x0040_0000 + 0x100)));
     }
 
     #[test]

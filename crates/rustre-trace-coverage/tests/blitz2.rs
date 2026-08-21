@@ -9,8 +9,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -398,12 +398,12 @@ BB Table: 2 bbs\n\
 0x5678, 20, 0\n";
     let d = DrcovData::parse(txt);
     assert_eq!(d.modules.len(), 1);
-    assert_eq!(d.modules[0].base, 0x400000);
+    assert_eq!(d.modules[0].base, 0x0040_0000);
     assert_eq!(d.modules[0].name, "bin");
     assert_eq!(d.basic_blocks.len(), 2);
     let addrs = d.resolve_addresses();
-    assert!(addrs.contains(&0x401234));
-    assert!(addrs.contains(&0x405678));
+    assert!(addrs.contains(&0x0040_1234));
+    assert!(addrs.contains(&0x0040_5678));
     let run = d.to_run("rn");
     assert_eq!(run.unique_bbs(), 2);
 }
@@ -436,7 +436,7 @@ BB Table: 1\n\
 16, 4, 0\n";
     let d = DrcovData::parse(txt);
     let addrs = d.resolve_addresses();
-    assert_eq!(addrs, vec![4194304 + 16]);
+    assert_eq!(addrs, vec![4_194_304 + 16]);
 }
 
 // --- LCOV -------------------------------------------------------------------

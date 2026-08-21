@@ -278,7 +278,7 @@ impl CoverageRun {
         let mut v: Vec<&FunctionStats> = self.functions.values()
             .filter(|f| f.call_count > 0)
             .collect();
-        v.sort_by(|a, b| b.call_count.cmp(&a.call_count));
+        v.sort_by_key(|b| std::cmp::Reverse(b.call_count));
         v.truncate(n);
         v
     }
@@ -370,7 +370,7 @@ impl CoverageDiff {
                 });
             }
         }
-        changed.sort_by(|x, y| y.delta.abs().cmp(&x.delta.abs()));
+        changed.sort_by_key(|y| std::cmp::Reverse(y.delta.abs()));
 
         let lost_count = crate::usize_to_i64_sat(lost_v.len());
         let gained_count = crate::usize_to_i64_sat(gained_v.len());

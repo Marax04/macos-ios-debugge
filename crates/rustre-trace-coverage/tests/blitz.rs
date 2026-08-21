@@ -394,13 +394,13 @@ BB Table: 2 bbs
 ";
     let d = DrcovData::parse(input);
     assert_eq!(d.modules.len(), 1);
-    assert_eq!(d.modules[0].base, 0x400000);
-    assert_eq!(d.modules[0].end, 0x500000);
+    assert_eq!(d.modules[0].base, 0x0040_0000);
+    assert_eq!(d.modules[0].end, 0x0050_0000);
     assert_eq!(d.modules[0].name, "binary");
     assert_eq!(d.basic_blocks.len(), 2);
     let addrs = d.resolve_addresses();
-    assert!(addrs.contains(&(0x400000 + 0x1000)));
-    assert!(addrs.contains(&(0x400000 + 0x2000)));
+    assert!(addrs.contains(&(0x0040_0000 + 0x1000)));
+    assert!(addrs.contains(&(0x0040_0000 + 0x2000)));
 }
 
 #[test]
@@ -415,7 +415,7 @@ BB Table: 1 bbs
     let d = DrcovData::parse(input);
     let r = d.to_run("rn");
     assert_eq!(r.name, "rn");
-    assert!(r.is_covered(0x401000));
+    assert!(r.is_covered(0x0040_1000));
 }
 
 #[test]

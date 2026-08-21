@@ -371,7 +371,7 @@ impl CoverageRun {
     #[must_use]
     pub fn hot_bbs(&self, n: usize) -> Vec<(u64, u64)> {
         let mut pairs: Vec<(u64, u64)> = self.bb_hits.iter().map(|(&a, &c)| (a, c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }
@@ -1507,7 +1507,7 @@ impl EdgeMap {
     pub fn hottest_edges(&self, n: usize) -> Vec<(CovEdge, u64)> {
         let mut pairs: Vec<(CovEdge, u64)> =
             self.edges.iter().map(|(e, &c)| (e.clone(), c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }
@@ -1582,7 +1582,7 @@ impl BlockCoverage {
     #[must_use]
     pub fn hot_blocks(&self, n: usize) -> Vec<(u64, u64)> {
         let mut pairs: Vec<(u64, u64)> = self.blocks.iter().map(|(&a, &c)| (a, c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }
@@ -1838,7 +1838,7 @@ mod tests {
                      0, 0x400000, 0x500000, 0x401000, 0, 0, /bin/ls\n";
         let d = DrcovData::parse(input);
         assert_eq!(d.modules.len(), 1);
-        assert_eq!(d.modules[0].base, 0x400000);
+        assert_eq!(d.modules[0].base, 0x0040_0000);
         assert_eq!(d.modules[0].name, "ls");
     }
 
@@ -1847,8 +1847,8 @@ mod tests {
         let d = DrcovData {
             modules: vec![DrcovModule {
                 id: 0,
-                base: 0x400000,
-                end: 0x500000,
+                base: 0x0040_0000,
+                end: 0x0050_0000,
                 name: "test".into(),
             }],
             basic_blocks: vec![DrcovBasicBlock {
@@ -1858,7 +1858,7 @@ mod tests {
             }],
         };
         let addrs = d.resolve_addresses();
-        assert_eq!(addrs, vec![0x401000]);
+        assert_eq!(addrs, vec![0x0040_1000]);
     }
 
     // â"€â"€ LCOV Parser â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -2120,7 +2120,7 @@ mod tests {
 
     #[test]
     fn test_parse_hex_or_dec() {
-        assert_eq!(parse_hex_or_dec("0x400000"), 0x400000);
+        assert_eq!(parse_hex_or_dec("0x400000"), 0x0040_0000);
         assert_eq!(parse_hex_or_dec("1024"), 1024);
         assert_eq!(parse_hex_or_dec("  0xFF  "), 0xFF);
     }
@@ -2856,7 +2856,7 @@ impl CoverageQuery {
 
         match self.sort {
             CoverageQuerySort::ByAddress => results.sort_unstable_by_key(|(a, _)| *a),
-            CoverageQuerySort::ByHitCount => results.sort_unstable_by(|a, b| b.1.cmp(&a.1)),
+            CoverageQuerySort::ByHitCount => results.sort_unstable_by_key(|b| std::cmp::Reverse(b.1)),
             CoverageQuerySort::Unsorted => {}
         }
 
@@ -4065,8 +4065,8 @@ mod extra_cov_tests {
         let d = DrcovData {
             modules: vec![DrcovModule {
                 id: 0,
-                base: 0x400000,
-                end: 0x500000,
+                base: 0x0040_0000,
+                end: 0x0050_0000,
                 name: "t".into(),
             }],
             basic_blocks: vec![

@@ -236,7 +236,7 @@ impl CoverageMap {
 
         // Top-10 hottest BBs
         let mut hot: Vec<(u64, u64)> = self.bbs.iter().map(|(&a, r)| (a, r.total_hits)).collect();
-        hot.sort_by(|a, b| b.1.cmp(&a.1));
+        hot.sort_by_key(|b| std::cmp::Reverse(b.1));
         if !hot.is_empty() {
             writeln!(out, "  Hot BBs (top 10):").ok();
             for (addr, hits) in hot.iter().take(10) {
@@ -488,7 +488,7 @@ pub fn serialize_compact(cov: &CoverageMap) -> Vec<u8> {
 #[must_use] 
 pub fn generate_svg_heatmap(cov: &CoverageMap, top_n: usize, width: u32, height: u32) -> String {
     let mut hot = cov.bb_heatmap_data();
-    hot.sort_by(|a, b| b.1.cmp(&a.1));
+    hot.sort_by_key(|b| std::cmp::Reverse(b.1));
     hot.truncate(top_n);
 
     let max_hits = hot.iter().map(|(_, h)| *h).max().unwrap_or(1);

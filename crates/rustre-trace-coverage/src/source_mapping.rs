@@ -846,9 +846,9 @@ fn read_form(
             r.skip(n)?;
             AttrValue::Skipped
         }
-        0x05 => AttrValue::Uint(u64::from(r.u16()?)),
-        0x06 | 0x17 | 0x22 | 0x23 => AttrValue::Uint(u64::from(r.u32()?)),
-        0x07 => AttrValue::Uint(r.u64()?),
+        0x05 | 0x12 | 0x26 | 0x2a => AttrValue::Uint(u64::from(r.u16()?)),
+        0x06 | 0x17 | 0x22 | 0x23 | 0x10 | 0x13 | 0x1c | 0x1d | 0x28 | 0x2c => AttrValue::Uint(u64::from(r.u32()?)),
+        0x07 | 0x14 | 0x20 => AttrValue::Uint(r.u64()?),
         0x08 => AttrValue::Str(r.cstr()?),
         0x09 | 0x18 => {
             let n = usize::try_from(r.uleb()?).unwrap_or(usize::MAX);
@@ -860,39 +860,28 @@ fn read_form(
             r.skip(n)?;
             AttrValue::Skipped
         }
-        0x0b => AttrValue::Uint(u64::from(r.u8()?)),
+        0x0b | 0x11 | 0x25 | 0x29 => AttrValue::Uint(u64::from(r.u8()?)),
         0x0c => AttrValue::Flag(r.u8()? != 0),
         0x0d => AttrValue::Int(r.sleb()?),
         0x0e | 0x1f => {
             let off = usize::try_from(r.u32()?).unwrap_or(usize::MAX);
             str_at(debug_str, off).map_or(AttrValue::StrOffset(off as u64), AttrValue::Str)
         }
-        0x0f => AttrValue::Uint(r.uleb()?),
-        0x10 => AttrValue::Uint(u64::from(r.u32()?)),
-        0x11 => AttrValue::Uint(u64::from(r.u8()?)),
-        0x12 => AttrValue::Uint(u64::from(r.u16()?)),
-        0x13 => AttrValue::Uint(u64::from(r.u32()?)),
-        0x14 | 0x20 => AttrValue::Uint(r.u64()?),
-        0x15 => AttrValue::Uint(r.uleb()?),
+        0x0f | 0x15 | 0x1a | 0x1b => AttrValue::Uint(r.uleb()?),
         0x16 => {
             let inner = r.uleb()?;
             return read_form(r, inner, 0, addr_size, debug_str);
         }
         0x19 => AttrValue::Flag(true),
-        0x1a | 0x1b => AttrValue::Uint(r.uleb()?),
-        0x1c | 0x1d => AttrValue::Uint(u64::from(r.u32()?)),
         0x1e => {
             r.skip(16)?;
             AttrValue::Skipped
         }
         0x21 => AttrValue::Int(implicit),
-        0x25 | 0x29 => AttrValue::Uint(u64::from(r.u8()?)),
-        0x26 | 0x2a => AttrValue::Uint(u64::from(r.u16()?)),
         0x27 | 0x2b => {
             r.skip(3)?;
             AttrValue::Skipped
         }
-        0x28 | 0x2c => AttrValue::Uint(u64::from(r.u32()?)),
         other => {
             return Err(DwarfError::Malformed(format!("unknown form {other:#x}")));
         }

@@ -293,7 +293,7 @@ impl PathProfile {
     pub fn ranked_paths(&self) -> Vec<(&ExecutionPath, u64)> {
         let mut pairs: Vec<(&ExecutionPath, u64)> =
             self.counts.iter().map(|(p, &c)| (p, c)).collect();
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 
