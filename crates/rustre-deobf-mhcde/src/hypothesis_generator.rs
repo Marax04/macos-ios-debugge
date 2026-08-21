@@ -65,13 +65,10 @@ impl HypothesisKind {
             Self::NopPadded => 0.30,
             Self::XorSingleByte => 0.25,
             Self::ConstantUnfolded => 0.20,
-            Self::ControlFlowFlattened => 0.15,
-            Self::StackString => 0.15,
-            Self::AddRollingKey => 0.10,
-            Self::ByteByByteString => 0.10,
-            Self::ReturnAddrObf => 0.05,
-            Self::VirtualMachine => 0.05,
-        }
+            Self::ControlFlowFlattened | Self::StackString => 0.15,
+            Self::AddRollingKey | Self::ByteByByteString => 0.10,
+            Self::ReturnAddrObf | Self::VirtualMachine => 0.05,
+            }
     }
 }
 
@@ -150,7 +147,7 @@ impl Hypothesis {
         let p = prior.clamp(1e-9, 1.0 - 1e-9);
         let l = likelihood.clamp(1e-9, 1.0 - 1e-9);
         let num = p * l;
-        let denom = num + (1.0 - p) * (1.0 - l);
+        let denom = (1.0 - p).mul_add(1.0 - l, num);
         if denom < 1e-12 {
             0.0
         } else {
@@ -617,8 +614,7 @@ pub fn confidence_score(data: &[u8]) -> f64 {
     let hypotheses = generator.generate(data);
     hypotheses
         .first()
-        .map(|h| h.confidence)
-        .unwrap_or(0.0)
+        .map_or(0.0, |h| h.confidence)
 }
 
 /// Return the kind of the top hypothesis for `data`.
@@ -703,7 +699,7 @@ mod tests {
     fn test_confidence_score_nonzero() {
         let data: Vec<u8> = (0..64).collect();
         let score = confidence_score(&data);
-        assert!(score >= 0.0 && score <= 1.0);
+        assert!((0.0..=1.0).contains(&score));
     }
 
     #[test]
@@ -763,11 +759,11 @@ mod tests {
         let mut data: Vec<u8> = Vec::with_capacity(256);
         let mut state = 12345u32;
         for _ in 0..256 {
-            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             data.push((state >> 16) as u8);
         }
         let score = confidence_score(&data);
-        assert!(score >= 0.0 && score <= 1.0);
+        assert!((0.0..=1.0).contains(&score));
     }
 
     #[test]

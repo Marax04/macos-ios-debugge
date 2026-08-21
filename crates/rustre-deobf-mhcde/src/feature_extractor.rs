@@ -310,20 +310,11 @@ impl FeatureExtractor {
                     call_count += 1;
                     i += 1;
                 }
-                0xEB | 0xE9 => {
+                0xEB | 0xE9 | 0x74..=0x7F => {
                     branch_count += 1;
                     i += 1;
                 }
-                0x74..=0x7F => {
-                    branch_count += 1;
-                    i += 1;
-                }
-                0xE0..=0xE2 => {
-                    loop_count += 1;
-                    branch_count += 1;
-                    i += 1;
-                }
-                0xE3 => {
+                0xE0..=0xE2 | 0xE3 => {
                     loop_count += 1;
                     branch_count += 1;
                     i += 1;

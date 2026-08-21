@@ -82,7 +82,6 @@ impl ValidationCriteria {
     #[must_use]
     pub fn for_kind(kind: HypothesisKind) -> Self {
         match kind {
-            HypothesisKind::Identity => Self::default(),
             HypothesisKind::NopPadded => Self {
                 min_naturalness: 0.40,
                 max_nop_density: 0.30,
@@ -427,11 +426,11 @@ impl HypothesisValidator {
 
         // Entropy bonus: penalise very high or very low entropy
         let ent_f64 = f64::from(entropy);
-        let ent_score = if ent_f64 < 1.5 || ent_f64 > 7.2 {
+        let ent_score = if !(1.5..=7.2).contains(&ent_f64) {
             0.0
         } else {
             let normalised = (ent_f64 - 1.5) / (7.2 - 1.5);
-            let bell = 1.0 - (normalised - 0.5).abs() * 2.0;
+            let bell = (normalised - 0.5).abs().mul_add(-2.0, 1.0);
             bell.max(0.0) * 0.25
         };
 
@@ -459,8 +458,7 @@ impl HypothesisValidator {
         // Kind-specific modifier
         let kind_mod = match kind {
             HypothesisKind::Identity => 0.10,
-            HypothesisKind::NopPadded => 0.05,
-            HypothesisKind::XorSingleByte => 0.05,
+            HypothesisKind::NopPadded | HypothesisKind::XorSingleByte => 0.05,
             _ => 0.0,
         };
 
@@ -520,9 +518,9 @@ impl BatchValidator {
 
     /// Validate a batch and return one [`ValidationResult`] per input.
     #[must_use]
-    pub fn validate_all<'a>(
+    pub fn validate_all(
         &self,
-        items: &[(&'a [u8], HypothesisKind)],
+        items: &[(&[u8], HypothesisKind)],
     ) -> Vec<ValidationResult> {
         let validator = HypothesisValidator::new(self.criteria.clone());
         items
@@ -630,7 +628,7 @@ mod tests {
     fn test_quality_score_nonnegative() {
         let data = clean_code();
         let q = quality_score(&data);
-        assert!(q >= 0.0 && q <= 1.0);
+        assert!((0.0..=1.0).contains(&q));
     }
 
     #[test]
@@ -716,7 +714,7 @@ mod tests {
         let items: Vec<(&[u8], HypothesisKind)> = vec![(&d1, HypothesisKind::Identity)];
         let results = bv.validate_all(&items);
         let mean = bv.mean_quality(&results);
-        assert!(mean >= 0.0 && mean <= 1.0);
+        assert!((0.0..=1.0).contains(&mean));
     }
 
     #[test]

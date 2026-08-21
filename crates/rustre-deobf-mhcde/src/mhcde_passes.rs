@@ -334,7 +334,7 @@ impl HandlerCfgPass {
         }
 
         // Step 3: sort by state_value to get linear order.
-        let mut sorted = handlers.clone();
+        let mut sorted = handlers;
         sorted.sort_by(|a, b| {
             a.state_value
                 .unwrap_or(u64::MAX)
@@ -530,12 +530,11 @@ impl ControlFlowUnflattener {
 
         let mut resolved = 0usize;
         for b in &mut blocks {
-            if let Some(s) = b.assigned_state {
-                if let Some(&succ) = state_to_addr.get(&s) {
+            if let Some(s) = b.assigned_state
+                && let Some(&succ) = state_to_addr.get(&s) {
                     b.successor = Some(succ);
                     resolved += 1;
                 }
-            }
         }
 
         let complete = resolved == blocks.len();
@@ -788,10 +787,10 @@ pub fn run_mhcde_pipeline(
     block_defs: &HashMap<Addr, Vec<(VarId, Option<u64>)>>,
     block_uses: &HashMap<Addr, (Vec<VarId>, Vec<VarId>)>,
 ) -> MhcdePipelineResult {
-    let mixed_mode = MixedModePass::default().run(data);
-    let handler_cfg = HandlerCfgPass::default().run(data, base);
-    let unflattened = ControlFlowUnflattener::default().run(data, base);
-    let opaque_const = OpaqueConstantEliminationPass::default().run(data, base, block_defs, block_uses);
+    let mixed_mode = MixedModePass.run(data);
+    let handler_cfg = HandlerCfgPass.run(data, base);
+    let unflattened = ControlFlowUnflattener.run(data, base);
+    let opaque_const = OpaqueConstantEliminationPass.run(data, base, block_defs, block_uses);
 
     let mm_bytes = mixed_mode.total_bytes();
     let oc_bytes = opaque_const.total_bytes();
@@ -824,7 +823,7 @@ mod tests {
     #[test]
     fn test_mixed_mode_66_90() {
         let data = [0x66u8, 0x90, 0x90];
-        let result = MixedModePass::default().run(&data);
+        let result = MixedModePass.run(&data);
         assert!(!result.transforms.is_empty());
         assert_eq!(result.transforms[0].length, 2);
     }
@@ -832,7 +831,7 @@ mod tests {
     #[test]
     fn test_mixed_mode_double_66() {
         let data = [0x66u8, 0x66, 0x66, 0x90, 0xC3];
-        let result = MixedModePass::default().run(&data);
+        let result = MixedModePass.run(&data);
         assert!(!result.transforms.is_empty());
     }
 

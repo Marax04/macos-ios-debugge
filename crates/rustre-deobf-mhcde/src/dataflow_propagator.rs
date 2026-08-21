@@ -436,9 +436,7 @@ impl AvailExprsAnalysis {
     #[must_use]
     pub fn available_at(&self, block: Addr) -> &HashSet<Expr> {
         self.block_data
-            .get(&block)
-            .map(|ae| &ae.in_set)
-            .unwrap_or_else(|| &EMPTY_EXPR_SET)
+            .get(&block).map_or_else(|| &*EMPTY_EXPR_SET, |ae| &ae.in_set)
     }
 }
 
@@ -896,7 +894,7 @@ mod tests {
         chain.defs.push(Def {
             block: 0x1000,
             insn_offset: 0,
-            var: var.clone(),
+            var,
             value: Some(42),
         });
         assert!(chain.is_dead());
@@ -962,7 +960,7 @@ mod tests {
         let info: HashMap<Addr, (Vec<VarId>, Vec<VarId>)> = [
             (0x1000, (vec![], vec![var.clone()])),
             (0x2000, (vec![var.clone()], vec![var.clone()])),
-            (0x3000, (vec![var.clone()], vec![])),
+            (0x3000, (vec![var], vec![])),
         ]
         .into_iter()
         .collect();

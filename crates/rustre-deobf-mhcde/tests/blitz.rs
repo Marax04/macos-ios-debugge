@@ -868,7 +868,7 @@ fn orch_patches_dont_overlap() {
             let p1_end = p1.offset + p1.length;
             let p2_end = p2.offset + p2.length;
             assert!(p1.offset >= p2_end || p2.offset >= p1_end,
-                "patches overlap: {:?} and {:?}", p1, p2);
+                "patches overlap: {p1:?} and {p2:?}");
         }
     }
 }
@@ -996,7 +996,7 @@ fn hyp_result_with_transformed_and_meta() {
         .with_transformed(vec![1, 2, 3])
         .with_meta("k", "v");
     assert_eq!(r.transformed.as_deref(), Some(&[1u8, 2, 3][..]));
-    assert_eq!(r.metadata.get("k").map(|s| s.as_str()), Some("v"));
+    assert_eq!(r.metadata.get("k").map(std::string::String::as_str), Some("v"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1033,7 +1033,7 @@ fn hyp_xor_best_key_finds_a_key() {
     let h = XorBestKeyHypothesis;
     // XOR a "natural" looking buffer with key 0x55 to mask it; best-key should
     // either find 0x55 or return original; either way meta has 'key'.
-    let original = vec![0x48; 64];
+    let original = [0x48; 64];
     let masked: Vec<u8> = original.iter().map(|b| b ^ 0x55).collect();
     let r = h.run(&masked);
     assert!(r.metadata.contains_key("key"));

@@ -18,8 +18,8 @@ fn make_lcg(seed: u64) -> impl FnMut() -> u64 {
     let mut s: u64 = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -78,7 +78,7 @@ fn opaque_patterns_each_match() {
     let det = OpaquePredicateDetector::new();
     for (data, expected) in cases {
         let h = det.detect(data);
-        assert!(!h.is_empty(), "expected match for {:?}", data);
+        assert!(!h.is_empty(), "expected match for {data:?}");
         assert_eq!(h[0].predicate_type, *expected);
     }
 }
@@ -214,7 +214,7 @@ fn junk_density_bounded_one() {
     // Pure NOP sled => density approaches 1.0.
     let data = vec![0x90u8; 64];
     let density = JunkCodeDetector::new().junk_density(&data);
-    assert!(density >= 0.99 && density <= 1.0);
+    assert!((0.99..=1.0).contains(&density));
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn cff_fan_out_zero_for_empty_blocks() {
 // DeadCodeEliminator
 // ---------------------------------------------------------------------------
 
-fn mk_block(offset: usize, succ: Vec<usize>) -> CfgBlock {
+const fn mk_block(offset: usize, succ: Vec<usize>) -> CfgBlock {
     CfgBlock {
         offset,
         length: 4,
@@ -424,7 +424,7 @@ fn fold_fold_all_no_overlap() {
 
 #[test]
 fn fold_result_serde() {
-    let r = FoldResult { value: 0xCAFEBABE, bytes_consumed: 5 };
+    let r = FoldResult { value: 0xCAFE_BABE, bytes_consumed: 5 };
     let s = serde_json::to_string(&r).unwrap();
     let back: FoldResult = serde_json::from_str(&s).unwrap();
     assert_eq!(back, r);
@@ -817,7 +817,7 @@ fn hypothesis_with_meta_chains() {
     let r = HypothesisResult::new("x", 0.5, 0.5)
         .with_meta("k", "v")
         .with_transformed(vec![1, 2, 3]);
-    assert_eq!(r.metadata.get("k").map(|s| s.as_str()), Some("v"));
+    assert_eq!(r.metadata.get("k").map(std::string::String::as_str), Some("v"));
     assert_eq!(r.transformed.as_deref(), Some(&[1, 2, 3][..]));
 }
 
@@ -885,7 +885,7 @@ fn threaded_orchestrator_send_sync_stress() {
     for t in 0..4u64 {
         let o = Arc::clone(&orch);
         handles.push(thread::spawn(move || {
-            let buf = lcg_bytes(0xABCDEF ^ t, 256);
+            let buf = lcg_bytes(0x00AB_CDEF ^ t, 256);
             for _ in 0..100 {
                 let a = o.analyze(&buf);
                 assert!((0.0..=1.0).contains(&a.score.confidence));

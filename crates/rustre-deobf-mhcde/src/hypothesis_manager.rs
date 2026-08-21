@@ -111,8 +111,7 @@ impl QualityScore {
         let function_prologue_count = count_prologues(output);
 
         // Composite: weight readability + low entropy + string presence
-        let composite = printable_ratio * 0.35
-            + (1.0 - entropy / 8.0) * 0.30
+        let composite = (1.0 - entropy / 8.0).mul_add(0.30, printable_ratio * 0.35)
             + (string_count.min(50) as f64 / 50.0) * 0.25
             + (function_prologue_count.min(10) as f64 / 10.0) * 0.10;
 
@@ -145,14 +144,14 @@ fn compute_entropy(data: &[u8]) -> f64 {
 
 fn compute_printable(data: &[u8]) -> f64 {
     if data.is_empty() { return 0.0; }
-    data.iter().filter(|&&b| b >= 0x20 && b <= 0x7E).count() as f64 / data.len() as f64
+    data.iter().filter(|&&b| (0x20..=0x7E).contains(&b)).count() as f64 / data.len() as f64
 }
 
 fn count_strings(data: &[u8], min_len: usize) -> usize {
     let mut count = 0;
     let mut run = 0;
     for &b in data {
-        if b >= 0x20 && b <= 0x7E {
+        if (0x20..=0x7E).contains(&b) {
             run += 1;
         } else {
             if run >= min_len { count += 1; }
@@ -561,7 +560,7 @@ mod tests {
     fn test_pruning_keeps_top_k() {
         let mut mgr = HypothesisManager::new(2, 0.0);
         for i in 0..5 {
-            let id = mgr.create(vec![DeobfPassSpec::new(format!("pass-{}", i), "xor")]);
+            let id = mgr.create(vec![DeobfPassSpec::new(format!("pass-{i}"), "xor")]);
             // Give each a different quality output
             let output = vec![b'A' + i as u8; 100 * (i + 1)];
             assert!(mgr.complete(id, output), "hypothesis {i} must be known");

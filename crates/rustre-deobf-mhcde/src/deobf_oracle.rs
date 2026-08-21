@@ -537,7 +537,7 @@ pub struct CachingOracle {
 
 impl std::fmt::Debug for CachingOracle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let size = self.cache.read().map(|g| g.len()).unwrap_or(0);
+        let size = self.cache.read().map_or(0, |g| g.len());
         f.debug_struct("CachingOracle")
             .field("cache_entries", &size)
             .field("capacity", &self.capacity)
@@ -593,7 +593,7 @@ impl CachingOracle {
     /// Number of cached entries.
     #[must_use]
     pub fn cache_size(&self) -> usize {
-        self.cache.read().map(|g| g.len()).unwrap_or(0)
+        self.cache.read().map_or(0, |g| g.len())
     }
 
     /// Clear the cache.

@@ -871,7 +871,7 @@ impl DeadCodeEliminator {
                 continue;
             }
             if let Some(succs) = succ_map.get(&offset) {
-                for &s in succs.iter() {
+                for &s in *succs {
                     if !reachable.contains(&s) {
                         stack.push(s);
                     }

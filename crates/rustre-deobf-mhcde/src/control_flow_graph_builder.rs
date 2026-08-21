@@ -241,7 +241,7 @@ impl InsnScanner {
         }
         let b0 = data[off];
         // REX prefix (0x40-0x4F)
-        let (b1_off, b0_eff) = if b0 >= 0x40 && b0 <= 0x4F && off + 1 < data.len() {
+        let (b1_off, b0_eff) = if (0x40..=0x4F).contains(&b0) && off + 1 < data.len() {
             (off + 1, data[off + 1])
         } else {
             (off, b0)
@@ -257,23 +257,20 @@ impl InsnScanner {
 
         match main_byte {
             // Single-byte instructions
-            0x90 | 0xC3 | 0xCB | 0xC9 | 0xF4 | 0xCC | 0xCE | 0xF8 | 0xF9 | 0xFA | 0xFB
-            | 0xFC | 0xFD | 0x9C | 0x9D | 0x60 | 0x61 => 1 + (b1_off - off),
             // Short jump / call rel8
-            0xEB | 0xE3 | 0x70..=0x7F => 2 + (b1_off - off),
+            0xEB | 0xE3 | 0x70..=0x7F | 0xB0..=0xB7 | 0xCD => 2 + (b1_off - off),
             // Near jump / call rel32
             0xE8 | 0xE9 => 5 + (b1_off - off),
             // Push/pop reg (50-57, 58-5F)
-            0x50..=0x5F => 1 + (b1_off - off),
+            0x90 | 0xC3 | 0xCB | 0xC9 | 0xF4 | 0xCC | 0xCE | 0xF8 | 0xF9 | 0xFA | 0xFB
+            | 0xFC | 0xFD | 0x9C | 0x9D | 0x60 | 0x61 | 0x50..=0x5F => 1 + (b1_off - off),
             // MOV r8, imm8  (B0-B7)
-            0xB0..=0xB7 => 2 + (b1_off - off),
             // MOV r32/r64, imm32/imm64  (B8-BF)
             0xB8..=0xBF => {
                 // Without REX.W we assume imm32 (5 bytes total with opcode)
                 5 + (b1_off - off)
             }
             // INT imm8
-            0xCD => 2 + (b1_off - off),
             // RETN imm16
             0xC2 | 0xCA => 3 + (b1_off - off),
             // MOV rm8, imm8 / MOV rm32, imm32
@@ -285,7 +282,6 @@ impl InsnScanner {
                     // Jcc rel32  (0F 80..8F)
                     0x80..=0x8F => 6 + (b1_off - off),
                     // SETcc, CMOV, etc.  (2-byte ModRM form)
-                    0x90..=0x9F | 0x40..=0x4F => 3 + (b1_off - off),
                     // NOP DWORD PTR [rax+disp]
                     0x1F => {
                         if b1_off + 2 < data.len() {
@@ -598,11 +594,10 @@ impl CfgBuilder {
             .flat_map(|b| b.succs.iter().map(move |&s| (b.start, s)))
             .collect();
         for (from, to) in edges {
-            if let Some(target_block) = blocks.get_mut(&to) {
-                if !target_block.preds.contains(&from) {
+            if let Some(target_block) = blocks.get_mut(&to)
+                && !target_block.preds.contains(&from) {
                     target_block.preds.push(from);
                 }
-            }
         }
     }
 
@@ -934,7 +929,7 @@ mod tests {
     #[test]
     fn test_cfg_stats() {
         let data = [0x90u8, 0xC3];
-        let cfg = CfgBuilder::new(0x400000).build(&data, 0x400000);
+        let cfg = CfgBuilder::new(0x0040_0000).build(&data, 0x0040_0000);
         let stats = CfgStats::compute(&cfg);
         assert!(stats.block_count > 0);
         assert!(stats.cyclomatic_complexity >= 1);

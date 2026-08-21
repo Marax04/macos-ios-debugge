@@ -49,9 +49,8 @@ impl PassCategory {
             Self::CffRemoval => 40,
             Self::DeadCode => 15,
             Self::Smc => 80,
-            Self::AntiAnti => 20,
+            Self::AntiAnti | Self::ConstProp => 20,
             Self::IatFix => 25,
-            Self::ConstProp => 20,
             Self::Dataflow => 35,
         }
     }
@@ -428,7 +427,7 @@ impl DeobfOrchestrator {
         match pass.category {
             PassCategory::StringDecrypt => {
                 // Stub: XOR with 0x00 (identity)
-                data.iter().map(|&b| b ^ 0x00).collect()
+                data.iter().map(|&b| b).collect()
             }
             PassCategory::DeadCode | PassCategory::ConstProp => {
                 data.to_vec() // no-op stub

@@ -170,13 +170,11 @@ impl ConcurrentDeobfExecutor {
         let mut workers = Vec::with_capacity(hypotheses.len());
         for h in hypotheses {
             let runner: Box<dyn HypothesisTrait> = match h.kind {
-                HypothesisKind::Identity => Box::new(IdentityHypothesis),
-                HypothesisKind::NopPadded => Box::new(NopStripHypothesis),
+                HypothesisKind::NopPadded | HypothesisKind::ConstantUnfolded => Box::new(NopStripHypothesis),
                 HypothesisKind::XorSingleByte => {
                     // Use the best-key searcher (subsumes fixed-key)
                     Box::new(XorBestKeyHypothesis)
                 }
-                HypothesisKind::ConstantUnfolded => Box::new(NopStripHypothesis),
                 _ => Box::new(IdentityHypothesis),
             };
             workers.push(HypothesisWorker::new(h, runner));
@@ -235,7 +233,7 @@ impl ConcurrentDeobfExecutor {
 
             let handle = thread::spawn(move || {
                 for worker in chunk {
-                    if flag_clone.lock().map(|f| *f).unwrap_or(false) {
+                    if flag_clone.lock().is_ok_and(|f| *f) {
                         break;
                     }
 
@@ -279,7 +277,7 @@ impl ConcurrentDeobfExecutor {
                             }
                             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                                 if early_exit_enabled
-                                    && flag_clone.lock().map(|f| *f).unwrap_or(false)
+                                    && flag_clone.lock().is_ok_and(|f| *f)
                                 {
                                     aborted_by_early_exit = true;
                                     break;
@@ -362,37 +360,34 @@ impl ConcurrentDeobfExecutor {
             .into_iter()
             .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
 
-        match best {
-            Some(r) => {
-                let transformed = r.kind != HypothesisKind::Identity && r.output.is_some();
-                BestResult {
-                    result: r,
-                    total_executed: total,
-                    viable_count,
-                    pool_elapsed_ms,
-                    transformed,
-                }
+        if let Some(r) = best {
+            let transformed = r.kind != HypothesisKind::Identity && r.output.is_some();
+            BestResult {
+                result: r,
+                total_executed: total,
+                viable_count,
+                pool_elapsed_ms,
+                transformed,
             }
-            None => {
-                let fallback = ExecutionResult {
-                    hypothesis_id: 0,
-                    kind: HypothesisKind::Identity,
-                    label: "identity (no results)".to_string(),
-                    score: ScoreModel::naturalness_score(data),
-                    naturalness: ScoreModel::naturalness_score(data),
-                    complexity: 1.0,
-                    output: Some(data.to_vec()),
-                    elapsed_ms: 0,
-                    viable: false,
-                    metadata: HashMap::new(),
-                };
-                BestResult {
-                    result: fallback,
-                    total_executed: total,
-                    viable_count: 0,
-                    pool_elapsed_ms,
-                    transformed: false,
-                }
+        } else {
+            let fallback = ExecutionResult {
+                hypothesis_id: 0,
+                kind: HypothesisKind::Identity,
+                label: "identity (no results)".to_string(),
+                score: ScoreModel::naturalness_score(data),
+                naturalness: ScoreModel::naturalness_score(data),
+                complexity: 1.0,
+                output: Some(data.to_vec()),
+                elapsed_ms: 0,
+                viable: false,
+                metadata: HashMap::new(),
+            };
+            BestResult {
+                result: fallback,
+                total_executed: total,
+                viable_count: 0,
+                pool_elapsed_ms,
+                transformed: false,
             }
         }
     }
@@ -452,7 +447,7 @@ pub fn executor_pool(threads: usize) -> ConcurrentDeobfExecutor {
 
 /// Build an executor tuned for aggressive early-exit behaviour.
 #[must_use]
-pub fn fast_executor() -> ConcurrentDeobfExecutor {
+pub const fn fast_executor() -> ConcurrentDeobfExecutor {
     ConcurrentDeobfExecutor::new(ExecutorConfig {
         max_threads: 8,
         timeout: Duration::from_millis(500),
@@ -463,7 +458,7 @@ pub fn fast_executor() -> ConcurrentDeobfExecutor {
 
 /// Build a thorough executor that evaluates every hypothesis without early exit.
 #[must_use]
-pub fn thorough_executor() -> ConcurrentDeobfExecutor {
+pub const fn thorough_executor() -> ConcurrentDeobfExecutor {
     ConcurrentDeobfExecutor::new(ExecutorConfig {
         max_threads: 4,
         timeout: Duration::from_secs(30),

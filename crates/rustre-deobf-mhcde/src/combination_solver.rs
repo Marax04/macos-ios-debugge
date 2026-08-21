@@ -78,13 +78,13 @@ impl QualityMetric {
 
         // Naturalness: inverted entropy + string coverage
         let inv_entropy = 1.0 - fv.byte_entropy;
-        let naturalness = (inv_entropy * 0.5 + fv.string_coverage * 0.5).clamp(0.0, 1.0);
+        let naturalness = fv.string_coverage.mul_add(0.5, inv_entropy * 0.5).clamp(0.0, 1.0);
 
         // Code density: fraction of non-NOP, non-zero bytes
         let code_bytes = data.iter().filter(|&&b| b != 0x90 && b != 0x00).count();
         let code_density = code_bytes as f64 / data.len() as f64;
 
-        let composite = (fv.instruction_diversity.mul_add(0.20, naturalness * 0.40 + fv.string_coverage * 0.25)
+        let composite = (fv.instruction_diversity.mul_add(0.20, fv.string_coverage.mul_add(0.25, naturalness * 0.40))
             + code_density * 0.15)
             .clamp(0.0, 1.0);
 
@@ -275,11 +275,6 @@ impl HypothesisApplicator {
                 Some(out)
             }
             // Algorithms that change length or require external tools → not applicable
-            Algorithm::UpxUnpack
-            | Algorithm::CffRemoval
-            | Algorithm::MbaSimplification
-            | Algorithm::AntiDebugPatch
-            | Algorithm::StringDecryption { .. } => None,
             _ => None,
         }
     }
@@ -659,7 +654,7 @@ mod tests {
     fn test_hypothesis_applicator_rc4() {
         let app = HypothesisApplicator;
         let key = vec![0xDE, 0xAD, 0xBE, 0xEF];
-        let h = Hypothesis::new(1, "rc4", Algorithm::Rc4 { key: key }, 0.9);
+        let h = Hypothesis::new(1, "rc4", Algorithm::Rc4 { key }, 0.9);
         let data = b"Hello World 1234567890".to_vec();
         let encrypted = app.apply(&data, &h).unwrap();
         let decrypted = app.apply(&encrypted, &h).unwrap();

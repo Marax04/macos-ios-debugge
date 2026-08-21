@@ -57,7 +57,7 @@ fn patterns() -> Vec<(&'static str, Vec<u8>)> {
 /// Every reported patch must extend past the jump opcode it neutralises.
 #[test]
 fn a_patch_covers_the_branch_it_neutralises() {
-    let detector = OpaquePredicateDetector::default();
+    let detector = OpaquePredicateDetector;
     let mut checked = 0usize;
 
     for (name, bytes) in patterns() {
@@ -99,7 +99,7 @@ fn a_patch_covers_the_branch_it_neutralises() {
 /// instruction that follows it.
 #[test]
 fn a_patch_stays_inside_the_pattern() {
-    let detector = OpaquePredicateDetector::default();
+    let detector = OpaquePredicateDetector;
 
     for (name, bytes) in patterns() {
         for predicate in detector.detect(&bytes) {
@@ -120,7 +120,7 @@ fn a_patch_stays_inside_the_pattern() {
 /// and clear CF. Whether the branch is taken then follows from the jump opcode.
 #[test]
 fn the_reported_outcome_matches_the_instructions() {
-    let detector = OpaquePredicateDetector::default();
+    let detector = OpaquePredicateDetector;
     let mut checked = 0usize;
 
     // (fixture, zero-flag after the setup, carry flag after the setup)
@@ -162,7 +162,7 @@ fn the_reported_outcome_matches_the_instructions() {
 /// The description and the typed field are two records of one fact.
 #[test]
 fn the_description_agrees_with_the_type() {
-    let detector = OpaquePredicateDetector::default();
+    let detector = OpaquePredicateDetector;
     let mut checked = 0usize;
 
     for (_, bytes) in patterns() {
