@@ -12146,6 +12146,14 @@ fn rv_lift_compressed_q1_rest(pc: u64, hw: u16) -> Vec<LlilOp> {
             _ => vec![LlilOp::Nop],
         }
     }
+    _ => rv_lift_compressed_q1_tail(pc, hw),
+    }
+}
+
+/// Final part of the quadrant-1 dispatch in the compressed lifter.
+fn rv_lift_compressed_q1_tail(pc: u64, hw: u16) -> Vec<LlilOp> {
+    let funct3 = (hw >> 13) & 7;
+    match funct3 {
     5 => {
         // C.J
         let offset = i64::from(c_j_offset(hw));
