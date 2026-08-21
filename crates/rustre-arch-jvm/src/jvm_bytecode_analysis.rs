@@ -192,199 +192,40 @@ impl StackFrameSimulator {
         opcode: u8,
         operands: &[u16],
     ) -> Result<(), JvmAnalysisError> {
+        // Opcodes whose effect depends on an operand or on the current stack
+        // top cannot be expressed as a table row, so they are handled first.
         match opcode {
-            0x00 => {} // nop
-            0x01 => {
-                frame.push(JvmValue::Null)?;
-            } // aconst_null
-            0x02..=0x08 => {
-                frame.push(JvmValue::Int)?;
-            } // iconst_*
-            0x09..=0x0A => {
-                frame.push(JvmValue::Long)?;
-            } // lconst_*
-            0x0B..=0x0D => {
-                frame.push(JvmValue::Float)?;
-            } // fconst_*
-            0x0E..=0x0F => {
-                frame.push(JvmValue::Double)?;
-            } // dconst_*
-            0x10 | 0x11 => {
-                frame.push(JvmValue::Int)?;
-            } // bipush, sipush
-            0x12..=0x14 => {
-                frame.push(JvmValue::Unknown)?;
-            } // ldc, ldc_w, ldc2_w
-            0x15 => {
-                // iload
+            // iload / aload: push whatever the addressed local holds.
+            0x15 | 0x19 => {
                 let idx = operands.first().copied().unwrap_or(0) as usize;
                 frame.push(frame.get_local(idx))?;
+                return Ok(());
             }
-            0x16 => {
-                frame.push(JvmValue::Long)?;
-            } // lload
-            0x17 => {
-                frame.push(JvmValue::Float)?;
-            } // fload
-            0x18 => {
-                frame.push(JvmValue::Double)?;
-            } // dload
-            0x19 => {
-                // aload
-                let idx = operands.first().copied().unwrap_or(0) as usize;
-                frame.push(frame.get_local(idx))?;
-            }
-            0x1A..=0x1D => {
-                frame.push(JvmValue::Int)?;
-            } // iload_0..3
-            0x1E..=0x21 => {
-                frame.push(JvmValue::Long)?;
-            } // lload_0..3
-            0x22..=0x25 => {
-                frame.push(JvmValue::Float)?;
-            } // fload_0..3
-            0x26..=0x29 => {
-                frame.push(JvmValue::Double)?;
-            } // dload_0..3
-            0x2A..=0x2D => {
-                frame.push(JvmValue::Reference(String::new()))?;
-            } // aload_0..3
-            // Array loads
-            0x2E => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Int)?;
-            } // iaload
-            0x2F => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Long)?;
-            } // laload
-            0x30 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Float)?;
-            } // faload
-            0x31 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Double)?;
-            } // daload
-            0x32 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Reference(String::new()))?;
-            }
-            // Stores
+            // istore: pop into the addressed local.
             0x36 => {
-                // istore
                 let val = frame.pop(pc)?;
                 let idx = operands.first().copied().unwrap_or(0) as usize;
                 frame.set_local(idx, val);
+                return Ok(());
             }
-            0x3B..=0x3E => {
-                frame.pop(pc)?;
-            } // istore_0..3
-            0x4B..=0x4E => {
-                frame.pop(pc)?;
-            } // astore_0..3
-            // Stack manipulation
-            0x57 => {
-                frame.pop(pc)?;
-            } // pop
-            0x58 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-            } // pop2
+            // dup: duplicate the current stack top.
             0x59 => {
-                // dup
                 let v = frame.peek().cloned().unwrap_or(JvmValue::Unknown);
                 frame.push(v)?;
+                return Ok(());
             }
-            // Arithmetic
-            0x60 => {
+            _ => {}
+        }
+
+        // Everything else is a fixed (pops, push) pair. An opcode with no row
+        // is treated as a no-op for simulation.
+        if let Some((pops, push)) = sim_effect(opcode) {
+            for _ in 0..pops {
                 frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Int)?;
-            } // iadd
-            0x61 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Long)?;
-            } // ladd
-            0x62 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Float)?;
-            } // fadd
-            0x63 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-                frame.push(JvmValue::Double)?;
-            } // dadd
-            // Comparisons / branches: don't change stack in our simple model
-            0x99..=0xA6 => {
-                frame.pop(pc)?;
-            } // if*
-            0xA7 => {} // goto
-            // Return
-            0xAC => {
-                frame.pop(pc)?;
-            } // ireturn
-            0xAD => {
-                frame.pop(pc)?;
-            } // lreturn
-            0xAE => {
-                frame.pop(pc)?;
-            } // freturn
-            0xAF => {
-                frame.pop(pc)?;
-            } // dreturn
-            0xB0 => {
-                frame.pop(pc)?;
-            } // areturn
-            0xB1 => {} // return (void)
-            // Field access
-            0xB2 => {
-                frame.push(JvmValue::Unknown)?;
-            } // getstatic
-            0xB3 => {
-                frame.pop(pc)?;
-            } // putstatic
-            0xB4 => {
-                frame.pop(pc)?;
-                frame.push(JvmValue::Unknown)?;
-            } // getfield
-            0xB5 => {
-                frame.pop(pc)?;
-                frame.pop(pc)?;
-            } // putfield
-            // Method invocation
-            0xB6..=0xB9 => {
-                // invokevirtual, invokespecial, invokestatic, invokeinterface
-                frame.push(JvmValue::Unknown)?;
             }
-            0xBA => {
-                // invokedynamic
-                frame.push(JvmValue::Unknown)?;
+            if let Some(v) = push.value() {
+                frame.push(v)?;
             }
-            // Object creation
-            0xBB => {
-                frame.push(JvmValue::Reference(String::new()))?;
-            } // new
-            0xBC => {
-                frame.pop(pc)?;
-                frame.push(JvmValue::Reference(String::new()))?;
-            } // newarray
-            0xC0 => {
-                frame.pop(pc)?;
-                frame.push(JvmValue::Reference(String::new()))?;
-            } // checkcast
-            0xC1 => {
-                frame.pop(pc)?;
-                frame.push(JvmValue::Int)?;
-            } // instanceof
-            _ => {} // Treat unknown as no-op for simulation.
         }
         Ok(())
     }
@@ -976,4 +817,102 @@ mod tests {
         let e = JvmAnalysisError::StackUnderflow { pc: 42 };
         assert!(e.to_string().contains("42"));
     }
+}
+
+/// Which value an opcode pushes after popping its inputs, in the simplified
+/// abstract model used by [`StackSimulator`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SimPush {
+    /// Pushes nothing.
+    Nothing,
+    /// Pushes the `null` reference.
+    Null,
+    Int,
+    Long,
+    Float,
+    Double,
+    /// Pushes an (unnamed) object reference.
+    Reference,
+    /// Pushes a value whose type this model does not track.
+    Unknown,
+}
+
+impl SimPush {
+    /// Materialise the pushed value, or `None` when the opcode pushes nothing.
+    fn value(self) -> Option<JvmValue> {
+        match self {
+            Self::Nothing => None,
+            Self::Null => Some(JvmValue::Null),
+            Self::Int => Some(JvmValue::Int),
+            Self::Long => Some(JvmValue::Long),
+            Self::Float => Some(JvmValue::Float),
+            Self::Double => Some(JvmValue::Double),
+            Self::Reference => Some(JvmValue::Reference(String::new())),
+            Self::Unknown => Some(JvmValue::Unknown),
+        }
+    }
+}
+
+/// Ordered `(lo, hi, pops, push)` rows describing the abstract stack effect of
+/// each JVM opcode range. Scanned in order by [`StackSimulator::simulate_one`];
+/// every row keeps its own comment naming the opcodes it covers. Opcodes that
+/// need the operand bytes (`iload`, `aload`, `istore`, `dup`) are handled
+/// explicitly before this table is consulted, and an opcode matched by no row
+/// is simulated as a no-op.
+const SIM_EFFECT_TABLE: &[(u8, u8, usize, SimPush)] = &[
+    (0x00, 0x00, 0, SimPush::Nothing),   // nop
+    (0x01, 0x01, 0, SimPush::Null),      // aconst_null
+    (0x02, 0x08, 0, SimPush::Int),       // iconst_*
+    (0x09, 0x0A, 0, SimPush::Long),      // lconst_*
+    (0x0B, 0x0D, 0, SimPush::Float),     // fconst_*
+    (0x0E, 0x0F, 0, SimPush::Double),    // dconst_*
+    (0x10, 0x11, 0, SimPush::Int),       // bipush, sipush
+    (0x12, 0x14, 0, SimPush::Unknown),   // ldc, ldc_w, ldc2_w
+    (0x16, 0x16, 0, SimPush::Long),      // lload
+    (0x17, 0x17, 0, SimPush::Float),     // fload
+    (0x18, 0x18, 0, SimPush::Double),    // dload
+    (0x1A, 0x1D, 0, SimPush::Int),       // iload_0..3
+    (0x1E, 0x21, 0, SimPush::Long),      // lload_0..3
+    (0x22, 0x25, 0, SimPush::Float),     // fload_0..3
+    (0x26, 0x29, 0, SimPush::Double),    // dload_0..3
+    (0x2A, 0x2D, 0, SimPush::Reference), // aload_0..3
+    (0x2E, 0x2E, 2, SimPush::Int),       // iaload
+    (0x2F, 0x2F, 2, SimPush::Long),      // laload
+    (0x30, 0x30, 2, SimPush::Float),     // faload
+    (0x31, 0x31, 2, SimPush::Double),    // daload
+    (0x32, 0x32, 2, SimPush::Reference), // aaload
+    (0x3B, 0x3E, 1, SimPush::Nothing),   // istore_0..3
+    (0x4B, 0x4E, 1, SimPush::Nothing),   // astore_0..3
+    (0x57, 0x57, 1, SimPush::Nothing),   // pop
+    (0x58, 0x58, 2, SimPush::Nothing),   // pop2
+    (0x60, 0x60, 2, SimPush::Int),       // iadd
+    (0x61, 0x61, 2, SimPush::Long),      // ladd
+    (0x62, 0x62, 2, SimPush::Float),     // fadd
+    (0x63, 0x63, 2, SimPush::Double),    // dadd
+    (0x99, 0xA6, 1, SimPush::Nothing),   // if* (branches, popped condition)
+    (0xA7, 0xA7, 0, SimPush::Nothing),   // goto
+    (0xAC, 0xAC, 1, SimPush::Nothing),   // ireturn
+    (0xAD, 0xAD, 1, SimPush::Nothing),   // lreturn
+    (0xAE, 0xAE, 1, SimPush::Nothing),   // freturn
+    (0xAF, 0xAF, 1, SimPush::Nothing),   // dreturn
+    (0xB0, 0xB0, 1, SimPush::Nothing),   // areturn
+    (0xB1, 0xB1, 0, SimPush::Nothing),   // return (void)
+    (0xB2, 0xB2, 0, SimPush::Unknown),   // getstatic
+    (0xB3, 0xB3, 1, SimPush::Nothing),   // putstatic
+    (0xB4, 0xB4, 1, SimPush::Unknown),   // getfield
+    (0xB5, 0xB5, 2, SimPush::Nothing),   // putfield
+    (0xB6, 0xB9, 0, SimPush::Unknown),   // invokevirtual/special/static/interface
+    (0xBA, 0xBA, 0, SimPush::Unknown),   // invokedynamic
+    (0xBB, 0xBB, 0, SimPush::Reference), // new
+    (0xBC, 0xBC, 1, SimPush::Reference), // newarray
+    (0xC0, 0xC0, 1, SimPush::Reference), // checkcast
+    (0xC1, 0xC1, 1, SimPush::Int),       // instanceof
+];
+
+/// Look up the table row covering `opcode`, if any.
+fn sim_effect(opcode: u8) -> Option<(usize, SimPush)> {
+    SIM_EFFECT_TABLE
+        .iter()
+        .find(|&&(lo, hi, _, _)| opcode >= lo && opcode <= hi)
+        .map(|&(_, _, pops, push)| (pops, push))
 }
