@@ -1215,7 +1215,7 @@ impl CoverageMap {
             pairs.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             pairs.truncate(n);
         }
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 
@@ -2198,7 +2198,7 @@ impl HeatMap {
             v.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             v.truncate(n);
         }
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 
@@ -4232,7 +4232,7 @@ impl TraceLoopDetector {
                 });
             }
         }
-        loops.sort_unstable_by(|a, b| b.iteration_count.cmp(&a.iteration_count));
+        loops.sort_unstable_by_key(|b| std::cmp::Reverse(b.iteration_count));
         loops
     }
 }
@@ -4750,7 +4750,7 @@ impl TraceSummary {
 
         // Build top-20 hot addresses.
         let mut hot: Vec<(u64, u64)> = addr_counts.into_iter().collect();
-        hot.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        hot.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         hot.truncate(20);
 
         Self {

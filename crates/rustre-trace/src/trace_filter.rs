@@ -383,7 +383,7 @@ impl TraceStats {
 
         // Top 20 hot PCs
         let mut sorted: Vec<(u64, u64)> = pc_counts.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
         stats.hot_pcs = sorted.into_iter().take(20).collect();
 
         stats
@@ -568,7 +568,7 @@ impl HotPathAnalyzer {
             .filter(|((_, _), c)| *c >= self.min_hits)
             .map(|((a, b), c)| (a, b, c))
             .collect();
-        sorted.sort_by(|a, b| b.2.cmp(&a.2));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.2));
         sorted.truncate(self.top_n);
         sorted
     }
@@ -584,7 +584,7 @@ impl HotPathAnalyzer {
             .into_iter()
             .filter(|(_, c)| *c >= self.min_hits)
             .collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
         sorted.truncate(self.top_n);
         sorted
     }

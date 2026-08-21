@@ -8,13 +8,13 @@ use rustre_trace::{
 };
 use std::sync::Arc;
 
-fn lcg_seed() -> u64 {
+const fn lcg_seed() -> u64 {
     0xDEAD_BEEF_CAFE_BABE
 }
-fn step(s: &mut u64) -> u64 {
+const fn step(s: &mut u64) -> u64 {
     *s = s
-        .wrapping_mul(6364136223846793005)
-        .wrapping_add(1442695040888963407);
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(1_442_695_040_888_963_407);
     *s
 }
 
@@ -117,7 +117,7 @@ fn t04_event_predicates_disjoint() {
             usize::from(e.is_instruction()) + usize::from(e.is_memory_access()) + usize::from(e.is_control_flow()) + usize::from(e.is_syscall()) + usize::from(e.is_exception());
         // Each event belongs to at most one category; some (ModuleLoad,
         // RegisterChange) belong to zero.
-        assert!(n <= 1, "event {:?} matched {} predicates", e, n);
+        assert!(n <= 1, "event {e:?} matched {n} predicates");
     }
 }
 
@@ -128,7 +128,7 @@ fn t05_event_display_never_panics_fuzz() {
     let mut s = lcg_seed();
     for _ in 0..200 {
         let e = rand_event(&mut s);
-        let out = format!("{}", e);
+        let out = format!("{e}");
         assert!(!out.is_empty());
     }
 }
@@ -141,8 +141,8 @@ fn t06_record_display_contains_seq_and_tid() {
         3,
         123,
     );
-    let s = format!("{}", rec);
-    assert!(s.contains("7"));
+    let s = format!("{rec}");
+    assert!(s.contains('7'));
     assert!(s.contains("tid=3"));
     assert!(s.contains("123"));
 }

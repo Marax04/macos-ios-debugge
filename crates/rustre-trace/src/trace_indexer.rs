@@ -144,7 +144,7 @@ impl PcIndex {
             .iter()
             .map(|(&pc, positions)| (pc, positions.len()))
             .collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -228,7 +228,7 @@ impl FunctionIndex {
             .iter()
             .map(|(&fn_addr, calls)| (fn_addr, calls.len()))
             .collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -342,7 +342,7 @@ impl MemIndex {
             .iter()
             .map(|(&a, entries)| (a, entries.len()))
             .collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -473,7 +473,7 @@ impl ApiIndex {
             .iter()
             .map(|(&num, calls)| (num, calls.len()))
             .collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }

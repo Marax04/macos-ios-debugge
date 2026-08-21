@@ -87,7 +87,7 @@ impl LoopInstance {
 
     /// Return `true` if this loop is a tight loop (1–3 instructions).
     #[must_use]
-    pub fn is_tight(&self) -> bool { self.body_size() <= 3 }
+    pub const fn is_tight(&self) -> bool { self.body_size() <= 3 }
 }
 
 impl fmt::Display for LoopInstance {
@@ -567,7 +567,7 @@ impl ExecutionGraph {
             v.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             v.truncate(n);
         }
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 }
@@ -724,7 +724,7 @@ impl TraceAnalyzer {
             v.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             v.truncate(n);
         }
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 }
@@ -764,8 +764,8 @@ mod tests {
 
     #[test]
     fn test_entry_new() {
-        let e = TraceEntry::new(0x401000, 4);
-        assert_eq!(e.pc, 0x401000);
+        let e = TraceEntry::new(0x0040_1000, 4);
+        assert_eq!(e.pc, 0x0040_1000);
         assert_eq!(e.size, 4);
     }
 

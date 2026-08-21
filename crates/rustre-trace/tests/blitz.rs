@@ -5,7 +5,7 @@ use rustre_trace::*;
 
 // ───────────────────────── helpers ─────────────────────────
 
-fn ins(addr: u64) -> TraceEvent {
+const fn ins(addr: u64) -> TraceEvent {
     TraceEvent::Instruction { addr, size: 4 }
 }
 

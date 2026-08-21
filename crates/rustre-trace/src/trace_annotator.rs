@@ -232,11 +232,10 @@ impl SymbolTable {
         // Find the largest symbol address ≤ `addr`.
         let mut best: Option<(&u64, &SymbolAnnotation)> = None;
         for (sym_addr, sym) in &self.symbols {
-            if *sym_addr <= addr {
-                if best.is_none() || *sym_addr > *best.unwrap().0 {
+            if *sym_addr <= addr
+                && (best.is_none() || *sym_addr > *best.unwrap().0) {
                     best = Some((sym_addr, sym));
                 }
-            }
         }
 
         best.map(|(sym_addr, sym)| SymbolAnnotation {
@@ -434,12 +433,11 @@ impl TraceAnnotator {
             }
 
             // Module annotation.
-            if self.config.annotate_modules {
-                if let Some(module) = self.symbol_table.module_for_addr(addr) {
+            if self.config.annotate_modules
+                && let Some(module) = self.symbol_table.module_for_addr(addr) {
                     entry.module_name = Some(module.to_string());
                     stats.with_module += 1;
                 }
-            }
 
             // Call/return tracking.
             if self.config.track_call_depth {
@@ -458,15 +456,14 @@ impl TraceAnnotator {
                         }
                         call_depth = call_depth.saturating_sub(1);
                     }
-                    TraceEvent::Instruction { addr, .. } => {
+                    TraceEvent::Instruction { addr, .. }
                         // Mark instruction events at known function entry points.
                         if self.config.mark_function_entries
                             && self.symbol_table.get_exact(*addr).is_some()
-                        {
+                        => {
                             entry.is_function_entry = true;
                             stats.function_entries += 1;
                         }
-                    }
                     _ => {}
                 }
             }
@@ -491,11 +488,10 @@ impl TraceAnnotator {
             entry.annotation_source = Some(self.config.source_label.clone());
         }
 
-        if self.config.annotate_modules {
-            if let Some(module) = self.symbol_table.module_for_addr(addr) {
+        if self.config.annotate_modules
+            && let Some(module) = self.symbol_table.module_for_addr(addr) {
                 entry.module_name = Some(module.to_string());
             }
-        }
 
         if self.symbol_table.get_exact(addr).is_some() && self.config.mark_function_entries {
             entry.is_function_entry = true;
@@ -544,8 +540,8 @@ impl TraceAnnotator {
         let mut call_stack: Vec<String> = Vec::new();
 
         for entry in entries {
-            if entry.is_function_entry {
-                if let Some(name) = &entry.function_name {
+            if entry.is_function_entry
+                && let Some(name) = &entry.function_name {
                     if let Some(caller) = call_stack.last() {
                         graph
                             .entry(caller.clone())
@@ -554,7 +550,6 @@ impl TraceAnnotator {
                     }
                     call_stack.push(name.clone());
                 }
-            }
             if entry.is_function_return {
                 call_stack.pop();
             }
@@ -571,7 +566,7 @@ impl TraceAnnotator {
             .into_iter()
             .map(|(k, v)| (k, v.len()))
             .collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
         pairs.truncate(n);
         pairs
     }

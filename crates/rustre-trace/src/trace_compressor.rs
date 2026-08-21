@@ -13,8 +13,10 @@ use crate::{TraceEvent, TraceRecord, TraceSession};
 
 /// Algorithm used to compress a trace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum CompressionMethod {
     /// No compression; events stored verbatim.
+    #[default]
     None,
     /// Run-length encoding: consecutive identical events are collapsed.
     RunLength,
@@ -26,11 +28,6 @@ pub enum CompressionMethod {
     RleDelta,
 }
 
-impl Default for CompressionMethod {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 impl std::fmt::Display for CompressionMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -264,13 +261,12 @@ impl TraceCompressor {
 
         let compressed_count = match method {
             CompressionMethod::None => original_count,
-            CompressionMethod::RunLength => compressed.rle_blocks.len(),
+            CompressionMethod::RunLength | CompressionMethod::RleDelta => compressed.rle_blocks.len(),
             CompressionMethod::Delta => {
                 compressed.delta_blocks.len() + compressed.verbatim_events.len()
             }
             CompressionMethod::Dictionary => compressed.dict_stream.len(),
-            CompressionMethod::RleDelta => compressed.rle_blocks.len(),
-        };
+            };
 
         let original_bytes = original_count as u64 * Self::BYTES_PER_EVENT;
         let compressed_bytes = Self::estimate_compressed_bytes(&compressed, method);
@@ -334,12 +330,11 @@ impl TraceCompressor {
         let mut blocks: Vec<RleBlock> = Vec::new();
 
         for rec in &session.records {
-            if let Some(last) = blocks.last_mut() {
-                if last.event == rec.event && last.thread_id == rec.thread_id {
+            if let Some(last) = blocks.last_mut()
+                && last.event == rec.event && last.thread_id == rec.thread_id {
                     last.count += 1;
                     continue;
                 }
-            }
             blocks.push(RleBlock {
                 event: rec.event.clone(),
                 count: 1,
@@ -419,7 +414,7 @@ impl TraceCompressor {
 
         // Sort by frequency descending, assign codes.
         let mut sorted: Vec<((String, u64), (TraceEvent, u64))> = freq_map.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.1.cmp(&a.1.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1.1));
 
         let mut code_map: HashMap<(String, u64), u32> = HashMap::new();
         let mut dictionary: Vec<DictionaryEntry> = Vec::with_capacity(sorted.len());
@@ -471,12 +466,11 @@ impl TraceCompressor {
                 addr: db.addr_delta.unsigned_abs(),
                 size: db.size,
             };
-            if let Some(last) = rle_blocks.last_mut() {
-                if last.event == proxy_event && last.thread_id == db.thread_id {
+            if let Some(last) = rle_blocks.last_mut()
+                && last.event == proxy_event && last.thread_id == db.thread_id {
                     last.count += 1;
                     continue;
                 }
-            }
             rle_blocks.push(RleBlock {
                 event: proxy_event,
                 count: 1,

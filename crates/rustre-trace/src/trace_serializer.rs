@@ -103,7 +103,7 @@ fn write_u64_le(buf: &mut Vec<u8>, v: u64) {
 }
 
 fn write_bool(buf: &mut Vec<u8>, v: bool) {
-    buf.push(if v { 1 } else { 0 });
+    buf.push(u8::from(v));
 }
 
 fn write_string(buf: &mut Vec<u8>, s: &str) {
@@ -207,21 +207,12 @@ fn encode_event(buf: &mut Vec<u8>, event: &TraceEvent) {
             write_u64_le(buf, *addr);
             write_u8(buf, *size);
         }
-        TraceEvent::MemRead { addr, size, value } => {
+        TraceEvent::MemRead { addr, size, value } | TraceEvent::MemWrite { addr, size, value } => {
             write_u64_le(buf, *addr);
             write_u8(buf, *size);
             write_u64_le(buf, *value);
         }
-        TraceEvent::MemWrite { addr, size, value } => {
-            write_u64_le(buf, *addr);
-            write_u8(buf, *size);
-            write_u64_le(buf, *value);
-        }
-        TraceEvent::Call { from, to } => {
-            write_u64_le(buf, *from);
-            write_u64_le(buf, *to);
-        }
-        TraceEvent::Return { from, to } => {
+        TraceEvent::Call { from, to } | TraceEvent::Return { from, to } => {
             write_u64_le(buf, *from);
             write_u64_le(buf, *to);
         }
@@ -330,12 +321,12 @@ impl TraceSerializer {
     }
 
     #[must_use]
-    pub fn raw() -> Self {
+    pub const fn raw() -> Self {
         Self::new(TraceFormat::Raw)
     }
 
     #[must_use]
-    pub fn rle() -> Self {
+    pub const fn rle() -> Self {
         Self::new(TraceFormat::Rle)
     }
 
@@ -355,7 +346,7 @@ impl TraceSerializer {
             return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "header too short"));
         }
         // Magic
-        if &data[..8] != TRACE_MAGIC {
+        if data[..8] != TRACE_MAGIC {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "bad magic"));
         }
         // Version
@@ -507,7 +498,7 @@ pub struct TraceWriter<W: Write> {
 }
 
 impl<W: Write> TraceWriter<W> {
-    pub fn new(inner: W, format: TraceFormat) -> Self {
+    pub const fn new(inner: W, format: TraceFormat) -> Self {
         Self {
             inner,
             serializer: TraceSerializer::new(format),
@@ -541,7 +532,7 @@ pub struct TraceReader<R: Read> {
 }
 
 impl<R: Read> TraceReader<R> {
-    pub fn new(inner: R, format: TraceFormat) -> Self {
+    pub const fn new(inner: R, format: TraceFormat) -> Self {
         Self {
             inner,
             serializer: TraceSerializer::new(format),

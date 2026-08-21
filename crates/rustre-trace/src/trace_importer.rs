@@ -382,12 +382,9 @@ impl TraceImporter {
                 continue;
             }
 
-            let addr = match Self::parse_hex_addr(parts[0]) {
-                Some(a) => a,
-                None => {
-                    parse_errors += 1;
-                    continue;
-                }
+            let addr = if let Some(a) = Self::parse_hex_addr(parts[0]) { a } else {
+                parse_errors += 1;
+                continue;
             };
 
             let size: u8 = parts
@@ -395,12 +392,11 @@ impl TraceImporter {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(4);
 
-            if let Some((lo, hi)) = opts.address_filter {
-                if addr < lo || addr >= hi {
+            if let Some((lo, hi)) = opts.address_filter
+                && (addr < lo || addr >= hi) {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
             session.push(
                 TraceEvent::Instruction { addr, size },
@@ -456,12 +452,9 @@ impl TraceImporter {
                 continue;
             }
 
-            let addr = match Self::parse_hex_or_dec(parts[1]) {
-                Some(a) => a,
-                None => {
-                    parse_errors += 1;
-                    continue;
-                }
+            let addr = if let Some(a) = Self::parse_hex_or_dec(parts[1]) { a } else {
+                parse_errors += 1;
+                continue;
             };
 
             let size: u8 = parts[2].trim().parse().unwrap_or(4);
@@ -474,19 +467,17 @@ impl TraceImporter {
                 .and_then(|s| s.trim().parse().ok())
                 .unwrap_or(0);
 
-            if let Some(filter_tid) = opts.thread_filter {
-                if tid != filter_tid {
+            if let Some(filter_tid) = opts.thread_filter
+                && tid != filter_tid {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
-            if let Some((lo, hi)) = opts.address_filter {
-                if addr < lo || addr >= hi {
+            if let Some((lo, hi)) = opts.address_filter
+                && (addr < lo || addr >= hi) {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
             session.push(TraceEvent::Instruction { addr, size }, tid, ts);
 
@@ -531,21 +522,15 @@ impl TraceImporter {
             lines_parsed += 1;
 
             // QEMU format: "0x00001000:  55                   push   rbp"
-            let colon_pos = match line.find(':') {
-                Some(p) => p,
-                None => {
-                    parse_errors += 1;
-                    continue;
-                }
+            let colon_pos = if let Some(p) = line.find(':') { p } else {
+                parse_errors += 1;
+                continue;
             };
 
             let addr_str = line[..colon_pos].trim();
-            let addr = match Self::parse_hex_addr(addr_str) {
-                Some(a) => a,
-                None => {
-                    parse_errors += 1;
-                    continue;
-                }
+            let addr = if let Some(a) = Self::parse_hex_addr(addr_str) { a } else {
+                parse_errors += 1;
+                continue;
             };
 
             // Count the hex bytes in the instruction encoding portion.
@@ -560,12 +545,11 @@ impl TraceImporter {
                 .min(15)) as u8;
             let size = if size == 0 { 4 } else { size };
 
-            if let Some((lo, hi)) = opts.address_filter {
-                if addr < lo || addr >= hi {
+            if let Some((lo, hi)) = opts.address_filter
+                && (addr < lo || addr >= hi) {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
             session.push(
                 TraceEvent::Instruction { addr, size },
@@ -650,21 +634,15 @@ impl TraceImporter {
             // or binary format packed structs (simplified to text here)
             if trimmed.starts_with("module[") {
                 let rest = &trimmed[7..];
-                let bracket_end = match rest.find(']') {
-                    Some(p) => p,
-                    None => {
-                        parse_errors += 1;
-                        continue;
-                    }
+                let bracket_end = if let Some(p) = rest.find(']') { p } else {
+                    parse_errors += 1;
+                    continue;
                 };
                 let mod_idx: u32 = rest[..bracket_end].parse().unwrap_or(0);
                 let rest = rest[bracket_end + 1..].trim_start_matches('+');
-                let colon = match rest.find(':') {
-                    Some(p) => p,
-                    None => {
-                        parse_errors += 1;
-                        continue;
-                    }
+                let colon = if let Some(p) = rest.find(':') { p } else {
+                    parse_errors += 1;
+                    continue;
                 };
                 let offset = Self::parse_hex_or_dec(rest[..colon].trim()).unwrap_or(0);
                 let size: u8 = rest[colon + 1..]
@@ -675,12 +653,11 @@ impl TraceImporter {
                 let base = module_bases.get(&mod_idx).copied().unwrap_or(0);
                 let addr = base.wrapping_add(offset);
 
-                if let Some((lo, hi)) = opts.address_filter {
-                    if addr < lo || addr >= hi {
+                if let Some((lo, hi)) = opts.address_filter
+                    && (addr < lo || addr >= hi) {
                         events_filtered += 1;
                         continue;
                     }
-                }
 
                 session.push(
                     TraceEvent::Instruction { addr, size },
@@ -739,21 +716,17 @@ impl TraceImporter {
             }
 
             let event_type = parts[0];
-            let addr = match Self::parse_hex_or_dec(parts[1]) {
-                Some(a) => a,
-                None => {
-                    parse_errors += 1;
-                    continue;
-                }
+            let addr = if let Some(a) = Self::parse_hex_or_dec(parts[1]) { a } else {
+                parse_errors += 1;
+                continue;
             };
             let size: u8 = parts[2].parse().unwrap_or(4).min(255) as u8;
 
-            if let Some((lo, hi)) = opts.address_filter {
-                if addr < lo || addr >= hi {
+            if let Some((lo, hi)) = opts.address_filter
+                && (addr < lo || addr >= hi) {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
             let event = match event_type {
                 "I" | "instr" => TraceEvent::Instruction { addr, size },
@@ -839,12 +812,11 @@ impl TraceImporter {
                 continue;
             }
 
-            if let Some((lo, hi)) = opts.address_filter {
-                if addr < lo || addr >= hi {
+            if let Some((lo, hi)) = opts.address_filter
+                && (addr < lo || addr >= hi) {
                     events_filtered += 1;
                     continue;
                 }
-            }
 
             session.push(
                 TraceEvent::Instruction { addr, size: 4 },
@@ -886,12 +858,11 @@ impl TraceImporter {
         let mut events_filtered = 0;
 
         for rec in &trace.session.records {
-            if let Some(filter_tid) = opts.thread_filter {
-                if rec.thread_id != filter_tid {
+            if let Some(filter_tid) = opts.thread_filter
+                && rec.thread_id != filter_tid {
                     events_filtered += 1;
                     continue;
                 }
-            }
             if opts.max_events > 0 && filtered_session.record_count() >= opts.max_events {
                 break;
             }
@@ -1113,7 +1084,7 @@ mod tests {
 
     #[test]
     fn test_parse_hex_addr() {
-        assert_eq!(TraceImporter::parse_hex_addr("0x401000"), Some(0x401000));
+        assert_eq!(TraceImporter::parse_hex_addr("0x401000"), Some(0x0040_1000));
         assert_eq!(TraceImporter::parse_hex_addr("0X1000"), Some(0x1000));
         assert_eq!(TraceImporter::parse_hex_addr("abc"), Some(0xabc));
         assert_eq!(TraceImporter::parse_hex_addr("gggg"), None);

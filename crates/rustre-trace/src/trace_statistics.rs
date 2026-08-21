@@ -91,11 +91,11 @@ impl InstructionMix {
     #[must_use]
     pub fn sorted_by_count(&self) -> Vec<(InsnCategory, u64)> {
         let mut v: Vec<_> = self.counts.iter().map(|(&k, &v)| (k, v)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 
-    pub fn merge(&mut self, other: &InstructionMix) {
+    pub fn merge(&mut self, other: &Self) {
         for (&cat, &cnt) in &other.counts {
             *self.counts.entry(cat).or_insert(0) += cnt;
         }
@@ -132,7 +132,7 @@ impl BasicBlockHits {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.hits.iter().map(|(&a, &h)| (a, h)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -245,7 +245,7 @@ impl MemoryStats {
     #[must_use]
     pub fn hot_cache_lines(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.cache_line_hits.iter().map(|(&a, &c)| (a, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -268,7 +268,7 @@ impl SyscallFrequency {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.counts.iter().map(|(&k, &v)| (k, v)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -300,11 +300,10 @@ impl BranchStats {
         }
         self.total_branches += 1;
         // Back edge heuristic: target address < source address
-        if taken && to < from {
-            if !self.back_edges.contains(&(from, to)) {
+        if taken && to < from
+            && !self.back_edges.contains(&(from, to)) {
                 self.back_edges.push((from, to));
             }
-        }
     }
 
     #[must_use]
@@ -332,7 +331,7 @@ impl BranchStats {
                 result.push((addr, rate));
             }
         }
-        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result.sort_by_key(|a| a.0);
         result
     }
 
@@ -447,7 +446,7 @@ pub struct TraceStatistics {
 
 impl TraceStatistics {
     #[must_use]
-    pub fn new() -> Self { TraceStatistics::default() }
+    pub fn new() -> Self { Self::default() }
 
     /// Compute statistics from a slice of trace records
     #[must_use]
@@ -463,8 +462,7 @@ impl TraceStatistics {
                 TraceEventKind::Instruction => {
                     stats.insn_mix.record(
                         rec.insn_bytes.first()
-                            .map(|&b| InsnCategory::from_x86_opcode(b))
-                            .unwrap_or(InsnCategory::Unknown)
+                            .map_or(InsnCategory::Unknown, |&b| InsnCategory::from_x86_opcode(b))
                     );
                 }
                 TraceEventKind::BasicBlock => {
@@ -526,7 +524,7 @@ impl TraceStatistics {
     #[must_use]
     pub fn hot_functions(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<_> = self.function_entry_counts.iter().map(|(&a, &c)| (a, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -585,7 +583,7 @@ pub fn diff_statistics(before: &TraceStatistics, after: &TraceStatistics) -> Tra
             bb_hit_delta.push((addr, a_count as i64 - b_count as i64));
         }
     }
-    bb_hit_delta.sort_by(|a, b| b.1.abs().cmp(&a.1.abs()));
+    bb_hit_delta.sort_by_key(|b| std::cmp::Reverse(b.1.abs()));
 
     let new_syscalls: Vec<u64> = after.syscalls.counts.keys()
         .filter(|k| !before.syscalls.counts.contains_key(k))
@@ -616,12 +614,12 @@ mod tests {
             TraceRecord::new_call(3, 0, 0x1010, 0x3000),
             TraceRecord::new_call(4, 0, 0x1020, 0x4000),
             {
-                let r = TraceRecord::new_mem(5, 0, 0x1030, false, 0x8000, 4);
-                r
+                
+                TraceRecord::new_mem(5, 0, 0x1030, false, 0x8000, 4)
             },
             {
-                let r = TraceRecord::new_mem(6, 0, 0x1030, true, 0x8004, 4);
-                r
+                
+                TraceRecord::new_mem(6, 0, 0x1030, true, 0x8004, 4)
             },
             {
                 let mut r = TraceRecord::new_insn(7, 0, 0x1040);

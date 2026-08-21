@@ -37,15 +37,15 @@ pub enum AnnotationSource {
 impl fmt::Display for AnnotationSource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AnnotationSource::SymbolFile(s) => write!(f, "sym:{s}"),
-            AnnotationSource::Yara => write!(f, "yara"),
-            AnnotationSource::Disassembler => write!(f, "disasm"),
-            AnnotationSource::DebugInfo => write!(f, "debug"),
-            AnnotationSource::User => write!(f, "user"),
-            AnnotationSource::Taint => write!(f, "taint"),
-            AnnotationSource::TypeInference => write!(f, "type"),
-            AnnotationSource::ThreatIntel => write!(f, "ti"),
-            AnnotationSource::Heuristic(h) => write!(f, "heur:{h}"),
+            Self::SymbolFile(s) => write!(f, "sym:{s}"),
+            Self::Yara => write!(f, "yara"),
+            Self::Disassembler => write!(f, "disasm"),
+            Self::DebugInfo => write!(f, "debug"),
+            Self::User => write!(f, "user"),
+            Self::Taint => write!(f, "taint"),
+            Self::TypeInference => write!(f, "type"),
+            Self::ThreatIntel => write!(f, "ti"),
+            Self::Heuristic(h) => write!(f, "heur:{h}"),
         }
     }
 }
@@ -82,17 +82,17 @@ pub enum AnnotationKind {
 impl fmt::Display for AnnotationKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AnnotationKind::Symbol { name, .. } => write!(f, "sym:{name}"),
-            AnnotationKind::FunctionBoundary { name, .. } => write!(f, "fn:{name}"),
-            AnnotationKind::YaraHit { rule, .. } => write!(f, "yara:{rule}"),
-            AnnotationKind::DataType { type_name, .. } => write!(f, "type:{type_name}"),
-            AnnotationKind::SourceLocation { file, line, .. } => write!(f, "src:{file}:{line}"),
-            AnnotationKind::TaintLabel { label, .. } => write!(f, "taint:{label}"),
-            AnnotationKind::ThreatTag { ioc_type, ioc_value, .. } => write!(f, "ti:{ioc_type}:{ioc_value}"),
-            AnnotationKind::Comment(s) => write!(f, "comment:{s}"),
-            AnnotationKind::LibraryCall { library, function } => write!(f, "call:{library}.{function}"),
-            AnnotationKind::LoopHead { .. } => write!(f, "loop"),
-            AnnotationKind::Category(c) => write!(f, "cat:{c}"),
+            Self::Symbol { name, .. } => write!(f, "sym:{name}"),
+            Self::FunctionBoundary { name, .. } => write!(f, "fn:{name}"),
+            Self::YaraHit { rule, .. } => write!(f, "yara:{rule}"),
+            Self::DataType { type_name, .. } => write!(f, "type:{type_name}"),
+            Self::SourceLocation { file, line, .. } => write!(f, "src:{file}:{line}"),
+            Self::TaintLabel { label, .. } => write!(f, "taint:{label}"),
+            Self::ThreatTag { ioc_type, ioc_value, .. } => write!(f, "ti:{ioc_type}:{ioc_value}"),
+            Self::Comment(s) => write!(f, "comment:{s}"),
+            Self::LibraryCall { library, function } => write!(f, "call:{library}.{function}"),
+            Self::LoopHead { .. } => write!(f, "loop"),
+            Self::Category(c) => write!(f, "cat:{c}"),
         }
     }
 }
@@ -121,7 +121,7 @@ pub struct TraceAnnotation {
 impl TraceAnnotation {
     #[must_use]
     pub const fn new(pc: u64, kind: AnnotationKind, source: AnnotationSource) -> Self {
-        TraceAnnotation {
+        Self {
             pc,
             pc_end: None,
             record_index: None,
@@ -182,7 +182,7 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     #[must_use]
-    pub fn new() -> Self { SymbolTable::default() }
+    pub fn new() -> Self { Self::default() }
 
     pub fn insert(&mut self, addr: u64, name: impl Into<String>, demangled: Option<String>) {
         let n = name.into();
@@ -220,7 +220,7 @@ pub struct FunctionBoundary {
 
 impl FunctionBoundary {
     pub fn new(start: u64, end: u64, name: impl Into<String>) -> Self {
-        FunctionBoundary { start, end, name: name.into(), module: None }
+        Self { start, end, name: name.into(), module: None }
     }
 
     #[must_use]
@@ -238,7 +238,7 @@ pub struct FunctionMap {
 
 impl FunctionMap {
     #[must_use]
-    pub fn new() -> Self { FunctionMap::default() }
+    pub fn new() -> Self { Self::default() }
 
     pub fn insert(&mut self, fb: FunctionBoundary) {
         let idx = self.functions.partition_point(|f| f.start < fb.start);
@@ -274,7 +274,7 @@ pub struct YaraHitRecord {
 
 impl YaraHitRecord {
     pub fn new(rule: impl Into<String>, start: u64, end: u64) -> Self {
-        YaraHitRecord {
+        Self {
             rule: rule.into(),
             namespace: None,
             tags: Vec::new(),
@@ -309,7 +309,7 @@ pub struct AnnotatedTrace {
 
 impl AnnotatedTrace {
     #[must_use]
-    pub fn new() -> Self { AnnotatedTrace::default() }
+    pub fn new() -> Self { Self::default() }
 
     pub fn add(&mut self, ann: TraceAnnotation) {
         let global_idx = self.annotations.len();
@@ -391,7 +391,7 @@ pub struct AnnotatorConfig {
 
 impl Default for AnnotatorConfig {
     fn default() -> Self {
-        AnnotatorConfig {
+        Self {
             annotate_symbols: true,
             annotate_functions: true,
             annotate_yara: true,
@@ -420,7 +420,7 @@ pub struct TraceAnnotator {
 impl TraceAnnotator {
     #[must_use]
     pub fn new() -> Self {
-        TraceAnnotator {
+        Self {
             config: AnnotatorConfig::default(),
             symbols: SymbolTable::new(),
             functions: FunctionMap::new(),
@@ -475,8 +475,8 @@ impl TraceAnnotator {
             at.seen_pcs.insert(rec.pc);
 
             // Symbol annotation.
-            if self.config.annotate_symbols && !sym_annotated.contains(&rec.pc) {
-                if let Some((name, demangled)) = self.symbols.lookup_addr(rec.pc) {
+            if self.config.annotate_symbols && !sym_annotated.contains(&rec.pc)
+                && let Some((name, demangled)) = self.symbols.lookup_addr(rec.pc) {
                     let ann = TraceAnnotation::new(
                         rec.pc,
                         AnnotationKind::Symbol {
@@ -493,11 +493,10 @@ impl TraceAnnotator {
                         sym_annotated.insert(rec.pc);
                     }
                 }
-            }
 
             // Function boundary annotation.
-            if self.config.annotate_functions && !fn_annotated.contains(&rec.pc) {
-                if let Some(fb) = self.functions.find(rec.pc) {
+            if self.config.annotate_functions && !fn_annotated.contains(&rec.pc)
+                && let Some(fb) = self.functions.find(rec.pc) {
                     // Only annotate at function entry.
                     if rec.pc == fb.start {
                         let ann = TraceAnnotation::new(
@@ -517,7 +516,6 @@ impl TraceAnnotator {
                         fn_annotated.insert(fb.start);
                     }
                 }
-            }
 
             // YARA hit annotation.
             if self.config.annotate_yara {
@@ -592,7 +590,7 @@ impl TraceAnnotator {
 
         // Apply max_per_pc limit (trim excess from each PC bucket).
         if self.config.max_per_pc > 0 {
-            for (_, anns) in at.by_pc.iter_mut() {
+            for anns in at.by_pc.values_mut() {
                 anns.truncate(self.config.max_per_pc);
             }
         }
@@ -602,7 +600,7 @@ impl TraceAnnotator {
 }
 
 impl Default for TraceAnnotator {
-    fn default() -> Self { TraceAnnotator::new() }
+    fn default() -> Self { Self::new() }
 }
 
 // ── Multi-source merger ───────────────────────────────────────────────────────
@@ -618,7 +616,7 @@ pub struct AnnotationMerger {
 impl AnnotationMerger {
     #[must_use]
     pub const fn new() -> Self {
-        AnnotationMerger { sources: Vec::new(), deduplicate: true }
+        Self { sources: Vec::new(), deduplicate: true }
     }
 
     #[must_use]
@@ -655,7 +653,7 @@ impl AnnotationMerger {
 }
 
 impl Default for AnnotationMerger {
-    fn default() -> Self { AnnotationMerger::new() }
+    fn default() -> Self { Self::new() }
 }
 
 // ── Annotation serialization helpers ─────────────────────────────────────────
@@ -956,8 +954,8 @@ mod tests {
     #[test]
     fn test_annotation_kind_display() {
         let k = AnnotationKind::Symbol { name: "foo".into(), demangled: None };
-        assert_eq!(format!("{}", k), "sym:foo");
+        assert_eq!(format!("{k}"), "sym:foo");
         let k2 = AnnotationKind::YaraHit { rule: "r".into(), namespace: None, tags: vec![] };
-        assert_eq!(format!("{}", k2), "yara:r");
+        assert_eq!(format!("{k2}"), "yara:r");
     }
 }

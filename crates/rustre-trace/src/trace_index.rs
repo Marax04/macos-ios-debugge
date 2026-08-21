@@ -89,7 +89,7 @@ impl AddressIndex {
             pairs.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             pairs.truncate(n);
         }
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 
@@ -164,8 +164,8 @@ impl FunctionIndex {
                         });
                 }
                 TraceEvent::Return { .. } => {
-                    if let Some((callee, call_seq, tid)) = stack.pop() {
-                        if let Some(spans) = idx.calls.get_mut(&callee) {
+                    if let Some((callee, call_seq, tid)) = stack.pop()
+                        && let Some(spans) = idx.calls.get_mut(&callee) {
                             for span in spans.iter_mut().rev() {
                                 if span.call_seq == call_seq && span.thread_id == tid {
                                     span.return_seq = Some(rec.seq);
@@ -173,7 +173,6 @@ impl FunctionIndex {
                                 }
                             }
                         }
-                    }
                 }
                 _ => {}
             }
@@ -211,7 +210,7 @@ impl FunctionIndex {
             pairs.select_nth_unstable_by(n, |a, b| b.1.cmp(&a.1));
             pairs.truncate(n);
         }
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         pairs
     }
 

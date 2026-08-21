@@ -83,26 +83,26 @@ pub struct TraceRecord {
 impl TraceRecord {
     #[must_use]
     pub const fn new_insn(seq: u64, tid: u32, pc: u64) -> Self {
-        TraceRecord { seq, tid, pc, event: TraceEventKind::Instruction,
+        Self { seq, tid, pc, event: TraceEventKind::Instruction,
             aux: 0, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
     #[must_use]
     pub const fn new_call(seq: u64, tid: u32, pc: u64, target: u64) -> Self {
-        TraceRecord { seq, tid, pc, event: TraceEventKind::Call,
+        Self { seq, tid, pc, event: TraceEventKind::Call,
             aux: target, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
     #[must_use]
     pub const fn new_bb(seq: u64, tid: u32, pc: u64, size: u32) -> Self {
-        TraceRecord { seq, tid, pc, event: TraceEventKind::BasicBlock,
+        Self { seq, tid, pc, event: TraceEventKind::BasicBlock,
             aux: size as u64, mem_addr: 0, mem_size: 0, insn_bytes: vec![] }
     }
 
     #[must_use]
     pub const fn new_mem(seq: u64, tid: u32, pc: u64, is_write: bool, addr: u64, size: u8) -> Self {
         let event = if is_write { TraceEventKind::MemWrite } else { TraceEventKind::MemRead };
-        TraceRecord { seq, tid, pc, event, aux: 0, mem_addr: addr, mem_size: size, insn_bytes: vec![] }
+        Self { seq, tid, pc, event, aux: 0, mem_addr: addr, mem_size: size, insn_bytes: vec![] }
     }
 }
 
@@ -121,18 +121,18 @@ pub enum TraceFormatError {
 impl fmt::Display for TraceFormatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TraceFormatError::Io(e) => write!(f, "IO error: {e}"),
-            TraceFormatError::BadMagic(m) => write!(f, "Bad magic: {m:02X?}"),
-            TraceFormatError::UnsupportedVersion(v) => write!(f, "Unsupported version: {v}"),
-            TraceFormatError::Truncated => write!(f, "Truncated trace"),
-            TraceFormatError::ParseError(s) => write!(f, "Parse error: {s}"),
-            TraceFormatError::JsonError(s) => write!(f, "JSON error: {s}"),
+            Self::Io(e) => write!(f, "IO error: {e}"),
+            Self::BadMagic(m) => write!(f, "Bad magic: {m:02X?}"),
+            Self::UnsupportedVersion(v) => write!(f, "Unsupported version: {v}"),
+            Self::Truncated => write!(f, "Truncated trace"),
+            Self::ParseError(s) => write!(f, "Parse error: {s}"),
+            Self::JsonError(s) => write!(f, "JSON error: {s}"),
         }
     }
 }
 
 impl std::error::Error for TraceFormatError {}
-impl From<io::Error> for TraceFormatError { fn from(e: io::Error) -> Self { TraceFormatError::Io(e) } }
+impl From<io::Error> for TraceFormatError { fn from(e: io::Error) -> Self { Self::Io(e) } }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NATIVE BINARY FORMAT
@@ -160,7 +160,7 @@ impl NativeTraceHeader {
 
     #[must_use]
     pub const fn new(record_count: u64, pid: u32, arch: u8) -> Self {
-        NativeTraceHeader {
+        Self {
             magic: NATIVE_MAGIC,
             version: NATIVE_VERSION,
             flags: 0,
@@ -196,7 +196,7 @@ impl NativeTraceHeader {
         if magic != NATIVE_MAGIC { return Err(TraceFormatError::BadMagic(magic)); }
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
         if version > NATIVE_VERSION { return Err(TraceFormatError::UnsupportedVersion(version)); }
-        Ok(NativeTraceHeader {
+        Ok(Self {
             magic,
             version,
             flags: u32::from_le_bytes([data[8], data[9], data[10], data[11]]),
@@ -338,11 +338,10 @@ pub fn parse_drcov(data: &[u8]) -> Result<(Vec<DrcovModule>, Vec<DrcovBbEntry>),
             break;
         }
         // Parse module line: " 0, 0x...base, 0x...end, 0x...entry, /path/to/module"
-        if let Some(stripped) = line.strip_prefix(' ') {
-            if let Some(m) = parse_drcov_module_line(stripped) {
+        if let Some(stripped) = line.strip_prefix(' ')
+            && let Some(m) = parse_drcov_module_line(stripped) {
                 modules.push(m);
             }
-        }
     }
 
     let mut bbs = Vec::with_capacity(bb_count);
@@ -377,7 +376,7 @@ fn parse_drcov_module_line(line: &str) -> Option<DrcovModule> {
 #[must_use]
 pub fn drcov_to_trace_records(modules: &[DrcovModule], bbs: &[DrcovBbEntry]) -> Vec<TraceRecord> {
     bbs.iter().enumerate().map(|(i, bb)| {
-        let base = modules.get(bb.mod_id as usize).map(|m| m.base).unwrap_or(0);
+        let base = modules.get(bb.mod_id as usize).map_or(0, |m| m.base);
         let abs_addr = base + u64::from(bb.start);
         TraceRecord::new_bb(i as u64, 0, abs_addr, u32::from(bb.size))
     }).collect()
@@ -578,7 +577,7 @@ pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
                 // TNT8: bits 7:1 are TNT bits, bit 0 = 0
                 // Highest set bit index = position of the stop bit; the
                 // number of TNT bits below it equals that index.
-                let cnt = (7 - b.leading_zeros()) as u8;
+                let cnt = b.ilog2() as u8;
                 let bits = (u64::from(b) >> 1) & ((1 << cnt) - 1);
                 packets.push(PtPacket { ptype: PtPacketType::Tnt8, size: 1, ip: None, tnt_bits: Some(bits), tnt_count: cnt, tsc: None });
                 i += 1;
@@ -588,7 +587,6 @@ pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
                 let ip_mode = (byte0 >> 3) & 0x03;
                 let (new_ip, sz) = decode_pt_ip(data, i + 1, last_ip, ip_mode);
                 let ptype = match byte0 & 0x1F {
-                    0x0D => PtPacketType::Tip,
                     0x11 => PtPacketType::TipPge,
                     0x01 => PtPacketType::TipPgd,
                     0x1D => PtPacketType::Fup,
@@ -600,7 +598,7 @@ pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
             }
             0x19 if i + 7 < data.len() => {
                 // TSC
-                let ts = u64::from_le_bytes([data[i+1],data[i+2],data[i+3],data[i+4],data[i+5],data[i+6],data[i+7],0]) & 0x00FFFFFFFFFFFFFF;
+                let ts = u64::from_le_bytes([data[i+1],data[i+2],data[i+3],data[i+4],data[i+5],data[i+6],data[i+7],0]) & 0x00FF_FFFF_FFFF_FFFF;
                 packets.push(PtPacket { ptype: PtPacketType::Tsc, size: 8, ip: None, tnt_bits: None, tnt_count: 0, tsc: Some(ts) });
                 i += 8;
             }
@@ -612,7 +610,6 @@ pub fn decode_pt_packets(data: &[u8]) -> Vec<PtPacket> {
 
 fn decode_pt_ip(data: &[u8], offset: usize, last_ip: u64, mode: u8) -> (u64, usize) {
     match mode {
-        0 => (0, 0),
         1 => {
             if offset + 2 > data.len() { return (0, 0); }
             let update = u64::from(u16::from_le_bytes([data[offset], data[offset+1]]));
@@ -622,7 +619,7 @@ fn decode_pt_ip(data: &[u8], offset: usize, last_ip: u64, mode: u8) -> (u64, usi
         2 => {
             if offset + 4 > data.len() { return (0, 0); }
             let update = u64::from(u32::from_le_bytes([data[offset],data[offset+1],data[offset+2],data[offset+3]]));
-            let ip = (last_ip & !0xFFFFFFFF) | update;
+            let ip = (last_ip & !0xFFFF_FFFF) | update;
             (ip, 4)
         }
         3 => {
@@ -631,7 +628,7 @@ fn decode_pt_ip(data: &[u8], offset: usize, last_ip: u64, mode: u8) -> (u64, usi
             bytes[..6].copy_from_slice(&data[offset..offset+6]);
             let raw = u64::from_le_bytes(bytes);
             // Sign-extend bit 47
-            let ip = if raw & (1 << 47) != 0 { raw | 0xFFFF000000000000 } else { raw };
+            let ip = if raw & (1 << 47) != 0 { raw | 0xFFFF_0000_0000_0000 } else { raw };
             (ip, 6)
         }
         _ => (0, 0),
