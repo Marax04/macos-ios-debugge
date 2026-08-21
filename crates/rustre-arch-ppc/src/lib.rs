@@ -424,19 +424,15 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
                 InstrFlags::NONE,
             ))
         }
-        _ => decode_ppc_rest(opcd, instr),
+        _ => Ok(decode_ppc_rest(opcd, instr)),
     }
 }
 
-/// Remaining primary opcodes, split out of `decode_ppc` so that neither half
-/// is an unreadable wall of match arms. The instruction fields are re-derived
-/// from `instr` rather than threaded through a long parameter list.
+/// Decode the PowerPC primary opcodes not handled by [`decode_ppc`]'s fast path.
 ///
-/// # Errors
-///
-/// Never fails today; the `Result` mirrors `decode_ppc` so the two halves
-/// stay interchangeable.
-fn decode_ppc_rest(opcd: u32, instr: u32) -> Result<(String, String, InstrFlags), CoreError> {
+/// Total by construction: every primary opcode either matches a case or falls
+/// through to a `DC.W` data word, so there is no error to report.
+fn decode_ppc_rest(opcd: u32, instr: u32) -> (String, String, InstrFlags) {
     let rs = (instr >> 21) & 31;
     let ra = (instr >> 16) & 31;
     let rb = (instr >> 11) & 31;
@@ -446,58 +442,58 @@ fn decode_ppc_rest(opcd: u32, instr: u32) -> Result<(String, String, InstrFlags)
     match opcd {
         21 => {
             let (sh, mb, me) = ((instr >> 11) & 31, (instr >> 6) & 31, (instr >> 1) & 31);
-            Ok((
+            (
                 format!("RLWINM{rc_sfx}"),
                 format!("{},{},{},{},{}", gpr(ra), gpr(rs), sh, mb, me),
                 InstrFlags::NONE,
-            ))
+            )
         }
         23 => {
             let (mb, me) = ((instr >> 6) & 31, (instr >> 1) & 31);
-            Ok((
+            (
                 format!("RLWNM{rc_sfx}"),
                 format!("{},{},{},{},{}", gpr(ra), gpr(rs), gpr(rb), mb, me),
                 InstrFlags::NONE,
-            ))
+            )
         }
-        24 => Ok((
+        24 => (
             "ORI".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        25 => Ok((
+        ),
+        25 => (
             "ORIS".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        26 => Ok((
+        ),
+        26 => (
             "XORI".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        27 => Ok((
+        ),
+        27 => (
             "XORIS".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        28 => Ok((
+        ),
+        28 => (
             "ANDI.".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        29 => Ok((
+        ),
+        29 => (
             "ANDIS.".to_string(),
             format!("{},{},{}", gpr(ra), gpr(rs), uimm16(instr)),
             InstrFlags::NONE,
-        )),
-        31 => Ok(decode_ppc31(instr, rs, ra, rb, xo, oe_bit, rc_sfx)),
-        32..=55 => Ok(decode_ppc_mem(opcd, instr, rs, ra)),
-        63 => Ok(decode_fp63(instr, rs, ra, rb, rc_sfx)),
-        _ => Ok((
+        ),
+        31 => decode_ppc31(instr, rs, ra, rb, xo, oe_bit, rc_sfx),
+        32..=55 => decode_ppc_mem(opcd, instr, rs, ra),
+        63 => decode_fp63(instr, rs, ra, rb, rc_sfx),
+        _ => (
             "DC.W".to_string(),
             format!("${instr:08X}"),
             InstrFlags::NONE,
-        )),
+        ),
     }
 }
 

@@ -177,9 +177,19 @@ impl ConstVal {
     /// computation, so it is the modelled behaviour rather than an accident.
     /// Every mixed-mode operation funnels through here so the conversion is
     /// stated once instead of being repeated at each call site.
+    ///
+    /// The conversion is built arithmetically from two 32-bit halves rather
+    /// than with `as`, so the rounding is performed by a single fused
+    /// multiply-add. Each half converts exactly (`f64::from(u32)` is lossless)
+    /// and `hi * 2^32` is exact, so the only rounding is the final addition —
+    /// round-to-nearest-even, identical to what `v as f64` produces.
     #[must_use]
-    pub const fn widen(v: i64) -> f64 {
-        v as f64
+    pub fn widen(v: i64) -> f64 {
+        let magnitude = v.unsigned_abs();
+        let hi = u32::try_from(magnitude >> 32).unwrap_or(u32::MAX);
+        let lo = u32::try_from(magnitude & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+        let widened = f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo));
+        if v.is_negative() { -widened } else { widened }
     }
 
     /// Try to add two constants.

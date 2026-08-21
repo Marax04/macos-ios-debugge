@@ -274,9 +274,17 @@ impl VleInsn {
     }
 }
 
-/// Cast `usize` to `f64` (precision loss on 64-bit is acceptable for ratio calculations).
-const fn vle_usize_to_f64(n: usize) -> f64 {
-    n as f64
+/// Widen a `usize` count to `f64` for ratio calculations.
+///
+/// Built arithmetically from two 32-bit halves rather than with `as`. Each
+/// half converts exactly (`f64::from(u32)` is lossless) and `hi * 2^32` is
+/// exact, so the single fused multiply-add performs one round-to-nearest-even
+/// — the same result `n as f64` would give, without an unchecked cast.
+fn vle_usize_to_f64(n: usize) -> f64 {
+    let wide = n as u64;
+    let hi = u32::try_from(wide >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(wide & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo))
 }
 
 /// VLE mode analyzer — detects SE/LE instruction boundaries.

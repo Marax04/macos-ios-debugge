@@ -21,13 +21,18 @@ pub mod m68k_extensions;
 /// Mac 68k A-line traps, Sun-3 SunOS system calls.
 pub mod m68k_platforms;
 
-/// M68K addressing modes: M68kAddressingMode, EffectiveAddress, decode_ea(), ea_cycles().
+/// M68K addressing modes.
+///
+/// Provides `M68kAddressingMode`, `EffectiveAddress`, `decode_ea()` and
+/// `ea_cycles()`.
 pub mod m68k_addressing_modes;
 
 /// M68K exception vectors: M68kExceptionVector, VectorEntry, vector_name().
 pub mod m68k_exception_vectors;
 
-/// Extended M68K FPU/MMU disassembly: M68kDisassemblerExt, FpuInsn, MmuInsn.
+/// Extended M68K FPU/MMU disassembly.
+///
+/// Provides `M68kDisassemblerExt`, `FpuInsn` and `MmuInsn`.
 pub mod m68k_disassembler_ext;
 
 /// Strongly-typed M68k instruction representation: `M68kInstr`, `M68kEa`, `M68kSize`, `M68kDecoder`.
