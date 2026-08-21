@@ -253,6 +253,10 @@ impl CfgBuilder {
         Self { instrs, regions }
     }
 
+    /// # Errors
+    ///
+    /// Returns [`CfgError`] if the instruction stream cannot be split into a
+    /// well-formed control-flow graph.
     pub fn build(self) -> Result<CilCfg, CfgError> {
         if self.instrs.is_empty() {
             return Ok(CilCfg {
@@ -557,9 +561,9 @@ fn compute_idoms(blocks: &[CilBlock], n: usize) -> Vec<Option<usize>> {
     idoms
 }
 
-fn intersect(a: usize, b: usize, idoms: &[Option<usize>], rpo_num: &[usize]) -> usize {
-    let mut x = a;
-    let mut y = b;
+fn intersect(left: usize, right: usize, idoms: &[Option<usize>], rpo_num: &[usize]) -> usize {
+    let mut x = left;
+    let mut y = right;
     // Bound iterations to prevent infinite loop on malformed/unreachable idoms.
     let max_iters = idoms.len() * 2 + 2;
     let mut iters = 0usize;
@@ -1015,9 +1019,9 @@ mod tests {
         let cfg = CfgBuilder::new(instrs, vec![]).build().unwrap();
         // Block 0 should have Switch edges.
         
-        assert!(!cfg.blocks[0]
+        assert!(cfg.blocks[0]
             .succs
             .iter()
-            .filter(|e| matches!(e.kind, EdgeKind::Switch(_))).next().is_none());
+            .any(|e| matches!(e.kind, EdgeKind::Switch(_))));
     }
 }

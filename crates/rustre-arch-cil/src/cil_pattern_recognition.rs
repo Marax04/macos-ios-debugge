@@ -290,9 +290,9 @@ impl CilPatternRecognizer {
         let mut i = 0;
         while i + 6 < code.len() {
             if code[i] == 0x72 {
-                let call1 = Self::scan_forward_for(code, i + 5, &[0x28, 0x6F], 8);
-                let calli = Self::scan_forward_for(code, i + 8, &[0x29], 16);
-                if call1 && calli {
+                let has_direct_call = Self::scan_forward_for(code, i + 5, &[0x28, 0x6F], 8);
+                let has_indirect_call = Self::scan_forward_for(code, i + 8, &[0x29], 16);
+                if has_direct_call && has_indirect_call {
                     matches.push(PatternMatch::new(
                         Pattern::PInvoke("LoadLibrary/GetProcAddress".to_string()),
                         offset_u32(i),

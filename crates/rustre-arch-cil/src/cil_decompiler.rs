@@ -419,6 +419,10 @@ impl ExpressionBuilder {
     }
 
     /// Pop an expression.
+    /// # Errors
+    ///
+    /// Returns [`DecompileError::StackUnderflow`] if the expression stack is
+    /// empty, naming `op` as the instruction that asked for the operand.
     pub fn pop(&mut self, op: &str) -> Result<CSharpExpr, DecompileError> {
         self.stack
             .pop()
@@ -450,6 +454,10 @@ impl ExpressionBuilder {
     }
 
     /// Process a single CIL instruction and update the expression stack.
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping the operands the
+    /// instruction consumes.
     pub fn process(&mut self, instr: &CilInstr) -> Result<Option<CSharpStmt>, DecompileError> {
         match instr.mnemonic.as_str() {
             "ldnull" => {
@@ -783,6 +791,9 @@ impl StatementBuilder {
     }
 
     /// Process all instructions in a method body.
+    /// # Errors
+    ///
+    /// Propagates the first [`DecompileError`] raised by any instruction.
     pub fn process_all(&mut self, instrs: &[CilInstr]) -> Result<(), DecompileError> {
         for instr in instrs {
             if let Some(stmt) = self.expr_builder.process(instr)? {
@@ -1193,6 +1204,11 @@ impl CilDecompiler {
     }
 
     /// Decompile a method with the given number of locals and arguments.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while decoding the byte stream
+    /// or while rebuilding expressions from it.
     pub fn decompile_method(
         &self,
         bytes: &[u8],
@@ -1214,6 +1230,10 @@ impl Default for CilDecompiler {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Decode a sequence of CIL instructions from a byte slice.
+/// # Errors
+///
+/// Returns [`DecompileError`] if the byte stream contains an instruction that
+/// cannot be decoded.
 pub fn decode_cil_bytes(bytes: &[u8]) -> Result<Vec<CilInstr>, DecompileError> {
     // CIL instructions average ~2 bytes; preallocate to cut reallocations.
     let mut instrs = Vec::with_capacity(bytes.len() / 2);

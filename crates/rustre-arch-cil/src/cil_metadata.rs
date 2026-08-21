@@ -56,6 +56,11 @@ impl MetadataRoot {
     ///
     /// # Errors
     /// Returns [`MetadataError::TooShort`] or [`MetadataError::BadMagic`].
+    ///
+    /// # Panics
+    ///
+    /// Cannot panic: every fixed-width read is guarded by the length check
+    /// above, so the `try_into` conversions on those sub-slices always succeed.
     pub fn parse(data: &[u8]) -> Result<(Self, usize), MetadataError> {
         if data.len() < 16 {
             return Err(MetadataError::TooShort);
@@ -124,6 +129,11 @@ impl StreamHeader {
     ///
     /// # Errors
     /// Returns [`MetadataError::TooShort`] or [`MetadataError::InvalidStream`].
+    ///
+    /// # Panics
+    ///
+    /// Cannot panic: every fixed-width read is guarded by the length check
+    /// above, so the `try_into` conversions on those sub-slices always succeed.
     pub fn parse(data: &[u8]) -> Result<(Self, usize), MetadataError> {
         if data.len() < 9 {
             // minimum: 4 (offset) + 4 (size) + 1 (name byte + NUL)
@@ -169,12 +179,13 @@ impl CilMetadataReader {
     /// # Errors
     /// Propagates any [`MetadataError`] from sub-parsers.
     pub fn parse(data: Vec<u8>) -> Result<Self, MetadataError> {
-        let (root, mut off) = MetadataRoot::parse(&data)?;
-        let n = root.streams as usize;
         // Cap allocation: each stream header is at least 9 bytes (4+4+1 NUL-terminated name).
         // An attacker-controlled streams count up to 65535 would allocate ~4 MB of pointers;
         // cap to a realistic maximum to prevent DoS via memory exhaustion.
         const MAX_STREAMS: usize = 256;
+
+        let (root, mut off) = MetadataRoot::parse(&data)?;
+        let n = root.streams as usize;
         let capacity = n.min(MAX_STREAMS);
         let mut stream_headers = Vec::with_capacity(capacity);
         for _ in 0..n {

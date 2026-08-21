@@ -84,6 +84,11 @@ impl StackDepthAnalysis {
     /// Run analysis on a sequence of `(il_offset, delta)` pairs.
     ///
     /// `delta` is the net stack change for the instruction at that offset.
+    /// # Errors
+    ///
+    /// Returns [`CilAnalysisError::StackUnderflow`] if the running depth would
+    /// go negative, and [`CilAnalysisError::StackOverflow`] if it exceeds the
+    /// 1024-slot evaluation-stack limit.
     pub fn analyze(instructions: &[(usize, i32)]) -> Result<Self, CilAnalysisError> {
         let mut result = Self::default();
         let mut depth: i32 = 0;
@@ -174,13 +179,13 @@ impl ExceptionFlowAnalysis {
     /// Build exception flow analysis from a list of clauses.
     #[must_use]
     pub fn build(clauses: Vec<ExceptionClause>) -> Self {
-        let mut try_to_handlers: HashMap<usize, Vec<usize>> = HashMap::new();
-        let mut nesting: BTreeMap<usize, usize> = BTreeMap::new();
-
         // Maximum number of IL offsets we will track for nesting depth.
         // Prevents DoS: an attacker-supplied clause with try_start=0, try_end=usize::MAX
         // would otherwise iterate billions of times.
         const MAX_NESTING_OFFSETS: usize = 1 << 20; // 1 M offsets ≈ realistic method body limit
+
+        let mut try_to_handlers: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut nesting: BTreeMap<usize, usize> = BTreeMap::new();
         for c in &clauses {
             try_to_handlers
                 .entry(c.try_start)
@@ -264,24 +269,29 @@ impl MethodCallGraph {
     }
 
     /// Record a call edge from `caller` to `callee`.
-    pub fn add_call(&mut self, caller: MetadataToken, callee: MetadataToken) {
+    ///
+    /// # Panics
+    ///
+    /// Cannot panic in practice: both nodes are inserted immediately before
+    /// they are looked up, so the lookups always succeed.
+    pub fn add_call(&mut self, from_token: MetadataToken, to_token: MetadataToken) {
         self.nodes
-            .entry(caller)
-            .or_insert_with(|| CallGraphNode::new(caller, "?"));
+            .entry(from_token)
+            .or_insert_with(|| CallGraphNode::new(from_token, "?"));
         self.nodes
-            .entry(callee)
-            .or_insert_with(|| CallGraphNode::new(callee, "?"));
+            .entry(to_token)
+            .or_insert_with(|| CallGraphNode::new(to_token, "?"));
         {
-            let c = self.nodes.get_mut(&caller).unwrap();
-            if !c.callees.contains(&callee) {
-                c.callees.push(callee);
+            let c = self.nodes.get_mut(&from_token).unwrap();
+            if !c.callees.contains(&to_token) {
+                c.callees.push(to_token);
             }
             c.call_count += 1;
         }
         {
-            let c = self.nodes.get_mut(&callee).unwrap();
-            if !c.callers.contains(&caller) {
-                c.callers.push(caller);
+            let c = self.nodes.get_mut(&to_token).unwrap();
+            if !c.callers.contains(&from_token) {
+                c.callers.push(from_token);
             }
         }
     }

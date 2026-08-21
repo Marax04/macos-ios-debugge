@@ -40,6 +40,7 @@ use rustre_core::arch::{
     Architecture, BranchInfo, CallingConvention, InstrFlags, Instruction, RegisterInfo,
 };
 use rustre_core::address::Address;
+use std::fmt::Write as _;
 use rustre_core::arch::{BranchCondition, RegisterKind};
 use rustre_core::endian::Endian;
 use rustre_core::errors::CoreError;
@@ -4041,10 +4042,12 @@ bitflags::bitflags! {
 pub fn cil_cfg_text(blocks: &[CilBasicBlock]) -> String {
     let mut out = String::new();
     for (i, b) in blocks.iter().enumerate() {
-        out.push_str(&format!(
-            "BB{i}: offset={:#06x}..{:#06x} ({} instrs)\n",
+        writeln!(
+            out,
+            "BB{i}: offset={:#06x}..{:#06x} ({} instrs)",
             b.start_offset, b.end_offset, b.instr_count
-        ));
+        )
+        .expect("writing to a String is infallible");
     }
     out
 }
@@ -4522,10 +4525,12 @@ mod cil_extra_tests {
 
     #[test]
     fn test_idiom_null_check() {
+        use rustre_core::address::Address;
+
         // ldnull, brfalse.s
         let code = [0x14_u8, 0x2c, 0x00];
+
         let arch = CilArch::new_32();
-        use rustre_core::address::Address;
         let instrs: Vec<_> = CilLinearDisassembler::new(&arch, &code, Address::new(0))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
@@ -4543,9 +4548,11 @@ mod cil_extra_tests {
 
     #[test]
     fn test_idiom_zero_init() {
-        let code = [0x16_u8, 0x0a];
-        let arch = CilArch::new_32();
         use rustre_core::address::Address;
+
+        let code = [0x16_u8, 0x0a];
+
+        let arch = CilArch::new_32();
         let instrs: Vec<_> = CilLinearDisassembler::new(&arch, &code, Address::new(0))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();

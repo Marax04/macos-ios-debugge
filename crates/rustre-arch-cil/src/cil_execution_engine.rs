@@ -138,14 +138,10 @@ impl LocalVars {
     }
 
     pub fn store(&mut self, idx: usize, val: CilValue) {
-        if idx < self.vars.len() {
-            self.vars[idx] = val;
-        } else {
-            while self.vars.len() <= idx {
-                self.vars.push(CilValue::Unknown);
-            }
-            self.vars[idx] = val;
+        while self.vars.len() <= idx {
+            self.vars.push(CilValue::Unknown);
         }
+        self.vars[idx] = val;
     }
 }
 
@@ -168,14 +164,10 @@ impl Arguments {
     }
 
     pub fn store(&mut self, idx: usize, val: CilValue) {
-        if idx < self.args.len() {
-            self.args[idx] = val;
-        } else {
-            while self.args.len() <= idx {
-                self.args.push(CilValue::Unknown);
-            }
-            self.args[idx] = val;
+        while self.args.len() <= idx {
+            self.args.push(CilValue::Unknown);
         }
+        self.args[idx] = val;
     }
 }
 
@@ -406,7 +398,7 @@ impl CilExecutionEngine {
                     let taken_pc = pc_as_i64(pc + 5) + off;
                     let fallthrough = pc + 5;
                     let taken = in_range_pc(taken_pc, opcodes.len());
-                    let cond = self.eval_branch_long(op, &mut stack);
+                    let cond = Self::eval_branch_long(op, &mut stack);
                     pc = if cond == Some(true) {
                         taken.unwrap_or(fallthrough)
                     } else {
@@ -672,7 +664,7 @@ impl CilExecutionEngine {
     }
 
     /// Returns Some(true) if the long branch should be taken.
-    fn eval_branch_long(&self, op: u8, stack: &mut EvalStack) -> Option<bool> {
+    fn eval_branch_long(op: u8, stack: &mut EvalStack) -> Option<bool> {
         // Long forms 0x39–0x46 mirror 0x2C–0x37
         let short_op = op - 0x39 + 0x2C;
         Self::eval_branch_short(short_op, stack)

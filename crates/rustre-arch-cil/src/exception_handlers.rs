@@ -222,11 +222,13 @@ impl MethodExceptionTable {
             ..Default::default()
         };
 
+        // Both section layouts start with a 4-byte header.
+        if bytes.len() < 4 {
+            return Err(EhDecodeError::Truncated);
+        }
+
         if fat_format {
             // Fat: 4-byte section header (flags u8, datasize u24), each clause = 24 bytes
-            if bytes.len() < 4 {
-                return Err(EhDecodeError::Truncated);
-            }
             let data_size = u32::from_le_bytes([bytes[1], bytes[2], bytes[3], 0]);
             let clause_count = (data_size.saturating_sub(4)) / 24;
             let mut off = 4usize;
@@ -240,9 +242,6 @@ impl MethodExceptionTable {
             }
         } else {
             // Small: 4-byte header (flags u8, datasize u8, reserved u16), each clause = 12 bytes
-            if bytes.len() < 4 {
-                return Err(EhDecodeError::Truncated);
-            }
             let data_size = bytes[1] as usize;
             if data_size < 4 {
                 return Err(EhDecodeError::Truncated);

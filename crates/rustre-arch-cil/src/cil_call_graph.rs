@@ -438,6 +438,7 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
         }
     }
 
+    #[must_use]
     pub fn with_devirtualization(mut self, hierarchy: HashMap<String, Vec<String>>) -> Self {
         self.devirtualize = true;
         self.type_hierarchy = hierarchy;
@@ -458,6 +459,10 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
     }
 
     /// Process one method body: scan `instrs` for call instructions and wire edges.
+    /// # Errors
+    ///
+    /// Returns [`CallGraphError::UnknownToken`] if `caller_token` has not been
+    /// registered as a node yet.
     pub fn process_method(
         &mut self,
         caller_token: u32,
@@ -489,7 +494,7 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
             let is_tail = tail_prefix;
             tail_prefix = false;
 
-            let token = if let Some(t) = instr.method_token() { t } else {
+            let Some(token) = instr.method_token() else {
                 // `calli` uses a signature token, not a method token.
                 let site = CallSite {
                     offset: instr.offset,
@@ -527,7 +532,7 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
                 && self.devirtualize
             {
                 if let Some(ref sig) = resolved {
-                    self.type_hierarchy.get(&sig.declaring_type).map_or_else(|| vec![], |subtypes| subtypes
+                    self.type_hierarchy.get(&sig.declaring_type).map_or_else(Vec::new, |subtypes| subtypes
                             .iter()
                             .filter_map(|sub| {
                                 let mut subsig = sig.clone();
@@ -674,10 +679,10 @@ mod tests {
         let instrs = vec![call_instr(0, 0x0A00_0001), ret_instr()];
         b.process_method(0x0600_0001, &instrs).unwrap();
         let cg = b.finish();
-        let caller = cg.node_by_token(0x0600_0001).unwrap();
-        let callee = cg.node_by_token(0x0A00_0001).unwrap();
-        assert!(caller.callees.contains(&callee.id));
-        assert!(callee.callers.contains(&caller.id));
+        let from_node = cg.node_by_token(0x0600_0001).unwrap();
+        let to_node = cg.node_by_token(0x0A00_0001).unwrap();
+        assert!(from_node.callees.contains(&to_node.id));
+        assert!(to_node.callers.contains(&from_node.id));
     }
 
     #[test]
