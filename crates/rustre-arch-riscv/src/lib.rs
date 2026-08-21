@@ -7924,29 +7924,11 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     let vs1 = ((word >> 15) & 0x1F) as usize;
     let vs2 = ((word >> 20) & 0x1F) as usize;
     let rs1 = vs1;
-    let rd = vd;
     let mask = vmask(vm);
 
     // VSETVL family — funct3 == 7
     if funct3 == 7 {
-        let b31 = (word >> 31) & 1;
-        let b30 = (word >> 30) & 1;
-        if b31 == 0 {
-            // VSETVLI: rd, rs1, vtypei[10:0]
-            let vtypei = (word >> 20) & 0x7FF;
-            let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
-            return Some(plain(address, "vsetvli", ops, bytes));
-        }
-        if b31 == 1 && b30 == 1 {
-            // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
-            let uimm5 = (word >> 15) & 0x1F;
-            let vtypei = (word >> 20) & 0x3FF;
-            let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
-            return Some(plain(address, "vsetivli", ops, bytes));
-        }
-        // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
-        let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
-        return Some(plain(address, "vsetvl", ops, bytes));
+        return Some(decode_rvv_vsetvl(address, word, bytes));
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
@@ -8025,29 +8007,11 @@ fn decode_rvv_mid(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     let vs1 = ((word >> 15) & 0x1F) as usize;
     let vs2 = ((word >> 20) & 0x1F) as usize;
     let rs1 = vs1;
-    let rd = vd;
     let mask = vmask(vm);
 
     // VSETVL family — funct3 == 7
     if funct3 == 7 {
-        let b31 = (word >> 31) & 1;
-        let b30 = (word >> 30) & 1;
-        if b31 == 0 {
-            // VSETVLI: rd, rs1, vtypei[10:0]
-            let vtypei = (word >> 20) & 0x7FF;
-            let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
-            return Some(plain(address, "vsetvli", ops, bytes));
-        }
-        if b31 == 1 && b30 == 1 {
-            // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
-            let uimm5 = (word >> 15) & 0x1F;
-            let vtypei = (word >> 20) & 0x3FF;
-            let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
-            return Some(plain(address, "vsetivli", ops, bytes));
-        }
-        // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
-        let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
-        return Some(plain(address, "vsetvl", ops, bytes));
+        return Some(decode_rvv_vsetvl(address, word, bytes));
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
@@ -12309,4 +12273,32 @@ const fn rvv_mnemonic_table_1(funct6: u32) -> Option<&'static str> {
         0x2F => Some("vnclip"),
         _ => None,
     }
+}
+
+/// The VSETVL family (`funct3 == 7`) of the RVV encoding.
+///
+/// Self-contained: it needs only the instruction word, so it lives apart
+/// from the arithmetic dispatch.
+fn decode_rvv_vsetvl(address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let b31 = (word >> 31) & 1;
+    let b30 = (word >> 30) & 1;
+    if b31 == 0 {
+        // VSETVLI: rd, rs1, vtypei[10:0]
+        let vtypei = (word >> 20) & 0x7FF;
+        let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
+        return plain(address, "vsetvli", ops, bytes);
+    }
+    if b31 == 1 && b30 == 1 {
+        // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
+        let uimm5 = (word >> 15) & 0x1F;
+        let vtypei = (word >> 20) & 0x3FF;
+        let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
+        return plain(address, "vsetivli", ops, bytes);
+    }
+    // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
+    let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
+    plain(address, "vsetvl", ops, bytes)
 }
