@@ -3536,6 +3536,80 @@ pub const fn jvm_opcode_name(op: u8) -> &'static str {
 // jvm_instruction_size — fixed operand-byte count look-up
 // ---------------------------------------------------------------------------
 
+/// Ordered `(lo, hi, size)` rows giving the fixed byte size of each JVM opcode
+/// range. Scanned in order by [`jvm_instruction_size`]; the first row whose
+/// range contains the opcode wins, so overlapping ranges are resolved by
+/// listing the more specific row first.
+///
+/// A size of `0` marks a variable-length or reserved opcode.
+const JVM_INSTRUCTION_SIZE_TABLE: &[(u8, u8, usize)] = &[
+    // Nop, AconstNull, IconstM1..Iconst5, Lconst0..Dconst1: opcode only
+    (0x00, 0x0f, 1),
+    // Bipush: opcode + 1-byte signed immediate
+    (0x10, 0x10, 2),
+    // Sipush: opcode + 2-byte signed immediate
+    (0x11, 0x11, 3),
+    // Ldc: opcode + 1-byte cp index
+    (0x12, 0x12, 2),
+    // LdcW / Ldc2W: opcode + 2-byte cp index
+    (0x13, 0x14, 3),
+    // Iload..Aload: opcode + 1-byte local index
+    (0x15, 0x19, 2),
+    // Iload0..Aload3, Iaload..Saload: no operands
+    (0x1a, 0x35, 1),
+    // Istore..Astore: opcode + 1-byte local index
+    (0x36, 0x3a, 2),
+    // Istore0..Astore3, Iastore..Sastore: no operands
+    (0x3b, 0x56, 1),
+    // Pop..Swap: no operands
+    (0x57, 0x5f, 1),
+    // Iadd..Lxor: no operands
+    (0x60, 0x83, 1),
+    // Iinc: opcode + index(1) + const(1) = 3 bytes
+    (0x84, 0x84, 3),
+    // I2l..I2s, Lcmp..Dcmpg: no operands
+    (0x85, 0x98, 1),
+    // Ifeq..IfAcmpne: opcode + 2-byte signed branch offset = 3
+    (0x99, 0xa6, 3),
+    // Goto: 3, Jsr: 3
+    (0xa7, 0xa8, 3),
+    // Ret: opcode + 1-byte local index = 2
+    (0xa9, 0xa9, 2),
+    // Tableswitch, Lookupswitch: variable (alignment padding + data)
+    (0xaa, 0xab, 0),
+    // Ireturn..return: no operands
+    (0xac, 0xb1, 1),
+    // Getstatic..Putfield: opcode + 2-byte cp index = 3
+    (0xb2, 0xb5, 3),
+    // Invokevirtual..Invokestatic: opcode + 2-byte cp index = 3
+    (0xb6, 0xb8, 3),
+    // Invokeinterface: opcode + 2-byte cp index + count + 0 = 5
+    // Invokedynamic:   opcode + 2-byte cp index + 0 + 0 = 5
+    (0xb9, 0xba, 5),
+    // new: opcode + 2-byte cp index = 3
+    (0xbb, 0xbb, 3),
+    // Newarray: opcode + 1-byte atype = 2
+    (0xbc, 0xbc, 2),
+    // Anewarray: opcode + 2-byte cp index = 3
+    (0xbd, 0xbd, 3),
+    // Arraylength, Athrow: no operands
+    (0xbe, 0xbf, 1),
+    // Checkcast, Instanceof: opcode + 2-byte cp index = 3
+    (0xc0, 0xc1, 3),
+    // Monitorenter, Monitorexit: no operands
+    (0xc2, 0xc3, 1),
+    // Wide: prefix — size depends on sub-opcode (variable)
+    (0xc4, 0xc4, 0),
+    // Multianewarray: opcode + 2-byte cp index + dims byte = 4
+    (0xc5, 0xc5, 4),
+    // Ifnull, Ifnonnull: opcode + 2-byte branch offset = 3
+    (0xc6, 0xc7, 3),
+    // GotoW, JsrW: opcode + 4-byte branch offset = 5
+    (0xc8, 0xc9, 5),
+    // Reserved / implementation-defined (0xca..=0xff): unknown size
+    (0xca, 0xff, 0),
+];
+
 /// Return the total instruction size (opcode byte + operand bytes) for a JVM
 /// opcode.
 ///
@@ -3546,74 +3620,15 @@ pub const fn jvm_opcode_name(op: u8) -> &'static str {
 /// Reserved opcodes (`0xca..=0xff`) also return `0`.
 #[must_use]
 pub const fn jvm_instruction_size(op: u8) -> usize {
-    match op {
-        // ── 1-byte instructions (opcode only, no operands) ──────────────────
-        // Nop, AconstNull, IconstM1..Iconst5, Lconst0..Dconst1
-        0x00..=0x0f => 1,
-        // Bipush: opcode + 1-byte signed immediate
-        0x10 => 2,
-        // Sipush: opcode + 2-byte signed immediate
-        0x11 => 3,
-        // Ldc: opcode + 1-byte cp index
-        0x12 => 2,
-        // LdcW / Ldc2W: opcode + 2-byte cp index
-        0x13 | 0x14 => 3,
-        // Iload..Aload: opcode + 1-byte local index
-        0x15..=0x19 => 2,
-        // Iload0..Aload3, Iaload..Saload: no operands
-        0x1a..=0x35 => 1,
-        // Istore..Astore: opcode + 1-byte local index
-        0x36..=0x3a => 2,
-        // Istore0..Astore3, Iastore..Sastore: no operands
-        0x3b..=0x56 => 1,
-        // Pop..Swap: no operands
-        0x57..=0x5f => 1,
-        // Iadd..Lxor: no operands
-        0x60..=0x83 => 1,
-        // Iinc: opcode + index(1) + const(1) = 3 bytes
-        0x84 => 3,
-        // I2l..I2s, Lcmp..Dcmpg: no operands
-        0x85..=0x98 => 1,
-        // Ifeq..IfAcmpne: opcode + 2-byte signed branch offset = 3
-        0x99..=0xa6 => 3,
-        // Goto: 3, Jsr: 3
-        0xa7 | 0xa8 => 3,
-        // Ret: opcode + 1-byte local index = 2
-        0xa9 => 2,
-        // Tableswitch, Lookupswitch: variable (alignment padding + data)
-        0xaa | 0xab => 0,
-        // Ireturn..return: no operands
-        0xac..=0xb1 => 1,
-        // Getstatic..Putfield: opcode + 2-byte cp index = 3
-        0xb2..=0xb5 => 3,
-        // Invokevirtual..Invokestatic: opcode + 2-byte cp index = 3
-        0xb6..=0xb8 => 3,
-        // Invokeinterface: opcode + 2-byte cp index + count + 0 = 5
-        // Invokedynamic:   opcode + 2-byte cp index + 0 + 0 = 5
-        0xb9 | 0xba => 5,
-        // new: opcode + 2-byte cp index = 3
-        0xbb => 3,
-        // Newarray: opcode + 1-byte atype = 2
-        0xbc => 2,
-        // Anewarray: opcode + 2-byte cp index = 3
-        0xbd => 3,
-        // Arraylength, Athrow: no operands
-        0xbe | 0xbf => 1,
-        // Checkcast, Instanceof: opcode + 2-byte cp index = 3
-        0xc0 | 0xc1 => 3,
-        // Monitorenter, Monitorexit: no operands
-        0xc2 | 0xc3 => 1,
-        // Wide: prefix — size depends on sub-opcode (variable)
-        0xc4 => 0,
-        // Multianewarray: opcode + 2-byte cp index + dims byte = 4
-        0xc5 => 4,
-        // Ifnull, Ifnonnull: opcode + 2-byte branch offset = 3
-        0xc6 | 0xc7 => 3,
-        // GotoW, JsrW: opcode + 4-byte branch offset = 5
-        0xc8 | 0xc9 => 5,
-        // Reserved / implementation-defined (0xca..=0xff): unknown size
-        _ => 0,
+    let mut i = 0;
+    while i < JVM_INSTRUCTION_SIZE_TABLE.len() {
+        let (lo, hi, size) = JVM_INSTRUCTION_SIZE_TABLE[i];
+        if op >= lo && op <= hi {
+            return size;
+        }
+        i += 1;
     }
+    0
 }
 
 // ---------------------------------------------------------------------------
