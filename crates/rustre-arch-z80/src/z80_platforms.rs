@@ -600,6 +600,14 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
             let nn = bytes.get(1..3).map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             GbDecoded { mnemonic: "CALL".into(), operands: format!("${nn:04X}"), size: 3 }
         }
+        _ => decode_gb_branch_misc(op, x, y, z, bytes, pc),
+    }
+}
+
+/// Game Boy branch, rotate, flag and RST opcodes, plus the bytes that are
+/// illegal on GB because the Z80 used them for the DD/ED/FD prefixes.
+fn decode_gb_branch_misc(op: u8, x: u8, y: u8, z: u8, bytes: &[u8], pc: u16) -> GbDecoded {
+    match op {
         // JR e — 0x18
         0x18 => {
             let e = bytes.get(1).copied().unwrap_or(0).cast_signed();

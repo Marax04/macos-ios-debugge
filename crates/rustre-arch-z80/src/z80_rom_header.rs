@@ -309,6 +309,12 @@ pub fn detect_rom_format(data: &[u8]) -> Z80RomHeader {
         };
     }
 
+    detect_rom_format_program(data, rom_size)
+}
+
+/// Formats recognised from the program bytes rather than from a size or magic:
+/// CP/M .COM images, a bare Z80 program starting with JP, and the unknown case.
+fn detect_rom_format_program(data: &[u8], rom_size: usize) -> Z80RomHeader {
     // ── 5. CP/M .COM: starts at 0x0100 after transfer vector, usually JP or DI ─
     if data.len() >= 3 {
         let starts_with_jp = data[0] == 0xC3;
