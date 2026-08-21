@@ -38,9 +38,14 @@ pub struct Z80Memory {
 impl Z80Memory {
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            data: Box::new([0u8; 0x10000]),
-        }
+        // Build the 64 KiB image on the heap from the start. `Box::new([0u8;
+        // 0x10000])` materialises the whole array as a stack temporary first,
+        // which is a 64 KiB stack frame in an unoptimised build.
+        let data: Box<[u8; 0x10000]> = vec![0u8; 0x10000]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("vec was allocated with exactly 0x10000 bytes"));
+        Self { data }
     }
 
     pub fn load(&mut self, addr: u16, bytes: &[u8]) {

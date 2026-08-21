@@ -166,11 +166,11 @@ impl Z80RegPair16 {
         match self {
             Self::BC => Z80Reg::B,
             Self::DE => Z80Reg::D,
-            Self::HL => Z80Reg::H,
+            // SP has no addressable 8-bit halves; H is returned as a filler.
+            Self::HL | Self::SP => Z80Reg::H,
             Self::AF => Z80Reg::A,
             Self::IX => Z80Reg::IXH,
             Self::IY => Z80Reg::IYH,
-            Self::SP => Z80Reg::H, // no single 8-bit for SP
         }
     }
 
@@ -180,11 +180,11 @@ impl Z80RegPair16 {
         match self {
             Self::BC => Z80Reg::C,
             Self::DE => Z80Reg::E,
-            Self::HL => Z80Reg::L,
+            // SP has no addressable 8-bit halves; L is returned as a filler.
+            Self::HL | Self::SP => Z80Reg::L,
             Self::AF => Z80Reg::F,
             Self::IX => Z80Reg::IXL,
             Self::IY => Z80Reg::IYL,
-            Self::SP => Z80Reg::L, // no single 8-bit for SP
         }
     }
 }

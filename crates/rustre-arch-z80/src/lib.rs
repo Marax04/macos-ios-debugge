@@ -3241,8 +3241,8 @@ pub fn identify_z80_idiom(instr: &Instruction) -> Z80Idiom {
     match instr.mnemonic.as_str() {
         "NOP" => Z80Idiom::Nop,
         "XOR" if instr.operands == "A" => Z80Idiom::ClearA,
-        "OR" if instr.operands == "A" => Z80Idiom::TestA,
-        "AND" if instr.operands == "A" => Z80Idiom::TestA,
+        // OR A and AND A both leave A intact and only refresh the flags.
+        "OR" | "AND" if instr.operands == "A" => Z80Idiom::TestA,
         "LD" => {
             let ops = instr.operands.as_str();
             let parts: Vec<&str> = ops.splitn(2, ',').collect();

@@ -80,7 +80,10 @@ fn rt_call_50_targets() {
 // ── 6: LD rp,nn round-trip ────────────────────────────────────────────────────
 #[test]
 fn rt_ld_rp_nn() {
-    let pairs: &[(fn(u16) -> [u8; 3], &str)] = &[
+    /// An encoder that turns a 16-bit operand into a 3-byte instruction,
+    /// paired with the mnemonic it is expected to produce.
+    type Enc16 = (fn(u16) -> [u8; 3], &'static str);
+    let pairs: &[Enc16] = &[
         (encode_ld_bc_nn, "BC"),
         (encode_ld_de_nn, "DE"),
         (encode_ld_hl_nn, "HL"),

@@ -54,7 +54,8 @@ impl Z80Reg {
         match self {
             Self::A => "A",
             Self::B => "B",
-            Self::C => "C",
+            // The register C and the carry condition both print as "C".
+            Self::C | Self::Carry => "C",
             Self::D => "D",
             Self::E => "E",
             Self::H => "H",
@@ -75,7 +76,6 @@ impl Z80Reg {
             Self::NZ => "NZ",
             Self::Z => "Z",
             Self::NC => "NC",
-            Self::Carry => "C",
             Self::PO => "PO",
             Self::PE => "PE",
             Self::P => "P",

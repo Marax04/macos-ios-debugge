@@ -281,8 +281,8 @@ impl Z80Disassembler {
     fn format_addr(&self, addr: u16) -> String {
         match self.config.syntax {
             Z80Syntax::Intel => format!("{addr:04X}H"),
-            Z80Syntax::Gas   => format!("0x{addr:04x}"),
-            Z80Syntax::Zilog => format!("0x{addr:04x}"),
+            // Gas and Zilog both spell addresses `0x….`
+            Z80Syntax::Gas | Z80Syntax::Zilog => format!("0x{addr:04x}"),
         }
     }
 
@@ -354,19 +354,19 @@ fn format_op_intel(op: &Z80Operand) -> String {
 fn estimate_cycles(instr: &Z80Instr) -> u8 {
     match instr.prefix {
         Z80Prefix::None => match instr.mnemonic {
-            "NOP"  => 4,
-            "HALT" => 4,
+            // 4 T-states: no operand fetch, register-only ALU, or rotates on A.
+            "NOP" | "HALT"
+            | "ADD" | "ADC" | "SUB" | "SBC" | "AND" | "OR" | "XOR" | "CP"
+            | "INC" | "DEC"
+            | "RLCA" | "RRCA" | "RLA" | "RRA" => 4,
             "LD"   => 7,
-            "PUSH" | "POP" => 11,
+            // 11 T-states: a 16-bit stack access, or an I/O cycle.
+            "PUSH" | "POP" | "IN" | "OUT" => 11,
             "CALL" => 17,
-            "RET"  => 10,
-            "JP"   => 10,
+            // 10 T-states: pop/push a return address, or fetch a 16-bit target.
+            "RET" | "JP" => 10,
             "JR"   => 12,
             "DJNZ" => 13,
-            "ADD" | "ADC" | "SUB" | "SBC" | "AND" | "OR" | "XOR" | "CP" => 4,
-            "INC" | "DEC" => 4,
-            "RLCA"| "RRCA"| "RLA" | "RRA" => 4,
-            "IN"  | "OUT" => 11,
             _      => 0,
         },
         Z80Prefix::Cb | Z80Prefix::Ed => 8,

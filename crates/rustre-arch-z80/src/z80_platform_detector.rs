@@ -57,12 +57,11 @@ impl Z80Platform {
     #[must_use]
     pub const fn ram_start(self) -> u16 {
         match self {
-            Self::ZxSpectrum => 0x4000,
+            // Spectrum, CPC and TRS-80 all put user RAM at 0x4000.
+            Self::ZxSpectrum | Self::AmstradCpc | Self::Trs80 => 0x4000,
             Self::Msx => 0x8000,
             Self::Cpm => 0x0100,
             Self::GameBoy => 0xC000,
-            Self::AmstradCpc => 0x4000,
-            Self::Trs80 => 0x4000,
             Self::Unknown => 0x0000,
         }
     }
@@ -71,13 +70,11 @@ impl Z80Platform {
     #[must_use]
     pub const fn interrupt_vector_address(self) -> Option<u16> {
         match self {
-            Self::ZxSpectrum => Some(0x0038), // IM 1 handler
-            Self::GameBoy => Some(0x0040),    // VBlank
-            Self::Cpm => None,
-            Self::Msx => Some(0x0038),
-            Self::AmstradCpc => Some(0x0038),
-            Self::Trs80 => Some(0x0038),
-            Self::Unknown => None,
+            // All the Z80 machines here use the IM 1 handler at 0x0038.
+            Self::ZxSpectrum | Self::Msx | Self::AmstradCpc | Self::Trs80 => Some(0x0038),
+            Self::GameBoy => Some(0x0040), // VBlank
+            // CP/M is an OS, not a machine: it pins no vector of its own.
+            Self::Cpm | Self::Unknown => None,
         }
     }
 
@@ -404,12 +401,10 @@ pub fn detect_from_vectors(vectors: &[u64]) -> Z80Platform {
 pub fn platform_interrupt_vectors(platform: Z80Platform) -> Vec<u16> {
     match platform {
         Z80Platform::GameBoy => vec![0x0040, 0x0048, 0x0050, 0x0058, 0x0060],
-        Z80Platform::ZxSpectrum => vec![0x0038],
-        Z80Platform::Msx => vec![0x0038],
-        Z80Platform::Cpm => vec![],
-        Z80Platform::AmstradCpc => vec![0x0038],
-        Z80Platform::Trs80 => vec![0x0038],
-        Z80Platform::Unknown => vec![],
+        // IM 1 machines: the single handler at 0x0038.
+        Z80Platform::ZxSpectrum | Z80Platform::Msx | Z80Platform::AmstradCpc
+        | Z80Platform::Trs80 => vec![0x0038],
+        Z80Platform::Cpm | Z80Platform::Unknown => vec![],
     }
 }
 
@@ -417,9 +412,10 @@ pub fn platform_interrupt_vectors(platform: Z80Platform) -> Vec<u16> {
 #[must_use]
 pub fn platform_rst_targets(platform: Z80Platform) -> Vec<u16> {
     match platform {
-        Z80Platform::ZxSpectrum => vec![0x0008, 0x0010, 0x0018, 0x0020, 0x0028, 0x0030, 0x0038],
-        Z80Platform::Msx => vec![0x0008, 0x0010, 0x0018, 0x0020, 0x0028, 0x0030, 0x0038],
-        Z80Platform::AmstradCpc => vec![0x0008, 0x0010, 0x0018, 0x0020, 0x0028, 0x0030, 0x0038],
+        // These three reserve RST 0 for the reset entry, so it is not a target.
+        Z80Platform::ZxSpectrum | Z80Platform::Msx | Z80Platform::AmstradCpc => {
+            vec![0x0008, 0x0010, 0x0018, 0x0020, 0x0028, 0x0030, 0x0038]
+        }
         _ => vec![0x0000, 0x0008, 0x0010, 0x0018, 0x0020, 0x0028, 0x0030, 0x0038],
     }
 }
