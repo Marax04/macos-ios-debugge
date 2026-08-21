@@ -8052,45 +8052,9 @@ fn decode_rvv_rest(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
                 0x16 => Some("vslide1up"),
                 0x17 => Some("vslide1down"),
                 0x18 => {
-                    // VWXUNARY0 / VRXUNARY0 etc — vs1 field selects
-                    if funct3 == 4 {
-                        match vs1 {
-                            0 => {
-                                return Some(plain(
-                                    address,
-                                    "vmv.x.s",
-                                    format!("{}, {}", xr(rd), vr(vs2)),
-                                    bytes,
-                                ));
-                            }
-                            16 => {
-                                return Some(plain(
-                                    address,
-                                    "vcpop.m",
-                                    format!("{}, {}{}", xr(rd), vr(vs2), mask),
-                                    bytes,
-                                ));
-                            }
-                            17 => {
-                                return Some(plain(
-                                    address,
-                                    "vfirst.m",
-                                    format!("{}, {}{}", xr(rd), vr(vs2), mask),
-                                    bytes,
-                                ));
-                            }
-                            _ => {}
-                        }
+                    if let Some(insn) = decode_rvv_vwxunary(address, word, bytes.clone()) {
+                        return Some(insn);
                     }
-                    if funct3 == 6
-                        && vs2 == 0 {
-                            return Some(plain(
-                                address,
-                                "vmv.s.x",
-                                format!("{}, {}", vr(vd), xr(rs1)),
-                                bytes,
-                            ));
-                        }
                     None
                 }
                 0x1C => Some("vmandnot"),
@@ -12144,5 +12108,60 @@ fn decode_rvv_mem(address: Address, word: u32, bytes: &[u8]) -> Option<Instructi
         return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes.to_vec()));
     }
 
+    None
+}
+
+/// VWXUNARY0 / VRXUNARY0 group of the RVV encoding (`funct6 == 0x18`).
+///
+/// Returns `Some` when the `vs1` selector names one of the scalar-move or
+/// mask-population forms, `None` when it does not.
+fn decode_rvv_vwxunary(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
+    let funct3 = (word >> 12) & 7;
+    let vm = (word >> 25) & 1;
+    let vd = ((word >> 7) & 0x1F) as usize;
+    let vs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let rs1 = vs1;
+    let rd = vd;
+    let mask = vmask(vm);
+    // VWXUNARY0 / VRXUNARY0 etc — vs1 field selects
+    if funct3 == 4 {
+        match vs1 {
+            0 => {
+                return Some(plain(
+                    address,
+                    "vmv.x.s",
+                    format!("{}, {}", xr(rd), vr(vs2)),
+                    bytes,
+                ));
+            }
+            16 => {
+                return Some(plain(
+                    address,
+                    "vcpop.m",
+                    format!("{}, {}{}", xr(rd), vr(vs2), mask),
+                    bytes,
+                ));
+            }
+            17 => {
+                return Some(plain(
+                    address,
+                    "vfirst.m",
+                    format!("{}, {}{}", xr(rd), vr(vs2), mask),
+                    bytes,
+                ));
+            }
+            _ => {}
+        }
+    }
+    if funct3 == 6
+        && vs2 == 0 {
+            return Some(plain(
+                address,
+                "vmv.s.x",
+                format!("{}, {}", vr(vd), xr(rs1)),
+                bytes,
+            ));
+        }
     None
 }
