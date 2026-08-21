@@ -313,7 +313,7 @@ impl PtTimingAnalyzer {
     #[must_use]
     pub fn slowest_blocks(&self, n: usize) -> Vec<&BlockTiming> {
         let mut sorted: Vec<&BlockTiming> = self.block_timings.iter().collect();
-        sorted.sort_by(|a, b| b.cycles.cmp(&a.cycles));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.cycles));
         sorted.into_iter().take(n).collect()
     }
 

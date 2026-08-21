@@ -623,7 +623,7 @@ impl FlowReconstructor {
     #[must_use]
     pub fn top_hot_addresses(&self, n: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<(u64, u64)> = self.heatmap.iter().map(|(&a, &c)| (a, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -891,7 +891,7 @@ impl CallGraph {
     #[must_use]
     pub fn top_edges(&self, n: usize) -> Vec<((u64, u64), u64)> {
         let mut v: Vec<_> = self.counts.iter().map(|(&e, &c)| (e, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
