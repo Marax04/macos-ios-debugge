@@ -81,7 +81,7 @@ impl StackString {
             return None;
         }
         let base_offset = pushes[0].offset;
-        let null_terminated = pushes.last().map_or(false, CharPush::is_null_terminator);
+        let null_terminated = pushes.last().is_some_and(CharPush::is_null_terminator);
         let raw: Vec<u8> = pushes
             .iter()
             .filter(|p| !p.is_null_terminator())
@@ -295,13 +295,11 @@ pub fn decode_stack_string(
 
         if !contiguous {
             // Flush the current run.
-            if run.len() >= min_length {
-                if let Some(ss) = StackString::from_pushes(&run) {
-                    if ss.printable_ratio() >= min_printable_ratio {
+            if run.len() >= min_length
+                && let Some(ss) = StackString::from_pushes(&run)
+                    && ss.printable_ratio() >= min_printable_ratio {
                         results.push(ss);
                     }
-                }
-            }
             run.clear();
         }
 
@@ -310,13 +308,11 @@ pub fn decode_stack_string(
     }
 
     // Flush final run.
-    if run.len() >= min_length {
-        if let Some(ss) = StackString::from_pushes(&run) {
-            if ss.printable_ratio() >= min_printable_ratio {
+    if run.len() >= min_length
+        && let Some(ss) = StackString::from_pushes(&run)
+            && ss.printable_ratio() >= min_printable_ratio {
                 results.push(ss);
             }
-        }
-    }
 
     results
 }

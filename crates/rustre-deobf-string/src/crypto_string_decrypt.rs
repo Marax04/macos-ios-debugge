@@ -214,7 +214,7 @@ const fn chacha20_quarter_round(a: &mut u32, b: &mut u32, c: &mut u32, d: &mut u
 }
 
 #[inline(always)]
-fn qr(s: &mut [u32; 16], ai: usize, bi: usize, ci: usize, di: usize) {
+const fn qr(s: &mut [u32; 16], ai: usize, bi: usize, ci: usize, di: usize) {
     let (mut a, mut b, mut c, mut d) = (s[ai], s[bi], s[ci], s[di]);
     chacha20_quarter_round(&mut a, &mut b, &mut c, &mut d);
     s[ai] = a; s[bi] = b; s[ci] = c; s[di] = d;
@@ -285,7 +285,7 @@ pub fn custom_xor_cipher_decrypt(key: &[u8], ciphertext: &[u8], rounds: u32) -> 
     for r in (0..rounds).rev() {
         for (i, b) in out.iter_mut().enumerate() {
             let ki = (i + r as usize) % key.len();
-            let sk = key[ki].rotate_left((r as u32 ^ i as u32) & 7);
+            let sk = key[ki].rotate_left((r ^ i as u32) & 7);
             *b ^= sk;
         }
     }
@@ -298,7 +298,7 @@ pub fn custom_xor_cipher_decrypt(key: &[u8], ciphertext: &[u8], rounds: u32) -> 
 
 /// Score bytes as ASCII printable text (0.0–1.0).
 fn printable_score(data: &[u8]) -> f64 {
-    let printable = data.iter().filter(|&&b| b >= 0x20 && b <= 0x7E).count();
+    let printable = data.iter().filter(|&&b| (0x20..=0x7E).contains(&b)).count();
     printable as f64 / data.len().max(1) as f64
 }
 
@@ -312,7 +312,7 @@ pub fn brute_force_rc4_1byte(ciphertext: &[u8]) -> Option<(u8, Vec<u8>, f64)> {
     for k in 0u8..=255 {
         let dec = rc4_decrypt(&[k], ciphertext);
         let score = printable_score(&dec);
-        if best.as_ref().map_or(true, |(_, _, s)| score > *s) {
+        if best.as_ref().is_none_or(|(_, _, s)| score > *s) {
             best = Some((k, dec, score));
         }
     }
@@ -330,11 +330,10 @@ pub fn brute_force_rc4_2byte(ciphertext: &[u8]) -> Option<([u8; 2], Vec<u8>, f64
         for k1 in 0u8..=255 {
             let dec = rc4_decrypt(&[k0, k1], ciphertext);
             let score = printable_score(&dec);
-            if score > 0.85 {
-                if best.as_ref().map_or(true, |(_, _, s)| score > *s) {
+            if score > 0.85
+                && best.as_ref().is_none_or(|(_, _, s)| score > *s) {
                     best = Some(([k0, k1], dec, score));
                 }
-            }
         }
     }
     best

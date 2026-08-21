@@ -255,7 +255,7 @@ pub fn recover_multibyte_xor(data: &[u8], max_key_len: usize) -> Vec<MultiByteXo
         // and English-like output (IC≈0.065) scores near 30.
         const ENGLISH_IC: f64 = 0.065;
         let ic_score = (avg_ic / ENGLISH_IC).min(1.0) * 30.0;
-        let confidence = (pr * 70.0 + ic_score).min(100.0) as u8;
+        let confidence = pr.mul_add(70.0, ic_score).min(100.0) as u8;
         results.push(MultiByteXorResult {
             key_length: key_len,
             key,
@@ -264,7 +264,7 @@ pub fn recover_multibyte_xor(data: &[u8], max_key_len: usize) -> Vec<MultiByteXo
             confidence,
         });
     }
-    results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+    results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
     results
 }
 
@@ -391,7 +391,7 @@ pub fn rc4_inverse_ksa(s_final: &[u8; 256]) -> Vec<Vec<u8>> {
     // meaningless noise this function's own documentation warns about. Reject it
     // instead of guessing.
     let mut seen = [false; 256];
-    for &b in s_final.iter() {
+    for &b in s_final {
         if core::mem::replace(&mut seen[b as usize], true) {
             return Vec::new();
         }
@@ -412,10 +412,10 @@ pub fn rc4_inverse_ksa(s_final: &[u8; 256]) -> Vec<Vec<u8>> {
             best_key = vec![k];
         }
     }
-    if !exact.is_empty() {
-        exact
-    } else {
+    if exact.is_empty() {
         vec![best_key]
+    } else {
+        exact
     }
 }
 
@@ -681,7 +681,7 @@ pub fn detect_arith_obf_in_mlil(
         }
     }
 
-    results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+    results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
     results
 }
 

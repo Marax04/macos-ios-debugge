@@ -307,7 +307,7 @@ impl StringEncryptionBruteforcer {
             results.extend(self.bf_rot_n(ciphertext));
         }
 
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 
@@ -340,7 +340,7 @@ impl StringEncryptionBruteforcer {
                 )
             })
             .collect();
-        out.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        out.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         out.truncate(self.max_results_per_algo);
         out
     }
@@ -364,7 +364,7 @@ impl StringEncryptionBruteforcer {
                 }
             }
         }
-        best.sort_by(|a, b| b.0.cmp(&a.0));
+        best.sort_by_key(|b| std::cmp::Reverse(b.0));
         best.truncate(self.max_results_per_algo);
         best.into_iter().map(|(_, r)| r).collect()
     }
@@ -381,7 +381,7 @@ impl StringEncryptionBruteforcer {
                 )
             })
             .collect();
-        out.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        out.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         out.truncate(self.max_results_per_algo);
         out
     }
@@ -402,7 +402,7 @@ impl StringEncryptionBruteforcer {
                 }
             }
         }
-        best.sort_by(|a, b| b.0.cmp(&a.0));
+        best.sort_by_key(|b| std::cmp::Reverse(b.0));
         best.truncate(self.max_results_per_algo);
         best.into_iter().map(|(_, r)| r).collect()
     }
@@ -440,11 +440,11 @@ impl StringEncryptionBruteforcer {
         }
         let mut out = Vec::with_capacity(2 * self.max_results_per_algo);
         for mut family in [adds, subs] {
-            family.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+            family.sort_by_key(|b| std::cmp::Reverse(b.confidence));
             family.truncate(self.max_results_per_algo);
             out.append(&mut family);
         }
-        out.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        out.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         out
     }
 
@@ -472,7 +472,7 @@ impl StringEncryptionBruteforcer {
                 out.push(r);
             }
         }
-        out.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        out.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         out.truncate(self.max_results_per_algo);
         out
     }
@@ -493,7 +493,7 @@ impl StringEncryptionBruteforcer {
                 )
             })
             .collect();
-        out.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        out.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         out.truncate(self.max_results_per_algo);
         out
     }

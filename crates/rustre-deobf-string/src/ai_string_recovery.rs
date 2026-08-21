@@ -26,11 +26,11 @@ impl AiScoringEngine {
         // Printable ASCII ratio
         let pr =
             bytes.iter().filter(|&&b| (0x20..0x7F).contains(&b)).count() as f32 / bytes.len() as f32;
-        score += pr * 30.0;
+        score = pr.mul_add(30.0, score);
 
         // English letter frequency score
         let alpha = bytes.iter().filter(|&&b| b.is_ascii_alphabetic()).count();
-        score += (alpha as f32 / bytes.len() as f32) * 20.0;
+        score = (alpha as f32 / bytes.len() as f32).mul_add(20.0, score);
 
         // Bonus: common URL/path patterns
         if text.contains("://") || text.contains("http") || text.contains("ftp") {
@@ -58,7 +58,7 @@ impl AiScoringEngine {
 
         // Penalty: too many non-printable
         let non_print = bytes.iter().filter(|&&b| !(0x20..0x7F).contains(&b)).count();
-        score -= (non_print as f32 / bytes.len() as f32) * 20.0;
+        score = (non_print as f32 / bytes.len() as f32).mul_add(-20.0, score);
 
         score.clamp(0.0, 100.0)
     }

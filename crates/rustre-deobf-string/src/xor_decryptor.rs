@@ -84,7 +84,7 @@ fn score_english(data: &[u8]) -> f64 {
 /// Score based on printable ASCII ratio.
 #[must_use]
 fn score_printable(data: &[u8]) -> f64 {
-    let printable = data.iter().filter(|&&b| b >= 0x20 && b <= 0x7E).count();
+    let printable = data.iter().filter(|&&b| (0x20..=0x7E).contains(&b)).count();
     printable as f64 / data.len().max(1) as f64
 }
 
@@ -147,7 +147,7 @@ pub fn brute_force_single_byte_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
     let mut candidates = Vec::with_capacity(256);
     for key in 0u8..=255 {
         let decrypted: Vec<u8> = ciphertext.iter().map(|&b| b ^ key).collect();
-        let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+        let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
         candidates.push(XorKeyCandidate {
             key: vec![key],
             score,
@@ -294,7 +294,7 @@ pub fn recover_multibyte_key(ciphertext: &[u8], key_len: usize) -> Vec<u8> {
     for offset in 0..key_len {
         // Collect only the sub-stream for this key position.
         let stream: Vec<u8> = ciphertext.iter().skip(offset).step_by(key_len).copied().collect();
-        key.push(best_single_byte_xor(&stream).map(|c| c.key[0]).unwrap_or(0));
+        key.push(best_single_byte_xor(&stream).map_or(0, |c| c.key[0]));
     }
     key
 }
@@ -319,7 +319,7 @@ pub fn attack_multibyte_xor(
         *combined.entry(*kl).or_default() += ic * 2.0;
     }
     for (kl, count) in &kasiski_scores {
-        *combined.entry(*kl).or_default() += *count as f64 * 0.1;
+        *combined.entry(*kl).or_default() = (*count as f64).mul_add(0.1, *combined.entry(*kl).or_default());
     }
 
     let mut ranked: Vec<(usize, f64)> = combined.into_iter().collect();
@@ -330,9 +330,9 @@ pub fn attack_multibyte_xor(
     for (key_len, _) in ranked.into_iter().take(5) {
         let key = recover_multibyte_key(ciphertext, key_len);
         let decrypted = xor_decrypt_multibyte(ciphertext, &key);
-        let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+        let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
 
-        if best.as_ref().map_or(true, |b| score > b.score) {
+        if best.as_ref().is_none_or(|b| score > b.score) {
             best = Some(XorKeyCandidate {
                 key,
                 score,
@@ -359,7 +359,7 @@ pub fn brute_force_rol_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
                 .iter()
                 .map(|&b| b.rotate_left(u32::from(rot)) ^ xor_key)
                 .collect();
-            let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+            let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
             if score > 0.3 {
                 candidates.push(XorKeyCandidate {
                     key: vec![rot, xor_key],
@@ -384,7 +384,7 @@ pub fn brute_force_ror_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
                 .iter()
                 .map(|&b| b.rotate_right(u32::from(rot)) ^ xor_key)
                 .collect();
-            let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+            let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
             if score > 0.3 {
                 candidates.push(XorKeyCandidate {
                     key: vec![rot, xor_key],
@@ -413,7 +413,7 @@ pub fn brute_force_xor_add(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
                 .iter()
                 .map(|&b| (b ^ xk).wrapping_add(ak))
                 .collect();
-            let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+            let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
             if score > 0.4 {
                 candidates.push(XorKeyCandidate {
                     key: vec![xk, ak],
@@ -454,7 +454,7 @@ pub fn brute_force_rolling_xor(ciphertext: &[u8]) -> Vec<XorKeyCandidate> {
     let mut candidates = Vec::new();
     for initial_key in 0u8..=255 {
         let decrypted = decrypt_rolling_xor(ciphertext, initial_key);
-        let score = score_english(&decrypted) * 0.7 + score_printable(&decrypted) * 0.3;
+        let score = score_printable(&decrypted).mul_add(0.3, score_english(&decrypted) * 0.7);
         candidates.push(XorKeyCandidate {
             key: vec![initial_key],
             score,
@@ -517,11 +517,10 @@ impl XorDecryptor {
         candidates.extend(brute_force_single_byte_xor(ciphertext).into_iter().take(5));
 
         // Multi-byte XOR
-        if ciphertext.len() >= 20 {
-            if let Ok(mb) = attack_multibyte_xor(ciphertext, self.config.max_key_len) {
+        if ciphertext.len() >= 20
+            && let Ok(mb) = attack_multibyte_xor(ciphertext, self.config.max_key_len) {
                 candidates.push(mb);
             }
-        }
 
         // Rolling XOR
         candidates.extend(brute_force_rolling_xor(ciphertext).into_iter().take(3));
@@ -584,7 +583,7 @@ mod tests {
         let plaintext = b"test string";
         let mut ciphertext = Vec::new();
         let mut prev = initial;
-        for &b in plaintext.iter() {
+        for &b in plaintext {
             let ct = b ^ prev;
             ciphertext.push(ct);
             prev = ct;

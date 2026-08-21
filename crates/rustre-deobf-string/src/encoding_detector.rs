@@ -64,7 +64,7 @@ impl fmt::Display for EncodingKind {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A decoded string together with provenance.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedString {
     /// The original (encoded) input.
     pub encoded: String,
@@ -159,7 +159,7 @@ impl EncodingResult {
 
     /// Sort candidates by descending confidence.
     pub fn sort_candidates(&mut self) {
-        self.candidates.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        self.candidates.sort_by_key(|b| std::cmp::Reverse(b.confidence));
     }
 
     /// Returns `true` if any encoding was detected.
@@ -245,7 +245,7 @@ impl Base64Detector {
                 table[clean[i + 2] as usize],
                 table[clean[i + 3] as usize],
             ];
-            if v.iter().any(|&x| x == 255) {
+            if v.contains(&255) {
                 return None;
             }
             out.push((v[0] << 2) | (v[1] >> 4));
@@ -261,18 +261,16 @@ impl Base64Detector {
     pub fn detect_and_decode(&self, s: &str) -> Vec<DecodedString> {
         let mut results = Vec::new();
 
-        if Self::is_standard(s) {
-            if let Some(bytes) = Self::decode_standard(s) {
+        if Self::is_standard(s)
+            && let Some(bytes) = Self::decode_standard(s) {
                 let conf = 90u8;
                 results.push(DecodedString::new(s.to_owned(), bytes, EncodingKind::Base64Standard, conf));
             }
-        }
-        if Self::is_url_safe(s) {
-            if let Some(bytes) = Self::decode_url_safe(s) {
+        if Self::is_url_safe(s)
+            && let Some(bytes) = Self::decode_url_safe(s) {
                 let conf = 88u8;
                 results.push(DecodedString::new(s.to_owned(), bytes, EncodingKind::Base64UrlSafe, conf));
             }
-        }
         for alpha in &self.custom_alphabets {
             if alpha.len() == 64 {
                 let arr: [u8; 64] = alpha.as_slice().try_into().unwrap();
@@ -304,7 +302,7 @@ impl HexStringDetector {
     #[must_use]
     pub fn is_raw_hex(s: &str) -> bool {
         let s = s.trim_start_matches("0x").trim_start_matches("0X");
-        s.len() >= 2 && s.len() % 2 == 0 && s.chars().all(|c| c.is_ascii_hexdigit())
+        s.len() >= 2 && s.len().is_multiple_of(2) && s.chars().all(|c| c.is_ascii_hexdigit())
     }
 
     /// Returns `true` if `s` is a `0x`-prefixed hex value.
@@ -318,7 +316,7 @@ impl HexStringDetector {
     pub fn decode(s: &str) -> Option<Vec<u8>> {
         let clean = s.trim_start_matches("0x").trim_start_matches("0X")
             .replace([' ', ',', '_'], "");
-        if clean.len() % 2 != 0 {
+        if !clean.len().is_multiple_of(2) {
             return None;
         }
         clean.as_bytes().chunks(2).map(|c| {
@@ -341,7 +339,7 @@ impl HexStringDetector {
                     i += 1;
                 }
                 let run = &s[start..i];
-                if run.len() >= 8 && run.len() % 2 == 0 {
+                if run.len() >= 8 && run.len().is_multiple_of(2) {
                     results.push((start, run.to_owned()));
                 }
             } else {
@@ -355,12 +353,11 @@ impl HexStringDetector {
     #[must_use]
     pub fn detect_and_decode(&self, s: &str) -> Vec<DecodedString> {
         let mut results = Vec::new();
-        if Self::is_raw_hex(s) || Self::is_prefixed_hex(s) {
-            if let Some(bytes) = Self::decode(s) {
+        if (Self::is_raw_hex(s) || Self::is_prefixed_hex(s))
+            && let Some(bytes) = Self::decode(s) {
                 let conf = if bytes.iter().all(|&b| b.is_ascii_graphic() || b == b' ') { 85 } else { 60 };
                 results.push(DecodedString::new(s.to_owned(), bytes, EncodingKind::HexString, conf));
             }
-        }
         results
     }
 }
@@ -519,8 +516,7 @@ impl CustomAlphabetSubstitution {
             .iter()
             .enumerate()
             .max_by_key(|&(_, &c)| c)
-            .map(|(i, _)| i as u8)
-            .unwrap_or(0);
+            .map_or(0, |(i, _)| i as u8);
 
         let mut table: [u8; 256] = std::array::from_fn(|i| i as u8);
         // Swap most frequent ciphertext byte with space.
@@ -606,24 +602,22 @@ impl EncodingDetector {
         }
 
         // URL percent encoding.
-        if self.try_url && is_url_encoded(input) {
-            if let Some(bytes) = decode_url_percent(input) {
+        if self.try_url && is_url_encoded(input)
+            && let Some(bytes) = decode_url_percent(input) {
                 let conf = 80u8;
                 result.add_candidate(DecodedString::new(
                     input.to_owned(), bytes, EncodingKind::UrlPercent, conf,
                 ));
             }
-        }
 
         // Unicode escapes.
-        if self.try_unicode && has_unicode_escapes(input) {
-            if let Some(decoded) = decode_unicode_escapes(input) {
+        if self.try_unicode && has_unicode_escapes(input)
+            && let Some(decoded) = decode_unicode_escapes(input) {
                 let bytes = decoded.as_bytes().to_vec();
                 result.add_candidate(DecodedString::new(
                     input.to_owned(), bytes, EncodingKind::UnicodeEscape, 85,
                 ));
             }
-        }
 
         // ROT-13.
         if self.try_rot && looks_like_rot13(input) {
@@ -687,11 +681,10 @@ impl EncodingDetector {
                     i += 1;
                 }
                 let blob = &text[start..i];
-                if blob.len() >= 16 {
-                    if let Some(decoded) = decode_base64(blob, false) {
+                if blob.len() >= 16
+                    && let Some(decoded) = decode_base64(blob, false) {
                         results.push((start, blob.to_owned(), decoded));
                     }
-                }
             } else {
                 i += 1;
             }
@@ -755,7 +748,7 @@ const fn b64_val_std(c: u8) -> Option<u8> {
     }
 }
 
-fn b64_val_url(c: u8) -> Option<u8> {
+const fn b64_val_url(c: u8) -> Option<u8> {
     match c {
         b'-' => Some(62),
         b'_' => Some(63),

@@ -275,13 +275,12 @@ pub fn run_pipeline_anyhow(
     let result = pipeline.run(input);
     // If the pipeline produced no useful output and at least one stage failed,
     // surface the first stage error via anyhow for ergonomic propagation.
-    if result.plaintext.is_none() {
-        if let Some(failed) = result.trace.iter().find(|r| r.error.is_some()) {
+    if result.plaintext.is_none()
+        && let Some(failed) = result.trace.iter().find(|r| r.error.is_some()) {
             let msg = failed.error.as_deref().unwrap_or("unknown stage error");
             return Err(anyhow::anyhow!("{msg}"))
                 .with_context(|| format!("pipeline stage '{}' failed", failed.stage_name));
         }
-    }
     Ok(result)
 }
 

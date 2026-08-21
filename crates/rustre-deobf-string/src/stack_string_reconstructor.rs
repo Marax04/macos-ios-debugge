@@ -237,7 +237,7 @@ impl Utf16String {
     /// Attempt to decode a UTF-16 LE string from raw bytes.
     #[must_use]
     pub fn from_bytes(start_addr: u64, stack_offset: i64, raw_bytes: Vec<u8>) -> Option<Self> {
-        if raw_bytes.len() < 4 || raw_bytes.len() % 2 != 0 {
+        if raw_bytes.len() < 4 || !raw_bytes.len().is_multiple_of(2) {
             return None;
         }
         let u16_chars: Vec<u16> = raw_bytes
@@ -401,7 +401,7 @@ impl StackStringRecon {
                     current = Some(r);
                 }
                 Some(ref mut r) => {
-                    let last_off = r.stores.last().map(|s| s.stack_offset).unwrap_or(r.base_offset);
+                    let last_off = r.stores.last().map_or(r.base_offset, |s| s.stack_offset);
                     let gap = store.stack_offset - last_off;
                     if store.base_reg == r.base_reg && gap >= 1 && gap <= self.config.max_offset_gap {
                         r.stores.push(store.clone());
@@ -418,11 +418,10 @@ impl StackStringRecon {
                 }
             }
         }
-        if let Some(r) = current {
-            if r.stores.len() >= self.config.min_store_count {
+        if let Some(r) = current
+            && r.stores.len() >= self.config.min_store_count {
                 regions.push(r);
             }
-        }
         regions
     }
 
@@ -434,13 +433,12 @@ impl StackStringRecon {
         let regions = self.group_into_regions();
         let mut results = Vec::new();
         for region in &regions {
-            if let Some(ss) = StackString::from_region(region) {
-                if f64::from(ss.confidence) / 100.0 >= self.config.min_printable_ratio {
+            if let Some(ss) = StackString::from_region(region)
+                && f64::from(ss.confidence) / 100.0 >= self.config.min_printable_ratio {
                     results.push(ss);
                 }
-            }
         }
-        results.sort_by(|a, b| a.start_addr.cmp(&b.start_addr));
+        results.sort_by_key(|a| a.start_addr);
         results
     }
 
@@ -471,15 +469,14 @@ impl StackStringRecon {
             // Heuristic: if every other byte is 0x00, likely UTF-16 LE.
             if raw.len() >= 4 {
                 let null_even = raw.iter().enumerate().filter(|(i, _)| i % 2 != 0).all(|(_, &b)| b == 0);
-                if null_even {
-                    if let Some(utf16) = Utf16String::from_bytes(
+                if null_even
+                    && let Some(utf16) = Utf16String::from_bytes(
                         region.insn_addr_range().0,
                         region.base_offset,
                         raw,
                     ) {
                         results.push(utf16);
                     }
-                }
             }
         }
         results

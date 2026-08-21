@@ -77,7 +77,7 @@ impl StackStringPattern {
         self.bytes
             .iter()
             .filter(|&&b| b != 0)
-            .all(|&b| b >= 0x20 && b <= 0x7E)
+            .all(|&b| (0x20..=0x7E).contains(&b))
     }
 
     /// Convert to a [`RecoveredString`].
@@ -241,22 +241,20 @@ impl StackStringScanner {
                     let addr_gap = a.insn_addr.saturating_sub(last.insn_addr);
                     let offset_gap = (a.offset - last.offset).abs();
                     if addr_gap > self.config.max_addr_gap || offset_gap > 256 {
-                        if current.len() >= self.config.min_bytes {
-                            if let Some(p) = self.build_pattern(&frame_reg, &current) {
+                        if current.len() >= self.config.min_bytes
+                            && let Some(p) = self.build_pattern(&frame_reg, &current) {
                                 patterns.push(p);
                             }
-                        }
                         current.clear();
                     }
                 }
                 current.push(a);
             }
 
-            if current.len() >= self.config.min_bytes {
-                if let Some(p) = self.build_pattern(&frame_reg, &current) {
+            if current.len() >= self.config.min_bytes
+                && let Some(p) = self.build_pattern(&frame_reg, &current) {
                     patterns.push(p);
                 }
-            }
         }
 
         patterns.sort_by_key(|p| p.start_addr);
@@ -311,7 +309,7 @@ impl StackStringScanner {
         }
 
         // Printability check
-        let printable = bytes.iter().filter(|&&b| b == 0 || (b >= 0x20 && b <= 0x7E)).count();
+        let printable = bytes.iter().filter(|&&b| b == 0 || (0x20..=0x7E).contains(&b)).count();
         let ratio = printable as f32 / bytes.len() as f32;
         if ratio < self.config.min_printable_ratio {
             // Try wide-char
@@ -327,8 +325,7 @@ impl StackStringScanner {
 
         let style = group
             .first()
-            .map(|a| a.style)
-            .unwrap_or(PlacementStyle::MovImm8);
+            .map_or(PlacementStyle::MovImm8, |a| a.style);
 
         Some(StackStringPattern {
             start_addr,
@@ -344,14 +341,14 @@ impl StackStringScanner {
 
 /// Heuristic: check if `bytes` looks like a UTF-16 LE string.
 fn is_utf16_le(bytes: &[u8]) -> bool {
-    if bytes.len() < 4 || bytes.len() % 2 != 0 {
+    if bytes.len() < 4 || !bytes.len().is_multiple_of(2) {
         return false;
     }
     let printable = bytes
         .chunks(2)
         .filter(|w| {
             let codepoint = u16::from_le_bytes([w[0], w[1]]);
-            codepoint == 0 || (codepoint >= 0x0020 && codepoint <= 0x007E)
+            codepoint == 0 || (0x0020..=0x007E).contains(&codepoint)
         })
         .count();
     printable as f32 / (bytes.len() / 2) as f32 >= 0.70

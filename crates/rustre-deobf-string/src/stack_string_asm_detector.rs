@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct StackStringHit {
     pub start_addr: u64,
     pub end_addr: u64,
@@ -34,8 +34,8 @@ pub fn detect_stack_strings(instrs: &[(u64, String, String)]) -> Vec<StackString
             if let Some((off, val)) = parse_mov_byte(operands) {
                 stores.push(ByteStore { addr: *addr, offset: off, value: val });
             }
-        } else if m == "push" {
-            if let Some(imm) = parse_push_imm(operands) {
+        } else if m == "push"
+            && let Some(imm) = parse_push_imm(operands) {
                 let base = next_push_offset(&stores);
                 for (i, b) in imm.iter().enumerate() {
                     stores.push(ByteStore {
@@ -45,7 +45,6 @@ pub fn detect_stack_strings(instrs: &[(u64, String, String)]) -> Vec<StackString
                     });
                 }
             }
-        }
     }
 
     group_runs(&stores)
@@ -138,7 +137,7 @@ fn parse_imm(s: &str) -> Option<u64> {
 fn parse_push_imm(operands: &str) -> Option<Vec<u8>> {
     let v = parse_imm(operands.trim())?;
     let bytes = v.to_le_bytes();
-    let mut out: Vec<u8> = bytes.iter().copied().collect();
+    let mut out: Vec<u8> = bytes.to_vec();
     while out.len() > 4 && *out.last().unwrap() == 0 {
         out.pop();
     }

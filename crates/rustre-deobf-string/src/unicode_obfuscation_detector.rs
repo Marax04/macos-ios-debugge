@@ -189,15 +189,15 @@ enum Script {
 const fn char_script(c: char) -> Script {
     let cp = c as u32;
     match cp {
-        0x0041..=0x007A => Script::Latin,   // Basic Latin letters
-        0x00C0..=0x024F => Script::Latin,   // Latin Extended
+        // Basic Latin letters
+        0x0041..=0x007A | 0x00C0..=0x024F => Script::Latin,   // Latin Extended
         0x0400..=0x04FF => Script::Cyrillic,
         0x0370..=0x03FF => Script::Greek,
         0x0600..=0x06FF => Script::Arabic,
         0x0590..=0x05FF => Script::Hebrew,
         0x0900..=0x097F => Script::Devanagari,
-        0x4E00..=0x9FFF => Script::CJK,
-        0x3040..=0x30FF => Script::CJK,    // Hiragana / Katakana
+        0x4E00..=0x9FFF | 0x3040..=0x30FF => Script::CJK,
+        // Hiragana / Katakana
         _ => Script::Other,
     }
 }
@@ -370,11 +370,10 @@ impl UnicodeObfuscationDetector {
         }
 
         // Mixed-script check
-        if self.check_mixed_script {
-            if let Some(finding) = mixed_script_check(s) {
+        if self.check_mixed_script
+            && let Some(finding) = mixed_script_check(s) {
                 findings.push(finding);
             }
-        }
 
         // Punycode check
         if self.check_punycode && s.contains("xn--") {

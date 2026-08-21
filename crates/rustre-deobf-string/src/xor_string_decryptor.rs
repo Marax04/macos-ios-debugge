@@ -144,7 +144,7 @@ impl KeyCandidate {
     pub fn new(key: Vec<u8>, key_type: XorKeyType, decrypted: Vec<u8>) -> Self {
         let printable_ratio = compute_printable_ratio(&decrypted);
         let english_score = compute_english_score(&decrypted);
-        let confidence = ((printable_ratio * 80.0) + (english_score * 20.0)).min(100.0) as u8;
+        let confidence = english_score.mul_add(20.0, printable_ratio * 80.0).min(100.0) as u8;
         Self {
             key,
             key_type,
@@ -188,7 +188,7 @@ impl fmt::Display for KeyCandidate {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A successfully decrypted string recovered from a binary.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptedString {
     /// Virtual address of the encrypted data.
     pub addr: u64,
@@ -330,17 +330,16 @@ impl XorDecryptor {
         for key in 1u8..=255 {
             let dec: Vec<u8> = ciphertext.iter().map(|&b| b ^ key).collect();
             let pr = compute_printable_ratio(&dec);
-            if pr >= self.config.min_printable_ratio {
-                if let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
+            if pr >= self.config.min_printable_ratio
+                && let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
                     let confidence = ((pr * 90.0) as u8).min(100);
                     results.push(DecryptedString::new(
                         addr, ciphertext.to_vec(), s, vec![key],
                         XorKeyType::SingleByte, confidence,
                     ));
                 }
-            }
         }
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 
@@ -373,17 +372,16 @@ impl XorDecryptor {
                 .map(|(i, &b)| b ^ key[i % key_len])
                 .collect();
             let pr = compute_printable_ratio(&dec);
-            if pr >= self.config.min_printable_ratio {
-                if let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
+            if pr >= self.config.min_printable_ratio
+                && let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
                     let confidence = ((pr * 85.0) as u8).min(100);
                     results.push(DecryptedString::new(
                         addr, ciphertext.to_vec(), s, key,
                         XorKeyType::Cyclic, confidence,
                     ));
                 }
-            }
         }
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 
@@ -401,8 +399,8 @@ impl XorDecryptor {
                 .map(|(i, &b)| b ^ init.wrapping_add(i as u8))
                 .collect();
             let pr = compute_printable_ratio(&dec);
-            if pr >= self.config.min_printable_ratio {
-                if let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
+            if pr >= self.config.min_printable_ratio
+                && let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
                     let confidence = ((pr * 75.0) as u8).min(100);
                     // Rank on how English the decoding looks, not on `pr`: every
                     // surviving candidate cleared the same printable threshold,
@@ -416,7 +414,6 @@ impl XorDecryptor {
                         XorKeyType::Rolling, confidence,
                     )));
                 }
-            }
         }
         results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(8);
@@ -443,17 +440,16 @@ impl XorDecryptor {
                 .map(|(i, &b)| b ^ key[i % key.len()])
                 .collect();
             let pr = compute_printable_ratio(&dec);
-            if pr >= self.config.min_printable_ratio {
-                if let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
+            if pr >= self.config.min_printable_ratio
+                && let Some(s) = maybe_utf8_string(&dec, self.config.min_string_length) {
                     let confidence = ((pr * 88.0) as u8).min(100);
                     results.push(DecryptedString::new(
                         addr, ciphertext.to_vec(), s, key.clone(),
                         XorKeyType::NullTerminated, confidence,
                     ));
                 }
-            }
         }
-        results.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        results.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         results
     }
 
@@ -476,7 +472,7 @@ impl XorDecryptor {
                 local.extend(self.try_rolling_key(ct, *addr));
             }
             // Deduplicate by plaintext.
-            local.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+            local.sort_by_key(|b| std::cmp::Reverse(b.confidence));
             local.dedup_by(|a, b| a.plaintext == b.plaintext);
             self.results_cache.insert(cache_key, local.clone());
             all.extend(local);
@@ -725,7 +721,7 @@ fn score_decoded_iter<I: Iterator<Item = u8>>(bytes: I, len: usize) -> f64 {
         }
     }
     let n = len as f64;
-    (english_score / n).min(1.0) + (printable as f64 / n) * 0.5
+    (printable as f64 / n).mul_add(0.5, (english_score / n).min(1.0))
 }
 
 /// Score an already-decoded buffer.
@@ -764,7 +760,7 @@ fn extract_null_terminated_strings(data: &[u8], min_len: usize, max_len: usize) 
     for (i, &b) in data.iter().enumerate() {
         if b == 0 {
             let s = &data[start..i];
-            if s.len() >= min_len && s.len() <= max_len && s.iter().all(|&c| c >= 0x20 && c < 0x7F) {
+            if s.len() >= min_len && s.len() <= max_len && s.iter().all(|&c| (0x20..0x7F).contains(&c)) {
                 strings.push(s.to_vec());
             }
             start = i + 1;

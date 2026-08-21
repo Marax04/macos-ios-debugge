@@ -192,7 +192,7 @@ impl TextStats {
         // English prose runs ~55%+ letters once spaces and punctuation are counted.
         let density = (n / self.len as f64 / 0.55).min(1.0);
 
-        printable_ratio * 0.25 + chi_score * 0.45 + density * 0.30
+        printable_ratio.mul_add(0.25, chi_score * 0.45) + density * 0.30
     }
 }
 
@@ -380,8 +380,8 @@ impl XorStringDecoder {
 
             // Single-byte brute force
             let bf = brute_force_xor(window);
-            if let Some((key, score, decoded)) = bf.into_iter().next() {
-                if score >= self.config.min_score && !key.is_trivial() {
+            if let Some((key, score, decoded)) = bf.into_iter().next()
+                && score >= self.config.min_score && !key.is_trivial() {
                     let k0 = key.bytes[0];
                     if seen.insert((offset, k0), ()).is_none() {
                         if let Ok(text) = std::str::from_utf8(&decoded) {
@@ -406,7 +406,6 @@ impl XorStringDecoder {
                         }
                     }
                 }
-            }
 
             // Multi-byte keys
             if self.config.try_multi_byte && window.len() >= self.config.max_key_len * 2 {
@@ -550,7 +549,7 @@ mod tests {
     #[test]
     fn brute_force_xor_multi_finds_2byte_key() {
         let plaintext = b"abcdefghijklmnopqrstuvwxyzabcdef";
-        let key = vec![0x13u8, 0x37];
+        let key = [0x13u8, 0x37];
         let ct: Vec<u8> = plaintext.iter().enumerate()
             .map(|(i, &b)| b ^ key[i % 2]).collect();
         let results = brute_force_xor_multi(&ct, 4);

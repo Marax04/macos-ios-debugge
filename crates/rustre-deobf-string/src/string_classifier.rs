@@ -303,7 +303,7 @@ impl StringPatternDb {
             }
         }
         let mut results: Vec<(StringClass, u8)> = best.into_values().collect();
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        results.sort_by_key(|b| std::cmp::Reverse(b.1));
         results
     }
 }

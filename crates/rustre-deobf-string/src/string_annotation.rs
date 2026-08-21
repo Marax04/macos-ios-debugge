@@ -817,7 +817,7 @@ impl StringDatabase {
     #[must_use]
     pub fn sorted_by_confidence(&self) -> Vec<&AnnotatedString> {
         let mut v: Vec<&AnnotatedString> = self.entries.values().collect();
-        v.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        v.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         v
     }
 

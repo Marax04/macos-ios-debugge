@@ -449,11 +449,11 @@ impl Poly1305 {
         r_bytes[12] &= 0xfc;
 
         let r = [
-            u32::from_le_bytes(r_bytes[0..4].try_into().unwrap_or([0; 4])) & 0x3ffffff,
-            (u32::from_le_bytes(r_bytes[3..7].try_into().unwrap_or([0; 4])) >> 2) & 0x3ffff03,
-            (u32::from_le_bytes(r_bytes[6..10].try_into().unwrap_or([0; 4])) >> 4) & 0x3ffc0ff,
-            (u32::from_le_bytes(r_bytes[9..13].try_into().unwrap_or([0; 4])) >> 6) & 0x3f03fff,
-            (u32::from_le_bytes(r_bytes[12..16].try_into().unwrap_or([0; 4])) >> 8) & 0x00fffff,
+            u32::from_le_bytes(r_bytes[0..4].try_into().unwrap_or([0; 4])) & 0x03ff_ffff,
+            (u32::from_le_bytes(r_bytes[3..7].try_into().unwrap_or([0; 4])) >> 2) & 0x03ff_ff03,
+            (u32::from_le_bytes(r_bytes[6..10].try_into().unwrap_or([0; 4])) >> 4) & 0x03ff_c0ff,
+            (u32::from_le_bytes(r_bytes[9..13].try_into().unwrap_or([0; 4])) >> 6) & 0x03f0_3fff,
+            (u32::from_le_bytes(r_bytes[12..16].try_into().unwrap_or([0; 4])) >> 8) & 0x000f_ffff,
         ];
 
         let s = [
@@ -478,7 +478,7 @@ impl Poly1305 {
             buf[16] = 1;
         }
         for i in 0..5 {
-            n[i] = (u32::from_le_bytes(buf[i * 3..i * 3 + 4].min_bytes()) >> (i * 2)) & 0x3ffffff;
+            n[i] = (u32::from_le_bytes(buf[i * 3..i * 3 + 4].min_bytes()) >> (i * 2)) & 0x03ff_ffff;
         }
         // h += n
         for i in 0..5 {
@@ -498,7 +498,7 @@ impl Poly1305 {
         let mut carry = 0u64;
         for i in 0..5 {
             d[i] += carry;
-            self.h[i] = (d[i] & 0x3ffffff) as u32;
+            self.h[i] = (d[i] & 0x03ff_ffff) as u32;
             carry = d[i] >> 26;
         }
         self.h[0] = self.h[0].wrapping_add((carry * 5) as u32);
@@ -509,25 +509,25 @@ impl Poly1305 {
     pub fn finalize(mut self) -> [u8; 16] {
         // Carry
         let mut c = self.h[0] >> 26;
-        self.h[0] &= 0x3ffffff;
+        self.h[0] &= 0x03ff_ffff;
         for i in 1..5 {
             self.h[i] = self.h[i].wrapping_add(c);
             c = self.h[i] >> 26;
-            self.h[i] &= 0x3ffffff;
+            self.h[i] &= 0x03ff_ffff;
         }
         self.h[0] = self.h[0].wrapping_add(c * 5);
         c = self.h[0] >> 26;
-        self.h[0] &= 0x3ffffff;
+        self.h[0] &= 0x03ff_ffff;
         self.h[1] = self.h[1].wrapping_add(c);
         // h %= 2^130-5 (conditional subtract)
         let mut g = [0u32; 5];
         g[0] = self.h[0].wrapping_add(5);
         c = g[0] >> 26;
-        g[0] &= 0x3ffffff;
+        g[0] &= 0x03ff_ffff;
         for i in 1..4 {
             g[i] = self.h[i].wrapping_add(c);
             c = g[i] >> 26;
-            g[i] &= 0x3ffffff;
+            g[i] &= 0x03ff_ffff;
         }
         g[4] = self.h[4].wrapping_add(c).wrapping_sub(1 << 26);
         // Select `g = h + 5` only when `h >= 2^130 - 5`.
@@ -665,25 +665,25 @@ mod tests {
     fn test_quarter_round_rfc_test_vector() {
         // RFC 8439 §2.1.1 test vector
         let mut state = [0u32; 16];
-        state[0] = 0x11111111;
-        state[1] = 0x01020304;
-        state[2] = 0x9b8d6f43;
-        state[3] = 0x01234567;
+        state[0] = 0x1111_1111;
+        state[1] = 0x0102_0304;
+        state[2] = 0x9b8d_6f43;
+        state[3] = 0x0123_4567;
         quarter_round(&mut state, 0, 1, 2, 3);
-        assert_eq!(state[0], 0xea2a92f4);
-        assert_eq!(state[1], 0xcb1cf8ce);
-        assert_eq!(state[2], 0x4581472e);
-        assert_eq!(state[3], 0x5881c4bb);
+        assert_eq!(state[0], 0xea2a_92f4);
+        assert_eq!(state[1], 0xcb1c_f8ce);
+        assert_eq!(state[2], 0x4581_472e);
+        assert_eq!(state[3], 0x5881_c4bb);
     }
 
     #[test]
     fn test_quarter_round_pure_consistency() {
-        let (a, b, c, d) = quarter_round_pure(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567);
+        let (a, b, c, d) = quarter_round_pure(0x1111_1111, 0x0102_0304, 0x9b8d_6f43, 0x0123_4567);
         let mut state = [0u32; 16];
-        state[0] = 0x11111111;
-        state[1] = 0x01020304;
-        state[2] = 0x9b8d6f43;
-        state[3] = 0x01234567;
+        state[0] = 0x1111_1111;
+        state[1] = 0x0102_0304;
+        state[2] = 0x9b8d_6f43;
+        state[3] = 0x0123_4567;
         quarter_round(&mut state, 0, 1, 2, 3);
         assert_eq!(a, state[0]);
         assert_eq!(b, state[1]);

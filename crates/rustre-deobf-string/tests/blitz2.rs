@@ -9,8 +9,8 @@ fn lcg_seeded(seed: u64) -> impl FnMut() -> u64 {
     let mut s: u64 = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -369,7 +369,7 @@ fn api_hash_build_and_resolve() {
     let table = ApiHasher::build_table(&names, ApiHashAlgorithm::Djb2);
     let h = u64::from(ApiHasher::djb2(b"CreateFileA"));
     assert_eq!(ApiHasher::resolve(&table, h), Some("CreateFileA"));
-    assert_eq!(ApiHasher::resolve(&table, 0xDEADBEEF), None);
+    assert_eq!(ApiHasher::resolve(&table, 0xDEAD_BEEF), None);
 }
 
 #[test]
@@ -446,7 +446,7 @@ fn algorithm_names_unique_nonempty() {
     let names: Vec<&str> = all.iter().map(|a| a.name()).collect();
     for n in &names { assert!(!n.is_empty()); }
     let mut sorted = names.clone();
-    sorted.sort();
+    sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), names.len());
 }

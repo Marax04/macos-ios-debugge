@@ -112,7 +112,7 @@ impl CustomAlphabet {
     pub fn is_valid_input(&self, data: &[u8]) -> bool {
         data.iter().all(|&b| {
             self.reverse.contains_key(&b)
-                || self.padding.map_or(false, |p| b == p)
+                || (self.padding == Some(b))
                 || b == b'\n' || b == b'\r'
         })
     }
@@ -121,7 +121,7 @@ impl CustomAlphabet {
     #[must_use]
     pub fn encode64(&self, data: &[u8]) -> Vec<u8> {
         if self.chars.len() != 64 { return vec![]; }
-        let mut out = Vec::with_capacity((data.len() + 2) / 3 * 4);
+        let mut out = Vec::with_capacity(data.len().div_ceil(3) * 4);
         for chunk in data.chunks(3) {
             let b0 = chunk[0];
             let b1 = if chunk.len() > 1 { chunk[1] } else { 0 };
@@ -276,9 +276,8 @@ impl CustomEncodingDetector {
         if let Some(p) = self.try_rot(data, 13) { results.push(p); }
         if self.try_rot_n {
             for n in (1u8..=25).filter(|&n| n != 13) {
-                if let Some(p) = self.try_rot(data, n) {
-                    if p.confidence >= self.min_confidence { results.push(p); }
-                }
+                if let Some(p) = self.try_rot(data, n)
+                    && p.confidence >= self.min_confidence { results.push(p); }
             }
         }
 
@@ -295,13 +294,13 @@ impl CustomEncodingDetector {
     }
 
     fn try_hex(&self, data: &[u8]) -> Option<EncodingPattern> {
-        if data.len() < 4 || data.len() % 2 != 0 { return None; }
+        if data.len() < 4 || !data.len().is_multiple_of(2) { return None; }
         let lower = data.iter().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f' | b'\n' | b'\r'));
         let upper = data.iter().all(|b| matches!(b, b'0'..=b'9' | b'A'..=b'F' | b'\n' | b'\r'));
         if !lower && !upper { return None; }
 
         let clean: Vec<u8> = data.iter().filter(|&&b| b != b'\n' && b != b'\r').copied().collect();
-        if clean.len() % 2 != 0 { return None; }
+        if !clean.len().is_multiple_of(2) { return None; }
         let decoded: Vec<u8> = clean.chunks(2).filter_map(|c| {
             let hi = hex_nibble(c[0])?;
             let lo = hex_nibble(c[1])?;
@@ -310,7 +309,7 @@ impl CustomEncodingDetector {
 
         let score = crate::xor_string_decoder::score_plaintext(&decoded);
         let kind = if lower { CustomEncodingKind::HexLower } else { CustomEncodingKind::HexUpper };
-        Some(EncodingPattern { kind, confidence: 0.7 + score * 0.3, decoded })
+        Some(EncodingPattern { kind, confidence: score.mul_add(0.3, 0.7), decoded })
     }
 
     fn try_base64(&self, data: &[u8], alpha: &CustomAlphabet, kind: CustomEncodingKind) -> Option<EncodingPattern> {
@@ -323,7 +322,7 @@ impl CustomEncodingDetector {
 
         let decoded = alpha.decode64(&clean).ok()?;
         let text_score = crate::xor_string_decoder::score_plaintext(&decoded);
-        let confidence = 0.7 + text_score * 0.3;
+        let confidence = text_score.mul_add(0.3, 0.7);
         Some(EncodingPattern { kind, confidence, decoded })
     }
 
@@ -335,7 +334,7 @@ impl CustomEncodingDetector {
         let score = crate::xor_string_decoder::score_plaintext(&decoded);
         if score < 0.4 { return None; }
         let kind = if n == 13 { CustomEncodingKind::Rot13 } else { CustomEncodingKind::RotN(n) };
-        Some(EncodingPattern { kind, confidence: 0.5 + score * 0.5, decoded })
+        Some(EncodingPattern { kind, confidence: score.mul_add(0.5, 0.5), decoded })
     }
 
     fn try_reversed(&self, data: &[u8]) -> Option<EncodingPattern> {
@@ -343,7 +342,7 @@ impl CustomEncodingDetector {
         let reversed: Vec<u8> = data.iter().rev().copied().collect();
         let score = crate::xor_string_decoder::score_plaintext(&reversed);
         if score < 0.6 { return None; }
-        Some(EncodingPattern { kind: CustomEncodingKind::Reversed, confidence: 0.5 + score * 0.5, decoded: reversed })
+        Some(EncodingPattern { kind: CustomEncodingKind::Reversed, confidence: score.mul_add(0.5, 0.5), decoded: reversed })
     }
 
     fn try_substitution_table(&self, data: &[u8]) -> Option<EncodingPattern> {
@@ -354,7 +353,7 @@ impl CustomEncodingDetector {
         for &b in data { freq[b as usize] += 1; }
         let unique = freq.iter().filter(|&&c| c > 0).count();
         // If very few unique bytes in a long string — probable substitution
-        if unique < 10 || unique > 200 { return None; }
+        if !(10..=200).contains(&unique) { return None; }
         // All bytes in printable range: 0x20–0x7e
         let printable = data.iter().all(|&b| (0x20..=0x7e).contains(&b));
         if !printable { return None; }
@@ -428,7 +427,7 @@ mod tests {
 
     #[test]
     fn custom_alphabet_duplicate_char_errors() {
-        let bad: Vec<u8> = std::iter::repeat(b'A').take(64).collect();
+        let bad: Vec<u8> = std::iter::repeat_n(b'A', 64).collect();
         assert!(CustomAlphabet::new(&bad, None).is_err());
     }
 
