@@ -391,6 +391,17 @@ pub struct ExpressionBuilder {
     pub type_printer: TypePrinter,
 }
 
+/// Whether one slice of the CIL-to-C# instruction table claimed a mnemonic.
+///
+/// Used instead of `Option<Option<CSharpStmt>>`, where the two layers would be
+/// indistinguishable at the call site.
+enum Handled {
+    /// The slice handled the mnemonic and produced this statement, if any.
+    Yes(Option<CSharpStmt>),
+    /// The slice does not handle this mnemonic; try the next one.
+    No,
+}
+
 impl ExpressionBuilder {
     /// Create a new builder.
     #[must_use]
@@ -459,7 +470,50 @@ impl ExpressionBuilder {
     /// Propagates any [`DecompileError`] raised while popping the operands the
     /// instruction consumes.
     pub fn process(&mut self, instr: &CilInstr) -> Result<Option<CSharpStmt>, DecompileError> {
-        match instr.mnemonic.as_str() {
+        let mne = instr.mnemonic.as_str();
+
+        if let Handled::Yes(stmt) = self.process_group1(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        if let Handled::Yes(stmt) = self.process_group2(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        if let Handled::Yes(stmt) = self.process_group3(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        if let Handled::Yes(stmt) = self.process_group4(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        if let Handled::Yes(stmt) = self.process_group5(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        if let Handled::Yes(stmt) = self.process_group6(mne, instr)? {
+            return Ok(stmt);
+        }
+
+        // Not handled by any slice above.
+        Ok(None)
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group1(
+        &mut self,
+        mne: &str,
+        instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "ldnull" => {
                 self.push(CSharpExpr::Null);
                 Ok(None)
@@ -517,6 +571,24 @@ impl ExpressionBuilder {
                 self.push(CSharpExpr::Arg(self.arg_name(1)));
                 Ok(None)
             }
+            _ => return Ok(Handled::No),
+        }?))
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group2(
+        &mut self,
+        mne: &str,
+        instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "ldarg.2" => {
                 self.push(CSharpExpr::Arg(self.arg_name(2)));
                 Ok(None)
@@ -572,6 +644,24 @@ impl ExpressionBuilder {
                     value: v,
                 }))
             }
+            _ => return Ok(Handled::No),
+        }?))
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group3(
+        &mut self,
+        mne: &str,
+        instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "stloc.3" => {
                 let v = self.pop("stloc.3")?;
                 Ok(Some(CSharpStmt::Assign {
@@ -632,6 +722,25 @@ impl ExpressionBuilder {
                 });
                 Ok(None)
             }
+            _ => return Ok(Handled::No),
+        }?))
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group4(
+        &mut self,
+        mne: &str,
+        // This slice needs only the mnemonic; the operands live in later slices.
+        _instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "div" | "div.un" => {
                 let rhs = self.pop("div")?;
                 let lhs = self.pop("div")?;
@@ -690,6 +799,25 @@ impl ExpressionBuilder {
                 });
                 Ok(None)
             }
+            _ => return Ok(Handled::No),
+        }?))
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group5(
+        &mut self,
+        mne: &str,
+        // This slice needs only the mnemonic; the operands live in other slices.
+        _instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "not" => {
                 let e = self.pop("not")?;
                 self.push(CSharpExpr::UnaryOp {
@@ -740,6 +868,24 @@ impl ExpressionBuilder {
                 let e = self.pop("throw")?;
                 Ok(Some(CSharpStmt::Throw(e)))
             }
+            _ => return Ok(Handled::No),
+        }?))
+    }
+
+    /// One slice of the CIL-to-C# instruction table, split out of
+    /// [`Self::process`] so no single function carries every mnemonic.
+    ///
+    /// [`Handled::No`] means this slice does not handle `mne`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any [`DecompileError`] raised while popping operands.
+    fn process_group6(
+        &mut self,
+        mne: &str,
+        instr: &CilInstr,
+    ) -> Result<Handled, DecompileError> {
+        Ok(Handled::Yes(match mne {
             "call" => {
                 // Simplified: use token as method reference
                 let token = instr.operands.trim_start_matches('#');
@@ -767,9 +913,10 @@ impl ExpressionBuilder {
                 self.push(CSharpExpr::StringLit(s));
                 Ok(None)
             }
-            _ => Ok(None),
-        }
+            _ => return Ok(Handled::No),
+        }?))
     }
+
 }
 
 // ── StatementBuilder ──────────────────────────────────────────────────────────

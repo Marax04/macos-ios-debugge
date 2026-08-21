@@ -1365,170 +1365,153 @@ fn decode_cil_group14(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), 
                 return Some(Err(e));
             }
             let op2 = bytes[1];
-            match op2 {
-                0x00 => Ok(prefixed("arglist", InstrFlags::NONE, op2)),
-                0x01 => Ok(prefixed("ceq", InstrFlags::NONE, op2)),
-                0x02 => Ok(prefixed("cgt", InstrFlags::NONE, op2)),
-                0x03 => Ok(prefixed("cgt.un", InstrFlags::NONE, op2)),
-                0x04 => Ok(prefixed("clt", InstrFlags::NONE, op2)),
-                0x05 => Ok(prefixed("clt.un", InstrFlags::NONE, op2)),
-                0x06 => {
-                    if let Err(e) = need(bytes, 6) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldftn",
-                        format!("#{:#010x}", u32le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    ))
-                }
-                0x07 => {
-                    if let Err(e) = need(bytes, 6) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldvirtftn",
-                        format!("#{:#010x}", u32le(bytes, 2)),
-                        InstrFlags::INDIRECT,
-                        vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    ))
-                }
-                0x09 => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldarg",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0a => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldarga",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0b => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "starg",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0c => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldloc",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0d => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "ldloca",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0e => {
-                    if let Err(e) = need(bytes, 4) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "stloc",
-                        format!("{}", u16le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3]],
-                    ))
-                }
-                0x0f => Ok(prefixed("localloc", InstrFlags::NONE, op2)),
-                0x11 => Ok(prefixed("endfilter", InstrFlags::RET, op2)),
-                0x12 => {
-                    if let Err(e) = need(bytes, 3) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "unaligned",
-                        format!("{}", bytes[2]),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2]],
-                    ))
-                }
-                0x13 => Ok(prefixed("volatile", InstrFlags::BARRIER, op2)),
-                0x14 => Ok(prefixed("tail", InstrFlags::NONE, op2)),
-                0x15 => {
-                    if let Err(e) = need(bytes, 6) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "initobj",
-                        format!("#{:#010x}", u32le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    ))
-                }
-                0x16 => {
-                    if let Err(e) = need(bytes, 6) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "constrained",
-                        format!("#{:#010x}", u32le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    ))
-                }
-                0x17 => Ok(prefixed("cpblk", InstrFlags::WRITE_MEM, op2)),
-                0x18 => Ok(prefixed("initblk", InstrFlags::WRITE_MEM, op2)),
-                0x19 => {
-                    if let Err(e) = need(bytes, 3) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "no",
-                        format!("{}", bytes[2]),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2]],
-                    ))
-                }
-                0x1a => Ok(prefixed("rethrow", InstrFlags::BRANCH, op2)),
-                0x1c => {
-                    if let Err(e) = need(bytes, 6) {
-                return Some(Err(e));
-            }
-                    Ok(prefixed_ops(
-                        "sizeof",
-                        format!("#{:#010x}", u32le(bytes, 2)),
-                        InstrFlags::NONE,
-                        vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    ))
-                }
-                0x1d => Ok(prefixed("refanytype", InstrFlags::NONE, op2)),
-                0x1e => Ok(prefixed("readonly", InstrFlags::NONE, op2)),
-                _ => Err(CilDecodeError::UnknownPrefixedOpcode(op2)),
-            }
+            decode_cil_prefixed(bytes, op2)
         }
         _ => return None,
     })
+}
+
+/// The 0xFE two-byte prefix table.
+///
+/// Split out of `decode_cil_group14` so the prefix opcodes are one function
+/// rather than a 130-line arm nested inside the single-byte table.
+fn decode_cil_prefixed(bytes: &[u8], op2: u8) -> Result<(CilInstr, usize), CilDecodeError> {
+    match op2 {
+        0x00 => Ok(prefixed("arglist", InstrFlags::NONE, op2)),
+        0x01 => Ok(prefixed("ceq", InstrFlags::NONE, op2)),
+        0x02 => Ok(prefixed("cgt", InstrFlags::NONE, op2)),
+        0x03 => Ok(prefixed("cgt.un", InstrFlags::NONE, op2)),
+        0x04 => Ok(prefixed("clt", InstrFlags::NONE, op2)),
+        0x05 => Ok(prefixed("clt.un", InstrFlags::NONE, op2)),
+        0x06 => {
+            need(bytes, 6)?;
+            Ok(prefixed_ops(
+                "ldftn",
+                format!("#{:#010x}", u32le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
+            ))
+        }
+        0x07 => {
+            need(bytes, 6)?;
+            Ok(prefixed_ops(
+                "ldvirtftn",
+                format!("#{:#010x}", u32le(bytes, 2)),
+                InstrFlags::INDIRECT,
+                vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
+            ))
+        }
+        0x09 => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "ldarg",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0a => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "ldarga",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0b => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "starg",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0c => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "ldloc",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0d => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "ldloca",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0e => {
+            need(bytes, 4)?;
+            Ok(prefixed_ops(
+                "stloc",
+                format!("{}", u16le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3]],
+            ))
+        }
+        0x0f => Ok(prefixed("localloc", InstrFlags::NONE, op2)),
+        0x11 => Ok(prefixed("endfilter", InstrFlags::RET, op2)),
+        0x12 => {
+            need(bytes, 3)?;
+            Ok(prefixed_ops(
+                "unaligned",
+                format!("{}", bytes[2]),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2]],
+            ))
+        }
+        0x13 => Ok(prefixed("volatile", InstrFlags::BARRIER, op2)),
+        0x14 => Ok(prefixed("tail", InstrFlags::NONE, op2)),
+        0x15 => {
+            need(bytes, 6)?;
+            Ok(prefixed_ops(
+                "initobj",
+                format!("#{:#010x}", u32le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
+            ))
+        }
+        0x16 => {
+            need(bytes, 6)?;
+            Ok(prefixed_ops(
+                "constrained",
+                format!("#{:#010x}", u32le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
+            ))
+        }
+        0x17 => Ok(prefixed("cpblk", InstrFlags::WRITE_MEM, op2)),
+        0x18 => Ok(prefixed("initblk", InstrFlags::WRITE_MEM, op2)),
+        0x19 => {
+            need(bytes, 3)?;
+            Ok(prefixed_ops(
+                "no",
+                format!("{}", bytes[2]),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2]],
+            ))
+        }
+        0x1a => Ok(prefixed("rethrow", InstrFlags::BRANCH, op2)),
+        0x1c => {
+            need(bytes, 6)?;
+            Ok(prefixed_ops(
+                "sizeof",
+                format!("#{:#010x}", u32le(bytes, 2)),
+                InstrFlags::NONE,
+                vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
+            ))
+        }
+        0x1d => Ok(prefixed("refanytype", InstrFlags::NONE, op2)),
+        0x1e => Ok(prefixed("readonly", InstrFlags::NONE, op2)),
+        _ => Err(CilDecodeError::UnknownPrefixedOpcode(op2)),
+    
+    }
 }
 
 // ---------------------------------------------------------------------------

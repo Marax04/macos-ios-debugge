@@ -271,83 +271,8 @@ impl CfgBuilder {
         }
 
         // Step 1: find all leader offsets (start of a basic block).
-        let mut leaders: HashSet<u32> = HashSet::new();
-        leaders.insert(self.instrs[0].offset);
-
-        // Handler entry points are also leaders.
-        for r in &self.regions {
-            leaders.insert(r.handler_start);
-            if let Some(fo) = r.filter_offset {
-                leaders.insert(fo);
-            }
-        }
-
         let max_offset = self.instrs.last().map_or(0, |i| i.offset + i.size);
-
-        for instr in &self.instrs {
-            match instr.opcode {
-                Opcode::Br | Opcode::BrS => {
-                    if let Some(tgt) = instr.branch_target() {
-                        if tgt >= max_offset {
-                            return Err(CfgError::OutOfBounds(tgt));
-                        }
-                        leaders.insert(tgt);
-                        leaders.insert(instr.offset + instr.size);
-                    }
-                }
-                Opcode::Brtrue
-                | Opcode::BrtrueS
-                | Opcode::Brfalse
-                | Opcode::BrfalseS
-                | Opcode::Beq
-                | Opcode::BeqS
-                | Opcode::Bge
-                | Opcode::BgeS
-                | Opcode::BgeUn
-                | Opcode::BgeUnS
-                | Opcode::Bgt
-                | Opcode::BgtS
-                | Opcode::BgtUn
-                | Opcode::BgtUnS
-                | Opcode::Ble
-                | Opcode::BleS
-                | Opcode::BleUn
-                | Opcode::BleUnS
-                | Opcode::Blt
-                | Opcode::BltS
-                | Opcode::BltUn
-                | Opcode::BltUnS
-                | Opcode::Bne
-                | Opcode::BneUnS => {
-                    if let Some(tgt) = instr.branch_target() {
-                        if tgt >= max_offset {
-                            return Err(CfgError::OutOfBounds(tgt));
-                        }
-                        leaders.insert(tgt);
-                    }
-                    leaders.insert(instr.offset + instr.size);
-                }
-                Opcode::Switch => {
-                    for tgt in instr.switch_targets() {
-                        if tgt >= max_offset {
-                            return Err(CfgError::OutOfBounds(tgt));
-                        }
-                        leaders.insert(tgt);
-                    }
-                    leaders.insert(instr.offset + instr.size);
-                }
-                Opcode::Leave | Opcode::LeaveS => {
-                    if let Some(tgt) = instr.branch_target() {
-                        leaders.insert(tgt);
-                    }
-                    leaders.insert(instr.offset + instr.size);
-                }
-                Opcode::Ret | Opcode::Throw | Opcode::Rethrow | Opcode::Endfinally => {
-                    leaders.insert(instr.offset + instr.size);
-                }
-                _ => {}
-            }
-        }
+        let leaders = find_leaders(&self.instrs, &self.regions, max_offset)?;
 
         // Step 2: partition instructions into basic blocks.
         let mut sorted_leaders: Vec<u32> = leaders.into_iter().collect();
@@ -511,6 +436,104 @@ impl CfgBuilder {
             loop_bodies,
         })
     }
+}
+
+
+/// Find every basic-block leader offset in `instrs`.
+///
+/// A leader is the first instruction of the method, any branch target, any
+/// instruction following a branch or a terminator, and every exception handler
+/// or filter entry point.
+///
+/// Split out of [`CfgBuilder::build`], which otherwise carried all nine CFG
+/// construction steps in one function.
+///
+/// # Errors
+///
+/// Returns [`CfgError::OutOfBounds`] if a branch target lies outside the
+/// method body, whose end is `max_offset`.
+fn find_leaders(
+    instrs: &[DecodedCilInstr],
+    regions: &[ExceptionRegion],
+    max_offset: u32,
+) -> Result<HashSet<u32>, CfgError> {
+    let mut leaders: HashSet<u32> = HashSet::new();
+    leaders.insert(instrs[0].offset);
+
+    // Handler entry points are also leaders.
+    for r in regions {
+        leaders.insert(r.handler_start);
+        if let Some(fo) = r.filter_offset {
+            leaders.insert(fo);
+        }
+    }
+
+    for instr in instrs {
+        match instr.opcode {
+            Opcode::Br | Opcode::BrS => {
+                if let Some(tgt) = instr.branch_target() {
+                    if tgt >= max_offset {
+                        return Err(CfgError::OutOfBounds(tgt));
+                    }
+                    leaders.insert(tgt);
+                    leaders.insert(instr.offset + instr.size);
+                }
+            }
+            Opcode::Brtrue
+            | Opcode::BrtrueS
+            | Opcode::Brfalse
+            | Opcode::BrfalseS
+            | Opcode::Beq
+            | Opcode::BeqS
+            | Opcode::Bge
+            | Opcode::BgeS
+            | Opcode::BgeUn
+            | Opcode::BgeUnS
+            | Opcode::Bgt
+            | Opcode::BgtS
+            | Opcode::BgtUn
+            | Opcode::BgtUnS
+            | Opcode::Ble
+            | Opcode::BleS
+            | Opcode::BleUn
+            | Opcode::BleUnS
+            | Opcode::Blt
+            | Opcode::BltS
+            | Opcode::BltUn
+            | Opcode::BltUnS
+            | Opcode::Bne
+            | Opcode::BneUnS => {
+                if let Some(tgt) = instr.branch_target() {
+                    if tgt >= max_offset {
+                        return Err(CfgError::OutOfBounds(tgt));
+                    }
+                    leaders.insert(tgt);
+                }
+                leaders.insert(instr.offset + instr.size);
+            }
+            Opcode::Switch => {
+                for tgt in instr.switch_targets() {
+                    if tgt >= max_offset {
+                        return Err(CfgError::OutOfBounds(tgt));
+                    }
+                    leaders.insert(tgt);
+                }
+                leaders.insert(instr.offset + instr.size);
+            }
+            Opcode::Leave | Opcode::LeaveS => {
+                if let Some(tgt) = instr.branch_target() {
+                    leaders.insert(tgt);
+                }
+                leaders.insert(instr.offset + instr.size);
+            }
+            Opcode::Ret | Opcode::Throw | Opcode::Rethrow | Opcode::Endfinally => {
+                leaders.insert(instr.offset + instr.size);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(leaders)
 }
 
 // ─── Dominator computation ────────────────────────────────────────────────────
