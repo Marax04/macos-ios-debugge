@@ -632,7 +632,8 @@ impl MipsFpuInsn {
                 let r = fpu.get_single(fs as usize) + fpu.get_single(ft as usize);
                 fpu.set_single(fd as usize, r);
             }
-            Self::AddD { fd, fs, ft } => {
+            Self::AddD { fd, fs, ft }
+            | Self::AddPS { fd, fs, ft } => {
                 let r = fpu.get_double(fs as usize) + fpu.get_double(ft as usize);
                 fpu.set_double(fd as usize, r);
             }
@@ -640,7 +641,8 @@ impl MipsFpuInsn {
                 let r = fpu.get_single(fs as usize) - fpu.get_single(ft as usize);
                 fpu.set_single(fd as usize, r);
             }
-            Self::SubD { fd, fs, ft } => {
+            Self::SubD { fd, fs, ft }
+            | Self::SubPS { fd, fs, ft } => {
                 let r = fpu.get_double(fs as usize) - fpu.get_double(ft as usize);
                 fpu.set_double(fd as usize, r);
             }
@@ -648,7 +650,8 @@ impl MipsFpuInsn {
                 let r = fpu.get_single(fs as usize) * fpu.get_single(ft as usize);
                 fpu.set_single(fd as usize, r);
             }
-            Self::MulD { fd, fs, ft } => {
+            Self::MulD { fd, fs, ft }
+            | Self::MulPS { fd, fs, ft } => {
                 let r = fpu.get_double(fs as usize) * fpu.get_double(ft as usize);
                 fpu.set_double(fd as usize, r);
             }
@@ -672,7 +675,8 @@ impl MipsFpuInsn {
                 let r = fpu.get_single(fs as usize).abs();
                 fpu.set_single(fd as usize, r);
             }
-            Self::AbsD { fd, fs } => {
+            Self::AbsD { fd, fs }
+            | Self::AbsPS { fd, fs } => {
                 let r = fpu.get_double(fs as usize).abs();
                 fpu.set_double(fd as usize, r);
             }
@@ -680,7 +684,8 @@ impl MipsFpuInsn {
                 let r = fpu.get_single(fs as usize);
                 fpu.set_single(fd as usize, r);
             }
-            Self::MovD { fd, fs } => {
+            Self::MovD { fd, fs }
+            | Self::MovPS { fd, fs } => {
                 let r = fpu.get_double(fs as usize);
                 fpu.set_double(fd as usize, r);
             }
@@ -688,7 +693,8 @@ impl MipsFpuInsn {
                 let r = -fpu.get_single(fs as usize);
                 fpu.set_single(fd as usize, r);
             }
-            Self::NegD { fd, fs } => {
+            Self::NegD { fd, fs }
+            | Self::NegPS { fd, fs } => {
                 let r = -fpu.get_double(fs as usize);
                 fpu.set_double(fd as usize, r);
             }
@@ -802,30 +808,6 @@ impl MipsFpuInsn {
                 }
             }
             // ── Paired-single ─────────────────────────────────────────────────
-            Self::AddPS { fd, fs, ft } => {
-                let r = fpu.get_double(fs as usize) + fpu.get_double(ft as usize);
-                fpu.set_double(fd as usize, r);
-            }
-            Self::SubPS { fd, fs, ft } => {
-                let r = fpu.get_double(fs as usize) - fpu.get_double(ft as usize);
-                fpu.set_double(fd as usize, r);
-            }
-            Self::MulPS { fd, fs, ft } => {
-                let r = fpu.get_double(fs as usize) * fpu.get_double(ft as usize);
-                fpu.set_double(fd as usize, r);
-            }
-            Self::AbsPS { fd, fs } => {
-                let r = fpu.get_double(fs as usize).abs();
-                fpu.set_double(fd as usize, r);
-            }
-            Self::NegPS { fd, fs } => {
-                let r = -fpu.get_double(fs as usize);
-                fpu.set_double(fd as usize, r);
-            }
-            Self::MovPS { fd, fs } => {
-                let r = fpu.get_double(fs as usize);
-                fpu.set_double(fd as usize, r);
-            }
             // ── Load/Store ───────────────────────────────────────────────────
             Self::Lwc1 { ft, base, offset } => {
                 let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
@@ -885,22 +867,14 @@ impl MipsFpuInsn {
                 }
             }
             // ── Branches ─────────────────────────────────────────────────────
-            Self::Bc1t { cc, offset } => {
+            Self::Bc1t { cc, offset }
+            | Self::Bc1tl { cc, offset } => {
                 if fpu.get_fcc(cc) {
                     next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
             }
-            Self::Bc1f { cc, offset } => {
-                if !fpu.get_fcc(cc) {
-                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
-                }
-            }
-            Self::Bc1tl { cc, offset } => {
-                if fpu.get_fcc(cc) {
-                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
-                }
-            }
-            Self::Bc1fl { cc, offset } => {
+            Self::Bc1f { cc, offset }
+            | Self::Bc1fl { cc, offset } => {
                 if !fpu.get_fcc(cc) {
                     next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
@@ -1037,8 +1011,7 @@ impl fmt::Display for FpuIlNode {
         match self {
             Self::Assign { fd, rhs } => write!(f, "f{fd} = {rhs}"),
             Self::BinOp { op, lhs, rhs } => write!(f, "{op}({lhs}, {rhs})"),
-            Self::UnOp { op, src } => write!(f, "{op}({src})"),
-            Self::Convert { op, src } => write!(f, "{op}({src})"),
+            Self::UnOp { op, src } | Self::Convert { op, src } => write!(f, "{op}({src})"),
             Self::Fpr(n) => write!(f, "f{n}"),
             Self::Gpr(n) => write!(f, "r{n}"),
             Self::Fcc(n) => write!(f, "fcc{n}"),

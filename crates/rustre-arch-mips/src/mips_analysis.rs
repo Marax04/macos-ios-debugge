@@ -66,9 +66,8 @@ impl MipsAbi {
     #[must_use]
     pub const fn arg_reg_count(self) -> u8 {
         match self {
-            Self::O32 | Self::EABI => 4,
+            Self::O32 | Self::EABI | Self::Unknown => 4,
             Self::N32 | Self::N64 => 8,
-            Self::Unknown => 4,
         }
     }
 
@@ -82,8 +81,8 @@ impl MipsAbi {
     #[must_use]
     pub const fn return_regs(self) -> &'static [u8] {
         match self {
-            Self::O32 | Self::EABI => &[2, 3], // $v0, $v1
-            Self::N32 | Self::N64 => &[2, 3],
+            // $v0, $v1 — same pair in every ABI that returns two registers
+            Self::O32 | Self::EABI | Self::N32 | Self::N64 => &[2, 3],
             Self::Unknown => &[2],
         }
     }
