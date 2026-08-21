@@ -23,11 +23,20 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
+    /// Low 32 bits of the next value, read from its little-endian byte image
+    /// so the narrowing is exact by construction rather than a numeric cast.
     const fn next_u32(&mut self) -> u32 {
-        self.next() as u32
+        let b = self.next().to_le_bytes();
+        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
     }
+    /// Low 16 bits of the next value, by the same rule as [`Lcg::next_u32`].
     const fn next_u16(&mut self) -> u16 {
-        self.next() as u16
+        let b = self.next().to_le_bytes();
+        u16::from_le_bytes([b[0], b[1]])
+    }
+    /// Low 8 bits of the next value, by the same rule as [`Lcg::next_u32`].
+    const fn next_u8(&mut self) -> u8 {
+        self.next().to_le_bytes()[0]
     }
 }
 
@@ -206,7 +215,7 @@ fn arm_usat_basic() {
 fn arm_usat_fuzz_in_range() {
     let mut lcg = Lcg::new(3);
     for _ in 0..200 {
-        let val = lcg.next() as i64;
+        let val = (lcg.next()).cast_signed();
         for n in [1u8, 4, 8, 16, 24, 32] {
             let r = arm_usat(val, n);
             let max = if n == 32 { u32::MAX } else { (1u32 << n) - 1 };
@@ -219,7 +228,7 @@ fn arm_usat_fuzz_in_range() {
 fn arm_ssat_fuzz_in_range() {
     let mut lcg = Lcg::new(4);
     for _ in 0..200 {
-        let val = (lcg.next() as i64).wrapping_sub(i64::MAX / 2);
+        let val = ((lcg.next()).cast_signed()).wrapping_sub(i64::MAX / 2);
         for n in [1u8, 4, 8, 16, 24, 32] {
             let r = arm_ssat(val, n);
             let max: i64 = (1i64 << (n - 1)) - 1;
@@ -456,7 +465,7 @@ fn arm_reg_bank_banked_counts() {
 fn arm_reg_bank_fuzz_never_panics() {
     let mut lcg = Lcg::new(6);
     for _ in 0..256 {
-        let mode = lcg.next() as u8;
+        let mode = lcg.next_u8();
         let b = ArmRegBank::from_cpsr_mode(mode);
         let _ = b.banked_gpr_count();
         let _ = b.has_spsr();
@@ -565,7 +574,7 @@ fn arm_branch_target_addition_consistency() {
         let w = lcg.next_u32();
         let off = arm_branch_offset(w);
         let t = arm_branch_target(pc, w);
-        assert_eq!(t, pc.wrapping_add(8).wrapping_add(off as u32));
+        assert_eq!(t, pc.wrapping_add(8).wrapping_add(off.cast_unsigned()));
     }
 }
 
@@ -679,10 +688,10 @@ fn thumb2_group_does_not_panic() {
 fn cp15_lookup_fuzz_never_panics() {
     let mut lcg = Lcg::new(20);
     for _ in 0..200 {
-        let crn = (lcg.next() as u8) & 0xf;
-        let op1 = (lcg.next() as u8) & 0x7;
-        let crm = (lcg.next() as u8) & 0xf;
-        let op2 = (lcg.next() as u8) & 0x7;
+        let crn = (lcg.next_u8()) & 0xf;
+        let op1 = (lcg.next_u8()) & 0x7;
+        let crm = (lcg.next_u8()) & 0xf;
+        let op2 = (lcg.next_u8()) & 0x7;
         let _ = cp15_lookup(crn, op1, crm, op2);
     }
 }
@@ -742,8 +751,8 @@ fn decode_it_conditions_first_only() {
 fn decode_it_conditions_fuzz_never_panics() {
     let mut lcg = Lcg::new(21);
     for _ in 0..200 {
-        let fc = (lcg.next() as u8) & 0xf;
-        let m = (lcg.next() as u8) & 0xf;
+        let fc = (lcg.next_u8()) & 0xf;
+        let m = (lcg.next_u8()) & 0xf;
         let v = decode_it_conditions(fc, m);
         assert!(v.len() <= 4);
     }

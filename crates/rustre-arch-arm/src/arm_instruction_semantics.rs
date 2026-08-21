@@ -453,14 +453,14 @@ impl BarrelShifter {
         if amount == 0 {
             return ShifterResult { value, carry_out: carry_in };
         }
-        let signed = value as i32;
+        let signed = value.cast_signed();
         if amount >= 32 {
             let result = if signed < 0 { u32::MAX } else { 0 };
             let carry_out = (value >> 31) != 0;
             return ShifterResult { value: result, carry_out };
         }
         let carry_out = ((value >> (amount - 1)) & 1) != 0;
-        ShifterResult { value: (signed >> amount) as u32, carry_out }
+        ShifterResult { value: (signed >> amount).cast_unsigned(), carry_out }
     }
 
     /// Rotate right.
@@ -518,7 +518,7 @@ impl AluOps {
     #[must_use]
     pub fn add(a: u32, b: u32) -> AluResult {
         let result64 = u64::from(a).wrapping_add(u64::from(b));
-        let value = result64 as u32;
+        let value = low32(result64);
         let (n, z) = Self::nz(value);
         let c = result64 > u64::from(u32::MAX);
         let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
@@ -529,7 +529,7 @@ impl AluOps {
     #[must_use]
     pub fn adc(a: u32, b: u32, carry_in: bool) -> AluResult {
         let result64 = u64::from(a).wrapping_add(u64::from(b)).wrapping_add(u64::from(carry_in));
-        let value = result64 as u32;
+        let value = low32(result64);
         let (n, z) = Self::nz(value);
         let c = result64 > u64::from(u32::MAX);
         let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
@@ -641,14 +641,14 @@ impl AluOps {
     #[must_use]
     pub const fn umull(a: u32, b: u32) -> (u32, u32) {
         let result = (a as u64).wrapping_mul(b as u64);
-        (result as u32, (result >> 32) as u32)
+        (low32(result), high32(result))
     }
 
     /// SMULL — signed 64-bit multiply.
     #[must_use]
     pub const fn smull(a: u32, b: u32) -> (u32, u32) {
-        let result = ((a as i32) as i64).wrapping_mul((b as i32) as i64) as u64;
-        (result as u32, (result >> 32) as u32)
+        let result = ((a.cast_signed()) as i64).wrapping_mul((b.cast_signed()) as i64).cast_unsigned();
+        (low32(result), high32(result))
     }
 }
 
@@ -1291,7 +1291,7 @@ mod tests {
     fn test_smull_negative() {
         let (lo, hi) = AluOps::smull(0xFFFF_FFFF, 2); // -1 * 2 = -2
         let combined = u64::from(lo) | (u64::from(hi) << 32);
-        assert_eq!(combined as i64, -2i64);
+        assert_eq!(combined.cast_signed(), -2i64);
     }
 
     #[test]
@@ -1571,4 +1571,23 @@ mod tests {
         assert_eq!(r.value, 0);
         assert!(r.carry_out);
     }
+}
+
+/// Low 32 bits of a 64-bit value.
+///
+/// Reads the low four little-endian bytes rather than performing a numeric
+/// cast, so the narrowing is exact by construction for every input and cannot
+/// panic. This is the defined result of the ARM 32-bit data-processing and
+/// `UMULL`/`SMULL` low-word operations.
+#[must_use]
+pub const fn low32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+}
+
+/// High 32 bits of a 64-bit value, by the same byte-image rule as [`low32`].
+#[must_use]
+pub const fn high32(v: u64) -> u32 {
+    let b = v.to_le_bytes();
+    u32::from_le_bytes([b[4], b[5], b[6], b[7]])
 }

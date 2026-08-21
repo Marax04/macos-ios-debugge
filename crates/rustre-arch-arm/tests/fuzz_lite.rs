@@ -25,6 +25,19 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
+
+    /// Low 32 bits of the next value, read from its little-endian byte image
+    /// so the narrowing is exact by construction rather than a numeric cast.
+    const fn next_u32(&mut self) -> u32 {
+        let b = self.next().to_le_bytes();
+        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+    }
+
+    /// Low 16 bits of the next value, by the same rule as [`Rng::next_u32`].
+    const fn next_u16(&mut self) -> u16 {
+        let b = self.next().to_le_bytes();
+        u16::from_le_bytes([b[0], b[1]])
+    }
 }
 
 /// All 16 A32 condition-code mnemonics, plus deliberately invalid ones.
@@ -47,7 +60,7 @@ fn exercise_a32(word: u32) {
 fn random_a32_words_never_panic() {
     let mut rng = Rng(0x2545_F491_4F6C_DD1D);
     for _ in 0..4_000 {
-        exercise_a32(rng.next() as u32);
+        exercise_a32(rng.next_u32());
     }
 }
 
@@ -58,7 +71,7 @@ fn coprocessor_field_sweep_never_panics() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     for coproc in 0u32..16 {
         for _ in 0..64 {
-            let base = rng.next() as u32;
+            let base = rng.next_u32();
             let word = (base & !(0xF << 8)) | (coproc << 8);
             exercise_a32(word);
         }
@@ -71,7 +84,7 @@ fn primary_opcode_field_sweep_never_panics() {
     let mut rng = Rng(0x1234_5678_9ABC_DEF0);
     for op in 0u32..256 {
         for _ in 0..16 {
-            let base = rng.next() as u32;
+            let base = rng.next_u32();
             let word = (base & !(0xFF << 20)) | (op << 20);
             exercise_a32(word);
         }
@@ -100,8 +113,8 @@ fn thumb32_halfword_sweeps_never_panic() {
     // Exhaustive over the top 5 bits of hw1 (the Thumb-32 marker plus op1).
     for top in 0u16..32 {
         for _ in 0..128 {
-            let hw1 = (top << 11) | ((rng.next() as u16) & 0x07FF);
-            let hw2 = rng.next() as u16;
+            let hw1 = (top << 11) | ((rng.next_u16()) & 0x07FF);
+            let hw2 = rng.next_u16();
             let _ = decode_thumb32_ext(hw1, hw2);
         }
     }

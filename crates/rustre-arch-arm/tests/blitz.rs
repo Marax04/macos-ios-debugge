@@ -64,7 +64,7 @@ fn arm_branch_offset_positive() {
 fn arm_branch_offset_negative_max() {
     // 0x800000 -> negative MSB set
     let raw = 0x0080_0000_u32;
-    let expected = ((raw | 0xff00_0000) as i32) << 2;
+    let expected = ((raw | 0xff00_0000).cast_signed()) << 2;
     assert_eq!(arm_branch_offset(raw), expected);
 }
 
