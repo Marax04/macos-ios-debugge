@@ -880,20 +880,19 @@ mod tests {
 
     // ── 15. get_branches on RET: empty ────────────────────────────────────────
 
-    #[test]
     /// RET emits a TARGETLESS `BranchInfo::ret()`, not an empty vec.
     ///
     /// This test previously asserted `branches.is_empty()` and directly
     /// CONTRADICTED `tests/blitz.rs::branches_ret_emits_ret_branch`, which
-    /// asserts exactly one BranchInfo. Both could not hold; the crate had two
+    /// asserts exactly one `BranchInfo`. Both could not hold; the crate had two
     /// tests pinning opposite semantics, so `RET` was never actually decided.
     ///
     /// Resolved in favour of emitting, on evidence:
     ///  * `BranchInfo::ret()` exists in rustre-core specifically to model a
     ///    targetless function return (`target: None, kind: Return`);
     ///  * rustre-arch-6502 (lib.rs:952) and rustre-arch-luajit (lib.rs:564)
-    ///    already emit it, so empty made AArch64 the outlier;
-    ///  * `get_branches`' own ERET arm already emits a targetless BranchInfo;
+    ///    already emit it, so empty made `AArch64` the outlier;
+    ///  * `get_branches`' own ERET arm already emits a targetless `BranchInfo`;
     ///  * it is ADDITIVE: `InstrFlags::RET` is untouched, so a flags-driven CFG
     ///    builder behaves identically, while a `get_branches`-driven one stops
     ///    running basic blocks past function returns. The empty form strictly

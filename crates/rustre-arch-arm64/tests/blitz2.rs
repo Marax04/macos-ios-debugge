@@ -32,11 +32,11 @@ impl Lcg {
     }
 }
 
-fn arch() -> Arm64Arch {
+const fn arch() -> Arm64Arch {
     Arm64Arch::new()
 }
 
-fn word_bytes(w: u32) -> [u8; 4] {
+const fn word_bytes(w: u32) -> [u8; 4] {
     w.to_le_bytes()
 }
 
@@ -667,7 +667,7 @@ fn get_branches_b_targets_50_offsets() {
         let instr = a.disassemble(Address::new(pc), &bytes).unwrap();
         let br = a.get_branches(&instr);
         assert_eq!(br.len(), 1);
-        let expected = pc.wrapping_add(((i as i64) * 4) as u64);
+        let expected = pc.wrapping_add((i64::from(i) * 4).cast_unsigned());
         assert_eq!(br[0].target.unwrap(), expected);
     }
 }

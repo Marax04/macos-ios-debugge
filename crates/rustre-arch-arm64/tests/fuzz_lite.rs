@@ -1,11 +1,11 @@
-//! Fuzz-lite: deterministic and exhaustive inputs thrown at the AArch64
+//! Fuzz-lite: deterministic and exhaustive inputs thrown at the `AArch64`
 //! immediate-decoding helpers. Invariant under test: no panic, no runaway
 //! allocation, terminates fast. Return values are irrelevant.
 //!
 //! Pattern mirrors `rustre-loader-pe/tests/fuzz_lite.rs` (xorshift64* PRNG,
 //! fixed seeds, no external crates).
 //!
-//! `decode_logical_imm` implements the AArch64 bitmask-immediate encoding —
+//! `decode_logical_imm` implements the `AArch64` bitmask-immediate encoding —
 //! the `N:immr:imms` scheme that turns 13 bits into a 64-bit mask. It is
 //! notoriously fiddly: the element size comes from the position of the highest
 //! clear bit in `imms`, several field combinations are architecturally

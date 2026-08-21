@@ -16,7 +16,7 @@ fn main() {
         for r in Arm64LinearDisassembler::new(g, Address::new(0x1000)) {
             match r {
                 Ok(i) => println!("{:02x?} -> '{}' '{}'", g, i.mnemonic, i.operands),
-                Err(e) => println!("{:02x?} -> ERR {:?}", g, e),
+                Err(e) => println!("{g:02x?} -> ERR {e:?}"),
             }
         }
     }

@@ -28,7 +28,7 @@ fn arch_endian_little() {
 
 #[test]
 fn arch_default_equals_new() {
-    assert_eq!(Arm64Arch::default(), Arm64Arch::new());
+    assert_eq!(Arm64Arch, Arm64Arch::new());
 }
 
 // ────────────────────────── disassemble: errors ─────────────────────────
@@ -202,8 +202,7 @@ fn ld_offset_starts_zero() {
 
 #[test]
 fn ld_addresses_increment_by_4() {
-    let code: Vec<u8> = std::iter::repeat([0x1fu8, 0x20, 0x03, 0xd5])
-        .take(5)
+    let code: Vec<u8> = std::iter::repeat_n([0x1fu8, 0x20, 0x03, 0xd5], 5)
         .flatten()
         .collect();
     let base = 0x4000u64;
@@ -323,7 +322,7 @@ fn sysreg_encoded_nzcv() {
     let r = arm64_sysreg_lookup("NZCV").unwrap();
     let e = r.encoded();
     // op0(3) << 14 | op1(3) << 11 | CRn(4) << 7 | CRm(2) << 3 | op2(0)
-    let expected = (3u16 << 14) | (3u16 << 11) | (4u16 << 7) | (2u16 << 3) | 0;
+    let expected = (3u16 << 14) | (3u16 << 11) | (4u16 << 7) | (2u16 << 3);
     assert_eq!(e, expected);
 }
 

@@ -648,7 +648,7 @@ mod tests {
     #[test]
     fn sve_group_from_word() {
         // bits[31:29]=000 → IntArith
-        let w = 0u32 | (0b0010 << 25);
+        let w = 0b0010 << 25;
         assert_eq!(SveInsnGroup::from_word(w), SveInsnGroup::IntArith);
         // bits[31:29]=100 → MemLoad
         let w2 = (0b100u32 << 29) | (0b0010 << 25);

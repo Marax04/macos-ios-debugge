@@ -482,7 +482,7 @@ mod tests {
         // Bit 21 (L) = 1 for MRS
         let enc = SysRegEncoding::new(3, 3, 4, 2, 0).to_u16();
         // Build MRS word: 0xD530_0000 | (enc << 5) | rt
-        let word = 0xD530_0000u32 | ((enc as u32) << 5) | 0;
+        let word = 0xD530_0000u32 | (u32::from(enc) << 5);
         assert!(is_mrs(word));
         assert!(!is_msr_reg(word));
     }
@@ -492,7 +492,7 @@ mod tests {
         let enc = SysRegEncoding::new(3, 0, 1, 0, 0); // SCTLR_EL1
         let packed = enc.to_u16();
         // Build an MRS word for this register
-        let word = 0xD530_0000u32 | ((packed as u32) << 5) | 3u32; // Rt=3
+        let word = 0xD530_0000u32 | (u32::from(packed) << 5) | 3u32; // Rt=3
         let (dec_enc, is_mrs_op) = decode_mrs_msr_word(word);
         assert!(is_mrs_op);
         assert_eq!(dec_enc, enc);
@@ -503,7 +503,7 @@ mod tests {
     fn format_sysreg_mrs() {
         let enc = SysRegEncoding::new(3, 3, 4, 4, 0); // FPCR
         let packed = enc.to_u16();
-        let word = 0xD530_0000u32 | ((packed as u32) << 5) | 2u32;
+        let word = 0xD530_0000u32 | (u32::from(packed) << 5) | 2u32;
         let s = format_sysreg_access(word);
         assert!(s.starts_with("MRS"));
         assert!(s.contains("FPCR"));

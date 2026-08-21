@@ -774,7 +774,7 @@ mod tests {
     #[test]
     fn many_mnemonics_no_panic() {
         let mut d = detector();
-        let big: Vec<&str> = std::iter::repeat("add").take(10_000).collect();
+        let big: Vec<&str> = std::iter::repeat_n("add", 10_000).collect();
         let fs = d.detect_from_insns(&big);
         assert!(fs.has(CpuFeature::BaseA64));
     }
