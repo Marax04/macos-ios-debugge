@@ -501,6 +501,20 @@ pub struct CilAnalyzer {
     pub complexity: CilComplexity,
 }
 
+/// Basic-block statistics for one method body.
+///
+/// Grouped into a struct so [`CilAnalyzer::analyze`] takes one meaningful
+/// parameter instead of three bare `usize`s that are easy to transpose.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BasicBlockStats {
+    /// Number of basic blocks in the method body.
+    pub bb_count: usize,
+    /// Number of branch instructions in the method body.
+    pub branch_count: usize,
+    /// Size, in instructions, of the largest basic block.
+    pub max_bb_size: usize,
+}
+
 impl CilAnalyzer {
     /// Create a new, empty analyzer.
     #[must_use]
@@ -514,7 +528,11 @@ impl CilAnalyzer {
     /// * `clauses`      — exception clauses
     /// * `calls`        — `(caller_token, callee_token)` pairs
     /// * `type_refs`    — `(type_token, il_offset)` pairs
-    /// * `bb_count`, `branch_count`, `max_bb_size` — basic block stats
+    /// * `bb_stats`     — basic block statistics for the method body
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`CilAnalysisError`] from the stack-depth sub-analysis.
     pub fn analyze(
         &mut self,
         method_token: MetadataToken,
@@ -522,9 +540,7 @@ impl CilAnalyzer {
         clauses: Vec<ExceptionClause>,
         calls: &[(MetadataToken, MetadataToken)],
         type_refs: &[(MetadataToken, usize)],
-        bb_count: usize,
-        branch_count: usize,
-        max_bb_size: usize,
+        bb_stats: BasicBlockStats,
     ) -> Result<(), CilAnalysisError> {
         self.stack = StackDepthAnalysis::analyze(stack_deltas)?;
         self.exc_flow = ExceptionFlowAnalysis::build(clauses);
@@ -538,10 +554,10 @@ impl CilAnalyzer {
         }
         self.type_usage.finalize(1);
         self.complexity = CilComplexity::compute(
-            bb_count,
-            branch_count,
+            bb_stats.bb_count,
+            bb_stats.branch_count,
             stack_deltas.len(),
-            max_bb_size,
+            bb_stats.max_bb_size,
             self.exc_flow.clauses.len(),
         );
         Ok(())
@@ -797,9 +813,7 @@ mod tests {
             vec![clause],
             &calls,
             &type_refs,
-            3,
-            2,
-            4,
+            BasicBlockStats { bb_count: 3, branch_count: 2, max_bb_size: 4 },
         )
         .unwrap();
         assert_eq!(a.stack.max_depth, 2);
@@ -811,7 +825,14 @@ mod tests {
     #[test]
     fn test_analyzer_underflow_propagates() {
         let mut a = CilAnalyzer::new();
-        let r = a.analyze(tok(1), &[(0, 1), (4, -2)], vec![], &[], &[], 1, 0, 1);
+        let r = a.analyze(
+            tok(1),
+            &[(0, 1), (4, -2)],
+            vec![],
+            &[],
+            &[],
+            BasicBlockStats { bb_count: 1, branch_count: 0, max_bb_size: 1 },
+        );
         assert!(r.is_err());
     }
 

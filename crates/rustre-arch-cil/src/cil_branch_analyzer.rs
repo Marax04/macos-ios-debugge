@@ -413,11 +413,11 @@ impl CfgBuilder {
         let find_block = |off: u32| -> Option<usize> { offset_to_block.get(&off).copied() };
 
         // Step 4: wire edges.
-        for i in 0..n {
-            let Some(last) = blocks[i].last_instr().cloned() else {
+        for block in blocks.iter_mut().take(n) {
+            let Some(last) = block.last_instr().cloned() else {
                 continue;
             };
-            let fall_through = blocks[i].end_offset;
+            let fall_through = block.end_offset;
             let mut succs: Vec<CfgEdge> = vec![];
 
             match last.opcode {
@@ -465,7 +465,7 @@ impl CfgBuilder {
                 }
             }
 
-            blocks[i].succs = succs;
+            block.succs = succs;
         }
 
         // Step 5: fill predecessor lists.
@@ -684,8 +684,9 @@ fn natural_loop_body(blocks: &[CilBlock], header: usize, latch: usize) -> HashSe
     queue.push_back(latch);
     while let Some(b) = queue.pop_front() {
         for &p in &blocks[b].preds {
-            if !body.contains(&p) {
-                body.insert(p);
+            // `insert` returns false when the block was already in the body,
+            // so this is one hash lookup instead of two.
+            if body.insert(p) {
                 queue.push_back(p);
             }
         }

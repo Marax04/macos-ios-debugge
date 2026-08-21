@@ -211,8 +211,73 @@ fn prefixed_ops(
 fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
     let op = bytes[0];
 
-    match op {
-        // ----- nop / break -----
+    if let Some(r) = decode_cil_group1(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group2(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group3(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group4(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group5(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group6(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group7(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group8(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group9(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group10(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group11(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group12(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group13(bytes, op) {
+        return r;
+    }
+
+    if let Some(r) = decode_cil_group14(bytes, op) {
+        return r;
+    }
+
+    // Not handled by any slice above.
+    Err(CilDecodeError::UnknownOpcode(op))
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group1(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x00 => Ok(simple("nop", InstrFlags::NONE, op)),
         0x01 => Ok(simple("break", InstrFlags::BARRIER, op)),
 
@@ -236,7 +301,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- ldarg.s / ldarga.s / starg.s -----
         0x0e => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldarg.s",
                 format!("{}", bytes[1]),
@@ -245,7 +312,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x0f => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldarga.s",
                 format!("{}", bytes[1]),
@@ -254,7 +323,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x10 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "starg.s",
                 format!("{}", bytes[1]),
@@ -265,7 +336,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- ldloc.s / ldloca.s / stloc.s -----
         0x11 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldloc.s",
                 format!("{}", bytes[1]),
@@ -274,7 +347,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x12 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldloca.s",
                 format!("{}", bytes[1]),
@@ -282,8 +357,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..2].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group2(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x13 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "stloc.s",
                 format!("{}", bytes[1]),
@@ -307,7 +395,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ldc.i4.s <int8>
         0x1f => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldc.i4.s",
                 format!("{}", i8b(bytes, 1)),
@@ -317,7 +407,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         }
         // ldc.i4 <int32>
         0x20 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldc.i4",
                 format!("{}", i32le(bytes, 1)),
@@ -327,7 +419,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         }
         // ldc.i8 <int64>
         0x21 => {
-            need(bytes, 9)?;
+            if let Err(e) = need(bytes, 9) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldc.i8",
                 format!("{}", i64le(bytes, 1)),
@@ -337,7 +431,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         }
         // ldc.r4 <float32>
         0x22 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldc.r4",
                 format!("{}", f32le(bytes, 1)),
@@ -346,8 +442,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         // ldc.r8 <float64>
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group3(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x23 => {
-            need(bytes, 9)?;
+            if let Err(e) = need(bytes, 9) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldc.r8",
                 format!("{}", f64le(bytes, 1)),
@@ -362,7 +471,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- jmp / call / calli / ret -----
         0x27 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "jmp",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -371,7 +482,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x28 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "call",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -380,7 +493,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x29 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "calli",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -392,7 +507,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- short branches (1-byte offset) -----
         0x2b => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "br.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -401,7 +518,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x2c => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "brfalse.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -409,8 +528,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..2].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group4(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x2d => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "brtrue.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -419,7 +551,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x2e => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "beq.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -428,7 +562,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x2f => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bge.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -437,7 +573,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x30 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bgt.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -446,7 +584,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x31 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ble.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -455,7 +595,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x32 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "blt.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -464,7 +606,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x33 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bne.un.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -472,8 +616,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..2].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group5(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x34 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bge.un.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -482,7 +639,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x35 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bgt.un.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -491,7 +650,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x36 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ble.un.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -500,7 +661,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x37 => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "blt.un.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -511,7 +674,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- long branches (4-byte offset) -----
         0x38 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "br",
                 format!("{:+}", i32le(bytes, 1)),
@@ -520,7 +685,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x39 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "brfalse",
                 format!("{:+}", i32le(bytes, 1)),
@@ -529,7 +696,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x3a => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "brtrue",
                 format!("{:+}", i32le(bytes, 1)),
@@ -537,8 +706,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..5].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group6(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x3b => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "beq",
                 format!("{:+}", i32le(bytes, 1)),
@@ -547,7 +729,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x3c => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bge",
                 format!("{:+}", i32le(bytes, 1)),
@@ -556,7 +740,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x3d => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bgt",
                 format!("{:+}", i32le(bytes, 1)),
@@ -565,7 +751,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x3e => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ble",
                 format!("{:+}", i32le(bytes, 1)),
@@ -574,7 +762,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x3f => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "blt",
                 format!("{:+}", i32le(bytes, 1)),
@@ -583,7 +773,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x40 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bne.un",
                 format!("{:+}", i32le(bytes, 1)),
@@ -592,7 +784,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x41 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bge.un",
                 format!("{:+}", i32le(bytes, 1)),
@@ -600,8 +794,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..5].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group7(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x42 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "bgt.un",
                 format!("{:+}", i32le(bytes, 1)),
@@ -610,7 +817,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x43 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ble.un",
                 format!("{:+}", i32le(bytes, 1)),
@@ -619,7 +828,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x44 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "blt.un",
                 format!("{:+}", i32le(bytes, 1)),
@@ -630,13 +841,17 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- switch -----
         0x45 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             let n = u32le(bytes, 1) as usize;
             // Guard against integer overflow when n is very large.
-            let total = n.checked_mul(4)
-                .and_then(|v| v.checked_add(5))
-                .ok_or(CilDecodeError::Truncated)?;
-            need(bytes, total)?;
+            let Some(total) = n.checked_mul(4).and_then(|v| v.checked_add(5)) else {
+                return Some(Err(CilDecodeError::Truncated));
+            };
+            if let Err(e) = need(bytes, total) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "switch",
                 format!("targets={n}"),
@@ -670,6 +885,17 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         // ----- arithmetic / logic -----
         0x58 => Ok(simple("add", InstrFlags::NONE, op)),
         0x59 => Ok(simple("sub", InstrFlags::NONE, op)),
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group8(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x5a => Ok(simple("mul", InstrFlags::NONE, op)),
         0x5b => Ok(simple("div", InstrFlags::NONE, op)),
         0x5c => Ok(simple("div.un", InstrFlags::NONE, op)),
@@ -696,7 +922,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- object model -----
         0x6f => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "callvirt",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -705,7 +933,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x70 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "cpobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -714,7 +944,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x71 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -723,7 +955,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x72 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldstr",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -732,7 +966,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x73 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "newobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -740,8 +976,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..5].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group9(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x74 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "castclass",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -750,7 +999,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x75 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "isinst",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -760,7 +1011,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         }
         0x76 => Ok(simple("conv.r.un", InstrFlags::NONE, op)),
         0x79 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "unbox",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -772,7 +1025,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- field access -----
         0x7b => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -781,7 +1036,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x7c => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldflda",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -790,7 +1047,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x7d => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "stfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -799,7 +1058,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x7e => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldsfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -807,8 +1068,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..5].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group10(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x7f => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldsflda",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -817,7 +1091,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x80 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "stsfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -826,7 +1102,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x81 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "stobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -849,7 +1127,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ----- box / newarr / ... -----
         0x8c => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "box",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -858,7 +1138,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x8d => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "newarr",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -867,8 +1149,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0x8e => Ok(simple("ldlen", InstrFlags::NONE, op)),
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group11(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0x8f => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldelema",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -902,7 +1197,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ldelem / stelem typed
         0xa3 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldelem",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -911,7 +1208,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
             ))
         }
         0xa4 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "stelem",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -922,7 +1221,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // unbox.any
         0xa5 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "unbox.any",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -937,13 +1238,26 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         0xb5 => Ok(simple("conv.ovf.i2", InstrFlags::NONE, op)),
         0xb6 => Ok(simple("conv.ovf.u2", InstrFlags::NONE, op)),
         0xb7 => Ok(simple("conv.ovf.i4", InstrFlags::NONE, op)),
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group12(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0xb8 => Ok(simple("conv.ovf.u4", InstrFlags::NONE, op)),
         0xb9 => Ok(simple("conv.ovf.i8", InstrFlags::NONE, op)),
         0xba => Ok(simple("conv.ovf.u8", InstrFlags::NONE, op)),
 
         // refanyval
         0xc2 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "refanyval",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -955,7 +1269,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // mkrefany
         0xc6 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "mkrefany",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -966,7 +1282,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
         // ldtoken
         0xd0 => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "ldtoken",
                 format!("#{:#010x}", u32le(bytes, 1)),
@@ -993,7 +1311,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         // endfinally / leave / leave.s / stind.i
         0xdc => Ok(simple("endfinally", InstrFlags::RET, op)),
         0xdd => {
-            need(bytes, 5)?;
+            if let Err(e) = need(bytes, 5) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "leave",
                 format!("{:+}", i32le(bytes, 1)),
@@ -1001,8 +1321,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 bytes[..5].to_vec(),
             ))
         }
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group13(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0xde => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             Ok(with_ops(
                 "leave.s",
                 format!("{:+}", i8b(bytes, 1)),
@@ -1016,8 +1349,21 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
         0xe0 => Ok(simple("conv.u", InstrFlags::NONE, op)),
 
         // ----- 0xFE prefix opcodes -----
+        _ => return None,
+    })
+}
+
+/// One slice of the CIL opcode table, split out of `decode_cil` so that no
+/// single function carries the whole 256-entry match.
+///
+/// Returns `None` when `op` is not handled in this slice, so the caller can
+/// try the next one.
+fn decode_cil_group14(bytes: &[u8], op: u8) -> Option<Result<(CilInstr, usize), CilDecodeError>> {
+    Some(match op {
         0xfe => {
-            need(bytes, 2)?;
+            if let Err(e) = need(bytes, 2) {
+                return Some(Err(e));
+            }
             let op2 = bytes[1];
             match op2 {
                 0x00 => Ok(prefixed("arglist", InstrFlags::NONE, op2)),
@@ -1027,7 +1373,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 0x04 => Ok(prefixed("clt", InstrFlags::NONE, op2)),
                 0x05 => Ok(prefixed("clt.un", InstrFlags::NONE, op2)),
                 0x06 => {
-                    need(bytes, 6)?;
+                    if let Err(e) = need(bytes, 6) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldftn",
                         format!("#{:#010x}", u32le(bytes, 2)),
@@ -1036,7 +1384,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x07 => {
-                    need(bytes, 6)?;
+                    if let Err(e) = need(bytes, 6) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldvirtftn",
                         format!("#{:#010x}", u32le(bytes, 2)),
@@ -1045,7 +1395,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x09 => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldarg",
                         format!("{}", u16le(bytes, 2)),
@@ -1054,7 +1406,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x0a => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldarga",
                         format!("{}", u16le(bytes, 2)),
@@ -1063,7 +1417,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x0b => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "starg",
                         format!("{}", u16le(bytes, 2)),
@@ -1072,7 +1428,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x0c => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldloc",
                         format!("{}", u16le(bytes, 2)),
@@ -1081,7 +1439,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x0d => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "ldloca",
                         format!("{}", u16le(bytes, 2)),
@@ -1090,7 +1450,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x0e => {
-                    need(bytes, 4)?;
+                    if let Err(e) = need(bytes, 4) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "stloc",
                         format!("{}", u16le(bytes, 2)),
@@ -1101,7 +1463,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 0x0f => Ok(prefixed("localloc", InstrFlags::NONE, op2)),
                 0x11 => Ok(prefixed("endfilter", InstrFlags::RET, op2)),
                 0x12 => {
-                    need(bytes, 3)?;
+                    if let Err(e) = need(bytes, 3) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "unaligned",
                         format!("{}", bytes[2]),
@@ -1112,7 +1476,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 0x13 => Ok(prefixed("volatile", InstrFlags::BARRIER, op2)),
                 0x14 => Ok(prefixed("tail", InstrFlags::NONE, op2)),
                 0x15 => {
-                    need(bytes, 6)?;
+                    if let Err(e) = need(bytes, 6) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "initobj",
                         format!("#{:#010x}", u32le(bytes, 2)),
@@ -1121,7 +1487,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                     ))
                 }
                 0x16 => {
-                    need(bytes, 6)?;
+                    if let Err(e) = need(bytes, 6) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "constrained",
                         format!("#{:#010x}", u32le(bytes, 2)),
@@ -1132,7 +1500,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 0x17 => Ok(prefixed("cpblk", InstrFlags::WRITE_MEM, op2)),
                 0x18 => Ok(prefixed("initblk", InstrFlags::WRITE_MEM, op2)),
                 0x19 => {
-                    need(bytes, 3)?;
+                    if let Err(e) = need(bytes, 3) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "no",
                         format!("{}", bytes[2]),
@@ -1142,7 +1512,9 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 }
                 0x1a => Ok(prefixed("rethrow", InstrFlags::BRANCH, op2)),
                 0x1c => {
-                    need(bytes, 6)?;
+                    if let Err(e) = need(bytes, 6) {
+                return Some(Err(e));
+            }
                     Ok(prefixed_ops(
                         "sizeof",
                         format!("#{:#010x}", u32le(bytes, 2)),
@@ -1155,9 +1527,8 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 _ => Err(CilDecodeError::UnknownPrefixedOpcode(op2)),
             }
         }
-
-        _ => Err(CilDecodeError::UnknownOpcode(op)),
-    }
+        _ => return None,
+    })
 }
 
 // ---------------------------------------------------------------------------

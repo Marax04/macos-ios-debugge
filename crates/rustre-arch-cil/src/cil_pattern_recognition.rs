@@ -518,8 +518,8 @@ impl CilPatternRecognizer {
     /// Scan backwards from `pos` for an ldc.i4 variant within `window` bytes.
     fn scan_back_for_ldc(code: &[u8], pos: usize, window: usize) -> bool {
         let start = pos.saturating_sub(window);
-        for j in start..pos {
-            if Self::is_ldc_i4(code[j]) {
+        for &opcode in &code[start..pos] {
+            if Self::is_ldc_i4(opcode) {
                 return true;
             }
         }

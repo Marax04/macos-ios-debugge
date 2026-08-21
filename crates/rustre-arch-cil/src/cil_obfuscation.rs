@@ -760,7 +760,9 @@ mod tests {
     #[test]
     fn test_entropy_zero_for_uniform() {
         let bytes = vec![0xAAu8; 16];
-        assert_eq!(StringEncryption::entropy(&bytes), 0.0);
+        // A single repeated byte carries no information; compare against an
+        // epsilon rather than for bit equality.
+        assert!(StringEncryption::entropy(&bytes).abs() < f64::EPSILON);
     }
 
     #[test]
