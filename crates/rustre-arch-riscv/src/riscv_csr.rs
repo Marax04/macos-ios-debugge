@@ -52,9 +52,8 @@ impl CsrAccess {
             Self::ReadWriteUser | Self::ReadOnly => 0,
             Self::ReadWriteSupervisor | Self::ReadOnlySupervisor => 1,
             Self::ReadWriteHypervisor => 2,
-            Self::ReadWriteMachine | Self::ReadOnlyMachine => 3,
-            Self::Debug => 3,
-        }
+            Self::ReadWriteMachine | Self::ReadOnlyMachine | Self::Debug => 3,
+            }
     }
 }
 
@@ -776,10 +775,7 @@ impl RiscVCsr {
     /// Return the name of a CSR, or a hex string if unknown.
     #[must_use]
     pub fn name(&self, addr: u16) -> String {
-        match self.descriptor(addr) {
-            Some(d) => d.name.to_string(),
-            None => format!("csr_{addr:#05x}"),
-        }
+        self.descriptor(addr).map_or_else(|| format!("csr_{addr:#05x}"), |d| d.name.to_string())
     }
 
     /// Iterate over all well-known CSR descriptors.
@@ -933,7 +929,7 @@ impl McauseDecoder {
 
     /// `true` if this is an exception.
     #[must_use]
-    pub fn is_exception(value: u64) -> bool {
+    pub const fn is_exception(value: u64) -> bool {
         !Self::is_interrupt(value)
     }
 }
@@ -1079,10 +1075,9 @@ impl Mtvec {
 
     /// Compute the handler address for the given cause.
     #[must_use]
-    pub fn handler_address(mtvec: u64, cause: u64, is_interrupt: bool) -> u64 {
+    pub const fn handler_address(mtvec: u64, cause: u64, is_interrupt: bool) -> u64 {
         let (mode, base) = Self::decode(mtvec);
         match mode {
-            MtvecMode::Direct => base,
             MtvecMode::Vectored => {
                 if is_interrupt {
                     base + 4 * (cause & 0x7FFF_FFFF_FFFF_FFFF)
@@ -1090,7 +1085,7 @@ impl Mtvec {
                     base
                 }
             }
-            MtvecMode::Reserved(_) => base,
+            MtvecMode::Direct | MtvecMode::Reserved(_) => base,
         }
     }
 }
@@ -1187,8 +1182,8 @@ mod tests {
     #[test]
     fn test_csr_write_read_roundtrip() {
         let mut r = csr();
-        r.write(0x300, 0xDEADBEEF).unwrap();
-        assert_eq!(r.read(0x300), Some(0xDEADBEEF));
+        r.write(0x300, 0xDEAD_BEEF).unwrap();
+        assert_eq!(r.read(0x300), Some(0xDEAD_BEEF));
     }
 
     #[test]

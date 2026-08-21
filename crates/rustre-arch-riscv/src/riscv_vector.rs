@@ -28,7 +28,7 @@ impl VlenConfig {
         }
     }
     #[must_use]
-    pub fn bytes(self) -> usize {
+    pub const fn bytes(self) -> usize {
         self.bits() / 8
     }
 }
@@ -524,7 +524,7 @@ pub struct VectorInsn {
 
 impl VectorInsn {
     #[must_use]
-    pub fn new_vvv(op: VecOp, vd: u8, vs2: u8, vs1: u8, vm: bool, enc: u32) -> Self {
+    pub const fn new_vvv(op: VecOp, vd: u8, vs2: u8, vs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
             vd: Some(VReg::new(vd)),
@@ -538,7 +538,7 @@ impl VectorInsn {
         }
     }
     #[must_use]
-    pub fn new_vvx(op: VecOp, vd: u8, vs2: u8, rs1: u8, vm: bool, enc: u32) -> Self {
+    pub const fn new_vvx(op: VecOp, vd: u8, vs2: u8, rs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
             vd: Some(VReg::new(vd)),
@@ -552,7 +552,7 @@ impl VectorInsn {
         }
     }
     #[must_use]
-    pub fn new_load(op: VecOp, vd: u8, rs1: u8, vm: bool, enc: u32) -> Self {
+    pub const fn new_load(op: VecOp, vd: u8, rs1: u8, vm: bool, enc: u32) -> Self {
         Self {
             op,
             vd: Some(VReg::new(vd)),
@@ -872,7 +872,7 @@ impl VectorDecoder {
     /// need to round-trip mnemonics back to enum variants.
     #[must_use]
     pub fn mnemonic_index() -> HashMap<&'static str, VecOp> {
-        use VecOp::*;
+        use VecOp::{Vadd, Vsub, Vrsub, Vmul, Vmulh, Vmulhu, Vmulhsu, Vdiv, Vdivu, Vrem, Vremu, Vand, Vor, Vxor, Vmin, Vminu, Vmax, Vmaxu, Vsll, Vsrl, Vsra, Vssrl, Vssra, Vsadd, Vsaddu, Vssub, Vssubu, Vfadd, Vfsub, Vfmul, Vfdiv, Vfsqrt, Vfneg, Vfabs, Vfmin, Vfmax, Vfmadd, Vfnmadd, Vfmsub, Vfnmsub, Vfcvt, Vfwcvt, Vfncvt, Vmseq, Vmsne, Vmslt, Vmsltu, Vmsle, Vmsleu, Vmsgt, Vmsgtu, Vmsge, Vmsgeu, Vredsum, Vredand, Vredor, Vredxor, Vredmin, Vredminu, Vredmax, Vredmaxu, Vfredsum, Vfredmin, Vfredmax, Vmand, Vmnand, Vmandnot, Vmor, Vmnor, Vmornot, Vmxor, Vmxnor, Vcpop, Vfirst, Vmsbf, Vmsif, Vmsof, Vslideup, Vslidedown, Vslide1up, Vslide1down, Vrgather, Vrgatherei16, Vcompress, Vmv, Vwadd, Vwaddu, Vwsub, Vwsubu, Vwmul, Vwmulu, Vwmulsu, Vwmacc, Vwmaccu, Vwmaccus, Vwmaccsu, Vnsrl, Vnsra, Vle8, Vle16, Vle32, Vle64, Vlse8, Vlse16, Vlse32, Vlse64, Vlxei8, Vlxei16, Vlxei32, Vlxei64, Vlm, Vse8, Vse16, Vse32, Vse64, Vsse8, Vsse16, Vsse32, Vsse64, Vsxei8, Vsxei16, Vsxei32, Vsxei64, Vsm, Vsetvli, Vsetivli, Vsetvl};
         let all = [
             Vadd,
             Vsub,
@@ -1231,7 +1231,7 @@ mod tests {
     fn test_decode_non_vector_returns_none() {
         let dec = VectorDecoder::new(VlenConfig::Vlen128);
         // ADD x1,x2,x3 (opcode 0x33)
-        assert!(dec.decode(0x003100B3).is_none());
+        assert!(dec.decode(0x0031_00B3).is_none());
     }
 
     #[test]

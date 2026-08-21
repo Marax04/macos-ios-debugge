@@ -252,7 +252,7 @@ impl TrapCause {
 
     /// Human-readable description.
     #[must_use]
-    pub fn description(&self) -> &'static str {
+    pub const fn description(&self) -> &'static str {
         match self {
             Self::Exception(e) => e.description(),
             Self::Interrupt(i) => i.description(),
@@ -270,7 +270,7 @@ impl fmt::Display for TrapCause {
 ///
 /// `xlen` must be 32 or 64.
 #[must_use]
-pub fn mcause_decode(cause: u64, xlen: u32) -> TrapCause {
+pub const fn mcause_decode(cause: u64, xlen: u32) -> TrapCause {
     let (is_interrupt, code) = if xlen == 32 {
         ((cause >> 31) & 1 == 1, cause & 0x7FFF_FFFF)
     } else {
@@ -374,7 +374,7 @@ pub struct TrapConfig {
 impl TrapConfig {
     /// Build a `TrapConfig` from a raw tvec value.
     #[must_use]
-    pub fn from_tvec(tvec: u64) -> Self {
+    pub const fn from_tvec(tvec: u64) -> Self {
         let mode = TvecMode::from_mtvec(tvec);
         let base = tvec & !0x3u64;
         Self {

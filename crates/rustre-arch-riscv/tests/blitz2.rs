@@ -1,6 +1,6 @@
 //! Blitz2 — deep adversarial coverage for rustre-arch-riscv.
 //!
-//! All randomness is from a seeded LCG (no std::time, no `rand`).
+//! All randomness is from a seeded LCG (no `std::time`, no `rand`).
 //! Every parser/decoder must never panic and must return a value
 //! (Ok / Err / Option / valid instruction including "unknown").
 
@@ -14,14 +14,14 @@ use rustre_core::address::Address;
 
 struct Lcg(u64);
 impl Lcg {
-    fn new() -> Self {
-        Lcg(0xDEAD_BEEF_CAFE_BABE)
+    const fn new() -> Self {
+        Self(0xDEAD_BEEF_CAFE_BABE)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
     fn u32(&mut self) -> u32 {
@@ -43,7 +43,7 @@ fn imm_i_roundtrip_50_inputs() {
         let imm = -2048 + (k * 4095) / 49;
         let imm = imm.clamp(-2048, 2047) as i16;
         let w = rv_encode_addi(1, 2, imm);
-        assert_eq!(rv_imm_i(w), imm as i32, "addi imm round-trip {imm}");
+        assert_eq!(rv_imm_i(w), i32::from(imm), "addi imm round-trip {imm}");
         assert_eq!(rv_rd(w), 1);
         assert_eq!(rv_rs1(w), 2);
         assert_eq!(rv_opcode(w), 0x13);
@@ -56,7 +56,7 @@ fn imm_s_roundtrip_50_inputs() {
         let imm = -2048 + (k * 4095) / 49;
         let imm = imm.clamp(-2048, 2047) as i16;
         let w = rv_encode_sw(3, 4, imm);
-        assert_eq!(rv_imm_s(w), imm as i32, "sw S-imm round-trip {imm}");
+        assert_eq!(rv_imm_s(w), i32::from(imm), "sw S-imm round-trip {imm}");
         assert_eq!(rv_rs2(w), 3);
         assert_eq!(rv_rs1(w), 4);
         assert_eq!(rv_opcode(w), 0x23);
@@ -79,9 +79,9 @@ fn imm_b_roundtrip_50_inputs() {
 #[test]
 fn imm_j_roundtrip_50_inputs() {
     for k in 0..50 {
-        let span = 2 * 1048575i32;
-        let raw = -1048576 + ((k * span) / 49);
-        let off = (raw & !1).clamp(-1048576, 1048574);
+        let span = 2 * 1_048_575_i32;
+        let raw = -1_048_576 + ((k * span) / 49);
+        let off = (raw & !1).clamp(-1_048_576, 1_048_574);
         assert!(rv_jtype_roundtrip(off), "jtype round-trip {off}");
         let w = rv_encode_jal(0, off);
         assert_eq!(rv_imm_j(w), off);
@@ -289,21 +289,21 @@ fn boundary_rv_bits_full_word() {
 fn boundary_misa_mxl() {
     // MXL extracted from top 2 bits of misa for XLEN=32 is 1, 64=2, 128=3.
     // We test that misa_has correctly indexes A-Z bits.
-    let misa: u64 = (1 << ('I' as u8 - b'A')) | (1 << ('M' as u8 - b'A'));
-    assert!(rv_misa_has(misa, ('I' as u8) - b'A'));
-    assert!(rv_misa_has(misa, ('M' as u8) - b'A'));
-    assert!(!rv_misa_has(misa, ('Z' as u8) - b'A'));
+    let misa: u64 = (1 << (b'I' - b'A')) | (1 << (b'M' - b'A'));
+    assert!(rv_misa_has(misa, b'I' - b'A'));
+    assert!(rv_misa_has(misa, b'M' - b'A'));
+    assert!(!rv_misa_has(misa, b'Z' - b'A'));
 }
 
 #[test]
 fn boundary_jal_imm_extremes() {
     // Most negative and most positive J-imm.
-    assert!(rv_jtype_roundtrip(-1048576));
-    assert!(rv_jtype_roundtrip(1048574));
-    let w = rv_encode_jal(1, -1048576);
-    assert_eq!(rv_imm_j(w), -1048576);
-    let w = rv_encode_jal(1, 1048574);
-    assert_eq!(rv_imm_j(w), 1048574);
+    assert!(rv_jtype_roundtrip(-1_048_576));
+    assert!(rv_jtype_roundtrip(1_048_574));
+    let w = rv_encode_jal(1, -1_048_576);
+    assert_eq!(rv_imm_j(w), -1_048_576);
+    let w = rv_encode_jal(1, 1_048_574);
+    assert_eq!(rv_imm_j(w), 1_048_574);
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn invalid_opcodes_classify_unknown() {
         0x4F, 0x53, 0x63, 0x67, 0x6F, 0x73,
     ];
     for op in 0u8..=0x7F {
-        let w = op as u32;
+        let w = u32::from(op);
         if known.contains(&op) {
             assert!(!matches!(rv_classify(w), RvOpcodeClass::Unknown));
         } else {
@@ -399,11 +399,11 @@ fn sub_ov_saturates_correctly() {
 fn addw_subw_wrap_then_sign_extend() {
     // Add that wraps in 32-bit then sign-extends.
     let r = rv_addw(0x7FFF_FFFF, 1);
-    assert_eq!(r, i32::MIN as i64);
+    assert_eq!(r, i64::from(i32::MIN));
     let r = rv_subw(0, 1);
     assert_eq!(r, -1i64);
     // High bits beyond 32 are ignored.
-    let r = rv_addw(0xFFFF_FFFF_0000_0001u64 as i64, 1);
+    let r = rv_addw((0xFFFF_FFFF_0000_0001u64).cast_signed(), 1);
     assert_eq!(r, 2);
 }
 
@@ -415,13 +415,13 @@ fn mul_mulh_consistent() {
         (-1, -1),
         (i64::MIN, -1),
         (i64::MAX, 2),
-        (1234567890, 9876543210),
+        (1_234_567_890, 9_876_543_210),
     ];
     for (a, b) in cases {
         let lo = rv_mul(a, b);
         let hi = rv_mulh(a, b);
         // Reconstruct 128-bit product and verify.
-        let prod = (a as i128).wrapping_mul(b as i128);
+        let prod = i128::from(a).wrapping_mul(i128::from(b));
         assert_eq!(lo, prod as i64);
         assert_eq!(hi, (prod >> 64) as i64);
     }
@@ -458,13 +458,13 @@ fn rotate_inverse() {
         for n in [0u8, 1, 7, 15, 31] {
             let lr = rv_ror32(v, n);
             // Rotating back the other direction by (32-n)%32 mod 32 returns original.
-            let back = if n == 0 { lr } else { lr.rotate_left(n as u32) };
+            let back = if n == 0 { lr } else { lr.rotate_left(u32::from(n)) };
             assert_eq!(back, v, "ror32 inverse v={v:#x} n={n}");
         }
         let v64 = g.next();
         for n in [0u8, 1, 7, 31, 63] {
             let lr = rv_ror64(v64, n);
-            let back = if n == 0 { lr } else { lr.rotate_left(n as u32) };
+            let back = if n == 0 { lr } else { lr.rotate_left(u32::from(n)) };
             assert_eq!(back, v64);
         }
     }
@@ -504,7 +504,7 @@ fn popcount_clz_ctz_consistency() {
             assert_eq!(clz, 32);
             assert_eq!(ctz, 32);
         } else {
-            assert!(pop >= 1 && pop <= 32);
+            assert!((1..=32).contains(&pop));
             assert!(clz <= 31);
             assert!(ctz <= 31);
             assert!(clz + ctz + pop >= 32 - (pop - 1) || true); // sanity
@@ -590,7 +590,7 @@ fn vsew_enum_from_bits_roundtrip() {
     }
     // Standard values 0..=3 are valid; >=4 reserved.
     // from_bits returns Option<RvVsew>; bits=0 is E8.
-    assert!(matches!(RvVsew::from_bits(0), Some(_)));
+    assert!(RvVsew::from_bits(0).is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -622,7 +622,7 @@ fn riscv_arch_threaded_decode_stress() {
                 for &w in words.iter() {
                     let bytes = w.to_le_bytes();
                     let _ = arch.disassemble(Address::new(0), &bytes);
-                    total = total.wrapping_add(rv_opcode(w) as u64);
+                    total = total.wrapping_add(u64::from(rv_opcode(w)));
                 }
             }
             total
@@ -807,18 +807,18 @@ fn encoder_jal_jalr_roundtrip() {
     for _ in 0..30 {
         let rd = (g.next() & 0x1F) as u8;
         // JAL takes 21-bit signed offset (even).
-        let off = ((g.next() as i64) % 1048574) & !1;
+        let off = (((g.next()).cast_signed()) % 1_048_574) & !1;
         let off = off as i32;
         let w = rv_encode_jal(rd, off);
         assert_eq!(rv_opcode(w), 0x6F);
         assert_eq!(rv_rd(w), rd);
         assert_eq!(rv_imm_j(w), off);
 
-        let imm = ((g.next() as i64) % 2048) as i16;
+        let imm = (((g.next()).cast_signed()) % 2048) as i16;
         let w = rv_encode_jalr(rd, 1, imm);
         assert_eq!(rv_opcode(w), 0x67);
         assert_eq!(rv_funct3(w), 0);
-        assert_eq!(rv_imm_i(w), imm as i32);
+        assert_eq!(rv_imm_i(w), i32::from(imm));
     }
 }
 

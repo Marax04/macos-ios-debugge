@@ -21,7 +21,7 @@ const fn creg(r3: u32) -> u32 {
 /// Sign-extend `bits`-wide value in `val` to i32.
 const fn sign_extend(val: u32, bits: u32) -> i32 {
     let shift = 32 - bits;
-    ((val << shift) as i32) >> shift
+    ((val << shift).cast_signed()) >> shift
 }
 
 /// Decode the CI-format immediate for C.ADDI / C.LI / C.ANDI etc.

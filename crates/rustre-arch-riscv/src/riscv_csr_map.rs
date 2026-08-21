@@ -409,13 +409,13 @@ pub fn csr_name(addr: u16) -> String {
 ///
 /// This is a pure address-based decode without consulting the table.
 #[must_use]
-pub fn csr_privilege(addr: u16) -> CsrPrivilege {
+pub const fn csr_privilege(addr: u16) -> CsrPrivilege {
     CsrPrivilege::from_csr_addr(addr)
 }
 
 /// Return the access type of a CSR from its address.
 #[must_use]
-pub fn csr_access(addr: u16) -> CsrAccess {
+pub const fn csr_access(addr: u16) -> CsrAccess {
     CsrAccess::from_csr_addr(addr)
 }
 
@@ -702,7 +702,7 @@ mod tests {
         let e = map().lookup(0x300).unwrap();
         let s = format!("{e}");
         assert!(s.contains("mstatus"));
-        assert!(s.contains("M"));
+        assert!(s.contains('M'));
     }
 
     #[test]

@@ -55,14 +55,14 @@ fn imm_s_combines_two_halves() {
 fn imm_b_roundtrip_aligned_offsets() {
     // B immediates are encoded in multiples of 2, range -4096..4094
     for off in [-4096, -2, 0, 2, 8, 100, 4094] {
-        assert!(rv_btype_roundtrip(off), "B-type roundtrip failed for {}", off);
+        assert!(rv_btype_roundtrip(off), "B-type roundtrip failed for {off}");
     }
 }
 
 #[test]
 fn imm_j_roundtrip_aligned_offsets() {
-    for off in [-1048576, -2, 0, 2, 8, 1048574] {
-        assert!(rv_jtype_roundtrip(off), "J-type roundtrip failed for {}", off);
+    for off in [-1_048_576, -2, 0, 2, 8, 1_048_574] {
+        assert!(rv_jtype_roundtrip(off), "J-type roundtrip failed for {off}");
     }
 }
 
@@ -140,7 +140,7 @@ fn is_load_store_branch_helpers() {
 fn gpr_names_cover_all_32() {
     for i in 0u8..32 {
         let n = rv_gpr_name(i);
-        assert!(!n.is_empty(), "gpr {} empty", i);
+        assert!(!n.is_empty(), "gpr {i} empty");
     }
     assert_eq!(rv_gpr_name(0), "zero");
     assert_eq!(rv_gpr_name(2), "sp");
@@ -151,7 +151,7 @@ fn gpr_names_cover_all_32() {
 fn fpr_names_cover_all_32() {
     for i in 0u8..32 {
         let n = rv_fpr_name(i);
-        assert!(!n.is_empty(), "fpr {} empty", i);
+        assert!(!n.is_empty(), "fpr {i} empty");
     }
 }
 
@@ -159,11 +159,11 @@ fn fpr_names_cover_all_32() {
 fn caller_callee_saved_disjoint_for_args_and_saved() {
     // a0..a7 should be caller-saved
     for i in 10u8..=17 {
-        assert!(rv_is_caller_saved(i), "x{} should be caller-saved", i);
+        assert!(rv_is_caller_saved(i), "x{i} should be caller-saved");
     }
     // s0..s11 (8,9,18..27) should be callee-saved
     for i in [8u8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27] {
-        assert!(rv_is_callee_saved(i), "x{} should be callee-saved", i);
+        assert!(rv_is_callee_saved(i), "x{i} should be callee-saved");
     }
 }
 
@@ -213,7 +213,7 @@ fn encode_addi_roundtrip() {
         assert_eq!(rv_opcode(w), 0x13);
         assert_eq!(rv_rd(w), 5);
         assert_eq!(rv_rs1(w), 6);
-        assert_eq!(rv_imm_i(w), imm as i32);
+        assert_eq!(rv_imm_i(w), i32::from(imm));
     }
 }
 
@@ -428,7 +428,7 @@ fn instr_lookup() {
 #[test]
 fn sbi_lookup_known() {
     assert!(sbi_lookup(0x00, 0).is_some());
-    assert!(sbi_lookup(0xDEADBEEF, 0).is_none());
+    assert!(sbi_lookup(0xDEAD_BEEF, 0).is_none());
 }
 
 #[test]

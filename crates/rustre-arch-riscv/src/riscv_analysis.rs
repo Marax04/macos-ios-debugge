@@ -284,7 +284,7 @@ impl CompressedInsn {
                 if rd == 0 {
                     Self::make(raw, "c.nop", "", Some("addi"))
                 } else {
-                    let imm6 = ((raw >> 2) & 0x1F) as i16
+                    let imm6 = ((raw >> 2) & 0x1F).cast_signed()
                         | (if (raw >> 12) & 1 != 0 { -32i16 } else { 0 });
                     Self::make(
                         raw,
@@ -300,7 +300,7 @@ impl CompressedInsn {
             }
             0b010 => {
                 let imm =
-                    ((raw >> 2) & 0x1F) as i16 | (if (raw >> 12) & 1 != 0 { -32i16 } else { 0 });
+                    ((raw >> 2) & 0x1F).cast_signed() | (if (raw >> 12) & 1 != 0 { -32i16 } else { 0 });
                 Self::make(
                     raw,
                     "c.li",

@@ -564,7 +564,7 @@ impl RiscvArch {
         offset: i32,
         bytes: Vec<u8>,
     ) -> Instruction {
-        let target = address.0.wrapping_add(offset as u64);
+        let target = address.0.wrapping_add((i64::from(offset)).cast_unsigned());
         let mn = match funct3 {
             0 => "beq",
             1 => "bne",
@@ -589,7 +589,7 @@ impl RiscvArch {
     // ------------------------------------------------------------------
 
     fn decode_jal(&self, address: Address, rd: usize, offset: i32, bytes: Vec<u8>) -> Instruction {
-        let target = address.0.wrapping_add(offset as u64);
+        let target = address.0.wrapping_add((i64::from(offset)).cast_unsigned());
         let flags = if rd == 1 {
             InstrFlags::BRANCH | InstrFlags::CALL
         } else {
@@ -1041,7 +1041,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                 1 if xlen == 32 => {
                     // C.JAL (RV32 only)
                     let offset = c_j_offset(hw);
-                    let target = addr.0.wrapping_add(offset as u64);
+                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
                     Ok(mk(
                         addr,
                         2,
@@ -1172,7 +1172,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                 5 => {
                     // C.J
                     let offset = c_j_offset(hw);
-                    let target = addr.0.wrapping_add(offset as u64);
+                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
                     Ok(mk(
                         addr,
                         2,
@@ -1186,7 +1186,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                     // C.BEQZ
                     let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
                     let offset = c_b_offset(hw);
-                    let target = addr.0.wrapping_add(offset as u64);
+                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
                     Ok(mk(
                         addr,
                         2,
@@ -1200,7 +1200,7 @@ pub fn decode_compressed(hw: u16, xlen: u32, addr: Address) -> Result<Instructio
                     // C.BNEZ
                     let rs1_prime = ((hw >> 7) & 0x7) as usize + 8;
                     let offset = c_b_offset(hw);
-                    let target = addr.0.wrapping_add(offset as u64);
+                    let target = addr.0.wrapping_add((i64::from(offset)).cast_unsigned());
                     Ok(mk(
                         addr,
                         2,
@@ -1399,7 +1399,7 @@ fn c_addi_imm(hw: u16) -> i32 {
     let nzimm5 = u32::from((hw >> 12) & 1);
     let raw = (nzimm5 << 5) | nzimm4_0;
     // Sign-extend 6-bit value: shift as u32 then reinterpret as i32
-    ((raw << 26) as i32) >> 26
+    ((raw << 26).cast_signed()) >> 26
 }
 
 fn c_addi16sp_imm(hw: u16) -> i32 {
@@ -1410,7 +1410,7 @@ fn c_addi16sp_imm(hw: u16) -> i32 {
     let b5 = u32::from((hw >> 2) & 1);
     let raw = (b9 << 9) | (b7b8 << 7) | (b6 << 6) | (b5 << 5) | (b4 << 4);
     // Sign-extend 10-bit value
-    ((raw << 22) as i32) >> 22
+    ((raw << 22).cast_signed()) >> 22
 }
 
 fn c_lui_imm(hw: u16) -> u32 {
@@ -1443,7 +1443,7 @@ fn c_j_offset(hw: u16) -> i32 {
         | (b4 << 4)
         | (b3b1 << 1);
     // Sign-extend 12-bit value
-    ((raw << 20) as i32) >> 20
+    ((raw << 20).cast_signed()) >> 20
 }
 
 fn c_b_offset(hw: u16) -> i32 {
@@ -1454,7 +1454,7 @@ fn c_b_offset(hw: u16) -> i32 {
     let b2b1 = u32::from((hw >> 3) & 0x3);
     let raw = (b8 << 8) | (b7b6 << 6) | (b5 << 5) | (b4b3 << 3) | (b2b1 << 1);
     // Sign-extend 9-bit value
-    ((raw << 23) as i32) >> 23
+    ((raw << 23).cast_signed()) >> 23
 }
 
 fn c_fldsp_imm(hw: u16) -> u32 {
@@ -1499,7 +1499,7 @@ fn c_fsdsp_imm(hw: u16) -> u32 {
 // ---------------------------------------------------------------------------
 
 const fn imm_i(word: u32) -> i32 {
-    (word as i32) >> 20
+    (word.cast_signed()) >> 20
 }
 
 const fn imm_s(word: u32) -> i32 {
@@ -1507,7 +1507,7 @@ const fn imm_s(word: u32) -> i32 {
     let lower = (word >> 7) & 0x1F;
     let raw = (upper << 5) | lower;
     // Sign-extend 12-bit value via u32 to avoid signed overflow
-    ((raw << 20) as i32) >> 20
+    ((raw << 20).cast_signed()) >> 20
 }
 
 const fn imm_b(word: u32) -> i32 {
@@ -1517,7 +1517,7 @@ const fn imm_b(word: u32) -> i32 {
     let b4_1 = (word >> 8) & 0xF;
     let raw = (b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1);
     // Sign-extend 13-bit value via u32 to avoid signed overflow
-    ((raw << 19) as i32) >> 19
+    ((raw << 19).cast_signed()) >> 19
 }
 
 const fn imm_u(word: u32) -> u32 {
@@ -1531,7 +1531,7 @@ const fn imm_j(word: u32) -> i32 {
     let b19_12 = (word >> 12) & 0xFF;
     let raw = (b20 << 20) | (b19_12 << 12) | (b11 << 11) | (b10_1 << 1);
     // Sign-extend 21-bit value via u32 to avoid signed overflow
-    ((raw << 11) as i32) >> 11
+    ((raw << 11).cast_signed()) >> 11
 }
 
 // ---------------------------------------------------------------------------
@@ -1757,7 +1757,6 @@ impl Architecture for RiscvArch {
     fn pointer_size(&self) -> usize {
         match self.bits {
             32 => 4,
-            64 => 8,
             128 => 16,
             _ => 8,
         }
@@ -1796,25 +1795,17 @@ impl Architecture for RiscvArch {
             let funct3 = (hw >> 13) & 0x7;
             let target = match (op, funct3) {
                 // C.JAL (RV32 only, op=01, funct3=001)
-                (1, 1) => {
-                    let offset = c_j_offset(hw);
-                    instr.address.0.wrapping_add(offset as u64)
-                }
                 // C.J (op=01, funct3=101)
-                (1, 5) => {
+                (1, 1) | (1, 5) => {
                     let offset = c_j_offset(hw);
-                    instr.address.0.wrapping_add(offset as u64)
+                    instr.address.0.wrapping_add((i64::from(offset)).cast_unsigned())
                 }
                 // C.BEQZ (op=01, funct3=110)
-                (1, 6) => {
+                (1, 6) | (1, 7) => {
                     let offset = c_b_offset(hw);
-                    instr.address.0.wrapping_add(offset as u64)
+                    instr.address.0.wrapping_add((i64::from(offset)).cast_unsigned())
                 }
                 // C.BNEZ (op=01, funct3=111)
-                (1, 7) => {
-                    let offset = c_b_offset(hw);
-                    instr.address.0.wrapping_add(offset as u64)
-                }
                 _ => return vec![],
             };
             let branch = if instr.flags.contains(InstrFlags::CONDITIONAL) {
@@ -1837,8 +1828,8 @@ impl Architecture for RiscvArch {
         ]);
         let opcode = word & 0x7F;
         let target = match opcode {
-            0x6F => instr.address.0.wrapping_add(imm_j(word) as u64),
-            0x63 => instr.address.0.wrapping_add(imm_b(word) as u64),
+            0x6F => instr.address.0.wrapping_add((i64::from(imm_j(word))).cast_unsigned()),
+            0x63 => instr.address.0.wrapping_add((i64::from(imm_b(word))).cast_unsigned()),
             _ => return vec![],
         };
         let branch = if instr.flags.contains(InstrFlags::CONDITIONAL) {
@@ -1994,13 +1985,13 @@ fn riscv_calling_conventions(bits: u32) -> Vec<CallingConvention> {
         out.push(
             CallingConvention::new("riscv_ilp32d")
                 .with_int_args({
-                    let mut a = int_args.clone();
+                    let mut a = int_args;
                     a.extend(fp_args.iter().cloned());
                     a
                 })
                 .with_float_args(fp_args.clone())
                 .with_return_regs({
-                    let mut r = int_rets.clone();
+                    let mut r = int_rets;
                     r.extend(fp_rets.iter().cloned());
                     r
                 }),
@@ -2031,13 +2022,13 @@ fn riscv_calling_conventions(bits: u32) -> Vec<CallingConvention> {
         out.push(
             CallingConvention::new("riscv_lp64d")
                 .with_int_args({
-                    let mut a = int_args.clone();
+                    let mut a = int_args;
                     a.extend(fp_args.iter().cloned());
                     a
                 })
-                .with_float_args(fp_args.clone())
+                .with_float_args(fp_args)
                 .with_return_regs({
-                    let mut r = int_rets.clone();
+                    let mut r = int_rets;
                     r.extend(fp_rets.iter().cloned());
                     r
                 }),
@@ -2220,7 +2211,7 @@ mod tests {
         (imm11_5 << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (imm4_0 << 7) | opcode
     }
     fn btype(offset: i32, rs2: u32, rs1: u32, funct3: u32, opcode: u32) -> u32 {
-        let off = offset as u32;
+        let off = offset.cast_unsigned();
         let b12 = (off >> 12) & 1;
         let b11 = (off >> 11) & 1;
         let b10_5 = (off >> 5) & 0x3F;
@@ -2235,7 +2226,7 @@ mod tests {
             | opcode
     }
     fn jtype(offset: i32, rd: u32, opcode: u32) -> u32 {
-        let off = offset as u32;
+        let off = offset.cast_unsigned();
         let b20 = (off >> 20) & 1;
         let b10_1 = (off >> 1) & 0x3FF;
         let b11 = (off >> 11) & 1;
@@ -2630,7 +2621,7 @@ mod tests {
         // C.LW x8, 0(x8) → funct3=2, op=0 → 0x4000
         // Encode: op=0, funct3=2, rd'=0(→x8), rs1'=0(→x8), uimm=0
         // bits: [15:13]=010, [12:10]=000(rs1'=0), [9:7]=000, [6:5]=00, [4:2]=000, [1:0]=00
-        let hw: u16 = (0b010 << 13) | (0b000 << 10);
+        let hw: u16 = (0b010 << 13);
         let instr = decode_compressed(hw, 64, Address::new(0x1000)).unwrap();
         assert_eq!(instr.mnemonic, "c.lw");
         assert!(instr.flags.contains(InstrFlags::READ_MEM));
@@ -2780,24 +2771,24 @@ pub const fn rv_funct7(word: u32) -> u8 {
 #[must_use]
 pub const fn rv_imm_i(word: u32) -> i32 {
     
-    (word as i32) >> 20
+    (word.cast_signed()) >> 20
 }
 
 /// Decode the S-type immediate (bits [31:25] | [11:7], sign-extended).
 #[must_use]
 pub const fn rv_imm_s(word: u32) -> i32 {
-    let hi = (word as i32) >> 25;
-    let lo = ((word >> 7) & 0x1f) as i32;
+    let hi = (word.cast_signed()) >> 25;
+    let lo = ((word >> 7) & 0x1f).cast_signed();
     (hi << 5) | lo
 }
 
 /// Decode the B-type immediate (sign-extended, multiple bit sources).
 #[must_use]
 pub const fn rv_imm_b(word: u32) -> i32 {
-    let imm12 = ((word >> 31) & 1) as i32;
-    let imm11 = ((word >> 7) & 1) as i32;
-    let imm10_5 = ((word >> 25) & 0x3f) as i32;
-    let imm4_1 = ((word >> 8) & 0xf) as i32;
+    let imm12 = ((word >> 31) & 1).cast_signed();
+    let imm11 = ((word >> 7) & 1).cast_signed();
+    let imm10_5 = ((word >> 25) & 0x3f).cast_signed();
+    let imm4_1 = ((word >> 8) & 0xf).cast_signed();
     let raw = (imm12 << 12) | (imm11 << 11) | (imm10_5 << 5) | (imm4_1 << 1);
     (raw << 19) >> 19
 }
@@ -2811,10 +2802,10 @@ pub const fn rv_imm_u(word: u32) -> u32 {
 /// Decode the J-type immediate (sign-extended, branch target offset).
 #[must_use]
 pub const fn rv_imm_j(word: u32) -> i32 {
-    let imm20 = ((word >> 31) & 1) as i32;
-    let imm19_12 = ((word >> 12) & 0xff) as i32;
-    let imm11 = ((word >> 20) & 1) as i32;
-    let imm10_1 = ((word >> 21) & 0x3ff) as i32;
+    let imm20 = ((word >> 31) & 1).cast_signed();
+    let imm19_12 = ((word >> 12) & 0xff).cast_signed();
+    let imm11 = ((word >> 20) & 1).cast_signed();
+    let imm10_1 = ((word >> 21) & 0x3ff).cast_signed();
     let raw = (imm20 << 20) | (imm19_12 << 12) | (imm11 << 11) | (imm10_1 << 1);
     (raw << 11) >> 11
 }
@@ -2822,13 +2813,13 @@ pub const fn rv_imm_j(word: u32) -> i32 {
 /// Compute the branch target address (PC-relative B-type).
 #[must_use]
 pub const fn rv_branch_target(pc: u64, word: u32) -> u64 {
-    pc.wrapping_add(rv_imm_b(word) as i64 as u64)
+    pc.wrapping_add((rv_imm_b(word) as i64).cast_unsigned())
 }
 
 /// Compute the JAL target address (PC-relative J-type).
 #[must_use]
 pub const fn rv_jal_target(pc: u64, word: u32) -> u64 {
-    pc.wrapping_add(rv_imm_j(word) as i64 as u64)
+    pc.wrapping_add((rv_imm_j(word) as i64).cast_unsigned())
 }
 
 // ---------------------------------------------------------------------------
@@ -4140,14 +4131,14 @@ pub const fn rv_bits(val: u32, hi: u8, lo: u8) -> u32 {
 #[must_use]
 pub const fn rv_sign_ext(val: u32, width: u8) -> i32 {
     let shift = 32 - width;
-    ((val << shift) as i32) >> shift
+    ((val << shift).cast_signed()) >> shift
 }
 
 /// Sign-extend a 64-bit value from bit width `width` to i64.
 #[must_use]
 pub const fn rv_sign_ext64(val: u64, width: u8) -> i64 {
     let shift = 64 - width;
-    ((val << shift) as i64) >> shift
+    ((val << shift).cast_signed()) >> shift
 }
 
 /// Population count of a 32-bit value.
@@ -5536,69 +5527,69 @@ pub static SBI_CALLS: &[SbiCall] = &[
     },
     // HSM extension
     SbiCall {
-        eid: 0x48534D,
+        eid: 0x0048_534D,
         fid: 0,
         name: "sbi_hart_start",
         description: "Start a HART",
     },
     SbiCall {
-        eid: 0x48534D,
+        eid: 0x0048_534D,
         fid: 1,
         name: "sbi_hart_stop",
         description: "Stop the current HART",
     },
     SbiCall {
-        eid: 0x48534D,
+        eid: 0x0048_534D,
         fid: 2,
         name: "sbi_hart_get_status",
         description: "Get HART status",
     },
     SbiCall {
-        eid: 0x48534D,
+        eid: 0x0048_534D,
         fid: 3,
         name: "sbi_hart_suspend",
         description: "Put HART in a lower power state",
     },
     // SRST extension (System Reset)
     SbiCall {
-        eid: 0x53525354,
+        eid: 0x5352_5354,
         fid: 0,
         name: "sbi_system_reset",
         description: "Reset or shutdown the system",
     },
     // PMU extension
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 0,
         name: "sbi_pmu_num_counters",
         description: "Returns the number of PMU counters",
     },
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 1,
         name: "sbi_pmu_counter_get_info",
         description: "Returns counter information",
     },
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 2,
         name: "sbi_pmu_counter_config",
         description: "Configure and start a counter",
     },
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 3,
         name: "sbi_pmu_counter_start",
         description: "Start a set of counters",
     },
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 4,
         name: "sbi_pmu_counter_stop",
         description: "Stop a set of counters",
     },
     SbiCall {
-        eid: 0x504D55,
+        eid: 0x0050_4D55,
         fid: 5,
         name: "sbi_pmu_counter_fw_read",
         description: "Read a firmware counter",
@@ -5818,7 +5809,7 @@ mod final_tests {
 
     #[test]
     fn test_sbi_hart_start() {
-        let s = sbi_lookup(0x48534D, 0).unwrap();
+        let s = sbi_lookup(0x0048_534D, 0).unwrap();
         assert_eq!(s.name, "sbi_hart_start");
     }
 
@@ -5849,7 +5840,7 @@ mod final_tests {
     #[test]
     fn test_rv_prologue_frame_size() {
         // ADDI sp, sp, -16 → opcode=0x13, funct3=0, rd=2, rs1=2, imm=-16
-        let imm_bits: u32 = ((-16i32) as u32) & 0xFFF;
+        let imm_bits: u32 = ((-16i32).cast_unsigned()) & 0xFFF;
         let word: u32 = ((imm_bits << 20) | (2 << 15)) | (2 << 7) | 0x13;
         assert_eq!(rv_prologue_frame_size(word), Some(16));
     }
@@ -5965,7 +5956,7 @@ pub const fn rv_sext(val: u64, bits: u8) -> i64 {
         return 0;
     }
     let shift = 64 - bits;
-    ((val << shift) as i64) >> shift
+    ((val << shift).cast_signed()) >> shift
 }
 
 // ---------------------------------------------------------------------------
@@ -6687,7 +6678,7 @@ mod more_tests {
     // ── SBI calls ────────────────────────────────────────────────────────────
     #[test]
     fn test_sbi_system_reset() {
-        let s = sbi_lookup(0x53525354, 0).unwrap();
+        let s = sbi_lookup(0x5352_5354, 0).unwrap();
         assert_eq!(s.name, "sbi_system_reset");
     }
 
@@ -7083,7 +7074,7 @@ mod expansion_tests {
     // ── Arithmetic helpers ───────────────────────────────────────────────────
     #[test]
     fn test_rv_addw() {
-        assert_eq!(rv_addw(i32::MAX as i64, 1), i32::MIN as i64);
+        assert_eq!(rv_addw(i64::from(i32::MAX), 1), i64::from(i32::MIN));
     }
 
     #[test]
@@ -7712,19 +7703,19 @@ impl RvHartState {
 
     /// Return the stack pointer (x2).
     #[must_use]
-    pub fn sp(&self) -> u64 {
+    pub const fn sp(&self) -> u64 {
         self.read_x(2)
     }
 
     /// Return the return address (x1 / ra).
     #[must_use]
-    pub fn ra(&self) -> u64 {
+    pub const fn ra(&self) -> u64 {
         self.read_x(1)
     }
 
     /// Return the frame pointer / s0 (x8).
     #[must_use]
-    pub fn fp(&self) -> u64 {
+    pub const fn fp(&self) -> u64 {
         self.read_x(8)
     }
 
@@ -7767,14 +7758,14 @@ pub const RV_WFI: u32 = 0x1050_0073;
 /// Encode an ADDI instruction word.
 #[must_use]
 pub const fn rv_encode_addi(rd: u8, rs1: u8, imm: i16) -> u32 {
-    let imm_bits = ((imm as i32) as u32) & 0xFFF;
+    let imm_bits = ((imm as i32).cast_unsigned()) & 0xFFF;
     (imm_bits << 20) | ((rs1 as u32 & 0x1f) << 15) | ((rd as u32 & 0x1f) << 7) | 0x13
 }
 
 /// Encode a SW (store word) instruction.
 #[must_use]
 pub const fn rv_encode_sw(rs2: u8, rs1: u8, imm: i16) -> u32 {
-    let imm_u = ((imm as i32) as u32) & 0xFFF;
+    let imm_u = ((imm as i32).cast_unsigned()) & 0xFFF;
     let imm11_5 = (imm_u >> 5) & 0x7f;
     let imm4_0 = imm_u & 0x1f;
     (imm11_5 << 25)
@@ -7788,7 +7779,7 @@ pub const fn rv_encode_sw(rs2: u8, rs1: u8, imm: i16) -> u32 {
 /// Encode a LW (load word) instruction.
 #[must_use]
 pub const fn rv_encode_lw(rd: u8, rs1: u8, imm: i16) -> u32 {
-    let imm_bits = ((imm as i32) as u32) & 0xFFF;
+    let imm_bits = ((imm as i32).cast_unsigned()) & 0xFFF;
     (imm_bits << 20) | ((rs1 as u32 & 0x1f) << 15) | (2 << 12) | ((rd as u32 & 0x1f) << 7) | 0x03
 }
 
@@ -7913,7 +7904,7 @@ pub const RV_XLEN_128: u8 = 128;
 /// Return `true` if `addr` is 4-byte aligned (required for 32-bit instructions).
 #[must_use]
 pub const fn rv_is_instr_aligned(addr: u64) -> bool {
-    addr & 0x3 == 0
+    addr.trailing_zeros() >= 2
 }
 
 /// Return `true` if `addr` is 2-byte aligned (sufficient for compressed instructions).
@@ -8103,7 +8094,6 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     let mop = (word >> 26) & 3;
     let lumop = vs2; // for unit-stride
     let width_bits: u32 = match (mew, (word >> 12) & 7) {
-        (0, 0) => 8,
         (0, 5) => 16,
         (0, 6) => 32,
         (0, 7) => 64,
@@ -8215,14 +8205,12 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
             };
             if let Some(m) = mn {
                 let sfx = match funct3 {
-                    0 => "vv",
                     3 => "vx",
                     2 => "vi",
                     _ => "vv",
                 };
                 let full = format!("{m}.{sfx}");
                 let ops = match funct3 {
-                    0 => ops_vvv(),
                     3 => ops_vvx(),
                     2 => ops_vvi(),
                     _ => ops_vvv(),
@@ -8471,29 +8459,29 @@ pub enum LlilExpr {
     /// Register read.
     Reg(String),
     /// Load from memory: mem[addr], size bytes.
-    Load { addr: Box<LlilExpr>, size: u8 },
+    Load { addr: Box<Self>, size: u8 },
     /// Zero-extend to 64 bits from sz bytes.
-    ZeroExt { inner: Box<LlilExpr>, sz: u8 },
+    ZeroExt { inner: Box<Self>, sz: u8 },
     /// Sign-extend to 64 bits from sz bytes.
-    SignExt { inner: Box<LlilExpr>, sz: u8 },
+    SignExt { inner: Box<Self>, sz: u8 },
     /// Truncate to sz bytes.
-    LowPart { inner: Box<LlilExpr>, sz: u8 },
+    LowPart { inner: Box<Self>, sz: u8 },
     /// Arithmetic/logical binary op.
     BinOp {
         op: LlilBinOp,
-        lhs: Box<LlilExpr>,
-        rhs: Box<LlilExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Unary op.
-    UnOp { op: LlilUnOp, inner: Box<LlilExpr> },
+    UnOp { op: LlilUnOp, inner: Box<Self> },
     /// Comparison returning 0 or 1.
     Cmp {
         op: LlilCmpOp,
-        lhs: Box<LlilExpr>,
-        rhs: Box<LlilExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Add (used for PC+imm).
-    Add(Box<LlilExpr>, Box<LlilExpr>),
+    Add(Box<Self>, Box<Self>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8644,15 +8632,15 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         0x37 => setreg(llil_const(imm_u)),
 
         // AUIPC
-        0x17 => setreg(llil_const((pc as i64).wrapping_add(imm_u))),
+        0x17 => setreg(llil_const((pc.cast_signed()).wrapping_add(imm_u))),
 
         // JAL
         0x6F => {
-            let target = pc.wrapping_add(imm_j as u64);
+            let target = pc.wrapping_add(imm_j.cast_unsigned());
             let mut ops = Vec::new();
             // Save return address if rd != x0
             if rd != 0 {
-                ops.push(llil_set(&rda, llil_const((pc as i64).wrapping_add(4))));
+                ops.push(llil_set(&rda, llil_const((pc.cast_signed()).wrapping_add(4))));
             }
             if rd == 1 || rd == 5 {
                 ops.push(LlilOp::Call { target });
@@ -8675,7 +8663,7 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
             let addr_masked = llil_binop(LlilBinOp::And, addr_expr, llil_const(-2i64));
             let mut ops = Vec::new();
             if rd != 0 {
-                ops.push(llil_set(&rda, llil_const((pc as i64).wrapping_add(4))));
+                ops.push(llil_set(&rda, llil_const((pc.cast_signed()).wrapping_add(4))));
             }
             if rd == 0 && rs1 == 1 && imm_i == 0 {
                 // ret
@@ -8694,7 +8682,7 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
 
         // BRANCH
         0x63 => {
-            let taken = pc.wrapping_add(imm_b as u64);
+            let taken = pc.wrapping_add(imm_b.cast_unsigned());
             let fallthrough = pc.wrapping_add(4);
             let cmp_op = match funct3 {
                 0 => LlilCmpOp::Eq,
@@ -8950,7 +8938,6 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         // FP loads / stores — emit as memory ops with intrinsic tags
         0x07 => {
             let (size, freg) = match funct3 {
-                2 => (4u8, true),
                 3 => (8, true),
                 _ => (4, true),
             };
@@ -8964,7 +8951,6 @@ pub fn rv_lift_word(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         }
         0x27 => {
             let size = match funct3 {
-                2 => 4u8,
                 3 => 8,
                 _ => 4,
             };
@@ -9077,9 +9063,9 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             1 if xlen == 32 => {
                 // C.JAL (RV32 only)
                 let offset = i64::from(c_j_offset(hw));
-                let target = pc.wrapping_add(offset as u64);
+                let target = pc.wrapping_add(offset.cast_unsigned());
                 vec![
-                    llil_set("ra", llil_const((pc as i64).wrapping_add(2))),
+                    llil_set("ra", llil_const((pc.cast_signed()).wrapping_add(2))),
                     LlilOp::Call { target },
                 ]
             }
@@ -9184,14 +9170,14 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
             5 => {
                 // C.J
                 let offset = i64::from(c_j_offset(hw));
-                let target = pc.wrapping_add(offset as u64);
+                let target = pc.wrapping_add(offset.cast_unsigned());
                 vec![LlilOp::Jump { target }]
             }
             6 => {
                 // C.BEQZ
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
                 let offset = i64::from(c_b_offset(hw));
-                let taken = pc.wrapping_add(offset as u64);
+                let taken = pc.wrapping_add(offset.cast_unsigned());
                 let fallthrough = pc.wrapping_add(2);
                 let cond = llil_cmp(LlilCmpOp::Eq, llil_reg(&xabi(rs1_p)), llil_const(0));
                 vec![LlilOp::If {
@@ -9204,7 +9190,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 // C.BNEZ
                 let rs1_p = ((hw >> 7) & 7) as usize + 8;
                 let offset = i64::from(c_b_offset(hw));
-                let taken = pc.wrapping_add(offset as u64);
+                let taken = pc.wrapping_add(offset.cast_unsigned());
                 let fallthrough = pc.wrapping_add(2);
                 let cond = llil_cmp(LlilCmpOp::Ne, llil_reg(&xabi(rs1_p)), llil_const(0));
                 vec![LlilOp::If {
@@ -9259,7 +9245,7 @@ pub fn rv_lift_compressed(pc: u64, hw: u16, xlen: u32) -> Vec<LlilOp> {
                 } else if rs2_raw == 0 {
                     // C.JALR
                     vec![
-                        llil_set("ra", llil_const((pc as i64).wrapping_add(2))),
+                        llil_set("ra", llil_const((pc.cast_signed()).wrapping_add(2))),
                         LlilOp::CallTo {
                             expr: Box::new(llil_reg(&xabi(rs1_raw))),
                         },
@@ -9333,11 +9319,7 @@ pub const fn rv_vtype_imm(vma: bool, vta: bool, vsew: u8, vlmul: u8) -> u16 {
 impl RiscvArch {
     /// Decode a vector (opcode=0x57) instruction word.
     fn decode_vector(&self, address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
-        if let Some(instr) = decode_rvv(address, word, bytes.clone()) {
-            instr
-        } else {
-            unknown(address, bytes)
-        }
+        decode_rvv(address, word, bytes.clone()).map_or_else(|| unknown(address, bytes), |instr| instr)
     }
 }
 
@@ -9380,14 +9362,14 @@ pub const fn rv_fclass_bit_name(bit: u8) -> &'static str {
 /// F extension: Encode FLW instruction.
 #[must_use]
 pub const fn rv_encode_flw(rd: u8, rs1: u8, imm: i16) -> u32 {
-    let imm12 = ((imm as i32) as u32) & 0xFFF;
+    let imm12 = ((imm as i32).cast_unsigned()) & 0xFFF;
     (imm12 << 20) | ((rs1 as u32 & 0x1f) << 15) | (2 << 12) | ((rd as u32 & 0x1f) << 7) | 0x07
 }
 
 /// F extension: Encode FSW instruction.
 #[must_use]
 pub const fn rv_encode_fsw(rs2: u8, rs1: u8, imm: i16) -> u32 {
-    let imm_u = ((imm as i32) as u32) & 0xFFF;
+    let imm_u = ((imm as i32).cast_unsigned()) & 0xFFF;
     let imm11_5 = (imm_u >> 5) & 0x7f;
     let imm4_0 = imm_u & 0x1f;
     (imm11_5 << 25)
@@ -9474,7 +9456,7 @@ pub const fn rv_encode_csrrc(rd: u8, rs1: u8, csr: u16) -> u32 {
 /// Encode JAL instruction.
 #[must_use]
 pub const fn rv_encode_jal(rd: u8, offset: i32) -> u32 {
-    let off = offset as u32;
+    let off = offset.cast_unsigned();
     let b20 = (off >> 20) & 1;
     let b10_1 = (off >> 1) & 0x3FF;
     let b11 = (off >> 11) & 1;
@@ -9485,14 +9467,14 @@ pub const fn rv_encode_jal(rd: u8, offset: i32) -> u32 {
 /// Encode JALR instruction.
 #[must_use]
 pub const fn rv_encode_jalr(rd: u8, rs1: u8, imm: i16) -> u32 {
-    let imm12 = ((imm as i32) as u32) & 0xFFF;
+    let imm12 = ((imm as i32).cast_unsigned()) & 0xFFF;
     (imm12 << 20) | ((rs1 as u32 & 0x1f) << 15) | ((rd as u32 & 0x1f) << 7) | 0x67
 }
 
 /// Encode BEQ instruction.
 #[must_use]
 pub const fn rv_encode_beq(rs1: u8, rs2: u8, offset: i32) -> u32 {
-    let off = offset as u32;
+    let off = offset.cast_unsigned();
     let b12 = (off >> 12) & 1;
     let b11 = (off >> 11) & 1;
     let b10_5 = (off >> 5) & 0x3F;
@@ -10896,7 +10878,7 @@ impl RvEncFormat {
 #[must_use]
 pub const fn rv_btype_roundtrip(offset: i32) -> bool {
     let word = {
-        let off = offset as u32;
+        let off = offset.cast_unsigned();
         let b12 = (off >> 12) & 1;
         let b11 = (off >> 11) & 1;
         let b10_5 = (off >> 5) & 0x3F;
@@ -10910,7 +10892,7 @@ pub const fn rv_btype_roundtrip(offset: i32) -> bool {
 #[must_use]
 pub const fn rv_jtype_roundtrip(offset: i32) -> bool {
     let word = {
-        let off = offset as u32;
+        let off = offset.cast_unsigned();
         let b20 = (off >> 20) & 1;
         let b10_1 = (off >> 1) & 0x3FF;
         let b11 = (off >> 11) & 1;
@@ -11024,14 +11006,14 @@ mod abi_tests {
     fn test_detect_prologue_frame_size() {
         // ADDI sp, sp, -32
         let addi_sp: u32 = {
-            let imm = (-32i32) as u32 & 0xFFF;
+            let imm = (-32i32).cast_unsigned() & 0xFFF;
             ((imm << 20) | (2 << 15)) | (2 << 7) | 0x13
         };
         // SD ra, 24(sp)
         let sd_ra: u32 = {
             let imm: i32 = 24;
-            let imm11_5 = ((imm >> 5) & 0x7F) as u32;
-            let imm4_0 = (imm & 0x1F) as u32;
+            let imm11_5 = ((imm >> 5) & 0x7F).cast_unsigned();
+            let imm4_0 = (imm & 0x1F).cast_unsigned();
             (imm11_5 << 25) | (1 << 20) | (2 << 15) | (3 << 12) | (imm4_0 << 7) | 0x23
         };
         let words = [addi_sp, sd_ra];
@@ -11107,20 +11089,20 @@ mod abi_tests {
     #[test]
     fn test_jtype_roundtrip_positive() {
         assert!(rv_jtype_roundtrip(16));
-        assert!(rv_jtype_roundtrip(1048572));
+        assert!(rv_jtype_roundtrip(1_048_572));
     }
 
     #[test]
     fn test_jtype_roundtrip_negative() {
         assert!(rv_jtype_roundtrip(-16));
-        assert!(rv_jtype_roundtrip(-1048576));
+        assert!(rv_jtype_roundtrip(-1_048_576));
     }
 
     // ── decode_word_full with vector opcode ───────────────────────────────────
     #[test]
     fn test_decode_word_full_vsetvli() {
         let arch = RiscvArch::rv64();
-        let vtypei = rv_vtype_imm(false, false, 2, 0) as u32;
+        let vtypei = u32::from(rv_vtype_imm(false, false, 2, 0));
         let word = rv_encode_vsetvli(1, 2, vtypei as u16);
         let bytes = word.to_le_bytes();
         let instr = arch.decode_word_full(Address::new(0x0), word, &bytes);
@@ -11587,7 +11569,7 @@ mod completeness_tests {
 
     // ── Branch completeness ───────────────────────────────────────────────────
     fn btype(offset: i32, rs2: u32, rs1: u32, funct3: u32) -> u32 {
-        let off = offset as u32;
+        let off = offset.cast_unsigned();
         let b12 = (off >> 12) & 1;
         let b11 = (off >> 11) & 1;
         let b10_5 = (off >> 5) & 0x3F;
