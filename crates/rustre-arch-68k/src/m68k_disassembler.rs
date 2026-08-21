@@ -48,40 +48,110 @@ impl fmt::Display for BranchTarget {
 // M68kDisasmConfig
 // ────────────────────────────────────────────────────────────────────────────
 
+/// Boolean rendering options for [`M68kDisasmConfig`], packed as one bit set.
+///
+/// Bit layout (LSB first): `SHOW_BYTES | SHOW_ADDRESS | USE_LABELS |
+/// UPPERCASE | RESOLVE_PCREL`.  Packing them removes the risk of transposing
+/// same-typed `bool` fields at a construction site.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DisasmFlags(u8);
+
+impl DisasmFlags {
+    /// Show hex bytes alongside each instruction.
+    pub const SHOW_BYTES: u8 = 1 << 0;
+    /// Show absolute addresses.
+    pub const SHOW_ADDRESS: u8 = 1 << 1;
+    /// Replace branch target addresses with labels where known.
+    pub const USE_LABELS: u8 = 1 << 2;
+    /// Use uppercase mnemonics (Motorola style).
+    pub const UPPERCASE: u8 = 1 << 3;
+    /// Show PC-relative operands as absolute addresses.
+    pub const RESOLVE_PCREL: u8 = 1 << 4;
+
+    /// Every bit this type tracks.
+    pub const MASK: u8 = Self::SHOW_BYTES
+        | Self::SHOW_ADDRESS
+        | Self::USE_LABELS
+        | Self::UPPERCASE
+        | Self::RESOLVE_PCREL;
+
+    /// No options enabled.
+    pub const NONE: Self = Self(0);
+    /// The default rendering: everything on.
+    pub const ALL: Self = Self(Self::MASK);
+
+    /// Keep only the bits this type tracks.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self {
+        Self(v & Self::MASK)
+    }
+
+    /// The raw bit image.
+    #[must_use]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u8) -> bool {
+        self.0 & bit != 0
+    }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u8, on: bool) -> Self {
+        if on { Self(self.0 | (bit & Self::MASK)) } else { Self(self.0 & !bit) }
+    }
+}
+
+impl core::ops::BitOr for DisasmFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
 /// Configuration for the M68k disassembler.
 #[derive(Clone, Debug)]
 pub struct M68kDisasmConfig {
-    /// Show hex bytes alongside each instruction.
-    pub show_bytes: bool,
-    /// Show absolute addresses.
-    pub show_address: bool,
-    /// Replace branch target addresses with labels where known.
-    pub use_labels: bool,
+    /// Boolean rendering options, packed in bit order.
+    pub flags: DisasmFlags,
     /// Column width for the mnemonic field.
     pub mnemonic_width: usize,
     /// Column width for the address field.
     pub address_width: usize,
     /// Column width for hex bytes field.
     pub bytes_width: usize,
-    /// Use uppercase mnemonics (default: true, Motorola style).
-    pub uppercase: bool,
-    /// Show PC-relative as absolute address (instead of offset).
-    pub resolve_pcrel: bool,
     /// Maximum bytes to show in the bytes column.
     pub max_bytes_shown: usize,
+}
+
+impl M68kDisasmConfig {
+    /// Show hex bytes alongside each instruction.
+    #[must_use]
+    pub const fn show_bytes(&self) -> bool { self.flags.has(DisasmFlags::SHOW_BYTES) }
+    /// Show absolute addresses.
+    #[must_use]
+    pub const fn show_address(&self) -> bool { self.flags.has(DisasmFlags::SHOW_ADDRESS) }
+    /// Replace branch target addresses with labels where known.
+    #[must_use]
+    pub const fn use_labels(&self) -> bool { self.flags.has(DisasmFlags::USE_LABELS) }
+    /// Use uppercase mnemonics.
+    #[must_use]
+    pub const fn uppercase(&self) -> bool { self.flags.has(DisasmFlags::UPPERCASE) }
+    /// Show PC-relative operands as absolute addresses.
+    #[must_use]
+    pub const fn resolve_pcrel(&self) -> bool { self.flags.has(DisasmFlags::RESOLVE_PCREL) }
 }
 
 impl Default for M68kDisasmConfig {
     fn default() -> Self {
         Self {
-            show_bytes: true,
-            show_address: true,
-            use_labels: true,
+            flags: DisasmFlags::ALL,
             mnemonic_width: 8,
             address_width: 8,
             bytes_width: 20,
-            uppercase: true,
-            resolve_pcrel: true,
             max_bytes_shown: 10,
         }
     }
@@ -312,8 +382,8 @@ impl M68kDisassembler {
         let ea_fmt = EaFormatter {
             labels: &self.labels,
             instr_pc: instr.address,
-            uppercase: self.config.uppercase,
-            resolve_pcrel: self.config.resolve_pcrel,
+            uppercase: self.config.uppercase(),
+            resolve_pcrel: self.config.resolve_pcrel(),
         };
 
         // Format operands
@@ -321,11 +391,11 @@ impl M68kDisassembler {
 
         // Format mnemonic with size suffix
         let mut mnem = instr.mnemonic.clone();
-        if self.config.uppercase { mnem = mnem.to_uppercase(); }
+        if self.config.uppercase() { mnem = mnem.to_uppercase(); }
         else { mnem = mnem.to_lowercase(); }
         let sz_str = if instr.size == M68kSize::Unsized { String::new() }
                      else { instr.size.suffix().to_string() };
-        let full_mnem = format!("{}{}", mnem, if self.config.uppercase { sz_str.to_uppercase() } else { sz_str });
+        let full_mnem = format!("{}{}", mnem, if self.config.uppercase() { sz_str.to_uppercase() } else { sz_str });
 
         // Build text line
         let text = self.build_line(instr.address, &bytes, &full_mnem, &operands);
@@ -384,10 +454,10 @@ impl M68kDisassembler {
         use core::fmt::Write as _;
         let mut s = String::new();
 
-        if self.config.show_address {
+        if self.config.show_address() {
             let _ = write!(s, "{:0width$X}  ", addr, width = self.config.address_width);
         }
-        if self.config.show_bytes {
+        if self.config.show_bytes() {
             let mut hex_bytes = String::with_capacity(self.config.max_bytes_shown * 3);
             for (i, b) in bytes.iter().take(self.config.max_bytes_shown).enumerate() {
                 if i > 0 { hex_bytes.push(' '); }

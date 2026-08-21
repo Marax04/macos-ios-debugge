@@ -80,21 +80,74 @@ impl fmt::Display for FlagBit {
 // CcRegister
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Named flag values for constructing a [`CcRegister`].
+/// The five CCR condition-code bits, packed in hardware bit order.
 ///
-/// Use with [`CcRegister::from_flags`].  All flags default to `false`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CcBits {
+/// Bit layout matches the M68K CCR low byte: `X N Z V C` (bit 4 down to
+/// bit 0).  Packing them into one value removes the transposition hazard of
+/// five adjacent `bool` fields, all interchangeable to the compiler.
+///
+/// Use with [`CcRegister::from_flags`].  All flags default to clear.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CcBits(u8);
+
+impl CcBits {
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+
+    /// Keep only the five CCR bits of a raw value.
+    #[must_use]
+    pub const fn from_bits(v: u8) -> Self { Self(v & 0x1F) }
+
+    /// The raw bit image, ready to become a [`CcRegister`].
+    #[must_use]
+    pub const fn bits(self) -> u8 { self.0 }
+
+    /// True when `bit` is set.
+    #[must_use]
+    pub const fn has(self, bit: FlagBit) -> bool { self.0 & bit.mask() != 0 }
+
+    /// A copy with `bit` set (`on`) or cleared.
+    #[must_use]
+    pub const fn with(self, bit: FlagBit, on: bool) -> Self {
+        if on { Self(self.0 | bit.mask()) } else { Self(self.0 & !bit.mask()) }
+    }
+
+    /// A copy with the carry flag (C) set to `on`.
+    #[must_use]
+    pub const fn with_carry(self, on: bool) -> Self { self.with(FlagBit::C, on) }
+    /// A copy with the overflow flag (V) set to `on`.
+    #[must_use]
+    pub const fn with_overflow(self, on: bool) -> Self { self.with(FlagBit::V, on) }
+    /// A copy with the zero flag (Z) set to `on`.
+    #[must_use]
+    pub const fn with_zero(self, on: bool) -> Self { self.with(FlagBit::Z, on) }
+    /// A copy with the negative flag (N) set to `on`.
+    #[must_use]
+    pub const fn with_negative(self, on: bool) -> Self { self.with(FlagBit::N, on) }
+    /// A copy with the extend flag (X) set to `on`.
+    #[must_use]
+    pub const fn with_extend(self, on: bool) -> Self { self.with(FlagBit::X, on) }
+
     /// Carry flag (C).
-    pub carry: bool,
+    #[must_use]
+    pub const fn carry(self) -> bool { self.has(FlagBit::C) }
     /// Overflow flag (V).
-    pub overflow: bool,
+    #[must_use]
+    pub const fn overflow(self) -> bool { self.has(FlagBit::V) }
     /// Zero flag (Z).
-    pub zero: bool,
+    #[must_use]
+    pub const fn zero(self) -> bool { self.has(FlagBit::Z) }
     /// Negative flag (N).
-    pub negative: bool,
+    #[must_use]
+    pub const fn negative(self) -> bool { self.has(FlagBit::N) }
     /// Extend flag (X).
-    pub extend: bool,
+    #[must_use]
+    pub const fn extend(self) -> bool { self.has(FlagBit::X) }
+}
+
+impl core::ops::BitOr for CcBits {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,13 +172,7 @@ impl CcRegister {
     /// Construct from individual flag values.
     #[must_use]
     pub const fn from_flags(bits: CcBits) -> Self {
-        let mut raw: u8 = 0;
-        if bits.carry { raw |= FlagBit::C.mask(); }
-        if bits.overflow { raw |= FlagBit::V.mask(); }
-        if bits.zero { raw |= FlagBit::Z.mask(); }
-        if bits.negative { raw |= FlagBit::N.mask(); }
-        if bits.extend { raw |= FlagBit::X.mask(); }
-        Self { raw }
+        Self { raw: bits.bits() }
     }
 
     /// Test a single flag bit.
@@ -170,7 +217,7 @@ impl CcRegister {
         // wrapped result is strictly less than either addend.
         let carry = ur < ua || ur < ub;
         let overflow = ((a ^ result) & (b ^ result)) < 0;
-        Self::from_flags(CcBits { carry, overflow, zero: result == 0, negative: result < 0, extend: carry })
+        Self::from_flags(CcBits::NONE.with_carry(carry).with_overflow(overflow).with_zero(result == 0).with_negative(result < 0).with_extend(carry))
     }
 
     /// Update CCR from the result of a signed 32-bit subtraction.
@@ -181,7 +228,7 @@ impl CcRegister {
         let ub = b.cast_unsigned();
         let borrow = ua < ub;
         let overflow = ((a ^ b) & (a ^ result)) < 0;
-        Self::from_flags(CcBits { carry: borrow, overflow, zero: result == 0, negative: result < 0, extend: borrow })
+        Self::from_flags(CcBits::NONE.with_carry(borrow).with_overflow(overflow).with_zero(result == 0).with_negative(result < 0).with_extend(borrow))
     }
 
     /// Update CCR from a logic-operation result (AND/OR/EOR).
@@ -189,7 +236,7 @@ impl CcRegister {
     /// C and V are always cleared; X is unchanged.
     #[must_use]
     pub const fn from_logic32(result: i32, x: bool) -> Self {
-        Self::from_flags(CcBits { carry: false, overflow: false, zero: result == 0, negative: result < 0, extend: x })
+        Self::from_flags(CcBits::NONE.with_zero(result == 0).with_negative(result < 0).with_extend(x))
     }
 
     /// CCR resulting from NEG.l (negate) of `a`.
@@ -198,7 +245,7 @@ impl CcRegister {
         let result = (0i32).wrapping_sub(a);
         let carry = a != 0;
         let overflow = a == i32::MIN;
-        Self::from_flags(CcBits { carry, overflow, zero: result == 0, negative: result < 0, extend: carry })
+        Self::from_flags(CcBits::NONE.with_carry(carry).with_overflow(overflow).with_zero(result == 0).with_negative(result < 0).with_extend(carry))
     }
 }
 
@@ -406,7 +453,7 @@ impl fmt::Display for M68kConditionCode {
 /// };
 ///
 /// // Z=1 → EQ is true.
-/// let ccr = CcRegister::from_flags(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false });
+/// let ccr = CcRegister::from_flags(CcBits::NONE.with_zero(true));
 /// assert!(evaluate_cc(M68kConditionCode::Eq, ccr));
 /// assert!(!evaluate_cc(M68kConditionCode::Ne, ccr));
 /// ```
@@ -496,52 +543,52 @@ mod tests {
 
     #[test]
     fn test_eq_z_set() {
-        assert!(evaluate_cc(M68kConditionCode::Eq, ccr(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Eq, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Eq, ccr(CcBits::NONE.with_zero(true))));
+        assert!(!evaluate_cc(M68kConditionCode::Eq, ccr(CcBits::NONE)));
     }
 
     #[test]
     fn test_ne_z_clear() {
-        assert!(evaluate_cc(M68kConditionCode::Ne, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Ne, ccr(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Ne, ccr(CcBits::NONE)));
+        assert!(!evaluate_cc(M68kConditionCode::Ne, ccr(CcBits::NONE.with_zero(true))));
     }
 
     #[test]
     fn test_hi_c0_z0() {
-        assert!(evaluate_cc(M68kConditionCode::Hi, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Hi, ccr(CcBits { carry: true, overflow: false, zero: false, negative: false, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Hi, ccr(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Hi, ccr(CcBits::NONE)));
+        assert!(!evaluate_cc(M68kConditionCode::Hi, ccr(CcBits::NONE.with_carry(true))));
+        assert!(!evaluate_cc(M68kConditionCode::Hi, ccr(CcBits::NONE.with_zero(true))));
     }
 
     #[test]
     fn test_ls_c_or_z() {
-        assert!(evaluate_cc(M68kConditionCode::Ls, ccr(CcBits { carry: true, overflow: false, zero: false, negative: false, extend: false })));
-        assert!(evaluate_cc(M68kConditionCode::Ls, ccr(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Ls, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Ls, ccr(CcBits::NONE.with_carry(true))));
+        assert!(evaluate_cc(M68kConditionCode::Ls, ccr(CcBits::NONE.with_zero(true))));
+        assert!(!evaluate_cc(M68kConditionCode::Ls, ccr(CcBits::NONE)));
     }
 
     #[test]
     fn test_ge_n_eq_v() {
         // N=0,V=0 → true
-        assert!(evaluate_cc(M68kConditionCode::Ge, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Ge, ccr(CcBits::NONE)));
         // N=1,V=1 → true
-        assert!(evaluate_cc(M68kConditionCode::Ge, ccr(CcBits { carry: false, overflow: true, zero: false, negative: true, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Ge, ccr(CcBits::NONE.with_overflow(true).with_negative(true))));
         // N=1,V=0 → false
-        assert!(!evaluate_cc(M68kConditionCode::Ge, ccr(CcBits { carry: false, overflow: false, zero: false, negative: true, extend: false })));
+        assert!(!evaluate_cc(M68kConditionCode::Ge, ccr(CcBits::NONE.with_negative(true))));
     }
 
     #[test]
     fn test_lt_n_ne_v() {
-        assert!(evaluate_cc(M68kConditionCode::Lt, ccr(CcBits { carry: false, overflow: false, zero: false, negative: true, extend: false })));
-        assert!(!evaluate_cc(M68kConditionCode::Lt, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Lt, ccr(CcBits::NONE.with_negative(true))));
+        assert!(!evaluate_cc(M68kConditionCode::Lt, ccr(CcBits::NONE)));
     }
 
     #[test]
     fn test_gt_z0_n_eq_v() {
         // Z=0,N=V(both 0) → true
-        assert!(evaluate_cc(M68kConditionCode::Gt, ccr(CcBits { carry: false, overflow: false, zero: false, negative: false, extend: false })));
+        assert!(evaluate_cc(M68kConditionCode::Gt, ccr(CcBits::NONE)));
         // Z=1 → false
-        assert!(!evaluate_cc(M68kConditionCode::Gt, ccr(CcBits { carry: false, overflow: false, zero: true, negative: false, extend: false })));
+        assert!(!evaluate_cc(M68kConditionCode::Gt, ccr(CcBits::NONE.with_zero(true))));
     }
 
     #[test]
@@ -614,7 +661,7 @@ mod tests {
 
     #[test]
     fn test_ccr_display() {
-        let r = CcRegister::from_flags(CcBits { carry: true, overflow: false, zero: true, negative: false, extend: false });
+        let r = CcRegister::from_flags(CcBits::NONE.with_carry(true).with_zero(true));
         let s = r.to_string();
         assert!(s.contains("Z=1"));
         assert!(s.contains("C=1"));
