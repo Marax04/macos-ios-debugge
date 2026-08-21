@@ -143,8 +143,8 @@ fn f64le(bytes: &[u8], off: usize) -> f64 {
     ])
 }
 
-fn simple(mne: &str, flags: InstrFlags, op: u8) -> Result<(CilInstr, usize), CilDecodeError> {
-    Ok((
+fn simple(mne: &str, flags: InstrFlags, op: u8) -> (CilInstr, usize) {
+    (
         CilInstr {
             raw: vec![op],
             mnemonic: mne.to_string(),
@@ -152,7 +152,7 @@ fn simple(mne: &str, flags: InstrFlags, op: u8) -> Result<(CilInstr, usize), Cil
             flags,
         },
         1,
-    ))
+    )
 }
 
 fn with_ops(
@@ -160,9 +160,9 @@ fn with_ops(
     ops: impl Into<String>,
     flags: InstrFlags,
     raw: Vec<u8>,
-) -> Result<(CilInstr, usize), CilDecodeError> {
+) -> (CilInstr, usize) {
     let size = raw.len();
-    Ok((
+    (
         CilInstr {
             raw,
             mnemonic: mne.to_string(),
@@ -170,11 +170,11 @@ fn with_ops(
             flags,
         },
         size,
-    ))
+    )
 }
 
-fn prefixed(mne: &str, flags: InstrFlags, op2: u8) -> Result<(CilInstr, usize), CilDecodeError> {
-    Ok((
+fn prefixed(mne: &str, flags: InstrFlags, op2: u8) -> (CilInstr, usize) {
+    (
         CilInstr {
             raw: vec![0xfe, op2],
             mnemonic: mne.to_string(),
@@ -182,7 +182,7 @@ fn prefixed(mne: &str, flags: InstrFlags, op2: u8) -> Result<(CilInstr, usize), 
             flags,
         },
         2,
-    ))
+    )
 }
 
 fn prefixed_ops(
@@ -190,9 +190,9 @@ fn prefixed_ops(
     ops: impl Into<String>,
     flags: InstrFlags,
     raw: Vec<u8>,
-) -> Result<(CilInstr, usize), CilDecodeError> {
+) -> (CilInstr, usize) {
     let size = raw.len();
-    Ok((
+    (
         CilInstr {
             raw,
             mnemonic: mne.to_string(),
@@ -200,7 +200,7 @@ fn prefixed_ops(
             flags,
         },
         size,
-    ))
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -212,419 +212,419 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
 
     match op {
         // ----- nop / break -----
-        0x00 => simple("nop", InstrFlags::NONE, op),
-        0x01 => simple("break", InstrFlags::BARRIER, op),
+        0x00 => Ok(simple("nop", InstrFlags::NONE, op)),
+        0x01 => Ok(simple("break", InstrFlags::BARRIER, op)),
 
         // ----- ldarg short -----
-        0x02 => simple("ldarg.0", InstrFlags::NONE, op),
-        0x03 => simple("ldarg.1", InstrFlags::NONE, op),
-        0x04 => simple("ldarg.2", InstrFlags::NONE, op),
-        0x05 => simple("ldarg.3", InstrFlags::NONE, op),
+        0x02 => Ok(simple("ldarg.0", InstrFlags::NONE, op)),
+        0x03 => Ok(simple("ldarg.1", InstrFlags::NONE, op)),
+        0x04 => Ok(simple("ldarg.2", InstrFlags::NONE, op)),
+        0x05 => Ok(simple("ldarg.3", InstrFlags::NONE, op)),
 
         // ----- ldloc short -----
-        0x06 => simple("ldloc.0", InstrFlags::NONE, op),
-        0x07 => simple("ldloc.1", InstrFlags::NONE, op),
-        0x08 => simple("ldloc.2", InstrFlags::NONE, op),
-        0x09 => simple("ldloc.3", InstrFlags::NONE, op),
+        0x06 => Ok(simple("ldloc.0", InstrFlags::NONE, op)),
+        0x07 => Ok(simple("ldloc.1", InstrFlags::NONE, op)),
+        0x08 => Ok(simple("ldloc.2", InstrFlags::NONE, op)),
+        0x09 => Ok(simple("ldloc.3", InstrFlags::NONE, op)),
 
         // ----- stloc short -----
-        0x0a => simple("stloc.0", InstrFlags::NONE, op),
-        0x0b => simple("stloc.1", InstrFlags::NONE, op),
-        0x0c => simple("stloc.2", InstrFlags::NONE, op),
-        0x0d => simple("stloc.3", InstrFlags::NONE, op),
+        0x0a => Ok(simple("stloc.0", InstrFlags::NONE, op)),
+        0x0b => Ok(simple("stloc.1", InstrFlags::NONE, op)),
+        0x0c => Ok(simple("stloc.2", InstrFlags::NONE, op)),
+        0x0d => Ok(simple("stloc.3", InstrFlags::NONE, op)),
 
         // ----- ldarg.s / ldarga.s / starg.s -----
         0x0e => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ldarg.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x0f => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ldarga.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x10 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "starg.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
 
         // ----- ldloc.s / ldloca.s / stloc.s -----
         0x11 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ldloc.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x12 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ldloca.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x13 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "stloc.s",
                 format!("{}", bytes[1]),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
 
         // ----- null / ldc.i4 short forms -----
-        0x14 => simple("ldnull", InstrFlags::NONE, op),
-        0x15 => simple("ldc.i4.m1", InstrFlags::NONE, op),
-        0x16 => simple("ldc.i4.0", InstrFlags::NONE, op),
-        0x17 => simple("ldc.i4.1", InstrFlags::NONE, op),
-        0x18 => simple("ldc.i4.2", InstrFlags::NONE, op),
-        0x19 => simple("ldc.i4.3", InstrFlags::NONE, op),
-        0x1a => simple("ldc.i4.4", InstrFlags::NONE, op),
-        0x1b => simple("ldc.i4.5", InstrFlags::NONE, op),
-        0x1c => simple("ldc.i4.6", InstrFlags::NONE, op),
-        0x1d => simple("ldc.i4.7", InstrFlags::NONE, op),
-        0x1e => simple("ldc.i4.8", InstrFlags::NONE, op),
+        0x14 => Ok(simple("ldnull", InstrFlags::NONE, op)),
+        0x15 => Ok(simple("ldc.i4.m1", InstrFlags::NONE, op)),
+        0x16 => Ok(simple("ldc.i4.0", InstrFlags::NONE, op)),
+        0x17 => Ok(simple("ldc.i4.1", InstrFlags::NONE, op)),
+        0x18 => Ok(simple("ldc.i4.2", InstrFlags::NONE, op)),
+        0x19 => Ok(simple("ldc.i4.3", InstrFlags::NONE, op)),
+        0x1a => Ok(simple("ldc.i4.4", InstrFlags::NONE, op)),
+        0x1b => Ok(simple("ldc.i4.5", InstrFlags::NONE, op)),
+        0x1c => Ok(simple("ldc.i4.6", InstrFlags::NONE, op)),
+        0x1d => Ok(simple("ldc.i4.7", InstrFlags::NONE, op)),
+        0x1e => Ok(simple("ldc.i4.8", InstrFlags::NONE, op)),
 
         // ldc.i4.s <int8>
         0x1f => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ldc.i4.s",
                 format!("{}", i8b(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         // ldc.i4 <int32>
         0x20 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldc.i4",
                 format!("{}", i32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         // ldc.i8 <int64>
         0x21 => {
             need(bytes, 9)?;
-            with_ops(
+            Ok(with_ops(
                 "ldc.i8",
                 format!("{}", i64le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..9].to_vec(),
-            )
+            ))
         }
         // ldc.r4 <float32>
         0x22 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldc.r4",
                 format!("{}", f32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         // ldc.r8 <float64>
         0x23 => {
             need(bytes, 9)?;
-            with_ops(
+            Ok(with_ops(
                 "ldc.r8",
                 format!("{}", f64le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..9].to_vec(),
-            )
+            ))
         }
 
         // ----- dup / pop -----
-        0x25 => simple("dup", InstrFlags::NONE, op),
-        0x26 => simple("pop", InstrFlags::NONE, op),
+        0x25 => Ok(simple("dup", InstrFlags::NONE, op)),
+        0x26 => Ok(simple("pop", InstrFlags::NONE, op)),
 
         // ----- jmp / call / calli / ret -----
         0x27 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "jmp",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::BRANCH,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x28 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "call",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::CALL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x29 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "calli",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::CALL | InstrFlags::INDIRECT,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
-        0x2a => simple("ret", InstrFlags::RET, op),
+        0x2a => Ok(simple("ret", InstrFlags::RET, op)),
 
         // ----- short branches (1-byte offset) -----
         0x2b => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "br.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x2c => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "brfalse.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x2d => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "brtrue.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x2e => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "beq.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x2f => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "bge.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x30 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "bgt.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x31 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ble.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x32 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "blt.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x33 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "bne.un.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x34 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "bge.un.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x35 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "bgt.un.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x36 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "ble.un.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
         0x37 => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "blt.un.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
 
         // ----- long branches (4-byte offset) -----
         0x38 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "br",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x39 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "brfalse",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3a => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "brtrue",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3b => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "beq",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3c => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "bge",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3d => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "bgt",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3e => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ble",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x3f => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "blt",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x40 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "bne.un",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x41 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "bge.un",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x42 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "bgt.un",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x43 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ble.un",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x44 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "blt.un",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ----- switch -----
@@ -636,521 +636,521 @@ fn decode_cil(bytes: &[u8]) -> Result<(CilInstr, usize), CilDecodeError> {
                 .and_then(|v| v.checked_add(5))
                 .ok_or(CilDecodeError::Truncated)?;
             need(bytes, total)?;
-            with_ops(
+            Ok(with_ops(
                 "switch",
                 format!("targets={n}"),
                 InstrFlags::BRANCH,
                 bytes[..total].to_vec(),
-            )
+            ))
         }
 
         // ----- indirect loads -----
-        0x46 => simple("ldind.i1", InstrFlags::READ_MEM, op),
-        0x47 => simple("ldind.u1", InstrFlags::READ_MEM, op),
-        0x48 => simple("ldind.i2", InstrFlags::READ_MEM, op),
-        0x49 => simple("ldind.u2", InstrFlags::READ_MEM, op),
-        0x4a => simple("ldind.i4", InstrFlags::READ_MEM, op),
-        0x4b => simple("ldind.u4", InstrFlags::READ_MEM, op),
-        0x4c => simple("ldind.i8", InstrFlags::READ_MEM, op),
-        0x4d => simple("ldind.i", InstrFlags::READ_MEM, op),
-        0x4e => simple("ldind.r4", InstrFlags::READ_MEM, op),
-        0x4f => simple("ldind.r8", InstrFlags::READ_MEM, op),
-        0x50 => simple("ldind.ref", InstrFlags::READ_MEM, op),
+        0x46 => Ok(simple("ldind.i1", InstrFlags::READ_MEM, op)),
+        0x47 => Ok(simple("ldind.u1", InstrFlags::READ_MEM, op)),
+        0x48 => Ok(simple("ldind.i2", InstrFlags::READ_MEM, op)),
+        0x49 => Ok(simple("ldind.u2", InstrFlags::READ_MEM, op)),
+        0x4a => Ok(simple("ldind.i4", InstrFlags::READ_MEM, op)),
+        0x4b => Ok(simple("ldind.u4", InstrFlags::READ_MEM, op)),
+        0x4c => Ok(simple("ldind.i8", InstrFlags::READ_MEM, op)),
+        0x4d => Ok(simple("ldind.i", InstrFlags::READ_MEM, op)),
+        0x4e => Ok(simple("ldind.r4", InstrFlags::READ_MEM, op)),
+        0x4f => Ok(simple("ldind.r8", InstrFlags::READ_MEM, op)),
+        0x50 => Ok(simple("ldind.ref", InstrFlags::READ_MEM, op)),
 
         // ----- indirect stores -----
-        0x51 => simple("stind.ref", InstrFlags::WRITE_MEM, op),
-        0x52 => simple("stind.i1", InstrFlags::WRITE_MEM, op),
-        0x53 => simple("stind.i2", InstrFlags::WRITE_MEM, op),
-        0x54 => simple("stind.i4", InstrFlags::WRITE_MEM, op),
-        0x55 => simple("stind.i8", InstrFlags::WRITE_MEM, op),
-        0x56 => simple("stind.r4", InstrFlags::WRITE_MEM, op),
-        0x57 => simple("stind.r8", InstrFlags::WRITE_MEM, op),
+        0x51 => Ok(simple("stind.ref", InstrFlags::WRITE_MEM, op)),
+        0x52 => Ok(simple("stind.i1", InstrFlags::WRITE_MEM, op)),
+        0x53 => Ok(simple("stind.i2", InstrFlags::WRITE_MEM, op)),
+        0x54 => Ok(simple("stind.i4", InstrFlags::WRITE_MEM, op)),
+        0x55 => Ok(simple("stind.i8", InstrFlags::WRITE_MEM, op)),
+        0x56 => Ok(simple("stind.r4", InstrFlags::WRITE_MEM, op)),
+        0x57 => Ok(simple("stind.r8", InstrFlags::WRITE_MEM, op)),
 
         // ----- arithmetic / logic -----
-        0x58 => simple("add", InstrFlags::NONE, op),
-        0x59 => simple("sub", InstrFlags::NONE, op),
-        0x5a => simple("mul", InstrFlags::NONE, op),
-        0x5b => simple("div", InstrFlags::NONE, op),
-        0x5c => simple("div.un", InstrFlags::NONE, op),
-        0x5d => simple("rem", InstrFlags::NONE, op),
-        0x5e => simple("rem.un", InstrFlags::NONE, op),
-        0x5f => simple("and", InstrFlags::NONE, op),
-        0x60 => simple("or", InstrFlags::NONE, op),
-        0x61 => simple("xor", InstrFlags::NONE, op),
-        0x62 => simple("shl", InstrFlags::NONE, op),
-        0x63 => simple("shr", InstrFlags::NONE, op),
-        0x64 => simple("shr.un", InstrFlags::NONE, op),
-        0x65 => simple("neg", InstrFlags::NONE, op),
-        0x66 => simple("not", InstrFlags::NONE, op),
+        0x58 => Ok(simple("add", InstrFlags::NONE, op)),
+        0x59 => Ok(simple("sub", InstrFlags::NONE, op)),
+        0x5a => Ok(simple("mul", InstrFlags::NONE, op)),
+        0x5b => Ok(simple("div", InstrFlags::NONE, op)),
+        0x5c => Ok(simple("div.un", InstrFlags::NONE, op)),
+        0x5d => Ok(simple("rem", InstrFlags::NONE, op)),
+        0x5e => Ok(simple("rem.un", InstrFlags::NONE, op)),
+        0x5f => Ok(simple("and", InstrFlags::NONE, op)),
+        0x60 => Ok(simple("or", InstrFlags::NONE, op)),
+        0x61 => Ok(simple("xor", InstrFlags::NONE, op)),
+        0x62 => Ok(simple("shl", InstrFlags::NONE, op)),
+        0x63 => Ok(simple("shr", InstrFlags::NONE, op)),
+        0x64 => Ok(simple("shr.un", InstrFlags::NONE, op)),
+        0x65 => Ok(simple("neg", InstrFlags::NONE, op)),
+        0x66 => Ok(simple("not", InstrFlags::NONE, op)),
 
         // ----- conversions -----
-        0x67 => simple("conv.i1", InstrFlags::NONE, op),
-        0x68 => simple("conv.i2", InstrFlags::NONE, op),
-        0x69 => simple("conv.i4", InstrFlags::NONE, op),
-        0x6a => simple("conv.i8", InstrFlags::NONE, op),
-        0x6b => simple("conv.r4", InstrFlags::NONE, op),
-        0x6c => simple("conv.r8", InstrFlags::NONE, op),
-        0x6d => simple("conv.u4", InstrFlags::NONE, op),
-        0x6e => simple("conv.u8", InstrFlags::NONE, op),
+        0x67 => Ok(simple("conv.i1", InstrFlags::NONE, op)),
+        0x68 => Ok(simple("conv.i2", InstrFlags::NONE, op)),
+        0x69 => Ok(simple("conv.i4", InstrFlags::NONE, op)),
+        0x6a => Ok(simple("conv.i8", InstrFlags::NONE, op)),
+        0x6b => Ok(simple("conv.r4", InstrFlags::NONE, op)),
+        0x6c => Ok(simple("conv.r8", InstrFlags::NONE, op)),
+        0x6d => Ok(simple("conv.u4", InstrFlags::NONE, op)),
+        0x6e => Ok(simple("conv.u8", InstrFlags::NONE, op)),
 
         // ----- object model -----
         0x6f => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "callvirt",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::CALL | InstrFlags::INDIRECT,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x70 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "cpobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x71 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::READ_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x72 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldstr",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x73 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "newobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::CALL,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x74 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "castclass",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x75 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "isinst",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
-        0x76 => simple("conv.r.un", InstrFlags::NONE, op),
+        0x76 => Ok(simple("conv.r.un", InstrFlags::NONE, op)),
         0x79 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "unbox",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
-        0x7a => simple("throw", InstrFlags::BRANCH, op),
+        0x7a => Ok(simple("throw", InstrFlags::BRANCH, op)),
 
         // ----- field access -----
         0x7b => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::READ_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x7c => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldflda",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x7d => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "stfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::WRITE_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x7e => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldsfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::READ_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x7f => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldsflda",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x80 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "stsfld",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::WRITE_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x81 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "stobj",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::WRITE_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ----- overflow conversions -----
-        0x82 => simple("conv.ovf.i1.un", InstrFlags::NONE, op),
-        0x83 => simple("conv.ovf.i2.un", InstrFlags::NONE, op),
-        0x84 => simple("conv.ovf.i4.un", InstrFlags::NONE, op),
-        0x85 => simple("conv.ovf.i8.un", InstrFlags::NONE, op),
-        0x86 => simple("conv.ovf.u1.un", InstrFlags::NONE, op),
-        0x87 => simple("conv.ovf.u2.un", InstrFlags::NONE, op),
-        0x88 => simple("conv.ovf.u4.un", InstrFlags::NONE, op),
-        0x89 => simple("conv.ovf.u8.un", InstrFlags::NONE, op),
-        0x8a => simple("conv.ovf.i.un", InstrFlags::NONE, op),
-        0x8b => simple("conv.ovf.u.un", InstrFlags::NONE, op),
+        0x82 => Ok(simple("conv.ovf.i1.un", InstrFlags::NONE, op)),
+        0x83 => Ok(simple("conv.ovf.i2.un", InstrFlags::NONE, op)),
+        0x84 => Ok(simple("conv.ovf.i4.un", InstrFlags::NONE, op)),
+        0x85 => Ok(simple("conv.ovf.i8.un", InstrFlags::NONE, op)),
+        0x86 => Ok(simple("conv.ovf.u1.un", InstrFlags::NONE, op)),
+        0x87 => Ok(simple("conv.ovf.u2.un", InstrFlags::NONE, op)),
+        0x88 => Ok(simple("conv.ovf.u4.un", InstrFlags::NONE, op)),
+        0x89 => Ok(simple("conv.ovf.u8.un", InstrFlags::NONE, op)),
+        0x8a => Ok(simple("conv.ovf.i.un", InstrFlags::NONE, op)),
+        0x8b => Ok(simple("conv.ovf.u.un", InstrFlags::NONE, op)),
 
         // ----- box / newarr / ... -----
         0x8c => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "box",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0x8d => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "newarr",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
-        0x8e => simple("ldlen", InstrFlags::NONE, op),
+        0x8e => Ok(simple("ldlen", InstrFlags::NONE, op)),
         0x8f => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldelema",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ----- ldelem -----
-        0x90 => simple("ldelem.i1", InstrFlags::READ_MEM, op),
-        0x91 => simple("ldelem.u1", InstrFlags::READ_MEM, op),
-        0x92 => simple("ldelem.i2", InstrFlags::READ_MEM, op),
-        0x93 => simple("ldelem.u2", InstrFlags::READ_MEM, op),
-        0x94 => simple("ldelem.i4", InstrFlags::READ_MEM, op),
-        0x95 => simple("ldelem.u4", InstrFlags::READ_MEM, op),
-        0x96 => simple("ldelem.i8", InstrFlags::READ_MEM, op),
-        0x97 => simple("ldelem.i", InstrFlags::READ_MEM, op),
-        0x98 => simple("ldelem.r4", InstrFlags::READ_MEM, op),
-        0x99 => simple("ldelem.r8", InstrFlags::READ_MEM, op),
-        0x9a => simple("ldelem.ref", InstrFlags::READ_MEM, op),
+        0x90 => Ok(simple("ldelem.i1", InstrFlags::READ_MEM, op)),
+        0x91 => Ok(simple("ldelem.u1", InstrFlags::READ_MEM, op)),
+        0x92 => Ok(simple("ldelem.i2", InstrFlags::READ_MEM, op)),
+        0x93 => Ok(simple("ldelem.u2", InstrFlags::READ_MEM, op)),
+        0x94 => Ok(simple("ldelem.i4", InstrFlags::READ_MEM, op)),
+        0x95 => Ok(simple("ldelem.u4", InstrFlags::READ_MEM, op)),
+        0x96 => Ok(simple("ldelem.i8", InstrFlags::READ_MEM, op)),
+        0x97 => Ok(simple("ldelem.i", InstrFlags::READ_MEM, op)),
+        0x98 => Ok(simple("ldelem.r4", InstrFlags::READ_MEM, op)),
+        0x99 => Ok(simple("ldelem.r8", InstrFlags::READ_MEM, op)),
+        0x9a => Ok(simple("ldelem.ref", InstrFlags::READ_MEM, op)),
 
         // ----- stelem -----
-        0x9b => simple("stelem.i", InstrFlags::WRITE_MEM, op),
-        0x9c => simple("stelem.i1", InstrFlags::WRITE_MEM, op),
-        0x9d => simple("stelem.i2", InstrFlags::WRITE_MEM, op),
-        0x9e => simple("stelem.i4", InstrFlags::WRITE_MEM, op),
-        0x9f => simple("stelem.i8", InstrFlags::WRITE_MEM, op),
-        0xa0 => simple("stelem.r4", InstrFlags::WRITE_MEM, op),
-        0xa1 => simple("stelem.r8", InstrFlags::WRITE_MEM, op),
-        0xa2 => simple("stelem.ref", InstrFlags::WRITE_MEM, op),
+        0x9b => Ok(simple("stelem.i", InstrFlags::WRITE_MEM, op)),
+        0x9c => Ok(simple("stelem.i1", InstrFlags::WRITE_MEM, op)),
+        0x9d => Ok(simple("stelem.i2", InstrFlags::WRITE_MEM, op)),
+        0x9e => Ok(simple("stelem.i4", InstrFlags::WRITE_MEM, op)),
+        0x9f => Ok(simple("stelem.i8", InstrFlags::WRITE_MEM, op)),
+        0xa0 => Ok(simple("stelem.r4", InstrFlags::WRITE_MEM, op)),
+        0xa1 => Ok(simple("stelem.r8", InstrFlags::WRITE_MEM, op)),
+        0xa2 => Ok(simple("stelem.ref", InstrFlags::WRITE_MEM, op)),
 
         // ldelem / stelem typed
         0xa3 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldelem",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::READ_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0xa4 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "stelem",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::WRITE_MEM,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // unbox.any
         0xa5 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "unbox.any",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ----- more conversions -----
-        0xb3 => simple("conv.ovf.i1", InstrFlags::NONE, op),
-        0xb4 => simple("conv.ovf.u1", InstrFlags::NONE, op),
-        0xb5 => simple("conv.ovf.i2", InstrFlags::NONE, op),
-        0xb6 => simple("conv.ovf.u2", InstrFlags::NONE, op),
-        0xb7 => simple("conv.ovf.i4", InstrFlags::NONE, op),
-        0xb8 => simple("conv.ovf.u4", InstrFlags::NONE, op),
-        0xb9 => simple("conv.ovf.i8", InstrFlags::NONE, op),
-        0xba => simple("conv.ovf.u8", InstrFlags::NONE, op),
+        0xb3 => Ok(simple("conv.ovf.i1", InstrFlags::NONE, op)),
+        0xb4 => Ok(simple("conv.ovf.u1", InstrFlags::NONE, op)),
+        0xb5 => Ok(simple("conv.ovf.i2", InstrFlags::NONE, op)),
+        0xb6 => Ok(simple("conv.ovf.u2", InstrFlags::NONE, op)),
+        0xb7 => Ok(simple("conv.ovf.i4", InstrFlags::NONE, op)),
+        0xb8 => Ok(simple("conv.ovf.u4", InstrFlags::NONE, op)),
+        0xb9 => Ok(simple("conv.ovf.i8", InstrFlags::NONE, op)),
+        0xba => Ok(simple("conv.ovf.u8", InstrFlags::NONE, op)),
 
         // refanyval
         0xc2 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "refanyval",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
-        0xc3 => simple("ckfinite", InstrFlags::NONE, op),
+        0xc3 => Ok(simple("ckfinite", InstrFlags::NONE, op)),
 
         // mkrefany
         0xc6 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "mkrefany",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ldtoken
         0xd0 => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "ldtoken",
                 format!("#{:#010x}", u32le(bytes, 1)),
                 InstrFlags::NONE,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
 
         // ----- more conversions -----
-        0xd1 => simple("conv.u2", InstrFlags::NONE, op),
-        0xd2 => simple("conv.u1", InstrFlags::NONE, op),
-        0xd3 => simple("conv.i", InstrFlags::NONE, op),
-        0xd4 => simple("conv.ovf.i", InstrFlags::NONE, op),
-        0xd5 => simple("conv.ovf.u", InstrFlags::NONE, op),
+        0xd1 => Ok(simple("conv.u2", InstrFlags::NONE, op)),
+        0xd2 => Ok(simple("conv.u1", InstrFlags::NONE, op)),
+        0xd3 => Ok(simple("conv.i", InstrFlags::NONE, op)),
+        0xd4 => Ok(simple("conv.ovf.i", InstrFlags::NONE, op)),
+        0xd5 => Ok(simple("conv.ovf.u", InstrFlags::NONE, op)),
 
         // ----- overflow arithmetic -----
-        0xd6 => simple("add.ovf", InstrFlags::NONE, op),
-        0xd7 => simple("add.ovf.un", InstrFlags::NONE, op),
-        0xd8 => simple("mul.ovf", InstrFlags::NONE, op),
-        0xd9 => simple("mul.ovf.un", InstrFlags::NONE, op),
-        0xda => simple("sub.ovf", InstrFlags::NONE, op),
-        0xdb => simple("sub.ovf.un", InstrFlags::NONE, op),
+        0xd6 => Ok(simple("add.ovf", InstrFlags::NONE, op)),
+        0xd7 => Ok(simple("add.ovf.un", InstrFlags::NONE, op)),
+        0xd8 => Ok(simple("mul.ovf", InstrFlags::NONE, op)),
+        0xd9 => Ok(simple("mul.ovf.un", InstrFlags::NONE, op)),
+        0xda => Ok(simple("sub.ovf", InstrFlags::NONE, op)),
+        0xdb => Ok(simple("sub.ovf.un", InstrFlags::NONE, op)),
 
         // endfinally / leave / leave.s / stind.i
-        0xdc => simple("endfinally", InstrFlags::RET, op),
+        0xdc => Ok(simple("endfinally", InstrFlags::RET, op)),
         0xdd => {
             need(bytes, 5)?;
-            with_ops(
+            Ok(with_ops(
                 "leave",
                 format!("{:+}", i32le(bytes, 1)),
                 InstrFlags::BRANCH,
                 bytes[..5].to_vec(),
-            )
+            ))
         }
         0xde => {
             need(bytes, 2)?;
-            with_ops(
+            Ok(with_ops(
                 "leave.s",
                 format!("{:+}", i8b(bytes, 1)),
                 InstrFlags::BRANCH,
                 bytes[..2].to_vec(),
-            )
+            ))
         }
-        0xdf => simple("stind.i", InstrFlags::WRITE_MEM, op),
+        0xdf => Ok(simple("stind.i", InstrFlags::WRITE_MEM, op)),
 
         // ----- remaining conversions -----
-        0xe0 => simple("conv.u", InstrFlags::NONE, op),
+        0xe0 => Ok(simple("conv.u", InstrFlags::NONE, op)),
 
         // ----- 0xFE prefix opcodes -----
         0xfe => {
             need(bytes, 2)?;
             let op2 = bytes[1];
             match op2 {
-                0x00 => prefixed("arglist", InstrFlags::NONE, op2),
-                0x01 => prefixed("ceq", InstrFlags::NONE, op2),
-                0x02 => prefixed("cgt", InstrFlags::NONE, op2),
-                0x03 => prefixed("cgt.un", InstrFlags::NONE, op2),
-                0x04 => prefixed("clt", InstrFlags::NONE, op2),
-                0x05 => prefixed("clt.un", InstrFlags::NONE, op2),
+                0x00 => Ok(prefixed("arglist", InstrFlags::NONE, op2)),
+                0x01 => Ok(prefixed("ceq", InstrFlags::NONE, op2)),
+                0x02 => Ok(prefixed("cgt", InstrFlags::NONE, op2)),
+                0x03 => Ok(prefixed("cgt.un", InstrFlags::NONE, op2)),
+                0x04 => Ok(prefixed("clt", InstrFlags::NONE, op2)),
+                0x05 => Ok(prefixed("clt.un", InstrFlags::NONE, op2)),
                 0x06 => {
                     need(bytes, 6)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldftn",
                         format!("#{:#010x}", u32le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    )
+                    ))
                 }
                 0x07 => {
                     need(bytes, 6)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldvirtftn",
                         format!("#{:#010x}", u32le(bytes, 2)),
                         InstrFlags::INDIRECT,
                         vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    )
+                    ))
                 }
                 0x09 => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldarg",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
                 0x0a => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldarga",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
                 0x0b => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "starg",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
                 0x0c => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldloc",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
                 0x0d => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "ldloca",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
                 0x0e => {
                     need(bytes, 4)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "stloc",
                         format!("{}", u16le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3]],
-                    )
+                    ))
                 }
-                0x0f => prefixed("localloc", InstrFlags::NONE, op2),
-                0x11 => prefixed("endfilter", InstrFlags::RET, op2),
+                0x0f => Ok(prefixed("localloc", InstrFlags::NONE, op2)),
+                0x11 => Ok(prefixed("endfilter", InstrFlags::RET, op2)),
                 0x12 => {
                     need(bytes, 3)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "unaligned",
                         format!("{}", bytes[2]),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2]],
-                    )
+                    ))
                 }
-                0x13 => prefixed("volatile", InstrFlags::BARRIER, op2),
-                0x14 => prefixed("tail", InstrFlags::NONE, op2),
+                0x13 => Ok(prefixed("volatile", InstrFlags::BARRIER, op2)),
+                0x14 => Ok(prefixed("tail", InstrFlags::NONE, op2)),
                 0x15 => {
                     need(bytes, 6)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "initobj",
                         format!("#{:#010x}", u32le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    )
+                    ))
                 }
                 0x16 => {
                     need(bytes, 6)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "constrained",
                         format!("#{:#010x}", u32le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    )
+                    ))
                 }
-                0x17 => prefixed("cpblk", InstrFlags::WRITE_MEM, op2),
-                0x18 => prefixed("initblk", InstrFlags::WRITE_MEM, op2),
+                0x17 => Ok(prefixed("cpblk", InstrFlags::WRITE_MEM, op2)),
+                0x18 => Ok(prefixed("initblk", InstrFlags::WRITE_MEM, op2)),
                 0x19 => {
                     need(bytes, 3)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "no",
                         format!("{}", bytes[2]),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2]],
-                    )
+                    ))
                 }
-                0x1a => prefixed("rethrow", InstrFlags::BRANCH, op2),
+                0x1a => Ok(prefixed("rethrow", InstrFlags::BRANCH, op2)),
                 0x1c => {
                     need(bytes, 6)?;
-                    prefixed_ops(
+                    Ok(prefixed_ops(
                         "sizeof",
                         format!("#{:#010x}", u32le(bytes, 2)),
                         InstrFlags::NONE,
                         vec![0xfe, op2, bytes[2], bytes[3], bytes[4], bytes[5]],
-                    )
+                    ))
                 }
-                0x1d => prefixed("refanytype", InstrFlags::NONE, op2),
-                0x1e => prefixed("readonly", InstrFlags::NONE, op2),
+                0x1d => Ok(prefixed("refanytype", InstrFlags::NONE, op2)),
+                0x1e => Ok(prefixed("readonly", InstrFlags::NONE, op2)),
                 _ => Err(CilDecodeError::UnknownPrefixedOpcode(op2)),
             }
         }

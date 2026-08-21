@@ -355,7 +355,6 @@ impl CilExecutionEngine {
                     let Ok(next) = usize::try_from(next) else { break };
                     if next >= opcodes.len() { break; }
                     pc = next;
-                    continue;
                 }
 
                 // br.s (short branch)
@@ -365,7 +364,6 @@ impl CilExecutionEngine {
                     let Ok(next) = usize::try_from(next) else { break };
                     if next >= opcodes.len() { break; }
                     pc = next;
-                    continue;
                 }
 
                 // ── conditional branches (short) ──────────────────────────
@@ -380,7 +378,6 @@ impl CilExecutionEngine {
                     } else {
                         fallthrough
                     };
-                    continue;
                 }
 
                 // ── switch (0x45): count + n*4 byte table, pops 1 value ──
@@ -392,13 +389,12 @@ impl CilExecutionEngine {
                     stack.pop();
                     // skip opcode byte + 4-byte count + n*4 offset entries
                     // Use checked arithmetic to prevent integer overflow on large n.
-                    let next_pc = match n.checked_mul(4).and_then(|v| v.checked_add(pc + 5)) {
-                        Some(v) => v,
-                        None => break,
+                    let Some(next_pc) = n.checked_mul(4).and_then(|v| v.checked_add(pc + 5))
+                    else {
+                        break;
                     };
                     if next_pc >= opcodes.len() { break; }
                     pc = next_pc;
-                    continue;
                 }
 
                 // ── conditional branches (long) ───────────────────────────
@@ -416,7 +412,6 @@ impl CilExecutionEngine {
                     } else {
                         fallthrough
                     };
-                    continue;
                 }
 
                 // ── arithmetic ───────────────────────────────────────────

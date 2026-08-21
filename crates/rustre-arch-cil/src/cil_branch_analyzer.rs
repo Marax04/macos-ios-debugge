@@ -360,9 +360,8 @@ impl CfgBuilder {
         let mut raw_blocks: Vec<(u32, Vec<DecodedCilInstr>)> = Vec::new();
         for (li, &leader) in sorted_leaders.iter().enumerate() {
             let next_leader = sorted_leaders.get(li + 1).copied().unwrap_or(max_offset);
-            let start_idx = match offset_to_idx.get(&leader) {
-                Some(&i) => i,
-                None => continue,
+            let Some(&start_idx) = offset_to_idx.get(&leader) else {
+                continue;
             };
             let slice: Vec<DecodedCilInstr> = self.instrs[start_idx..]
                 .iter()
@@ -411,9 +410,8 @@ impl CfgBuilder {
 
         // Step 4: wire edges.
         for i in 0..n {
-            let last = match blocks[i].last_instr().cloned() {
-                Some(l) => l,
-                None => continue,
+            let Some(last) = blocks[i].last_instr().cloned() else {
+                continue;
             };
             let fall_through = blocks[i].end_offset;
             let mut succs: Vec<CfgEdge> = vec![];

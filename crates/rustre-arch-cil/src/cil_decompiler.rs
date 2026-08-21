@@ -896,29 +896,29 @@ impl CSharpCodeGenerator {
     ) -> String {
         let mut code = String::new();
         if method.is_async {
-            write!(code, 
-                "{}async {} {}()\n",
+            writeln!(code,
+                "{}async {} {}()",
                 self.indent_str(),
                 return_type,
                 name
             )
                 .expect("writing to a String is infallible");
         } else {
-            write!(code, 
-                "{}{} {}()\n",
+            writeln!(code,
+                "{}{} {}()",
                 self.indent_str(),
                 return_type,
                 name
             )
                 .expect("writing to a String is infallible");
         }
-        write!(code, "{}{{\n", self.indent_str()).expect("writing to a String is infallible");
+        writeln!(code, "{}{{", self.indent_str()).expect("writing to a String is infallible");
         self.push_indent();
         for stmt in &method.stmts {
             write!(code, "{}{}", self.indent_str(), stmt).expect("writing to a String is infallible");
         }
         self.pop_indent();
-        write!(code, "{}}}\n", self.indent_str()).expect("writing to a String is infallible");
+        writeln!(code, "{}}}", self.indent_str()).expect("writing to a String is infallible");
         code
     }
 

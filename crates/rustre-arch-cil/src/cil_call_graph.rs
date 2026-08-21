@@ -463,9 +463,8 @@ impl<R: TokenResolver> CallGraphBuilder<R> {
         caller_token: u32,
         instrs: &[DecodedCilInstr],
     ) -> Result<(), CallGraphError> {
-        let caller_id = match self.graph.token_to_node.get(&caller_token) {
-            Some(&id) => id,
-            None => return Err(CallGraphError::UnknownToken(caller_token)),
+        let Some(&caller_id) = self.graph.token_to_node.get(&caller_token) else {
+            return Err(CallGraphError::UnknownToken(caller_token));
         };
 
         let mut tail_prefix = false;
