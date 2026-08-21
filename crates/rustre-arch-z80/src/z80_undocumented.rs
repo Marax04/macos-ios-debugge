@@ -489,14 +489,8 @@ const fn reg_from_bits(b: u8) -> Option<Z80Reg> {
 /// Returns `Some((UndocInsn, bytes_consumed))` or `None` for official or
 /// unrecognised encodings.
 #[must_use]
-pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
-    if bytes.is_empty() {
-        return None;
-    }
-
-    match bytes[0] {
-        // ── DD prefix ────────────────────────────────────────────────────────
-        0xDD => {
+/// Undocumented DD-prefixed forms: the IXH/IXL half-register instructions.
+fn undoc_decode_dd(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
             if bytes.len() < 2 {
                 return None;
             }
@@ -560,9 +554,10 @@ pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
                 }
                 _ => None,
             }
-        }
-        // ── FD prefix ────────────────────────────────────────────────────────
-        0xFD => {
+}
+
+/// Undocumented FD-prefixed forms: the IYH/IYL half-register instructions.
+fn undoc_decode_fd(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
             if bytes.len() < 2 {
                 return None;
             }
@@ -615,7 +610,18 @@ pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
                 }
                 _ => None,
             }
-        }
+}
+
+pub fn undoc_decode(bytes: &[u8]) -> Option<(UndocInsn, usize)> {
+    if bytes.is_empty() {
+        return None;
+    }
+
+    match bytes[0] {
+        // ── DD prefix ────────────────────────────────────────────────────────
+        0xDD => undoc_decode_dd(bytes),
+        // ── FD prefix ────────────────────────────────────────────────────────
+        0xFD => undoc_decode_fd(bytes),
         // ── CB prefix: SLL (undocumented shift, 0x30-0x37) ───────────────────
         0xCB => {
             if bytes.len() < 2 {

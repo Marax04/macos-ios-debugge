@@ -638,6 +638,14 @@ pub fn decode_gb(bytes: &[u8], pc: u16) -> GbDecoded {
         0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
             GbDecoded { mnemonic: "ILLEGAL".into(), operands: format!("${op:02X}"), size: 1 }
         }
+        _ => decode_gb_patterned(op, x, y, z, bytes),
+    }
+}
+
+/// Game Boy opcodes recognised by bit pattern rather than by exact value:
+/// the x=1 register loads, x=0/z=1 16-bit loads and the x=2 ALU block.
+fn decode_gb_patterned(op: u8, x: u8, y: u8, z: u8, bytes: &[u8]) -> GbDecoded {
+    match op {
         // 8-bit register loads x=1
         op if x == 1 && op != 0x76 => {
             let dst = GB_R8_NAMES[y as usize];
