@@ -194,8 +194,8 @@ pub const fn vector_name(index: u8) -> &'static str {
         12 => "TIMER1_A1",
         13 => "TIMER1_A0",
         14 => "NMI",
-        15 => "RESET",
-        16..=27 => "RESERVED",
+        15 | 63 => "RESET",
+        16..=27 | 43..=61 => "RESERVED",
         28 => "NMI_SRC",
         29 => "SYS_NMI",
         30 => "TIMER2_A1",
@@ -211,9 +211,7 @@ pub const fn vector_name(index: u8) -> &'static str {
         40 => "PORT4",
         41 => "PORT5",
         42 => "PORT6",
-        43..=61 => "RESERVED",
         62 => "SYS_NMI2",
-        63 => "RESET",
         _ => "UNKNOWN",
     }
 }
@@ -410,7 +408,7 @@ mod tests {
         data[124] = 0x00; data[125] = 0xC0; // slot 62 → 0xC000
         let table = VectorTable::parse(&data, "TEST");
         let hmap = table.handler_map();
-        assert_eq!(hmap.get(&0xC000).map(|v| v.len()), Some(2));
+        assert_eq!(hmap.get(&0xC000).map(Vec::len), Some(2));
     }
 
     #[test]

@@ -111,7 +111,7 @@ fn reg_name_all_known_regs() {
     let expected = ["PC", "SP", "SR", "CG", "R4", "R5", "R6", "R7", "R8", "R9",
                     "R10", "R11", "R12", "R13", "R14", "R15"];
     for (i, name) in expected.iter().enumerate() {
-        assert_eq!(reg_name(i as u8), *name);
+        assert_eq!(reg_name(u8::try_from(i).unwrap()), *name);
     }
 }
 
@@ -494,7 +494,7 @@ fn register_file_pop_wraps() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "index out of bounds")]
 fn register_file_read_out_of_range_panics() {
     // Documented panic behavior — exercising the panic path.
     let rf = RegisterFile::new();
@@ -527,7 +527,7 @@ fn flat_memory_as_slice_full_size() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "would wrap past end of address space")]
 fn flat_memory_load_overflow_panics() {
     let mut m = FlatMemory::new();
     let big = vec![0u8; 0x100];
@@ -562,7 +562,7 @@ fn arch_20bit_max_addr() {
 #[test]
 fn arch_interrupt_vectors_contains_reset() {
     let a = Msp430Arch::new_16();
-    assert!(a.interrupt_vectors().iter().any(|v| *v == InterruptVector::Reset));
+    assert!(a.interrupt_vectors().contains(&InterruptVector::Reset));
 }
 
 #[test]
@@ -579,7 +579,7 @@ fn arch_registers_first_is_pc() {
 fn interrupt_vector_addresses_distinct() {
     let all = InterruptVector::all();
     let mut addrs: Vec<u16> = all.iter().map(|v| v.address()).collect();
-    addrs.sort();
+    addrs.sort_unstable();
     let len = addrs.len();
     addrs.dedup();
     assert_eq!(addrs.len(), len, "interrupt vector addresses must be unique");
@@ -589,7 +589,7 @@ fn interrupt_vector_addresses_distinct() {
 fn interrupt_vector_names_distinct() {
     let all = InterruptVector::all();
     let mut names: Vec<&str> = all.iter().map(|v| v.name()).collect();
-    names.sort();
+    names.sort_unstable();
     let len = names.len();
     names.dedup();
     assert_eq!(names.len(), len);

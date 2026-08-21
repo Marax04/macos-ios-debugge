@@ -603,12 +603,11 @@ mod tests {
         // No prior auth — strip is suspicious
         a.process_instruction(0x2000, "xpaci");
         let report = a.finish();
-        let strips: Vec<_> = report
+        let has_strip = report
             .findings
             .iter()
-            .filter(|f| matches!(f, PacFinding::UnauthenticatedStrip { .. }))
-            .collect();
-        assert!(!strips.is_empty());
+            .any(|f| matches!(f, PacFinding::UnauthenticatedStrip { .. }));
+        assert!(has_strip);
     }
 
     #[test]

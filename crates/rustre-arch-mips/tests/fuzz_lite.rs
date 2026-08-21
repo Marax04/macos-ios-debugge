@@ -18,6 +18,12 @@
 use rustre_arch_mips::MipsArch;
 use rustre_core::address::Address;
 
+/// Low 32 bits of a PRNG word — MIPS instructions are 32 bits wide, and
+/// masking first makes the conversion provably in range.
+fn low32(v: u64) -> u32 {
+    u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0)
+}
+
 /// xorshift64* — deterministic, no external crates.
 struct Rng(u64);
 
@@ -61,7 +67,7 @@ fn exercise_word(word: u32) {
 fn random_words_never_panic() {
     let mut rng = Rng(0x2545_F491_4F6C_DD1D);
     for _ in 0..4_000 {
-        exercise_word(rng.next() as u32);
+        exercise_word(low32(rng.next()));
     }
 }
 
@@ -71,7 +77,7 @@ fn primary_opcode_sweep_never_panics() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     for op in 0u32..64 {
         for _ in 0..32 {
-            let base = rng.next() as u32;
+            let base = low32(rng.next());
             exercise_word((base & 0x03FF_FFFF) | (op << 26));
         }
     }
@@ -86,7 +92,7 @@ fn special_funct_sweep_never_panics() {
     let mut rng = Rng(0x1234_5678_9ABC_DEF0);
     for funct in 0u32..64 {
         for _ in 0..32 {
-            let base = rng.next() as u32;
+            let base = low32(rng.next());
             // opcode = 0 (SPECIAL), funct in the low 6 bits.
             exercise_word((base & 0x03FF_FFC0) | funct);
         }

@@ -12,7 +12,18 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
+/// Convert a slice index to a `u32` byte-address component.
+///
+/// Inputs index a buffer that is itself addressed with 32-bit MIPS
+/// addresses, so the value always fits; `unwrap_or` keeps this total
+/// rather than panicking on an oversized buffer.
+#[must_use]
+pub fn index_u32(index: usize) -> u32 {
+    u32::try_from(index).unwrap_or(u32::MAX)
+}
+
 /// Re-exported map type used by MIPS analysis tables.
+///
 /// `BTreeMap` is used instead of `HashMap` to prevent hash-collision `DoS` when
 /// keys derive from attacker-controlled binary content (addresses, offsets).
 pub type MipsMap<K, V> = BTreeMap<K, V>;
@@ -156,7 +167,7 @@ impl MipsInsn {
     }
     #[must_use]
     pub const fn imm16(self) -> i16 {
-        self.0 as i16
+        ((self.0 & 0xFFFF) as u16).cast_signed()
     }
     #[must_use]
     pub const fn instr_index(self) -> u32 {
@@ -227,7 +238,7 @@ impl MipsInsn {
     #[must_use]
     pub fn branch_target(self, pc: u32) -> u32 {
         let offset = i32::from(self.imm16()) * 4;
-        (pc as i32 + 4 + offset) as u32
+        (pc.cast_signed() + 4 + offset).cast_unsigned()
     }
 
     /// Jump target (j-type absolute in 256 MB page).
@@ -312,7 +323,7 @@ impl MipsFunctionProfiler {
             }
             // ADDIU SP, SP, -N: stack frame setup (op=0x09, rs=29, rt=29, imm<0)
             if raw & 0xFFFF_0000 == 0x27BD_0000 {
-                let imm = raw as i16;
+                let imm = ((raw & 0xFFFF) as u16).cast_signed();
                 if imm < 0 {
                     profile.stack_frame_size = Some(imm);
                 }
@@ -347,6 +358,11 @@ impl MipsFunctionProfiler {
 // ---------------------------------------------------------------------------
 
 /// Scans a MIPS binary for printable ASCII strings (min 4 chars).
+///
+/// # Panics
+///
+/// Never panics in practice: the only fallible step builds a `String` from
+/// bytes already validated with [`u8::is_ascii`].
 #[must_use]
 pub fn scan_mips_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<(u32, String)> {
     let mut result = Vec::new();
@@ -360,7 +376,7 @@ pub fn scan_mips_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<(u32, S
             buf.push(b as char);
         } else {
             if buf.len() >= min_len {
-                result.push((base + run_start.unwrap() as u32, std::mem::take(&mut buf)));
+                result.push((base + index_u32(run_start.unwrap()), std::mem::take(&mut buf)));
             } else {
                 buf.clear();
             }
@@ -370,7 +386,7 @@ pub fn scan_mips_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<(u32, S
     if buf.len() >= min_len {
         // run_start is always Some when buf is non-empty; unwrap_or(0) would silently
         // produce a wrong address, so use unwrap() to expose logic errors early.
-        result.push((base + run_start.unwrap() as u32, buf));
+        result.push((base + index_u32(run_start.unwrap()), buf));
     }
     result
 }
@@ -422,7 +438,7 @@ impl DelaySlotAnalyzer {
                 bytes[i * 4 + 3],
             ]);
             let insn = MipsInsn(raw);
-            let addr = base + (i as u32) * 4;
+            let addr = base + index_u32(i) * 4;
             if insn.has_delay_slot() {
                 let ds_addr = addr + 4;
                 let (ds_is_branch, ds_is_nop) = if i + 1 < words {
@@ -433,7 +449,7 @@ impl DelaySlotAnalyzer {
                         bytes[(i + 1) * 4 + 3],
                     ]);
                     let ds = MipsInsn(ds_raw);
-                    (ds.has_delay_slot(), ds_raw == 0x00000000) // NOP = SLL $0,$0,0
+                    (ds.has_delay_slot(), ds_raw == 0x0000_0000) // NOP = SLL $0,$0,0
                 } else {
                     (false, false)
                 };
@@ -502,7 +518,7 @@ impl GlobalPointerUsage {
                 bytes[i * 4 + 3],
             ]);
             let insn = MipsInsn(raw);
-            let addr = base + (i as u32) * 4;
+            let addr = base + index_u32(i) * 4;
             if insn.is_gp_relative() {
                 let is_load = matches!(insn.op(), 0x23 | 0x21 | 0x20 | 0x25 | 0x24);
                 self.accesses.push(GpAccess {
@@ -517,7 +533,8 @@ impl GlobalPointerUsage {
     /// Resolve a GP-relative offset to an absolute address.
     #[must_use]
     pub fn resolve(&self, offset: i16) -> Option<u32> {
-        self.gp_value.map(|gp| (i64::from(gp) + i64::from(offset)) as u32)
+        self.gp_value
+            .map(|gp| crate::low_u32_of_i64(i64::from(gp) + i64::from(offset)))
     }
 
     #[must_use]
@@ -583,7 +600,7 @@ impl MipsExceptionHandler {
             ]);
             // ERET: COP0 (op=0x10), CO=1, funct=0x18 → 0x42000018
             if raw == 0x4200_0018 {
-                let addr = base + (i as u32) * 4;
+                let addr = base + index_u32(i) * 4;
                 self.handlers.push(ExceptionHandler {
                     addr,
                     kind: ExceptionKind::Unknown,
@@ -639,7 +656,7 @@ impl MipsTlb {
                 bytes[i * 4 + 3],
             ]);
             let insn = MipsInsn(raw);
-            let addr = base + (i as u32) * 4;
+            let addr = base + index_u32(i) * 4;
             if insn.is_tlb_op() {
                 let kind = match insn.funct() {
                     0x02 => TlbOpKind::Tlbwi,
@@ -687,7 +704,7 @@ impl MipsBranchTargetTable {
                 bytes[i * 4 + 3],
             ]);
             let insn = MipsInsn(raw);
-            let addr = base + (i as u32) * 4;
+            let addr = base + index_u32(i) * 4;
             if insn.is_branch() {
                 let target = insn.branch_target(addr);
                 self.targets.insert(target);
@@ -787,7 +804,7 @@ mod tests {
     #[test]
     fn test_mips_insn_nop_no_delay() {
         // NOP = 0x00000000 (SLL $0,$0,0)
-        let insn = MipsInsn(0x00000000);
+        let insn = MipsInsn(0x0000_0000);
         assert!(!insn.has_delay_slot());
     }
 
@@ -903,8 +920,8 @@ mod tests {
     #[test]
     fn test_gp_usage_resolve() {
         let mut gpu = GlobalPointerUsage::new();
-        gpu.set_gp(0x10000000);
-        assert_eq!(gpu.resolve(0x100), Some(0x10000100));
+        gpu.set_gp(0x1000_0000);
+        assert_eq!(gpu.resolve(0x100), Some(0x1000_0100));
     }
 
     #[test]
@@ -1109,8 +1126,8 @@ mod tests {
     #[test]
     fn test_gp_usage_negative_offset() {
         let mut gpu = GlobalPointerUsage::new();
-        gpu.set_gp(0x10001000);
-        assert_eq!(gpu.resolve(-0x100i16), Some(0x10000F00));
+        gpu.set_gp(0x1000_1000);
+        assert_eq!(gpu.resolve(-0x100i16), Some(0x1000_0F00));
     }
 
     #[test]

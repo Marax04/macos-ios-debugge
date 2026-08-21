@@ -1,9 +1,9 @@
 //! Adversarial deep tests for `rustre-arch-msp430`.
 //!
-//! Covers the public lib.rs API: constant generator, addressing modes,
+//! Covers the public `lib.rs` API: constant generator, addressing modes,
 //! emulated-instruction detection, decoder (formats I/II/III + jumps),
-//! ALU primitives, RegisterFile, FlatMemory, Msp430Emulator, build_cfg,
-//! InterruptVector, and the msp430x extension helpers.
+//! ALU primitives, `RegisterFile`, `FlatMemory`, `Msp430Emulator`, `build_cfg`,
+//! `InterruptVector`, and the msp430x extension helpers.
 
 use rustre_core::arch::InstrFlags;
 use rustre_arch_msp430::msp430x;
@@ -18,21 +18,21 @@ use rustre_arch_msp430::{
 
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn u16(&mut self) -> u16 {
-        self.next() as u16
+    const fn u16(&mut self) -> u16 {
+        (self.next() & 0xFFFF) as u16
     }
-    fn u8(&mut self) -> u8 {
-        self.next() as u8
+    const fn u8(&mut self) -> u8 {
+        (self.next() & 0xFF) as u8
     }
 }
 
@@ -148,7 +148,7 @@ fn reg_name_all_16() {
         "R14", "R15",
     ];
     for (i, n) in names.iter().enumerate() {
-        assert_eq!(reg_name(i as u8), *n);
+        assert_eq!(reg_name(u8::try_from(i).unwrap()), *n);
     }
     assert_eq!(reg_name(16), "Rx");
     assert_eq!(reg_name(255), "Rx");
@@ -274,9 +274,9 @@ fn alu_subc_matches_addc_with_inverted_src() {
     for _ in 0..50 {
         let s = lcg.u16();
         let d = lcg.u16();
-        let c = (lcg.u8() & 1) != 0;
-        let a = alu_subc(s, d, c);
-        let b = alu_addc(!s, d, c);
+        let carry = (lcg.u8() & 1) != 0;
+        let a = alu_subc(s, d, carry);
+        let b = alu_addc(!s, d, carry);
         assert_eq!(a, b);
     }
 }
@@ -376,7 +376,7 @@ fn register_file_read_write_round_trip() {
     let mut rf = RegisterFile::new();
     let mut model = [0u16; 16];
     for _ in 0..200 {
-        let r = (lcg.u8() & 0xF) as u8;
+        let r = lcg.u8() & 0xF;
         let v = lcg.u16();
         rf.write(r, v);
         model[r as usize] = v;
@@ -471,7 +471,7 @@ fn flat_memory_byte_round_trip() {
         model[a as usize] = v;
     }
     for a in (0..=0xFFFFu32).step_by(13) {
-        assert_eq!(m.read_byte(a as u16), model[a as usize]);
+        assert_eq!(m.read_byte(u16::try_from(a).unwrap()), model[a as usize]);
     }
 }
 
@@ -480,7 +480,7 @@ fn flat_memory_word_le_round_trip() {
     let mut lcg = Lcg::new(0x0123_4567_89AB_CDEF);
     let mut m = FlatMemory::new();
     for _ in 0..200 {
-        let a = (lcg.u16() & 0xFFFE).max(0); // even
+        let a = lcg.u16() & 0xFFFE; // even; a u16 needs no lower clamp
         let v = lcg.u16();
         m.write_word(a, v);
         assert_eq!(m.read_word(a), v);
@@ -506,7 +506,7 @@ fn flat_memory_load_ok() {
     let data = [1u8, 2, 3, 4, 5];
     m.load(0x1000, &data);
     for (i, &b) in data.iter().enumerate() {
-        assert_eq!(m.read_byte(0x1000 + i as u16), b);
+        assert_eq!(m.read_byte(0x1000 + u16::try_from(i).unwrap()), b);
     }
 }
 
@@ -548,7 +548,7 @@ fn interrupt_vector_addresses_unique() {
     // All in vector area.
     for v in all {
         let a = v.address();
-        assert!(a >= 0xFFE0 && a <= 0xFFFE);
+        assert!((0xFFE0..=0xFFFE).contains(&a));
         assert!(!v.name().is_empty());
     }
     assert_eq!(InterruptVector::Reset.address(), 0xFFFE);
@@ -616,7 +616,7 @@ fn decode_conditional_jumps_all_names() {
         // single-operand format, whose first entry is RRC, which is why the
         // decoder answered "RRC.W" and the test failed: it decoded the word it
         // was actually given, correctly. One missing bit, not a decoder defect.
-        let word: u16 = 0b0010_0000_0000_0000 | ((cond as u16) << 10);
+        let word: u16 = 0b0010_0000_0000_0000 | (u16::try_from(cond).unwrap() << 10);
         assert_eq!(word & 0xE000, 0x2000, "jump opcode base must be 0x2000");
         let bytes = word.to_le_bytes();
         let d = decode(&bytes, 0x1000).unwrap();
@@ -724,13 +724,13 @@ fn decode_round_trip_jmp_targets_50() {
     // Encode a JMP with various offsets and verify the decoded target.
     let mut lcg = Lcg::new(0xABCD_EF01_2345_6789);
     for _ in 0..50 {
-        let raw = (lcg.u16() & 0x3FF) as i16;
+        let raw = (lcg.u16() & 0x3FF).cast_signed();
         let offset = if raw & 0x200 != 0 { raw | (-0x400_i16) } else { raw };
-        let word: u16 = 0b0011_1100_0000_0000 | (raw as u16); // JMP cond=7
+        let word: u16 = 0b0011_1100_0000_0000 | raw.cast_unsigned(); // JMP cond=7
         let pc: u64 = 0x4000;
         let bytes = word.to_le_bytes();
         let d = decode(&bytes, pc).unwrap();
-        let expected = (pc as i64).wrapping_add(2).wrapping_add(i64::from(offset) * 2) as u64;
+        let expected = pc.wrapping_add(2).wrapping_add_signed(i64::from(offset) * 2);
         assert_eq!(d.branch_target, Some(expected));
     }
 }
@@ -829,14 +829,14 @@ fn emulator_lcg_random_step_no_panic() {
     let mut e = Msp430Emulator::new();
     // Fill some memory deterministically.
     for a in (0..0x800u32).step_by(2) {
-        e.mem.write_word(a as u16, lcg.u16());
+        e.mem.write_word(u16::try_from(a).unwrap(), lcg.u16());
     }
     e.regs.set_pc(0x0100);
     e.regs.set_sp(0x07FE);
     for _ in 0..200 {
         // Must never panic regardless of the random opcodes.
         let _ = e.step();
-        if e.regs.pc() as u32 >= 0x07F0 {
+        if u32::from(e.regs.pc()) >= 0x07F0 {
             e.regs.set_pc(0x0100);
         }
     }
@@ -998,21 +998,24 @@ fn flat_memory_is_send_sync_arc_mutex_stress() {
     use std::sync::{Arc, Mutex};
     use std::thread;
 
-    let m = Arc::new(Mutex::new(FlatMemory::new()));
+    let shared = Arc::new(Mutex::new(FlatMemory::new()));
     let mut handles = Vec::new();
-    for t in 0..4u32 {
-        let m2 = Arc::clone(&m);
+    for thread_id in 0..4u32 {
+        let m2 = Arc::clone(&shared);
         handles.push(thread::spawn(move || {
-            let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ u64::from(t);
+            let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ u64::from(thread_id);
             for _ in 0..100 {
                 s = s
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
-                let a = (s as u16) & 0xFFFE;
-                let v = (s >> 16) as u16;
-                let mut g = m2.lock().unwrap();
-                g.write_word(a, v);
-                assert_eq!(g.read_word(a), v);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                let a = ((s & 0xFFFF) as u16) & 0xFFFE;
+                let v = ((s >> 16) & 0xFFFF) as u16;
+                let v_read = {
+                    let mut g = m2.lock().unwrap();
+                    g.write_word(a, v);
+                    g.read_word(a)
+                };
+                assert_eq!(v_read, v);
             }
         }));
     }
@@ -1034,13 +1037,16 @@ fn register_file_send_sync_threaded() {
             let mut s: u64 = 0x1234_5678_9ABC_DEF0 ^ u64::from(t);
             for _ in 0..100 {
                 s = s
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
-                let reg = (s as u8) & 0xF;
-                let v = (s >> 16) as u16;
-                let mut g = r.lock().unwrap();
-                g.write(reg, v);
-                assert_eq!(g.read(reg), v);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                let reg = ((s & 0xFF) as u8) & 0xF;
+                let v = ((s >> 16) & 0xFFFF) as u16;
+                let v_read = {
+                    let mut g = r.lock().unwrap();
+                    g.write(reg, v);
+                    g.read(reg)
+                };
+                assert_eq!(v_read, v);
             }
         }));
     }

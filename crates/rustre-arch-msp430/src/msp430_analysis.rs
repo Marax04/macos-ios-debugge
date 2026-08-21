@@ -336,7 +336,7 @@ impl PowerModeAnalysis {
         let mut i = 0;
         while i < hwords {
             let hw = u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-            let addr = base + (i as u32) * 2;
+            let Some(addr) = hword_addr(base, i) else { break };
             // BIS.W #imm, SR = 0xD032 (immediate, next word) or 0xD322 for R2 operand
             // LPM entry patterns: BIS.B/W with various SR bits
             // Check for "BIS #imm16, SR" = 0xD032 followed by the SR mask
@@ -347,11 +347,12 @@ impl PowerModeAnalysis {
                 let scg1 = (imm >> 5) & 1; // Note: SR bit layout varies by doc
                 let oscoff = (imm >> 5) & 1;
                 let mode = match (cpuoff, scg0, scg1, oscoff) {
-                    (1, 0, 0, _) => PowerMode::Lpm0,
                     (1, 0, 1, _) => PowerMode::Lpm1,
                     (1, 1, 0, _) => PowerMode::Lpm2,
                     (1, 1, 1, _) => PowerMode::Lpm3,
-                    _ => PowerMode::Lpm0, // default
+                    // The explicit LPM0 encoding (cpuoff=1, scg0=0, scg1=0)
+                    // and every other bit combination both mean LPM0.
+                    _ => PowerMode::Lpm0,
                 };
                 self.events.push(PowerModeEvent {
                     addr,
@@ -421,7 +422,7 @@ impl CriticalSectionDetector {
 
         for i in 0..hwords {
             let hw = u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-            let addr = base + (i as u32) * 2;
+            let Some(addr) = hword_addr(base, i) else { break };
             let insn = Msp430InsnWord(hw);
 
             if insn.is_dint() {
@@ -505,16 +506,16 @@ impl WatchdogPatterns {
         let mut i = 0;
         while i < hwords {
             let hw = u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-            let addr = base + (i as u32) * 2;
+            let Some(addr) = hword_addr(base, i) else { break };
             // MOV.W #imm16, &abs: 0x40B2 <imm16> <abs16>
             if hw == 0x40B2 && i + 2 < hwords {
                 let imm = u16::from_le_bytes([bytes[(i + 1) * 2], bytes[(i + 1) * 2 + 1]]);
                 let abs = u16::from_le_bytes([bytes[(i + 2) * 2], bytes[(i + 2) * 2 + 1]]);
                 if abs == 0x015C {
                     // WDTCTL address
-                    let high_byte = (imm >> 8) as u8;
+                    let high_byte = ((imm >> 8) & 0xFF) as u8;
                     if high_byte == 0x5A {
-                        let low_byte = imm as u8;
+                        let low_byte = (imm & 0xFF) as u8;
                         let kind = if low_byte == 0x80 {
                             WdtEventKind::Disable
                         } else if low_byte & 0x80 != 0 {
@@ -587,20 +588,21 @@ impl FlashWriteDetector {
         let mut i = 0;
         while i < hwords {
             let hw = u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-            let addr = base + (i as u32) * 2;
+            let Some(addr) = hword_addr(base, i) else { break };
             // MOV.W #imm, &abs: 0x40B2 imm abs
             if hw == 0x40B2 && i + 2 < hwords {
                 let imm = u16::from_le_bytes([bytes[(i + 1) * 2], bytes[(i + 1) * 2 + 1]]);
                 let abs = u16::from_le_bytes([bytes[(i + 2) * 2], bytes[(i + 2) * 2 + 1]]);
-                let high = (imm >> 8) as u8;
+                let high = ((imm >> 8) & 0xFF) as u8;
                 if abs == 0x012C && high == 0xA5 {
                     // FCTL1 password = 0xA5xx
-                    let low = imm as u8;
+                    let low = (imm & 0xFF) as u8;
                     let kind = match low {
                         0x40 => FlashWriteKind::ByteWrite,
-                        0x42 => FlashWriteKind::WordWrite,
                         0x02 => FlashWriteKind::Erase,
                         0x04 => FlashWriteKind::MassErase,
+                        // 0x42 is the explicit word-write encoding; any other
+                        // password byte is treated as a word write as well.
                         _ => FlashWriteKind::WordWrite,
                     };
                     self.sequences.push(FlashWriteSeq {
@@ -709,6 +711,16 @@ pub const MSP430_VECTOR_NAMES: [&str; 32] = [
     "VEC31",
 ];
 
+/// Byte address of half-word `i` inside a region that starts at `base`.
+///
+/// Returns `None` when the half-word index does not fit the 32-bit address
+/// space, which bounds every scanner below to input it can actually address
+/// instead of silently wrapping on an oversized slice.
+#[must_use]
+fn hword_addr(base: u32, i: usize) -> Option<u32> {
+    Some(base.wrapping_add(u32::try_from(i).ok()?.wrapping_mul(2)))
+}
+
 /// Parses the interrupt vector table from the last 64 bytes of flash.
 #[must_use] 
 pub fn parse_interrupt_vectors(vector_table_bytes: &[u8]) -> Vec<IsrInfo> {
@@ -717,22 +729,20 @@ pub fn parse_interrupt_vectors(vector_table_bytes: &[u8]) -> Vec<IsrInfo> {
     }
     let mut isrs = Vec::new();
     let start_offset = vector_table_bytes.len() - 64;
-    for i in 0..32usize {
-        let off = start_offset + i * 2;
-        if off + 2 > vector_table_bytes.len() {
-            break;
-        }
-        let addr =
-            u32::from(u16::from_le_bytes([vector_table_bytes[off], vector_table_bytes[off + 1]]));
+    for (i, entry) in vector_table_bytes[start_offset..].chunks_exact(2).enumerate().take(32) {
+        let addr = u32::from(u16::from_le_bytes([entry[0], entry[1]]));
         if addr != 0 && addr != 0xFFFF {
             let name = if i < MSP430_VECTOR_NAMES.len() {
                 MSP430_VECTOR_NAMES[i]
             } else {
                 "Unknown"
             };
+            // `take(32)` bounds the index, so this conversion always succeeds;
+            // stopping rather than truncating keeps the indices honest anyway.
+            let Ok(vector_index) = u8::try_from(i) else { break };
             isrs.push(IsrInfo {
                 handler_addr: addr,
-                vector_index: i as u8,
+                vector_index,
                 name,
             });
         }
@@ -751,9 +761,11 @@ pub struct FlashString {
     pub value: String,
 }
 
-/// Maximum number of characters accumulated for a single string run before
-/// the run is truncated. Prevents unbounded memory growth when scanning large
-/// attacker-controlled inputs that consist entirely of printable bytes.
+/// Character cap for a single accumulated string run.
+///
+/// A run longer than this is truncated, which prevents unbounded memory growth
+/// when scanning large attacker-controlled inputs that consist entirely of
+/// printable bytes.
 pub const MAX_FLASH_STRING_RUN: usize = 4096;
 
 /// Scans a binary region for printable ASCII strings (min 4 chars).
@@ -773,9 +785,12 @@ pub fn scan_flash_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<FlashS
                 run_buf.push(b as char);
             }
         } else {
-            if run_buf.len() >= min_len {
+            if run_buf.len() >= min_len
+                && let Some(start) = run_start
+                && let Ok(off) = u32::try_from(start)
+            {
                 result.push(FlashString {
-                    addr: base + run_start.unwrap() as u32,
+                    addr: base.wrapping_add(off),
                     value: run_buf.clone(),
                 });
             }
@@ -783,9 +798,11 @@ pub fn scan_flash_strings(base: u32, bytes: &[u8], min_len: usize) -> Vec<FlashS
             run_buf.clear();
         }
     }
-    if run_buf.len() >= min_len {
+    if run_buf.len() >= min_len
+        && let Ok(off) = u32::try_from(run_start.unwrap_or(0))
+    {
         result.push(FlashString {
-            addr: base + run_start.unwrap_or(0) as u32,
+            addr: base.wrapping_add(off),
             value: run_buf,
         });
     }
@@ -840,7 +857,7 @@ impl BootloaderAnalysis {
         let hwords = bytes.len() / 2;
         for i in 0..hwords {
             let hw = u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-            let addr = base + (i as u32) * 2;
+            let Some(addr) = hword_addr(base, i) else { break };
             // CALL #imm: 0x12B0 <target_addr>
             if hw == 0x12B0 && i + 1 < hwords {
                 let target = u16::from_le_bytes([bytes[(i + 1) * 2], bytes[(i + 1) * 2 + 1]]);

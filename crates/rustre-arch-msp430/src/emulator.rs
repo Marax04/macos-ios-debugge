@@ -431,11 +431,11 @@ pub fn step(state: &mut Msp430State) -> Result<StepResult, CoreError> {
 
 /// Wrapping cast from i32 to u16 — intentional for MSP430 16-bit PC arithmetic.
 #[inline]
-const fn i32_to_u16_wrap(v: i32) -> u16 { v as u16 }
+const fn i32_to_u16_wrap(v: i32) -> u16 { (v.cast_unsigned() & 0xFFFF) as u16 }
 
 /// Sign-extend i8 to u16 — intentional for MSP430 constant-generator values.
 #[inline]
-const fn i8_sext_u16(v: i8) -> u16 { v as u16 }
+const fn i8_sext_u16(v: i8) -> u16 { (v as i16).cast_unsigned() }
 
 // ── Jump execution ────────────────────────────────────────────────────────────
 
@@ -511,7 +511,7 @@ fn exec_single_op(state: &mut Msp430State, word: u16) -> StepResult {
         }
         2 /* RRA */ => {
             let r = if bw {
-                let byte_val = (val as u8).cast_signed() >> 1;
+                let byte_val = ((val & 0xFF) as u8).cast_signed() >> 1;
                 let carry = val & 1 != 0;
                 AluResult {
                     result:   u16::from(byte_val.cast_unsigned()),
@@ -635,7 +635,7 @@ fn exec_two_op(state: &mut Msp430State, word: u16, opcode4: u8) {
             None => {
                 state.regs[dst_reg as usize] = write_val;
                 // If writing to SR, check CPUOFF.
-                if dst_reg == regs::SR as u8 {
+                if u32::from(dst_reg) == regs::SR {
                     // handled by caller
                 }
             }
@@ -731,13 +731,10 @@ fn read_src_operand(
 const fn write_operand(state: &mut Msp430State, as_bits: u8, reg: u8, val: u16, bw: bool) {
     // In byte mode the upper byte of the destination register is cleared.
     let val = if bw { val & 0x00FF } else { val };
-    match src_addr_mode(as_bits, reg) {
-        AddrMode::Register => {
-            state.regs[reg as usize] = val;
-        }
-        // Indexed: extension word already consumed; EA computed at read time.
-        // All other modes: write-back is handled at the call site.
-        _ => {}
+    // Indexed: extension word already consumed; EA computed at read time.
+    // All other modes: write-back is handled at the call site.
+    if matches!(src_addr_mode(as_bits, reg), AddrMode::Register) {
+        state.regs[reg as usize] = val;
     }
 }
 

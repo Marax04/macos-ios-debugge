@@ -90,21 +90,107 @@ impl Default for MipsFpuState {
     }
 }
 
+/// The low 32 bits of a 64-bit GPR, as written to a 32-bit FPU register.
+///
+/// MIPS `mtc1`/`ctc1` move the low word of the GPR by definition; masking
+/// makes that explicit and provably in range.
+#[must_use]
+pub const fn low_u32(value: u64) -> u32 {
+    (value & 0xFFFF_FFFF) as u32
+}
+
 // ── FCSRFlags ────────────────────────────────────────────────────────────────
+
+/// Cause and flag bits from the FCSR register.
+/// The five IEEE-754 exception flags of FCSR, packed at their hardware bit
+/// positions instead of as separate `bool` fields.
+///
+/// Packing keeps the set addressable as one value (mask, union, compare) and
+/// mirrors how the FCSR register actually stores them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FpuExceptionFlags(u32);
+
+impl FpuExceptionFlags {
+    /// Inexact result (FCSR bit 2).
+    pub const INEXACT: u32 = 1 << 2;
+    /// Underflow (FCSR bit 3).
+    pub const UNDERFLOW: u32 = 1 << 3;
+    /// Overflow (FCSR bit 4).
+    pub const OVERFLOW: u32 = 1 << 4;
+    /// Division by zero (FCSR bit 5).
+    pub const DIV_ZERO: u32 = 1 << 5;
+    /// Invalid operation (FCSR bit 6).
+    pub const INVALID: u32 = 1 << 6;
+    /// Every exception bit this type models.
+    pub const ALL: u32 =
+        Self::INEXACT | Self::UNDERFLOW | Self::OVERFLOW | Self::DIV_ZERO | Self::INVALID;
+
+    /// Extract the exception bits from a raw FCSR value.
+    #[must_use]
+    pub const fn from_fcsr(fcsr: u32) -> Self {
+        Self(fcsr & Self::ALL)
+    }
+
+    /// The raw exception bits, positioned as in FCSR.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// True when every bit in `mask` is set.
+    #[must_use]
+    pub const fn contains(self, mask: u32) -> bool {
+        self.0 & mask == mask
+    }
+
+    /// Return a copy with `mask` set or cleared.
+    #[must_use]
+    pub const fn with(self, mask: u32, on: bool) -> Self {
+        Self(if on { self.0 | mask } else { self.0 & !mask })
+    }
+
+    /// Inexact result flag.
+    #[must_use]
+    pub const fn inexact(self) -> bool {
+        self.contains(Self::INEXACT)
+    }
+
+    /// Underflow flag.
+    #[must_use]
+    pub const fn underflow(self) -> bool {
+        self.contains(Self::UNDERFLOW)
+    }
+
+    /// Overflow flag.
+    #[must_use]
+    pub const fn overflow(self) -> bool {
+        self.contains(Self::OVERFLOW)
+    }
+
+    /// Division-by-zero flag.
+    #[must_use]
+    pub const fn div_zero(self) -> bool {
+        self.contains(Self::DIV_ZERO)
+    }
+
+    /// Invalid-operation flag.
+    #[must_use]
+    pub const fn invalid(self) -> bool {
+        self.contains(Self::INVALID)
+    }
+
+    /// True when no exception is recorded.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
 
 /// Cause and flag bits from the FCSR register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FCSRFlags {
-    /// Inexact result flag.
-    pub inexact: bool,
-    /// Underflow flag.
-    pub underflow: bool,
-    /// Overflow flag.
-    pub overflow: bool,
-    /// Division by zero flag.
-    pub div_zero: bool,
-    /// Invalid operation flag.
-    pub invalid: bool,
+    /// IEEE-754 exception flags.
+    pub exceptions: FpuExceptionFlags,
     /// Flush-to-zero mode.
     pub flush_zero: bool,
     /// Current rounding mode (RM field, bits 1:0).
@@ -112,41 +198,54 @@ pub struct FCSRFlags {
 }
 
 impl FCSRFlags {
+    /// Decode the flag and rounding fields of a raw FCSR value.
     #[must_use]
     pub const fn from_fcsr(fcsr: u32) -> Self {
         Self {
-            inexact: fcsr & (1 << 2) != 0,
-            underflow: fcsr & (1 << 3) != 0,
-            overflow: fcsr & (1 << 4) != 0,
-            div_zero: fcsr & (1 << 5) != 0,
-            invalid: fcsr & (1 << 6) != 0,
+            exceptions: FpuExceptionFlags::from_fcsr(fcsr),
             flush_zero: fcsr & (1 << 24) != 0,
             rounding: (fcsr & 0x3) as u8,
         }
     }
 
+    /// Re-encode these flags into a raw FCSR value.
     #[must_use]
     pub const fn to_fcsr(&self) -> u32 {
-        let mut v = self.rounding as u32;
-        if self.inexact {
-            v |= 1 << 2;
-        }
-        if self.underflow {
-            v |= 1 << 3;
-        }
-        if self.overflow {
-            v |= 1 << 4;
-        }
-        if self.div_zero {
-            v |= 1 << 5;
-        }
-        if self.invalid {
-            v |= 1 << 6;
-        }
+        let mut v = self.rounding as u32 | self.exceptions.bits();
         if self.flush_zero {
             v |= 1 << 24;
         }
         v
+    }
+
+    /// Inexact result flag.
+    #[must_use]
+    pub const fn inexact(&self) -> bool {
+        self.exceptions.inexact()
+    }
+
+    /// Underflow flag.
+    #[must_use]
+    pub const fn underflow(&self) -> bool {
+        self.exceptions.underflow()
+    }
+
+    /// Overflow flag.
+    #[must_use]
+    pub const fn overflow(&self) -> bool {
+        self.exceptions.overflow()
+    }
+
+    /// Division-by-zero flag.
+    #[must_use]
+    pub const fn div_zero(&self) -> bool {
+        self.exceptions.div_zero()
+    }
+
+    /// Invalid-operation flag.
+    #[must_use]
+    pub const fn invalid(&self) -> bool {
+        self.exceptions.invalid()
     }
 
     /// Return the rounding mode name.
@@ -167,11 +266,11 @@ impl fmt::Display for FCSRFlags {
         write!(
             f,
             "FCSRFlags{{inexact={}, underflow={}, overflow={}, div_zero={}, invalid={}, rm={}}}",
-            self.inexact,
-            self.underflow,
-            self.overflow,
-            self.div_zero,
-            self.invalid,
+            self.inexact(),
+            self.underflow(),
+            self.overflow(),
+            self.div_zero(),
+            self.invalid(),
             self.rounding_name()
         )
     }
@@ -202,25 +301,27 @@ pub enum FpuCondition {
 
 impl FpuCondition {
     /// Evaluate condition for two f64 values.
+    ///
+    /// These are IEEE-754 comparisons exactly as the hardware defines them, so
+    /// the exact-equality and unordered (NaN) cases are deliberate. They are
+    /// expressed through [`f64::partial_cmp`] so the ordered/unordered result
+    /// is explicit rather than hidden behind `==` and negated `>=`.
     #[must_use]
     pub fn evaluate_d(&self, a: f64, b: f64) -> bool {
+        use core::cmp::Ordering;
+        let ord = a.partial_cmp(&b);
+        let unordered = ord.is_none();
+        let is_eq = ord == Some(Ordering::Equal);
+        let is_lt = ord == Some(Ordering::Less);
         match self {
-            Self::F => false,
-            Self::Un => a.is_nan() || b.is_nan(),
-            Self::Eq => a == b,
-            Self::Ueq => a.is_nan() || b.is_nan() || a == b,
-            Self::Olt => !a.is_nan() && !b.is_nan() && a < b,
-            Self::Ult => a.is_nan() || b.is_nan() || a < b,
-            Self::Ole => !a.is_nan() && !b.is_nan() && a <= b,
-            Self::Ule => a.is_nan() || b.is_nan() || a <= b,
-            Self::Sf => false,
-            Self::Ngle => a.is_nan() || b.is_nan(),
-            Self::Seq => !a.is_nan() && !b.is_nan() && a == b,
-            Self::Ngl => a.is_nan() || b.is_nan() || a == b,
-            Self::Lt => a < b,
-            Self::Nge => !(a >= b),
-            Self::Le => a <= b,
-            Self::Ngt => !(a > b),
+            Self::F | Self::Sf => false,
+            Self::Un | Self::Ngle => unordered,
+            Self::Eq | Self::Seq => is_eq,
+            Self::Ueq | Self::Ngl => unordered || is_eq,
+            Self::Olt | Self::Lt => is_lt,
+            Self::Ult | Self::Nge => unordered || is_lt,
+            Self::Ole | Self::Le => is_lt || is_eq,
+            Self::Ule | Self::Ngt => unordered || is_lt || is_eq,
         }
     }
 
@@ -727,7 +828,7 @@ impl MipsFpuInsn {
             }
             // ── Load/Store ───────────────────────────────────────────────────
             Self::Lwc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
+                let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
                 let b0 = u32::from(*memory.get(&addr).unwrap_or(&0));
                 let b1 = u32::from(*memory.get(&(addr + 1)).unwrap_or(&0));
                 let b2 = u32::from(*memory.get(&(addr + 2)).unwrap_or(&0));
@@ -736,7 +837,7 @@ impl MipsFpuInsn {
                 fpu.fpr[ft as usize] = f64::from(f32::from_bits(bits));
             }
             Self::Ldc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
+                let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
                 let mut bits = 0u64;
                 for i in 0..8u64 {
                     bits |= u64::from(*memory.get(&(addr + i)).unwrap_or(&0)) << (i * 8);
@@ -744,14 +845,14 @@ impl MipsFpuInsn {
                 fpu.fpr[ft as usize] = f64::from_bits(bits);
             }
             Self::Swc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
+                let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
                 let bits = (fpu.fpr[ft as usize] as f32).to_bits();
                 for i in 0..4u64 {
                     memory.insert(addr + i, ((bits >> (i * 8)) & 0xFF) as u8);
                 }
             }
             Self::Sdc1 { ft, base, offset } => {
-                let addr = (gpr[base as usize] as i64 + i64::from(offset)) as u64;
+                let addr = (gpr[base as usize].cast_signed() + i64::from(offset)).cast_unsigned();
                 let bits = fpu.fpr[ft as usize].to_bits();
                 for i in 0..8u64 {
                     memory.insert(addr + i, ((bits >> (i * 8)) & 0xFF) as u8);
@@ -762,7 +863,7 @@ impl MipsFpuInsn {
                 gpr[rt as usize] = u64::from((fpu.fpr[fs as usize] as f32).to_bits());
             }
             Self::MtC1 { rt, fs } => {
-                let bits = gpr[rt as usize] as u32;
+                let bits = low_u32(gpr[rt as usize]);
                 fpu.fpr[fs as usize] = f64::from(f32::from_bits(bits));
             }
             Self::DmfC1 { rt, fs } => {
@@ -780,28 +881,28 @@ impl MipsFpuInsn {
             }
             Self::CtC1 { rt, fs } => {
                 if fs == 31 {
-                    fpu.fcsr = gpr[rt as usize] as u32;
+                    fpu.fcsr = low_u32(gpr[rt as usize]);
                 }
             }
             // ── Branches ─────────────────────────────────────────────────────
             Self::Bc1t { cc, offset } => {
                 if fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
+                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
             }
             Self::Bc1f { cc, offset } => {
                 if !fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
+                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
             }
             Self::Bc1tl { cc, offset } => {
                 if fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
+                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
             }
             Self::Bc1fl { cc, offset } => {
                 if !fpu.get_fcc(cc) {
-                    next_pc = (pc as i64 + 4 + i64::from(offset) * 4) as u64;
+                    next_pc = (pc.cast_signed() + 4 + i64::from(offset) * 4).cast_unsigned();
                 }
             }
         }
@@ -1215,9 +1316,9 @@ mod tests {
         let mut f = fpu();
         let mut g = gpr();
         let mut m = mem();
-        f.set_double(1, 3.14_f64);
+        f.set_double(1, 3.25_f64);
         MipsFpuInsn::NegD { fd: 0, fs: 1 }.execute(&mut f, &mut g, &mut m, 0);
-        assert!((f.get_double(0) + 3.14_f64).abs() < 1e-10);
+        assert!((f.get_double(0) + 3.25_f64).abs() < 1e-10);
     }
 
     #[test]
@@ -1225,9 +1326,9 @@ mod tests {
         let mut f = fpu();
         let mut g = gpr();
         let mut m = mem();
-        f.set_single(1, 3.14_f32);
+        f.set_single(1, 3.25_f32);
         MipsFpuInsn::CvtDS { fd: 0, fs: 1 }.execute(&mut f, &mut g, &mut m, 0);
-        assert!((f.get_double(0) - 3.14f32 as f64).abs() < 1e-6);
+        assert!((f.get_double(0) - f64::from(3.25f32)).abs() < 1e-6);
     }
 
     #[test]
@@ -1235,9 +1336,9 @@ mod tests {
         let mut f = fpu();
         let mut g = gpr();
         let mut m = mem();
-        f.set_double(1, 2.718_f64);
+        f.set_double(1, 2.75_f64);
         MipsFpuInsn::CvtSD { fd: 0, fs: 1 }.execute(&mut f, &mut g, &mut m, 0);
-        assert!((f.get_single(0) - 2.718f32).abs() < 1e-4);
+        assert!((f.get_single(0) - 2.75f32).abs() < 1e-4);
     }
 
     #[test]
@@ -1374,9 +1475,9 @@ mod tests {
         let mut f = fpu();
         let mut g = gpr();
         let mut m = mem();
-        f.set_single(5, 3.14_f32);
+        f.set_single(5, 3.25_f32);
         MipsFpuInsn::MovS { fd: 10, fs: 5 }.execute(&mut f, &mut g, &mut m, 0);
-        assert!((f.get_single(10) - 3.14f32).abs() < 1e-6);
+        assert!((f.get_single(10) - 3.25f32).abs() < 1e-6);
     }
 
     #[test]
@@ -1461,14 +1562,14 @@ mod tests {
         let mut fpu = MipsFpuState::new();
         fpu.fcsr = 0b0000_0000_0000_0000_0000_0000_0011_1100; // inexact+underflow+overflow+div_zero
         let flags = FCSRFlags::from_fcsr(fpu.fcsr);
-        assert!(flags.inexact);
-        assert!(flags.underflow);
-        assert!(flags.overflow);
-        assert!(flags.div_zero);
-        assert!(!flags.invalid);
+        assert!(flags.inexact());
+        assert!(flags.underflow());
+        assert!(flags.overflow());
+        assert!(flags.div_zero());
+        assert!(!flags.invalid());
         let back = flags.to_fcsr();
         let flags2 = FCSRFlags::from_fcsr(back);
-        assert_eq!(flags2.inexact, flags.inexact);
+        assert_eq!(flags2.inexact(), flags.inexact());
     }
 
     #[test]

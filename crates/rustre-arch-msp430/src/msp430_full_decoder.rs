@@ -427,10 +427,12 @@ impl PushPopM {
     pub fn registers(self) -> Vec<Msp430Reg> {
         (0..u16::from(self.n))
             .map(|i| {
+                // `n` is at most 16, so the index always fits a byte.
+                let i8_idx = (i & 0xFF) as u8;
                 let idx = if self.is_push {
-                    self.start_reg.0.saturating_sub(i as u8)
+                    self.start_reg.0.saturating_sub(i8_idx)
                 } else {
-                    self.start_reg.0 + i as u8
+                    self.start_reg.0 + i8_idx
                 };
                 Msp430Reg(idx.min(15))
             })
@@ -483,9 +485,9 @@ impl Msp430FullDecoder {
         // ── Format III: jump (top3 = 001) ──────────────────────────────────
         if top3 == 0b001 {
             let cond = (word >> 10) & 0x7;
-            let offset10 = (word & 0x3ff) as i16;
+            let offset10 = (word & 0x3ff).cast_signed();
             let offset = i32::from(((offset10 << 6) >> 6) * 2);
-            let target = address.wrapping_add(2).wrapping_add(offset as u32);
+            let target = address.wrapping_add(2).wrapping_add_signed(offset);
             let jop = JumpOp::from_bits(cond as u8);
             return Some(Msp430Instruction {
                 address,
@@ -731,7 +733,6 @@ impl Msp430FullDecoder {
 
     fn format_dst(reg: Msp430Reg, mode: AddrMode, bytes: &[u8], ext_off: usize) -> String {
         match mode {
-            AddrMode::Register => reg.name().to_string(),
             AddrMode::Indexed => {
                 if bytes.len() >= ext_off + 2 {
                     let idx = u16::from_le_bytes([bytes[ext_off], bytes[ext_off + 1]]);
@@ -740,6 +741,7 @@ impl Msp430FullDecoder {
                     format!("?({})", reg.name())
                 }
             }
+            // Register direct and every remaining mode print the bare name.
             _ => reg.name().to_string(),
         }
     }
@@ -750,7 +752,10 @@ impl Msp430FullDecoder {
         let mut out = Vec::with_capacity(bytes.len() / 3);
         let mut off = 0usize;
         while off + 1 < bytes.len() {
-            let addr = base.saturating_add(off as u32);
+            // A region longer than 4 GiB cannot be addressed by this decoder,
+            // so stop rather than silently wrapping the address.
+            let Ok(off32) = u32::try_from(off) else { break };
+            let addr = base.saturating_add(off32);
             if let Some(insn) = Self::decode(&bytes[off..], addr) {
                 let sz = insn.size;
                 out.push(insn);
@@ -1156,7 +1161,7 @@ mod tests {
         let bytes: Vec<u8> = jmp.iter().cycle().take(6).copied().collect();
         let instrs = Msp430FullDecoder::decode_all(&bytes, 0x4400);
         for (i, insn) in instrs.iter().enumerate() {
-            assert_eq!(insn.address, 0x4400 + (i as u32) * 2);
+            assert_eq!(insn.address, 0x4400 + u32::try_from(i).unwrap() * 2);
         }
     }
 

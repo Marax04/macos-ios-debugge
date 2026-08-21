@@ -168,8 +168,10 @@ impl PacInstruction {
 impl fmt::Display for PacInstruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Format address as "0x0000_1000" with underscore separator
-        let hi = (self.address >> 16) as u32;
-        let lo = (self.address & 0xFFFF) as u32;
+        // Keep the full u64 value: a narrowing `as u32` here silently
+        // dropped bits 48..64 of any address at or above 2^48.
+        let hi = self.address >> 16;
+        let lo = self.address & 0xFFFF;
         write!(f, "0x{hi:04x}_{lo:04x}  {}", self.mnemonic)?;
         if let Some(PacModifier::Register(m)) = self.modifier {
             write!(f, "  x{}, x{}", self.reg, m)?;
@@ -570,7 +572,7 @@ pub const fn encode_retaa() -> u32 {
     let op1: u32 = 0b1_1010 << 24;
     let op2: u32 = 0b0_0001 << 16;
     let op3: u32 = 0b10_1010 << 10;
-    op0 | op1 | op2 | op3 | 30u32
+    op0 | op1 | op2 | op3 | 0b1_1110u32
 }
 
 // ---------------------------------------------------------------------------
@@ -778,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_filter_pac_instructions() {
-        let words = vec![0xD503201F_u32, encode_pacia(0, 1), 0xD503_201F]; // NOP, PACIA, NOP
+        let words = vec![0xD503_201F_u32, encode_pacia(0, 1), 0xD503_201F]; // NOP, PACIA, NOP
         let bytes = raw_bytes(&words);
         let instrs = PacAnalyzer::new().filter_pac_instructions(0, &bytes);
         assert_eq!(instrs.len(), 1);
@@ -878,7 +880,7 @@ mod tests {
         let op1: u32 = 0b1_1010 << 24;
         let op2: u32 = 0b0_0001 << 16;
         let op3: u32 = 0b10_1011 << 10;
-        let raw = op0 | op1 | op2 | op3 | 30u32;
+        let raw = op0 | op1 | op2 | op3 | 0b1_1110u32;
         let instr = decode_pac_instruction(0, raw).unwrap();
         assert_eq!(instr.mnemonic, "RETAB");
         assert_eq!(instr.key, PacKey::IB);
@@ -960,7 +962,7 @@ mod tests {
 
     #[test]
     fn test_analyze_nop_sequence_no_pac() {
-        let nops = vec![0xD503201Fu32; 8];
+        let nops = vec![0xD503_201F_u32; 8];
         let bytes = raw_bytes(&nops);
         let r = PacAnalyzer::new().analyze(0, &bytes);
         assert_eq!(r.instructions.len(), 0);

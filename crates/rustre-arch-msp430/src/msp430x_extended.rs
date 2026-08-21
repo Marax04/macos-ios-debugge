@@ -147,12 +147,23 @@ impl fmt::Display for Msp430xInsn {
 /// * Bits 15–12: `0b1100` — identifies this as an extension word.
 /// * Bit 11 (`ZC`): if set, the carry flag is not affected by the repeat count.
 /// * Bit 10 (`#`): if set, the repeat count follows in bits 3–0 (immediate);
-///                 if clear, a register number in bits 3–0 holds the count.
+///   if clear, a register number in bits 3–0 holds the count.
 /// * Bit 9 (`AL`): `.A` (address) extension when set; otherwise `.W`/`.B` from
-///                 the base instruction's BW bit.
+///   the base instruction's BW bit.
 /// * Bits 8, 7–4: High nibble of source and destination addresses for 20-bit modes.
 #[derive(Debug, Clone, Copy)]
 pub struct ExtWord(pub u16);
+
+/// Reinterpret the low 16 bits of `w` as a signed 16-bit displacement.
+///
+/// MSP430X indexed and symbolic operands carry a two's-complement 16-bit
+/// offset in the extension word. Masking to 16 bits first proves the narrowing
+/// cannot discard information, and `cast_signed` then reinterprets those exact
+/// bits as signed, which is precisely the encoding the ISA specifies.
+#[must_use]
+const fn low16_signed(w: u32) -> i16 {
+    ((w & 0xFFFF) as u16).cast_signed()
+}
 
 impl ExtWord {
     /// Verify the extension word signature (bits 15:12 == `0b0001_1000` pattern).
@@ -238,6 +249,68 @@ impl fmt::Display for AddrOp {
     }
 }
 
+/// Decode the register-source half (`op_field` 0x8..=0xD) of the MSP430X
+/// address-instruction group.
+///
+/// Split out of `decode_addr_instr` so that neither function is longer than a
+/// reader can hold in view at once; the caller has already narrowed `op_field`.
+fn decode_addr_reg_forms(
+    op_field: u16,
+    word: u16,
+    src_reg: u8,
+    dst_reg: u8,
+    extra: Option<u32>,
+) -> Option<(AddrOp, Option<AddrMode>, AddrMode, usize)> {
+    Some(match op_field {
+        // 0b1000: MOVA Rsrc, Rdst
+        0x8 => {
+            (AddrOp::Mova,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Register(dst_reg),
+             2)
+        }
+        // 0b1001: CMPA Rsrc, Rdst
+        0x9 => {
+            (AddrOp::Cmpa,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Register(dst_reg),
+             2)
+        }
+        // 0b1010: ADDA Rsrc, Rdst
+        0xA => {
+            (AddrOp::Adda,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Register(dst_reg),
+             2)
+        }
+        // 0b1011: SUBA Rsrc, Rdst
+        0xB => {
+            (AddrOp::Suba,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Register(dst_reg),
+             2)
+        }
+        // 0b1100: MOVA Rsrc, z16(Rdst)
+        0xC => {
+            let offset = i32::from(low16_signed(extra?));
+            (AddrOp::Mova,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Indexed { reg: dst_reg, offset },
+             4)
+        }
+        // 0b1101: MOVA Rsrc, &abs20
+        0xD => {
+            let abs = ((u32::from(word) & 0xF) << 16) | (extra? & 0xFFFF);
+            (AddrOp::Mova,
+             Some(AddrMode::Register(src_reg)),
+             AddrMode::Absolute(abs),
+             4)
+        }
+        // The caller only dispatches 0x8..=0xD here.
+        _ => return None,
+    })
+}
+
 /// Try to decode an address instruction from a 16-bit word.
 ///
 /// Returns `Some((op, src_mode, dst_reg))` on success.
@@ -257,13 +330,13 @@ pub fn decode_addr_instr(word: u16, pc: u32, extra: Option<u32>) -> Option<Msp43
         0x0 => {
             let imm20 = (((u32::from(word) >> 4) & 0xF) << 16) | (extra? & 0xFFFF);
             (AddrOp::Mova,
-             Some(AddrMode::Immediate(imm20 as i32)),
+             Some(AddrMode::Immediate(imm20.cast_signed())),
              AddrMode::Register(dst_reg),
              4)
         }
         // 0b0001: MOVA z16(Rsrc), Rdst
         0x1 => {
-            let offset = i32::from(extra? as i16);
+            let offset = i32::from(low16_signed(extra?));
             (AddrOp::Mova,
              Some(AddrMode::Indexed { reg: src_reg, offset }),
              AddrMode::Register(dst_reg),
@@ -295,7 +368,7 @@ pub fn decode_addr_instr(word: u16, pc: u32, extra: Option<u32>) -> Option<Msp43
         0x5 => {
             let imm20 = (((u32::from(word) >> 4) & 0xF) << 16) | (extra? & 0xFFFF);
             (AddrOp::Cmpa,
-             Some(AddrMode::Immediate(imm20 as i32)),
+             Some(AddrMode::Immediate(imm20.cast_signed())),
              AddrMode::Register(dst_reg),
              4)
         }
@@ -303,7 +376,7 @@ pub fn decode_addr_instr(word: u16, pc: u32, extra: Option<u32>) -> Option<Msp43
         0x6 => {
             let imm20 = (((u32::from(word) >> 4) & 0xF) << 16) | (extra? & 0xFFFF);
             (AddrOp::Adda,
-             Some(AddrMode::Immediate(imm20 as i32)),
+             Some(AddrMode::Immediate(imm20.cast_signed())),
              AddrMode::Register(dst_reg),
              4)
         }
@@ -311,54 +384,12 @@ pub fn decode_addr_instr(word: u16, pc: u32, extra: Option<u32>) -> Option<Msp43
         0x7 => {
             let imm20 = (((u32::from(word) >> 4) & 0xF) << 16) | (extra? & 0xFFFF);
             (AddrOp::Suba,
-             Some(AddrMode::Immediate(imm20 as i32)),
+             Some(AddrMode::Immediate(imm20.cast_signed())),
              AddrMode::Register(dst_reg),
              4)
         }
-        // 0b1000: MOVA Rsrc, Rdst
-        0x8 => {
-            (AddrOp::Mova,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Register(dst_reg),
-             2)
-        }
-        // 0b1001: CMPA Rsrc, Rdst
-        0x9 => {
-            (AddrOp::Cmpa,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Register(dst_reg),
-             2)
-        }
-        // 0b1010: ADDA Rsrc, Rdst
-        0xA => {
-            (AddrOp::Adda,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Register(dst_reg),
-             2)
-        }
-        // 0b1011: SUBA Rsrc, Rdst
-        0xB => {
-            (AddrOp::Suba,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Register(dst_reg),
-             2)
-        }
-        // 0b1100: MOVA Rsrc, z16(Rdst)
-        0xC => {
-            let offset = i32::from(extra? as i16);
-            (AddrOp::Mova,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Indexed { reg: dst_reg, offset },
-             4)
-        }
-        // 0b1101: MOVA Rsrc, &abs20
-        0xD => {
-            let abs = ((u32::from(word) & 0xF) << 16) | (extra? & 0xFFFF);
-            (AddrOp::Mova,
-             Some(AddrMode::Register(src_reg)),
-             AddrMode::Absolute(abs),
-             4)
-        }
+        // 0x8..=0xD are the register-source forms; see `decode_addr_reg_forms`.
+        0x8..=0xD => decode_addr_reg_forms(op_field, word, src_reg, dst_reg, extra)?,
         _ => return None,
     };
 
@@ -469,10 +500,9 @@ impl PushPopMultiple {
     /// List of registers affected, from highest to lowest (push order).
     #[must_use]
     pub fn register_list(&self) -> Vec<u8> {
-        let top = self.top_reg as i8;
-        (0..self.count as i8)
-            .map(|i| (top - i) as u8)
-            .collect()
+        // `count` is 1..=16 and `top_reg` is 0..=15, so the subtraction below
+        // stays inside u8 and needs no signed detour.
+        (0..self.count).map(|i| self.top_reg.wrapping_sub(i)).collect()
     }
 }
 
@@ -497,7 +527,7 @@ pub const fn decode_pushm_popm(word: u16) -> Option<PushPopMultiple> {
     //   0x15F9 = PUSHM.W #16,R9  → bit 8 = 1 is the .W form
     // `lib.rs::decode_pushm_popm` is the corrected twin and agrees with them;
     // its comment already flagged this copy as still wrong.
-    if word >> 10 != 0b000101 { return None; }
+    if word >> 10 != 0b00_0101 { return None; }
     let is_push = (word >> 9) & 1 == 0;
     let addr    = (word >> 8) & 1 == 0;
     let count   = (((word >> 4) & 0xF) as u8) + 1;
@@ -568,7 +598,7 @@ pub fn decode_calla(word: u16, pc: u32, extra: Option<u32>) -> Option<CallaInsn>
     let (mode, length) = match mode_field {
         0x4 => (CallaMode::Register(reg), 2),
         0x5 => {
-            let off = i32::from(extra? as i16);
+            let off = i32::from(low16_signed(extra?));
             (CallaMode::Indexed { reg, offset: off }, 4)
         }
         0x6 => (CallaMode::Indirect(reg), 2),
@@ -580,8 +610,11 @@ pub fn decode_calla(word: u16, pc: u32, extra: Option<u32>) -> Option<CallaInsn>
         }
         0x9 => {
             // Symbolic: PC-relative.
-            let rel = i32::from(extra? as i16);
-            let target = (i64::from(pc) + i64::from(rel) + 4) as u32 & 0xFFFFF;
+            let rel = i32::from(low16_signed(extra?));
+            // Mask to the 20-bit address space FIRST: the result is then in
+            // 0..=0xF_FFFF, so it is non-negative and fits a u32 exactly.
+            let target =
+                ((i64::from(pc) + i64::from(rel) + 4).cast_unsigned() & 0xF_FFFF) as u32;
             (CallaMode::Symbolic(target), 4)
         }
         0xB => {
@@ -652,7 +685,7 @@ pub fn decode_bra(word: u16, pc: u32, extra: Option<u32>) -> Option<BraInsn> {
         && insn.mnemonic == "MOVA" && insn.dst == AddrMode::Register(0)
             && let Some(AddrMode::Immediate(v)) = insn.src {
                 return Some(BraInsn {
-                    target: BraTarget::Immediate(v as u32 & 0xFFFFF),
+                    target: BraTarget::Immediate(v.cast_unsigned() & 0xF_FFFF),
                     length: insn.length,
                 });
             }
@@ -703,14 +736,14 @@ pub fn decode_ext_format_i(
 
     let src_reg  = ((base_word >> 8) & 0xF) as u8;
     let dst_reg  = (base_word & 0xF) as u8;
-    let as_field = (base_word >> 4) & 0x3;
-    let ad_field = (base_word >> 7) & 0x1;
+    let as_bits = (base_word >> 4) & 0x3;
+    let ad_bit = (base_word >> 7) & 0x1;
 
     let src_high = u32::from(ext_word & 0xF);
     let dst_high = u32::from((ext_word >> 4) & 0xF);
 
-    let src = decode_operand(src_reg, as_field as u8, extra_src, src_high)?;
-    let dst = decode_operand(dst_reg, (ad_field | 0b100) as u8, extra_dst, dst_high)?;
+    let src = decode_operand(src_reg, as_bits as u8, extra_src, src_high)?;
+    let dst = decode_operand(dst_reg, ((ad_bit | 0b100) & 0x7) as u8, extra_dst, dst_high)?;
 
     Some(Msp430xInsn {
         mnemonic: op_name.to_string(),
@@ -736,7 +769,7 @@ fn decode_operand(reg: u8, as_field: u8, extra: Option<u16>, high: u32) -> Optio
         (2, 0b00) if is_dst => Some(AddrMode::Register(2)),
         (2, 0b01) => Some(AddrMode::Immediate(extra.map(|e| {
             let low = u32::from(e);
-            ((high << 16) | low) as i32
+            ((high << 16) | low).cast_signed()
         })?)),
         (2, 0b10) => Some(AddrMode::Immediate(4)),
         (2, 0b11) => Some(AddrMode::Immediate(8)),
@@ -752,8 +785,12 @@ fn decode_operand(reg: u8, as_field: u8, extra: Option<u16>, high: u32) -> Optio
         }
         // General indexed.
         (_, 0b01) => {
-            let low = i32::from(extra? as i16);
-            let offset = if high != 0 { ((high << 16) as i32) | (u32::from(extra?) as i32) } else { low };
+            let low = i32::from(extra?.cast_signed());
+            let offset = if high != 0 {
+                ((high << 16) | u32::from(extra?)).cast_signed()
+            } else {
+                low
+            };
             Some(AddrMode::Indexed { reg, offset })
         }
         // Register direct.
@@ -763,7 +800,7 @@ fn decode_operand(reg: u8, as_field: u8, extra: Option<u16>, high: u32) -> Optio
         // Indirect auto-increment / immediate.
         (0, 0b11) => {
             let low = u32::from(extra?);
-            let imm = ((high << 16) | low) as i32;
+            let imm = ((high << 16) | low).cast_signed();
             Some(AddrMode::Immediate(imm))
         }
         (_, 0b11) => Some(AddrMode::IndirectAutoInc(reg)),
@@ -815,7 +852,11 @@ pub fn disassemble_msp430x(buf: &[u8], base_addr: u32) -> Vec<(u32, String)> {
         if let Some(bra) = decode_bra(word, pc, extra1) {
             let len = bra.length;
             result.push((pc, bra.to_string()));
-            i += len; pc += len as u32;
+            i += len;
+            // Decoded instruction lengths are 2..=8; a value that cannot fit a
+            // u32 would mean a corrupt decode, so stop instead of wrapping.
+            let Ok(len32) = u32::try_from(len) else { break };
+            pc += len32;
             continue;
         }
 
@@ -823,7 +864,11 @@ pub fn disassemble_msp430x(buf: &[u8], base_addr: u32) -> Vec<(u32, String)> {
         if let Some(calla) = decode_calla(word, pc, extra1) {
             let len = calla.length;
             result.push((pc, calla.to_string()));
-            i += len; pc += len as u32;
+            i += len;
+            // Decoded instruction lengths are 2..=8; a value that cannot fit a
+            // u32 would mean a corrupt decode, so stop instead of wrapping.
+            let Ok(len32) = u32::try_from(len) else { break };
+            pc += len32;
             continue;
         }
 
@@ -831,7 +876,11 @@ pub fn disassemble_msp430x(buf: &[u8], base_addr: u32) -> Vec<(u32, String)> {
         if let Some(addr_insn) = decode_addr_instr(word, pc, extra1) {
             let len = addr_insn.length;
             result.push((pc, addr_insn.to_string()));
-            i += len; pc += len as u32;
+            i += len;
+            // Decoded instruction lengths are 2..=8; a value that cannot fit a
+            // u32 would mean a corrupt decode, so stop instead of wrapping.
+            let Ok(len32) = u32::try_from(len) else { break };
+            pc += len32;
             continue;
         }
 

@@ -394,15 +394,21 @@ fn lift_one_op(out: &mut LiftedInsn, op: Op1, bw: bool, src: &Operand) {
 
 // ── Format-I (two-operand) lifting ────────────────────────────────────────────
 
-fn lift_two_op(out: &mut LiftedInsn, op: Op2, bw: bool, src: &Operand, dst: &Operand) {
-    let w = IlWidth::from(bw);
-    let src_val = read_operand(src);
-    let dst_val = read_operand(dst);
-
+/// Lift the arithmetic half of the Format I two-operand group.
+///
+/// Split out of `lift_two_op` so neither function grows past a readable size;
+/// the caller has already narrowed `op` to one of the six arithmetic opcodes.
+fn lift_two_op_arith(
+    out: &mut LiftedInsn,
+    op: Op2,
+    w: IlWidth,
+    dst: &Operand,
+    src_val: &IlExpr,
+    dst_val: &IlExpr,
+) {
+    let src_val = src_val.clone();
+    let dst_val = dst_val.clone();
     match op {
-        Op2::Mov => {
-            write_operand(out, dst, src_val, w);
-        }
         Op2::Add => {
             let result = IlExpr::Add(src_val.clone().boxed(), dst_val.clone().boxed());
             write_operand(out, dst, result.clone(), w);
@@ -477,6 +483,23 @@ fn lift_two_op(out: &mut LiftedInsn, op: Op2, bw: bool, src: &Operand, dst: &Ope
             let carry = IlExpr::CarryOf(src_val.boxed(), dst_val.boxed());
             emit_nzc_flags(out, result, carry);
             out.set_flag(sr_bits::V, IlExpr::zero());
+        }
+        // The caller only dispatches the six arithmetic opcodes here.
+        _ => {}
+    }
+}
+
+fn lift_two_op(out: &mut LiftedInsn, op: Op2, bw: bool, src: &Operand, dst: &Operand) {
+    let w = IlWidth::from(bw);
+    let src_val = read_operand(src);
+    let dst_val = read_operand(dst);
+
+    match op {
+        Op2::Mov => {
+            write_operand(out, dst, src_val, w);
+        }
+        Op2::Add | Op2::Addc | Op2::Sub | Op2::Subc | Op2::Cmp | Op2::Dadd => {
+            lift_two_op_arith(out, op, w, dst, &src_val, &dst_val);
         }
         Op2::Bit => {
             // BIT = AND, result discarded; C = (result != 0), V = 0.

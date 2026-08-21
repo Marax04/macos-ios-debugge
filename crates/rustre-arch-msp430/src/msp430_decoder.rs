@@ -360,20 +360,20 @@ impl Msp430Decoder {
         let bits15_10 = (word >> 10) & 0x3f;
 
         if bits15_13 == 0b001 {
-            return self.decode_type3(address, word);
+            return Self::decode_type3(address, word);
         }
         if bits15_10 == 0b00_0100 {
-            return self.decode_type2(data, address, word);
+            return Self::decode_type2(data, address, word);
         }
         if bits15_12 >= 4 {
-            return self.decode_type1(data, address, word);
+            return Self::decode_type1(data, address, word);
         }
         Err(err(address, word, "unrecognized opcode"))
     }
 
     // ──────── Type I: double-operand ──────────────────────────────────────────
 
-    fn decode_type1(&self, data: &[u8], address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
+    fn decode_type1(data: &[u8], address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
         let opcode4 = ((word >> 12) & 0xf) as u8;
         let op = Op2::from_bits(opcode4).ok_or_else(|| err(address, word, "bad op2 opcode"))?;
         let src_reg = ((word >> 8) & 0xf) as u8;
@@ -384,8 +384,8 @@ impl Msp430Decoder {
         let size = WordSize::from_bw(bw);
 
         let mut off = 2usize;
-        let src = self.decode_src(data, &mut off, src_reg, as_bits, address)?;
-        let dst = self.decode_dst(data, &mut off, dst_reg, ad, address)?;
+        let src = Self::decode_src(data, &mut off, src_reg, as_bits, address)?;
+        let dst = Self::decode_dst(data, &mut off, dst_reg, ad, address)?;
 
         let mut instr = Msp430Instr {
             address, length: u8::try_from(off).unwrap_or(u8::MAX),
@@ -402,7 +402,7 @@ impl Msp430Decoder {
 
     // ──────── Type II: single-operand ────────────────────────────────────────
 
-    fn decode_type2(&self, data: &[u8], address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
+    fn decode_type2(data: &[u8], address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
         let op_bits = ((word >> 7) & 0x7) as u8;
         let op = Op1::from_bits(op_bits).ok_or_else(|| err(address, word, "bad op1 opcode"))?;
         let bw      = ((word >> 6) & 0x1) as u8;
@@ -414,7 +414,7 @@ impl Msp430Decoder {
         let src = if op == Op1::Reti {
             None
         } else {
-            Some(self.decode_src(data, &mut off, src_reg, as_bits, address)?)
+            Some(Self::decode_src(data, &mut off, src_reg, as_bits, address)?)
         };
 
         Ok(Msp430Instr {
@@ -431,7 +431,7 @@ impl Msp430Decoder {
 
     // ──────── Type III: jump ──────────────────────────────────────────────────
 
-    fn decode_type3(&self, address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
+    fn decode_type3(address: u16, word: u16) -> Result<Msp430Instr, DecodeError> {
         let cond_bits = ((word >> 10) & 0x7) as u8;
         let cond = JumpCond::from_bits(cond_bits).ok_or_else(|| err(address, word, "bad jump cond"))?;
         // 10-bit signed offset, in words
@@ -453,7 +453,7 @@ impl Msp430Decoder {
 
     // ──────── Addressing mode helpers ─────────────────────────────────────────
 
-    fn decode_src(&self, data: &[u8], off: &mut usize, reg: u8, as_bits: u8, address: u16) -> Result<AddressMode, DecodeError> {
+    fn decode_src(data: &[u8], off: &mut usize, reg: u8, as_bits: u8, address: u16) -> Result<AddressMode, DecodeError> {
         // Check constant generator first
         if let Some(c) = const_gen(reg, as_bits) {
             return Ok(AddressMode::Constant(c));
@@ -461,7 +461,7 @@ impl Msp430Decoder {
         match as_bits {
             0 => Ok(AddressMode::Register(reg)),
             1 => {
-                let ext = self.read_ext(data, *off, address)?;
+                let ext = Self::read_ext(data, *off, address)?;
                 *off += 2;
                 if reg == 0 { // PC => Symbolic
                     Ok(AddressMode::Symbolic(ext))
@@ -480,7 +480,7 @@ impl Msp430Decoder {
             }
             3 => {
                 if reg == 0 { // PC => Immediate
-                    let ext = self.read_ext(data, *off, address)?;
+                    let ext = Self::read_ext(data, *off, address)?;
                     *off += 2;
                     Ok(AddressMode::Immediate(ext))
                 } else {
@@ -491,11 +491,11 @@ impl Msp430Decoder {
         }
     }
 
-    fn decode_dst(&self, data: &[u8], off: &mut usize, reg: u8, ad: u8, address: u16) -> Result<AddressMode, DecodeError> {
+    fn decode_dst(data: &[u8], off: &mut usize, reg: u8, ad: u8, address: u16) -> Result<AddressMode, DecodeError> {
         match ad {
             0 => Ok(AddressMode::Register(reg)),
             1 => {
-                let ext = self.read_ext(data, *off, address)?;
+                let ext = Self::read_ext(data, *off, address)?;
                 *off += 2;
                 if reg == 0 { Ok(AddressMode::Symbolic(ext)) }
                 else if reg == 2 { Ok(AddressMode::Absolute(ext)) }
@@ -505,7 +505,7 @@ impl Msp430Decoder {
         }
     }
 
-    fn read_ext(&self, data: &[u8], off: usize, addr: u16) -> Result<u16, DecodeError> {
+    fn read_ext(data: &[u8], off: usize, addr: u16) -> Result<u16, DecodeError> {
         if off + 2 > data.len() {
             return Err(err(addr, 0, "extension word out of bounds"));
         }
@@ -538,7 +538,7 @@ impl Default for Msp430Decoder {
 
 /// Wrapping i32→u16 cast (intentional for MSP430 16-bit PC arithmetic).
 #[inline]
-const fn i32_to_u16_wrap(v: i32) -> u16 { v as u16 }
+const fn i32_to_u16_wrap(v: i32) -> u16 { (v.cast_unsigned() & 0xFFFF) as u16 }
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tests

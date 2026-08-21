@@ -579,12 +579,9 @@ pub enum LiftedBranchSemantics {
 pub const fn lifting_semantics(branch: &BranchWithDelay, taken: bool) -> LiftedBranchSemantics {
     match (branch.kind, taken) {
         (DelaySlotKind::None, true) => LiftedBranchSemantics::BranchOnly { target: branch.target },
-        (DelaySlotKind::None, false) => LiftedBranchSemantics::FallthroughOnly {
-            fallthrough: branch.fallthrough,
-        },
-        (DelaySlotKind::Annulled, false) => LiftedBranchSemantics::FallthroughOnly {
-            fallthrough: branch.fallthrough,
-        },
+        (DelaySlotKind::None | DelaySlotKind::Annulled, false) => {
+            LiftedBranchSemantics::FallthroughOnly { fallthrough: branch.fallthrough }
+        }
         _ => LiftedBranchSemantics::DelayThenBranch { target: branch.target },
     }
 }
@@ -641,7 +638,7 @@ impl FunctionDelaySlotStats {
         if self.branch_count == 0 {
             return 0.0;
         }
-        self.nop_count as f64 / self.branch_count as f64
+        crate::count_as_f64(self.nop_count) / crate::count_as_f64(self.branch_count)
     }
 }
 
@@ -766,7 +763,7 @@ mod tests {
     #[test]
     fn many_branches_total_matches_input_len() {
         let branches: Vec<_> = (0..50)
-            .map(|i| make_branch(MipsJumpOpcode::J, 0x2000_0000 + (i as u64) * 4, i % 2 == 0))
+            .map(|i: u64| make_branch(MipsJumpOpcode::J, 0x2000_0000 + i * 4, i % 2 == 0))
             .collect();
         let analyser = MipsDelaySlot::default_config();
         let report = analyser.analyze(&branches);

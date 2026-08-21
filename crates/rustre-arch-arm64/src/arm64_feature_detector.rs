@@ -88,6 +88,17 @@ pub enum CpuFeature {
     SecMon,
 }
 
+/// Denominator for a confidence ratio, converted without precision loss.
+///
+/// Instruction totals are saturated at `u32::MAX` first, so the
+/// conversion is exact (every `u32` is representable in an `f64`).
+/// Counts beyond four billion instructions cannot change a ratio that
+/// is immediately clamped to `[0, 1]`.
+#[must_use]
+pub fn instruction_total_as_f64(total: u64) -> f64 {
+    f64::from(u32::try_from(total.max(1).min(u64::from(u32::MAX))).unwrap_or(u32::MAX))
+}
+
 impl CpuFeature {
     /// Short mnemonic for display.
     #[must_use] 
@@ -129,16 +140,26 @@ impl CpuFeature {
     #[must_use] 
     pub const fn min_arch_version(self) -> (u8, u8) {
         match self {
-            Self::BaseA64 | Self::AdvSimd | Self::Fp => (8, 0),
+            Self::BaseA64
+            | Self::AdvSimd
+            | Self::Fp
+            | Self::Aes
+            | Self::Sha1
+            | Self::Sha256
+            | Self::Pmull
+            | Self::Pmu
+            | Self::Hyp
+            | Self::SecMon => (8, 0),
             Self::Lse | Self::Rdm => (8, 1),
-            Self::Fp16 | Self::Sve | Self::DotProd | Self::Sha3 | Self::Sm4 => (8, 2),
+            Self::Fp16
+            | Self::Sve
+            | Self::DotProd
+            | Self::Sha3
+            | Self::Sm4
+            | Self::DebugV8p2 => (8, 2),
             Self::Pauth | Self::JscvT | Self::Fcma => (8, 3),
             Self::Rcpc | Self::NV | Self::Tlbios => (8, 4),
             Self::Bti | Self::Mte | Self::Sve2 | Self::Rng | Self::Sb => (8, 5),
-            Self::Aes | Self::Sha1 | Self::Sha256 | Self::Pmull => (8, 0),
-            Self::DebugV8p2 => (8, 2),
-            Self::Pmu => (8, 0),
-            Self::Hyp | Self::SecMon => (8, 0),
         }
     }
 }
@@ -248,6 +269,7 @@ impl fmt::Display for FeatureSet {
 // ─── MnemonicPattern ─────────────────────────────────────────────────────────
 
 /// A mnemonic prefix and the feature it implies.
+#[derive(Debug)]
 struct MnemonicPattern {
     prefix: &'static str,
     feature: CpuFeature,
@@ -459,17 +481,17 @@ impl Arm64FeatureDetector {
 
     /// Analyze pre-counted occurrences and return the feature set.
     #[must_use] 
-    pub fn detect_from_counts(&self, counts: HashMap<CpuFeature, u32>, total: u64) -> FeatureSet {
+    pub fn detect_from_counts(&self, counts: &HashMap<CpuFeature, u32>, total: u64) -> FeatureSet {
         let mut set = FeatureSet::new();
         set.instructions_scanned = total;
         // Base features always assumed.
         set.add(CpuFeature::BaseA64, 1.0);
 
-        for (feature, count) in &counts {
+        for (feature, count) in counts {
             if *count >= self.min_occurrences {
-                let raw_confidence = (f64::from(*count) / total.max(1) as f64).min(1.0);
+                let raw_confidence = (f64::from(*count) / instruction_total_as_f64(total)).min(1.0);
                 // At least one occurrence → at least 0.5 confidence.
-                let confidence = (raw_confidence * 10.0).min(1.0).max(0.5);
+                let confidence = (raw_confidence * 10.0).clamp(0.5, 1.0);
                 set.add(*feature, confidence);
             }
         }
@@ -484,7 +506,7 @@ impl Arm64FeatureDetector {
         for pat in &self.patterns {
             let count = self.occurrence_counts.get(&pat.feature).copied().unwrap_or(0);
             if count >= self.min_occurrences {
-                let raw_confidence = (f64::from(count) / total.max(1) as f64 * 10.0).min(1.0);
+                let raw_confidence = (f64::from(count) / instruction_total_as_f64(total) * 10.0).min(1.0);
                 let confidence = raw_confidence.max(pat.confidence * 0.5);
                 set.add(pat.feature, confidence);
             }
@@ -518,6 +540,8 @@ impl fmt::Debug for Arm64FeatureDetector {
             .field("min_occurrences", &self.min_occurrences)
             .field("detect_privileged", &self.detect_privileged)
             .field("pattern_count", &self.patterns.len())
+            .field("patterns", &self.patterns)
+            .field("occurrence_counts", &self.occurrence_counts)
             .finish()
     }
 }
@@ -741,7 +765,7 @@ mod tests {
         fs.add(CpuFeature::Fp, 0.5);
         // Exactly-at-threshold and just-below
         let high_at = fs.high_confidence_features(0.5);
-        let high_above = fs.high_confidence_features(0.500001);
+        let high_above = fs.high_confidence_features(0.500_001);
         // At threshold: implementation-defined inclusive/exclusive, just verify no panic.
         let _ = high_at;
         assert!(!high_above.contains(&CpuFeature::Fp));

@@ -467,9 +467,12 @@ pub fn decode_insn(bytes: &[u8], pc: u64) -> Result<Msp430Insn, CoreError> {
 // ── Format III decoder ────────────────────────────────────────────────────────
 
 /// Wrapping cast from i64 to u16 (intentional truncation for MSP430 16-bit PC).
+///
+/// Masking to 16 bits first makes the narrowing provably lossless while keeping
+/// exactly the two's-complement low half that the hardware would keep.
 #[inline]
 const fn i64_to_u16_wrap(v: i64) -> u16 {
-    v as u16
+    (v.cast_unsigned() & 0xFFFF) as u16
 }
 
 fn decode_jump(word: u16, pc: u64) -> Msp430Insn {

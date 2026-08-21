@@ -352,8 +352,11 @@ pub const fn stack_arg_offset(conv: MipsCallingConvention, arg_index: usize) -> 
         MipsCallingConvention::O32 => 4i32,
         MipsCallingConvention::N32 | MipsCallingConvention::N64 => 8i32,
     };
-    let base = conv.home_area_size() as i32;
-    Some(base + stack_index as i32 * slot_size)
+    let base = conv.home_area_size().cast_signed();
+    // `stack_index` counts the stack arguments of one call, so it is far
+    // below `i32::MAX`; the mask makes that provable to the compiler.
+    let index = (stack_index & 0x7FFF_FFFF) as i32;
+    Some(base + index * slot_size)
 }
 
 // ---------------------------------------------------------------------------
@@ -452,7 +455,7 @@ impl CallSiteLayout {
                     MipsCallingConvention::O32 => 4u8,
                     MipsCallingConvention::N32 | MipsCallingConvention::N64 => 8u8,
                 };
-                let offset = stack_bytes as i32;
+                let offset = stack_bytes.cast_signed();
                 locations.push(ArgLocation::Stack(StackSlot::new(offset, slot_size, arg.index)));
                 stack_bytes += u32::from(slot_size);
             }

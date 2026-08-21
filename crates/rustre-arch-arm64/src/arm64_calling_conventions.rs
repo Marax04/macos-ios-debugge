@@ -7,6 +7,16 @@
 use ahash::AHashMap;
 use std::fmt;
 
+/// Convert a byte count to a signed stack offset without wrapping.
+///
+/// Stack sizes come from caller-supplied type descriptions, so an
+/// unchecked `as i64` could wrap a huge `usize` into a negative offset.
+/// Saturating at `i64::MAX` keeps offsets non-negative and never panics.
+#[must_use]
+pub fn usize_to_i64_saturating(value: usize) -> i64 {
+    i64::try_from(value).unwrap_or(i64::MAX)
+}
+
 // ─── ArgRegister ──────────────────────────────────────────────────────────────
 
 /// An argument or return register in the ARM64 ABI.
@@ -301,9 +311,11 @@ impl Arm64CallingConvention {
     pub fn stack_arg_offset(&self, stack_arg_index: usize, arg_size_bytes: usize) -> i64 {
         // Each argument is padded to the next multiple of 8 bytes.
         let slot_size = (arg_size_bytes + 7) & !7;
+        // Saturating: an `as i64` here wrapped to a negative offset for
+        // absurd sizes. Saturation keeps the offset non-negative.
         let mut offset: i64 = 0;
         for _ in 0..stack_arg_index {
-            offset += slot_size as i64;
+            offset = offset.saturating_add(usize_to_i64_saturating(slot_size));
         }
         offset
     }
@@ -337,7 +349,7 @@ impl Arm64CallingConvention {
                 size_bytes: actual_size,
                 by_ref,
             });
-            sp_offset += actual_size as i64;
+            sp_offset = sp_offset.saturating_add(usize_to_i64_saturating(actual_size));
         }
         layout
     }

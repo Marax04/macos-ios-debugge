@@ -338,7 +338,7 @@ fn encode_decode_syscall() {
 
 #[test]
 fn encode_rtype_field_layout() {
-    let w = encode_rtype(0b11111, 0b11111, 0b11111, 0b11111, 0b111111);
+    let w = encode_rtype(0b1_1111, 0b1_1111, 0b1_1111, 0b1_1111, 0b11_1111);
     // Opcode (top 6 bits) is zero for SPECIAL
     assert_eq!(w >> 26, 0);
     // funct = low 6

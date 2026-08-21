@@ -1347,9 +1347,9 @@ mod tests {
     fn test_neon_decoder_non_neon_word_returns_none() {
         let dec = NeonDecoder::new();
         // A non-NEON word (e.g. NOP = 0xD503201F, group = 0b1101)
-        assert!(dec.decode(0xD503201F).is_none());
+        assert!(dec.decode(0xD503_201F).is_none());
         // SUB X0,X0,#0 = 0xD1000000, group = 0b1101
-        assert!(dec.decode(0xD1000000).is_none());
+        assert!(dec.decode(0xD100_0000).is_none());
     }
 
     #[test]
@@ -1358,10 +1358,10 @@ mod tests {
         // Words with group bits 0b0111 or 0b1111 may be NEON.
         // 0x0F000000 → bits[28:25] = 0b0111 (group 0b0111) — may return Some or None.
         // Just verify it doesn't panic.
-        let _ = dec.decode(0x0F000000);
-        let _ = dec.decode(0x4F000000);
-        let _ = dec.decode(0x0E000000);
-        let _ = dec.decode(0x4E000000);
+        let _ = dec.decode(0x0F00_0000);
+        let _ = dec.decode(0x4F00_0000);
+        let _ = dec.decode(0x0E00_0000);
+        let _ = dec.decode(0x4E00_0000);
     }
 
     #[test]

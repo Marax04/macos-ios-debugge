@@ -65,9 +65,18 @@ pub trait Peripheral: fmt::Debug {
     }
 
     /// Read a byte from `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PeripheralError`] when `addr` is not one of this
+    /// peripheral's registers, or the register is not readable.
     fn read8(&self, addr: u16) -> Result<u8, PeripheralError>;
 
     /// Read a word (16-bit) from `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the error from either of the two underlying byte reads.
     fn read16(&self, addr: u16) -> Result<u16, PeripheralError> {
         let lo = u16::from(self.read8(addr)?);
         let hi = u16::from(self.read8(addr + 1)?);
@@ -75,9 +84,18 @@ pub trait Peripheral: fmt::Debug {
     }
 
     /// Write a byte to `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PeripheralError`] when `addr` is not one of this
+    /// peripheral's registers, or the register is not writable.
     fn write8(&mut self, addr: u16, value: u8) -> Result<(), PeripheralError>;
 
     /// Write a word (16-bit) to `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the error from either of the two underlying byte writes.
     fn write16(&mut self, addr: u16, value: u16) -> Result<(), PeripheralError> {
         self.write8(addr, (value & 0xFF) as u8)?;
         self.write8(addr + 1, (value >> 8) as u8)
@@ -182,7 +200,6 @@ impl TimerA {
             return;
         }
         match self.mode() {
-            0 => {} // stopped
             1 => {
                 // up to TACCR0
                 self.tar = self.tar.wrapping_add(1);
@@ -206,6 +223,7 @@ impl TimerA {
                     self.taifg = true;
                 }
             }
+            // Mode 0 is "stopped"; it and every other mode need no action here.
             _ => {}
         }
     }
@@ -248,9 +266,9 @@ impl Peripheral for TimerA {
         macro_rules! merge {
             ($reg:expr) => {
                 if is_hi {
-                    $reg = ($reg & 0x00FF) | ((value as u16) << 8);
+                    $reg = ($reg & 0x00FF) | (u16::from(value) << 8);
                 } else {
-                    $reg = ($reg & 0xFF00) | (value as u16);
+                    $reg = ($reg & 0xFF00) | u16::from(value);
                 }
             };
         }
@@ -520,9 +538,9 @@ impl Peripheral for Adc10 {
         macro_rules! m {
             ($r:expr) => {
                 if is_hi {
-                    $r = ($r & 0x00FF) | ((value as u16) << 8);
+                    $r = ($r & 0x00FF) | (u16::from(value) << 8);
                 } else {
-                    $r = ($r & 0xFF00) | (value as u16);
+                    $r = ($r & 0xFF00) | u16::from(value);
                 }
             };
         }
@@ -1012,9 +1030,9 @@ impl Peripheral for FlashController {
         macro_rules! m {
             ($r:expr) => {
                 if is_hi {
-                    $r = ($r & 0x00FF) | ((value as u16) << 8);
+                    $r = ($r & 0x00FF) | (u16::from(value) << 8);
                 } else {
-                    $r = ($r & 0xFF00) | (value as u16);
+                    $r = ($r & 0xFF00) | u16::from(value);
                 }
             };
         }
@@ -1060,6 +1078,11 @@ impl PeripheralBus {
     }
 
     /// Read a byte from address `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeripheralError::NotMapped`] when no attached peripheral
+    /// claims `addr`, or the owning peripheral's own error otherwise.
     pub fn read8(&self, addr: u16) -> Result<u8, PeripheralError> {
         for p in &self.peripherals {
             if p.handles(addr) {
@@ -1070,6 +1093,11 @@ impl PeripheralBus {
     }
 
     /// Write a byte to address `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeripheralError::NotMapped`] when no attached peripheral
+    /// claims `addr`, or the owning peripheral's own error otherwise.
     pub fn write8(&mut self, addr: u16, value: u8) -> Result<(), PeripheralError> {
         for p in &mut self.peripherals {
             if p.handles(addr) {
@@ -1080,6 +1108,11 @@ impl PeripheralBus {
     }
 
     /// Read a word from address `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeripheralError::NotMapped`] when no attached peripheral
+    /// claims `addr`, or the owning peripheral's own error otherwise.
     pub fn read16(&self, addr: u16) -> Result<u16, PeripheralError> {
         for p in &self.peripherals {
             if p.handles(addr) {
@@ -1090,6 +1123,11 @@ impl PeripheralBus {
     }
 
     /// Write a word to address `addr`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeripheralError::NotMapped`] when no attached peripheral
+    /// claims `addr`, or the owning peripheral's own error otherwise.
     pub fn write16(&mut self, addr: u16, value: u16) -> Result<(), PeripheralError> {
         for p in &mut self.peripherals {
             if p.handles(addr) {
@@ -1416,7 +1454,7 @@ mod tests {
     fn test_port_read_pin_output() {
         let mut p = PortRegisters::new(1, 0x0020);
         p.pin_dir = 0xFF; // all outputs
-        p.pin_out = 0b00001000; // pin 3 high
+        p.pin_out = 0b0000_1000; // pin 3 high
         assert!(p.read_pin(3));
         assert!(!p.read_pin(0));
     }

@@ -310,7 +310,9 @@ impl Msp430CallingConvention {
     pub fn stack_arg_offset(&self, n: usize, sp_offset_extra: i16) -> i16 {
         // Number of slots consumed by register arguments.
         let regs_used = self.max_reg_args.min(n);
-        let stack_index = n.saturating_sub(regs_used) as i16;
+        // An argument list longer than i16::MAX is not representable in this
+        // ABI at all, so saturate rather than wrap the slot index.
+        let stack_index = i16::try_from(n.saturating_sub(regs_used)).unwrap_or(i16::MAX);
         let ret_addr_slot: i16 = 2; // CALL pushes 16-bit return address
         ret_addr_slot + sp_offset_extra + stack_index * 2
     }
@@ -415,12 +417,22 @@ impl CallingConventionDb {
     }
 
     /// Return the GCC calling convention.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the database was built without the GCC entry, which the
+    /// constructor always installs.
     #[must_use]
     pub fn gcc(&self) -> &Msp430CallingConvention {
         self.map.get(&CcKind::Gcc).unwrap()
     }
 
     /// Return the IAR calling convention.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the database was built without the IAR entry, which the
+    /// constructor always installs.
     #[must_use]
     pub fn iar(&self) -> &Msp430CallingConvention {
         self.map.get(&CcKind::Iar).unwrap()

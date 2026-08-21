@@ -90,13 +90,10 @@ fn extract_adr_target(text: &str, instr_addr: u64) -> Option<u64> {
 
 fn parse_signed_imm(s: &str) -> Option<i64> {
     let s = s.trim().trim_start_matches('#').trim_start_matches('$');
-    let (neg, rest) = if let Some(r) = s.strip_prefix('-') {
-        (true, r)
-    } else if let Some(r) = s.strip_prefix('+') {
-        (false, r)
-    } else {
-        (false, s)
-    };
+    let (neg, rest) = s.strip_prefix('-').map_or_else(
+        || (false, s.strip_prefix('+').unwrap_or(s)),
+        |r| (true, r),
+    );
     let v: i64 = if let Some(h) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
         i64::from_str_radix(h, 16).ok()?
     } else {

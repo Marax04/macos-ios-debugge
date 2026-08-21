@@ -220,9 +220,8 @@ impl AddrMode {
     #[must_use]
     pub const fn ext_words(self) -> usize {
         match self {
-            Self::Register | Self::Indirect | Self::IndirectAutoInc => 0,
+            Self::Register | Self::Indirect | Self::IndirectAutoInc | Self::Constant(_) => 0,
             Self::Indexed | Self::Absolute | Self::Immediate | Self::Symbolic => 1,
-            Self::Constant(_) => 0,
         }
     }
 
@@ -268,14 +267,14 @@ impl AddrMode {
 #[must_use]
 pub const fn constant_generator(reg: u8, as_bits: u8) -> Option<i8> {
     match (reg, as_bits) {
-        (2, 0) => None, // SR register mode (not CG)
-        (2, 1) => None, // SR indexed (not CG)
         (2, 2) => Some(4),
         (2, 3) => Some(8),
         (3, 0) => Some(0),
         (3, 1) => Some(1),
         (3, 2) => Some(2),
         (3, 3) => Some(-1),
+        // (2, 0) is SR register mode and (2, 1) is SR indexed mode; neither is a
+        // constant-generator encoding, so they fall through here with the rest.
         _ => None,
     }
 }
@@ -345,7 +344,7 @@ pub const fn bw_suffix(bw: u8) -> &'static str {
 pub fn format_src(as_bits: u8, reg: u8, ext: Option<u16>) -> String {
     match src_addr_mode(as_bits, reg) {
         AddrMode::Register => reg_name(reg).to_string(),
-        AddrMode::Indexed => format!("{}({})", ext.unwrap_or(0) as i16, reg_name(reg)),
+        AddrMode::Indexed => format!("{}({})", ext.unwrap_or(0).cast_signed(), reg_name(reg)),
         AddrMode::Absolute => format!("&0x{:04X}", ext.unwrap_or(0)),
         AddrMode::Indirect => format!("@{}", reg_name(reg)),
         AddrMode::IndirectAutoInc => format!("@{}+", reg_name(reg)),
@@ -364,7 +363,7 @@ pub fn format_dst(ad: u8, reg: u8, ext: Option<u16>) -> String {
             if reg == 2 {
                 format!("&0x{:04X}", ext.unwrap_or(0))
             } else {
-                format!("{}({})", ext.unwrap_or(0) as i16, reg_name(reg))
+                format!("{}({})", ext.unwrap_or(0).cast_signed(), reg_name(reg))
             }
         }
     }
@@ -384,13 +383,12 @@ pub const fn check_emulated(
     bw: u8,
 ) -> Option<&'static str> {
     match (opcode4, src_reg, dst_reg, as_bits, ad) {
-        // MOV #0, dst  => CLR dst  (constant-generator encoding: R3, as=0)
-        (4, 3, _, 0, _) if bw == 0 => Some("CLR.W"),
-        (4, 3, _, 0, _) if bw != 0 => Some("CLR.B"),
-        // MOV #0, dst  => CLR dst  (immediate-mode encoding: R0/PC, as=3, immediate=0)
-        // The caller must have verified that the immediate extension word is 0.
-        (4, 0, _, 3, _) if bw == 0 => Some("CLR.W"),
-        (4, 0, _, 3, _) if bw != 0 => Some("CLR.B"),
+        // MOV #0, dst => CLR dst, in two encodings that mean the same thing:
+        //   * constant-generator encoding: R3, as=0;
+        //   * immediate-mode encoding: R0/PC, as=3, immediate=0 -- the caller
+        //     must have verified that the immediate extension word is 0.
+        (4, 3, _, 0, _) | (4, 0, _, 3, _) if bw == 0 => Some("CLR.W"),
+        (4, 3, _, 0, _) | (4, 0, _, 3, _) if bw != 0 => Some("CLR.B"),
         // MOV @SP+, PC => RET
         (4, 1, 0, 3, 0) => Some("RET"),
         // ADD #-1, dst => DEC
@@ -442,19 +440,19 @@ pub fn decode(bytes: &[u8], pc: u64) -> Result<DecodedInstr, CoreError> {
     // ── Format III: Jump (bits 15-13 == 001) ─────────────────────────────────
     let hi3 = (word >> 13) as u8;
     if hi3 == 0b001 {
-        return decode_jump(word, pc);
+        return Ok(decode_jump(word, pc));
     }
 
     // ── Format II: Single-operand (bits 15-10 == 0001 00) ────────────────────
     let hi6 = (word >> 10) & 0x3F;
     if hi6 == 0b00_0100 {
-        return decode_single_op(word, bytes, ext_at, pc);
+        return Ok(decode_single_op(word, ext_at));
     }
 
     // ── Format I: Two-operand (opcode in bits 15-12, >= 4) ───────────────────
     let opcode4 = (word >> 12) as u8;
     if opcode4 >= 4 {
-        return decode_two_op(word, bytes, ext_at, opcode4);
+        return Ok(decode_two_op(word, ext_at, opcode4));
     }
 
     // Unknown / data word.
@@ -467,18 +465,16 @@ pub fn decode(bytes: &[u8], pc: u64) -> Result<DecodedInstr, CoreError> {
     })
 }
 
-fn decode_jump(word: u16, pc: u64) -> Result<DecodedInstr, CoreError> {
+fn decode_jump(word: u16, pc: u64) -> DecodedInstr {
     let cond = ((word >> 10) & 7) as u8;
     let raw_offset = word & 0x3FF;
     // Sign-extend 10-bit value.
     let offset = if raw_offset & 0x200 != 0 {
-        (raw_offset as i16) | (-0x400_i16)
+        raw_offset.cast_signed() | (-0x400_i16)
     } else {
-        raw_offset as i16
+        raw_offset.cast_signed()
     };
-    let target = (pc as i64)
-        .wrapping_add(2)
-        .wrapping_add(i64::from(offset) * 2) as u64;
+    let target = pc.wrapping_add(2).wrapping_add_signed(i64::from(offset) * 2);
 
     let (mn, is_cond) = match cond {
         0 => ("JNE", true),
@@ -496,21 +492,16 @@ fn decode_jump(word: u16, pc: u64) -> Result<DecodedInstr, CoreError> {
         flags |= InstrFlags::CONDITIONAL;
     }
 
-    Ok(DecodedInstr {
+    DecodedInstr {
         mnemonic: mn.to_string(),
         operands: format!("0x{:04X}", target & 0xFFFFF),
         size: 2,
         flags,
         branch_target: Some(target),
-    })
+    }
 }
 
-fn decode_single_op(
-    word: u16,
-    _bytes: &[u8],
-    ext_at: impl Fn(usize) -> Option<u16>,
-    _pc: u64,
-) -> Result<DecodedInstr, CoreError> {
+fn decode_single_op(word: u16, ext_at: impl Fn(usize) -> Option<u16>) -> DecodedInstr {
     let opcode3 = ((word >> 7) & 7) as u8;
     let bw = ((word >> 6) & 1) as u8;
     let as_bits = ((word >> 4) & 3) as u8;
@@ -518,13 +509,13 @@ fn decode_single_op(
 
     // Special case: RETI = 0x1300
     if word == 0x1300 {
-        return Ok(DecodedInstr {
+        return DecodedInstr {
             mnemonic: "RETI".into(),
             operands: String::new(),
             size: 2,
             flags: InstrFlags::RET,
             branch_target: None,
-        });
+        };
     }
 
     let mode = src_addr_mode(as_bits, reg);
@@ -544,21 +535,20 @@ fn decode_single_op(
         _ => ("DC.W".to_string(), InstrFlags::NONE),
     };
 
-    Ok(DecodedInstr {
+    DecodedInstr {
         mnemonic: mn,
         operands: src,
         size,
         flags,
         branch_target: None,
-    })
+    }
 }
 
 fn decode_two_op(
     word: u16,
-    _bytes: &[u8],
     ext_at: impl Fn(usize) -> Option<u16>,
     opcode4: u8,
-) -> Result<DecodedInstr, CoreError> {
+) -> DecodedInstr {
     let src_reg = ((word >> 8) & 0xF) as u8;
     let ad = ((word >> 7) & 1) as u8;
     let bw = ((word >> 6) & 1) as u8;
@@ -584,10 +574,8 @@ fn decode_two_op(
         check_emulated(opcode4, src_reg, dst_reg, as_bits, ad, bw)
     };
 
-    let mn = if let Some(emu) = emulated {
-        emu.to_string()
-    } else {
-        match opcode4 {
+    let mn = emulated.map_or_else(
+        || match opcode4 {
             4 => format!("MOV{}", bw_suffix(bw)),
             5 => format!("ADD{}", bw_suffix(bw)),
             6 => format!("ADDC{}", bw_suffix(bw)),
@@ -601,8 +589,9 @@ fn decode_two_op(
             14 => format!("XOR{}", bw_suffix(bw)),
             15 => format!("AND{}", bw_suffix(bw)),
             _ => "DC.W".to_string(),
-        }
-    };
+        },
+        ToString::to_string,
+    );
 
     let src = format_src(as_bits, src_reg, ext1);
     let dst = format_dst(ad, dst_reg, ext2);
@@ -618,13 +607,13 @@ fn decode_two_op(
     // CALL via MOV @SP+, PC is handled by emulated above (RET).
     let flags = mem_flags;
 
-    Ok(DecodedInstr {
+    DecodedInstr {
         mnemonic: mn,
         operands,
         size,
         flags,
         branch_target: None,
-    })
+    }
 }
 
 // ── MSP430X extended instructions ─────────────────────────────────────────────
@@ -680,8 +669,8 @@ pub mod msp430x {
             0 => Some(if al_bit != 0 { "RRCM.A" } else { "RRCM.W" }),
             1 => Some(if al_bit != 0 { "RRUM.A" } else { "RRUM.W" }),
             2 if zc_bit != 0 => Some(if al_bit != 0 { "RLAM.A" } else { "RLAM.W" }),
-            2 => Some(if al_bit != 0 { "RRAM.A" } else { "RRAM.W" }),
-            3 => Some(if al_bit != 0 { "RRAM.A" } else { "RRAM.W" }),
+            // Opcode 2 without ZC and opcode 3 both encode RRAM.
+            2 | 3 => Some(if al_bit != 0 { "RRAM.A" } else { "RRAM.W" }),
             _ => None,
         }
     }
@@ -935,7 +924,7 @@ impl AluResult {
 #[must_use]
 pub fn alu_add(src: u16, dst: u16) -> AluResult {
     let wide = u32::from(src).wrapping_add(u32::from(dst));
-    let result = wide as u16;
+    let result = (wide & 0xFFFF) as u16;
     let carry = wide > 0xFFFF;
     // Overflow: both operands same sign but result has different sign.
     let overflow = (!(src ^ dst) & (src ^ result)) & 0x8000 != 0;
@@ -948,7 +937,7 @@ pub fn alu_addc(src: u16, dst: u16, c_in: bool) -> AluResult {
     let wide = u32::from(src)
         .wrapping_add(u32::from(dst))
         .wrapping_add(u32::from(c_in));
-    let result = wide as u16;
+    let result = (wide & 0xFFFF) as u16;
     let carry = wide > 0xFFFF;
     let overflow = (!(src ^ dst) & (src ^ result)) & 0x8000 != 0;
     AluResult::from_word(result, carry, overflow)
@@ -1003,7 +992,7 @@ pub fn alu_rrc(val: u16, carry_in: bool) -> AluResult {
 #[must_use]
 pub const fn alu_rra(val: u16) -> AluResult {
     let new_carry = val & 1 != 0;
-    let result = ((val as i16) >> 1) as u16;
+    let result = (val.cast_signed() >> 1).cast_unsigned();
     AluResult::from_word(result, new_carry, false)
 }
 
@@ -1031,7 +1020,9 @@ pub const fn alu_sxt(val: u16) -> AluResult {
 ///
 /// Covers the full 64 KiB address space of the base MSP430.
 pub struct FlatMemory {
-    data: Box<[u8; 0x10000]>,
+    /// A boxed slice rather than a boxed array: the array form would be
+    /// materialised on the stack before being moved to the heap.
+    data: Box<[u8]>,
 }
 
 impl FlatMemory {
@@ -1039,7 +1030,7 @@ impl FlatMemory {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            data: Box::new([0u8; 0x10000]),
+            data: vec![0u8; 0x10000].into_boxed_slice(),
         }
     }
 
@@ -1162,9 +1153,9 @@ impl Msp430Emulator {
                 (imm, pc_after_word.wrapping_add(2))
             }
             AddrMode::Indexed => {
-                let offset = self.mem.read_word(pc_after_word) as i16;
+                let offset = self.mem.read_word(pc_after_word).cast_signed();
                 let base = self.regs.read(reg);
-                let ea = base.wrapping_add(offset as u16);
+                let ea = base.wrapping_add(offset.cast_unsigned());
                 (self.mem.read_word(ea), pc_after_word.wrapping_add(2))
             }
             AddrMode::Absolute => {
@@ -1172,11 +1163,11 @@ impl Msp430Emulator {
                 (self.mem.read_word(abs), pc_after_word.wrapping_add(2))
             }
             AddrMode::Symbolic => {
-                let offset = self.mem.read_word(pc_after_word) as i16;
-                let ea = pc_after_word.wrapping_add(offset as u16);
+                let offset = self.mem.read_word(pc_after_word).cast_signed();
+                let ea = pc_after_word.wrapping_add(offset.cast_unsigned());
                 (self.mem.read_word(ea), pc_after_word.wrapping_add(2))
             }
-            AddrMode::Constant(c) => (c as u16, pc_after_word),
+            AddrMode::Constant(c) => (i16::from(c).cast_unsigned(), pc_after_word),
         }
     }
 
@@ -1204,11 +1195,11 @@ impl Msp430Emulator {
         } else {
             let hi6 = (word >> 10) & 0x3F;
             if hi6 == 0b00_0100 {
-                self.exec_single_op(word)?;
+                self.exec_single_op(word);
             } else {
                 let opcode4 = (word >> 12) as u8;
                 if opcode4 >= 4 {
-                    self.exec_two_op(word, opcode4)?;
+                    self.exec_two_op(word, opcode4);
                 }
                 // else: data word, ignore
             }
@@ -1222,9 +1213,9 @@ impl Msp430Emulator {
         let cond = ((word >> 10) & 7) as u8;
         let raw_offset = word & 0x3FF;
         let offset = if raw_offset & 0x200 != 0 {
-            (raw_offset as i16) | (-0x400_i16)
+            raw_offset.cast_signed() | (-0x400_i16)
         } else {
-            raw_offset as i16
+            raw_offset.cast_signed()
         };
 
         let taken = match cond {
@@ -1240,12 +1231,14 @@ impl Msp430Emulator {
 
         if taken {
             let cur_pc = self.regs.pc();
-            let new_pc = (i32::from(cur_pc) + i32::from(offset) * 2) as u16;
+            // Mask to 16 bits first, so the narrowing provably keeps every
+            // bit that the MSP430's wrapping PC arithmetic would keep.
+            let new_pc = ((i32::from(cur_pc) + i32::from(offset) * 2).cast_unsigned() & 0xFFFF) as u16;
             self.regs.set_pc(new_pc);
         }
     }
 
-    fn exec_single_op(&mut self, word: u16) -> Result<(), CoreError> {
+    fn exec_single_op(&mut self, word: u16) {
         if word == 0x1300 {
             // RETI: pop SR then PC.
             let sp = self.regs.sp();
@@ -1254,7 +1247,7 @@ impl Msp430Emulator {
             self.regs.regs[2] = sr_val;
             self.regs.set_pc(pc_val);
             self.regs.set_sp(sp.wrapping_add(4));
-            return Ok(());
+            return;
         }
 
         let opcode3 = ((word >> 7) & 7) as u8;
@@ -1273,7 +1266,7 @@ impl Msp430Emulator {
                     r.result
                 } else {
                     let rv = alu_rrc(val & 0xFF, self.regs.carry());
-                    self.regs.update_flags_byte(rv.result as u8, rv.carry, rv.overflow);
+                    self.regs.update_flags_byte((rv.result & 0xFF) as u8, rv.carry, rv.overflow);
                     rv.result & 0xFF
                 };
                 if as_bits == 0 {
@@ -1329,10 +1322,9 @@ impl Msp430Emulator {
             }
             _ => {}
         }
-        Ok(())
     }
 
-    fn exec_two_op(&mut self, word: u16, opcode4: u8) -> Result<(), CoreError> {
+    fn exec_two_op(&mut self, word: u16, opcode4: u8) {
         let src_reg = ((word >> 8) & 0xF) as u8;
         let ad = ((word >> 7) & 1) as u8;
         let bw = ((word >> 6) & 1) as u8;
@@ -1366,8 +1358,8 @@ impl Msp430Emulator {
             5 => alu_add(src_val, dst_val),                   // ADD
             6 => alu_addc(src_val, dst_val, carry_in),        // ADDC
             7 => alu_subc(src_val, dst_val, carry_in),        // SUBC
-            8 => alu_sub(src_val, dst_val),                   // SUB
-            9 => alu_sub(src_val, dst_val),                   // CMP (discard)
+            // SUB, and CMP which computes the same difference but discards it.
+            8 | 9 => alu_sub(src_val, dst_val),
             11 => {
                 
                 alu_and(src_val, dst_val)
@@ -1388,7 +1380,7 @@ impl Msp430Emulator {
                         .update_flags_word(result.result, result.carry, result.overflow);
                 } else {
                     self.regs
-                        .update_flags_byte(result.result as u8, result.carry, result.overflow);
+                        .update_flags_byte((result.result & 0xFF) as u8, result.carry, result.overflow);
                 }
             }
         }
@@ -1406,13 +1398,11 @@ impl Msp430Emulator {
                     if bw == 0 {
                         self.mem.write_word(ea, write_val);
                     } else {
-                        self.mem.write_byte(ea, write_val as u8);
+                        self.mem.write_byte(ea, (write_val & 0xFF) as u8);
                     }
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -1501,12 +1491,12 @@ pub fn build_cfg(
             if cur < base_addr || cur >= base_addr + bytes.len() as u64 {
                 break;
             }
-            let off = (cur - base_addr) as usize;
+            // The guard above proved `cur` is inside `bytes`, so the offset
+            // fits `usize`; bailing out instead of truncating keeps that true
+            // even if the guard is ever weakened.
+            let Ok(off) = usize::try_from(cur - base_addr) else { break };
             let slice = &bytes[off..];
-            let dec = match decode(slice, cur) {
-                Ok(d) => d,
-                Err(_) => break,
-            };
+            let Ok(dec) = decode(slice, cur) else { break };
 
             let next_addr = cur + dec.size as u64;
             let is_term = dec
@@ -1751,7 +1741,7 @@ pub fn encode_jump(cond: u8, offset: i16) -> Result<u16, CoreError> {
             message: format!("jump offset {offset} out of 10-bit range"),
         });
     }
-    let raw = (offset as u16) & 0x3FF;
+    let raw = offset.cast_unsigned() & 0x3FF;
     Ok(0x2000 | (u16::from(cond) << 10) | raw)
 }
 

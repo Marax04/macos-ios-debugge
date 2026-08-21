@@ -245,13 +245,16 @@ pub fn decode_src_mode(as_bits: u8, reg: u8, ext_word: Option<u16>, pc: u16) -> 
                 Msp430AddrMode::Absolute { addr: ext_word.unwrap_or(0) }
             } else if reg == 0 {
                 // PC with AS=01 → symbolic (PC-relative).
-                let offset = ext_word.unwrap_or(0) as i16;
-                let target = (i32::from(pc) + 2 + i32::from(offset)) as u16;
+                let offset = ext_word.unwrap_or(0).cast_signed();
+                // Mask to 16 bits first: the sum then provably fits a u16 and
+                // is non-negative, matching the MSP430's wrapping PC arithmetic.
+                let target =
+                    ((i32::from(pc) + 2 + i32::from(offset)).cast_unsigned() & 0xFFFF) as u16;
                 Msp430AddrMode::Symbolic { addr: target }
             } else {
                 Msp430AddrMode::Indexed {
                     reg,
-                    offset: ext_word.unwrap_or(0) as i16,
+                    offset: ext_word.unwrap_or(0).cast_signed(),
                 }
             }
         }
@@ -291,13 +294,16 @@ pub fn decode_dst_mode(ad: u8, reg: u8, ext_word: Option<u16>, pc: u16) -> Msp43
             if reg == 2 {
                 Msp430AddrMode::Absolute { addr: ext_word.unwrap_or(0) }
             } else if reg == 0 {
-                let offset = ext_word.unwrap_or(0) as i16;
-                let target = (i32::from(pc) + 2 + i32::from(offset)) as u16;
+                let offset = ext_word.unwrap_or(0).cast_signed();
+                // Mask to 16 bits first: the sum then provably fits a u16 and
+                // is non-negative, matching the MSP430's wrapping PC arithmetic.
+                let target =
+                    ((i32::from(pc) + 2 + i32::from(offset)).cast_unsigned() & 0xFFFF) as u16;
                 Msp430AddrMode::Symbolic { addr: target }
             } else {
                 Msp430AddrMode::Indexed {
                     reg,
-                    offset: ext_word.unwrap_or(0) as i16,
+                    offset: ext_word.unwrap_or(0).cast_signed(),
                 }
             }
         }
@@ -328,13 +334,15 @@ pub fn compute_effective_address(
         Msp430AddrMode::RegisterDirect { reg } => EffectiveAddress::Register(reg),
         Msp430AddrMode::Indexed { reg, offset } => {
             let base = read_reg(reg);
-            EffectiveAddress::Concrete(base.wrapping_add(offset as u16))
+            EffectiveAddress::Concrete(base.wrapping_add(offset.cast_unsigned()))
         }
-        Msp430AddrMode::Absolute { addr } => EffectiveAddress::Concrete(addr),
-        Msp430AddrMode::Indirect { reg } => EffectiveAddress::Concrete(read_reg(reg)),
-        Msp430AddrMode::IndirectAutoInc { reg } => EffectiveAddress::Concrete(read_reg(reg)),
-        Msp430AddrMode::Immediate { value } => EffectiveAddress::Immediate(value as i16),
-        Msp430AddrMode::Symbolic { addr } => EffectiveAddress::Concrete(addr),
+        Msp430AddrMode::Absolute { addr } | Msp430AddrMode::Symbolic { addr } => {
+            EffectiveAddress::Concrete(addr)
+        }
+        Msp430AddrMode::Indirect { reg } | Msp430AddrMode::IndirectAutoInc { reg } => {
+            EffectiveAddress::Concrete(read_reg(reg))
+        }
+        Msp430AddrMode::Immediate { value } => EffectiveAddress::Immediate(value.cast_signed()),
         Msp430AddrMode::Constant { value } => EffectiveAddress::Immediate(i16::from(value)),
     }
 }
@@ -356,8 +364,7 @@ impl AddressingModeInfo {
     #[must_use]
     pub const fn from_mode(mode: Msp430AddrMode) -> Self {
         let effective_addr = match mode {
-            Msp430AddrMode::Absolute { addr } => Some(addr),
-            Msp430AddrMode::Symbolic { addr } => Some(addr),
+            Msp430AddrMode::Absolute { addr } | Msp430AddrMode::Symbolic { addr } => Some(addr),
             _ => None,
         };
         Self {

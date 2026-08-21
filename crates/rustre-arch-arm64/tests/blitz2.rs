@@ -18,14 +18,16 @@ impl Lcg {
     const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next_u64(&mut self) -> u64 {
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u32(&mut self) -> u32 {
+    const fn next_u32(&mut self) -> u32 {
+        // Exact: `>> 32` leaves only the high 32 bits, which fit a u32 by
+        // construction, so this narrowing cannot lose information.
         (self.next_u64() >> 32) as u32
     }
 }
@@ -253,7 +255,9 @@ fn cond_from_bits_roundtrip_via_suffix() {
         "nv",
     ];
     for (i, s) in suffixes.iter().enumerate() {
-        let c = A64Cond::from_bits(i as u8);
+        // 16 entries, so the index always fits in a u8; check, do not cast.
+        let bits = u8::try_from(i).expect("condition index fits in u8");
+        let c = A64Cond::from_bits(bits);
         assert_eq!(c.suffix(), *s);
     }
 }
@@ -345,8 +349,8 @@ fn lse_unknown_returns_none() {
 fn lse_ordering_flags_consistent() {
     let casa = lse_lookup("casa").unwrap();
     assert!(casa.acquire && !casa.release);
-    let casl = lse_lookup("casl").unwrap();
-    assert!(!casl.acquire && casl.release);
+    let cas_release = lse_lookup("casl").unwrap();
+    assert!(!cas_release.acquire && cas_release.release);
 }
 
 // ---------------------------------------------------------------------------
@@ -542,8 +546,8 @@ fn linear_disassembler_current_address_advances() {
     let nop = [0x1f, 0x20, 0x03, 0xd5];
     let code: Vec<u8> = nop.iter().cycle().take(16).copied().collect();
     let mut ld = Arm64LinearDisassembler::new(&code, Address::new(0x8000));
-    for i in 0..4 {
-        assert_eq!(ld.current_address().as_u64(), 0x8000 + (i as u64) * 4);
+    for i in 0u64..4 {
+        assert_eq!(ld.current_address().as_u64(), 0x8000 + i * 4);
         ld.next().unwrap().unwrap();
     }
     assert!(ld.is_done());
@@ -632,10 +636,10 @@ fn arm64arch_threaded_stress() {
     use std::thread;
     let a = Arc::new(Arm64Arch::new());
     let mut handles = Vec::new();
-    for t in 0..4 {
+    for t in 0u64..4 {
         let a = Arc::clone(&a);
         handles.push(thread::spawn(move || {
-            let mut g = Lcg::new(0xDEAD_BEEF_CAFE_BABE ^ (t as u64));
+            let mut g = Lcg::new(0xDEAD_BEEF_CAFE_BABE ^ t);
             for _ in 0..100 {
                 let w = g.next_u32();
                 let _ = a.disassemble(Address::new(0x1000), &word_bytes(w));
@@ -655,9 +659,9 @@ fn arm64arch_threaded_stress() {
 fn get_branches_b_targets_50_offsets() {
     let a = arch();
     let pc: u64 = 0x1_0000;
-    for i in 0i32..50 {
+    for i in 0u32..50 {
         // construct B with imm26 = i  (positive)
-        let imm26 = (i as u32) & 0x03FF_FFFF;
+        let imm26 = i & 0x03FF_FFFF;
         let word: u32 = 0x1400_0000 | imm26;
         let bytes = word.to_le_bytes();
         let instr = a.disassemble(Address::new(pc), &bytes).unwrap();
@@ -695,7 +699,6 @@ fn get_branches_invalid_short_bytes_empty() {
 
 #[test]
 fn registers_size_classes_consistent() {
-    let regs = arch().registers();
     // Only check classic SIMD/GPR forms: <prefix><digits-only>.
     fn is_numbered(n: &str, prefix: char) -> bool {
         let mut chars = n.chars();
@@ -705,6 +708,7 @@ fn registers_size_classes_consistent() {
         let rest: String = chars.collect();
         !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
     }
+    let regs = arch().registers();
     for r in &regs {
         let n = r.name.as_str();
         if is_numbered(n, 'x') {

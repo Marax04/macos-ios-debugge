@@ -23,13 +23,34 @@ fn addr(v: u64) -> Address {
     Address::new(v)
 }
 
+/// Low 32 bits of a PRNG word. Truncation is the point: MIPS instructions are
+/// 32-bit, and masking first makes the conversion provably in range.
+fn low32(v: u64) -> u32 {
+    u32::try_from(v & 0xFFFF_FFFF).unwrap_or(0)
+}
+
+/// Low 16 bits of a PRNG word.
+fn low16(v: u64) -> u16 {
+    u16::try_from(v & 0xFFFF).unwrap_or(0)
+}
+
+/// Low 8 bits of a PRNG word.
+fn low8(v: u64) -> u8 {
+    u8::try_from(v & 0xFF).unwrap_or(0)
+}
+
+/// Low 16 bits of a PRNG word, reinterpreted as a signed immediate.
+fn low_i16(v: u64) -> i16 {
+    low16(v).cast_signed()
+}
+
 /// Deterministic LCG (Knuth MMIX constants).
 fn lcg(seed: u64) -> impl FnMut() -> u64 {
     let mut s = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -43,7 +64,7 @@ fn fuzz_decode_word_le_no_panic_5000() {
     let a = MipsArch::mips32_le();
     let mut g = lcg(0xDEAD_BEEF_CAFE_BABE);
     for i in 0..5000u64 {
-        let w = g() as u32;
+        let w = low32(g());
         let bytes = w.to_le_bytes();
         let ins = a.decode_word(addr(i * 4), w, &bytes);
         // Mnemonic must be a non-empty UTF-8 string.
@@ -56,7 +77,7 @@ fn fuzz_decode_word_be_no_panic_5000() {
     let a = MipsArch::mips32_be();
     let mut g = lcg(0x0123_4567_89AB_CDEF);
     for i in 0..5000u64 {
-        let w = g() as u32;
+        let w = low32(g());
         let bytes = w.to_be_bytes();
         let ins = a.decode_word(addr(i * 4), w, &bytes);
         assert!(!ins.mnemonic.is_empty());
@@ -68,7 +89,7 @@ fn fuzz_decode_word_64le_no_panic() {
     let a = MipsArch::mips64_le();
     let mut g = lcg(0xA5A5_5A5A_F00D_BAAD);
     for _ in 0..2000 {
-        let w = g() as u32;
+        let w = low32(g());
         let bytes = w.to_le_bytes();
         let _ = a.decode_word(addr(0), w, &bytes);
     }
@@ -79,7 +100,7 @@ fn fuzz_decode_word_truncated_bytes_no_panic() {
     let a = MipsArch::mips32_le();
     let mut g = lcg(0xBADC_0FFE_E0DD_F00D);
     for _ in 0..1000 {
-        let w = g() as u32;
+        let w = low32(g());
         // Pass a deliberately-undersized raw buffer.
         let raw = [0u8; 1];
         let _ = a.decode_word(addr(0), w, &raw);
@@ -93,7 +114,7 @@ fn fuzz_decode_word_address_wraps() {
     let a = MipsArch::mips32_le();
     let mut g = lcg(0xCAFE_F00D_DEAD_C0DE);
     for _ in 0..500 {
-        let w = g() as u32;
+        let w = low32(g());
         let pc = g();
         let b = w.to_le_bytes();
         let _ = a.decode_word(addr(pc), w, &b);
@@ -121,7 +142,7 @@ fn fuzz_disassemble_long_slices() {
     for _ in 0..500 {
         let mut buf = vec![0u8; 16];
         for b in &mut buf {
-            *b = g() as u8;
+            *b = low8(g());
         }
         let r = a.disassemble(addr(0), &buf);
         // Either Ok or Err, but never panic.
@@ -136,14 +157,14 @@ fn fuzz_disassemble_long_slices() {
 #[test]
 fn read_word_endian_round_trip_50() {
     let a_le = MipsArch::mips32_le();
-    let a_be = MipsArch::mips32_be();
+    let arch_big_endian = MipsArch::mips32_be();
     let mut g = lcg(0x33);
     for _ in 0..50 {
-        let w = g() as u32;
+        let w = low32(g());
         let leb = w.to_le_bytes();
         let beb = w.to_be_bytes();
         assert_eq!(a_le.read_word(&leb), Some(w));
-        assert_eq!(a_be.read_word(&beb), Some(w));
+        assert_eq!(arch_big_endian.read_word(&beb), Some(w));
     }
 }
 
@@ -152,7 +173,7 @@ fn read_write_be32_round_trip_50() {
     let mut g = lcg(0x77);
     let mut buf = vec![0u8; 8];
     for _ in 0..50 {
-        let w = g() as u32;
+        let w = low32(g());
         write_be32(&mut buf, 0, w);
         assert_eq!(read_be32(&buf, 0), Some(w));
         write_be32(&mut buf, 4, w);
@@ -165,7 +186,7 @@ fn read_write_le32_round_trip_50() {
     let mut g = lcg(0x88);
     let mut buf = vec![0u8; 8];
     for _ in 0..50 {
-        let w = g() as u32;
+        let w = low32(g());
         write_le32(&mut buf, 0, w);
         assert_eq!(read_le32(&buf, 0), Some(w));
     }
@@ -175,7 +196,7 @@ fn read_write_le32_round_trip_50() {
 fn swap32_is_involution() {
     let mut g = lcg(0x99);
     for _ in 0..100 {
-        let w = g() as u32;
+        let w = low32(g());
         assert_eq!(swap32(swap32(w)), w);
     }
 }
@@ -184,7 +205,7 @@ fn swap32_is_involution() {
 fn swap16_is_involution() {
     let mut g = lcg(0xAA);
     for _ in 0..100 {
-        let w = g() as u16;
+        let w = low16(g());
         assert_eq!(swap16(swap16(w)), w);
     }
 }
@@ -194,7 +215,7 @@ fn read_le_be_relate_via_swap() {
     let mut g = lcg(0xBB);
     let mut buf = vec![0u8; 4];
     for _ in 0..50 {
-        let w = g() as u32;
+        let w = low32(g());
         write_le32(&mut buf, 0, w);
         let be_view = read_be32(&buf, 0).unwrap();
         assert_eq!(be_view, swap32(w));
@@ -245,9 +266,9 @@ fn write_le32_overflow_offset_is_noop() {
 fn encode_addu_field_layout_50() {
     let mut g = lcg(0x101);
     for _ in 0..50 {
-        let rd = (g() as u32) & 0x1F;
-        let rs = (g() as u32) & 0x1F;
-        let rt = (g() as u32) & 0x1F;
+        let rd = low32(g()) & 0x1F;
+        let rs = low32(g()) & 0x1F;
+        let rt = low32(g()) & 0x1F;
         let w = encode_addu(rd, rs, rt);
         assert_eq!(w >> 26, 0);
         assert_eq!(w & 0x3F, 0x21);
@@ -261,7 +282,7 @@ fn encode_addu_field_layout_50() {
 fn encode_j_target_masked() {
     let mut g = lcg(0x202);
     for _ in 0..50 {
-        let t = g() as u32;
+        let t = low32(g());
         let w = encode_j(t);
         assert_eq!(w >> 26, 0x02);
         assert_eq!(w & 0x03FF_FFFF, t & 0x03FF_FFFF);
@@ -279,7 +300,7 @@ fn encode_jal_marks_call_and_branch() {
 #[test]
 fn encode_jr_ra_marks_ret() {
     let a = MipsArch::mips32_le();
-    let w = encode_jr(REG_RA as u32);
+    let w = encode_jr(u32::try_from(REG_RA).unwrap_or(0));
     let i = a.decode_word(addr(0), w, &w.to_le_bytes());
     assert_eq!(i.mnemonic, "jr");
     assert!(i.flags.contains(rustre_core::arch::InstrFlags::RET));
@@ -288,7 +309,7 @@ fn encode_jr_ra_marks_ret() {
 #[test]
 fn encode_jr_non_ra_no_ret() {
     let a = MipsArch::mips32_le();
-    let w = encode_jr(REG_T9 as u32);
+    let w = encode_jr(u32::try_from(REG_T9).unwrap_or(0));
     let i = a.decode_word(addr(0), w, &w.to_le_bytes());
     assert_eq!(i.mnemonic, "jr");
     assert!(!i.flags.contains(rustre_core::arch::InstrFlags::RET));
@@ -299,9 +320,9 @@ fn encode_lw_sw_offsets_50() {
     let a = MipsArch::mips32_le();
     let mut g = lcg(0x303);
     for _ in 0..50 {
-        let rt = (g() as u32) & 0x1F;
-        let rs = (g() as u32) & 0x1F;
-        let off = (g() as i16) & 0x7FFF; // keep positive for predictability
+        let rt = low32(g()) & 0x1F;
+        let rs = low32(g()) & 0x1F;
+        let off = low_i16(g()) & 0x7FFF; // keep positive for predictability
         let w = encode_lw(rt, rs, off);
         let i = a.decode_word(addr(0), w, &w.to_le_bytes());
         assert_eq!(i.mnemonic, "lw");
@@ -371,7 +392,7 @@ fn is_valid_zero_and_nop() {
 fn is_valid_fuzz_no_panic() {
     let mut g = lcg(0x707);
     for _ in 0..1000 {
-        let _ = is_valid_mips_word(g() as u32);
+        let _ = is_valid_mips_word(low32(g()));
     }
 }
 
@@ -385,7 +406,7 @@ fn histogram_fuzz_total_matches_word_count() {
     let mut g = lcg(0xAB);
     let mut bytes = Vec::with_capacity(64 * 4);
     for _ in 0..64 {
-        let w = g() as u32;
+        let w = low32(g());
         bytes.extend_from_slice(&w.to_le_bytes());
     }
     let h = MipsHistogram::build(&a, &bytes, addr(0));
@@ -399,7 +420,7 @@ fn scan_constant_pool_fuzz_no_panic() {
     let mut g = lcg(0xCDCD);
     let mut bytes = Vec::with_capacity(128);
     for _ in 0..32 {
-        let w = g() as u32;
+        let w = low32(g());
         bytes.extend_from_slice(&w.to_le_bytes());
     }
     let _ = scan_constant_pool(&a, &bytes, addr(0x4000));
@@ -442,7 +463,7 @@ fn linear_disasm_fuzz_count_consistent() {
     let mut g = lcg(0xEEEE);
     let mut bytes = Vec::new();
     for _ in 0..50 {
-        let w = g() as u32;
+        let w = low32(g());
         bytes.extend_from_slice(&w.to_le_bytes());
     }
     let n = MipsLinearDisassembler::new(&a, &bytes, addr(0)).count();
@@ -733,8 +754,8 @@ fn callee_caller_saved_disjoint_modulo_sp_gp() {
     // No GPR should be both caller and callee saved.
     let cc = MipsCallingConvention::O32;
     let callee: HashSet<_> = cc.callee_saved_regs().into_iter().collect();
-    let caller: HashSet<_> = cc.caller_saved_regs().into_iter().collect();
-    let inter: HashSet<_> = callee.intersection(&caller).collect();
+    let caller_saved: HashSet<_> = cc.caller_saved_regs().into_iter().collect();
+    let inter: HashSet<_> = callee.intersection(&caller_saved).collect();
     assert!(inter.is_empty(), "overlap: {:?}", inter);
 }
 
@@ -816,7 +837,7 @@ fn mips_revision_ordering() {
 // 17. Hash/Eq consistency on 30+ pairs.
 // -------------------------------------------------------------------
 
-fn assert_hash_eq<T: std::hash::Hash + Eq + Clone + std::fmt::Debug>(a: T, b: T) {
+fn assert_hash_eq<T: std::hash::Hash + Eq + Clone + std::fmt::Debug>(a: &T, b: &T) {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
     let mut h1 = DefaultHasher::new();
@@ -830,18 +851,18 @@ fn assert_hash_eq<T: std::hash::Hash + Eq + Clone + std::fmt::Debug>(a: T, b: T)
 #[test]
 fn hash_eq_pairs_30() {
     // MipsEndian
-    assert_hash_eq(MipsEndian::Little, MipsEndian::Little);
-    assert_hash_eq(MipsEndian::Big, MipsEndian::Big);
+    assert_hash_eq(&MipsEndian::Little, &MipsEndian::Little);
+    assert_hash_eq(&MipsEndian::Big, &MipsEndian::Big);
 
     // MipsAbi
-    assert_hash_eq(MipsAbi::O32, MipsAbi::O32);
-    assert_hash_eq(MipsAbi::N32, MipsAbi::N32);
-    assert_hash_eq(MipsAbi::N64, MipsAbi::N64);
+    assert_hash_eq(&MipsAbi::O32, &MipsAbi::O32);
+    assert_hash_eq(&MipsAbi::N32, &MipsAbi::N32);
+    assert_hash_eq(&MipsAbi::N64, &MipsAbi::N64);
 
     // DelaySlotKind
-    assert_hash_eq(DelaySlotKind::Standard, DelaySlotKind::Standard);
-    assert_hash_eq(DelaySlotKind::Annulled, DelaySlotKind::Annulled);
-    assert_hash_eq(DelaySlotKind::None, DelaySlotKind::None);
+    assert_hash_eq(&DelaySlotKind::Standard, &DelaySlotKind::Standard);
+    assert_hash_eq(&DelaySlotKind::Annulled, &DelaySlotKind::Annulled);
+    assert_hash_eq(&DelaySlotKind::None, &DelaySlotKind::None);
 
     // MipsJumpOpcode subset
     let ops = [
@@ -855,30 +876,30 @@ fn hash_eq_pairs_30() {
         MipsJumpOpcode::Bnel,
     ];
     for o in &ops {
-        assert_hash_eq(*o, *o);
+        assert_hash_eq(o, o);
     }
 
     // MipsCallingConvention
-    assert_hash_eq(MipsCallingConvention::O32, MipsCallingConvention::O32);
-    assert_hash_eq(MipsCallingConvention::N32, MipsCallingConvention::N32);
-    assert_hash_eq(MipsCallingConvention::N64, MipsCallingConvention::N64);
+    assert_hash_eq(&MipsCallingConvention::O32, &MipsCallingConvention::O32);
+    assert_hash_eq(&MipsCallingConvention::N32, &MipsCallingConvention::N32);
+    assert_hash_eq(&MipsCallingConvention::N64, &MipsCallingConvention::N64);
 
     // Cop0Register
-    assert_hash_eq(Cop0Register::r(12), Cop0Register::new(12, 0));
-    assert_hash_eq(cop0::STATUS, cop0::STATUS);
-    assert_hash_eq(cop0::CAUSE, cop0::CAUSE);
+    assert_hash_eq(&Cop0Register::r(12), &Cop0Register::new(12, 0));
+    assert_hash_eq(&cop0::STATUS, &cop0::STATUS);
+    assert_hash_eq(&cop0::CAUSE, &cop0::CAUSE);
 
     // GprRole
-    assert_hash_eq(GprRole::Argument, GprRole::Argument);
-    assert_hash_eq(GprRole::Saved, GprRole::Saved);
+    assert_hash_eq(&GprRole::Argument, &GprRole::Argument);
+    assert_hash_eq(&GprRole::Saved, &GprRole::Saved);
 
     // HiLoEffect
-    assert_hash_eq(HiLoEffect::None, HiLoEffect::None);
-    assert_hash_eq(HiLoEffect::MultSigned, HiLoEffect::MultSigned);
-    assert_hash_eq(HiLoEffect::DivUnsigned, HiLoEffect::DivUnsigned);
+    assert_hash_eq(&HiLoEffect::None, &HiLoEffect::None);
+    assert_hash_eq(&HiLoEffect::MultSigned, &HiLoEffect::MultSigned);
+    assert_hash_eq(&HiLoEffect::DivUnsigned, &HiLoEffect::DivUnsigned);
 
     // MipsRevision
-    assert_hash_eq(MipsRevision::Mips32r2, MipsRevision::Mips32r2);
+    assert_hash_eq(&MipsRevision::Mips32r2, &MipsRevision::Mips32r2);
 }
 
 // -------------------------------------------------------------------
@@ -941,12 +962,12 @@ fn gpr_role_out_of_range_consistent() {
 fn arch_threaded_decode_stress() {
     let arch = Arc::new(MipsArch::mips32_le());
     let mut handles = vec![];
-    for t in 0..4 {
+    for t in 0u64..4 {
         let a = Arc::clone(&arch);
         handles.push(thread::spawn(move || {
-            let mut g = lcg(0xC0DE_BABE_0000 ^ (t as u64));
+            let mut g = lcg(0xC0DE_BABE_0000 ^ t);
             for _ in 0..100 {
-                let w = g() as u32;
+                let w = low32(g());
                 let _ = a.decode_word(addr(0), w, &w.to_le_bytes());
             }
         }));
@@ -960,12 +981,12 @@ fn arch_threaded_decode_stress() {
 fn cop0register_threaded_lookup_stress() {
     let entries = Arc::new(standard_cop0_entries());
     let mut handles = vec![];
-    for t in 0..4 {
+    for t in 0u64..4 {
         let e = Arc::clone(&entries);
         handles.push(thread::spawn(move || {
-            let mut g = lcg(0x1111_2222 ^ (t as u64));
+            let mut g = lcg(0x1111_2222 ^ t);
             for _ in 0..100 {
-                let idx = (g() as usize) % e.len();
+                let idx = usize::try_from(low32(g())).unwrap_or(0) % e.len();
                 let _ = e[idx].name;
             }
         }));
@@ -1024,7 +1045,7 @@ fn format_instruction_fuzz_no_panic() {
     let opts = FormatOptions::default();
     let mut g = lcg(0xF00D_FACE_1234_5678);
     for _ in 0..200 {
-        let w = g() as u32;
+        let w = low32(g());
         let i = a.decode_word(addr(0), w, &w.to_le_bytes());
         let _ = format_instruction(&i, false, &opts);
         let _ = format_instruction(&i, true, &opts);

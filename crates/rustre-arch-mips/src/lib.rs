@@ -275,12 +275,12 @@ impl MipsArch {
         let bytes = raw[..raw.len().min(4)].to_vec();
 
         match opcode {
-            0x00 => self.decode_special(
+            0x00 => Self::decode_special(
                 address,
                 SpecialFields { word, funct, rs, rt, rd, shamt },
                 bytes,
             ),
-            0x01 => self.decode_regimm(address, rs, rt, simm16, bytes),
+            0x01 => Self::decode_regimm(address, rs, rt, simm16, bytes),
 
             // J-type
             0x02 => {
@@ -305,20 +305,20 @@ impl MipsArch {
             0x07 => branch_i(address, "bgtz", rs, None, simm16, bytes),
 
             // Arithmetic immediate
-            0x08 => itype(address, "addi", gpr(rt), rs_simm(rs, simm16), bytes),
-            0x09 => itype(address, "addiu", gpr(rt), rs_simm(rs, simm16), bytes),
-            0x0A => itype(address, "slti", gpr(rt), rs_simm(rs, simm16), bytes),
-            0x0B => itype(address, "sltiu", gpr(rt), rs_simm(rs, simm16), bytes),
-            0x0C => itype(address, "andi", gpr(rt), rs_uimm(rs, imm16), bytes),
-            0x0D => itype(address, "ori", gpr(rt), rs_uimm(rs, imm16), bytes),
-            0x0E => itype(address, "xori", gpr(rt), rs_uimm(rs, imm16), bytes),
-            0x0F => itype(address, "lui", gpr(rt), format!("0x{imm16:x}"), bytes),
+            0x08 => itype(address, "addi", gpr(rt), &rs_simm(rs, simm16), bytes),
+            0x09 => itype(address, "addiu", gpr(rt), &rs_simm(rs, simm16), bytes),
+            0x0A => itype(address, "slti", gpr(rt), &rs_simm(rs, simm16), bytes),
+            0x0B => itype(address, "sltiu", gpr(rt), &rs_simm(rs, simm16), bytes),
+            0x0C => itype(address, "andi", gpr(rt), &rs_uimm(rs, imm16), bytes),
+            0x0D => itype(address, "ori", gpr(rt), &rs_uimm(rs, imm16), bytes),
+            0x0E => itype(address, "xori", gpr(rt), &rs_uimm(rs, imm16), bytes),
+            0x0F => itype(address, "lui", gpr(rt), &format!("0x{imm16:x}"), bytes),
 
             // Coprocessors
-            0x10 => self.decode_cop0(address, rs, rt, rd, word, bytes),
-            0x11 => self.decode_cop1(address, word, rs, rt, bytes),
-            0x12 => self.decode_cop2(address, word, bytes),
-            0x13 => self.decode_cop1x(address, word, bytes),
+            0x10 => Self::decode_cop0(address, rs, rt, rd, word, bytes),
+            0x11 => Self::decode_cop1(address, word, rs, rt, bytes),
+            0x12 => Self::decode_cop2(address, word, bytes),
+            0x13 => Self::decode_cop1x(address, word, bytes),
 
             // Branch-likely (MIPS II)
             0x14 => branch_i(address, "beql", rs, Some(rt), simm16, bytes),
@@ -327,16 +327,16 @@ impl MipsArch {
             0x17 => branch_i(address, "bgtzl", rs, None, simm16, bytes),
 
             // MIPS64 immediate arithmetic
-            0x18 => itype(address, "daddi", gpr(rt), rs_simm(rs, simm16), bytes),
-            0x19 => itype(address, "daddiu", gpr(rt), rs_simm(rs, simm16), bytes),
+            0x18 => itype(address, "daddi", gpr(rt), &rs_simm(rs, simm16), bytes),
+            0x19 => itype(address, "daddiu", gpr(rt), &rs_simm(rs, simm16), bytes),
 
             // MIPS64 unaligned load/store
             0x1A => mem_op(address, "ldl", rt, rs, simm16, InstrFlags::READ_MEM, bytes),
             0x1B => mem_op(address, "ldr", rt, rs, simm16, InstrFlags::READ_MEM, bytes),
 
             // SPECIAL2 and SPECIAL3
-            0x1C => self.decode_special2(address, funct, rs, rt, rd, bytes),
-            0x1F => self.decode_special3(
+            0x1C => Self::decode_special2(address, funct, rs, rt, rd, bytes),
+            0x1F => Self::decode_special3(
                 address,
                 SpecialFields { word, funct, rs, rt, rd, shamt },
                 bytes,
@@ -433,7 +433,6 @@ impl MipsArch {
     // SPECIAL (opcode == 0) — all 64 funct codes
     // -----------------------------------------------------------------------
     fn decode_special(
-        &self,
         address: Address,
         f: SpecialFields,
         bytes: Vec<u8>,
@@ -753,7 +752,6 @@ impl MipsArch {
     // REGIMM (opcode == 1, rt selects sub-opcode)
     // -----------------------------------------------------------------------
     fn decode_regimm(
-        &self,
         address: Address,
         rs: usize,
         rt: usize,
@@ -845,7 +843,6 @@ impl MipsArch {
     // COP0 — system coprocessor
     // -----------------------------------------------------------------------
     fn decode_cop0(
-        &self,
         address: Address,
         rs: usize,
         rt: usize,
@@ -911,7 +908,6 @@ impl MipsArch {
     // Supports fmt=S (single), D (double), W (word), L (long), PS (pair)
     // -----------------------------------------------------------------------
     fn decode_cop1(
-        &self,
         address: Address,
         word: u32,
         rs: usize,
@@ -1027,7 +1023,7 @@ impl MipsArch {
     // -----------------------------------------------------------------------
     // COP2 — application-specific coprocessor
     // -----------------------------------------------------------------------
-    fn decode_cop2(&self, address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
+    fn decode_cop2(address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
         mk(
             address,
             "cop2",
@@ -1040,7 +1036,7 @@ impl MipsArch {
     // -----------------------------------------------------------------------
     // COP1X (opcode 0x13) — fused FP multiply-accumulate
     // -----------------------------------------------------------------------
-    fn decode_cop1x(&self, address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
+    fn decode_cop1x(address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
         let funct = word & 0x3F;
         let base = ((word >> 21) & 0x1F) as usize;
         let idx = ((word >> 16) & 0x1F) as usize;
@@ -1182,7 +1178,6 @@ impl MipsArch {
     // SPECIAL2 (opcode 0x1C) — MUL, CLZ/CLO, MADD/MSUB
     // -----------------------------------------------------------------------
     fn decode_special2(
-        &self,
         address: Address,
         funct: u32,
         rs: usize,
@@ -1214,7 +1209,6 @@ impl MipsArch {
     // SPECIAL3 (opcode 0x1F) — EXT/INS, BSHFL, RDHWR, MIPS64 variants
     // -----------------------------------------------------------------------
     fn decode_special3(
-        &self,
         address: Address,
         f: SpecialFields,
         bytes: Vec<u8>,
@@ -1225,14 +1219,14 @@ impl MipsArch {
             0x00 => rtype(
                 address,
                 "ext",
-                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, rd as u32 + 1),
+                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, field_u32(rd) + 1),
                 bytes,
             ),
             // DEXTM: 64-bit EXT with msbd >= 32
             0x01 => rtype(
                 address,
                 "dextm",
-                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, rd as u32 + 33),
+                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, field_u32(rd) + 33),
                 bytes,
             ),
             // DEXTU
@@ -1244,7 +1238,7 @@ impl MipsArch {
                     gpr(rt),
                     gpr(rs),
                     shamt + 32,
-                    rd as u32 + 1
+                    field_u32(rd) + 1
                 ),
                 bytes,
             ),
@@ -1252,7 +1246,7 @@ impl MipsArch {
             0x03 => rtype(
                 address,
                 "dext",
-                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, rd as u32 + 1),
+                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, field_u32(rd) + 1),
                 bytes,
             ),
             // INS: rd = msb, shamt = lsb; size = msb - lsb + 1.
@@ -1265,14 +1259,14 @@ impl MipsArch {
                     gpr(rt),
                     gpr(rs),
                     shamt,
-                    (rd as u32).saturating_sub(shamt) + 1
+                    field_u32(rd).saturating_sub(shamt) + 1
                 ),
                 bytes,
             ),
             0x05 => rtype(
                 address,
                 "dinsm",
-                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, rd as u32 + 33),
+                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, field_u32(rd) + 33),
                 bytes,
             ),
             0x06 => rtype(
@@ -1283,14 +1277,14 @@ impl MipsArch {
                     gpr(rt),
                     gpr(rs),
                     shamt + 32,
-                    rd as u32 + 1
+                    field_u32(rd) + 1
                 ),
                 bytes,
             ),
             0x07 => rtype(
                 address,
                 "dins",
-                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, rd as u32 + 1),
+                format!("{}, {}, {}, {}", gpr(rt), gpr(rs), shamt, field_u32(rd) + 1),
                 bytes,
             ),
 
@@ -1350,7 +1344,7 @@ fn rtype(address: Address, mnemonic: &str, operands: String, bytes: Vec<u8>) -> 
     mk(address, mnemonic, operands, InstrFlags::NONE, bytes)
 }
 
-fn itype(address: Address, mnemonic: &str, dst: &str, src: String, bytes: Vec<u8>) -> Instruction {
+fn itype(address: Address, mnemonic: &str, dst: &str, src: &str, bytes: Vec<u8>) -> Instruction {
     mk(
         address,
         mnemonic,
@@ -1369,10 +1363,10 @@ fn branch_i(
     bytes: Vec<u8>,
 ) -> Instruction {
     let target = branch_target_i(address, simm16);
-    let operands = match rt {
-        Some(rt_idx) => format!("{}, {}, 0x{target:x}", gpr(rs), gpr(rt_idx)),
-        None => format!("{}, 0x{target:x}", gpr(rs)),
-    };
+    let operands = rt.map_or_else(
+        || format!("{}, 0x{target:x}", gpr(rs)),
+        |rt_idx| format!("{}, {}, 0x{target:x}", gpr(rs), gpr(rt_idx)),
+    );
     mk(
         address,
         mnemonic,
@@ -1437,7 +1431,7 @@ fn rs_uimm(rs: usize, imm16: u32) -> String {
 #[must_use]
 pub const fn branch_target_i(address: Address, simm16: i64) -> u64 {
     let pc4 = address.0.wrapping_add(4);
-    pc4.wrapping_add((simm16 << 2) as u64)
+    pc4.wrapping_add((simm16 << 2).cast_unsigned())
 }
 
 /// J-type absolute target: { (PC+4)[63:28], `instr_index`, 2'b00 }
@@ -1491,9 +1485,8 @@ impl Architecture for MipsArch {
         if instr.flags.contains(InstrFlags::INDIRECT) {
             return vec![];
         }
-        let word = match self.read_word(&instr.bytes) {
-            Some(w) => w,
-            None => return vec![],
+        let Some(word) = self.read_word(&instr.bytes) else {
+            return vec![];
         };
         let opcode = (word >> 26) & 0x3F;
         let imm16 = word & 0xFFFF;
@@ -1501,9 +1494,7 @@ impl Architecture for MipsArch {
         let target26 = word & 0x03FF_FFFF;
         let target_addr = match opcode {
             0x02 | 0x03 => branch_target_j(instr.address, target26),
-            0x04..=0x07 => branch_target_i(instr.address, simm16),
-            0x14..=0x17 => branch_target_i(instr.address, simm16),
-            0x01 => branch_target_i(instr.address, simm16),
+            0x01 | 0x04..=0x07 | 0x14..=0x17 => branch_target_i(instr.address, simm16),
             _ => return vec![],
         };
         let branch = if instr.flags.contains(InstrFlags::CONDITIONAL) {
@@ -1536,9 +1527,9 @@ fn mips_registers(bits: u32) -> Vec<RegisterInfo> {
 
     // Numeric names r0..r31
     for i in 0u32..32 {
-        let kind = if i == REG_SP as u32 {
+        let kind = if i == field_u32(REG_SP) {
             RegisterKind::Stack
-        } else if i == REG_RA as u32 {
+        } else if i == field_u32(REG_RA) {
             RegisterKind::Link
         } else {
             RegisterKind::General
@@ -2157,7 +2148,7 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
             return vec![
                 LlilOp::SetRegConst {
                     dest: "$ra".into(),
-                    value: (instr.address.0 + 8) as i64,
+                    value: (instr.address.0 + 8).cast_signed(),
                 },
                 LlilOp::Call { target: t },
             ];
@@ -2240,20 +2231,22 @@ pub fn lift_to_llil(instr: &Instruction) -> Vec<LlilOp> {
 
 fn parse_imm(s: &str) -> i64 {
     let s = s.trim();
-    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        i64::from_str_radix(hex, 16).unwrap_or(0)
-    } else {
-        s.parse::<i64>().unwrap_or(0)
-    }
+    s.strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .map_or_else(
+            || s.parse::<i64>().unwrap_or(0),
+            |hex| i64::from_str_radix(hex, 16).unwrap_or(0),
+        )
 }
 
 fn parse_hex_target(s: &str) -> u64 {
     let s = s.trim();
-    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        u64::from_str_radix(hex, 16).unwrap_or(0)
-    } else {
-        s.parse::<u64>().unwrap_or(0)
-    }
+    s.strip_prefix("0x")
+        .or_else(|| s.strip_prefix("0X"))
+        .map_or_else(
+            || s.parse::<u64>().unwrap_or(0),
+            |hex| u64::from_str_radix(hex, 16).unwrap_or(0),
+        )
 }
 
 /// Parse `reg, offset(base)` memory operand format.
@@ -2548,27 +2541,27 @@ pub fn encode_lui(rt: u32, imm: u16) -> u32 {
 /// ADDIU rt, rs, imm
 #[must_use]
 pub fn encode_addiu(rt: u32, rs: u32, imm: i16) -> u32 {
-    encode_itype(0x09, rs, rt, imm as u16)
+    encode_itype(0x09, rs, rt, imm.cast_unsigned())
 }
 /// LW rt, offset(rs)
 #[must_use]
 pub fn encode_lw(rt: u32, rs: u32, offset: i16) -> u32 {
-    encode_itype(0x23, rs, rt, offset as u16)
+    encode_itype(0x23, rs, rt, offset.cast_unsigned())
 }
 /// SW rt, offset(rs)
 #[must_use]
 pub fn encode_sw(rt: u32, rs: u32, offset: i16) -> u32 {
-    encode_itype(0x2B, rs, rt, offset as u16)
+    encode_itype(0x2B, rs, rt, offset.cast_unsigned())
 }
 /// BEQ rs, rt, offset
 #[must_use]
 pub fn encode_beq(rs: u32, rt: u32, off: i16) -> u32 {
-    encode_itype(0x04, rs, rt, off as u16)
+    encode_itype(0x04, rs, rt, off.cast_unsigned())
 }
 /// BNE rs, rt, offset
 #[must_use]
 pub fn encode_bne(rs: u32, rt: u32, off: i16) -> u32 {
-    encode_itype(0x05, rs, rt, off as u16)
+    encode_itype(0x05, rs, rt, off.cast_unsigned())
 }
 /// SYSCALL with code
 #[must_use]
@@ -4634,6 +4627,34 @@ pub enum GprRole {
     ReturnAddress,
 }
 
+/// Widen a 5-bit instruction register/field index to `u32`.
+///
+/// Every caller feeds a value masked to five bits (`0..=31`) or a
+/// register constant, so the conversion cannot fail; `unwrap_or` keeps
+/// it total instead of panicking on a decoder fed hostile bytes.
+#[must_use]
+pub fn field_u32(field: usize) -> u32 {
+    u32::try_from(field).unwrap_or(u32::MAX)
+}
+
+/// Take the low 32 bits of a signed 64-bit value as a `u32`.
+///
+/// Masking first makes the result provably in range, so this is a
+/// reinterpretation of the low word, not a lossy narrowing.
+#[must_use]
+pub const fn low_u32_of_i64(value: i64) -> u32 {
+    (value & 0xFFFF_FFFF) as u32
+}
+
+/// Convert an element count to `f64` without precision loss.
+///
+/// Counts are saturated at `u32::MAX` first, so the conversion is exact
+/// (every `u32` is representable in an `f64`).
+#[must_use]
+pub fn count_as_f64(count: usize) -> f64 {
+    f64::from(u32::try_from(count).unwrap_or(u32::MAX))
+}
+
 /// Return the O32 ABI role for a given GPR number.
 #[must_use]
 pub const fn gpr_role_o32(reg: usize) -> GprRole {
@@ -4642,13 +4663,13 @@ pub const fn gpr_role_o32(reg: usize) -> GprRole {
         1 => GprRole::At,
         2 | 3 => GprRole::ReturnValue,
         4..=7 => GprRole::Argument,
-        8..=15 | 24 | 25 => GprRole::Temporary,
         16..=23 => GprRole::Saved,
         26 | 27 => GprRole::Kernel,
         28 => GprRole::GlobalPointer,
         29 => GprRole::StackPointer,
         30 => GprRole::FramePointer,
         31 => GprRole::ReturnAddress,
+        // Caller-saved temporaries (t0-t9) and any out-of-range index.
         _ => GprRole::Temporary,
     }
 }
@@ -4661,13 +4682,13 @@ pub const fn gpr_role_n64(reg: usize) -> GprRole {
         1 => GprRole::At,
         2 | 3 => GprRole::ReturnValue,
         4..=11 => GprRole::Argument,
-        12..=15 | 24 | 25 => GprRole::Temporary,
         16..=23 => GprRole::Saved,
         26 | 27 => GprRole::Kernel,
         28 => GprRole::GlobalPointer,
         29 => GprRole::StackPointer,
         30 => GprRole::FramePointer,
         31 => GprRole::ReturnAddress,
+        // Caller-saved temporaries (t0-t9) and any out-of-range index.
         _ => GprRole::Temporary,
     }
 }
@@ -5719,7 +5740,7 @@ mod tests_extended {
     fn test_detect_prologue() {
         // addiu $sp,$sp,-32 then sw $ra,28($sp)
         let ws = [
-            encode_itype(0x09, 29, 29, (-32i16) as u16), // addiu $sp,$sp,-32
+            encode_itype(0x09, 29, 29, (-32i16).cast_unsigned()), // addiu $sp,$sp,-32
             encode_itype(0x2B, 29, 31, 28u16),           // sw $ra,28($sp)
         ];
         let mut bytes = Vec::new();
@@ -6211,7 +6232,7 @@ impl MipsDisassemblyContext {
                 let reg_idx = gpr_index(parts[0]);
                 let imm = parse_imm(parts[1]);
                 if let Some(r) = reg_idx {
-                    self.hi_imm.insert(r, (imm << 16) as u32);
+                    self.hi_imm.insert(r, low_u32_of_i64(imm << 16));
                 }
             }
         }
@@ -6400,10 +6421,9 @@ impl InstrPattern {
     #[must_use]
     pub fn matches(&self, instr: &Instruction) -> bool {
         let m_ok = instr.mnemonic.starts_with(self.mnemonic_prefix);
-        let o_ok = match self.operand_contains {
-            Some(s) => instr.operands.contains(s),
-            None => true,
-        };
+        let o_ok = self
+            .operand_contains
+            .is_none_or(|s| instr.operands.contains(s));
         m_ok && o_ok
     }
 }
@@ -6430,14 +6450,84 @@ pub fn find_pattern(instrs: &[Instruction], patterns: &[InstrPattern]) -> Vec<us
 // MIPS32 / MIPS64 feature detection
 // ===========================================================================
 
-/// CPU feature flags.
-#[derive(Debug, Clone, Default)]
-pub struct MipsFeatures {
-    pub has_fpu: bool,
-    pub has_mips64: bool,
-    pub has_mips32r2: bool,
-    pub has_dsp: bool,
-    pub has_msa: bool,
+/// CPU feature flags, packed into a bit set.
+///
+/// A bit set rather than five `bool` fields: the flags are queried as a group
+/// and a set can be unioned across translation units, which five independent
+/// booleans cannot.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MipsFeatures(u32);
+
+impl MipsFeatures {
+    /// Coprocessor 1 (hardware floating point) is used.
+    pub const FPU: u32 = 1 << 0;
+    /// MIPS64 doubleword instructions are used.
+    pub const MIPS64: u32 = 1 << 1;
+    /// MIPS32 release 2 instructions are used.
+    pub const MIPS32R2: u32 = 1 << 2;
+    /// DSP ASE instructions are used.
+    pub const DSP: u32 = 1 << 3;
+    /// MSA (SIMD) instructions are used.
+    pub const MSA: u32 = 1 << 4;
+
+    /// An empty feature set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self(0)
+    }
+
+    /// The raw bits of the set.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// True when every bit in `mask` is present.
+    #[must_use]
+    pub const fn contains(self, mask: u32) -> bool {
+        self.0 & mask == mask
+    }
+
+    /// Add every bit in `mask` to the set.
+    pub const fn insert(&mut self, mask: u32) {
+        self.0 |= mask;
+    }
+
+    /// The union of two feature sets.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Hardware floating point detected.
+    #[must_use]
+    pub const fn has_fpu(self) -> bool {
+        self.contains(Self::FPU)
+    }
+
+    /// MIPS64 instructions detected.
+    #[must_use]
+    pub const fn has_mips64(self) -> bool {
+        self.contains(Self::MIPS64)
+    }
+
+    /// MIPS32r2 instructions detected.
+    #[must_use]
+    pub const fn has_mips32r2(self) -> bool {
+        self.contains(Self::MIPS32R2)
+    }
+
+    /// DSP ASE instructions detected.
+    #[must_use]
+    pub const fn has_dsp(self) -> bool {
+        self.contains(Self::DSP)
+    }
+
+    /// MSA instructions detected.
+    #[must_use]
+    pub const fn has_msa(self) -> bool {
+        self.contains(Self::MSA)
+    }
 }
 
 impl MipsFeatures {
@@ -6456,7 +6546,7 @@ impl MipsFeatures {
                 || m == "ldc1"
                 || m == "sdc1"
             {
-                f.has_fpu = true;
+                f.insert(Self::FPU);
             }
             if m.starts_with('d')
                 && (m == "dadd"
@@ -6471,7 +6561,7 @@ impl MipsFeatures {
                     || m == "dsrl"
                     || m == "dsra")
             {
-                f.has_mips64 = true;
+                f.insert(Self::MIPS64);
             }
             if m == "seb"
                 || m == "seh"
@@ -6482,7 +6572,7 @@ impl MipsFeatures {
                 || m == "rotr"
                 || m == "rotrv"
             {
-                f.has_mips32r2 = true;
+                f.insert(Self::MIPS32R2);
             }
         }
         f
@@ -6548,7 +6638,7 @@ mod tests_patterns {
     #[test]
     fn test_stack_frame_prologue() {
         let ws = [
-            encode_itype(0x09, 29, 29, (-32i16) as u16), // addiu $sp,$sp,-32
+            encode_itype(0x09, 29, 29, (-32i16).cast_unsigned()), // addiu $sp,$sp,-32
             encode_itype(0x2B, 29, 31, 28u16),           // sw $ra,28($sp)
             encode_itype(0x2B, 29, 30, 24u16),           // sw $fp,24($sp)
         ];
@@ -6591,7 +6681,7 @@ mod tests_patterns {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&w.to_le_bytes());
         let f = MipsFeatures::detect(&arch32le(), &bytes, addr(0));
-        assert!(f.has_fpu);
+        assert!(f.has_fpu());
     }
 
     // ── call graph build ──────────────────────────────────────────────────────
@@ -7088,7 +7178,7 @@ impl MipsClass {
 pub fn reorder_for_delay_slots(
     arch: &MipsArch,
     instrs: &[Instruction],
-    lifted: Vec<(usize, Vec<LlilOp>)>,
+    lifted: &[(usize, Vec<LlilOp>)],
 ) -> Vec<(usize, Vec<LlilOp>)> {
     let tags = DelaySlotAnalyzer::tag_delay_slots(instrs);
     let mut out: Vec<(usize, Vec<LlilOp>)> = Vec::with_capacity(lifted.len());
@@ -7542,7 +7632,7 @@ mod tests_advanced {
             .enumerate()
             .map(|(i, instr)| (i, lift_to_llil(instr)))
             .collect();
-        let reordered = reorder_for_delay_slots(&arch, &instrs, lifted);
+        let reordered = reorder_for_delay_slots(&arch, &instrs, &lifted);
         // After reorder: index 0 should be the nop (delay slot), then jump
         assert_eq!(reordered.len(), 2);
         // The delay slot (originally index 1) should come first
@@ -8317,7 +8407,7 @@ impl DisassemblyReport {
         let code_density = if bytes.is_empty() {
             0.0
         } else {
-            stats.total as f64 / (bytes.len() as f64 / 4.0)
+            count_as_f64(stats.total) / (count_as_f64(bytes.len()) / 4.0)
         };
 
         Self {
@@ -8757,11 +8847,82 @@ pub struct TlbEntry {
     pub pfn1: u32, // Physical frame number (odd page)
     pub c0: u8,    // Cache attributes (even)
     pub c1: u8,    // Cache attributes (odd)
-    pub dirty0: bool,
-    pub dirty1: bool,
-    pub valid0: bool,
-    pub valid1: bool,
+    /// Per-page dirty/valid bits for the even and odd page of the pair.
+    pub flags: TlbFlags,
     pub global: bool,
+}
+
+/// The dirty and valid bits of a TLB entry's even/odd page pair.
+///
+/// The four bits travel together in hardware (EntryLo0/EntryLo1), so they are
+/// modelled as one value rather than four independent booleans.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TlbFlags(u8);
+
+impl TlbFlags {
+    /// Dirty (writable) bit of the even page.
+    pub const DIRTY0: u8 = 1 << 0;
+    /// Dirty (writable) bit of the odd page.
+    pub const DIRTY1: u8 = 1 << 1;
+    /// Valid bit of the even page.
+    pub const VALID0: u8 = 1 << 2;
+    /// Valid bit of the odd page.
+    pub const VALID1: u8 = 1 << 3;
+
+    /// Build a flag set from the four hardware bits.
+    #[must_use]
+    pub const fn new(dirty0: bool, dirty1: bool, valid0: bool, valid1: bool) -> Self {
+        let mut bits = 0u8;
+        if dirty0 {
+            bits |= Self::DIRTY0;
+        }
+        if dirty1 {
+            bits |= Self::DIRTY1;
+        }
+        if valid0 {
+            bits |= Self::VALID0;
+        }
+        if valid1 {
+            bits |= Self::VALID1;
+        }
+        Self(bits)
+    }
+
+    /// The raw bits.
+    #[must_use]
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    /// True when every bit in `mask` is present.
+    #[must_use]
+    pub const fn contains(self, mask: u8) -> bool {
+        self.0 & mask == mask
+    }
+
+    /// Dirty bit of the even page.
+    #[must_use]
+    pub const fn dirty0(self) -> bool {
+        self.contains(Self::DIRTY0)
+    }
+
+    /// Dirty bit of the odd page.
+    #[must_use]
+    pub const fn dirty1(self) -> bool {
+        self.contains(Self::DIRTY1)
+    }
+
+    /// Valid bit of the even page.
+    #[must_use]
+    pub const fn valid0(self) -> bool {
+        self.contains(Self::VALID0)
+    }
+
+    /// Valid bit of the odd page.
+    #[must_use]
+    pub const fn valid1(self) -> bool {
+        self.contains(Self::VALID1)
+    }
 }
 
 impl TlbEntry {
@@ -8779,10 +8940,7 @@ impl TlbEntry {
             pfn1: if odd { pfn } else { pfn + 1 },
             c0: 3, // cacheable, non-coherent, write-back
             c1: 3,
-            dirty0: !odd,
-            dirty1: odd,
-            valid0: !odd,
-            valid1: odd,
+            flags: TlbFlags::new(!odd, odd, !odd, odd),
             global: false,
         }
     }
@@ -8799,12 +8957,12 @@ impl TlbEntry {
         }
         let even = (vaddr >> 12) & 1 == 0;
         if even {
-            if !self.valid0 {
+            if !self.flags.valid0() {
                 return None;
             }
             Some((self.pfn0 << 12) | (vaddr & 0xFFF))
         } else {
-            if !self.valid1 {
+            if !self.flags.valid1() {
                 return None;
             }
             Some((self.pfn1 << 12) | (vaddr & 0xFFF))
@@ -9363,7 +9521,7 @@ mod tests_cfg {
     #[test]
     fn test_stack_frame_leaf() {
         // No sw $ra → leaf
-        let ws = [encode_itype(0x09, 29, 29, (-16i16) as u16)]; // addiu $sp,$sp,-16
+        let ws = [encode_itype(0x09, 29, 29, (-16i16).cast_unsigned())]; // addiu $sp,$sp,-16
         let mut bytes = Vec::new();
         for w in ws {
             bytes.extend_from_slice(&w.to_le_bytes());
@@ -9493,6 +9651,12 @@ pub fn patch_instr(bytes: &mut [u8], offset: usize, new_word: u32, endian: MipsE
 
 /// Patch a branch/jump at `offset` to reach `target` from `pc`.
 /// Returns `Ok(new_word)` on success, `Err` if the displacement is out of range.
+///
+/// # Errors
+///
+/// Returns `Err` when `offset` lies outside `bytes`, when the word at
+/// `offset` is not a branch or jump, or when `target` is out of range for
+/// the encoding's displacement field.
 pub fn patch_branch(
     bytes: &mut [u8],
     offset: usize,
@@ -9522,13 +9686,13 @@ pub fn patch_branch(
         0x04 | 0x05 | 0x06 | 0x07 | 0x14 | 0x15 | 0x16 | 0x17 | 0x01 => {
             // I-type: PC-relative 16-bit displacement
             let pc4 = pc.0.wrapping_add(4);
-            let disp = (target as i64).wrapping_sub(pc4 as i64);
+            let disp = target.cast_signed().wrapping_sub(pc4.cast_signed());
             let disp_words = disp >> 2;
             if !(-32768..=32767).contains(&disp_words) {
                 return Err("I-type branch displacement out of range");
             }
             let upper = old_word & 0xFFFF_0000;
-            let new_word = upper | ((disp_words as u32) & 0xFFFF);
+            let new_word = upper | (low_u32_of_i64(disp_words) & 0xFFFF);
             patch_instr(bytes, offset, new_word, endian);
             Ok(new_word)
         }
@@ -9671,7 +9835,7 @@ impl MipsHistogram {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(&str, usize)> {
         let mut v: Vec<(&str, usize)> = self.counts.iter().map(|(k, &v)| (k.as_str(), v)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|e| std::cmp::Reverse(e.1));
         v.truncate(n);
         v
     }
@@ -9707,9 +9871,8 @@ pub fn scan_constant_pool(arch: &MipsArch, bytes: &[u8], base: Address) -> Vec<C
     let mut entries = Vec::new();
     let mut offset = 0usize;
     while offset + 4 <= bytes.len() {
-        let word = match arch.read_word(&bytes[offset..]) {
-            Some(w) => w,
-            None => break,
+        let Some(word) = arch.read_word(&bytes[offset..]) else {
+            break;
         };
         if !is_valid_mips_word(word) {
             entries.push(ConstantPoolEntry {

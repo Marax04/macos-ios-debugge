@@ -340,27 +340,39 @@ const fn size_field(word: u32, shift: u32) -> Option<SveElementSize> {
     SveElementSize::from_bits2(((word >> shift) & 3) as u8)
 }
 
+/// The register/element operands of a decoded SVE instruction, grouped so
+/// that `make_insn` takes one cohesive bundle instead of five loose slots.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SveOperandRegs {
+    /// Destination vector register, when the encoding has one.
+    pub zd: Option<SveRegister>,
+    /// First source vector register.
+    pub zn: Option<SveRegister>,
+    /// Second source vector register.
+    pub zm: Option<SveRegister>,
+    /// Governing predicate register.
+    pub pg: Option<SvePredicate>,
+    /// Element size of the operation.
+    pub elem_size: Option<SveElementSize>,
+}
+
 fn make_insn(
     word: u32,
     group: SveInsnGroup,
     mnemonic: &str,
     operands: String,
-    zd: Option<SveRegister>,
-    zn: Option<SveRegister>,
-    zm: Option<SveRegister>,
-    pg: Option<SvePredicate>,
-    elem_size: Option<SveElementSize>,
+    regs: SveOperandRegs,
 ) -> SveInsn {
     SveInsn {
         word,
         mnemonic: mnemonic.to_ascii_lowercase(),
         operands,
         group,
-        zd,
-        zn,
-        zm,
-        pg,
-        elem_size,
+        zd: regs.zd,
+        zn: regs.zn,
+        zm: regs.zm,
+        pg: regs.pg,
+        elem_size: regs.elem_size,
     }
 }
 
@@ -394,17 +406,7 @@ fn decode_int_arith(word: u32) -> Option<SveInsn> {
     } else {
         format!("{zd}{suf}, {zn}{suf}, {zm}{suf}")
     };
-    Some(make_insn(
-        word,
-        SveInsnGroup::IntArith,
-        mnemonic,
-        ops,
-        Some(zd),
-        Some(zn),
-        Some(zm),
-        if has_pg { Some(pg) } else { None },
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::IntArith, mnemonic, ops, SveOperandRegs { zd: Some(zd), zn: Some(zn), zm: Some(zm), pg: if has_pg { Some(pg) } else { None }, elem_size: Some(size) }))
 }
 
 fn decode_int_arith2(word: u32) -> Option<SveInsn> {
@@ -423,17 +425,7 @@ fn decode_int_arith2(word: u32) -> Option<SveInsn> {
     };
     let suf = size.suffix();
     let ops = format!("{zd}{suf}, {pg}/m, {zn}{suf}");
-    Some(make_insn(
-        word,
-        SveInsnGroup::IntArith2,
-        mnemonic,
-        ops,
-        Some(zd),
-        Some(zn),
-        None,
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::IntArith2, mnemonic, ops, SveOperandRegs { zd: Some(zd), zn: Some(zn), zm: None, pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_bit_shift(word: u32) -> Option<SveInsn> {
@@ -452,17 +444,7 @@ fn decode_bit_shift(word: u32) -> Option<SveInsn> {
     };
     let suf = size.suffix();
     let ops = format!("{zd}{suf}, {pg}/m, {zn}{suf}, {zm}{suf}");
-    Some(make_insn(
-        word,
-        SveInsnGroup::BitShift,
-        mnemonic,
-        ops,
-        Some(zd),
-        Some(zn),
-        Some(zm),
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::BitShift, mnemonic, ops, SveOperandRegs { zd: Some(zd), zn: Some(zn), zm: Some(zm), pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_predicate(word: u32) -> Option<SveInsn> {
@@ -485,17 +467,7 @@ fn decode_predicate(word: u32) -> Option<SveInsn> {
             format!("{pd}.b, {pg}/z, {pn}.b, {pm}.b"),
         ),
     };
-    Some(make_insn(
-        word,
-        SveInsnGroup::Predicate,
-        mnemonic,
-        ops,
-        None,
-        None,
-        None,
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::Predicate, mnemonic, ops, SveOperandRegs { zd: None, zn: None, zm: None, pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_mem_load(word: u32) -> Option<SveInsn> {
@@ -511,17 +483,7 @@ fn decode_mem_load(word: u32) -> Option<SveInsn> {
     } else {
         format!("{zd}{suf}, {pg}/z, [x{rn}, x{rm}]")
     };
-    Some(make_insn(
-        word,
-        SveInsnGroup::MemLoad,
-        "ld1",
-        ops,
-        Some(zd),
-        None,
-        None,
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::MemLoad, "ld1", ops, SveOperandRegs { zd: Some(zd), zn: None, zm: None, pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_mem_store(word: u32) -> Option<SveInsn> {
@@ -537,17 +499,7 @@ fn decode_mem_store(word: u32) -> Option<SveInsn> {
     } else {
         format!("{zt}{suf}, {pg}, [x{rn}, x{rm}]")
     };
-    Some(make_insn(
-        word,
-        SveInsnGroup::MemStore,
-        "st1",
-        ops,
-        Some(zt),
-        None,
-        None,
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::MemStore, "st1", ops, SveOperandRegs { zd: Some(zt), zn: None, zm: None, pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_fp_arith(word: u32) -> Option<SveInsn> {
@@ -570,17 +522,7 @@ fn decode_fp_arith(word: u32) -> Option<SveInsn> {
     };
     let suf = size.suffix();
     let ops = format!("{zd}{suf}, {pg}/m, {zn}{suf}, {zm}{suf}");
-    Some(make_insn(
-        word,
-        SveInsnGroup::FpArith,
-        mnemonic,
-        ops,
-        Some(zd),
-        Some(zn),
-        Some(zm),
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::FpArith, mnemonic, ops, SveOperandRegs { zd: Some(zd), zn: Some(zn), zm: Some(zm), pg: Some(pg), elem_size: Some(size) }))
 }
 
 fn decode_mem_gather(word: u32) -> Option<SveInsn> {
@@ -592,17 +534,7 @@ fn decode_mem_gather(word: u32) -> Option<SveInsn> {
     let suf = size.suffix();
 
     let ops = format!("{zd}{suf}, {pg}/z, [x{rn}, {zm}{suf}]");
-    Some(make_insn(
-        word,
-        SveInsnGroup::MemGather,
-        "ld1",
-        ops,
-        Some(zd),
-        None,
-        Some(zm),
-        Some(pg),
-        Some(size),
-    ))
+    Some(make_insn(word, SveInsnGroup::MemGather, "ld1", ops, SveOperandRegs { zd: Some(zd), zn: None, zm: Some(zm), pg: Some(pg), elem_size: Some(size) }))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

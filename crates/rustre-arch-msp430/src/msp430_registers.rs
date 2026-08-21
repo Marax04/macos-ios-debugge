@@ -6,6 +6,7 @@
 // Only std is used; no external crates.
 
 use std::fmt;
+use std::fmt::Write as _;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Msp430Reg
@@ -243,8 +244,8 @@ impl ConstGen {
     }
 
     #[must_use] 
-    pub fn value_u16(self) -> u16 {
-        i32::from(self.value()) as u16
+    pub const fn value_u16(self) -> u16 {
+        self.value().cast_unsigned()
     }
 }
 
@@ -426,11 +427,14 @@ impl Msp430RegFile {
     /// Dump all register values.
     #[must_use] 
     pub fn dump(&self) -> String {
-        let mut s = String::new();
-        for r in Msp430Reg::all() {
-            s.push_str(&format!("{:4}: {:04X}\n", r.name(), self.regs[r.index()]));
-        }
-        s
+        // `fold` with `writeln!` instead of `map(format!).collect()`: it
+        // reuses one buffer rather than allocating a String per register.
+        // Writing to a String is infallible, so the Result carries no
+        // information here.
+        Msp430Reg::all().into_iter().fold(String::new(), |mut acc, r| {
+            let _ = writeln!(acc, "{:4}: {:04X}", r.name(), self.regs[r.index()]);
+            acc
+        })
     }
 
     /// Return a snapshot of all register values.

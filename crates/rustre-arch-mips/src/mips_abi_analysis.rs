@@ -453,6 +453,11 @@ impl GlobalPointerUsage {
     }
 
     /// Range of GP offsets seen.
+    ///
+    /// # Panics
+    ///
+    /// Never panics: the `unwrap` calls are guarded by the emptiness check
+    /// immediately above them, so `min`/`max` always yield a value.
     #[must_use]
     pub fn offset_range(&self) -> Option<(i32, i32)> {
         if self.offsets.is_empty() {

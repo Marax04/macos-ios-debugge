@@ -68,7 +68,10 @@ impl InterruptVector {
     /// Return the vector table address for this interrupt.
     #[must_use]
     pub const fn address(self) -> u16 {
-        VECTOR_TABLE_BASE + self.index() as u16 * 2
+        // `index()` is a small enum discriminant (0..=31), so doubling it and
+        // keeping the low 16 bits is the whole value; the widening to u64 makes
+        // that bound checkable rather than platform-dependent.
+        VECTOR_TABLE_BASE + ((self.index() as u64 * 2) & 0xFFFF) as u16
     }
 
     /// Return the zero-based index of this vector (0 = lowest priority).

@@ -7822,14 +7822,20 @@ pub fn lane_byte_offset(lane: u8, elem_size: u8) -> u8 {
 /// size in bytes.
 #[must_use]
 pub const fn q_lane_count(elem_size: u8) -> u8 {
-    if elem_size == 0 { 0 } else { 16 / elem_size }
+    match 16u8.checked_div(elem_size) {
+        Some(n) => n,
+        None => 0,
+    }
 }
 
 /// Number of elements that fit in a 64-bit (D) register for a given element
 /// size in bytes.
 #[must_use]
 pub const fn d_lane_count(elem_size: u8) -> u8 {
-    if elem_size == 0 { 0 } else { 8 / elem_size }
+    match 8u8.checked_div(elem_size) {
+        Some(n) => n,
+        None => 0,
+    }
 }
 
 // ── AArch64 instruction-set state ──────────────────────────────────────────

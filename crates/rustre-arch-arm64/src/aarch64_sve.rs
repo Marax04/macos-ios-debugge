@@ -1416,7 +1416,7 @@ mod tests {
     // ── 17. SveOpcode::Unknown ──────────────────────────────────────────────
     #[test]
     fn test_unknown_opcode() {
-        let op = SveOpcode::Unknown(0xdeadbeef);
+        let op = SveOpcode::Unknown(0xdead_beef);
         assert_eq!(op.mnemonic(), "???");
         assert!(!op.reads_memory());
         assert!(!op.writes_memory());
@@ -1443,15 +1443,15 @@ mod tests {
     // ── 20. SveInstruction address stored ───────────────────────────────────
     #[test]
     fn test_instruction_address() {
-        let insn = SveInstruction::new(0xdeadbeef, 0, SveOpcode::Sel, None, vec![]);
-        assert_eq!(insn.address, 0xdeadbeef);
+        let insn = SveInstruction::new(0xdead_beef, 0, SveOpcode::Sel, None, vec![]);
+        assert_eq!(insn.address, 0xdead_beef);
     }
 
     // ── 21. SveInstruction encoding stored ──────────────────────────────────
     #[test]
     fn test_instruction_encoding() {
-        let insn = SveInstruction::new(0, 0xaabbccdd, SveOpcode::Eor, None, vec![]);
-        assert_eq!(insn.encoding, 0xaabbccdd);
+        let insn = SveInstruction::new(0, 0xaabb_ccdd, SveOpcode::Eor, None, vec![]);
+        assert_eq!(insn.encoding, 0xaabb_ccdd);
     }
 
     // ── 22. Predicate generate opcodes all produce_predicate ────────────────
