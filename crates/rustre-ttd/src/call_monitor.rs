@@ -255,7 +255,7 @@ impl CallFrequencyMap {
     #[must_use]
     pub fn top_by_name(&self, limit: usize) -> Vec<(&str, u64)> {
         let mut v: Vec<(&str, u64)> = self.by_name.iter().map(|(k, &v)| (k.as_str(), v)).collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(limit);
         v
     }
@@ -264,7 +264,7 @@ impl CallFrequencyMap {
     #[must_use]
     pub fn top_by_addr(&self, limit: usize) -> Vec<(u64, u64)> {
         let mut v: Vec<(u64, u64)> = self.by_addr.iter().map(|(&k, &v)| (k, v)).collect();
-        v.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(limit);
         v
     }

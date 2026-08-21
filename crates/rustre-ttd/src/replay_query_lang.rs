@@ -724,7 +724,7 @@ impl<'a> QueryExecutor<'a> {
 
         // Sort.
         if query.is_order_desc() {
-            matched.sort_unstable_by(|a, b| b.position.cmp(&a.position));
+            matched.sort_unstable_by_key(|b| std::cmp::Reverse(b.position));
         } else {
             matched.sort_unstable_by_key(|e| e.position);
         }

@@ -1627,7 +1627,7 @@ impl SyscallSummary {
     #[must_use]
     pub fn top_syscalls(&self) -> Vec<&SyscallInfo> {
         let mut v: Vec<&SyscallInfo> = self.by_nr.values().collect();
-        v.sort_by(|a, b| b.call_count.cmp(&a.call_count));
+        v.sort_by_key(|b| std::cmp::Reverse(b.call_count));
         v
     }
 }
