@@ -20,10 +20,10 @@ impl M68kDReg {
     #[must_use]
     pub const fn from_u8(n: u8) -> Option<Self> {
         match n & 7 {
-            0 => Some(M68kDReg::D0), 1 => Some(M68kDReg::D1),
-            2 => Some(M68kDReg::D2), 3 => Some(M68kDReg::D3),
-            4 => Some(M68kDReg::D4), 5 => Some(M68kDReg::D5),
-            6 => Some(M68kDReg::D6), 7 => Some(M68kDReg::D7),
+            0 => Some(Self::D0), 1 => Some(Self::D1),
+            2 => Some(Self::D2), 3 => Some(Self::D3),
+            4 => Some(Self::D4), 5 => Some(Self::D5),
+            6 => Some(Self::D6), 7 => Some(Self::D7),
             _ => None,
         }
     }
@@ -32,16 +32,16 @@ impl M68kDReg {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            M68kDReg::D0 => "D0", M68kDReg::D1 => "D1",
-            M68kDReg::D2 => "D2", M68kDReg::D3 => "D3",
-            M68kDReg::D4 => "D4", M68kDReg::D5 => "D5",
-            M68kDReg::D6 => "D6", M68kDReg::D7 => "D7",
+            Self::D0 => "D0", Self::D1 => "D1",
+            Self::D2 => "D2", Self::D3 => "D3",
+            Self::D4 => "D4", Self::D5 => "D5",
+            Self::D6 => "D6", Self::D7 => "D7",
         }
     }
     #[must_use]
-    pub const fn all() -> [M68kDReg; 8] {
-        [M68kDReg::D0, M68kDReg::D1, M68kDReg::D2, M68kDReg::D3,
-         M68kDReg::D4, M68kDReg::D5, M68kDReg::D6, M68kDReg::D7]
+    pub const fn all() -> [Self; 8] {
+        [Self::D0, Self::D1, Self::D2, Self::D3,
+         Self::D4, Self::D5, Self::D6, Self::D7]
     }
 }
 
@@ -58,10 +58,10 @@ impl M68kAReg {
     #[must_use]
     pub const fn from_u8(n: u8) -> Option<Self> {
         match n & 7 {
-            0 => Some(M68kAReg::A0), 1 => Some(M68kAReg::A1),
-            2 => Some(M68kAReg::A2), 3 => Some(M68kAReg::A3),
-            4 => Some(M68kAReg::A4), 5 => Some(M68kAReg::A5),
-            6 => Some(M68kAReg::A6), 7 => Some(M68kAReg::A7),
+            0 => Some(Self::A0), 1 => Some(Self::A1),
+            2 => Some(Self::A2), 3 => Some(Self::A3),
+            4 => Some(Self::A4), 5 => Some(Self::A5),
+            6 => Some(Self::A6), 7 => Some(Self::A7),
             _ => None,
         }
     }
@@ -70,18 +70,18 @@ impl M68kAReg {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            M68kAReg::A0 => "A0", M68kAReg::A1 => "A1",
-            M68kAReg::A2 => "A2", M68kAReg::A3 => "A3",
-            M68kAReg::A4 => "A4", M68kAReg::A5 => "A5",
-            M68kAReg::A6 => "A6", M68kAReg::A7 => "SP",
+            Self::A0 => "A0", Self::A1 => "A1",
+            Self::A2 => "A2", Self::A3 => "A3",
+            Self::A4 => "A4", Self::A5 => "A5",
+            Self::A6 => "A6", Self::A7 => "SP",
         }
     }
     #[must_use]
-    pub fn is_sp(self) -> bool { self == M68kAReg::A7 }
+    pub fn is_sp(self) -> bool { self == Self::A7 }
     #[must_use]
-    pub const fn all() -> [M68kAReg; 8] {
-        [M68kAReg::A0, M68kAReg::A1, M68kAReg::A2, M68kAReg::A3,
-         M68kAReg::A4, M68kAReg::A5, M68kAReg::A6, M68kAReg::A7]
+    pub const fn all() -> [Self; 8] {
+        [Self::A0, Self::A1, Self::A2, Self::A3,
+         Self::A4, Self::A5, Self::A6, Self::A7]
     }
 }
 
@@ -115,28 +115,28 @@ impl M68kCcr {
     #[must_use]
     pub const fn extend(self)   -> bool { self.0 & Self::X_BIT != 0 }
 
-    pub fn set_carry(&mut self, v: bool)    { self.set_bit(Self::C_BIT, v); }
-    pub fn set_overflow(&mut self, v: bool) { self.set_bit(Self::V_BIT, v); }
-    pub fn set_zero(&mut self, v: bool)     { self.set_bit(Self::Z_BIT, v); }
-    pub fn set_negative(&mut self, v: bool) { self.set_bit(Self::N_BIT, v); }
-    pub fn set_extend(&mut self, v: bool)   { self.set_bit(Self::X_BIT, v); }
+    pub const fn set_carry(&mut self, v: bool)    { self.set_bit(Self::C_BIT, v); }
+    pub const fn set_overflow(&mut self, v: bool) { self.set_bit(Self::V_BIT, v); }
+    pub const fn set_zero(&mut self, v: bool)     { self.set_bit(Self::Z_BIT, v); }
+    pub const fn set_negative(&mut self, v: bool) { self.set_bit(Self::N_BIT, v); }
+    pub const fn set_extend(&mut self, v: bool)   { self.set_bit(Self::X_BIT, v); }
 
     const fn set_bit(&mut self, bit: u8, v: bool) {
         if v { self.0 |= bit; } else { self.0 &= !bit; }
     }
 
     /// Update N and Z flags from a 32-bit result.
-    pub fn update_nz32(&mut self, result: u32) {
+    pub const fn update_nz32(&mut self, result: u32) {
         self.set_negative(result & 0x8000_0000 != 0);
         self.set_zero(result == 0);
     }
     /// Update N and Z flags from a 16-bit result.
-    pub fn update_nz16(&mut self, result: u16) {
+    pub const fn update_nz16(&mut self, result: u16) {
         self.set_negative(result & 0x8000 != 0);
         self.set_zero(result == 0);
     }
     /// Update N and Z flags from an 8-bit result.
-    pub fn update_nz8(&mut self, result: u8) {
+    pub const fn update_nz8(&mut self, result: u8) {
         self.set_negative(result & 0x80 != 0);
         self.set_zero(result == 0);
     }
@@ -302,7 +302,7 @@ pub struct M68kRegFile {
 
 impl Default for M68kRegFile {
     fn default() -> Self {
-        M68kRegFile {
+        Self {
             d: [0; 8], a: [0; 8], pc: 0,
             sr: M68kSr(0x2700), // supervisor, int mask=7
             usp: 0, isp: 0, msp: 0,
@@ -319,18 +319,30 @@ impl M68kRegFile {
     // ──── Data registers ────────────────────────────────────────────────────
 
     #[must_use]
-    pub fn dreg(&self, r: M68kDReg) -> u32 { self.d[r.index()] }
+    pub const fn dreg(&self, r: M68kDReg) -> u32 { self.d[r.index()] }
     #[must_use]
     pub const fn dreg_n(&self, n: u8) -> u32 { self.d[(n & 7) as usize] }
-    pub fn set_dreg(&mut self, r: M68kDReg, v: u32) { self.d[r.index()] = v; }
+    pub const fn set_dreg(&mut self, r: M68kDReg, v: u32) { self.d[r.index()] = v; }
     pub const fn set_dreg_n(&mut self, n: u8, v: u32) { self.d[(n & 7) as usize] = v; }
+
+    /// Low 8 bits of a 32-bit value, expressed as a byte selection rather than
+    /// a narrowing cast so no truncation can be silent.
+    #[must_use]
+    pub const fn low8(v: u32) -> u8 { v.to_le_bytes()[0] }
+    /// Low 16 bits of a 32-bit value, expressed as a byte selection rather than
+    /// a narrowing cast so no truncation can be silent.
+    #[must_use]
+    pub const fn low16(v: u32) -> u16 {
+        let b = v.to_le_bytes();
+        u16::from_le_bytes([b[0], b[1]])
+    }
 
     /// Read data register as byte (bits 0-7).
     #[must_use]
-    pub fn dreg_byte(&self, r: M68kDReg) -> u8 { self.d[r.index()] as u8 }
+    pub const fn dreg_byte(&self, r: M68kDReg) -> u8 { Self::low8(self.d[r.index()]) }
     /// Read data register as word (bits 0-15).
     #[must_use]
-    pub fn dreg_word(&self, r: M68kDReg) -> u16 { self.d[r.index()] as u16 }
+    pub const fn dreg_word(&self, r: M68kDReg) -> u16 { Self::low16(self.d[r.index()]) }
 
     /// Write lower 8 bits, preserving upper 24.
     pub fn set_dreg_byte(&mut self, r: M68kDReg, v: u8) {
@@ -346,10 +358,10 @@ impl M68kRegFile {
     // ──── Address registers ──────────────────────────────────────────────────
 
     #[must_use]
-    pub fn areg(&self, r: M68kAReg) -> u32 { self.a[r.index()] }
+    pub const fn areg(&self, r: M68kAReg) -> u32 { self.a[r.index()] }
     #[must_use]
     pub const fn areg_n(&self, n: u8) -> u32 { self.a[(n & 7) as usize] }
-    pub fn set_areg(&mut self, r: M68kAReg, v: u32) { self.a[r.index()] = v; }
+    pub const fn set_areg(&mut self, r: M68kAReg, v: u32) { self.a[r.index()] = v; }
     pub const fn set_areg_n(&mut self, n: u8, v: u32) { self.a[(n & 7) as usize] = v; }
 
     /// Get the active stack pointer (A7).
@@ -360,14 +372,14 @@ impl M68kRegFile {
     // ──── Status register / CCR ──────────────────────────────────────────────
 
     #[must_use]
-    pub fn ccr(&self) -> M68kCcr { self.sr.ccr() }
+    pub const fn ccr(&self) -> M68kCcr { self.sr.ccr() }
     pub fn set_ccr(&mut self, ccr: M68kCcr) { self.sr.set_ccr(ccr); }
 
     #[must_use]
-    pub fn supervisor(&self) -> bool { self.sr.supervisor() }
+    pub const fn supervisor(&self) -> bool { self.sr.supervisor() }
 
     /// Switch to supervisor mode, saving USP.
-    pub fn enter_supervisor(&mut self) {
+    pub const fn enter_supervisor(&mut self) {
         if !self.supervisor() {
             self.usp = self.a[7];
             self.a[7] = self.isp;
@@ -376,7 +388,7 @@ impl M68kRegFile {
     }
 
     /// Return to user mode, restoring USP.
-    pub fn exit_supervisor(&mut self) {
+    pub const fn exit_supervisor(&mut self) {
         if self.supervisor() {
             self.isp = self.a[7];
             self.a[7] = self.usp;
@@ -426,13 +438,13 @@ impl M68kRegFile {
     #[must_use]
     pub fn get_named(&self, name: &str) -> Option<u32> {
         let upper = name.to_uppercase();
-        if upper.starts_with('D') {
-            let n: u8 = upper[1..].parse().ok()?;
+        if let Some(rest) = upper.strip_prefix('D') {
+            let n: u8 = rest.parse().ok()?;
             if n > 7 { return None; }
             return Some(self.d[n as usize]);
         }
-        if upper.starts_with('A') {
-            let n: u8 = upper[1..].parse().ok()?;
+        if let Some(rest) = upper.strip_prefix('A') {
+            let n: u8 = rest.parse().ok()?;
             if n > 7 { return None; }
             return Some(self.a[n as usize]);
         }
@@ -454,28 +466,26 @@ impl M68kRegFile {
 
     pub fn set_named(&mut self, name: &str, value: u32) -> bool {
         let upper = name.to_uppercase();
-        if upper.starts_with('D') {
-            if let Ok(n) = upper[1..].parse::<u8>() {
-                if n <= 7 { self.d[n as usize] = value; return true; }
-            }
+        if let Some(rest) = upper.strip_prefix('D') {
+            if let Ok(n) = rest.parse::<u8>()
+                && n <= 7 { self.d[n as usize] = value; return true; }
             return false;
         }
-        if upper.starts_with('A') {
-            if let Ok(n) = upper[1..].parse::<u8>() {
-                if n <= 7 { self.a[n as usize] = value; return true; }
-            }
+        if let Some(rest) = upper.strip_prefix('A') {
+            if let Ok(n) = rest.parse::<u8>()
+                && n <= 7 { self.a[n as usize] = value; return true; }
             return false;
         }
         match upper.as_str() {
             "PC"   => { self.pc = value; true }
-            "SR"   => { self.sr = M68kSr(value as u16); true }
-            "CCR"  => { self.set_ccr(M68kCcr(value as u8)); true }
+            "SR"   => { self.sr = M68kSr(Self::low16(value)); true }
+            "CCR"  => { self.set_ccr(M68kCcr(Self::low8(value))); true }
             "USP"  => { self.usp = value; true }
             "ISP" | "SSP" => { self.isp = value; true }
             "MSP"  => { self.msp = value; true }
             "VBR"  => { self.vbr.0 = value; true }
-            "SFC"  => { self.sfc = FunctionCode(value as u8); true }
-            "DFC"  => { self.dfc = FunctionCode(value as u8); true }
+            "SFC"  => { self.sfc = FunctionCode(Self::low8(value)); true }
+            "DFC"  => { self.dfc = FunctionCode(Self::low8(value)); true }
             "CACR" => { self.cacr.0 = value; true }
             "SP"   => { self.a[7] = value; true }
             _      => false,
@@ -485,22 +495,23 @@ impl M68kRegFile {
     /// Dump all register values as a formatted string.
     #[must_use]
     pub fn dump(&self) -> String {
+        use core::fmt::Write as _;
         let mut s = String::new();
         s.push_str("D registers:\n");
-        for i in 0..8 {
-            s.push_str(&format!("  D{}: {:08X}\n", i, self.d[i]));
+        for (i, v) in self.d.iter().enumerate() {
+            let _ = writeln!(s, "  D{i}: {v:08X}");
         }
         s.push_str("A registers:\n");
-        for i in 0..7 {
-            s.push_str(&format!("  A{}: {:08X}\n", i, self.a[i]));
+        for (i, v) in self.a.iter().take(7).enumerate() {
+            let _ = writeln!(s, "  A{i}: {v:08X}");
         }
-        s.push_str(&format!("  SP: {:08X}\n", self.a[7]));
-        s.push_str(&format!("PC:  {:08X}\n", self.pc));
-        s.push_str(&format!("{}\n", self.sr));
-        s.push_str(&format!("USP: {:08X}  ISP: {:08X}  MSP: {:08X}\n",
-            self.usp, self.isp, self.msp));
-        s.push_str(&format!("VBR: {:08X}  SFC: {}  DFC: {}  CACR: {:08X}\n",
-            self.vbr.0, self.sfc.0, self.dfc.0, self.cacr.0));
+        let _ = writeln!(s, "  SP: {:08X}", self.a[7]);
+        let _ = writeln!(s, "PC:  {:08X}", self.pc);
+        let _ = writeln!(s, "{}", self.sr);
+        let _ = writeln!(s, "USP: {:08X}  ISP: {:08X}  MSP: {:08X}",
+            self.usp, self.isp, self.msp);
+        let _ = writeln!(s, "VBR: {:08X}  SFC: {}  DFC: {}  CACR: {:08X}",
+            self.vbr.0, self.sfc.0, self.dfc.0, self.cacr.0);
         s
     }
 }
@@ -521,13 +532,13 @@ impl RegList {
     #[must_use]
     pub fn data_regs(self) -> [bool; 8] {
         let mut r = [false; 8];
-        for i in 0..8 { r[i] = (self.0 >> i) & 1 == 1; }
+        for (i, slot) in r.iter_mut().enumerate() { *slot = (self.0 >> i) & 1 == 1; }
         r
     }
     #[must_use]
     pub fn addr_regs(self) -> [bool; 8] {
         let mut r = [false; 8];
-        for i in 0..8 { r[i] = (self.0 >> (i + 8)) & 1 == 1; }
+        for (i, slot) in r.iter_mut().enumerate() { *slot = (self.0 >> (i + 8)) & 1 == 1; }
         r
     }
     #[must_use]
@@ -579,7 +590,7 @@ mod tests {
         ccr.update_nz32(0);
         assert!(ccr.zero());
         assert!(!ccr.negative());
-        ccr.update_nz32(0x80000000);
+        ccr.update_nz32(0x8000_0000);
         assert!(ccr.negative());
         assert!(!ccr.zero());
     }
@@ -603,42 +614,42 @@ mod tests {
     #[test]
     fn test_regfile_dreg_rw() {
         let mut rf = M68kRegFile::new();
-        rf.set_dreg(M68kDReg::D3, 0xDEADBEEF);
-        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEADBEEF);
+        rf.set_dreg(M68kDReg::D3, 0xDEAD_BEEF);
+        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEAD_BEEF);
         rf.set_dreg_byte(M68kDReg::D3, 0xAA);
-        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEADBEAA);
+        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEAD_BEAA);
         rf.set_dreg_word(M68kDReg::D3, 0x1234);
-        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEAD1234);
+        assert_eq!(rf.dreg(M68kDReg::D3), 0xDEAD_1234);
     }
 
     #[test]
     fn test_regfile_areg_rw() {
         let mut rf = M68kRegFile::new();
-        rf.set_areg(M68kAReg::A5, 0x100000);
-        assert_eq!(rf.areg(M68kAReg::A5), 0x100000);
+        rf.set_areg(M68kAReg::A5, 0x0010_0000);
+        assert_eq!(rf.areg(M68kAReg::A5), 0x0010_0000);
     }
 
     #[test]
     fn test_regfile_sp() {
         let mut rf = M68kRegFile::new();
         // 0x00100000 → push_long decrements by 4 → 0x000FFFFC
-        rf.set_sp(0x00100000);
-        assert_eq!(rf.sp(), 0x00100000);
+        rf.set_sp(0x0010_0000);
+        assert_eq!(rf.sp(), 0x0010_0000);
         let addr = rf.push_long();
-        assert_eq!(addr, 0x00FFFFC);
+        assert_eq!(addr, 0x000F_FFFC);
         let pop = rf.pop_long();
-        assert_eq!(pop, 0x00FFFFC);
-        assert_eq!(rf.sp(), 0x00100000);
+        assert_eq!(pop, 0x000F_FFFC);
+        assert_eq!(rf.sp(), 0x0010_0000);
     }
 
     #[test]
     fn test_regfile_supervisor_switch() {
         let mut rf = M68kRegFile::new();
-        rf.set_sp(0xFF0000);
-        rf.usp = 0xEE0000;
+        rf.set_sp(0x00FF_0000);
+        rf.usp = 0x00EE_0000;
         rf.exit_supervisor();
         assert!(!rf.supervisor());
-        assert_eq!(rf.sp(), 0xEE0000);
+        assert_eq!(rf.sp(), 0x00EE_0000);
         rf.enter_supervisor();
         assert!(rf.supervisor());
     }
@@ -648,8 +659,8 @@ mod tests {
         let mut rf = M68kRegFile::new();
         rf.set_named("D4", 0xABCD);
         assert_eq!(rf.get_named("D4"), Some(0xABCD));
-        rf.set_named("PC", 0x401000);
-        assert_eq!(rf.get_named("PC"), Some(0x401000));
+        rf.set_named("PC", 0x0040_1000);
+        assert_eq!(rf.get_named("PC"), Some(0x0040_1000));
     }
 
     #[test]

@@ -69,10 +69,25 @@ pub struct SparcReg {
     pub number: u8,
 }
 
+impl std::str::FromStr for SparcReg {
+    type Err = ();
+
+    /// Parse a register name string (e.g. `"%i0"`, `"%o7"`, `"%g1"`).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(())` when the string does not name a SPARC register; the
+    /// inherent [`SparcReg::parse_name`] returns the same information as an
+    /// `Option` for callers that prefer it.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_name(s).ok_or(())
+    }
+}
+
 impl SparcReg {
     /// Parse a register name string (e.g. `"%i0"`, `"%o7"`, `"%g1"`).
     #[must_use]
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_name(s: &str) -> Option<Self> {
         let s = s.trim().trim_start_matches('%');
         // Use char_indices to avoid splitting at a non-ASCII byte boundary.
         let mut chars = s.char_indices();
@@ -260,7 +275,7 @@ impl SparcRegisterWindow {
             });
             // Rotate WIM on overflow: WIM = (WIM >> 1) | (top bit)
             // Guard against nwindows==0 or >=32 which would cause shift overflow.
-            let nw = u32::from(self.nwindows).min(31).max(1);
+            let nw = u32::from(self.nwindows).clamp(1, 31);
             let mask = (1u32 << nw).wrapping_sub(1);
             let top = self.wim & mask;
             self.wim = ((top >> 1) | (top << (nw - 1))) & mask;
@@ -406,7 +421,7 @@ pub fn save_restore_analysis(instrs: &[WindowInstr], nwindows: u8) -> SaveRestor
 pub fn classify_window_instrs(words: &[u32]) -> Vec<WindowInstr> {
     let mut out = Vec::new();
     for (i, &w) in words.iter().enumerate() {
-        let pc = (i as u32) * 4;
+        let pc = crate::sparc_narrow::low_u32_of_usize(i) * 4;
         if is_save(w) {
             out.push(WindowInstr::Save { pc });
         } else if is_restore(w) {
@@ -425,7 +440,7 @@ pub fn classify_window_instrs(words: &[u32]) -> Vec<WindowInstr> {
 pub const fn is_save(word: u32) -> bool {
     let op = (word >> 30) & 0x3;
     let op3 = (word >> 19) & 0x3F;
-    op == 0b10 && op3 == 0b111100
+    op == 0b10 && op3 == 0b11_1100
 }
 
 /// Heuristic: does this 32-bit word look like a SPARC `RESTORE` instruction?
@@ -435,7 +450,7 @@ pub const fn is_save(word: u32) -> bool {
 pub const fn is_restore(word: u32) -> bool {
     let op = (word >> 30) & 0x3;
     let op3 = (word >> 19) & 0x3F;
-    op == 0b10 && op3 == 0b111101
+    op == 0b10 && op3 == 0b11_1101
 }
 
 /// Statistics over a call stack.
@@ -491,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_sparc_reg_from_str() {
-        let r = SparcReg::from_str("%i0").unwrap();
+        let r = SparcReg::parse_name("%i0").unwrap();
         assert_eq!(r.class, RegisterClass::In);
         assert_eq!(r.number, 0);
     }
@@ -553,14 +568,14 @@ mod tests {
     #[test]
     fn test_is_save() {
         // Encode SAVE %g0, %g0, %g0: op=10, op3=0x3C, rd=0, rs1=0, rs2=0
-        let w: u32 = (0b10 << 30) | (0 << 25) | (0x3C << 19) | (0 << 14) | 0;
+        let w: u32 = (0b10 << 30) | (0x3C << 19);
         assert!(is_save(w));
         assert!(!is_restore(w));
     }
 
     #[test]
     fn test_is_restore() {
-        let w: u32 = (0b10 << 30) | (0 << 25) | (0x3D << 19) | (0 << 14) | 0;
+        let w: u32 = (0b10 << 30) | (0x3D << 19);
         assert!(is_restore(w));
         assert!(!is_save(w));
     }

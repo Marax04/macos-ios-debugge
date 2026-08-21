@@ -223,8 +223,19 @@ macro_rules! opcodes {
     };
 }
 
+/// Opcode table for one mnemonic.
+///
+/// The mnemonics are split across three lookups purely to keep each function
+/// a readable size; the chain below is exhaustive.
 fn lookup_opcode_table(mnemonic: &str) -> Option<OpcodeTable> {
-    match mnemonic.to_uppercase().as_str() {
+    let upper = mnemonic.to_uppercase();
+    lookup_opcode_table_a(&upper)
+        .or_else(|| lookup_opcode_table_b(&upper))
+        .or_else(|| lookup_opcode_table_c(&upper))
+}
+
+fn lookup_opcode_table_a(mnemonic: &str) -> Option<OpcodeTable> {
+    match mnemonic {
         "ADC" => Some(opcodes!(
             Immediate  => 0x69, 2;
             ZeroPage   => 0x65, 2;
@@ -297,6 +308,12 @@ fn lookup_opcode_table(mnemonic: &str) -> Option<OpcodeTable> {
         )),
         "DEX" => Some(opcodes!(Implied => 0xCA, 1;)),
         "DEY" => Some(opcodes!(Implied => 0x88, 1;)),
+        _ => None,
+    }
+}
+
+fn lookup_opcode_table_b(mnemonic: &str) -> Option<OpcodeTable> {
+    match mnemonic {
         "EOR" => Some(opcodes!(
             Immediate => 0x49, 2;
             ZeroPage  => 0x45, 2;
@@ -362,6 +379,12 @@ fn lookup_opcode_table(mnemonic: &str) -> Option<OpcodeTable> {
             IndirectX => 0x01, 2;
             IndirectY => 0x11, 2;
         )),
+        _ => None,
+    }
+}
+
+fn lookup_opcode_table_c(mnemonic: &str) -> Option<OpcodeTable> {
+    match mnemonic {
         "PHA" => Some(opcodes!(Implied => 0x48, 1;)),
         "PHP" => Some(opcodes!(Implied => 0x08, 1;)),
         "PLA" => Some(opcodes!(Implied => 0x68, 1;)),
@@ -638,13 +661,28 @@ impl TwoPassAssembler {
         };
 
         // Pass 1: build symbol table and compute addresses
+        let symbols = self.assemble_pass1(&lines)?;
+
+        // Pass 2: emit bytes
+        self.assemble_pass2(&lines, &symbols, &mut listing)?;
+
+        Ok(listing)
+    }
+
+    /// First assembler pass: define every label and compute its address.
+    ///
+    /// # Errors
+    ///
+    /// Returns every symbol-definition error found, so the caller sees them
+    /// all rather than only the first.
+    fn assemble_pass1(&self, lines: &[&str]) -> Result<SymbolTable, Vec<AssemblerError>> {
         let mut symbols = SymbolTable::default();
         let mut pc: u16 = self.origin;
         let mut pass1_errors: Vec<AssemblerError> = Vec::new();
 
         for (idx, &line_text) in lines.iter().enumerate() {
             let line_num = idx + 1;
-            match self.parse_line(line_text, line_num) {
+            match Self::parse_line(line_text, line_num) {
                 Ok(SourceLine::Empty) => {}
                 Ok(SourceLine::Label(name)) => {
                     if let Err(e) = symbols.define(&name, pc, line_num) {
@@ -695,13 +733,25 @@ impl TwoPassAssembler {
         if !pass1_errors.is_empty() {
             return Err(pass1_errors);
         }
+        Ok(symbols)
+    }
 
-        // Pass 2: emit bytes
-        pc = self.origin;
+    /// Second assembler pass: emit bytes now every label address is known.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first parse error encountered while re-reading the source.
+    fn assemble_pass2(
+        &self,
+        lines: &[&str],
+        symbols: &SymbolTable,
+        listing: &mut ListingOutput,
+    ) -> Result<(), Vec<AssemblerError>> {
+        let mut pc = self.origin;
 
         for (idx, &line_text) in lines.iter().enumerate() {
             let line_num = idx + 1;
-            let parsed = self.parse_line(line_text, line_num)?;
+            let parsed = Self::parse_line(line_text, line_num)?;
             match parsed {
                 SourceLine::Empty => {
                     listing.lines.push(ListingLine {
@@ -721,7 +771,7 @@ impl TwoPassAssembler {
                 }
                 SourceLine::LabelWithInstruction(_, instr) | SourceLine::InstructionLine(instr) => {
                     let addr = pc;
-                    match Self::encode_instruction(&instr, pc, &symbols) {
+                    match Self::encode_instruction(&instr, pc, symbols) {
                         Ok(bytes) => {
                             pc = pc.wrapping_add(len_u16(bytes.len()));
                             listing.lines.push(ListingLine {
@@ -792,8 +842,7 @@ impl TwoPassAssembler {
                 }
             }
         }
-
-        Ok(listing)
+        Ok(())
     }
 
     /// Return the object bytes produced by the last assembly.
@@ -819,7 +868,7 @@ impl TwoPassAssembler {
     // Parsing helpers
     // -------------------------------------------------------------------
 
-    fn parse_line(&self, line: &str, line_num: usize) -> Result<SourceLine, AssemblerError> {
+    fn parse_line(line: &str, line_num: usize) -> Result<SourceLine, AssemblerError> {
         // Strip comments
         let line = line.find(';').map_or(line, |pos| &line[..pos]).trim();
         if line.is_empty() {
@@ -887,7 +936,7 @@ impl TwoPassAssembler {
             }
         }
 
-        let instr = self.parse_instruction(rest, line_num)?;
+        let instr = Self::parse_instruction(rest, line_num)?;
         Ok(match label {
             Some(l) => SourceLine::LabelWithInstruction(l, instr),
             None => SourceLine::InstructionLine(instr),
@@ -971,7 +1020,7 @@ impl TwoPassAssembler {
         })
     }
 
-    fn parse_instruction(&self, s: &str, line_num: usize) -> Result<Instruction, AssemblerError> {
+    fn parse_instruction(s: &str, line_num: usize) -> Result<Instruction, AssemblerError> {
         let mut parts = s.splitn(2, |c: char| c.is_whitespace());
         let mnemonic = parts.next().unwrap_or("").trim().to_uppercase();
         if mnemonic.is_empty() {
@@ -1066,19 +1115,16 @@ impl TwoPassAssembler {
             return Some(2);
         }
         // If mode is Absolute but operand is a symbol resolving to ≤ 0xFF, prefer ZeroPage
-        if instr.mode == AddressingMode::Absolute {
-            if let (Some(syms), Some(op_str)) = (symbols, instr.operand.as_deref()) {
+        if instr.mode == AddressingMode::Absolute
+            && let (Some(syms), Some(op_str)) = (symbols, instr.operand.as_deref()) {
                 let op = op_str.trim();
                 // Only do this for symbol operands (not numeric literals)
-                if !op.starts_with('$') && !op.starts_with('%') && !op.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-                    if let Some(val) = syms.get(op) {
-                        if val <= 0xFF && table.iter().any(|(m, _, _)| *m == AddressingMode::ZeroPage) {
+                if !op.starts_with('$') && !op.starts_with('%') && !op.chars().next().is_some_and(|c| c.is_ascii_digit())
+                    && let Some(val) = syms.get(op)
+                        && val <= 0xFF && table.iter().any(|(m, _, _)| *m == AddressingMode::ZeroPage) {
                             return Some(2);
                         }
-                    }
-                }
             }
-        }
         table
             .iter()
             .find(|(m, _, _)| *m == instr.mode)
@@ -1108,13 +1154,10 @@ impl TwoPassAssembler {
             let op_str = instr.operand.as_deref().unwrap_or("").trim();
             if !op_str.starts_with('$') && !op_str.starts_with('%')
                 && !op_str.chars().next().is_some_and(|c| c.is_ascii_digit())
-            {
-                if let Some(val) = symbols.get(op_str) {
-                    if val <= 0xFF && find_opcode(mnemonic, AddressingMode::ZeroPage).is_some() {
+                && let Some(val) = symbols.get(op_str)
+                    && val <= 0xFF && find_opcode(mnemonic, AddressingMode::ZeroPage).is_some() {
                         effective_mode = AddressingMode::ZeroPage;
                     }
-                }
-            }
         }
 
         let entry = find_opcode(mnemonic, effective_mode).ok_or_else(|| {
@@ -1393,7 +1436,7 @@ mod tests {
         assert_eq!(bytes[0], 0xA2); // LDX imm
         assert_eq!(bytes[2], 0xCA); // DEX
         assert_eq!(bytes[3], 0xD0); // BNE
-        assert_eq!(bytes[4] as i8, -3i8); // backward 3
+        assert_eq!(bytes[4].cast_signed(), -3i8); // backward 3
     }
 
     // --- Directives ----------------------------------------------------------

@@ -228,41 +228,15 @@ impl std::error::Error for LiftError {}
 /// [`DexILInsn`] values, along with the number of bytes consumed.
 pub struct DexLifter;
 
-impl DexLifter {
-    /// Create a new lifter instance.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self
-    }
-
-    /// Lift one Dalvik instruction from `bytes`.
-    ///
-    /// Returns `(Vec<DexILInsn>, bytes_consumed)`.
-    ///
-    /// # Errors
-    /// Returns [`LiftError`] for truncated, unused, or unimplemented opcodes.
-    pub fn lift(&self, bytes: &[u8]) -> Result<(Vec<DexILInsn>, usize), LiftError> {
-        if bytes.is_empty() {
-            return Err(LiftError::Truncated);
-        }
-        let op = bytes[0];
-        let hi = if bytes.len() > 1 { bytes[1] } else { 0 };
-
-        // Helper closures for reading LE integers
-        let u16_at = |off: usize| -> Option<u16> {
-            bytes
-                .get(off..off + 2)
-                .map(|s| u16::from_le_bytes([s[0], s[1]]))
-        };
-        let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(|v| v as i16) };
-        let u32_at = |off: usize| -> Option<u32> {
-            bytes
-                .get(off..off + 4)
-                .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
-        };
-        let i32_at = |off: usize| -> Option<i32> { u32_at(off).map(|v| v as i32) };
-
-        match op {
+/// Opcode-dispatch chunk 0 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part0(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
             // nop
             0x00 => Ok((vec![DexILInsn::Nop], 2)),
 
@@ -326,6 +300,19 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part1(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 1 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part1(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
             // move-wide/16
             0x06 => {
                 let a = u16_at(2).ok_or(LiftError::Truncated)?;
@@ -396,19 +383,23 @@ impl DexLifter {
                     2,
                 ))
             }
-            // move-result-object vAA
-            0x0c => {
-                let a = u16::from(hi);
-                Ok((
-                    vec![DexILInsn::Assign {
-                        dest: a,
-                        expr: DexILExpr::InvokeResult(ILWidth::Ref),
-                    }],
-                    2,
-                ))
-            }
-            // move-exception vAA
-            0x0d => {
+        _ => lift_part2(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 2 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part2(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    match op {
+            // move-result-object vAA (0x0c) and move-exception vAA (0x0d): both
+            // move a reference produced elsewhere into vAA.
+            0x0c | 0x0d => {
                 let a = u16::from(hi);
                 Ok((
                     vec![DexILInsn::Assign {
@@ -448,7 +439,7 @@ impl DexLifter {
             // const/4 vA, #+B
             0x12 => {
                 let a = u16::from(hi & 0x0f);
-                let raw = (hi >> 4) as i8;
+                let raw = (hi >> 4).cast_signed();
                 let v = if raw & 0x8 != 0 {
                     i32::from(raw) | -16i32
                 } else {
@@ -474,6 +465,26 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part3(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 3 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part3(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    let u32_at = |off: usize| -> Option<u32> {
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    let i32_at = |off: usize| -> Option<i32> { u32_at(off).map(u32::cast_signed) };
+    match op {
             // const vAA, #+BBBBBBBB
             0x14 => {
                 let a = u16::from(hi);
@@ -539,6 +550,25 @@ impl DexLifter {
                     10,
                 ))
             }
+        _ => lift_part4(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 4 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part4(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    let u32_at = |off: usize| -> Option<u32> {
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    match op {
             // const-wide/high16 vAA, #+BBBB000000000000
             0x19 => {
                 let a = u16::from(hi);
@@ -606,6 +636,19 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part5(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 5 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part5(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
             // instance-of vA, vB, type@CCCC
             0x20 => {
                 let a = u16::from(hi & 0x0f);
@@ -669,10 +712,30 @@ impl DexLifter {
             // goto +AA
             0x28 => Ok((
                 vec![DexILInsn::Goto {
-                    offset: i32::from(hi as i8),
+                    offset: i32::from(hi.cast_signed()),
                 }],
                 2,
             )),
+        _ => lift_part6(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 6 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part6(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    let u32_at = |off: usize| -> Option<u32> {
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    let i32_at = |off: usize| -> Option<i32> { u32_at(off).map(u32::cast_signed) };
+    match op {
             // goto/16 +AAAA
             0x29 => {
                 let off = i32::from(i16_at(2).ok_or(LiftError::Truncated)?);
@@ -742,6 +805,20 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part7(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 7 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part7(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    match op {
 
             // if-eq..if-le vA, vB, +CCCC
             0x32..=0x37 => {
@@ -791,6 +868,14 @@ impl DexLifter {
 
             // unused 0x3e..=0x43
             0x3e..=0x43 => Err(LiftError::Unused(op)),
+        _ => lift_part8(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 8 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part8(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    match op {
 
             // aget* vAA, vBB, vCC
             0x44..=0x4a => {
@@ -859,6 +944,19 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part9(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 9 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part9(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
 
             // iget* vA, vB, field@CCCC
             0x52..=0x58 => {
@@ -911,6 +1009,19 @@ impl DexLifter {
                     4,
                 ))
             }
+        _ => lift_part10(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 10 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part10(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
             // sget* vAA, field@BBBB
             0x60..=0x66 => {
                 let a = u16::from(hi);
@@ -952,11 +1063,12 @@ impl DexLifter {
                 ))
             }
 
-            // invoke-virtual {vC..vG}, meth@BBBB
-            0x6e => {
+            // invoke-virtual {vC..vG}, meth@BBBB (0x6e) and invoke-interface
+            // (0x72): both dispatch dynamically on the receiver in vC.
+            0x6e | 0x72 => {
                 let count = (hi >> 4) & 0x0f;
                 let method = u32::from(u16_at(2).ok_or(LiftError::Truncated)?);
-                let regs = Self::extract_35c_regs(bytes, hi, count)?;
+                let regs = DexLifter::extract_35c_regs(bytes, hi, count)?;
                 let this_reg = regs.first().copied().unwrap_or(0);
                 let args = regs.into_iter().skip(1).collect();
                 Ok((
@@ -972,31 +1084,28 @@ impl DexLifter {
             0x6f | 0x70 => {
                 let count = (hi >> 4) & 0x0f;
                 let method = u32::from(u16_at(2).ok_or(LiftError::Truncated)?);
-                let args = Self::extract_35c_regs(bytes, hi, count)?;
+                let args = DexLifter::extract_35c_regs(bytes, hi, count)?;
                 Ok((vec![DexILInsn::InvokeDirect { method, args }], 6))
             }
+        _ => lift_part11(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 11 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part11(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    match op {
             // invoke-static
             0x71 => {
                 let count = (hi >> 4) & 0x0f;
                 let method = u32::from(u16_at(2).ok_or(LiftError::Truncated)?);
-                let args = Self::extract_35c_regs(bytes, hi, count)?;
+                let args = DexLifter::extract_35c_regs(bytes, hi, count)?;
                 Ok((vec![DexILInsn::InvokeStatic { method, args }], 6))
-            }
-            // invoke-interface
-            0x72 => {
-                let count = (hi >> 4) & 0x0f;
-                let method = u32::from(u16_at(2).ok_or(LiftError::Truncated)?);
-                let regs = Self::extract_35c_regs(bytes, hi, count)?;
-                let this_reg = regs.first().copied().unwrap_or(0);
-                let args = regs.into_iter().skip(1).collect();
-                Ok((
-                    vec![DexILInsn::InvokeVirtual {
-                        method,
-                        this_reg,
-                        args,
-                    }],
-                    6,
-                ))
             }
             // invoke-*/range
             0x74..=0x78 => {
@@ -1016,7 +1125,7 @@ impl DexLifter {
             0x7b..=0x8f => {
                 let a = u16::from(hi & 0x0f);
                 let b = u16::from((hi >> 4) & 0x0f);
-                let (un_op, src_w, dst_w) = Self::unary_op_info(op);
+                let (un_op, src_w, dst_w) = DexLifter::unary_op_info(op);
                 let insn = if dst_w == ILWidth::W64 {
                     DexILInsn::AssignWide {
                         dest: a,
@@ -1038,6 +1147,14 @@ impl DexLifter {
                 };
                 Ok((vec![insn], 2))
             }
+        _ => lift_part12(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 12 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part12(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    match op {
 
             // binary ops 23x
             0x90..=0xaf => {
@@ -1052,7 +1169,7 @@ impl DexLifter {
                 } else {
                     return Err(LiftError::Truncated);
                 };
-                let (bin_op, w) = Self::binary_op_info_23x(op);
+                let (bin_op, w) = DexLifter::binary_op_info_23x(op);
                 let insn = if w == ILWidth::W64 {
                     DexILInsn::AssignWide {
                         dest: a,
@@ -1081,7 +1198,7 @@ impl DexLifter {
             0xb0..=0xcf => {
                 let a = u16::from(hi & 0x0f);
                 let b = u16::from((hi >> 4) & 0x0f);
-                let (bin_op, w) = Self::binary_op_info_2addr(op);
+                let (bin_op, w) = DexLifter::binary_op_info_2addr(op);
                 let insn = if w == ILWidth::W64 {
                     DexILInsn::AssignWide {
                         dest: a,
@@ -1105,13 +1222,33 @@ impl DexLifter {
                 };
                 Ok((vec![insn], 2))
             }
+        _ => lift_part13(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 13 of [`DexLifter::lift`]; unmatched opcodes
+/// fall through to the next chunk.
+fn lift_part13(bytes: &[u8], op: u8, hi: u8) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+    let u16_at = |off: usize| -> Option<u16> {
+        bytes
+            .get(off..off + 2)
+            .map(|s| u16::from_le_bytes([s[0], s[1]]))
+    };
+    let i16_at = |off: usize| -> Option<i16> { u16_at(off).map(u16::cast_signed) };
+    let u32_at = |off: usize| -> Option<u32> {
+        bytes
+            .get(off..off + 4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    };
+    let i32_at = |off: usize| -> Option<i32> { u32_at(off).map(u32::cast_signed) };
+    match op {
 
             // /lit16 ops 22s
             0xd0..=0xd7 => {
                 let a = u16::from(hi & 0x0f);
                 let b = u16::from((hi >> 4) & 0x0f);
                 let lit = i32::from(i16_at(2).ok_or(LiftError::Truncated)?);
-                let bin_op = Self::lit_op(op);
+                let bin_op = DexLifter::lit_op(op);
                 Ok((
                     vec![DexILInsn::Assign {
                         dest: a,
@@ -1135,11 +1272,11 @@ impl DexLifter {
                     return Err(LiftError::Truncated);
                 };
                 let lit = i32::from(if bytes.len() > 3 {
-                    bytes[3] as i8
+                    bytes[3].cast_signed()
                 } else {
                     return Err(LiftError::Truncated);
                 });
-                let bin_op = Self::lit8_op(op);
+                let bin_op = DexLifter::lit8_op(op);
                 Ok((
                     vec![DexILInsn::Assign {
                         dest: a,
@@ -1168,7 +1305,30 @@ impl DexLifter {
             }
 
             _ => Err(LiftError::Unimplemented(op)),
+    }
+}
+
+impl DexLifter {
+    /// Create a new lifter instance.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    /// Lift one Dalvik instruction from `bytes`.
+    ///
+    /// Returns `(Vec<DexILInsn>, bytes_consumed)`.
+    ///
+    /// # Errors
+    /// Returns [`LiftError`] for truncated, unused, or unimplemented opcodes.
+    pub fn lift(&self, bytes: &[u8]) -> Result<(Vec<DexILInsn>, usize), LiftError> {
+        if bytes.is_empty() {
+            return Err(LiftError::Truncated);
         }
+        let op = bytes[0];
+        let hi = if bytes.len() > 1 { bytes[1] } else { 0 };
+
+        lift_part0(bytes, op, hi)
     }
 
     // -- Private helpers --
@@ -1188,108 +1348,134 @@ impl DexLifter {
         Ok(all[..count.min(5) as usize].to_vec())
     }
 
+    const UNARY_OP_TABLE: &[(u8, u8, (UnOpKind, ILWidth, ILWidth))] = &[
+        (0x7b, 0x7b, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // neg-int
+        (0x7c, 0x7c, (UnOpKind::Not, ILWidth::W32, ILWidth::W32)), // not-int
+        (0x7d, 0x7d, (UnOpKind::Neg, ILWidth::W64, ILWidth::W64)), // neg-long
+        (0x7e, 0x7e, (UnOpKind::Not, ILWidth::W64, ILWidth::W64)), // not-long
+        (0x7f, 0x7f, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // neg-float
+        (0x80, 0x80, (UnOpKind::Neg, ILWidth::W64, ILWidth::W64)), // neg-double
+        (0x81, 0x81, (UnOpKind::Neg, ILWidth::W32, ILWidth::W64)), // int-to-long
+        (0x82, 0x82, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // int-to-float
+        (0x83, 0x83, (UnOpKind::Neg, ILWidth::W32, ILWidth::W64)), // int-to-double
+        (0x84, 0x84, (UnOpKind::Neg, ILWidth::W64, ILWidth::W32)), // long-to-int
+        (0x85, 0x85, (UnOpKind::Neg, ILWidth::W64, ILWidth::W32)), // long-to-float
+        (0x86, 0x86, (UnOpKind::Neg, ILWidth::W64, ILWidth::W64)), // long-to-double
+        (0x87, 0x87, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // float-to-int
+        (0x88, 0x88, (UnOpKind::Neg, ILWidth::W32, ILWidth::W64)), // float-to-long
+        (0x89, 0x89, (UnOpKind::Neg, ILWidth::W32, ILWidth::W64)), // float-to-double (uses W64 for double)
+        (0x8a, 0x8a, (UnOpKind::Neg, ILWidth::W64, ILWidth::W32)), // double-to-int
+        (0x8b, 0x8b, (UnOpKind::Neg, ILWidth::W64, ILWidth::W64)), // double-to-long
+        (0x8c, 0x8c, (UnOpKind::Neg, ILWidth::W64, ILWidth::W32)), // double-to-float
+        (0x8d, 0x8d, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // int-to-byte
+        (0x8e, 0x8e, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // int-to-char
+        (0x8f, 0x8f, (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)), // int-to-short
+    ];
+
     const fn unary_op_info(op: u8) -> (UnOpKind, ILWidth, ILWidth) {
-        match op {
-            0x7b => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // neg-int
-            0x7c => (UnOpKind::Not, ILWidth::W32, ILWidth::W32), // not-int
-            0x7d => (UnOpKind::Neg, ILWidth::W64, ILWidth::W64), // neg-long
-            0x7e => (UnOpKind::Not, ILWidth::W64, ILWidth::W64), // not-long
-            0x7f => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // neg-float
-            0x80 => (UnOpKind::Neg, ILWidth::W64, ILWidth::W64), // neg-double
-            // conversions: all treated as Neg for simplicity (would be Convert in full impl)
-            0x81 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W64), // int-to-long
-            0x82 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // int-to-float
-            0x83 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W64), // int-to-double
-            0x84 => (UnOpKind::Neg, ILWidth::W64, ILWidth::W32), // long-to-int
-            0x85 => (UnOpKind::Neg, ILWidth::W64, ILWidth::W32), // long-to-float
-            0x86 => (UnOpKind::Neg, ILWidth::W64, ILWidth::W64), // long-to-double
-            0x87 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // float-to-int
-            0x88 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W64), // float-to-long
-            0x89 => (UnOpKind::Neg, ILWidth::W32, ILWidth::W64), // float-to-double (uses W64 for double)
-            0x8a => (UnOpKind::Neg, ILWidth::W64, ILWidth::W32), // double-to-int
-            0x8b => (UnOpKind::Neg, ILWidth::W64, ILWidth::W64), // double-to-long
-            0x8c => (UnOpKind::Neg, ILWidth::W64, ILWidth::W32), // double-to-float
-            0x8d => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // int-to-byte
-            0x8e => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // int-to-char
-            0x8f => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32), // int-to-short
-            _ => (UnOpKind::Neg, ILWidth::W32, ILWidth::W32),
+        let mut i = 0;
+        while i < Self::UNARY_OP_TABLE.len() {
+            let (lo, hi, v) = Self::UNARY_OP_TABLE[i];
+            if op >= lo && op <= hi {
+                return v;
+            }
+            i += 1;
         }
+        (UnOpKind::Neg, ILWidth::W32, ILWidth::W32)
     }
+
+    const BINARY_OP_23X_TABLE: &[(u8, u8, (BinOpKind, ILWidth))] = &[
+        (0x90, 0x90, (BinOpKind::Add, ILWidth::W32)),
+        (0x91, 0x91, (BinOpKind::Sub, ILWidth::W32)),
+        (0x92, 0x92, (BinOpKind::Mul, ILWidth::W32)),
+        (0x93, 0x93, (BinOpKind::Div, ILWidth::W32)),
+        (0x94, 0x94, (BinOpKind::Rem, ILWidth::W32)),
+        (0x95, 0x95, (BinOpKind::And, ILWidth::W32)),
+        (0x96, 0x96, (BinOpKind::Or, ILWidth::W32)),
+        (0x97, 0x97, (BinOpKind::Xor, ILWidth::W32)),
+        (0x98, 0x98, (BinOpKind::Shl, ILWidth::W32)),
+        (0x99, 0x99, (BinOpKind::Shr, ILWidth::W32)),
+        (0x9a, 0x9a, (BinOpKind::Ushr, ILWidth::W32)),
+        (0x9b, 0x9b, (BinOpKind::Add, ILWidth::W64)),
+        (0x9c, 0x9c, (BinOpKind::Sub, ILWidth::W64)),
+        (0x9d, 0x9d, (BinOpKind::Mul, ILWidth::W64)),
+        (0x9e, 0x9e, (BinOpKind::Div, ILWidth::W64)),
+        (0x9f, 0x9f, (BinOpKind::Rem, ILWidth::W64)),
+        (0xa0, 0xa0, (BinOpKind::And, ILWidth::W64)),
+        (0xa1, 0xa1, (BinOpKind::Or, ILWidth::W64)),
+        (0xa2, 0xa2, (BinOpKind::Xor, ILWidth::W64)),
+        (0xa3, 0xa3, (BinOpKind::Shl, ILWidth::W64)),
+        (0xa4, 0xa4, (BinOpKind::Shr, ILWidth::W64)),
+        (0xa5, 0xa5, (BinOpKind::Ushr, ILWidth::W64)),
+        (0xa6, 0xa6, (BinOpKind::Add, ILWidth::W32)),
+        (0xa7, 0xa7, (BinOpKind::Sub, ILWidth::W32)),
+        (0xa8, 0xa8, (BinOpKind::Mul, ILWidth::W32)),
+        (0xa9, 0xa9, (BinOpKind::Div, ILWidth::W32)),
+        (0xaa, 0xaa, (BinOpKind::Rem, ILWidth::W32)), // float ops
+        (0xab, 0xab, (BinOpKind::Add, ILWidth::W64)),
+        (0xac, 0xac, (BinOpKind::Sub, ILWidth::W64)),
+        (0xad, 0xad, (BinOpKind::Mul, ILWidth::W64)),
+        (0xae, 0xae, (BinOpKind::Div, ILWidth::W64)),
+        (0xaf, 0xaf, (BinOpKind::Rem, ILWidth::W64)), // double ops
+    ];
 
     const fn binary_op_info_23x(op: u8) -> (BinOpKind, ILWidth) {
-        match op {
-            0x90 => (BinOpKind::Add, ILWidth::W32),
-            0x91 => (BinOpKind::Sub, ILWidth::W32),
-            0x92 => (BinOpKind::Mul, ILWidth::W32),
-            0x93 => (BinOpKind::Div, ILWidth::W32),
-            0x94 => (BinOpKind::Rem, ILWidth::W32),
-            0x95 => (BinOpKind::And, ILWidth::W32),
-            0x96 => (BinOpKind::Or, ILWidth::W32),
-            0x97 => (BinOpKind::Xor, ILWidth::W32),
-            0x98 => (BinOpKind::Shl, ILWidth::W32),
-            0x99 => (BinOpKind::Shr, ILWidth::W32),
-            0x9a => (BinOpKind::Ushr, ILWidth::W32),
-            0x9b => (BinOpKind::Add, ILWidth::W64),
-            0x9c => (BinOpKind::Sub, ILWidth::W64),
-            0x9d => (BinOpKind::Mul, ILWidth::W64),
-            0x9e => (BinOpKind::Div, ILWidth::W64),
-            0x9f => (BinOpKind::Rem, ILWidth::W64),
-            0xa0 => (BinOpKind::And, ILWidth::W64),
-            0xa1 => (BinOpKind::Or, ILWidth::W64),
-            0xa2 => (BinOpKind::Xor, ILWidth::W64),
-            0xa3 => (BinOpKind::Shl, ILWidth::W64),
-            0xa4 => (BinOpKind::Shr, ILWidth::W64),
-            0xa5 => (BinOpKind::Ushr, ILWidth::W64),
-            0xa6 => (BinOpKind::Add, ILWidth::W32),
-            0xa7 => (BinOpKind::Sub, ILWidth::W32),
-            0xa8 => (BinOpKind::Mul, ILWidth::W32),
-            0xa9 => (BinOpKind::Div, ILWidth::W32),
-            0xaa => (BinOpKind::Rem, ILWidth::W32), // float ops
-            0xab => (BinOpKind::Add, ILWidth::W64),
-            0xac => (BinOpKind::Sub, ILWidth::W64),
-            0xad => (BinOpKind::Mul, ILWidth::W64),
-            0xae => (BinOpKind::Div, ILWidth::W64),
-            0xaf => (BinOpKind::Rem, ILWidth::W64), // double ops
-            _ => (BinOpKind::Add, ILWidth::W32),
+        let mut i = 0;
+        while i < Self::BINARY_OP_23X_TABLE.len() {
+            let (lo, hi, v) = Self::BINARY_OP_23X_TABLE[i];
+            if op >= lo && op <= hi {
+                return v;
+            }
+            i += 1;
         }
+        (BinOpKind::Add, ILWidth::W32)
     }
 
+    const BINARY_OP_2ADDR_TABLE: &[(u8, u8, (BinOpKind, ILWidth))] = &[
+        (0xb0, 0xb0, (BinOpKind::Add, ILWidth::W32)),
+        (0xb1, 0xb1, (BinOpKind::Sub, ILWidth::W32)),
+        (0xb2, 0xb2, (BinOpKind::Mul, ILWidth::W32)),
+        (0xb3, 0xb3, (BinOpKind::Div, ILWidth::W32)),
+        (0xb4, 0xb4, (BinOpKind::Rem, ILWidth::W32)),
+        (0xb5, 0xb5, (BinOpKind::And, ILWidth::W32)),
+        (0xb6, 0xb6, (BinOpKind::Or, ILWidth::W32)),
+        (0xb7, 0xb7, (BinOpKind::Xor, ILWidth::W32)),
+        (0xb8, 0xb8, (BinOpKind::Shl, ILWidth::W32)),
+        (0xb9, 0xb9, (BinOpKind::Shr, ILWidth::W32)),
+        (0xba, 0xba, (BinOpKind::Ushr, ILWidth::W32)),
+        (0xbb, 0xbb, (BinOpKind::Add, ILWidth::W64)),
+        (0xbc, 0xbc, (BinOpKind::Sub, ILWidth::W64)),
+        (0xbd, 0xbd, (BinOpKind::Mul, ILWidth::W64)),
+        (0xbe, 0xbe, (BinOpKind::Div, ILWidth::W64)),
+        (0xbf, 0xbf, (BinOpKind::Rem, ILWidth::W64)),
+        (0xc0, 0xc0, (BinOpKind::And, ILWidth::W64)),
+        (0xc1, 0xc1, (BinOpKind::Or, ILWidth::W64)),
+        (0xc2, 0xc2, (BinOpKind::Xor, ILWidth::W64)),
+        (0xc3, 0xc3, (BinOpKind::Shl, ILWidth::W64)),
+        (0xc4, 0xc4, (BinOpKind::Shr, ILWidth::W64)),
+        (0xc5, 0xc5, (BinOpKind::Ushr, ILWidth::W64)),
+        (0xc6, 0xc6, (BinOpKind::Add, ILWidth::W32)),
+        (0xc7, 0xc7, (BinOpKind::Sub, ILWidth::W32)),
+        (0xc8, 0xc8, (BinOpKind::Mul, ILWidth::W32)),
+        (0xc9, 0xc9, (BinOpKind::Div, ILWidth::W32)),
+        (0xca, 0xca, (BinOpKind::Rem, ILWidth::W32)), // float 2addr
+        (0xcb, 0xcb, (BinOpKind::Add, ILWidth::W64)),
+        (0xcc, 0xcc, (BinOpKind::Sub, ILWidth::W64)),
+        (0xcd, 0xcd, (BinOpKind::Mul, ILWidth::W64)),
+        (0xce, 0xce, (BinOpKind::Div, ILWidth::W64)),
+        (0xcf, 0xcf, (BinOpKind::Rem, ILWidth::W64)), // double 2addr
+    ];
+
     const fn binary_op_info_2addr(op: u8) -> (BinOpKind, ILWidth) {
-        match op {
-            0xb0 => (BinOpKind::Add, ILWidth::W32),
-            0xb1 => (BinOpKind::Sub, ILWidth::W32),
-            0xb2 => (BinOpKind::Mul, ILWidth::W32),
-            0xb3 => (BinOpKind::Div, ILWidth::W32),
-            0xb4 => (BinOpKind::Rem, ILWidth::W32),
-            0xb5 => (BinOpKind::And, ILWidth::W32),
-            0xb6 => (BinOpKind::Or, ILWidth::W32),
-            0xb7 => (BinOpKind::Xor, ILWidth::W32),
-            0xb8 => (BinOpKind::Shl, ILWidth::W32),
-            0xb9 => (BinOpKind::Shr, ILWidth::W32),
-            0xba => (BinOpKind::Ushr, ILWidth::W32),
-            0xbb => (BinOpKind::Add, ILWidth::W64),
-            0xbc => (BinOpKind::Sub, ILWidth::W64),
-            0xbd => (BinOpKind::Mul, ILWidth::W64),
-            0xbe => (BinOpKind::Div, ILWidth::W64),
-            0xbf => (BinOpKind::Rem, ILWidth::W64),
-            0xc0 => (BinOpKind::And, ILWidth::W64),
-            0xc1 => (BinOpKind::Or, ILWidth::W64),
-            0xc2 => (BinOpKind::Xor, ILWidth::W64),
-            0xc3 => (BinOpKind::Shl, ILWidth::W64),
-            0xc4 => (BinOpKind::Shr, ILWidth::W64),
-            0xc5 => (BinOpKind::Ushr, ILWidth::W64),
-            0xc6 => (BinOpKind::Add, ILWidth::W32),
-            0xc7 => (BinOpKind::Sub, ILWidth::W32),
-            0xc8 => (BinOpKind::Mul, ILWidth::W32),
-            0xc9 => (BinOpKind::Div, ILWidth::W32),
-            0xca => (BinOpKind::Rem, ILWidth::W32), // float 2addr
-            0xcb => (BinOpKind::Add, ILWidth::W64),
-            0xcc => (BinOpKind::Sub, ILWidth::W64),
-            0xcd => (BinOpKind::Mul, ILWidth::W64),
-            0xce => (BinOpKind::Div, ILWidth::W64),
-            0xcf => (BinOpKind::Rem, ILWidth::W64), // double 2addr
-            _ => (BinOpKind::Add, ILWidth::W32),
+        let mut i = 0;
+        while i < Self::BINARY_OP_2ADDR_TABLE.len() {
+            let (lo, hi, v) = Self::BINARY_OP_2ADDR_TABLE[i];
+            if op >= lo && op <= hi {
+                return v;
+            }
+            i += 1;
         }
+        (BinOpKind::Add, ILWidth::W32)
     }
 
     const fn lit_op(op: u8) -> BinOpKind {

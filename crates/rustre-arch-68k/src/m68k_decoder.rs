@@ -30,14 +30,13 @@ impl M68kSize {
     #[must_use]
     pub const fn bytes(self) -> usize {
         match self {
-            M68kSize::Byte     => 1,
-            M68kSize::Word     => 2,
-            M68kSize::Long     => 4,
-            M68kSize::Single   => 4,
-            M68kSize::Double   => 8,
-            M68kSize::Extended => 10,
-            M68kSize::Packed   => 12,
-            M68kSize::Unsized  => 0,
+            Self::Byte     => 1,
+            Self::Word     => 2,
+            Self::Long | Self::Single     => 4,
+            Self::Double   => 8,
+            Self::Extended => 10,
+            Self::Packed   => 12,
+            Self::Unsized  => 0,
         }
     }
 
@@ -45,9 +44,9 @@ impl M68kSize {
     #[must_use]
     pub const fn from_sz2(sz: u8) -> Option<Self> {
         match sz {
-            0 => Some(M68kSize::Byte),
-            1 => Some(M68kSize::Word),
-            2 => Some(M68kSize::Long),
+            0 => Some(Self::Byte),
+            1 => Some(Self::Word),
+            2 => Some(Self::Long),
             _ => None,
         }
     }
@@ -56,9 +55,9 @@ impl M68kSize {
     #[must_use]
     pub const fn from_move_sz(sz: u8) -> Option<Self> {
         match sz {
-            1 => Some(M68kSize::Byte),
-            3 => Some(M68kSize::Word),
-            2 => Some(M68kSize::Long),
+            1 => Some(Self::Byte),
+            3 => Some(Self::Word),
+            2 => Some(Self::Long),
             _ => None,
         }
     }
@@ -66,14 +65,14 @@ impl M68kSize {
     #[must_use]
     pub const fn suffix(self) -> &'static str {
         match self {
-            M68kSize::Byte     => ".b",
-            M68kSize::Word     => ".w",
-            M68kSize::Long     => ".l",
-            M68kSize::Single   => ".s",
-            M68kSize::Double   => ".d",
-            M68kSize::Extended => ".x",
-            M68kSize::Packed   => ".p",
-            M68kSize::Unsized  => "",
+            Self::Byte     => ".b",
+            Self::Word     => ".w",
+            Self::Long     => ".l",
+            Self::Single   => ".s",
+            Self::Double   => ".d",
+            Self::Extended => ".x",
+            Self::Packed   => ".p",
+            Self::Unsized  => "",
         }
     }
 }
@@ -130,38 +129,33 @@ impl M68kEa {
     #[must_use]
     pub const fn extension_words(&self, sz: M68kSize) -> usize {
         match self {
-            M68kEa::DataReg(_) | M68kEa::AddrReg(_) | M68kEa::AddrInd(_)
-            | M68kEa::PostInc(_) | M68kEa::PreDec(_) => 0,
-            M68kEa::DispAn(..) | M68kEa::IdxAn { .. } => 1,
-            M68kEa::AbsShort(_) => 1,
-            M68kEa::AbsLong(_)  => 2,
-            M68kEa::DispPc(_) | M68kEa::IdxPc { .. } => 1,
-            M68kEa::Imm(_) => {
+            Self::DispAn(..) | Self::IdxAn { .. } | Self::AbsShort(_) | Self::DispPc(_) | Self::IdxPc { .. } | Self::RegList(_) => 1,
+            Self::AbsLong(_)  => 2,
+            Self::Imm(_) => {
                 match sz {
-                    M68kSize::Byte | M68kSize::Word => 1,
                     M68kSize::Long => 2,
                     _ => 1,
                 }
             }
-            M68kEa::Ccr | M68kEa::Sr | M68kEa::Usp => 0,
-            M68kEa::RegList(_) => 1,
-        }
+            Self::DataReg(_) | Self::AddrReg(_) | Self::AddrInd(_)
+            | Self::PostInc(_) | Self::PreDec(_) | Self::Ccr | Self::Sr | Self::Usp => 0,
+            }
     }
 
     /// True if this EA can be used as a source (all except pre-dec which is only dst).
     #[must_use]
     pub const fn is_valid_src(&self) -> bool {
-        !matches!(self, M68kEa::PreDec(_))
+        !matches!(self, Self::PreDec(_))
     }
 
     /// True if this EA is a memory reference (can be used with memory instructions).
     #[must_use]
     pub const fn is_memory(&self) -> bool {
         matches!(self,
-            M68kEa::AddrInd(_) | M68kEa::PostInc(_) | M68kEa::PreDec(_)
-            | M68kEa::DispAn(..) | M68kEa::IdxAn { .. }
-            | M68kEa::AbsShort(_) | M68kEa::AbsLong(_)
-            | M68kEa::DispPc(_) | M68kEa::IdxPc { .. }
+            Self::AddrInd(_) | Self::PostInc(_) | Self::PreDec(_)
+            | Self::DispAn(..) | Self::IdxAn { .. }
+            | Self::AbsShort(_) | Self::AbsLong(_)
+            | Self::DispPc(_) | Self::IdxPc { .. }
         )
     }
 
@@ -169,28 +163,28 @@ impl M68kEa {
     #[must_use]
     pub fn to_motorola(&self) -> String {
         match self {
-            M68kEa::DataReg(n)       => format!("D{n}"),
-            M68kEa::AddrReg(n)       => format!("A{n}"),
-            M68kEa::AddrInd(n)       => format!("(A{n})"),
-            M68kEa::PostInc(n)       => format!("(A{n})+"),
-            M68kEa::PreDec(n)        => format!("-(A{n})"),
-            M68kEa::DispAn(an, d)    => format!("({d},A{an})"),
-            M68kEa::IdxAn { an, xn, xn_is_addr, xn_size, disp } => {
+            Self::DataReg(n)       => format!("D{n}"),
+            Self::AddrReg(n)       => format!("A{n}"),
+            Self::AddrInd(n)       => format!("(A{n})"),
+            Self::PostInc(n)       => format!("(A{n})+"),
+            Self::PreDec(n)        => format!("-(A{n})"),
+            Self::DispAn(an, d)    => format!("({d},A{an})"),
+            Self::IdxAn { an, xn, xn_is_addr, xn_size, disp } => {
                 let xreg = if *xn_is_addr { format!("A{xn}") } else { format!("D{xn}") };
                 format!("({},{},{}.{})", disp, an, xreg, xn_size.suffix().trim_start_matches('.'))
             }
-            M68kEa::AbsShort(a)      => format!("${a:04X}.W"),
-            M68kEa::AbsLong(a)       => format!("${a:08X}.L"),
-            M68kEa::DispPc(d)        => format!("({d},PC)"),
-            M68kEa::IdxPc { xn, xn_is_addr, xn_size, disp } => {
+            Self::AbsShort(a)      => format!("${a:04X}.W"),
+            Self::AbsLong(a)       => format!("${a:08X}.L"),
+            Self::DispPc(d)        => format!("({d},PC)"),
+            Self::IdxPc { xn, xn_is_addr, xn_size, disp } => {
                 let xreg = if *xn_is_addr { format!("A{xn}") } else { format!("D{xn}") };
                 format!("({},PC,{}.{})", disp, xreg, xn_size.suffix().trim_start_matches('.'))
             }
-            M68kEa::Imm(v)           => format!("#${v:X}"),
-            M68kEa::Ccr              => "CCR".to_string(),
-            M68kEa::Sr               => "SR".to_string(),
-            M68kEa::Usp              => "USP".to_string(),
-            M68kEa::RegList(mask)    => format!("{{reglist:{mask:016b}}}"),
+            Self::Imm(v)           => format!("#${v:X}"),
+            Self::Ccr              => "CCR".to_string(),
+            Self::Sr               => "SR".to_string(),
+            Self::Usp              => "USP".to_string(),
+            Self::RegList(mask)    => format!("{{reglist:{mask:016b}}}"),
         }
     }
 }
@@ -230,34 +224,34 @@ impl M68kGroup {
     #[must_use]
     pub const fn from_opcode(word: u16) -> Self {
         match word >> 12 {
-            0x0 => M68kGroup::Group0,
-            0x1 => M68kGroup::Group1,
-            0x2 => M68kGroup::Group2,
-            0x3 => M68kGroup::Group3,
-            0x4 => M68kGroup::Group4,
-            0x5 => M68kGroup::Group5,
-            0x6 => M68kGroup::Group6,
-            0x7 => M68kGroup::Group7,
-            0x8 => M68kGroup::Group8,
-            0x9 => M68kGroup::Group9,
-            0xA => M68kGroup::GroupA,
-            0xB => M68kGroup::GroupB,
-            0xC => M68kGroup::GroupC,
-            0xD => M68kGroup::GroupD,
-            0xE => M68kGroup::GroupE,
-            _   => M68kGroup::GroupF,
+            0x0 => Self::Group0,
+            0x1 => Self::Group1,
+            0x2 => Self::Group2,
+            0x3 => Self::Group3,
+            0x4 => Self::Group4,
+            0x5 => Self::Group5,
+            0x6 => Self::Group6,
+            0x7 => Self::Group7,
+            0x8 => Self::Group8,
+            0x9 => Self::Group9,
+            0xA => Self::GroupA,
+            0xB => Self::GroupB,
+            0xC => Self::GroupC,
+            0xD => Self::GroupD,
+            0xE => Self::GroupE,
+            _   => Self::GroupF,
         }
     }
 
     #[must_use]
-    pub fn is_aline(self) -> bool { self == M68kGroup::GroupA }
+    pub fn is_aline(self) -> bool { self == Self::GroupA }
     #[must_use]
-    pub fn is_fline(self) -> bool { self == M68kGroup::GroupF }
+    pub fn is_fline(self) -> bool { self == Self::GroupF }
     #[must_use]
-    pub fn is_branch(self) -> bool { self == M68kGroup::Group6 }
+    pub fn is_branch(self) -> bool { self == Self::Group6 }
     #[must_use]
     pub const fn is_move(self) -> bool {
-        matches!(self, M68kGroup::Group1 | M68kGroup::Group2 | M68kGroup::Group3)
+        matches!(self, Self::Group1 | Self::Group2 | Self::Group3)
     }
 }
 
@@ -279,24 +273,24 @@ impl M68kCond {
     #[must_use]
     pub const fn from_u8(v: u8) -> Self {
         match v & 0xf {
-            0 => M68kCond::T,  1 => M68kCond::Ra, 2 => M68kCond::HI,
-            3 => M68kCond::LS, 4 => M68kCond::CC, 5 => M68kCond::CS,
-            6 => M68kCond::NE, 7 => M68kCond::EQ, 8 => M68kCond::VC,
-            9 => M68kCond::VS, 10 => M68kCond::PL, 11 => M68kCond::MI,
-            12 => M68kCond::GE, 13 => M68kCond::LT, 14 => M68kCond::GT,
-            _ => M68kCond::LE,
+            0 => Self::T,  1 => Self::Ra, 2 => Self::HI,
+            3 => Self::LS, 4 => Self::CC, 5 => Self::CS,
+            6 => Self::NE, 7 => Self::EQ, 8 => Self::VC,
+            9 => Self::VS, 10 => Self::PL, 11 => Self::MI,
+            12 => Self::GE, 13 => Self::LT, 14 => Self::GT,
+            _ => Self::LE,
         }
     }
 
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            M68kCond::T  => "T",  M68kCond::Ra => "F",  M68kCond::HI => "HI",
-            M68kCond::LS => "LS", M68kCond::CC => "CC", M68kCond::CS => "CS",
-            M68kCond::NE => "NE", M68kCond::EQ => "EQ", M68kCond::VC => "VC",
-            M68kCond::VS => "VS", M68kCond::PL => "PL", M68kCond::MI => "MI",
-            M68kCond::GE => "GE", M68kCond::LT => "LT", M68kCond::GT => "GT",
-            M68kCond::LE => "LE",
+            Self::T  => "T",  Self::Ra => "F",  Self::HI => "HI",
+            Self::LS => "LS", Self::CC => "CC", Self::CS => "CS",
+            Self::NE => "NE", Self::EQ => "EQ", Self::VC => "VC",
+            Self::VS => "VS", Self::PL => "PL", Self::MI => "MI",
+            Self::GE => "GE", Self::LT => "LT", Self::GT => "GT",
+            Self::LE => "LE",
         }
     }
 }
@@ -340,7 +334,7 @@ impl M68kInstr {
     /// Placeholder "illegal/undefined" instruction.
     #[must_use]
     pub fn illegal(address: u32, opcode: u16) -> Self {
-        M68kInstr {
+        Self {
             address, length: 2, group: M68kGroup::from_opcode(opcode),
             opcode, mnemonic: "ILLEGAL".to_string(), size: M68kSize::Unsized,
             src: None, dst: None, cond: None, branch_target: None,
@@ -395,13 +389,18 @@ pub struct M68kDecoder;
 
 impl M68kDecoder {
     #[must_use]
-    pub const fn new() -> Self { M68kDecoder }
+    pub const fn new() -> Self { Self }
 
     /// Decode a single instruction.
     ///
     /// `data` must contain at least 2 bytes.
     /// `address` is the virtual address of the first byte.
-    /// Returns the decoded instruction or a decode error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecodeError`] when `data` is shorter than one opcode word or
+    /// when the opcode (or a required extension word) does not form a valid
+    /// 68k instruction at `address`.
     pub fn decode(&self, data: &[u8], address: u32) -> Result<M68kInstr, DecodeError> {
         if data.len() < 2 {
             return Err(DecodeError { address, opcode: 0, reason: "buffer too short".into() });
@@ -410,23 +409,22 @@ impl M68kDecoder {
         let group = M68kGroup::from_opcode(word);
 
         match group {
-            M68kGroup::Group0 => self.decode_group0(data, address, word),
-            M68kGroup::Group1 => self.decode_move(data, address, word, M68kSize::Byte),
-            M68kGroup::Group2 => self.decode_move(data, address, word, M68kSize::Long),
-            M68kGroup::Group3 => self.decode_move(data, address, word, M68kSize::Word),
-            M68kGroup::Group4 => self.decode_group4(data, address, word),
-            M68kGroup::Group5 => self.decode_group5(data, address, word),
-            M68kGroup::Group6 => self.decode_group6(data, address, word),
-            M68kGroup::Group7 => self.decode_moveq(address, word),
-            M68kGroup::Group8 => self.decode_group8(data, address, word),
-            M68kGroup::Group9 => self.decode_addsub(data, address, word, false),
-            M68kGroup::GroupA => Ok(M68kInstr::illegal(address, word)),
-            M68kGroup::GroupB => self.decode_groupb(data, address, word),
-            M68kGroup::GroupC => self.decode_groupc(data, address, word),
-            M68kGroup::GroupD => self.decode_addsub(data, address, word, true),
-            M68kGroup::GroupE => self.decode_groupe(data, address, word),
-            M68kGroup::GroupF => Ok(M68kInstr::illegal(address, word)),
-        }
+            M68kGroup::Group0 => Self::decode_group0(data, address, word),
+            M68kGroup::Group1 => Self::decode_move(data, address, word, M68kSize::Byte),
+            M68kGroup::Group2 => Self::decode_move(data, address, word, M68kSize::Long),
+            M68kGroup::Group3 => Self::decode_move(data, address, word, M68kSize::Word),
+            M68kGroup::Group4 => Self::decode_group4(data, address, word),
+            M68kGroup::Group5 => Self::decode_group5(data, address, word),
+            M68kGroup::Group6 => Self::decode_group6(data, address, word),
+            M68kGroup::Group7 => Self::decode_moveq(address, word),
+            M68kGroup::Group8 => Self::decode_group8(data, address, word),
+            M68kGroup::Group9 => Self::decode_addsub(data, address, word, false),
+            M68kGroup::GroupA | M68kGroup::GroupF => Ok(M68kInstr::illegal(address, word)),
+            M68kGroup::GroupB => Self::decode_groupb(data, address, word),
+            M68kGroup::GroupC => Self::decode_groupc(data, address, word),
+            M68kGroup::GroupD => Self::decode_addsub(data, address, word, true),
+            M68kGroup::GroupE => Self::decode_groupe(data, address, word),
+            }
     }
 
     // ──── EA parsing helpers ─────────────────────────────────────────────────
@@ -438,8 +436,35 @@ impl M68kDecoder {
         data.get(off..off+4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
+    /// Reject a buffer that cannot even hold the opcode word.
+    ///
+    /// `decode` already checks this, but the per-group decoders are reachable
+    /// on their own, so each one re-establishes the invariant it relies on
+    /// before indexing attacker-supplied bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecodeError`] when `data` holds fewer than two bytes.
+    fn require_opcode_word(data: &[u8], address: u32, word: u16) -> Result<(), DecodeError> {
+        if data.len() < 2 {
+            return Err(DecodeError { address, opcode: word, reason: "buffer too short".into() });
+        }
+        Ok(())
+    }
+
+    /// Narrow an instruction byte length to the `u8` field it is stored in.
+    ///
+    /// `parse_ea` only ever reports 0, 2, 4, 6, 8 or 10 extension bytes and a
+    /// 68k instruction is at most 22 bytes long, so the conversion never
+    /// saturates in practice; the explicit `try_from` keeps a corrupt input
+    /// from silently wrapping around instead of panicking in a decoder that is
+    /// fed attacker-controlled bytes.
+    fn instr_len_u8(bytes: usize) -> u8 {
+        u8::try_from(bytes).unwrap_or(u8::MAX)
+    }
+
     /// Parse an EA and return (ea, `bytes_consumed`).
-    fn parse_ea(&self, data: &[u8], base_off: usize, mode: u8, reg: u8, sz: M68kSize) -> Option<(M68kEa, usize)> {
+    fn parse_ea(data: &[u8], base_off: usize, mode: u8, reg: u8, sz: M68kSize) -> Option<(M68kEa, usize)> {
         let mut extra = 0usize;
         let ea = match mode {
             0 => M68kEa::DataReg(reg),
@@ -448,7 +473,7 @@ impl M68kDecoder {
             3 => M68kEa::PostInc(reg),
             4 => M68kEa::PreDec(reg),
             5 => {
-                let d = Self::read_word(data, base_off)? as i16;
+                let d = Self::read_word(data, base_off)?.cast_signed();
                 extra = 2;
                 M68kEa::DispAn(reg, d)
             }
@@ -473,7 +498,7 @@ impl M68kDecoder {
                     M68kEa::AbsLong(v)
                 }
                 2 => {
-                    let d = Self::read_word(data, base_off)? as i16;
+                    let d = Self::read_word(data, base_off)?.cast_signed();
                     extra = 2;
                     M68kEa::DispPc(d)
                 }
@@ -491,11 +516,6 @@ impl M68kDecoder {
                     match sz {
                         M68kSize::Byte => {
                             let v = u32::from(Self::read_word(data, base_off)?) & 0xff;
-                            extra = 2;
-                            M68kEa::Imm(v)
-                        }
-                        M68kSize::Word => {
-                            let v = u32::from(Self::read_word(data, base_off)?);
                             extra = 2;
                             M68kEa::Imm(v)
                         }
@@ -520,7 +540,7 @@ impl M68kDecoder {
 
     // ──── Group decoders ─────────────────────────────────────────────────────
 
-    fn decode_group0(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_group0(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
         // Bit manipulation / MOVEP / Immediate
         // Check for MOVEP first: bit 8 set and mode bits 3..2 are 001
         if (word >> 8) & 1 == 1 && ((word >> 3) & 0b111) == 0b001 {
@@ -528,9 +548,8 @@ impl M68kDecoder {
             let an = (word & 7) as u8;
             let sz = if (word >> 6) & 1 == 1 { M68kSize::Long } else { M68kSize::Word };
             let disp = Self::read_word(data, 2)
-                .ok_or_else(|| DecodeError { address, opcode: word, reason: "MOVEP: buffer too short for displacement".into() })?
-                as i16;
-            let mut instr = self.make_instr(address, word, "MOVEP", sz);
+                .ok_or_else(|| DecodeError { address, opcode: word, reason: "MOVEP: buffer too short for displacement".into() })?.cast_signed();
+            let mut instr = Self::make_instr(address, word, "MOVEP", sz);
             instr.length = 4;
             if (word >> 7) & 1 == 1 {
                 instr.src = Some(M68kEa::DataReg(dn));
@@ -548,17 +567,17 @@ impl M68kDecoder {
         let sz_bits = ((word >> 6) & 3) as u8;
         if sz_bits == 3 {
             // Bit operation without size
-            let bitop = match (word >> 6) & 3 { _ => "BTST" };
+            let bitop = "BTST";
             let _ = bitop;
             let mnem = match (word >> 8) & 0b11 {
                 0 => "BTST", 1 => "BCHG", 2 => "BCLR", _ => "BSET",
             };
-            let mut instr = self.make_instr(address, word, mnem, M68kSize::Unsized);
+            let mut instr = Self::make_instr(address, word, mnem, M68kSize::Unsized);
             instr.length = 2;
             instr.src = Some(M68kEa::DataReg(dn));
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Byte) {
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Byte) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
             return Ok(instr);
         }
@@ -573,13 +592,13 @@ impl M68kDecoder {
                 let bop = match (word >> 6) & 3 {
                     0 => "BTST", 1 => "BCHG", 2 => "BCLR", _ => "BSET",
                 };
-                let mut instr = self.make_instr(address, word, bop, M68kSize::Unsized);
+                let mut instr = Self::make_instr(address, word, bop, M68kSize::Unsized);
                 instr.length = 4;
                 let bit_n = u32::from(Self::read_word(data, 2).unwrap_or(0)) & 0xff;
                 instr.src = Some(M68kEa::Imm(bit_n));
-                if let Some((ea, extra)) = self.parse_ea(data, 4, mode, reg, M68kSize::Byte) {
+                if let Some((ea, extra)) = Self::parse_ea(data, 4, mode, reg, M68kSize::Byte) {
                     instr.dst = Some(ea);
-                    instr.length += extra as u8;
+                    instr.length += Self::instr_len_u8(extra);
                 }
                 return Ok(instr);
             }
@@ -587,36 +606,37 @@ impl M68kDecoder {
             6 => ("CMPI", 2),
             _ => return Ok(M68kInstr::illegal(address, word)),
         };
-        let (imm_ea, imm_bytes) = self.parse_ea(data, off, 7, 4, sz)
+        let (imm_ea, imm_bytes) = Self::parse_ea(data, off, 7, 4, sz)
             .ok_or_else(|| DecodeError { address, opcode: word, reason: "bad imm ea".into() })?;
         let dst_off = off + imm_bytes;
-        let mut instr = self.make_instr(address, word, mnem, sz);
+        let mut instr = Self::make_instr(address, word, mnem, sz);
         instr.src = Some(imm_ea);
-        if let Some((dst_ea, dst_extra)) = self.parse_ea(data, dst_off, mode, reg, sz) {
+        if let Some((dst_ea, dst_extra)) = Self::parse_ea(data, dst_off, mode, reg, sz) {
             instr.dst = Some(dst_ea);
-            instr.length = (dst_off + dst_extra) as u8;
+            instr.length = Self::instr_len_u8(dst_off + dst_extra);
         }
         Ok(instr)
     }
 
-    fn decode_move(&self, data: &[u8], address: u32, word: u16, sz: M68kSize) -> Result<M68kInstr, DecodeError> {
+    fn decode_move(data: &[u8], address: u32, word: u16, sz: M68kSize) -> Result<M68kInstr, DecodeError> {
         let src_mode = ((word >> 3) & 7) as u8;
         let src_reg  = (word & 7) as u8;
         let dst_reg  = ((word >> 9) & 7) as u8;
         let dst_mode = ((word >> 6) & 7) as u8;
         let mnem = if dst_mode == 1 { "MOVEA" } else { "MOVE" };
-        let (src_ea, src_bytes) = self.parse_ea(data, 2, src_mode, src_reg, sz)
+        let (src_ea, src_bytes) = Self::parse_ea(data, 2, src_mode, src_reg, sz)
             .ok_or_else(|| DecodeError { address, opcode: word, reason: "bad src ea".into() })?;
-        let (dst_ea, dst_bytes) = self.parse_ea(data, 2 + src_bytes, dst_mode, dst_reg, sz)
+        let (dst_ea, dst_bytes) = Self::parse_ea(data, 2 + src_bytes, dst_mode, dst_reg, sz)
             .ok_or_else(|| DecodeError { address, opcode: word, reason: "bad dst ea".into() })?;
-        let mut instr = self.make_instr(address, word, mnem, sz);
+        let mut instr = Self::make_instr(address, word, mnem, sz);
         instr.src = Some(src_ea);
         instr.dst = Some(dst_ea);
-        instr.length = (2 + src_bytes + dst_bytes) as u8;
+        instr.length = Self::instr_len_u8(2 + src_bytes + dst_bytes);
         Ok(instr)
     }
 
-    fn decode_group4(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_group4(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         // Misc: CLR, NOT, NEG, NEGX, TST, EXT, SWAP, PEA, LEA, JSR, JMP, TRAP, RTS, ...
         let top8 = (word >> 8) as u8;
         let mode = ((word >> 3) & 7) as u8;
@@ -626,38 +646,38 @@ impl M68kDecoder {
             0x4A => {
                 // TST
                 let sz = M68kSize::from_sz2(sz_bits).unwrap_or(M68kSize::Word);
-                let mut instr = self.make_instr(address, word, "TST", sz);
-                if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
+                let mut instr = Self::make_instr(address, word, "TST", sz);
+                if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
                     instr.dst = Some(ea);
-                    instr.length += extra as u8;
+                    instr.length += Self::instr_len_u8(extra);
                 }
                 Ok(instr)
             }
             0x42 => {
                 let sz = M68kSize::from_sz2(sz_bits).unwrap_or(M68kSize::Word);
-                let mut instr = self.make_instr(address, word, "CLR", sz);
-                if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
+                let mut instr = Self::make_instr(address, word, "CLR", sz);
+                if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
                     instr.dst = Some(ea);
-                    instr.length += extra as u8;
+                    instr.length += Self::instr_len_u8(extra);
                 }
                 Ok(instr)
             }
             0x46 => {
                 // NOT or MOVE to SR
                 if sz_bits == 3 {
-                    let mut instr = self.make_instr(address, word, "MOVE", M68kSize::Word);
-                    if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Word) {
+                    let mut instr = Self::make_instr(address, word, "MOVE", M68kSize::Word);
+                    if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Word) {
                         instr.src = Some(ea);
                         instr.dst = Some(M68kEa::Sr);
-                        instr.length += extra as u8;
+                        instr.length += Self::instr_len_u8(extra);
                     }
                     Ok(instr)
                 } else {
                     let sz = M68kSize::from_sz2(sz_bits).unwrap_or(M68kSize::Word);
-                    let mut instr = self.make_instr(address, word, "NOT", sz);
-                    if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
+                    let mut instr = Self::make_instr(address, word, "NOT", sz);
+                    if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
                         instr.dst = Some(ea);
-                        instr.length += extra as u8;
+                        instr.length += Self::instr_len_u8(extra);
                     }
                     Ok(instr)
                 }
@@ -665,57 +685,57 @@ impl M68kDecoder {
             _ => {
                 // JSR / JMP / LEA / PEA / RTS / RTE / RTR / NOP / TRAP ...
                 if word == 0x4E75 {
-                    let mut instr = self.make_instr(address, word, "RTS", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "RTS", M68kSize::Unsized);
                     instr.is_terminator = true;
                     return Ok(instr);
                 }
                 if word == 0x4E71 {
-                    return Ok(self.make_instr(address, word, "NOP", M68kSize::Unsized));
+                    return Ok(Self::make_instr(address, word, "NOP", M68kSize::Unsized));
                 }
                 if word == 0x4E73 {
-                    let mut instr = self.make_instr(address, word, "RTE", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "RTE", M68kSize::Unsized);
                     instr.is_terminator = true;
                     return Ok(instr);
                 }
                 if word == 0x4E74 {
-                    let mut instr = self.make_instr(address, word, "RTD", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "RTD", M68kSize::Unsized);
                     instr.is_terminator = true;
                     instr.length = 4;
                     return Ok(instr);
                 }
                 if word == 0x4E77 {
-                    let mut instr = self.make_instr(address, word, "RTR", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "RTR", M68kSize::Unsized);
                     instr.is_terminator = true;
                     return Ok(instr);
                 }
-                if (word >> 6) & 0b111111 == 0b111011 {
+                if (word >> 6) & 0b11_1111 == 0b11_1011 {
                     // JMP
-                    let mut instr = self.make_instr(address, word, "JMP", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "JMP", M68kSize::Unsized);
                     instr.is_terminator = true;
-                    if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
+                    if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
                         instr.dst = Some(ea);
-                        instr.length += extra as u8;
+                        instr.length += Self::instr_len_u8(extra);
                     }
                     return Ok(instr);
                 }
-                if (word >> 6) & 0b111111 == 0b111010 {
+                if (word >> 6) & 0b11_1111 == 0b11_1010 {
                     // JSR
-                    let mut instr = self.make_instr(address, word, "JSR", M68kSize::Unsized);
+                    let mut instr = Self::make_instr(address, word, "JSR", M68kSize::Unsized);
                     instr.is_call = true;
-                    if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
+                    if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
                         instr.dst = Some(ea);
-                        instr.length += extra as u8;
+                        instr.length += Self::instr_len_u8(extra);
                     }
                     return Ok(instr);
                 }
                 // LEA
                 if (word >> 6) & 3 == 3 && (word >> 8) & 1 == 1 {
                     let dn = ((word >> 9) & 7) as u8;
-                    let mut instr = self.make_instr(address, word, "LEA", M68kSize::Long);
-                    if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
+                    let mut instr = Self::make_instr(address, word, "LEA", M68kSize::Long);
+                    if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Unsized) {
                         instr.src = Some(ea);
                         instr.dst = Some(M68kEa::AddrReg(dn));
-                        instr.length += extra as u8;
+                        instr.length += Self::instr_len_u8(extra);
                     }
                     return Ok(instr);
                 }
@@ -724,7 +744,8 @@ impl M68kDecoder {
         }
     }
 
-    fn decode_group5(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_group5(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let mode = ((word >> 3) & 7) as u8;
         let reg  = (word & 7) as u8;
         let sz_bits = ((word >> 6) & 3) as u8;
@@ -734,49 +755,47 @@ impl M68kDecoder {
             if mode == 1 {
                 // DBcc
                 let disp = Self::read_word(data, 2)
-                    .ok_or_else(|| DecodeError { address, opcode: word, reason: "DBcc: buffer too short for displacement".into() })?
-                    as i16;
+                    .ok_or_else(|| DecodeError { address, opcode: word, reason: "DBcc: buffer too short for displacement".into() })?.cast_signed();
                 let target = address.wrapping_add(2).wrapping_add_signed(i32::from(disp));
-                let mut instr = self.make_instr(address, word, &format!("DB{}", cond.name()), M68kSize::Word);
+                let mut instr = Self::make_instr(address, word, &format!("DB{}", cond.name()), M68kSize::Word);
                 instr.length = 4;
                 instr.src = Some(M68kEa::DataReg(reg));
                 instr.branch_target = Some(target);
                 instr.cond = Some(cond);
                 return Ok(instr);
             }
-            let mut instr = self.make_instr(address, word, &format!("S{}", cond.name()), M68kSize::Byte);
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Byte) {
+            let mut instr = Self::make_instr(address, word, &format!("S{}", cond.name()), M68kSize::Byte);
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Byte) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
             return Ok(instr);
         }
         let sz = M68kSize::from_sz2(sz_bits).unwrap_or(M68kSize::Word);
         let data3 = u32::from((word >> 9) & 7);
         let mnem = if (word >> 8) & 1 == 1 { "SUBQ" } else { "ADDQ" };
-        let mut instr = self.make_instr(address, word, mnem, sz);
+        let mut instr = Self::make_instr(address, word, mnem, sz);
         instr.src = Some(M68kEa::Imm(if data3 == 0 { 8 } else { data3 }));
-        if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
+        if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
             instr.dst = Some(ea);
-            instr.length += extra as u8;
+            instr.length += Self::instr_len_u8(extra);
         }
         Ok(instr)
     }
 
-    fn decode_group6(&self, _data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_group6(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let cond = M68kCond::from_u8(((word >> 8) & 0xf) as u8);
         let disp8 = (word & 0xff) as i8;
         let (target, len) = if disp8 == 0 {
             // 16-bit displacement follows
-            let d16 = Self::read_word(_data, 2)
-                .ok_or_else(|| DecodeError { address, opcode: word, reason: "Bcc.W: buffer too short".into() })?
-                as i16;
+            let d16 = Self::read_word(data, 2)
+                .ok_or_else(|| DecodeError { address, opcode: word, reason: "Bcc.W: buffer too short".into() })?.cast_signed();
             (address.wrapping_add(2).wrapping_add_signed(i32::from(d16)), 4u8)
         } else if disp8 == -1i8 {
             // 32-bit displacement follows (68020+)
-            let d32 = Self::read_long(_data, 2)
-                .ok_or_else(|| DecodeError { address, opcode: word, reason: "Bcc.L: buffer too short".into() })?
-                as i32;
+            let d32 = Self::read_long(data, 2)
+                .ok_or_else(|| DecodeError { address, opcode: word, reason: "Bcc.L: buffer too short".into() })?.cast_signed();
             (address.wrapping_add(2).wrapping_add_signed(d32), 6u8)
         } else {
             (address.wrapping_add(2).wrapping_add_signed(i32::from(disp8)), 2u8)
@@ -786,7 +805,7 @@ impl M68kDecoder {
             M68kCond::Ra => "BSR",
             _ => &format!("B{}", cond.name()),
         };
-        let mut instr = self.make_instr(address, word, mnem, M68kSize::Unsized);
+        let mut instr = Self::make_instr(address, word, mnem, M68kSize::Unsized);
         instr.length = len;
         instr.branch_target = Some(target);
         instr.cond = Some(cond);
@@ -795,49 +814,55 @@ impl M68kDecoder {
         Ok(instr)
     }
 
-    fn decode_moveq(&self, address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_moveq(address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        // MOVEQ is encoded 0111 ddd0 iiiiiiii: bit 8 must be clear, otherwise
+        // this is not a MOVEQ at all and silently decoding it would invent an
+        // instruction that the CPU does not execute.
+        if (word >> 8) & 1 != 0 {
+            return Err(DecodeError { address, opcode: word, reason: "MOVEQ: bit 8 must be clear".into() });
+        }
         let dn = ((word >> 9) & 7) as u8;
-        let imm = i32::from((word & 0xff) as i8) as u32;
-        let mut instr = self.make_instr(address, word, "MOVEQ", M68kSize::Long);
+        let imm = i32::from((word & 0xff) as i8).cast_unsigned();
+        let mut instr = Self::make_instr(address, word, "MOVEQ", M68kSize::Long);
         instr.src = Some(M68kEa::Imm(imm));
         instr.dst = Some(M68kEa::DataReg(dn));
         Ok(instr)
     }
 
-    fn decode_group8(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_group8(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let dn   = ((word >> 9) & 7) as u8;
         let sz   = ((word >> 6) & 3) as u8;
         let mode = ((word >> 3) & 7) as u8;
         let reg  = (word & 7) as u8;
         if sz == 3 {
             let mnem = if (word >> 8) & 1 == 1 { "DIVS" } else { "DIVU" };
-            let mut instr = self.make_instr(address, word, mnem, M68kSize::Word);
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Word) {
+            let mut instr = Self::make_instr(address, word, mnem, M68kSize::Word);
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Word) {
                 instr.src = Some(ea);
                 instr.dst = Some(M68kEa::DataReg(dn));
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
             return Ok(instr);
         }
         let sz = M68kSize::from_sz2(sz).unwrap_or(M68kSize::Word);
-        let mut instr = self.make_instr(address, word, "OR", sz);
+        let mut instr = Self::make_instr(address, word, "OR", sz);
         if (word >> 8) & 1 == 1 {
             instr.src = Some(M68kEa::DataReg(dn));
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
-        } else {
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz) {
-                instr.src = Some(ea);
-                instr.dst = Some(M68kEa::DataReg(dn));
-                instr.length += extra as u8;
-            }
+        } else if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz) {
+            instr.src = Some(ea);
+            instr.dst = Some(M68kEa::DataReg(dn));
+            instr.length += Self::instr_len_u8(extra);
         }
         Ok(instr)
     }
 
-    fn decode_addsub(&self, data: &[u8], address: u32, word: u16, is_add: bool) -> Result<M68kInstr, DecodeError> {
+    fn decode_addsub(data: &[u8], address: u32, word: u16, is_add: bool) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let dn   = ((word >> 9) & 7) as u8;
         let sz   = ((word >> 6) & 3) as u8;
         let mode = ((word >> 3) & 7) as u8;
@@ -848,28 +873,27 @@ impl M68kDecoder {
         let sz_typed = if sz == 3 { M68kSize::Long } else {
             M68kSize::from_sz2(sz).unwrap_or(M68kSize::Word)
         };
-        let mut instr = self.make_instr(address, word, mnem, sz_typed);
+        let mut instr = Self::make_instr(address, word, mnem, sz_typed);
         if (word >> 8) & 1 == 1 {
             instr.src = Some(M68kEa::DataReg(dn));
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz_typed) {
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz_typed) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
-        } else {
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz_typed) {
-                instr.src = Some(ea);
-                if sz == 3 {
-                    instr.dst = Some(M68kEa::AddrReg(dn));
-                } else {
-                    instr.dst = Some(M68kEa::DataReg(dn));
-                }
-                instr.length += extra as u8;
+        } else if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz_typed) {
+            instr.src = Some(ea);
+            if sz == 3 {
+                instr.dst = Some(M68kEa::AddrReg(dn));
+            } else {
+                instr.dst = Some(M68kEa::DataReg(dn));
             }
+            instr.length += Self::instr_len_u8(extra);
         }
         Ok(instr)
     }
 
-    fn decode_groupb(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_groupb(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let dn   = ((word >> 9) & 7) as u8;
         let sz   = ((word >> 6) & 3) as u8;
         let mode = ((word >> 3) & 7) as u8;
@@ -884,53 +908,53 @@ impl M68kDecoder {
         let sz_t = if sz == 3 { M68kSize::Long } else {
             M68kSize::from_sz2(sz).unwrap_or(M68kSize::Word)
         };
-        let mut instr = self.make_instr(address, word, mnem, sz_t);
-        if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz_t) {
+        let mut instr = Self::make_instr(address, word, mnem, sz_t);
+        if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz_t) {
             instr.src = Some(ea);
             if sz == 3 {
                 instr.dst = Some(M68kEa::AddrReg(dn));
             } else {
                 instr.dst = Some(M68kEa::DataReg(dn));
             }
-            instr.length += extra as u8;
+            instr.length += Self::instr_len_u8(extra);
         }
         Ok(instr)
     }
 
-    fn decode_groupc(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_groupc(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let dn   = ((word >> 9) & 7) as u8;
         let sz   = ((word >> 6) & 3) as u8;
         let mode = ((word >> 3) & 7) as u8;
         let reg  = (word & 7) as u8;
         if sz == 3 {
             let mnem = if (word >> 8) & 1 == 1 { "MULS" } else { "MULU" };
-            let mut instr = self.make_instr(address, word, mnem, M68kSize::Word);
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Word) {
+            let mut instr = Self::make_instr(address, word, mnem, M68kSize::Word);
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Word) {
                 instr.src = Some(ea);
                 instr.dst = Some(M68kEa::DataReg(dn));
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
             return Ok(instr);
         }
         let sz_t = M68kSize::from_sz2(sz).unwrap_or(M68kSize::Word);
-        let mut instr = self.make_instr(address, word, "AND", sz_t);
+        let mut instr = Self::make_instr(address, word, "AND", sz_t);
         if (word >> 8) & 1 == 1 {
             instr.src = Some(M68kEa::DataReg(dn));
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz_t) {
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz_t) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
-        } else {
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, sz_t) {
-                instr.src = Some(ea);
-                instr.dst = Some(M68kEa::DataReg(dn));
-                instr.length += extra as u8;
-            }
+        } else if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, sz_t) {
+            instr.src = Some(ea);
+            instr.dst = Some(M68kEa::DataReg(dn));
+            instr.length += Self::instr_len_u8(extra);
         }
         Ok(instr)
     }
 
-    fn decode_groupe(&self, data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+    fn decode_groupe(data: &[u8], address: u32, word: u16) -> Result<M68kInstr, DecodeError> {
+        Self::require_opcode_word(data, address, word)?;
         let sz_bits = ((word >> 6) & 3) as u8;
         let mode    = ((word >> 3) & 7) as u8;
         let reg     = (word & 7) as u8;
@@ -946,10 +970,10 @@ impl M68kDecoder {
                 2 => if dir == 0 { "ROXR" } else { "ROXL" },
                 _ => if dir == 0 { "ROR"  } else { "ROL"  },
             };
-            let mut instr = self.make_instr(address, word, mnem, M68kSize::Word);
-            if let Some((ea, extra)) = self.parse_ea(data, 2, mode, reg, M68kSize::Word) {
+            let mut instr = Self::make_instr(address, word, mnem, M68kSize::Word);
+            if let Some((ea, extra)) = Self::parse_ea(data, 2, mode, reg, M68kSize::Word) {
                 instr.dst = Some(ea);
-                instr.length += extra as u8;
+                instr.length += Self::instr_len_u8(extra);
             }
             return Ok(instr);
         }
@@ -961,7 +985,7 @@ impl M68kDecoder {
             2 => if dir == 0 { "ROXR" } else { "ROXL" },
             _ => if dir == 0 { "ROR"  } else { "ROL"  },
         };
-        let mut instr = self.make_instr(address, word, mnem, sz);
+        let mut instr = Self::make_instr(address, word, mnem, sz);
         if ir == 0 {
             instr.src = Some(M68kEa::Imm(if count == 0 { 8 } else { u32::from(count) }));
         } else {
@@ -971,7 +995,7 @@ impl M68kDecoder {
         Ok(instr)
     }
 
-    fn make_instr(&self, address: u32, opcode: u16, mnemonic: &str, size: M68kSize) -> M68kInstr {
+    fn make_instr(address: u32, opcode: u16, mnemonic: &str, size: M68kSize) -> M68kInstr {
         M68kInstr {
             address,
             length: 2,
@@ -995,7 +1019,10 @@ impl M68kDecoder {
         let mut out = Vec::with_capacity(data.len() / 2);
         let mut off = 0;
         while off + 2 <= data.len() {
-            let addr = base_address.wrapping_add(off as u32);
+            // The 68k address space is 32 bits wide, so a sweep offset can never
+            // legitimately exceed `u32::MAX`; saturate rather than wrap so a
+            // pathological input cannot alias a low address.
+            let addr = base_address.wrapping_add(u32::try_from(off).unwrap_or(u32::MAX));
             match self.decode(&data[off..], addr) {
                 Ok(instr) => {
                     let len = instr.length.max(2) as usize;
@@ -1010,7 +1037,7 @@ impl M68kDecoder {
 }
 
 impl Default for M68kDecoder {
-    fn default() -> Self { M68kDecoder::new() }
+    fn default() -> Self { Self::new() }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

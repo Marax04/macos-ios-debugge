@@ -49,7 +49,7 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn next_u32(&mut self) -> u32 {
+    const fn next_u32(&mut self) -> u32 {
         (self.next() >> 32) as u32
     }
 }

@@ -381,21 +381,21 @@ impl SparcCallConv {
 
         for &sz in arg_sizes {
             let is_fp = false; // Without type info, assume integer.
-            let aligned_sz = ((sz + 7) / 8) * 8;
+            let aligned_sz = sz.div_ceil(8) * 8;
 
             if is_fp && fp_reg < 16 {
                 fp_args.push(ArgLocation::Register { reg: u32::try_from(fp_reg).unwrap_or(u32::MAX) * 2, size: sz });
                 fp_reg += 1;
                 // FP args also consume an integer slot in some cases.
             } else if int_reg < 6 {
-                if sz <= 8 {
-                    int_args.push(ArgLocation::Register { reg: u32::try_from(int_reg).unwrap_or(u32::MAX), size: sz });
-                    int_reg += 1;
-                } else {
-                    // >8 bytes: passed by reference.
-                    int_args.push(ArgLocation::Register { reg: u32::try_from(int_reg).unwrap_or(u32::MAX), size: 8 });
-                    int_reg += 1;
-                }
+                // An argument wider than a register is passed by reference, so
+                // that slot always holds 8 bytes.
+                let slot_size = if sz <= 8 { sz } else { 8 };
+                int_args.push(ArgLocation::Register {
+                    reg: u32::try_from(int_reg).unwrap_or(u32::MAX),
+                    size: slot_size,
+                });
+                int_reg += 1;
             } else {
                 int_args.push(ArgLocation::Stack { offset: stack_off, size: sz });
                 stack_off += aligned_sz;

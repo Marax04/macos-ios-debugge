@@ -29,15 +29,12 @@ pub struct BranchTarget {
 impl BranchTarget {
     #[must_use]
     pub const fn new(address: u32, label: Option<String>, is_call: bool, is_conditional: bool) -> Self {
-        BranchTarget { address, label, is_call, is_conditional }
+        Self { address, label, is_call, is_conditional }
     }
 
     #[must_use]
     pub fn label_or_addr(&self) -> String {
-        match &self.label {
-            Some(l) => l.clone(),
-            None => format!("loc_{:08X}", self.address),
-        }
+        self.label.as_ref().map_or_else(|| format!("loc_{:08X}", self.address), std::clone::Clone::clone)
     }
 }
 
@@ -76,7 +73,7 @@ pub struct M68kDisasmConfig {
 
 impl Default for M68kDisasmConfig {
     fn default() -> Self {
-        M68kDisasmConfig {
+        Self {
             show_bytes: true,
             show_address: true,
             use_labels: true,
@@ -117,8 +114,10 @@ pub struct DisasmLine {
 
 impl DisasmLine {
     #[must_use]
-    pub const fn end_address(&self) -> u32 {
-        self.address.wrapping_add(self.bytes.len() as u32)
+    pub fn end_address(&self) -> u32 {
+        // An instruction is a handful of bytes; the length can never overflow
+        // `u32`, and saturating keeps a corrupt buffer from wrapping the PC.
+        self.address.wrapping_add(u32::try_from(self.bytes.len()).unwrap_or(u32::MAX))
     }
 }
 
@@ -158,15 +157,15 @@ impl<'a> EaFormatter<'a> {
     #[must_use]
     pub fn format(&self, ea: &M68kEa, sz: M68kSize) -> String {
         match ea {
-            M68kEa::DataReg(n) => self.case(format!("D{n}")),
-            M68kEa::AddrReg(n) => self.case(format!("A{n}")),
-            M68kEa::AddrInd(n) => format!("({})", self.case(format!("A{n}"))),
-            M68kEa::PostInc(n) => format!("({})+", self.case(format!("A{n}"))),
-            M68kEa::PreDec(n)  => format!("-({})", self.case(format!("A{n}"))),
-            M68kEa::DispAn(an, d) => format!("({},{})", d, self.case(format!("A{an}"))),
+            M68kEa::DataReg(n) => self.case(&format!("D{n}")),
+            M68kEa::AddrReg(n) => self.case(&format!("A{n}")),
+            M68kEa::AddrInd(n) => format!("({})", self.case(&format!("A{n}"))),
+            M68kEa::PostInc(n) => format!("({})+", self.case(&format!("A{n}"))),
+            M68kEa::PreDec(n)  => format!("-({})", self.case(&format!("A{n}"))),
+            M68kEa::DispAn(an, d) => format!("({},{})", d, self.case(&format!("A{an}"))),
             M68kEa::IdxAn { an, xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { self.case(format!("A{xn}")) } else { self.case(format!("D{xn}")) };
-                format!("({},{},{}.{})", disp, self.case(format!("A{an}")), xreg,
+                let xreg = if *xn_is_addr { self.case(&format!("A{xn}")) } else { self.case(&format!("D{xn}")) };
+                format!("({},{},{}.{})", disp, self.case(&format!("A{an}")), xreg,
                     if self.uppercase { xn_size.suffix().to_uppercase().trim_start_matches('.').to_string() }
                     else { xn_size.suffix().trim_start_matches('.').to_string() })
             }
@@ -175,31 +174,34 @@ impl<'a> EaFormatter<'a> {
             M68kEa::DispPc(d) => {
                 if self.resolve_pcrel {
                     // PC at end of instruction word = instr_pc + 2
-                    let target = (i64::from(self.instr_pc) + 2 + i64::from(*d)) as u32;
+                    // 68k PC-relative targets wrap inside the 32-bit address space;
+                    // doing the arithmetic in `u32` reproduces that exactly
+                    // instead of narrowing a wider intermediate.
+                    let target = self.instr_pc.wrapping_add(2).wrapping_add_signed(i32::from(*d));
                     self.format_addr(target, "")
                 } else {
                     format!("({d},PC)")
                 }
             }
             M68kEa::IdxPc { xn, xn_is_addr, xn_size, disp } => {
-                let xreg = if *xn_is_addr { self.case(format!("A{xn}")) } else { self.case(format!("D{xn}")) };
+                let xreg = if *xn_is_addr { self.case(&format!("A{xn}")) } else { self.case(&format!("D{xn}")) };
                 if self.resolve_pcrel {
-                    let base = (i64::from(self.instr_pc) + 2 + i64::from(*disp)) as u32;
+                    let base = self.instr_pc.wrapping_add(2).wrapping_add_signed(i32::from(*disp));
                     format!("({},{},PC)", self.format_addr(base, ""), xreg)
                 } else {
                     format!("({},PC,{}.{})", disp, xreg,
                         xn_size.suffix().trim_start_matches('.'))
                 }
             }
-            M68kEa::Imm(v) => self.format_imm(*v, sz),
-            M68kEa::Ccr => self.case("CCR".to_string()),
-            M68kEa::Sr  => self.case("SR".to_string()),
-            M68kEa::Usp => self.case("USP".to_string()),
+            M68kEa::Imm(v) => Self::format_imm(*v, sz),
+            M68kEa::Ccr => self.case("CCR"),
+            M68kEa::Sr  => self.case("SR"),
+            M68kEa::Usp => self.case("USP"),
             M68kEa::RegList(mask) => self.format_reglist(*mask),
         }
     }
 
-    fn case(&self, s: String) -> String {
+    fn case(&self, s: &str) -> String {
         if self.uppercase { s.to_uppercase() } else { s.to_lowercase() }
     }
 
@@ -214,7 +216,7 @@ impl<'a> EaFormatter<'a> {
         }
     }
 
-    fn format_imm(&self, v: u32, sz: M68kSize) -> String {
+    fn format_imm(v: u32, sz: M68kSize) -> String {
         match sz {
             M68kSize::Byte => format!("#${:02X}", v & 0xFF),
             M68kSize::Word => format!("#${:04X}", v & 0xFFFF),
@@ -258,7 +260,7 @@ pub struct M68kDisassembler {
 impl M68kDisassembler {
     #[must_use]
     pub fn new(config: M68kDisasmConfig) -> Self {
-        M68kDisassembler {
+        Self {
             config,
             decoder: M68kDecoder::new(),
             labels: HashMap::new(),
@@ -321,7 +323,7 @@ impl M68kDisassembler {
         let mut mnem = instr.mnemonic.clone();
         if self.config.uppercase { mnem = mnem.to_uppercase(); }
         else { mnem = mnem.to_lowercase(); }
-        let sz_str = if instr.size == M68kSize::Unsized { "".to_string() }
+        let sz_str = if instr.size == M68kSize::Unsized { String::new() }
                      else { instr.size.suffix().to_string() };
         let full_mnem = format!("{}{}", mnem, if self.config.uppercase { sz_str.to_uppercase() } else { sz_str });
 
@@ -379,10 +381,11 @@ impl M68kDisassembler {
     }
 
     fn build_line(&self, addr: u32, bytes: &[u8], mnem: &str, operands: &str) -> String {
+        use core::fmt::Write as _;
         let mut s = String::new();
 
         if self.config.show_address {
-            s.push_str(&format!("{:0width$X}  ", addr, width = self.config.address_width));
+            let _ = write!(s, "{:0width$X}  ", addr, width = self.config.address_width);
         }
         if self.config.show_bytes {
             let mut hex_bytes = String::with_capacity(self.config.max_bytes_shown * 3);
@@ -390,7 +393,7 @@ impl M68kDisassembler {
                 if i > 0 { hex_bytes.push(' '); }
                 let _ = std::fmt::Write::write_fmt(&mut hex_bytes, format_args!("{b:02X}"));
             }
-            s.push_str(&format!("{:<width$}  ", hex_bytes, width = self.config.bytes_width));
+            let _ = write!(s, "{:<width$}  ", hex_bytes, width = self.config.bytes_width);
         }
 
         let mnem_field = format!("{:<width$}", mnem, width = self.config.mnemonic_width);
@@ -407,7 +410,9 @@ impl M68kDisassembler {
         let mut lines = Vec::new();
         let mut off = 0usize;
         while off + 2 <= data.len() {
-            let addr = base_address.wrapping_add(off as u32);
+            // The 68k address space is 32 bits wide, so a sweep offset cannot
+            // legitimately exceed `u32::MAX`.
+            let addr = base_address.wrapping_add(u32::try_from(off).unwrap_or(u32::MAX));
             let line = self.disassemble_one(&data[off..], addr);
             let consumed = line.bytes.len().max(2);
             off += consumed;
@@ -422,7 +427,9 @@ impl M68kDisassembler {
         let mut lines = Vec::new();
         let mut off = 0usize;
         while off + 2 <= data.len() && lines.len() < max_instrs {
-            let addr = base_address.wrapping_add(off as u32);
+            // The 68k address space is 32 bits wide, so a sweep offset cannot
+            // legitimately exceed `u32::MAX`.
+            let addr = base_address.wrapping_add(u32::try_from(off).unwrap_or(u32::MAX));
             let line = self.disassemble_one(&data[off..], addr);
             let consumed = line.bytes.len().max(2);
             let is_term = line.is_terminator;
@@ -463,9 +470,9 @@ impl M68kDisassembler {
         // Second pass: assign labels
         let mut count = 0;
         for (addr, is_call) in targets {
-            if !self.labels.contains_key(&addr) {
+            if let std::collections::hash_map::Entry::Vacant(slot) = self.labels.entry(addr) {
                 let prefix = if is_call { "sub" } else { "loc" };
-                self.labels.insert(addr, format!("{prefix}_{addr:08X}"));
+                slot.insert(format!("{prefix}_{addr:08X}"));
                 count += 1;
             }
         }
@@ -582,7 +589,7 @@ mod tests {
         let fmt = EaFormatter::new(&labels, 0x1000);
         let ea = M68kEa::Imm(0xABCD);
         let s = fmt.format(&ea, M68kSize::Word);
-        assert!(s.contains("$ABCD"), "got: {}", s);
+        assert!(s.contains("$ABCD"), "got: {s}");
     }
 
     #[test]
@@ -591,7 +598,7 @@ mod tests {
         let fmt = EaFormatter::new(&labels, 0x1000);
         let ea = M68kEa::DispAn(6, -4);
         let s = fmt.format(&ea, M68kSize::Long);
-        assert!(s.contains("A6"), "got: {}", s);
-        assert!(s.contains("-4"), "got: {}", s);
+        assert!(s.contains("A6"), "got: {s}");
+        assert!(s.contains("-4"), "got: {s}");
     }
 }

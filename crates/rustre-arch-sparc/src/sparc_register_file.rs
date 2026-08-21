@@ -102,11 +102,12 @@ impl RegisterWindow {
     #[must_use]
     pub const fn read(&self, reg: usize) -> u64 {
         match reg {
-            0 => 0, // %g0 is always zero
             1..=7 => self.globals[reg],
             8..=15 => self.outs[reg - 8],
             16..=23 => self.locals[reg - 16],
             24..=31 => self.ins[reg - 24],
+            // %g0 reads as zero by architecture; an index outside 0..=31 names
+            // no register at all. Both answer 0.
             _ => 0,
         }
     }
@@ -116,11 +117,12 @@ impl RegisterWindow {
     /// Writes to %g0 are silently dropped.
     pub const fn write(&mut self, reg: usize, value: u64) {
         match reg {
-            0 => {} // writes to %g0 are discarded
             1..=7 => self.globals[reg] = value,
             8..=15 => self.outs[reg - 8] = value,
             16..=23 => self.locals[reg - 16] = value,
             24..=31 => self.ins[reg - 24] = value,
+            // Writes to %g0 are discarded by architecture; an index outside
+            // 0..=31 names no register. Both are no-ops.
             _ => {}
         }
     }
@@ -233,7 +235,7 @@ impl SparcRegisterFile {
     /// Panics if `nwindows` is 0 or exceeds [`MAX_WINDOWS`].
     #[must_use]
     pub fn new(nwindows: usize) -> Self {
-        assert!(nwindows >= 2 && nwindows <= MAX_WINDOWS, "nwindows out of range");
+        assert!((2..=MAX_WINDOWS).contains(&nwindows), "nwindows out of range");
         let windows = (0..nwindows).map(RegisterWindow::new).collect();
         let fp_count = MAX_FP_REGS;
         Self {
@@ -334,7 +336,7 @@ impl SparcRegisterFile {
         if pair < self.fp_double.len() {
             let lo = f64::from(self.fp_regs[pair * 2]);
             let hi = f64::from(self.fp_regs.get(pair * 2 + 1).copied().unwrap_or(0.0));
-            self.fp_double[pair] = (hi as f64) * (2.0_f64.powi(32)) + (lo as f64);
+            self.fp_double[pair] = hi * (2.0_f64.powi(32)) + lo;
         }
     }
 }
@@ -394,7 +396,7 @@ impl WindowManager {
     /// Panics if `nwindows` is 0 or > [`MAX_WINDOWS`].
     #[must_use]
     pub fn new(nwindows: usize) -> Self {
-        assert!(nwindows >= 2 && nwindows <= MAX_WINDOWS);
+        assert!((2..=MAX_WINDOWS).contains(&nwindows));
         Self {
             cwp: 0,
             wim: 1 << ((nwindows - 1) % nwindows), // last window invalid
@@ -468,9 +470,13 @@ impl WindowManager {
     }
 
     /// Return the call depth estimate (number of nested SAVEs).
+    ///
+    /// Not a `const fn`: the `u64` counter is widened to `usize` through a
+    /// checked, saturating conversion rather than a truncating cast, and
+    /// `usize::try_from` is not available in a const context.
     #[must_use]
-    pub const fn call_depth(&self) -> usize {
-        self.saves.saturating_sub(self.restores) as usize
+    pub fn call_depth(&self) -> usize {
+        crate::sparc_narrow::u64_to_usize(self.saves.saturating_sub(self.restores))
     }
 
     /// Return the full CWP change history.
@@ -615,9 +621,9 @@ mod tests {
     #[test]
     fn test_register_file_fp() {
         let mut rf = SparcRegisterFile::new(8);
-        rf.write_fp(0, 3.14);
+        rf.write_fp(0, 2.5);
         let v = rf.read_fp(0);
-        assert!((v - 3.14).abs() < 0.01);
+        assert!((v - 2.5).abs() < 0.01);
     }
 
     #[test]
@@ -650,7 +656,7 @@ mod tests {
         match res {
             WindowOpResult::Ok(new_cwp) => assert_eq!(new_cwp, 7),
             WindowOpResult::Overflow => {} // acceptable with specific WIM
-            _ => panic!("unexpected underflow"),
+            WindowOpResult::Underflow => panic!("unexpected underflow"),
         }
     }
 
@@ -664,7 +670,7 @@ mod tests {
         match res {
             WindowOpResult::Ok(new_cwp) => assert_eq!(new_cwp, (cwp_after_save + 1) % 8),
             WindowOpResult::Underflow => {} // acceptable
-            _ => panic!("unexpected overflow"),
+            WindowOpResult::Overflow => panic!("unexpected overflow"),
         }
     }
 
@@ -706,7 +712,7 @@ mod tests {
     fn test_cwp_history() {
         let mut wm = WindowManager::new(8);
         wm.save();
-        assert!(wm.cwp_history().len() >= 1);
+        assert!(!wm.cwp_history().is_empty());
     }
 
     #[test]

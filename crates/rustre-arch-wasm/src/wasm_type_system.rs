@@ -1,6 +1,8 @@
-//! WebAssembly type system: `ValType`, `FuncType`, `ResultType`, `RefType`, `TableType`,
-//! `MemType`, `GlobalType`; type compatibility checking; LEB128 encoding; type
-//! canonicalization; function type deduplication.
+//! WebAssembly type system.
+//!
+//! `ValType`, `FuncType`, `ResultType`, `RefType`, `TableType`, `MemType` and
+//! `GlobalType`, plus type compatibility checking, LEB128 encoding, type
+//! canonicalization and function type deduplication.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -225,7 +227,7 @@ impl ResultType {
     #[must_use]
     pub fn decode(bytes: &[u8], pos: usize) -> Option<(Self, usize)> {
         let (count, n) = decode_uleb128(bytes, pos)?;
-        let count = count as usize;
+        let count = usize::try_from(count).ok()?;
         let mut p = pos + n;
         // `count` is an attacker-controlled ULEB128 (the br_table paths in
         // `lib.rs`/`wasm_lifter.rs` already bound theirs). Each value type is a
@@ -270,7 +272,7 @@ pub struct WasmFuncType {
 impl WasmFuncType {
     /// Create a new function type.
     #[must_use]
-    pub fn new(params: Vec<WasmValType>, results: Vec<WasmValType>) -> Self {
+    pub const fn new(params: Vec<WasmValType>, results: Vec<WasmValType>) -> Self {
         Self {
             params: ResultType::from_vec(params),
             results: ResultType::from_vec(results),
@@ -302,25 +304,25 @@ impl WasmFuncType {
 
     /// Number of parameters.
     #[must_use]
-    pub fn param_count(&self) -> usize {
+    pub const fn param_count(&self) -> usize {
         self.params.len()
     }
 
     /// Number of results.
     #[must_use]
-    pub fn result_count(&self) -> usize {
+    pub const fn result_count(&self) -> usize {
         self.results.len()
     }
 
     /// Return the arity as (params, results).
     #[must_use]
-    pub fn arity(&self) -> (usize, usize) {
+    pub const fn arity(&self) -> (usize, usize) {
         (self.params.len(), self.results.len())
     }
 
     /// Returns `true` when this function type has no parameters and no results.
     #[must_use]
-    pub fn is_void_void(&self) -> bool {
+    pub const fn is_void_void(&self) -> bool {
         self.params.is_empty() && self.results.is_empty()
     }
 }
@@ -383,14 +385,14 @@ impl WasmTableType {
         let max = if kind == 1 {
             let (max_val, n2) = decode_uleb128(bytes, p)?;
             p += n2;
-            Some(max_val as u32)
+            Some(u32::try_from(max_val).ok()?)
         } else {
             None
         };
         Some((
             Self {
                 element_type,
-                min: min as u32,
+                min: u32::try_from(min).ok()?,
                 max,
             },
             p - pos,
@@ -472,11 +474,17 @@ impl WasmMemType {
         let max = if kind == 1 {
             let (max_val, n2) = decode_uleb128(bytes, p)?;
             p += n2;
-            Some(max_val as u32)
+            Some(u32::try_from(max_val).ok()?)
         } else {
             None
         };
-        Some((Self { min: min as u32, max }, p - pos))
+        Some((
+            Self {
+                min: u32::try_from(min).ok()?,
+                max,
+            },
+            p - pos,
+        ))
     }
 
     /// Encode to binary.
@@ -630,12 +638,19 @@ impl TypeRegistry {
     /// Insert `ft` into the registry, returning its canonical index.
     ///
     /// If an equivalent type already exists, the existing index is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry already holds `u32::MAX` types, which exhausts the
+    /// 32-bit Wasm type index space.
     pub fn intern(&mut self, ft: WasmFuncType) -> u32 {
         let key = TypeKey::from_func_type(&ft);
         if let Some(&idx) = self.index.get(&key) {
             return idx;
         }
-        let idx = self.types.len() as u32;
+        // A registry cannot address more than `u32::MAX` types: the Wasm index
+        // space is 32-bit, so overflowing it is a caller bug, not input data.
+        let idx = u32::try_from(self.types.len()).expect("type index space exhausted");
         self.types.push(ft);
         self.index.insert(key, idx);
         idx
@@ -683,7 +698,7 @@ impl TypeRegistry {
     #[must_use]
     pub fn decode_type_section(bytes: &[u8]) -> Option<Self> {
         let (count, n) = decode_uleb128(bytes, 0)?;
-        let count = count as usize;
+        let count = usize::try_from(count).ok()?;
         let mut reg = Self::new();
         let mut pos = n;
         for _ in 0..count {
@@ -708,11 +723,16 @@ impl TypeRegistry {
     }
 
     /// Iterate over all types in index order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry holds more than `u32::MAX` types, which exhausts
+    /// the 32-bit Wasm type index space.
     pub fn iter(&self) -> impl Iterator<Item = (u32, &WasmFuncType)> {
         self.types
             .iter()
             .enumerate()
-            .map(|(i, ft)| (i as u32, ft))
+            .map(|(i, ft)| (u32::try_from(i).expect("type index space exhausted"), ft))
     }
 }
 
@@ -753,7 +773,8 @@ pub fn func_types_compatible(a: &WasmFuncType, b: &WasmFuncType) -> bool {
 /// Encode an unsigned 64-bit value as LEB128 and push bytes to `out`.
 pub fn encode_uleb128(mut value: u64, out: &mut Vec<u8>) {
     loop {
-        let mut byte = (value & 0x7F) as u8;
+        // Masked to 7 bits, so the value is always in `0..=127`.
+        let mut byte = u8::try_from(value & 0x7F).unwrap_or(0);
         value >>= 7;
         if value != 0 {
             byte |= 0x80;
@@ -769,7 +790,8 @@ pub fn encode_uleb128(mut value: u64, out: &mut Vec<u8>) {
 pub fn encode_sleb128(mut value: i64, out: &mut Vec<u8>) {
     let mut more = true;
     while more {
-        let mut byte = (value & 0x7F) as u8;
+        // Masked to 7 bits, so the value is always in `0..=127`.
+        let mut byte = u8::try_from(value & 0x7F).unwrap_or(0);
         value >>= 7;
         if (value == 0 && (byte & 0x40) == 0) || (value == -1 && (byte & 0x40) != 0) {
             more = false;
@@ -945,7 +967,7 @@ mod tests {
 
     #[test]
     fn test_uleb128_roundtrip() {
-        let values = [0u64, 1, 127, 128, 300, 0x4000, u32::MAX as u64];
+        let values = [0u64, 1, 127, 128, 300, 0x4000, u64::from(u32::MAX)];
         for v in values {
             let mut out = Vec::new();
             encode_uleb128(v, &mut out);
@@ -957,7 +979,7 @@ mod tests {
 
     #[test]
     fn test_sleb128_roundtrip() {
-        let values = [0i64, -1, 1, -128, 127, -300, i32::MIN as i64];
+        let values = [0i64, -1, 1, -128, 127, -300, i64::from(i32::MIN)];
         for v in values {
             let mut out = Vec::new();
             encode_sleb128(v, &mut out);

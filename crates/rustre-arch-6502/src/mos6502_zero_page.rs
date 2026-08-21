@@ -188,7 +188,7 @@ impl Mos6502ZeroPage {
     pub fn analyze(bytes: &[u8], base_addr: u64) -> Self {
         // Safety: ZeroPageEntry doesn't implement Copy, so we can't use array
         // initialization syntax directly. Use a loop to build the array.
-        let entries: [ZeroPageEntry; 256] = core::array::from_fn(|i| ZeroPageEntry::new(i as u8));
+        let entries: [ZeroPageEntry; 256] = core::array::from_fn(|i| ZeroPageEntry::new(u8::try_from(i & 0xFF).unwrap_or(0)));
         let mut zp = Self {
             entries,
             active_count: 0,
@@ -214,7 +214,7 @@ impl Mos6502ZeroPage {
     #[must_use]
     pub fn sorted_by_access_count(&self) -> Vec<&ZeroPageEntry> {
         let mut v: Vec<&ZeroPageEntry> = self.active_entries().collect();
-        v.sort_unstable_by(|a, b| b.total_accesses().cmp(&a.total_accesses()));
+        v.sort_unstable_by_key(|e| core::cmp::Reverse(e.total_accesses()));
         v
     }
 
@@ -254,7 +254,7 @@ impl Mos6502ZeroPage {
     /// Names follow the pattern `zp_NN` where `NN` is the hex address, with
     /// the suffix `_ptr` added for addresses used as indirect pointers.
     pub fn assign_names(&mut self) {
-        for entry in self.entries.iter_mut() {
+        for entry in &mut self.entries {
             if entry.total_accesses() == 0 {
                 continue;
             }
@@ -321,8 +321,9 @@ fn classify_zp_access(
     out: &mut Mos6502ZeroPage,
 ) {
     let kind = match mode {
-        AddrMode::ZeroPage => access_kind_for_mnemonic(mnemonic),
-        AddrMode::ZeroPageX | AddrMode::ZeroPageY => access_kind_for_mnemonic(mnemonic),
+        AddrMode::ZeroPage | AddrMode::ZeroPageX | AddrMode::ZeroPageY => {
+            Some((op1, access_kind_for_mnemonic(mnemonic)))
+        }
         AddrMode::IndirectX | AddrMode::IndirectY | AddrMode::ZeroPageIndirect => {
             // The zero-page byte is a pointer.
             Some((op1, ZeroPageAccessKind::Indirect))
@@ -338,10 +339,10 @@ fn classify_zp_access(
 ///
 /// Returns `Some((address_byte, kind))` or `None` if the mode/mnemonic
 /// combination does not directly access zero-page memory.
-fn access_kind_for_mnemonic(mnemonic: &str) -> Option<(u8, ZeroPageAccessKind)> {
+fn access_kind_for_mnemonic(mnemonic: &str) -> ZeroPageAccessKind {
     // This function is called without the address; the address is supplied by
     // the caller.  We return a dummy address of 0 and the caller substitutes.
-    let kind = match mnemonic {
+    match mnemonic {
         // Stores
         "STA" | "STX" | "STY" | "STZ" => ZeroPageAccessKind::Write,
         // Read-modify-write
@@ -349,9 +350,7 @@ fn access_kind_for_mnemonic(mnemonic: &str) -> Option<(u8, ZeroPageAccessKind)> 
         | "RMB" | "SMB" => ZeroPageAccessKind::ReadModifyWrite,
         // Reads (everything else that touches ZP)
         _ => ZeroPageAccessKind::Read,
-    };
-    // Return a sentinel; caller replaces address with actual op1.
-    Some((0, kind))
+    }
 }
 
 // Override the function to accept address separately.

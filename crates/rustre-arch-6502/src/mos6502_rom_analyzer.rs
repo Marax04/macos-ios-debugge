@@ -25,15 +25,21 @@ pub enum RomType {
     Generic,
 }
 
+/// Last valid address offset for a block of `len` bytes, saturating at the
+/// top of the 16-bit address space so an oversized input stays total.
+fn len_as_addr(len: usize) -> u16 {
+    u16::try_from(len.saturating_sub(1)).unwrap_or(u16::MAX)
+}
+
 impl std::fmt::Display for RomType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            RomType::Nes       => "NES (iNES)",
-            RomType::Snes      => "SNES",
-            RomType::C64       => "Commodore 64 PRG",
-            RomType::Apple2    => "Apple II binary",
-            RomType::Atari2600 => "Atari 2600 cartridge",
-            RomType::Generic   => "Generic 6502 binary",
+            Self::Nes       => "NES (iNES)",
+            Self::Snes      => "SNES",
+            Self::C64       => "Commodore 64 PRG",
+            Self::Apple2    => "Apple II binary",
+            Self::Atari2600 => "Atari 2600 cartridge",
+            Self::Generic   => "Generic 6502 binary",
         };
         write!(f, "{s}")
     }
@@ -240,7 +246,7 @@ impl RomAnalyzer {
     #[must_use]
     pub fn analyze(data: &[u8]) -> Self {
         let rom_type = identify_rom_type(data);
-        let mut analyzer = RomAnalyzer {
+        let mut analyzer = Self {
             rom_type: rom_type.clone(),
             nes_header: None,
             c64_load_addr: None,
@@ -288,7 +294,7 @@ impl RomAnalyzer {
                 // (last_bank_off - prg_off) is prg_size - 16384; this can exceed
                 // u16::MAX for large ROMs (prg_rom_size >= 6), so clamp to u16.
                 let bank_rel = (last_bank_off.saturating_sub(prg_off)) as u64;
-                let vec_base = (0x8000u64 + bank_rel) as u16;
+                let vec_base = u16::try_from((0x8000u64 + bank_rel) & 0xFFFF).unwrap_or(0x8000);
                 self.vectors = Some(read_vectors(vec_slice, vec_base));
                 // Simpler: read directly from last 6 bytes of PRG data.
                 let prg_end = prg_off + prg_size;
@@ -311,7 +317,7 @@ impl RomAnalyzer {
         self.c64_load_addr = Some(load_addr);
         self.banks.push(MemoryBank {
             name: format!("C64 PRG at ${load_addr:04X}"),
-            addr_range: (load_addr, load_addr.saturating_add(code.len().saturating_sub(1) as u16)),
+            addr_range: (load_addr, load_addr.saturating_add(len_as_addr(code.len()))),
             data_offset: 2,
             read_only: false,
         });
@@ -347,7 +353,7 @@ impl RomAnalyzer {
         let (load_addr, code) = parse_c64_prg(data); // same 2-byte header
         self.banks.push(MemoryBank {
             name: format!("Apple II binary at ${load_addr:04X}"),
-            addr_range: (load_addr, load_addr.saturating_add(code.len().saturating_sub(1) as u16)),
+            addr_range: (load_addr, load_addr.saturating_add(len_as_addr(code.len()))),
             data_offset: 2,
             read_only: false,
         });
@@ -365,7 +371,7 @@ impl RomAnalyzer {
         let base: u16 = if data.len() <= 0x4000 { 0xC000 } else { 0x8000 };
         self.banks.push(MemoryBank {
             name: "Generic ROM".to_string(),
-            addr_range: (base, base.saturating_add(data.len().saturating_sub(1) as u16)),
+            addr_range: (base, base.saturating_add(len_as_addr(data.len()))),
             data_offset: 0,
             read_only: true,
         });

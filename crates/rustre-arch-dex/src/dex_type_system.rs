@@ -447,7 +447,7 @@ impl DexTypeSystem {
                 .map_or("V", String::as_str);
             let td = TypeDescriptor::parse(descriptor).unwrap_or(TypeDescriptor::Primitive(PrimitiveKind::Void));
             if let TypeDescriptor::Class(ref ct) = td {
-                class_index.insert(ct.descriptor.clone(), i as u32);
+                class_index.insert(ct.descriptor.clone(), u32::try_from(i).unwrap_or(u32::MAX));
             }
             types.push(td);
         }
@@ -505,7 +505,7 @@ impl DexTypeSystem {
         let mut class_index = HashMap::new();
         for (i, td) in types.iter().enumerate() {
             if let TypeDescriptor::Class(ct) = td {
-                class_index.insert(ct.descriptor.clone(), i as u32);
+                class_index.insert(ct.descriptor.clone(), u32::try_from(i).unwrap_or(u32::MAX));
             }
         }
         Self {

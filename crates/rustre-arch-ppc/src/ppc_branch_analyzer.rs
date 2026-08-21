@@ -349,10 +349,10 @@ impl PpcBranchAnalyzer {
             }
             528 => {
                 // bcctr / bctrl
-                let btype = if !always {
-                    BranchType::CondLink
-                } else {
+                let btype = if always {
                     BranchType::CounterReg
+                } else {
+                    BranchType::CondLink
                 };
                 Some(PpcBranch {
                     addr,

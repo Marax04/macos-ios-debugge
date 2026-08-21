@@ -214,11 +214,13 @@ impl SmaliInstruction {
         }
     }
 
+    #[must_use]
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self
     }
 
+    #[must_use]
     pub fn with_comment(mut self, comment: impl Into<String>) -> Self {
         self.comment = Some(comment.into());
         self
@@ -678,6 +680,7 @@ impl SmaliFormatter {
         Self::default()
     }
 
+    #[must_use]
     pub fn with_indent(mut self, indent: impl Into<String>) -> Self {
         self.indent = indent.into();
         self
@@ -700,11 +703,8 @@ impl SmaliFormatter {
     pub fn format_instruction(&self, insn: &SmaliInstruction) -> String {
         let base = insn.format();
         // Replace leading 4 spaces with configured indent
-        if let Some(__stripped) = base.strip_prefix("    ") {
-            format!("{}{}", self.indent, __stripped)
-        } else {
-            base
-        }
+        base.strip_prefix("    ")
+            .map_or_else(|| base.clone(), |rest| format!("{}{}", self.indent, rest))
     }
 }
 

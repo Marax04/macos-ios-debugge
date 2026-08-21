@@ -199,7 +199,11 @@ impl DelaySlotReport {
         if self.branch_count == 0 {
             return 1.0;
         }
-        self.useful_slots as f64 / self.branch_count as f64
+        // Both counts are instruction tallies for one function, far below
+        // 2^32; convert exactly rather than through a lossy cast.
+        let useful = f64::from(u32::try_from(self.useful_slots).unwrap_or(u32::MAX));
+        let total = f64::from(u32::try_from(self.branch_count).unwrap_or(u32::MAX));
+        useful / total
     }
 
     /// Return all delay slots that are wasted.
@@ -290,8 +294,8 @@ impl DelaySlotAnalyzer {
                 delay_slot_addresses.push(slot_instr.address.as_u64());
 
                 let fill = self.classify_fill(slot_instr);
-                let kind = self.classify_kind(instr, &delay_info);
-                let branch_target = self.extract_branch_target(instr, base_addr);
+                let kind = Self::classify_kind(instr, &delay_info);
+                let branch_target = Self::extract_branch_target(instr, base_addr);
 
                 let ds = DelaySlot {
                     branch_addr: instr.address.as_u64(),
@@ -305,7 +309,7 @@ impl DelaySlotAnalyzer {
                 };
 
                 if delay_info.annulled {
-                    let cond = self.extract_condition(&delay_info.base_mnemonic);
+                    let cond = Self::extract_condition(&delay_info.base_mnemonic);
                     annulled_branches.push(AnnulledBranch {
                         addr: instr.address.as_u64(),
                         mnemonic: instr.mnemonic.clone(),
@@ -366,7 +370,6 @@ impl DelaySlotAnalyzer {
 
     /// Determine how the delay slot is executed for this branch.
     const fn classify_kind(
-        &self,
         branch: &rustre_core::arch::Instruction,
         info: &SparcDelayInfo,
     ) -> DelaySlotKind {
@@ -385,7 +388,6 @@ impl DelaySlotAnalyzer {
 
     /// Extract the branch target address from the operands string.
     fn extract_branch_target(
-        &self,
         instr: &rustre_core::arch::Instruction,
         _base: u64,
     ) -> Option<u64> {
@@ -399,12 +401,10 @@ impl DelaySlotAnalyzer {
     }
 
     /// Extract the condition name from a branch mnemonic (e.g. "BNE" → "NE").
-    fn extract_condition(&self, base_mnemonic: &str) -> String {
-        if let Some(stripped) = base_mnemonic.strip_prefix('B') {
-            stripped.to_string()
-        } else {
-            base_mnemonic.to_string()
-        }
+    fn extract_condition(base_mnemonic: &str) -> String {
+        base_mnemonic
+            .strip_prefix('B')
+            .map_or_else(|| base_mnemonic.to_string(), ToString::to_string)
     }
 
     /// Return whether the given address is a delay-slot instruction in `report`.
@@ -456,21 +456,21 @@ mod tests {
     // Encode a BA,a (annulled unconditional branch) at PC 0x1000, target +8.
     // BA,a: a=1, cond=8, op2=2, disp22=2 (2*4=8)
     fn encode_ba_annul(disp_words: i32) -> [u8; 4] {
-        let d22 = (disp_words as u32) & 0x3FFFFF;
+        let d22 = (disp_words).cast_unsigned() & 0x3F_FFFF;
         let enc: u32 = (1u32 << 29) | (8u32 << 25) | (2u32 << 22) | d22;
         enc.to_be_bytes()
     }
 
     // Encode a BNE (non-annulled) with disp.
     fn encode_bne(disp_words: i32) -> [u8; 4] {
-        let d22 = (disp_words as u32) & 0x3FFFFF;
+        let d22 = (disp_words).cast_unsigned() & 0x3F_FFFF;
         let enc: u32 = (9u32 << 25) | (2u32 << 22) | d22;
         enc.to_be_bytes()
     }
 
     // Encode a CALL with disp30.
     fn encode_call_instr(disp30_words: i32) -> [u8; 4] {
-        let d30 = (disp30_words as u32) & 0x3FFFFFFF;
+        let d30 = (disp30_words).cast_unsigned() & 0x3FFF_FFFF;
         let enc: u32 = (1u32 << 30) | d30;
         enc.to_be_bytes()
     }
@@ -492,7 +492,7 @@ mod tests {
         // CALL target ; ADD %o0, %o1, %o2
         let call = encode_call_instr(2);
         // ADD %o0, %o1, %o2: op=2, op3=0, rs1=8, rs2=9, rd=10
-        let add: u32 = (0b10u32 << 30) | (10u32 << 25) | (0u32 << 19) | (8u32 << 14) | 9u32;
+        let add: u32 = ((0b10u32 << 30) | (10u32 << 25)) | (8u32 << 14) | 9u32;
         let add_bytes = add.to_be_bytes();
         let code: Vec<u8> = call.iter().chain(add_bytes.iter()).copied().collect();
         let report = analyzer().analyze(&code, 0x1000);
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn test_fill_efficiency_all_useful() {
         let call = encode_call_instr(2);
-        let add: u32 = (0b10u32 << 30) | (10u32 << 25) | (0u32 << 19) | (8u32 << 14) | 9u32;
+        let add: u32 = ((0b10u32 << 30) | (10u32 << 25)) | (8u32 << 14) | 9u32;
         let code: Vec<u8> = call
             .iter()
             .chain(add.to_be_bytes().iter())
@@ -627,7 +627,7 @@ mod tests {
         let call = encode_call_instr(5);
         let nop = encode_nop().to_be_bytes();
         let bne = encode_bne(3);
-        let add: u32 = (0b10u32 << 30) | (10u32 << 25) | (0u32 << 19) | (8u32 << 14) | 9u32;
+        let add: u32 = ((0b10u32 << 30) | (10u32 << 25)) | (8u32 << 14) | 9u32;
         let code: Vec<u8> = call
             .iter()
             .chain(nop.iter())

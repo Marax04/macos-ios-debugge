@@ -15,8 +15,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -60,7 +60,7 @@ fn fuzz_decode_dex_short_inputs() {
 fn fuzz_decode_dex_all_opcodes_two_bytes() {
     // For every primary opcode, ensure 2-byte input either Ok or specific Err
     for op in 0u16..=255 {
-        let res = decode_dex(&[op as u8, 0]);
+        let res = decode_dex(&[u8::try_from(op).expect("loop bound is 255"), 0]);
         // For multi-codeunit forms with only 2 bytes given, error or success
         // is allowed. The contract is: don't panic.
         let _ = res;
@@ -73,7 +73,7 @@ fn fuzz_decode_dex_all_opcodes_padded() {
     let mut ok_count = 0;
     for op in 0u16..=255 {
         let mut buf = vec![0u8; 16];
-        buf[0] = op as u8;
+        buf[0] = u8::try_from(op).expect("loop bound is 255");
         let res = decode_dex(&buf);
         if res.is_ok() {
             ok_count += 1;
@@ -485,7 +485,7 @@ fn dex_param_count_fuzz_never_panics() {
         let len = (g() % 60) as usize;
         let mut s = String::with_capacity(len);
         for _ in 0..len {
-            let c = charset[(g() as usize) % charset.len()] as char;
+            let c = charset[usize::try_from(g()).unwrap_or(0) % charset.len()] as char;
             s.push(c);
         }
         // Must not panic
@@ -552,20 +552,20 @@ fn lookup_dex_opcode_known() {
 #[test]
 fn lookup_dex_opcode_all_bytes_no_panic() {
     for op in 0u16..=255 {
-        let _ = lookup_dex_opcode(op as u8);
+        let _ = lookup_dex_opcode(u8::try_from(op).expect("loop bound is 255"));
     }
 }
 
 #[test]
 fn opcode_ref_units_match_format_units() {
-    for entry in DEX_OPCODE_REF.iter() {
+    for entry in DEX_OPCODE_REF {
         assert!(entry.units >= 1 && entry.units <= 5, "op {:#x}", entry.opcode);
     }
 }
 
 #[test]
 fn opcode_ref_flag_bits_decode() {
-    for entry in DEX_OPCODE_REF.iter() {
+    for entry in DEX_OPCODE_REF {
         let f = entry.flags();
         // Round-trip: if CALL bit set, flags() contains CALL.
         if entry.flag_bits & 2 != 0 {
@@ -694,8 +694,8 @@ fn dex_arch_send_sync_threaded_decode() {
             let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE ^ tid.wrapping_mul(0x9E37_79B1);
             for _ in 0..100 {
                 s = s
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
                 // Always-decodable prog: return-void
                 let r = arch.disassemble(Address::new(s), &[0x0e, 0x00]);
                 assert!(r.is_ok());
@@ -903,7 +903,7 @@ fn find_blocks_three_blocks_with_goto() {
     let code = [0x12_u8, 0x00, 0x28, 0x01, 0x0e, 0x00];
     let blocks = dex_find_blocks(&code).unwrap();
     assert_eq!(blocks.len(), 2);
-    assert!(blocks[0].len() > 0);
+    assert!(!blocks[0].is_empty());
     assert!(!blocks[0].is_empty());
 }
 
@@ -939,7 +939,7 @@ fn idiom_null_check_nez() {
 fn packed_switch_size_boundaries() {
     assert_eq!(packed_switch_payload_size(0), 4);
     assert_eq!(packed_switch_payload_size(1), 6);
-    assert_eq!(packed_switch_payload_size(u16::MAX), 4 + (u16::MAX as u32) * 2);
+    assert_eq!(packed_switch_payload_size(u16::MAX), 4 + u32::from(u16::MAX) * 2);
 }
 
 #[test]
@@ -1110,14 +1110,14 @@ fn instr_cost_invoke_costs_more_than_nop() {
 #[test]
 fn well_known_classes_unique_descriptors() {
     let mut seen = std::collections::HashSet::new();
-    for c in DEX_WELL_KNOWN_CLASSES.iter() {
+    for c in DEX_WELL_KNOWN_CLASSES {
         assert!(seen.insert(c.descriptor), "duplicate {}", c.descriptor);
     }
 }
 
 #[test]
 fn well_known_classes_lookup_each() {
-    for c in DEX_WELL_KNOWN_CLASSES.iter() {
+    for c in DEX_WELL_KNOWN_CLASSES {
         assert!(lookup_dex_class(c.descriptor).is_some());
     }
 }

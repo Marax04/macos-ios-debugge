@@ -56,9 +56,9 @@ pub const DEX_MAGIC_039: &[u8; 8] = b"dex\n039\0";
 pub const CDEX_MAGIC: &[u8; 4] = b"cdex";
 
 /// DEX endian constant for little-endian files.
-pub const DEX_ENDIAN_CONSTANT: u32 = 0x12345678;
+pub const DEX_ENDIAN_CONSTANT: u32 = 0x1234_5678;
 /// DEX endian constant for reverse-endian files.
-pub const DEX_REVERSE_ENDIAN_CONSTANT: u32 = 0x78563412;
+pub const DEX_REVERSE_ENDIAN_CONSTANT: u32 = 0x7856_3412;
 
 /// DEX item type codes for the map list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -512,7 +512,11 @@ fn decode_12x(
     hi: u8,
     mnem: &str,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
-    let _ = bytes;
+    if bytes.len() < 2 {
+        return Err(CoreError::InvalidFormat {
+            message: format!("truncated {mnem}: 12x needs 2 bytes, got {}", bytes.len()),
+        });
+    }
     let a = hi & 0x0f;
     let b = (hi >> 4) & 0x0f;
     Ok((
@@ -529,9 +533,14 @@ fn decode_23x(
     mnem: &str,
     flags: InstrFlags,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    if bytes.len() < 4 {
+        return Err(CoreError::InvalidFormat {
+            message: format!("truncated {mnem}: 23x needs 4 bytes, got {}", bytes.len()),
+        });
+    }
     let a = hi;
-    let b = if bytes.len() > 2 { bytes[2] } else { 0 };
-    let c = if bytes.len() > 3 { bytes[3] } else { 0 };
+    let b = bytes[2];
+    let c = bytes[3];
     Ok((
         mnem.into(),
         format!("{}, {}, {}", reg_name(a), reg_name(b), reg_name(c)),
@@ -548,7 +557,7 @@ fn decode_22c(
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let a = hi & 0x0f;
     let b = (hi >> 4) & 0x0f;
-    let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
     Ok((
@@ -566,7 +575,7 @@ fn decode_21c(
     flags: InstrFlags,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let a = hi;
-    let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
     Ok((
@@ -583,7 +592,7 @@ fn decode_21c_type(
     mnem: &str,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let a = hi;
-    let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
     Ok((
@@ -601,7 +610,7 @@ fn decode_invoke_35c(
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let count = (hi >> 4) & 0x0f;
     let reg_g = hi & 0x0f;
-    let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
     let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
@@ -629,10 +638,10 @@ fn decode_invoke_3rc(
     mnem: &str,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let count = hi as usize;
-    let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
-    let first = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
+    let first = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
     })?;
     Ok((
@@ -653,9 +662,9 @@ fn decode_22s(
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
     let a = hi & 0x0f;
     let b = (hi >> 4) & 0x0f;
-    let lit = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
+    let lit = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
         message: "truncated".into(),
-    })? as i16;
+    })?).cast_signed();
     Ok((
         mnem.into(),
         format!("{}, {}, #{lit}", reg_name(a), reg_name(b)),
@@ -669,9 +678,14 @@ fn decode_22b(
     hi: u8,
     mnem: &str,
 ) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    if bytes.len() < 4 {
+        return Err(CoreError::InvalidFormat {
+            message: format!("truncated {mnem}: 22b needs 4 bytes, got {}", bytes.len()),
+        });
+    }
     let a = hi;
-    let b = if bytes.len() > 2 { bytes[2] } else { 0 };
-    let lit = if bytes.len() > 3 { bytes[3] as i8 } else { 0 };
+    let b = bytes[2];
+    let lit = bytes[3].cast_signed();
     Ok((
         mnem.into(),
         format!("{}, {}, #{lit}", reg_name(a), reg_name(b)),
@@ -683,6 +697,1024 @@ fn decode_22b(
 // ---------------------------------------------------------------------------
 // Main DEX instruction decoder
 // ---------------------------------------------------------------------------
+
+/// Opcode-dispatch chunk 0 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part0(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // nop / payload pseudo-instructions
+            0x00 => {
+                let mnem = match hi {
+                    0x01 => "packed-switch-payload",
+                    0x02 => "sparse-switch-payload",
+                    0x03 => "fill-array-data-payload",
+                    _ => "nop",
+                };
+                Ok((mnem.into(), String::new(), 2, InstrFlags::NONE))
+            }
+            // move vA, vB  — 12x format
+            0x01 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                Ok((
+                    "move".into(),
+                    format!("{}, {}", reg_name(a), reg_name(b)),
+                    2,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move/from16 vAA, vBBBB — 22x
+            0x02 => {
+                let a = hi;
+                let b = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "move/from16".into(),
+                    format!("{}, v{b}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move/16 vAAAA, vBBBB — 32x
+            0x03 => {
+                let a = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let b = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok(("move/16".into(), format!("v{a}, v{b}"), 6, InstrFlags::NONE))
+            }
+            // move-wide vA, vB — 12x
+            0x04 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                Ok((
+                    "move-wide".into(),
+                    format!("{}, {}", reg_name_wide(a), reg_name_wide(b)),
+                    2,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move-wide/from16
+            0x05 => {
+                let a = hi;
+                let b = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "move-wide/from16".into(),
+                    format!("{}, v{}:v{}", reg_name_wide(a), b, b + 1),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+        _ => decode_dex_part1(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 1 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part1(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // move-wide/16
+            0x06 => {
+                let a = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let b = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "move-wide/16".into(),
+                    format!("v{}:v{}, v{}:v{}", a, a + 1, b, b + 1),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move-object vA, vB
+            0x07 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                Ok((
+                    "move-object".into(),
+                    format!("{}, {}", reg_name(a), reg_name(b)),
+                    2,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move-object/from16
+            0x08 => {
+                let a = hi;
+                let b = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "move-object/from16".into(),
+                    format!("{}, v{b}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move-object/16
+            0x09 => {
+                let a = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let b = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "move-object/16".into(),
+                    format!("v{a}, v{b}"),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // move-result vAA — 11x
+            0x0a => Ok(("move-result".into(), reg_name(hi), 2, InstrFlags::NONE)),
+            // move-result-wide vAA
+            0x0b => Ok((
+                "move-result-wide".into(),
+                reg_name_wide(hi),
+                2,
+                InstrFlags::NONE,
+            )),
+            // move-result-object vAA
+            0x0c => Ok((
+                "move-result-object".into(),
+                reg_name(hi),
+                2,
+                InstrFlags::NONE,
+            )),
+            // move-exception vAA
+            0x0d => Ok(("move-exception".into(), reg_name(hi), 2, InstrFlags::NONE)),
+            // return-void
+            0x0e => Ok(("return-void".into(), String::new(), 2, InstrFlags::RET)),
+        _ => decode_dex_part2(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 2 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part2(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // return vAA
+            0x0f => Ok(("return".into(), reg_name(hi), 2, InstrFlags::RET)),
+            // return-wide vAA
+            0x10 => Ok(("return-wide".into(), reg_name_wide(hi), 2, InstrFlags::RET)),
+            // return-object vAA
+            0x11 => Ok(("return-object".into(), reg_name(hi), 2, InstrFlags::RET)),
+            // const/4 vA, #+B — 11n
+            0x12 => {
+                let a = hi & 0x0f;
+                let lit4 = (hi >> 4).cast_signed();
+                let signed_lit = if lit4 & 0x8 != 0 {
+                    i32::from(lit4) | -16i32
+                } else {
+                    i32::from(lit4)
+                };
+                Ok((
+                    "const/4".into(),
+                    format!("{}, #{signed_lit}", reg_name(a)),
+                    2,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const/16 vAA, #+BBBB — 21s
+            0x13 => {
+                let a = hi;
+                let lit = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "const/16".into(),
+                    format!("{}, #{lit}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const vAA, #+BBBBBBBB — 31i
+            0x14 => {
+                let a = hi;
+                let lit = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "const".into(),
+                    format!("{}, #0x{lit:x}", reg_name(a)),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const/high16 vAA, #+BBBB0000 — 21h
+            0x15 => {
+                let a = hi;
+                let lit = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const/high16".into(),
+                    format!("{}, #0x{:x}0000", reg_name(a), lit),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-wide/16 vAA, #+BBBB
+            0x16 => {
+                let a = hi;
+                let lit = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "const-wide/16".into(),
+                    format!("{}, #{lit}", reg_name_wide(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+        _ => decode_dex_part3(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 3 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part3(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // const-wide/32 vAA, #+BBBBBBBB
+            0x17 => {
+                let a = hi;
+                let lit = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "const-wide/32".into(),
+                    format!("{}, #0x{lit:x}", reg_name_wide(a)),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-wide vAA, #+BBBBBBBBBBBBBBBB — 51l
+            0x18 => {
+                if bytes.len() < 10 {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated".into(),
+                    });
+                }
+                let a = hi;
+                let lit = read_u64(bytes, 2).unwrap_or(0);
+                Ok((
+                    "const-wide".into(),
+                    format!("{}, #0x{lit:x}", reg_name_wide(a)),
+                    10,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-wide/high16 vAA, #+BBBB000000000000
+            0x19 => {
+                let a = hi;
+                let lit = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const-wide/high16".into(),
+                    format!("{}, #0x{lit:x}000000000000", reg_name_wide(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-string vAA, string@BBBB — 21c
+            0x1a => {
+                let a = hi;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const-string".into(),
+                    format!("{}, string@{idx:#x}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-string/jumbo vAA, string@BBBBBBBB — 31c
+            0x1b => {
+                let a = hi;
+                let idx = read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const-string/jumbo".into(),
+                    format!("{}, string@{idx:#x}", reg_name(a)),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-class vAA, type@BBBB — 21c
+            0x1c => decode_21c_type(bytes, hi, "const-class"),
+            // monitor-enter vAA — 11x
+            0x1d => Ok(("monitor-enter".into(), reg_name(hi), 2, InstrFlags::NONE)),
+            // monitor-exit vAA
+            0x1e => Ok(("monitor-exit".into(), reg_name(hi), 2, InstrFlags::NONE)),
+        _ => decode_dex_part4(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 4 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part4(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // check-cast vAA, type@BBBB — 21c
+            0x1f => decode_21c_type(bytes, hi, "check-cast"),
+            // instance-of vA, vB, type@CCCC — 22c
+            0x20 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "instance-of".into(),
+                    format!("{}, {}, type@{idx:#x}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // array-length vA, vB — 12x
+            0x21 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                Ok((
+                    "array-length".into(),
+                    format!("{}, {}", reg_name(a), reg_name(b)),
+                    2,
+                    InstrFlags::NONE,
+                ))
+            }
+            // new-instance vAA, type@BBBB — 21c
+            0x22 => decode_21c_type(bytes, hi, "new-instance"),
+            // new-array vA, vB, type@CCCC — 22c
+            0x23 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "new-array".into(),
+                    format!("{}, {}, type@{idx:#x}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // filled-new-array {vC..vG}, type@BBBB — 35c
+            0x24 => {
+                let count = (hi >> 4) & 0x0f;
+                let reg_g = hi & 0x0f;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
+                let reg_c = regs_byte & 0x0f;
+                let reg_d = (regs_byte >> 4) & 0x0f;
+                let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
+                let reg_e = regs_byte2 & 0x0f;
+                let reg_f = (regs_byte2 >> 4) & 0x0f;
+                let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
+                let mut reg_list = Vec::with_capacity(count as usize);
+                for __item in all.iter().take(count as usize) {
+                    reg_list.push(reg_name(*__item));
+                }
+                Ok((
+                    "filled-new-array".into(),
+                    format!("{{{}}}, type@{idx:#x}", reg_list.join(", ")),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+        _ => decode_dex_part5(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 5 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part5(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // filled-new-array/range {vCCCC..vNNNN}, type@BBBB — 3rc
+            0x25 => {
+                let count = hi as usize;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let first = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "filled-new-array/range".into(),
+                    format!(
+                        "{{v{first}..v{}}}, type@{idx:#x}",
+                        first as usize + count.saturating_sub(1)
+                    ),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // fill-array-data vAA, +BBBBBBBB — 31t
+            0x26 => {
+                let a = hi;
+                let off = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "fill-array-data".into(),
+                    format!("{}, {off:+}", reg_name(a)),
+                    6,
+                    InstrFlags::NONE,
+                ))
+            }
+            // throw vAA — 11x
+            0x27 => Ok(("throw".into(), reg_name(hi), 2, InstrFlags::BRANCH)),
+            // goto +AA — 10t
+            0x28 => {
+                let off = hi.cast_signed();
+                Ok(("goto".into(), format!("{off:+}"), 2, InstrFlags::BRANCH))
+            }
+            // goto/16 +AAAA — 20t
+            0x29 => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok(("goto/16".into(), format!("{off:+}"), 4, InstrFlags::BRANCH))
+            }
+            // goto/32 +AAAAAAAA — 30t
+            0x2a => {
+                let off = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok(("goto/32".into(), format!("{off:+}"), 6, InstrFlags::BRANCH))
+            }
+            // packed-switch vAA, +BBBBBBBB — 31t
+            0x2b => {
+                let a = hi;
+                let off = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "packed-switch".into(),
+                    format!("{}, {off:+}", reg_name(a)),
+                    6,
+                    InstrFlags::BRANCH | InstrFlags::INDIRECT,
+                ))
+            }
+        _ => decode_dex_part6(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 6 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part6(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // sparse-switch vAA, +BBBBBBBB — 31t
+            0x2c => {
+                let a = hi;
+                let off = (read_u32(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "sparse-switch".into(),
+                    format!("{}, {off:+}", reg_name(a)),
+                    6,
+                    InstrFlags::BRANCH | InstrFlags::INDIRECT,
+                ))
+            }
+            // cmpl-float vAA, vBB, vCC — 23x
+            0x2d => decode_23x(bytes, hi, "cmpl-float", InstrFlags::NONE),
+            // cmpg-float
+            0x2e => decode_23x(bytes, hi, "cmpg-float", InstrFlags::NONE),
+            // cmpl-double
+            0x2f => decode_23x(bytes, hi, "cmpl-double", InstrFlags::NONE),
+            // cmpg-double
+            0x30 => decode_23x(bytes, hi, "cmpg-double", InstrFlags::NONE),
+            // cmp-long
+            0x31 => decode_23x(bytes, hi, "cmp-long", InstrFlags::NONE),
+            // if-eq vA, vB, +CCCC — 22t
+            0x32 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-eq".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x33 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-ne".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x34 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-lt".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+        _ => decode_dex_part7(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 7 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part7(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            0x35 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-ge".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x36 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-gt".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x37 => {
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-le".into(),
+                    format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            // if-eqz..if-lez vAA, +BBBB — 21t
+            0x38 => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-eqz".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x39 => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-nez".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x3a => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-ltz".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+        _ => decode_dex_part8(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 8 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part8(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            0x3b => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-gez".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x3c => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-gtz".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            0x3d => {
+                let off = (read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?).cast_signed();
+                Ok((
+                    "if-lez".into(),
+                    format!("{}, {off:+}", reg_name(hi)),
+                    4,
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                ))
+            }
+            // 0x3e–0x43 and 0x79–0x7a: unused in the Dalvik opcode space.
+            0x3e..=0x43 | 0x79 | 0x7a => Err(CoreError::InvalidFormat {
+                message: format!("unused DEX opcode 0x{op:02x}"),
+            }),
+            // aget variants vAA, vBB, vCC — 23x
+            0x44 => decode_23x(bytes, hi, "aget", InstrFlags::READ_MEM),
+            0x45 => decode_23x(bytes, hi, "aget-wide", InstrFlags::READ_MEM),
+            0x46 => decode_23x(bytes, hi, "aget-object", InstrFlags::READ_MEM),
+            0x47 => decode_23x(bytes, hi, "aget-boolean", InstrFlags::READ_MEM),
+            0x48 => decode_23x(bytes, hi, "aget-byte", InstrFlags::READ_MEM),
+            0x49 => decode_23x(bytes, hi, "aget-char", InstrFlags::READ_MEM),
+            0x4a => decode_23x(bytes, hi, "aget-short", InstrFlags::READ_MEM),
+            // aput variants
+            0x4b => decode_23x(bytes, hi, "aput", InstrFlags::WRITE_MEM),
+            0x4c => decode_23x(bytes, hi, "aput-wide", InstrFlags::WRITE_MEM),
+            0x4d => decode_23x(bytes, hi, "aput-object", InstrFlags::WRITE_MEM),
+            0x4e => decode_23x(bytes, hi, "aput-boolean", InstrFlags::WRITE_MEM),
+            0x4f => decode_23x(bytes, hi, "aput-byte", InstrFlags::WRITE_MEM),
+            0x50 => decode_23x(bytes, hi, "aput-char", InstrFlags::WRITE_MEM),
+            0x51 => decode_23x(bytes, hi, "aput-short", InstrFlags::WRITE_MEM),
+            // iget variants vA, vB, field@CCCC — 22c
+            0x52 => decode_22c(bytes, hi, "iget", InstrFlags::READ_MEM),
+            0x53 => decode_22c(bytes, hi, "iget-wide", InstrFlags::READ_MEM),
+            0x54 => decode_22c(bytes, hi, "iget-object", InstrFlags::READ_MEM),
+            0x55 => decode_22c(bytes, hi, "iget-boolean", InstrFlags::READ_MEM),
+            0x56 => decode_22c(bytes, hi, "iget-byte", InstrFlags::READ_MEM),
+            0x57 => decode_22c(bytes, hi, "iget-char", InstrFlags::READ_MEM),
+            0x58 => decode_22c(bytes, hi, "iget-short", InstrFlags::READ_MEM),
+            // iput variants
+            0x59 => decode_22c(bytes, hi, "iput", InstrFlags::WRITE_MEM),
+            0x5a => decode_22c(bytes, hi, "iput-wide", InstrFlags::WRITE_MEM),
+            0x5b => decode_22c(bytes, hi, "iput-object", InstrFlags::WRITE_MEM),
+            0x5c => decode_22c(bytes, hi, "iput-boolean", InstrFlags::WRITE_MEM),
+            0x5d => decode_22c(bytes, hi, "iput-byte", InstrFlags::WRITE_MEM),
+            0x5e => decode_22c(bytes, hi, "iput-char", InstrFlags::WRITE_MEM),
+            0x5f => decode_22c(bytes, hi, "iput-short", InstrFlags::WRITE_MEM),
+            // sget variants vAA, field@BBBB — 21c
+            0x60 => decode_21c(bytes, hi, "sget", InstrFlags::READ_MEM),
+            0x61 => decode_21c(bytes, hi, "sget-wide", InstrFlags::READ_MEM),
+            0x62 => decode_21c(bytes, hi, "sget-object", InstrFlags::READ_MEM),
+            0x63 => decode_21c(bytes, hi, "sget-boolean", InstrFlags::READ_MEM),
+            0x64 => decode_21c(bytes, hi, "sget-byte", InstrFlags::READ_MEM),
+        _ => decode_dex_part9(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 9 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part9(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            0x65 => decode_21c(bytes, hi, "sget-char", InstrFlags::READ_MEM),
+            0x66 => decode_21c(bytes, hi, "sget-short", InstrFlags::READ_MEM),
+            // sput variants
+            0x67 => decode_21c(bytes, hi, "sput", InstrFlags::WRITE_MEM),
+            0x68 => decode_21c(bytes, hi, "sput-wide", InstrFlags::WRITE_MEM),
+            0x69 => decode_21c(bytes, hi, "sput-object", InstrFlags::WRITE_MEM),
+            0x6a => decode_21c(bytes, hi, "sput-boolean", InstrFlags::WRITE_MEM),
+            0x6b => decode_21c(bytes, hi, "sput-byte", InstrFlags::WRITE_MEM),
+            0x6c => decode_21c(bytes, hi, "sput-char", InstrFlags::WRITE_MEM),
+            0x6d => decode_21c(bytes, hi, "sput-short", InstrFlags::WRITE_MEM),
+            // invoke-virtual {vC..vG}, meth@BBBB — 35c
+            0x6e => decode_invoke_35c(bytes, hi, "invoke-virtual"),
+            0x6f => decode_invoke_35c(bytes, hi, "invoke-super"),
+            0x70 => decode_invoke_35c(bytes, hi, "invoke-direct"),
+            0x71 => decode_invoke_35c(bytes, hi, "invoke-static"),
+            0x72 => decode_invoke_35c(bytes, hi, "invoke-interface"),
+            // 0x73: unused
+            0x73 => Err(CoreError::InvalidFormat {
+                message: "unused DEX opcode 0x73".into(),
+            }),
+            // invoke-virtual/range {vCCCC..vNNNN}, meth@BBBB — 3rc
+            0x74 => decode_invoke_3rc(bytes, hi, "invoke-virtual/range"),
+            0x75 => decode_invoke_3rc(bytes, hi, "invoke-super/range"),
+            0x76 => decode_invoke_3rc(bytes, hi, "invoke-direct/range"),
+            0x77 => decode_invoke_3rc(bytes, hi, "invoke-static/range"),
+            0x78 => decode_invoke_3rc(bytes, hi, "invoke-interface/range"),
+            // unary ops — 12x
+            0x7b => decode_12x(bytes, hi, "neg-int"),
+            0x7c => decode_12x(bytes, hi, "not-int"),
+            0x7d => decode_12x(bytes, hi, "neg-long"),
+            0x7e => decode_12x(bytes, hi, "not-long"),
+            0x7f => decode_12x(bytes, hi, "neg-float"),
+            0x80 => decode_12x(bytes, hi, "neg-double"),
+            0x81 => decode_12x(bytes, hi, "int-to-long"),
+            0x82 => decode_12x(bytes, hi, "int-to-float"),
+            0x83 => decode_12x(bytes, hi, "int-to-double"),
+            0x84 => decode_12x(bytes, hi, "long-to-int"),
+            0x85 => decode_12x(bytes, hi, "long-to-float"),
+            0x86 => decode_12x(bytes, hi, "long-to-double"),
+            0x87 => decode_12x(bytes, hi, "float-to-int"),
+            0x88 => decode_12x(bytes, hi, "float-to-long"),
+            0x89 => decode_12x(bytes, hi, "float-to-double"),
+            0x8a => decode_12x(bytes, hi, "double-to-int"),
+            0x8b => decode_12x(bytes, hi, "double-to-long"),
+            0x8c => decode_12x(bytes, hi, "double-to-float"),
+            0x8d => decode_12x(bytes, hi, "int-to-byte"),
+            0x8e => decode_12x(bytes, hi, "int-to-char"),
+            0x8f => decode_12x(bytes, hi, "int-to-short"),
+            // binary ops — 23x
+            0x90 => decode_23x(bytes, hi, "add-int", InstrFlags::NONE),
+            0x91 => decode_23x(bytes, hi, "sub-int", InstrFlags::NONE),
+            0x92 => decode_23x(bytes, hi, "mul-int", InstrFlags::NONE),
+            0x93 => decode_23x(bytes, hi, "div-int", InstrFlags::NONE),
+            0x94 => decode_23x(bytes, hi, "rem-int", InstrFlags::NONE),
+            0x95 => decode_23x(bytes, hi, "and-int", InstrFlags::NONE),
+            0x96 => decode_23x(bytes, hi, "or-int", InstrFlags::NONE),
+            0x97 => decode_23x(bytes, hi, "xor-int", InstrFlags::NONE),
+            0x98 => decode_23x(bytes, hi, "shl-int", InstrFlags::NONE),
+            0x99 => decode_23x(bytes, hi, "shr-int", InstrFlags::NONE),
+            0x9a => decode_23x(bytes, hi, "ushr-int", InstrFlags::NONE),
+            0x9b => decode_23x(bytes, hi, "add-long", InstrFlags::NONE),
+            0x9c => decode_23x(bytes, hi, "sub-long", InstrFlags::NONE),
+            0x9d => decode_23x(bytes, hi, "mul-long", InstrFlags::NONE),
+            0x9e => decode_23x(bytes, hi, "div-long", InstrFlags::NONE),
+            0x9f => decode_23x(bytes, hi, "rem-long", InstrFlags::NONE),
+            0xa0 => decode_23x(bytes, hi, "and-long", InstrFlags::NONE),
+            0xa1 => decode_23x(bytes, hi, "or-long", InstrFlags::NONE),
+            0xa2 => decode_23x(bytes, hi, "xor-long", InstrFlags::NONE),
+            0xa3 => decode_23x(bytes, hi, "shl-long", InstrFlags::NONE),
+            0xa4 => decode_23x(bytes, hi, "shr-long", InstrFlags::NONE),
+            0xa5 => decode_23x(bytes, hi, "ushr-long", InstrFlags::NONE),
+            0xa6 => decode_23x(bytes, hi, "add-float", InstrFlags::NONE),
+            0xa7 => decode_23x(bytes, hi, "sub-float", InstrFlags::NONE),
+            0xa8 => decode_23x(bytes, hi, "mul-float", InstrFlags::NONE),
+            0xa9 => decode_23x(bytes, hi, "div-float", InstrFlags::NONE),
+        _ => decode_dex_part10(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 10 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part10(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            0xaa => decode_23x(bytes, hi, "rem-float", InstrFlags::NONE),
+            0xab => decode_23x(bytes, hi, "add-double", InstrFlags::NONE),
+            0xac => decode_23x(bytes, hi, "sub-double", InstrFlags::NONE),
+            0xad => decode_23x(bytes, hi, "mul-double", InstrFlags::NONE),
+            0xae => decode_23x(bytes, hi, "div-double", InstrFlags::NONE),
+            0xaf => decode_23x(bytes, hi, "rem-double", InstrFlags::NONE),
+            // /2addr variants — 12x
+            0xb0 => decode_12x(bytes, hi, "add-int/2addr"),
+            0xb1 => decode_12x(bytes, hi, "sub-int/2addr"),
+            0xb2 => decode_12x(bytes, hi, "mul-int/2addr"),
+            0xb3 => decode_12x(bytes, hi, "div-int/2addr"),
+            0xb4 => decode_12x(bytes, hi, "rem-int/2addr"),
+            0xb5 => decode_12x(bytes, hi, "and-int/2addr"),
+            0xb6 => decode_12x(bytes, hi, "or-int/2addr"),
+            0xb7 => decode_12x(bytes, hi, "xor-int/2addr"),
+            0xb8 => decode_12x(bytes, hi, "shl-int/2addr"),
+            0xb9 => decode_12x(bytes, hi, "shr-int/2addr"),
+            0xba => decode_12x(bytes, hi, "ushr-int/2addr"),
+            0xbb => decode_12x(bytes, hi, "add-long/2addr"),
+            0xbc => decode_12x(bytes, hi, "sub-long/2addr"),
+            0xbd => decode_12x(bytes, hi, "mul-long/2addr"),
+            0xbe => decode_12x(bytes, hi, "div-long/2addr"),
+            0xbf => decode_12x(bytes, hi, "rem-long/2addr"),
+            0xc0 => decode_12x(bytes, hi, "and-long/2addr"),
+            0xc1 => decode_12x(bytes, hi, "or-long/2addr"),
+            0xc2 => decode_12x(bytes, hi, "xor-long/2addr"),
+            0xc3 => decode_12x(bytes, hi, "shl-long/2addr"),
+            0xc4 => decode_12x(bytes, hi, "shr-long/2addr"),
+            0xc5 => decode_12x(bytes, hi, "ushr-long/2addr"),
+            0xc6 => decode_12x(bytes, hi, "add-float/2addr"),
+            0xc7 => decode_12x(bytes, hi, "sub-float/2addr"),
+            0xc8 => decode_12x(bytes, hi, "mul-float/2addr"),
+            0xc9 => decode_12x(bytes, hi, "div-float/2addr"),
+            0xca => decode_12x(bytes, hi, "rem-float/2addr"),
+            0xcb => decode_12x(bytes, hi, "add-double/2addr"),
+            0xcc => decode_12x(bytes, hi, "sub-double/2addr"),
+            0xcd => decode_12x(bytes, hi, "mul-double/2addr"),
+            0xce => decode_12x(bytes, hi, "div-double/2addr"),
+            0xcf => decode_12x(bytes, hi, "rem-double/2addr"),
+            // /lit16 variants vA, vB, #+CCCC — 22s
+            0xd0 => decode_22s(bytes, hi, "add-int/lit16"),
+            0xd1 => decode_22s(bytes, hi, "rsub-int"),
+            0xd2 => decode_22s(bytes, hi, "mul-int/lit16"),
+            0xd3 => decode_22s(bytes, hi, "div-int/lit16"),
+            0xd4 => decode_22s(bytes, hi, "rem-int/lit16"),
+            0xd5 => decode_22s(bytes, hi, "and-int/lit16"),
+            0xd6 => decode_22s(bytes, hi, "or-int/lit16"),
+            0xd7 => decode_22s(bytes, hi, "xor-int/lit16"),
+            // /lit8 variants vAA, vBB, #+CC — 22b
+            0xd8 => decode_22b(bytes, hi, "add-int/lit8"),
+            0xd9 => decode_22b(bytes, hi, "rsub-int/lit8"),
+            0xda => decode_22b(bytes, hi, "mul-int/lit8"),
+            0xdb => decode_22b(bytes, hi, "div-int/lit8"),
+            0xdc => decode_22b(bytes, hi, "rem-int/lit8"),
+            0xdd => decode_22b(bytes, hi, "and-int/lit8"),
+            0xde => decode_22b(bytes, hi, "or-int/lit8"),
+            0xdf => decode_22b(bytes, hi, "xor-int/lit8"),
+            0xe0 => decode_22b(bytes, hi, "shl-int/lit8"),
+            0xe1 => decode_22b(bytes, hi, "shr-int/lit8"),
+            0xe2 => decode_22b(bytes, hi, "ushr-int/lit8"),
+        _ => decode_dex_part11(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 11 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part11(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // DEX 038+ new instructions
+            // invoke-polymorphic {vC..vG}, meth@BBBB, proto@HHHH — 45cc
+            0xfa => {
+                let count = (hi >> 4) & 0x0f;
+                let reg_g = hi & 0x0f;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
+                let reg_c = regs_byte & 0x0f;
+                let reg_d = (regs_byte >> 4) & 0x0f;
+                let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
+                let reg_e = regs_byte2 & 0x0f;
+                let reg_f = (regs_byte2 >> 4) & 0x0f;
+                let proto_idx = read_u16(bytes, 6).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
+                let mut reg_list = Vec::with_capacity(count as usize);
+                for __item in all.iter().take(count as usize) {
+                    reg_list.push(reg_name(*__item));
+                }
+                Ok((
+                    "invoke-polymorphic".into(),
+                    format!(
+                        "{{{}}}, meth@{idx:#x}, proto@{proto_idx:#x}",
+                        reg_list.join(", ")
+                    ),
+                    8,
+                    InstrFlags::CALL,
+                ))
+            }
+            // invoke-polymorphic/range {vCCCC..vNNNN}, meth@BBBB, proto@HHHH — 4rcc
+            0xfb => {
+                let count = hi as usize;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let first = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let proto_idx = read_u16(bytes, 6).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "invoke-polymorphic/range".into(),
+                    format!(
+                        "{{v{first}..v{}}}, meth@{idx:#x}, proto@{proto_idx:#x}",
+                        first as usize + count.saturating_sub(1)
+                    ),
+                    8,
+                    InstrFlags::CALL,
+                ))
+            }
+        _ => decode_dex_part12(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 12 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part12(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // invoke-custom {vC..vG}, call_site@BBBB — 35c-like
+            0xfc => {
+                let count = (hi >> 4) & 0x0f;
+                let reg_g = hi & 0x0f;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
+                let reg_c = regs_byte & 0x0f;
+                let reg_d = (regs_byte >> 4) & 0x0f;
+                let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
+                let reg_e = regs_byte2 & 0x0f;
+                let reg_f = (regs_byte2 >> 4) & 0x0f;
+                let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
+                let mut reg_list = Vec::with_capacity(count as usize);
+                for __item in all.iter().take(count as usize) {
+                    reg_list.push(reg_name(*__item));
+                }
+                Ok((
+                    "invoke-custom".into(),
+                    format!("{{{}}}, call_site@{idx:#x}", reg_list.join(", ")),
+                    6,
+                    InstrFlags::CALL,
+                ))
+            }
+            // invoke-custom/range {vCCCC..vNNNN}, call_site@BBBB — 3rc
+            0xfd => {
+                let count = hi as usize;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                let first = read_u16(bytes, 4).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "invoke-custom/range".into(),
+                    format!(
+                        "{{v{first}..v{}}}, call_site@{idx:#x}",
+                        first as usize + count.saturating_sub(1)
+                    ),
+                    6,
+                    InstrFlags::CALL,
+                ))
+            }
+            // const-method-handle vAA, method_handle@BBBB — 21c
+            0xfe => {
+                let a = hi;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const-method-handle".into(),
+                    format!("{}, method_handle@{idx:#x}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+            // const-method-type vAA, proto@BBBB — 21c
+            0xff => {
+                let a = hi;
+                let idx = read_u16(bytes, 2).ok_or_else(|| CoreError::InvalidFormat {
+                    message: "truncated".into(),
+                })?;
+                Ok((
+                    "const-method-type".into(),
+                    format!("{}, proto@{idx:#x}", reg_name(a)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+        _ => decode_dex_part13(bytes, op, hi),
+    }
+}
+
+/// Opcode-dispatch chunk 13 of [`decode_dex`]; unmatched opcodes fall through to the next chunk.
+fn decode_dex_part13(bytes: &[u8], op: u8, hi: u8) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    match op {
+            // ART-optimised (OAT) opcodes — used in compiled DEX/OAT images.
+            // Operands follow the same 22c / 35c / 3rc formats used by their
+            // standard counterparts; we emit the mnemonic from art_opcode_name and
+            // decode operands generically so downstream consumers can process them
+            // without errors.
+            0xe3..=0xf9 => {
+                let name = art_opcode_name(op);
+                // ART field-access quick variants (iget-*/iput-*-quick, 0xe3..=0xee)
+                // use a 22c-like layout: vA, vB, field@CCCC
+                // ART invoke-virtual-quick variants (0xe9..=0xea) use 35c/3rc-like
+                // layouts. We decode all of them uniformly as 4-byte instructions
+                // with a 16-bit index operand, which covers every current ART opcode.
+                let index = read_u16(bytes, 2).unwrap_or(0);
+                let a = hi & 0x0f;
+                let b = (hi >> 4) & 0x0f;
+                Ok((
+                    name.into(),
+                    format!("{}, {}, @{index:#x}", reg_name(a), reg_name(b)),
+                    4,
+                    InstrFlags::NONE,
+                ))
+            }
+        // The chunks above cover every opcode; this arm exists only so each
+        // chunk is a total function over `u8`.
+        _ => Err(CoreError::InvalidFormat {
+            message: format!("unknown DEX opcode 0x{op:02x}"),
+        }),
+    }
+}
 
 /// Decode a Dalvik instruction from the given byte slice.
 /// Returns `(mnemonic, operands, size_in_bytes, flags)`.
@@ -700,928 +1732,7 @@ pub fn decode_dex(bytes: &[u8]) -> Result<(String, String, usize, InstrFlags), C
     let op = bytes[0];
     let hi = if bytes.len() > 1 { bytes[1] } else { 0 };
 
-    match op {
-        // nop / payload pseudo-instructions
-        0x00 => {
-            let mnem = match hi {
-                0x01 => "packed-switch-payload",
-                0x02 => "sparse-switch-payload",
-                0x03 => "fill-array-data-payload",
-                _ => "nop",
-            };
-            Ok((mnem.into(), String::new(), 2, InstrFlags::NONE))
-        }
-        // move vA, vB  — 12x format
-        0x01 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            Ok((
-                "move".into(),
-                format!("{}, {}", reg_name(a), reg_name(b)),
-                2,
-                InstrFlags::NONE,
-            ))
-        }
-        // move/from16 vAA, vBBBB — 22x
-        0x02 => {
-            let a = hi;
-            let b = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "move/from16".into(),
-                format!("{}, v{b}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // move/16 vAAAA, vBBBB — 32x
-        0x03 => {
-            let a = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let b = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok(("move/16".into(), format!("v{a}, v{b}"), 6, InstrFlags::NONE))
-        }
-        // move-wide vA, vB — 12x
-        0x04 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            Ok((
-                "move-wide".into(),
-                format!("{}, {}", reg_name_wide(a), reg_name_wide(b)),
-                2,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-wide/from16
-        0x05 => {
-            let a = hi;
-            let b = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "move-wide/from16".into(),
-                format!("{}, v{}:v{}", reg_name_wide(a), b, b + 1),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-wide/16
-        0x06 => {
-            let a = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let b = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "move-wide/16".into(),
-                format!("v{}:v{}, v{}:v{}", a, a + 1, b, b + 1),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-object vA, vB
-        0x07 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            Ok((
-                "move-object".into(),
-                format!("{}, {}", reg_name(a), reg_name(b)),
-                2,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-object/from16
-        0x08 => {
-            let a = hi;
-            let b = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "move-object/from16".into(),
-                format!("{}, v{b}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-object/16
-        0x09 => {
-            let a = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let b = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "move-object/16".into(),
-                format!("v{a}, v{b}"),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // move-result vAA — 11x
-        0x0a => Ok(("move-result".into(), reg_name(hi), 2, InstrFlags::NONE)),
-        // move-result-wide vAA
-        0x0b => Ok((
-            "move-result-wide".into(),
-            reg_name_wide(hi),
-            2,
-            InstrFlags::NONE,
-        )),
-        // move-result-object vAA
-        0x0c => Ok((
-            "move-result-object".into(),
-            reg_name(hi),
-            2,
-            InstrFlags::NONE,
-        )),
-        // move-exception vAA
-        0x0d => Ok(("move-exception".into(), reg_name(hi), 2, InstrFlags::NONE)),
-        // return-void
-        0x0e => Ok(("return-void".into(), String::new(), 2, InstrFlags::RET)),
-        // return vAA
-        0x0f => Ok(("return".into(), reg_name(hi), 2, InstrFlags::RET)),
-        // return-wide vAA
-        0x10 => Ok(("return-wide".into(), reg_name_wide(hi), 2, InstrFlags::RET)),
-        // return-object vAA
-        0x11 => Ok(("return-object".into(), reg_name(hi), 2, InstrFlags::RET)),
-        // const/4 vA, #+B — 11n
-        0x12 => {
-            let a = hi & 0x0f;
-            let lit4 = (hi >> 4) as i8;
-            let signed_lit = if lit4 & 0x8 != 0 {
-                i32::from(lit4) | -16i32
-            } else {
-                i32::from(lit4)
-            };
-            Ok((
-                "const/4".into(),
-                format!("{}, #{signed_lit}", reg_name(a)),
-                2,
-                InstrFlags::NONE,
-            ))
-        }
-        // const/16 vAA, #+BBBB — 21s
-        0x13 => {
-            let a = hi;
-            let lit = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "const/16".into(),
-                format!("{}, #{lit}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const vAA, #+BBBBBBBB — 31i
-        0x14 => {
-            let a = hi;
-            let lit = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok((
-                "const".into(),
-                format!("{}, #0x{lit:x}", reg_name(a)),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // const/high16 vAA, #+BBBB0000 — 21h
-        0x15 => {
-            let a = hi;
-            let lit = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const/high16".into(),
-                format!("{}, #0x{:x}0000", reg_name(a), lit),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-wide/16 vAA, #+BBBB
-        0x16 => {
-            let a = hi;
-            let lit = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "const-wide/16".into(),
-                format!("{}, #{lit}", reg_name_wide(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-wide/32 vAA, #+BBBBBBBB
-        0x17 => {
-            let a = hi;
-            let lit = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok((
-                "const-wide/32".into(),
-                format!("{}, #0x{lit:x}", reg_name_wide(a)),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-wide vAA, #+BBBBBBBBBBBBBBBB — 51l
-        0x18 => {
-            if bytes.len() < 10 {
-                return Err(CoreError::InvalidFormat {
-                    message: "truncated".into(),
-                });
-            }
-            let a = hi;
-            let lit = read_u64(bytes, 2).unwrap_or(0);
-            Ok((
-                "const-wide".into(),
-                format!("{}, #0x{lit:x}", reg_name_wide(a)),
-                10,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-wide/high16 vAA, #+BBBB000000000000
-        0x19 => {
-            let a = hi;
-            let lit = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const-wide/high16".into(),
-                format!("{}, #0x{lit:x}000000000000", reg_name_wide(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-string vAA, string@BBBB — 21c
-        0x1a => {
-            let a = hi;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const-string".into(),
-                format!("{}, string@{idx:#x}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-string/jumbo vAA, string@BBBBBBBB — 31c
-        0x1b => {
-            let a = hi;
-            let idx = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const-string/jumbo".into(),
-                format!("{}, string@{idx:#x}", reg_name(a)),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-class vAA, type@BBBB — 21c
-        0x1c => decode_21c_type(bytes, hi, "const-class"),
-        // monitor-enter vAA — 11x
-        0x1d => Ok(("monitor-enter".into(), reg_name(hi), 2, InstrFlags::NONE)),
-        // monitor-exit vAA
-        0x1e => Ok(("monitor-exit".into(), reg_name(hi), 2, InstrFlags::NONE)),
-        // check-cast vAA, type@BBBB — 21c
-        0x1f => decode_21c_type(bytes, hi, "check-cast"),
-        // instance-of vA, vB, type@CCCC — 22c
-        0x20 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "instance-of".into(),
-                format!("{}, {}, type@{idx:#x}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // array-length vA, vB — 12x
-        0x21 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            Ok((
-                "array-length".into(),
-                format!("{}, {}", reg_name(a), reg_name(b)),
-                2,
-                InstrFlags::NONE,
-            ))
-        }
-        // new-instance vAA, type@BBBB — 21c
-        0x22 => decode_21c_type(bytes, hi, "new-instance"),
-        // new-array vA, vB, type@CCCC — 22c
-        0x23 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "new-array".into(),
-                format!("{}, {}, type@{idx:#x}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // filled-new-array {vC..vG}, type@BBBB — 35c
-        0x24 => {
-            let count = (hi >> 4) & 0x0f;
-            let reg_g = hi & 0x0f;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
-            let reg_c = regs_byte & 0x0f;
-            let reg_d = (regs_byte >> 4) & 0x0f;
-            let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
-            let reg_e = regs_byte2 & 0x0f;
-            let reg_f = (regs_byte2 >> 4) & 0x0f;
-            let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
-            let mut reg_list = Vec::with_capacity(count as usize);
-            for __item in all.iter().take(count as usize) {
-                reg_list.push(reg_name(*__item));
-            }
-            Ok((
-                "filled-new-array".into(),
-                format!("{{{}}}, type@{idx:#x}", reg_list.join(", ")),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // filled-new-array/range {vCCCC..vNNNN}, type@BBBB — 3rc
-        0x25 => {
-            let count = hi as usize;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let first = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "filled-new-array/range".into(),
-                format!(
-                    "{{v{first}..v{}}}, type@{idx:#x}",
-                    first as usize + count.saturating_sub(1)
-                ),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // fill-array-data vAA, +BBBBBBBB — 31t
-        0x26 => {
-            let a = hi;
-            let off = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok((
-                "fill-array-data".into(),
-                format!("{}, {off:+}", reg_name(a)),
-                6,
-                InstrFlags::NONE,
-            ))
-        }
-        // throw vAA — 11x
-        0x27 => Ok(("throw".into(), reg_name(hi), 2, InstrFlags::BRANCH)),
-        // goto +AA — 10t
-        0x28 => {
-            let off = hi as i8;
-            Ok(("goto".into(), format!("{off:+}"), 2, InstrFlags::BRANCH))
-        }
-        // goto/16 +AAAA — 20t
-        0x29 => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok(("goto/16".into(), format!("{off:+}"), 4, InstrFlags::BRANCH))
-        }
-        // goto/32 +AAAAAAAA — 30t
-        0x2a => {
-            let off = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok(("goto/32".into(), format!("{off:+}"), 6, InstrFlags::BRANCH))
-        }
-        // packed-switch vAA, +BBBBBBBB — 31t
-        0x2b => {
-            let a = hi;
-            let off = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok((
-                "packed-switch".into(),
-                format!("{}, {off:+}", reg_name(a)),
-                6,
-                InstrFlags::BRANCH | InstrFlags::INDIRECT,
-            ))
-        }
-        // sparse-switch vAA, +BBBBBBBB — 31t
-        0x2c => {
-            let a = hi;
-            let off = read_u32(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i32;
-            Ok((
-                "sparse-switch".into(),
-                format!("{}, {off:+}", reg_name(a)),
-                6,
-                InstrFlags::BRANCH | InstrFlags::INDIRECT,
-            ))
-        }
-        // cmpl-float vAA, vBB, vCC — 23x
-        0x2d => decode_23x(bytes, hi, "cmpl-float", InstrFlags::NONE),
-        // cmpg-float
-        0x2e => decode_23x(bytes, hi, "cmpg-float", InstrFlags::NONE),
-        // cmpl-double
-        0x2f => decode_23x(bytes, hi, "cmpl-double", InstrFlags::NONE),
-        // cmpg-double
-        0x30 => decode_23x(bytes, hi, "cmpg-double", InstrFlags::NONE),
-        // cmp-long
-        0x31 => decode_23x(bytes, hi, "cmp-long", InstrFlags::NONE),
-        // if-eq vA, vB, +CCCC — 22t
-        0x32 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-eq".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x33 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-ne".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x34 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-lt".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x35 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-ge".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x36 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-gt".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x37 => {
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-le".into(),
-                format!("{}, {}, {off:+}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        // if-eqz..if-lez vAA, +BBBB — 21t
-        0x38 => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-eqz".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x39 => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-nez".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x3a => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-ltz".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x3b => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-gez".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x3c => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-gtz".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        0x3d => {
-            let off = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })? as i16;
-            Ok((
-                "if-lez".into(),
-                format!("{}, {off:+}", reg_name(hi)),
-                4,
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            ))
-        }
-        // 0x3e–0x43: unused
-        0x3e..=0x43 => Err(CoreError::InvalidFormat {
-            message: format!("unused DEX opcode 0x{op:02x}"),
-        }),
-        // aget variants vAA, vBB, vCC — 23x
-        0x44 => decode_23x(bytes, hi, "aget", InstrFlags::READ_MEM),
-        0x45 => decode_23x(bytes, hi, "aget-wide", InstrFlags::READ_MEM),
-        0x46 => decode_23x(bytes, hi, "aget-object", InstrFlags::READ_MEM),
-        0x47 => decode_23x(bytes, hi, "aget-boolean", InstrFlags::READ_MEM),
-        0x48 => decode_23x(bytes, hi, "aget-byte", InstrFlags::READ_MEM),
-        0x49 => decode_23x(bytes, hi, "aget-char", InstrFlags::READ_MEM),
-        0x4a => decode_23x(bytes, hi, "aget-short", InstrFlags::READ_MEM),
-        // aput variants
-        0x4b => decode_23x(bytes, hi, "aput", InstrFlags::WRITE_MEM),
-        0x4c => decode_23x(bytes, hi, "aput-wide", InstrFlags::WRITE_MEM),
-        0x4d => decode_23x(bytes, hi, "aput-object", InstrFlags::WRITE_MEM),
-        0x4e => decode_23x(bytes, hi, "aput-boolean", InstrFlags::WRITE_MEM),
-        0x4f => decode_23x(bytes, hi, "aput-byte", InstrFlags::WRITE_MEM),
-        0x50 => decode_23x(bytes, hi, "aput-char", InstrFlags::WRITE_MEM),
-        0x51 => decode_23x(bytes, hi, "aput-short", InstrFlags::WRITE_MEM),
-        // iget variants vA, vB, field@CCCC — 22c
-        0x52 => decode_22c(bytes, hi, "iget", InstrFlags::READ_MEM),
-        0x53 => decode_22c(bytes, hi, "iget-wide", InstrFlags::READ_MEM),
-        0x54 => decode_22c(bytes, hi, "iget-object", InstrFlags::READ_MEM),
-        0x55 => decode_22c(bytes, hi, "iget-boolean", InstrFlags::READ_MEM),
-        0x56 => decode_22c(bytes, hi, "iget-byte", InstrFlags::READ_MEM),
-        0x57 => decode_22c(bytes, hi, "iget-char", InstrFlags::READ_MEM),
-        0x58 => decode_22c(bytes, hi, "iget-short", InstrFlags::READ_MEM),
-        // iput variants
-        0x59 => decode_22c(bytes, hi, "iput", InstrFlags::WRITE_MEM),
-        0x5a => decode_22c(bytes, hi, "iput-wide", InstrFlags::WRITE_MEM),
-        0x5b => decode_22c(bytes, hi, "iput-object", InstrFlags::WRITE_MEM),
-        0x5c => decode_22c(bytes, hi, "iput-boolean", InstrFlags::WRITE_MEM),
-        0x5d => decode_22c(bytes, hi, "iput-byte", InstrFlags::WRITE_MEM),
-        0x5e => decode_22c(bytes, hi, "iput-char", InstrFlags::WRITE_MEM),
-        0x5f => decode_22c(bytes, hi, "iput-short", InstrFlags::WRITE_MEM),
-        // sget variants vAA, field@BBBB — 21c
-        0x60 => decode_21c(bytes, hi, "sget", InstrFlags::READ_MEM),
-        0x61 => decode_21c(bytes, hi, "sget-wide", InstrFlags::READ_MEM),
-        0x62 => decode_21c(bytes, hi, "sget-object", InstrFlags::READ_MEM),
-        0x63 => decode_21c(bytes, hi, "sget-boolean", InstrFlags::READ_MEM),
-        0x64 => decode_21c(bytes, hi, "sget-byte", InstrFlags::READ_MEM),
-        0x65 => decode_21c(bytes, hi, "sget-char", InstrFlags::READ_MEM),
-        0x66 => decode_21c(bytes, hi, "sget-short", InstrFlags::READ_MEM),
-        // sput variants
-        0x67 => decode_21c(bytes, hi, "sput", InstrFlags::WRITE_MEM),
-        0x68 => decode_21c(bytes, hi, "sput-wide", InstrFlags::WRITE_MEM),
-        0x69 => decode_21c(bytes, hi, "sput-object", InstrFlags::WRITE_MEM),
-        0x6a => decode_21c(bytes, hi, "sput-boolean", InstrFlags::WRITE_MEM),
-        0x6b => decode_21c(bytes, hi, "sput-byte", InstrFlags::WRITE_MEM),
-        0x6c => decode_21c(bytes, hi, "sput-char", InstrFlags::WRITE_MEM),
-        0x6d => decode_21c(bytes, hi, "sput-short", InstrFlags::WRITE_MEM),
-        // invoke-virtual {vC..vG}, meth@BBBB — 35c
-        0x6e => decode_invoke_35c(bytes, hi, "invoke-virtual"),
-        0x6f => decode_invoke_35c(bytes, hi, "invoke-super"),
-        0x70 => decode_invoke_35c(bytes, hi, "invoke-direct"),
-        0x71 => decode_invoke_35c(bytes, hi, "invoke-static"),
-        0x72 => decode_invoke_35c(bytes, hi, "invoke-interface"),
-        // 0x73: unused
-        0x73 => Err(CoreError::InvalidFormat {
-            message: "unused DEX opcode 0x73".into(),
-        }),
-        // invoke-virtual/range {vCCCC..vNNNN}, meth@BBBB — 3rc
-        0x74 => decode_invoke_3rc(bytes, hi, "invoke-virtual/range"),
-        0x75 => decode_invoke_3rc(bytes, hi, "invoke-super/range"),
-        0x76 => decode_invoke_3rc(bytes, hi, "invoke-direct/range"),
-        0x77 => decode_invoke_3rc(bytes, hi, "invoke-static/range"),
-        0x78 => decode_invoke_3rc(bytes, hi, "invoke-interface/range"),
-        // 0x79–0x7a: unused
-        0x79 | 0x7a => Err(CoreError::InvalidFormat {
-            message: format!("unused DEX opcode 0x{op:02x}"),
-        }),
-        // unary ops — 12x
-        0x7b => decode_12x(bytes, hi, "neg-int"),
-        0x7c => decode_12x(bytes, hi, "not-int"),
-        0x7d => decode_12x(bytes, hi, "neg-long"),
-        0x7e => decode_12x(bytes, hi, "not-long"),
-        0x7f => decode_12x(bytes, hi, "neg-float"),
-        0x80 => decode_12x(bytes, hi, "neg-double"),
-        0x81 => decode_12x(bytes, hi, "int-to-long"),
-        0x82 => decode_12x(bytes, hi, "int-to-float"),
-        0x83 => decode_12x(bytes, hi, "int-to-double"),
-        0x84 => decode_12x(bytes, hi, "long-to-int"),
-        0x85 => decode_12x(bytes, hi, "long-to-float"),
-        0x86 => decode_12x(bytes, hi, "long-to-double"),
-        0x87 => decode_12x(bytes, hi, "float-to-int"),
-        0x88 => decode_12x(bytes, hi, "float-to-long"),
-        0x89 => decode_12x(bytes, hi, "float-to-double"),
-        0x8a => decode_12x(bytes, hi, "double-to-int"),
-        0x8b => decode_12x(bytes, hi, "double-to-long"),
-        0x8c => decode_12x(bytes, hi, "double-to-float"),
-        0x8d => decode_12x(bytes, hi, "int-to-byte"),
-        0x8e => decode_12x(bytes, hi, "int-to-char"),
-        0x8f => decode_12x(bytes, hi, "int-to-short"),
-        // binary ops — 23x
-        0x90 => decode_23x(bytes, hi, "add-int", InstrFlags::NONE),
-        0x91 => decode_23x(bytes, hi, "sub-int", InstrFlags::NONE),
-        0x92 => decode_23x(bytes, hi, "mul-int", InstrFlags::NONE),
-        0x93 => decode_23x(bytes, hi, "div-int", InstrFlags::NONE),
-        0x94 => decode_23x(bytes, hi, "rem-int", InstrFlags::NONE),
-        0x95 => decode_23x(bytes, hi, "and-int", InstrFlags::NONE),
-        0x96 => decode_23x(bytes, hi, "or-int", InstrFlags::NONE),
-        0x97 => decode_23x(bytes, hi, "xor-int", InstrFlags::NONE),
-        0x98 => decode_23x(bytes, hi, "shl-int", InstrFlags::NONE),
-        0x99 => decode_23x(bytes, hi, "shr-int", InstrFlags::NONE),
-        0x9a => decode_23x(bytes, hi, "ushr-int", InstrFlags::NONE),
-        0x9b => decode_23x(bytes, hi, "add-long", InstrFlags::NONE),
-        0x9c => decode_23x(bytes, hi, "sub-long", InstrFlags::NONE),
-        0x9d => decode_23x(bytes, hi, "mul-long", InstrFlags::NONE),
-        0x9e => decode_23x(bytes, hi, "div-long", InstrFlags::NONE),
-        0x9f => decode_23x(bytes, hi, "rem-long", InstrFlags::NONE),
-        0xa0 => decode_23x(bytes, hi, "and-long", InstrFlags::NONE),
-        0xa1 => decode_23x(bytes, hi, "or-long", InstrFlags::NONE),
-        0xa2 => decode_23x(bytes, hi, "xor-long", InstrFlags::NONE),
-        0xa3 => decode_23x(bytes, hi, "shl-long", InstrFlags::NONE),
-        0xa4 => decode_23x(bytes, hi, "shr-long", InstrFlags::NONE),
-        0xa5 => decode_23x(bytes, hi, "ushr-long", InstrFlags::NONE),
-        0xa6 => decode_23x(bytes, hi, "add-float", InstrFlags::NONE),
-        0xa7 => decode_23x(bytes, hi, "sub-float", InstrFlags::NONE),
-        0xa8 => decode_23x(bytes, hi, "mul-float", InstrFlags::NONE),
-        0xa9 => decode_23x(bytes, hi, "div-float", InstrFlags::NONE),
-        0xaa => decode_23x(bytes, hi, "rem-float", InstrFlags::NONE),
-        0xab => decode_23x(bytes, hi, "add-double", InstrFlags::NONE),
-        0xac => decode_23x(bytes, hi, "sub-double", InstrFlags::NONE),
-        0xad => decode_23x(bytes, hi, "mul-double", InstrFlags::NONE),
-        0xae => decode_23x(bytes, hi, "div-double", InstrFlags::NONE),
-        0xaf => decode_23x(bytes, hi, "rem-double", InstrFlags::NONE),
-        // /2addr variants — 12x
-        0xb0 => decode_12x(bytes, hi, "add-int/2addr"),
-        0xb1 => decode_12x(bytes, hi, "sub-int/2addr"),
-        0xb2 => decode_12x(bytes, hi, "mul-int/2addr"),
-        0xb3 => decode_12x(bytes, hi, "div-int/2addr"),
-        0xb4 => decode_12x(bytes, hi, "rem-int/2addr"),
-        0xb5 => decode_12x(bytes, hi, "and-int/2addr"),
-        0xb6 => decode_12x(bytes, hi, "or-int/2addr"),
-        0xb7 => decode_12x(bytes, hi, "xor-int/2addr"),
-        0xb8 => decode_12x(bytes, hi, "shl-int/2addr"),
-        0xb9 => decode_12x(bytes, hi, "shr-int/2addr"),
-        0xba => decode_12x(bytes, hi, "ushr-int/2addr"),
-        0xbb => decode_12x(bytes, hi, "add-long/2addr"),
-        0xbc => decode_12x(bytes, hi, "sub-long/2addr"),
-        0xbd => decode_12x(bytes, hi, "mul-long/2addr"),
-        0xbe => decode_12x(bytes, hi, "div-long/2addr"),
-        0xbf => decode_12x(bytes, hi, "rem-long/2addr"),
-        0xc0 => decode_12x(bytes, hi, "and-long/2addr"),
-        0xc1 => decode_12x(bytes, hi, "or-long/2addr"),
-        0xc2 => decode_12x(bytes, hi, "xor-long/2addr"),
-        0xc3 => decode_12x(bytes, hi, "shl-long/2addr"),
-        0xc4 => decode_12x(bytes, hi, "shr-long/2addr"),
-        0xc5 => decode_12x(bytes, hi, "ushr-long/2addr"),
-        0xc6 => decode_12x(bytes, hi, "add-float/2addr"),
-        0xc7 => decode_12x(bytes, hi, "sub-float/2addr"),
-        0xc8 => decode_12x(bytes, hi, "mul-float/2addr"),
-        0xc9 => decode_12x(bytes, hi, "div-float/2addr"),
-        0xca => decode_12x(bytes, hi, "rem-float/2addr"),
-        0xcb => decode_12x(bytes, hi, "add-double/2addr"),
-        0xcc => decode_12x(bytes, hi, "sub-double/2addr"),
-        0xcd => decode_12x(bytes, hi, "mul-double/2addr"),
-        0xce => decode_12x(bytes, hi, "div-double/2addr"),
-        0xcf => decode_12x(bytes, hi, "rem-double/2addr"),
-        // /lit16 variants vA, vB, #+CCCC — 22s
-        0xd0 => decode_22s(bytes, hi, "add-int/lit16"),
-        0xd1 => decode_22s(bytes, hi, "rsub-int"),
-        0xd2 => decode_22s(bytes, hi, "mul-int/lit16"),
-        0xd3 => decode_22s(bytes, hi, "div-int/lit16"),
-        0xd4 => decode_22s(bytes, hi, "rem-int/lit16"),
-        0xd5 => decode_22s(bytes, hi, "and-int/lit16"),
-        0xd6 => decode_22s(bytes, hi, "or-int/lit16"),
-        0xd7 => decode_22s(bytes, hi, "xor-int/lit16"),
-        // /lit8 variants vAA, vBB, #+CC — 22b
-        0xd8 => decode_22b(bytes, hi, "add-int/lit8"),
-        0xd9 => decode_22b(bytes, hi, "rsub-int/lit8"),
-        0xda => decode_22b(bytes, hi, "mul-int/lit8"),
-        0xdb => decode_22b(bytes, hi, "div-int/lit8"),
-        0xdc => decode_22b(bytes, hi, "rem-int/lit8"),
-        0xdd => decode_22b(bytes, hi, "and-int/lit8"),
-        0xde => decode_22b(bytes, hi, "or-int/lit8"),
-        0xdf => decode_22b(bytes, hi, "xor-int/lit8"),
-        0xe0 => decode_22b(bytes, hi, "shl-int/lit8"),
-        0xe1 => decode_22b(bytes, hi, "shr-int/lit8"),
-        0xe2 => decode_22b(bytes, hi, "ushr-int/lit8"),
-        // DEX 038+ new instructions
-        // invoke-polymorphic {vC..vG}, meth@BBBB, proto@HHHH — 45cc
-        0xfa => {
-            let count = (hi >> 4) & 0x0f;
-            let reg_g = hi & 0x0f;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
-            let reg_c = regs_byte & 0x0f;
-            let reg_d = (regs_byte >> 4) & 0x0f;
-            let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
-            let reg_e = regs_byte2 & 0x0f;
-            let reg_f = (regs_byte2 >> 4) & 0x0f;
-            let proto_idx = read_u16(bytes, 6).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
-            let mut reg_list = Vec::with_capacity(count as usize);
-            for __item in all.iter().take(count as usize) {
-                reg_list.push(reg_name(*__item));
-            }
-            Ok((
-                "invoke-polymorphic".into(),
-                format!(
-                    "{{{}}}, meth@{idx:#x}, proto@{proto_idx:#x}",
-                    reg_list.join(", ")
-                ),
-                8,
-                InstrFlags::CALL,
-            ))
-        }
-        // invoke-polymorphic/range {vCCCC..vNNNN}, meth@BBBB, proto@HHHH — 4rcc
-        0xfb => {
-            let count = hi as usize;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let first = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let proto_idx = read_u16(bytes, 6).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "invoke-polymorphic/range".into(),
-                format!(
-                    "{{v{first}..v{}}}, meth@{idx:#x}, proto@{proto_idx:#x}",
-                    first as usize + count.saturating_sub(1)
-                ),
-                8,
-                InstrFlags::CALL,
-            ))
-        }
-        // invoke-custom {vC..vG}, call_site@BBBB — 35c-like
-        0xfc => {
-            let count = (hi >> 4) & 0x0f;
-            let reg_g = hi & 0x0f;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let regs_byte = if bytes.len() > 4 { bytes[4] } else { 0 };
-            let reg_c = regs_byte & 0x0f;
-            let reg_d = (regs_byte >> 4) & 0x0f;
-            let regs_byte2 = if bytes.len() > 5 { bytes[5] } else { 0 };
-            let reg_e = regs_byte2 & 0x0f;
-            let reg_f = (regs_byte2 >> 4) & 0x0f;
-            let all = [reg_c, reg_d, reg_e, reg_f, reg_g];
-            let mut reg_list = Vec::with_capacity(count as usize);
-            for __item in all.iter().take(count as usize) {
-                reg_list.push(reg_name(*__item));
-            }
-            Ok((
-                "invoke-custom".into(),
-                format!("{{{}}}, call_site@{idx:#x}", reg_list.join(", ")),
-                6,
-                InstrFlags::CALL,
-            ))
-        }
-        // invoke-custom/range {vCCCC..vNNNN}, call_site@BBBB — 3rc
-        0xfd => {
-            let count = hi as usize;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            let first = read_u16(bytes, 4).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "invoke-custom/range".into(),
-                format!(
-                    "{{v{first}..v{}}}, call_site@{idx:#x}",
-                    first as usize + count.saturating_sub(1)
-                ),
-                6,
-                InstrFlags::CALL,
-            ))
-        }
-        // const-method-handle vAA, method_handle@BBBB — 21c
-        0xfe => {
-            let a = hi;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const-method-handle".into(),
-                format!("{}, method_handle@{idx:#x}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // const-method-type vAA, proto@BBBB — 21c
-        0xff => {
-            let a = hi;
-            let idx = read_u16(bytes, 2).ok_or(CoreError::InvalidFormat {
-                message: "truncated".into(),
-            })?;
-            Ok((
-                "const-method-type".into(),
-                format!("{}, proto@{idx:#x}", reg_name(a)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-        // ART-optimised (OAT) opcodes — used in compiled DEX/OAT images.
-        // Operands follow the same 22c / 35c / 3rc formats used by their
-        // standard counterparts; we emit the mnemonic from art_opcode_name and
-        // decode operands generically so downstream consumers can process them
-        // without errors.
-        0xe3..=0xf9 => {
-            let name = art_opcode_name(op);
-            // ART field-access quick variants (iget-*/iput-*-quick, 0xe3..=0xee)
-            // use a 22c-like layout: vA, vB, field@CCCC
-            // ART invoke-virtual-quick variants (0xe9..=0xea) use 35c/3rc-like
-            // layouts. We decode all of them uniformly as 4-byte instructions
-            // with a 16-bit index operand, which covers every current ART opcode.
-            let index = read_u16(bytes, 2).unwrap_or(0);
-            let a = hi & 0x0f;
-            let b = (hi >> 4) & 0x0f;
-            Ok((
-                name.into(),
-                format!("{}, {}, @{index:#x}", reg_name(a), reg_name(b)),
-                4,
-                InstrFlags::NONE,
-            ))
-        }
-    }
+    decode_dex_part0(bytes, op, hi)
 }
 
 // ---------------------------------------------------------------------------
@@ -1877,7 +1988,7 @@ mod tests {
     fn test_const_wide() {
         // const-wide v0, #0x0102030405060708 — 51l = 10 bytes
         let mut buf = vec![0x18_u8, 0x00];
-        buf.extend_from_slice(&0x0102030405060708_u64.to_le_bytes());
+        buf.extend_from_slice(&0x0102_0304_0506_0708_u64.to_le_bytes());
         let i = dis(&buf);
         assert_eq!(i.mnemonic, "const-wide");
         assert_eq!(i.size, 10);
@@ -2193,8 +2304,8 @@ mod tests {
 
     #[test]
     fn test_dex_endian_constants() {
-        assert_eq!(DEX_ENDIAN_CONSTANT, 0x12345678);
-        assert_eq!(DEX_REVERSE_ENDIAN_CONSTANT, 0x78563412);
+        assert_eq!(DEX_ENDIAN_CONSTANT, 0x1234_5678);
+        assert_eq!(DEX_REVERSE_ENDIAN_CONSTANT, 0x7856_3412);
     }
 
     // --- Format code units ---
@@ -2874,10 +2985,7 @@ pub fn dex_param_count(descriptor: &str) -> usize {
         Some(pos) => pos + 1, // '(' is ASCII (1 byte), so pos+1 is always a char boundary
         None => return 0,     // No opening paren — not a valid descriptor
     };
-    let end = match descriptor.find(')') {
-        Some(pos) => pos,
-        None => descriptor.len(),
-    };
+    let end = descriptor.find(')').unwrap_or(descriptor.len());
     let end = end.max(start); // ensure end >= start to avoid panic on malformed input
     let params = &descriptor[start..end];
     let mut count = 0;
@@ -3538,47 +3646,145 @@ pub fn dex_simple_class_name(descriptor: &str) -> &str {
 // DEX instruction timing/cycle-cost estimator
 // ---------------------------------------------------------------------------
 
+/// `const`-compatible string equality used by the cost-table scan.
+const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Heuristic cost weight per DEX mnemonic, consulted by [`dex_instr_cost`].
+///
+/// Kept as an ordered table rather than a `match` so every mnemonic keeps its
+/// own row even where several share a weight.
+const DEX_INSTR_COST_TABLE: &[(&str, u32)] = &[
+    ("nop", 0),
+    ("move", 1),
+    ("move/from16", 1),
+    ("move-object", 1),
+    ("const/4", 2),
+    ("const/16", 2),
+    ("const", 2),
+    ("const-string", 2),
+    ("return-void", 1),
+    ("return", 1),
+    ("return-wide", 1),
+    ("return-object", 1),
+    ("goto", 2),
+    ("goto/16", 2),
+    ("goto/32", 2),
+    ("if-eq", 3),
+    ("if-ne", 3),
+    ("if-lt", 3),
+    ("if-ge", 3),
+    ("if-gt", 3),
+    ("if-le", 3),
+    ("if-eqz", 3),
+    ("if-nez", 3),
+    ("if-ltz", 3),
+    ("if-gez", 3),
+    ("if-gtz", 3),
+    ("if-lez", 3),
+    ("aget", 5),
+    ("aget-wide", 5),
+    ("aget-object", 5),
+    ("aget-boolean", 5),
+    ("aget-char", 5),
+    ("aput", 5),
+    ("aput-wide", 5),
+    ("aput-object", 5),
+    ("aput-boolean", 5),
+    ("aput-char", 5),
+    ("iget", 4),
+    ("iget-wide", 4),
+    ("iget-object", 4),
+    ("iget-boolean", 4),
+    ("iget-char", 4),
+    ("iput", 4),
+    ("iput-wide", 4),
+    ("iput-object", 4),
+    ("iput-boolean", 4),
+    ("iput-char", 4),
+    ("sget", 6),
+    ("sget-wide", 6),
+    ("sget-object", 6),
+    ("sget-boolean", 6),
+    ("sget-char", 6),
+    ("sput", 6),
+    ("sput-wide", 6),
+    ("sput-object", 6),
+    ("sput-boolean", 6),
+    ("sput-char", 6),
+    ("invoke-virtual", 20),
+    ("invoke-super", 20),
+    ("invoke-interface", 20),
+    ("invoke-direct", 15),
+    ("invoke-static", 15),
+    ("new-instance", 25),
+    ("new-array", 20),
+    ("check-cast", 8),
+    ("instance-of", 8),
+    ("array-length", 3),
+    ("filled-new-array", 20),
+    ("throw", 10),
+    ("monitor-enter", 12),
+    ("monitor-exit", 12),
+    ("add-int", 2),
+    ("sub-int", 2),
+    ("mul-int", 2),
+    ("and-int", 2),
+    ("or-int", 2),
+    ("xor-int", 2),
+    ("div-int", 8),
+    ("rem-int", 8),
+    ("neg-int", 1),
+    ("not-int", 1),
+    ("shl-int", 2),
+    ("shr-int", 2),
+    ("ushr-int", 2),
+    ("add-long", 3),
+    ("sub-long", 3),
+    ("mul-long", 3),
+    ("and-long", 3),
+    ("or-long", 3),
+    ("xor-long", 3),
+    ("div-long", 12),
+    ("rem-long", 12),
+    ("add-float", 4),
+    ("sub-float", 4),
+    ("mul-float", 4),
+    ("div-float", 10),
+    ("rem-float", 10),
+    ("add-double", 5),
+    ("sub-double", 5),
+    ("mul-double", 5),
+    ("div-double", 12),
+    ("rem-double", 12),
+];
+
 /// Estimated relative cost (cycle weight) for a DEX instruction.
 ///
 /// Costs are heuristic and intended for relative comparison only.
 #[must_use]
 pub fn dex_instr_cost(mnemonic: &str) -> u32 {
-    match mnemonic {
-        "nop" => 0,
-        "move" | "move/from16" | "move-object" => 1,
-        "const/4" | "const/16" | "const" | "const-string" => 2,
-        "return-void" | "return" | "return-wide" | "return-object" => 1,
-        "goto" | "goto/16" | "goto/32" => 2,
-        "if-eq" | "if-ne" | "if-lt" | "if-ge" | "if-gt" | "if-le" => 3,
-        "if-eqz" | "if-nez" | "if-ltz" | "if-gez" | "if-gtz" | "if-lez" => 3,
-        "aget" | "aget-wide" | "aget-object" | "aget-boolean" | "aget-char" => 5,
-        "aput" | "aput-wide" | "aput-object" | "aput-boolean" | "aput-char" => 5,
-        "iget" | "iget-wide" | "iget-object" | "iget-boolean" | "iget-char" => 4,
-        "iput" | "iput-wide" | "iput-object" | "iput-boolean" | "iput-char" => 4,
-        "sget" | "sget-wide" | "sget-object" | "sget-boolean" | "sget-char" => 6,
-        "sput" | "sput-wide" | "sput-object" | "sput-boolean" | "sput-char" => 6,
-        "invoke-virtual" | "invoke-super" | "invoke-interface" => 20,
-        "invoke-direct" | "invoke-static" => 15,
-        "new-instance" => 25,
-        "new-array" => 20,
-        "check-cast" => 8,
-        "instance-of" => 8,
-        "array-length" => 3,
-        "filled-new-array" => 20,
-        "throw" => 10,
-        "monitor-enter" | "monitor-exit" => 12,
-        "add-int" | "sub-int" | "mul-int" | "and-int" | "or-int" | "xor-int" => 2,
-        "div-int" | "rem-int" => 8,
-        "neg-int" | "not-int" => 1,
-        "shl-int" | "shr-int" | "ushr-int" => 2,
-        "add-long" | "sub-long" | "mul-long" | "and-long" | "or-long" | "xor-long" => 3,
-        "div-long" | "rem-long" => 12,
-        "add-float" | "sub-float" | "mul-float" => 4,
-        "div-float" | "rem-float" => 10,
-        "add-double" | "sub-double" | "mul-double" => 5,
-        "div-double" | "rem-double" => 12,
-        _ => 2,
+    let mut i = 0;
+    while i < DEX_INSTR_COST_TABLE.len() {
+        let (name, cost) = DEX_INSTR_COST_TABLE[i];
+        if str_eq(name, mnemonic) {
+            return cost;
+        }
+        i += 1;
     }
+    2
 }
 
 // ---------------------------------------------------------------------------

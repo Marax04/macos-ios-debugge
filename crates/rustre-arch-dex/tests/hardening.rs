@@ -6,7 +6,7 @@
 //! bounds check inside the loop was reached.
 //!
 //! `dex_string_pool` already capped its own equivalent count (with a comment
-//! naming the DoS), which is why this one went unnoticed: the crate *looked*
+//! naming the `DoS`), which is why this one went unnoticed: the crate *looked*
 //! hardened.
 
 use rustre_arch_dex::dex_type_system::DexTypeSystem;
@@ -46,7 +46,7 @@ fn wellformed_tables_still_parse() {
     let mut data = Vec::new();
     data.extend_from_slice(&0u32.to_le_bytes()); // type id 0 → "I"
     data.extend_from_slice(&1u32.to_le_bytes()); // type id 1 → "Ljava/lang/String;"
-    let protos_off = data.len() as u32;
+    let protos_off = u32::try_from(data.len()).expect("fixture is small");
     data.extend_from_slice(&0u32.to_le_bytes()); // shorty idx
     data.extend_from_slice(&0u32.to_le_bytes()); // return type idx
     data.extend_from_slice(&0u32.to_le_bytes()); // params off

@@ -165,6 +165,13 @@ fn decode_ppc_mem(opcd: u32, instr: u32, rs: u32, ra: u32) -> (String, String, I
             format!("{},{}({})", gpr(rs), simm16(instr), gpr(ra)),
             InstrFlags::READ_MEM,
         ),
+        _ => decode_ppc_mem_rest(opcd, instr, rs, ra),
+    }
+}
+
+/// Remaining primary memory opcodes, split out of `decode_ppc_mem` so that neither half is an unreadable wall of match arms.
+fn decode_ppc_mem_rest(opcd: u32, instr: u32, rs: u32, ra: u32) -> (String, String, InstrFlags) {
+    match opcd {
         44 => (
             "STH".to_string(),
             format!("{},{}({})", gpr(rs), simm16(instr), gpr(ra)),
@@ -245,11 +252,8 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
     let opcd = instr >> 26;
     let rs = (instr >> 21) & 31;
     let ra = (instr >> 16) & 31;
-    let rb = (instr >> 11) & 31;
     let rc_bit = instr & 1;
-    let oe_bit = (instr >> 10) & 1;
     let rc_sfx = if rc_bit != 0 { "." } else { "" };
-    let xo = (instr >> 1) & 0x3FF;
 
     match opcd {
         3 => Ok((
@@ -420,6 +424,26 @@ fn decode_ppc(bytes: &[u8], pc: u64) -> Result<(String, String, InstrFlags), Cor
                 InstrFlags::NONE,
             ))
         }
+        _ => decode_ppc_rest(opcd, instr),
+    }
+}
+
+/// Remaining primary opcodes, split out of `decode_ppc` so that neither half
+/// is an unreadable wall of match arms. The instruction fields are re-derived
+/// from `instr` rather than threaded through a long parameter list.
+///
+/// # Errors
+///
+/// Never fails today; the `Result` mirrors `decode_ppc` so the two halves
+/// stay interchangeable.
+fn decode_ppc_rest(opcd: u32, instr: u32) -> Result<(String, String, InstrFlags), CoreError> {
+    let rs = (instr >> 21) & 31;
+    let ra = (instr >> 16) & 31;
+    let rb = (instr >> 11) & 31;
+    let oe_bit = (instr >> 10) & 1;
+    let rc_sfx = if instr & 1 != 0 { "." } else { "" };
+    let xo = (instr >> 1) & 0x3FF;
+    match opcd {
         21 => {
             let (sh, mb, me) = ((instr >> 11) & 31, (instr >> 6) & 31, (instr >> 1) & 31);
             Ok((
@@ -511,7 +535,7 @@ fn decode_ppc31(
 
 /// Decode opcode-31 low extended opcodes (xo 0..=316).
 fn decode_ppc31_lo(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrFlags)> {
-    let (instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let (_instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
     let sfx = c.sfx.as_str();
     let rc_sfx = c.rc_sfx;
     Some(match xo {
@@ -571,6 +595,16 @@ fn decode_ppc31_lo(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrF
             format!("{},{},{}", gpr(rs), gpr(ra), gpr(rb)),
             InstrFlags::NONE,
         ),
+        _ => return decode_ppc31_lo_mid(xo, c),
+    })
+}
+
+/// Middle band of the opcode-31 low extended-opcode table.
+fn decode_ppc31_lo_mid(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrFlags)> {
+    let (_instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let sfx = c.sfx.as_str();
+    let rc_sfx = c.rc_sfx;
+    Some(match xo {
         28 => (
             format!("AND{rc_sfx}"),
             format!("{},{},{}", gpr(ra), gpr(rs), gpr(rb)),
@@ -632,6 +666,15 @@ fn decode_ppc31_lo(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrF
             format!("{},{},{}", gpr(ra), gpr(rs), gpr(rb)),
             InstrFlags::NONE,
         ),
+        _ => return decode_ppc31_lo_rest(xo, c),
+    })
+}
+
+/// Upper half of the opcode-31 low extended-opcode table.
+fn decode_ppc31_lo_rest(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrFlags)> {
+    let (instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let sfx = c.sfx.as_str();
+    Some(match xo {
         136 => (
             format!("SUBFE{sfx}"),
             format!("{},{},{}", gpr(rs), gpr(ra), gpr(rb)),
@@ -693,6 +736,16 @@ fn decode_ppc31_lo(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrF
             format!("{},{},{}", gpr(rs), gpr(ra), gpr(rb)),
             InstrFlags::WRITE_MEM,
         ),
+        _ => return decode_ppc31_lo_tail(xo, c),
+    })
+}
+
+/// Tail band of the opcode-31 low extended-opcode table.
+fn decode_ppc31_lo_tail(xo: u32, c: &Ppc31Args<'_>) -> Option<(String, String, InstrFlags)> {
+    let (_instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let sfx = c.sfx.as_str();
+    let rc_sfx = c.rc_sfx;
+    Some(match xo {
         232 => (
             format!("SUBFME{sfx}"),
             format!("{},{}", gpr(rs), gpr(ra)),
@@ -837,6 +890,15 @@ fn decode_ppc31_hi(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
             format!("{},{},{}", gpr(ra), gpr(rs), gpr(rb)),
             InstrFlags::NONE,
         ),
+        _ => decode_ppc31_hi_mid(xo, c),
+    }
+}
+
+/// Middle band of the opcode-31 high extended-opcode table.
+fn decode_ppc31_hi_mid(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
+    let (_instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let sfx = c.sfx.as_str();
+    match xo {
         491 => (
             format!("DIVW{sfx}"),
             format!("{},{},{}", gpr(rs), gpr(ra), gpr(rb)),
@@ -853,6 +915,14 @@ fn decode_ppc31_hi(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
             format!("{},{},{}", gpr(rs), gpr(ra), gpr(rb)),
             InstrFlags::READ_MEM,
         ),
+        _ => decode_ppc31_hi_mid2(xo, c),
+    }
+}
+
+/// Second middle band of the opcode-31 high extended-opcode table.
+fn decode_ppc31_hi_mid2(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
+    let (instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    match xo {
         535 => (
             "LFSX".to_string(),
             format!("{},{},{}", fpr(rs), gpr(ra), gpr(rb)),
@@ -874,6 +944,15 @@ fn decode_ppc31_hi(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
             InstrFlags::READ_MEM,
         ),
         598 => ("SYNC".to_string(), String::new(), InstrFlags::BARRIER),
+        _ => decode_ppc31_hi_rest(xo, c),
+    }
+}
+
+/// Upper half of the opcode-31 high extended-opcode table, split out of `decode_ppc31_hi`.
+fn decode_ppc31_hi_rest(xo: u32, c: &Ppc31Args<'_>) -> (String, String, InstrFlags) {
+    let (instr, rs, ra, rb) = (c.instr, c.rs, c.ra, c.rb);
+    let rc_sfx = c.rc_sfx;
+    match xo {
         599 => (
             "LFDX".to_string(),
             format!("{},{},{}", fpr(rs), gpr(ra), gpr(rb)),
@@ -975,7 +1054,6 @@ fn decode_fp63(
     rb: u32,
     rc_sfx: &str,
 ) -> (String, String, InstrFlags) {
-    let xo = (instr >> 1) & 0x1F;
     let xo10 = (instr >> 1) & 0x3FF;
     match xo10 {
         0 => (
@@ -1013,6 +1091,15 @@ fn decode_fp63(
             format!("{},{}", crfield(rs >> 2), crfield(ra >> 2)),
             InstrFlags::NONE,
         ),
+        _ => decode_fp63_rest(instr, rs, ra, rb, rc_sfx),
+    }
+}
+
+/// Upper half of the opcode-63 floating-point table.
+fn decode_fp63_rest(instr: u32, rs: u32, ra: u32, rb: u32, rc_sfx: &str) -> (String, String, InstrFlags) {
+    let xo = (instr >> 1) & 0x1F;
+    let xo10 = (instr >> 1) & 0x3FF;
+    match xo10 {
         72 => (
             format!("FMR{rc_sfx}"),
             format!("{},{}", fpr(rs), fpr(rb)),
@@ -5890,8 +5977,8 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                 }];
             }
         }
-        "ADDIC" | "ADDIC." => {
-            if parts.len() >= 3 {
+        "ADDIC" | "ADDIC."
+            if parts.len() >= 3 => {
                 let imm = ppc_parse_imm(parts[2]);
                 return vec![PpcLlilOp::ArithImm {
                     dest: parts[0].to_string(),
@@ -5900,7 +5987,19 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                     rhs: imm,
                 }];
             }
-        }
+        _ => {}
+    }
+    ppc_lift_a2(instr)
+}
+
+/// Second band of the `ppc_lift` mnemonic dispatch table.
+#[must_use]
+pub fn ppc_lift_a2(instr: &Instruction) -> Vec<PpcLlilOp> {
+    let m = instr.mnemonic.as_str();
+    let ops = &instr.operands;
+    let parts: Vec<&str> = ops.split(',').map(str::trim).collect();
+
+    match m {
         "SUBFIC" => {
             if parts.len() >= 3 {
                 let imm = ppc_parse_imm(parts[2]);
@@ -5969,6 +6068,19 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                 }];
             }
         }
+        _ => {}
+    }
+    ppc_lift_b(instr)
+}
+
+/// Second band of the mnemonic dispatch table used by `ppc_lift`.
+#[must_use]
+pub fn ppc_lift_b(instr: &Instruction) -> Vec<PpcLlilOp> {
+    let m = instr.mnemonic.as_str();
+    let ops = &instr.operands;
+    let parts: Vec<&str> = ops.split(',').map(str::trim).collect();
+
+    match m {
         "SUBF" | "SUBFC" | "SUBFE" | "SUBFZE" | "SUBFME" => {
             if parts.len() >= 3 {
                 return vec![PpcLlilOp::Arith {
@@ -6016,8 +6128,8 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                 }];
             }
         }
-        "SLW" => {
-            if parts.len() >= 3 {
+        "SLW"
+            if parts.len() >= 3 => {
                 return vec![PpcLlilOp::Arith {
                     dest: parts[0].into(),
                     lhs: parts[1].into(),
@@ -6025,7 +6137,19 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                     rhs: parts[2].into(),
                 }];
             }
-        }
+        _ => {}
+    }
+    ppc_lift_b2(instr)
+}
+
+/// Fourth band of the `ppc_lift` mnemonic dispatch table.
+#[must_use]
+pub fn ppc_lift_b2(instr: &Instruction) -> Vec<PpcLlilOp> {
+    let m = instr.mnemonic.as_str();
+    let ops = &instr.operands;
+    let parts: Vec<&str> = ops.split(',').map(str::trim).collect();
+
+    match m {
         "SRW" => {
             if parts.len() >= 3 {
                 return vec![PpcLlilOp::Arith {
@@ -6088,6 +6212,18 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                 }];
             }
         }
+        _ => {}
+    }
+    ppc_lift_rest(instr)
+}
+
+/// Second half of the mnemonic dispatch table used by `ppc_lift`.
+#[must_use]
+pub fn ppc_lift_rest(instr: &Instruction) -> Vec<PpcLlilOp> {
+    let m = instr.mnemonic.as_str();
+    let ops = &instr.operands;
+
+    match m {
         "LHZ" | "LHZU" | "LHA" | "LHAU" | "LHZX" | "LHAX" => {
             if let Some((dst, base, off)) = ppc_parse_mem(ops) {
                 return vec![PpcLlilOp::Load {
@@ -6110,7 +6246,7 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
         }
 
         // ── Stores ─────────────────────────────────────────────────────────
-        "STW" | "STWU" | "STWX" | "STWUX" => {
+        "STW" | "STWU" | "STWX" | "STWUX" | "STFS" | "STFSU" | "STFSX" => {
             if let Some((src, base, off)) = ppc_parse_mem(ops) {
                 return vec![PpcLlilOp::Store {
                     base,
@@ -6150,17 +6286,6 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
                 }];
             }
         }
-        "STFS" | "STFSU" | "STFSX" => {
-            if let Some((src, base, off)) = ppc_parse_mem(ops) {
-                return vec![PpcLlilOp::Store {
-                    base,
-                    offset: off,
-                    src,
-                    size: 4,
-                }];
-            }
-        }
-
         // ── Control flow ───────────────────────────────────────────────────
         "B" | "BA" => {
             let t = ppc_parse_target(ops);
@@ -6178,6 +6303,19 @@ pub fn ppc_lift(instr: &Instruction) -> Vec<PpcLlilOp> {
         "BCLR" | "BCLRL" => return vec![PpcLlilOp::Ret],
         "SC" => return vec![PpcLlilOp::Syscall],
 
+        _ => {}
+    }
+    ppc_lift_rest_b(instr)
+}
+
+/// Fourth band of the mnemonic dispatch table used by `ppc_lift`.
+#[must_use]
+pub fn ppc_lift_rest_b(instr: &Instruction) -> Vec<PpcLlilOp> {
+    let m = instr.mnemonic.as_str();
+    let ops = &instr.operands;
+    let parts: Vec<&str> = ops.split(',').map(str::trim).collect();
+
+    match m {
         "BEQ" | "BEQL" => {
             let t = ppc_parse_target(parts.last().copied().unwrap_or("$0"));
             return vec![PpcLlilOp::CondJump {
@@ -7078,7 +7216,7 @@ impl PpcHistogram {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(&str, usize)> {
         let mut v: Vec<(&str, usize)> = self.counts.iter().map(|(k, &v)| (k.as_str(), v)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }

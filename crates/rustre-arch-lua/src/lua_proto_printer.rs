@@ -79,19 +79,52 @@ impl SourceMap {
 
 // ─── PrintConfig ─────────────────────────────────────────────────────────────
 
+/// Base used when numbering instructions in the listing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetBase {
+    /// The first instruction is numbered 0.
+    Zero,
+    /// The first instruction is numbered 1.
+    One,
+}
+
+impl OffsetBase {
+    /// Offset to display for the instruction at index `i`.
+    #[must_use]
+    pub const fn display_index(self, i: usize) -> usize {
+        match self {
+            Self::Zero => i,
+            Self::One => i + 1,
+        }
+    }
+}
+
+/// Which optional sections the printer emits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PrintSections {
+    /// Print the constant pool inline after the disassembly.
+    pub constants: bool,
+    /// Annotate each instruction with its source line.
+    pub lines: bool,
+    /// Show upvalue names next to GETUPVAL/SETUPVAL references.
+    pub upvalue_names: bool,
+}
+
+impl Default for PrintSections {
+    fn default() -> Self {
+        Self { constants: true, lines: true, upvalue_names: true }
+    }
+}
+
 /// Configuration for `LuaProtoPrinter`.
 #[derive(Debug, Clone)]
 pub struct PrintConfig {
     /// Prefix used to indent each nesting level of sub-prototypes.
     pub indent: String,
-    /// Whether to print the constant pool inline after the disassembly.
-    pub show_constants: bool,
-    /// Whether to annotate each instruction with its source line.
-    pub show_lines: bool,
-    /// Whether to show upvalue names next to GETUPVAL/SETUPVAL references.
-    pub show_upvalue_names: bool,
-    /// Whether to number instructions starting from 0 (false = 1-based).
-    pub zero_based_offset: bool,
+    /// Which optional sections to emit.
+    pub sections: PrintSections,
+    /// Instruction numbering base.
+    pub offset_base: OffsetBase,
     /// Width of the mnemonic column.
     pub mnemonic_width: usize,
     /// Whether to recurse into sub-prototypes.
@@ -106,10 +139,8 @@ impl Default for PrintConfig {
     fn default() -> Self {
         Self {
             indent: "  ".to_owned(),
-            show_constants: true,
-            show_lines: true,
-            show_upvalue_names: true,
-            zero_based_offset: true,
+            sections: PrintSections::default(),
+            offset_base: OffsetBase::Zero,
             mnemonic_width: 14,
             recurse: true,
             max_depth: 0,
@@ -287,6 +318,11 @@ impl LuaProtoPrinter {
     }
 
     /// Render `proto` to the provided `writer`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input bytes are malformed, truncated, or
+    /// otherwise cannot be decoded.
     pub fn print_proto_to<W: FmtWrite>(&self, proto: &LuaProto, writer: &mut W) -> fmt::Result {
         self.print_proto_internal_to(proto, 0, writer)
     }
@@ -342,13 +378,13 @@ impl LuaProtoPrinter {
 
         // ── Disassembly ───────────────────────────────────────────────────────
         for (i, &word) in proto.code.iter().enumerate() {
-            let offset = if self.config.zero_based_offset { i } else { i + 1 };
+            let offset = self.config.offset_base.display_index(i);
             let addr_str = format!("{:0width$x}", offset, width = self.config.addr_width);
 
             let (mnemonic, operands) = decode_word(proto.version, word);
 
             // Annotate operands with upvalue names.
-            let operands = if self.config.show_upvalue_names {
+            let operands = if self.config.sections.upvalue_names {
                 annotate_upvalue_operands(&mnemonic, &operands, &proto.upvalues, proto.version)
             } else {
                 operands
@@ -358,7 +394,7 @@ impl LuaProtoPrinter {
             let operands =
                 annotate_constant_operands(&mnemonic, &operands, &proto.constants, proto.version);
 
-            let line_str = if self.config.show_lines {
+            let line_str = if self.config.sections.lines {
                 proto
                     .source_map
                     .line_at(i).map_or_else(|| "     ".to_owned(), |l| format!("{l:5}"))
@@ -375,7 +411,7 @@ impl LuaProtoPrinter {
         }
 
         // ── Constant pool ─────────────────────────────────────────────────────
-        if self.config.show_constants && !proto.constants.is_empty() {
+        if self.config.sections.constants && !proto.constants.is_empty() {
             writeln!(w, "{indent}; constants:")?;
             for (i, c) in proto.constants.iter().enumerate() {
                 writeln!(w, "{indent}  [{i:4}] {c}")?;
@@ -383,7 +419,7 @@ impl LuaProtoPrinter {
         }
 
         // ── Upvalue table ─────────────────────────────────────────────────────
-        if self.config.show_upvalue_names && !proto.upvalues.is_empty() {
+        if self.config.sections.upvalue_names && !proto.upvalues.is_empty() {
             writeln!(w, "{indent}; upvalues:")?;
             for (i, uv) in proto.upvalues.iter().enumerate() {
                 let in_stack = if uv.in_stack { "instack" } else { "       " };
@@ -460,22 +496,22 @@ fn decode_legacy(version: LuaVersion, word: u32) -> (String, String) {
         .to_lowercase();
 
     // Use sBx for JMP and FORLOOP/FORPREP.
-    let use_sbx = match version {
+    let uses_sbx = match version {
         LuaVersion::Lua51 => matches!(op, 22 | 31 | 32),
         LuaVersion::Lua52 => matches!(op, 23 | 32 | 33 | 35),
         _ => matches!(op, 30 | 39 | 40 | 42),
     };
-    let use_bx = match version {
+    let takes_bx_operand = match version {
         LuaVersion::Lua51 => matches!(op, 1 | 5 | 7 | 36),
         LuaVersion::Lua52 => matches!(op, 1 | 2 | 37),
         _ => matches!(op, 1 | 2 | 44),
     };
 
-    let operands = if use_sbx {
+    let operands = if uses_sbx {
         const MAXARG_SBX: i64 = ((1i64 << 18) - 1) >> 1;
         let sbx = i64::from(bx) - MAXARG_SBX;
         format!("{a}, {sbx:+}")
-    } else if use_bx {
+    } else if takes_bx_operand {
         format!("{a}, {bx}")
     } else {
         format!("{a}, {b}, {c}")
@@ -513,15 +549,14 @@ fn decode_54(word: u32) -> (String, String) {
             let sj = i64::from((word >> 7) & 0x01ff_ffff) - 16_777_215;
             format!("{sj:+}")
         }
-        3 => format!("{a}, {bx}"),          // LOADK
-        77 => format!("{a}, {bx}"),         // CLOSURE
+        3 | 77 => format!("{a}, {bx}"),          // LOADK
+        // CLOSURE
         1 | 2 | 71 | 72 | 73 | 75 => {     // LOADI/LOADF/FORLOOP/...
             let sbx = i64::from(bx) - 65535;
             format!("{a}, {sbx:+}")
         }
         80 => format!("{}", word >> 7),     // EXTRAARG
-        66 | 67 => format!("{a}, {b}, {c}"),
-        68 => format!("{a}, {b}, {c}"),
+        66..=68 => format!("{a}, {b}, {c}"),
         69 => String::new(),
         70 => format!("{a}"),
         _ => {
@@ -604,7 +639,7 @@ mod tests {
         p.num_params = 1;
         p.max_stack = 4;
         // LOADK R0, 0  (op=3, a=0, bx=0)
-        p.code.push(3u32 | (0 << 7));
+        p.code.push(3u32);
         // RETURN0 (op=69)
         p.code.push(69u32);
         p.constants.push(ConstantValue::Str("hello".to_owned()));
@@ -628,7 +663,7 @@ mod tests {
     fn test_constants_in_output() {
         let proto = make_simple_proto();
         let config = PrintConfig {
-            show_constants: true,
+            sections: PrintSections { constants: true, ..PrintSections::default() },
             ..Default::default()
         };
         let output = LuaProtoPrinter::with_config(config).print_proto(&proto);
@@ -639,7 +674,7 @@ mod tests {
     fn test_line_annotation_present() {
         let proto = make_simple_proto();
         let config = PrintConfig {
-            show_lines: true,
+            sections: PrintSections { lines: true, ..PrintSections::default() },
             ..Default::default()
         };
         let output = LuaProtoPrinter::with_config(config).print_proto(&proto);
@@ -690,8 +725,8 @@ mod tests {
     fn test_decode_legacy_jmp() {
         // Lua 5.1 JMP (op=22), sBx=0 (no-op jump).
         // bx = MAXARG_SBX_OLD = 131071; encoded as (bx << 14) | 22.
-        let bx: u32 = 131071;
-        let word = 22u32 | (bx << 14);
+        let bx: u32 = 131_071;
+        let word = 0x16u32 | (bx << 14);
         let (mn, ops) = decode_legacy(LuaVersion::Lua51, word);
         assert_eq!(mn, "jmp");
         assert!(ops.contains("+0") || ops.contains("0, +0"));

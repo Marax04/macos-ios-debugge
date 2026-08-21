@@ -373,7 +373,7 @@ impl std::fmt::Display for V9Instr {
 // ── V9Lifter ──────────────────────────────────────────────────────────────────
 
 /// IL (Intermediate Language) operation for the V9 lifter.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum V9IlOp {
     /// Register-to-register assignment.
     Assign { dst: u8, src: u8 },
@@ -485,9 +485,8 @@ impl V9Lifter {
                     }
                 }
             }
-            V9Opcode::Flushw | V9Opcode::Stbar | V9Opcode::Membar { .. } => {
-                self.ops.push(V9IlOp::Nop);
-            }
+            // FLUSHW / STBAR / MEMBAR have no data-flow effect to model, and
+            // anything not yet lifted is conservatively a no-op too.
             _ => {
                 self.ops.push(V9IlOp::Nop);
             }
@@ -551,13 +550,10 @@ impl V9CallingConv {
             int_return_regs: vec![8],                 // %o0
             fp_return_regs: vec![0],                  // %f0
             caller_saved: vec![8, 9, 10, 11, 12, 13, 14, 15, 1, 2, 3, 4, 5, 6, 7],
-            callee_saved: vec![16..=23, 24..=31]
+            // l0-l7 = 16-23, i0-i7 = 24-31
+            callee_saved: vec![16u8..=23, 24u8..=31]
                 .into_iter()
                 .flatten()
-                .collect::<Vec<_>>()
-                // l0-l7 = 16-23, i0-i7 = 24-31
-                .into_iter()
-                .map(|v| v as u8)
                 .collect(),
         }
     }
@@ -592,15 +588,11 @@ impl V9CallingConv {
                         stk_off += 4;
                     }
                 }
-                'd' => {
-                    if fp_idx + 1 < self.fp_arg_regs.len() {
+                'd'
+                    if fp_idx + 1 < self.fp_arg_regs.len() => {
                         result.push(ArgClass::FloatRegD(self.fp_arg_regs[fp_idx]));
                         fp_idx += 2;
-                    } else {
-                        result.push(ArgClass::Stack { offset: stk_off });
-                        stk_off += 8;
                     }
-                }
                 _ => {
                     result.push(ArgClass::Stack { offset: stk_off });
                     stk_off += 8;
@@ -634,7 +626,7 @@ pub fn decode_v9_instr(word: u32) -> Option<V9Instr> {
     let i = (word >> 13) & 1;
     let rs2 = (word & 31) as u8;
     let simm13 = if i == 1 {
-        let raw = (word & 0x1FFF) as i32;
+        let raw = (word & 0x1FFF).cast_signed();
         Some(if raw & 0x1000 != 0 {
             i64::from(raw | -0x2000_i32)
         } else {
@@ -715,6 +707,64 @@ pub fn decode_v9_instr(word: u32) -> Option<V9Instr> {
             operand_str: String::new(),
         }),
         // SLLx (0x25, x bit set = 64-bit)
+        _ => decode_v9_instr_more(word),
+    }
+}
+
+/// Continuation of [`decode_v9_instr`]; split out only to keep each function short.
+fn decode_v9_instr_more(word: u32) -> Option<V9Instr> {
+    let fmt = word >> 30;
+    if fmt != 2 {
+        return None; // Only Format 3 (fmt=10) carries V9 ALU ops
+    }
+    let op3 = (word >> 19) & 0x3F;
+    let rs1 = ((word >> 14) & 31) as u8;
+    let rd = ((word >> 25) & 31) as u8;
+    let i = (word >> 13) & 1;
+    let rs2 = (word & 31) as u8;
+    let simm13 = if i == 1 {
+        let raw = (word & 0x1FFF).cast_signed();
+        Some(if raw & 0x1000 != 0 {
+            i64::from(raw | -0x2000_i32)
+        } else {
+            i64::from(raw)
+        })
+    } else {
+        None
+    };
+
+    let build = |opcode: V9Opcode, ops: String| -> Option<V9Instr> {
+        Some(V9Instr {
+            opcode,
+            rs1: Some(rs1),
+            rs2: if i == 0 { Some(rs2) } else { None },
+            rd: Some(rd),
+            imm: simm13,
+            operand_str: ops,
+        })
+    };
+
+    let reg = |r: u8| -> String {
+        match r {
+            0 => "%g0".to_string(),
+            1..=7 => format!("%g{r}"),
+            8..=13 => format!("%o{}", r - 8),
+            14 => "%sp".to_string(),
+            15 => "%o7".to_string(),
+            16..=23 => format!("%l{}", r - 16),
+            24..=29 => format!("%i{}", r - 24),
+            30 => "%fp".to_string(),
+            31 => "%i7".to_string(),
+            _ => format!("%r{r}"),
+        }
+    };
+    let src2 = if i == 1 {
+        format!("{}", simm13.unwrap_or(0))
+    } else {
+        reg(rs2)
+    };
+
+    match op3 {
         0x25 if (word >> 12) & 1 == 1 => {
             build(V9Opcode::Sllx, format!("{},{},{}", reg(rs1), src2, reg(rd)))
         }
@@ -728,16 +778,16 @@ pub fn decode_v9_instr(word: u32) -> Option<V9Instr> {
         }
         // MEMBAR (0x28)
         0x28 => {
-            let mask = (word & 0x7F) as u8;
-            let cmask = ((word >> 4) & 7) as u8;
-            let mmask = (word & 0xF) as u8;
+            let membar_mask = crate::sparc_narrow::low_u8_of_u32(word & 0x7F);
+            let completion = crate::sparc_narrow::low_u8_of_u32((word >> 4) & 7);
+            let ordering = crate::sparc_narrow::low_u8_of_u32(word & 0xF);
             Some(V9Instr {
-                opcode: V9Opcode::Membar { mmask, cmask },
+                opcode: V9Opcode::Membar { mmask: ordering, cmask: completion },
                 rs1: None,
                 rs2: None,
                 rd: None,
                 imm: None,
-                operand_str: format!("#0x{mask:02x}"),
+                operand_str: format!("#0x{membar_mask:02x}"),
             })
         }
         // MOVcc (0x2C) – integer condition code
@@ -1469,7 +1519,7 @@ impl V9Encoder {
             | (0x09u32 << 19)
             | ((rs1 as u32 & 31) << 14)
             | (1u32 << 13)
-            | (simm13 as u32 & 0x1FFF)
+            | ((simm13).cast_unsigned() & 0x1FFF)
     }
 
     /// Encode an UDIVX instruction: `udivx rs1, simm13, rd`.
@@ -1480,7 +1530,7 @@ impl V9Encoder {
             | (0x0Du32 << 19)
             | ((rs1 as u32 & 31) << 14)
             | (1u32 << 13)
-            | (simm13 as u32 & 0x1FFF)
+            | ((simm13).cast_unsigned() & 0x1FFF)
     }
 
     /// Encode a FLUSHW instruction.

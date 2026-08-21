@@ -8,7 +8,7 @@ use rustre_core::endian::Endian;
 fn arch() -> AvrArch {
     AvrArch::default()
 }
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 
@@ -75,12 +75,12 @@ fn encode_rjmp_min() {
     assert_eq!(encode_rjmp(-2048), 0xC800);
 }
 #[test]
-#[should_panic]
+#[should_panic(expected = "RJMP displacement out of range")]
 fn encode_rjmp_over_panics() {
     let _ = encode_rjmp(2048);
 }
 #[test]
-#[should_panic]
+#[should_panic(expected = "RJMP displacement out of range")]
 fn encode_rjmp_under_panics() {
     let _ = encode_rjmp(-2049);
 }
@@ -90,24 +90,24 @@ fn encode_rcall_zero() {
     assert_eq!(encode_rcall(0), 0xD000);
 }
 #[test]
-#[should_panic]
+#[should_panic(expected = "RCALL displacement out of range")]
 fn encode_rcall_over_panics() {
     let _ = encode_rcall(2048);
 }
 
 // ── Register encoders bounds ──
 #[test]
-#[should_panic]
+#[should_panic(expected = "ADD register out of range")]
 fn encode_add_over_panics() {
     let _ = encode_add(32, 0);
 }
 #[test]
-#[should_panic]
+#[should_panic(expected = "LDI destination must be r16")]
 fn encode_ldi_low_panics() {
     let _ = encode_ldi(15, 0);
 }
 #[test]
-#[should_panic]
+#[should_panic(expected = "LDI destination must be r16")]
 fn encode_ldi_high_panics() {
     let _ = encode_ldi(32, 0);
 }
@@ -290,7 +290,7 @@ fn linear_iterates_two_nops() {
     let bytes = [0x00, 0x00, 0x00, 0x00];
     let arch = arch();
     let d = AvrLinearDisassembler::new(&arch, &bytes, a(0));
-    let count = d.filter(|r| r.is_ok()).count();
+    let count = d.flatten().count();
     assert_eq!(count, 2);
 }
 #[test]
@@ -305,9 +305,8 @@ fn linear_odd_trailing_byte_advances() {
     let bytes = [0x00, 0x00, 0xFF];
     let arch = arch();
     let d = AvrLinearDisassembler::new(&arch, &bytes, a(0));
-    let v: Vec<_> = d.collect();
     // first NOP decodes ok, then last byte either errors or stops.
-    assert!(!v.is_empty());
+    assert!(d.count() > 0);
 }
 
 // ── lookup_* helpers ──
@@ -553,7 +552,8 @@ fn cycle_count_empty_zero() {
 fn cycle_min_le_max_all_table() {
     // covered in inline tests but assert via helpers
     let nop = make_instr("NOP", "");
-    assert!(avr_cycle_count_min(&[nop.clone()]) <= avr_cycle_count_max(&[nop]));
+    let one = std::slice::from_ref(&nop);
+    assert!(avr_cycle_count_min(one) <= avr_cycle_count_max(one));
 }
 #[test]
 fn sreg_modifying_unknown_is_zero() {
@@ -606,7 +606,7 @@ fn constants_relate() {
 #[test]
 fn int_vector_numbers_sequential() {
     for (i, v) in ATMEGA328P_INT_VECTORS.iter().enumerate() {
-        assert_eq!(v.number as usize, i, "vector {} number mismatch", i);
+        assert_eq!(v.number as usize, i, "vector {i} number mismatch");
     }
 }
 #[test]

@@ -905,7 +905,7 @@ mod tests {
         // ba (branch always): op2=010, cond=1000, annul=0
         let raw: u32 = (0b10000_u32 << 25) // cond=A, annul=0
             | (0b010 << 22)
-            | 100;
+            | 0x64;
         let insn = dec().decode(raw).unwrap();
         assert_eq!(insn.mnemonic, "ba");
         assert!(insn.has_delay_slot);
@@ -916,7 +916,7 @@ mod tests {
         // be: cond=0001
         let raw: u32 = (0b00010_u32 << 25)  // cond=E, annul=0
             | (0b010 << 22)
-            | 50;
+            | 0x32;
         let insn = dec().decode(raw).unwrap();
         assert!(insn.mnemonic.starts_with("be"));
     }

@@ -120,6 +120,61 @@ impl fmt::Display for LuaVersion {
 // For Bx / sBx: bits 15..31 = 17 bits.
 // MAXARG_sBx = ((1 << 17) - 1) / 2 = 65535
 
+/// Convert a float that holds an exact integer value into an `i64`.
+///
+/// Returns `None` when the value is not finite, is not integral, or does not
+/// fit in an `i64`. The conversion is done on the IEEE-754 fields directly so
+/// every step is a checked integer operation rather than a truncating `as`.
+#[must_use]
+pub fn f64_to_exact_i64(f: f64) -> Option<i64> {
+    if !f.is_finite() || f.fract() != 0.0 {
+        return None;
+    }
+    if f == 0.0 {
+        return Some(0);
+    }
+    let bits = f.to_bits();
+    let negative = (bits >> 63) == 1;
+    // The 11 exponent bits fit an i32 with room to spare.
+    let raw_exp = i32::try_from((bits >> 52) & 0x7FF).unwrap_or(0);
+    let exp = raw_exp - 1023;
+    if !(0..=62).contains(&exp) {
+        return None;
+    }
+    let mantissa = (bits & 0x000F_FFFF_FFFF_FFFF) | 0x0010_0000_0000_0000;
+    let shift = 52 - exp; // 0..=52 because exp is in 0..=62
+    let magnitude = if shift >= 0 {
+        mantissa >> shift
+    } else {
+        mantissa << (-shift)
+    };
+    let value = i64::try_from(magnitude).ok()?;
+    Some(if negative { -value } else { value })
+}
+/// Convert a Lua integer to the Lua float representation.
+///
+/// Lua 5.x defines integer-to-float coercion as round-to-nearest, exactly what
+/// `as` would do. Splitting the magnitude into two 32-bit halves keeps every
+/// step a *checked* conversion (`u32::try_from` on a value already masked to
+/// 32 bits can never fail) while producing the same IEEE-754 double.
+#[must_use]
+pub fn lua_int_to_f64(v: i64) -> f64 {
+    let mag = v.unsigned_abs();
+    let hi = u32::try_from(mag >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(mag & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    let m = f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo));
+    if v < 0 { -m } else { m }
+}
+
+/// Convert a count to `f64` for ratio and percentage reporting.
+///
+/// Counts come from a byte slice length, so they are bounded by the input size;
+/// saturating at `u32::MAX` keeps the conversion total and lossless.
+#[must_use]
+pub fn count_as_f64(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap_or(u32::MAX))
+}
+
 pub const MAXARG_SBX: i32 = ((1 << 17) - 1) >> 1; // 65535
 
 // Lua 5.4 —" 25-bit sJ offset (used by JMP in 5.4)
@@ -158,7 +213,7 @@ pub const fn get_bx54(w: u32) -> u32 {
 
 #[inline]
 pub(crate) const fn get_sbx54(w: u32) -> i32 {
-    get_bx54(w) as i32 - MAXARG_SBX
+    get_bx54(w).cast_signed() - MAXARG_SBX
 }
 
 #[inline]
@@ -169,13 +224,13 @@ pub const fn get_ax54(w: u32) -> u32 {
 
 #[inline]
 pub(crate) const fn get_sj54(w: u32) -> i32 {
-    ((w >> 7) & 0x01ff_ffff) as i32 - MAXARG_SJ
+    ((w >> 7) & 0x01ff_ffff).cast_signed() - MAXARG_SJ
 }
 
 /// Signed C field (8-bit with bias 127).
 #[inline]
 pub(crate) const fn get_sc54(w: u32) -> i32 {
-    (get_c54(w) as i32) - 127
+    get_c54(w).cast_signed() - 127
 }
 
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -191,7 +246,7 @@ pub(crate) const fn get_sc54(w: u32) -> i32 {
 // For sBx: sBx = Bx - MAXARG_SBX_OLD
 
 const MAXARG_BX_OLD: u32 = (1 << 18) - 1; // 262143
-const MAXARG_SBX_OLD: i32 = (MAXARG_BX_OLD as i32) >> 1; // 131071
+const MAXARG_SBX_OLD: i32 = MAXARG_BX_OLD.cast_signed() >> 1; // 131071
 
 #[inline]
 const fn get_op_old(w: u32) -> u8 {
@@ -220,7 +275,7 @@ const fn get_bx_old(w: u32) -> u32 {
 
 #[inline]
 const fn get_sbx_old(w: u32) -> i32 {
-    get_bx_old(w) as i32 - MAXARG_SBX_OLD
+    get_bx_old(w).cast_signed() - MAXARG_SBX_OLD
 }
 
 // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -485,10 +540,8 @@ enum Lua54Fmt {
 const fn lua54_fmt(op: u8) -> Lua54Fmt {
     match op {
         54 => Lua54Fmt::IsJ,
-        1 | 2 => Lua54Fmt::AsBx,
-        71 | 72 | 73 | 75 => Lua54Fmt::AsBx,
-        3 => Lua54Fmt::ABx,
-        77 => Lua54Fmt::ABx,
+        1 | 2 | 71 | 72 | 73 | 75 => Lua54Fmt::AsBx,
+        3 | 77 => Lua54Fmt::ABx,
         55..=65 => Lua54Fmt::TestJump,
         80 => Lua54Fmt::Ax,
         _ => Lua54Fmt::Abc,
@@ -606,13 +659,13 @@ enum LuaLegacyFmt {
 /// Determine the format of a Lua 5.1 opcode.
 const fn lua51_fmt(op: u8) -> LuaLegacyFmt {
     match op {
-        1 => LuaLegacyFmt::ABx,   // LOADK
-        5 => LuaLegacyFmt::ABx,   // GETGLOBAL
-        7 => LuaLegacyFmt::ABx,   // SETGLOBAL
-        22 => LuaLegacyFmt::AsBx, // JMP
-        31 => LuaLegacyFmt::AsBx, // FORLOOP
-        32 => LuaLegacyFmt::AsBx, // FORPREP
-        36 => LuaLegacyFmt::ABx,  // CLOSURE
+        // LOADK
+        // GETGLOBAL
+        // SETGLOBAL
+        22 | 31 | 32 => LuaLegacyFmt::AsBx, // JMP
+        // FORLOOP
+        // FORPREP
+        1 | 5 | 7 | 36 => LuaLegacyFmt::ABx,  // CLOSURE
         _ => LuaLegacyFmt::Abc,
     }
 }
@@ -620,13 +673,13 @@ const fn lua51_fmt(op: u8) -> LuaLegacyFmt {
 /// Determine the format of a Lua 5.2 opcode.
 const fn lua52_fmt(op: u8) -> LuaLegacyFmt {
     match op {
-        1 => LuaLegacyFmt::ABx,   // LOADK
-        2 => LuaLegacyFmt::ABx,   // LOADKX
-        23 => LuaLegacyFmt::AsBx, // JMP
-        32 => LuaLegacyFmt::AsBx, // FORLOOP
-        33 => LuaLegacyFmt::AsBx, // FORPREP
-        35 => LuaLegacyFmt::AsBx, // TFORLOOP
-        37 => LuaLegacyFmt::ABx,  // CLOSURE
+        // LOADK
+        // LOADKX
+        23 | 32 | 33 | 35 => LuaLegacyFmt::AsBx, // JMP
+        // FORLOOP
+        // FORPREP
+        // TFORLOOP
+        1 | 2 | 37 => LuaLegacyFmt::ABx,  // CLOSURE
         39 => LuaLegacyFmt::Ax,   // EXTRAARG
         _ => LuaLegacyFmt::Abc,
     }
@@ -635,13 +688,13 @@ const fn lua52_fmt(op: u8) -> LuaLegacyFmt {
 /// Determine the format of a Lua 5.3 opcode.
 const fn lua53_fmt(op: u8) -> LuaLegacyFmt {
     match op {
-        1 => LuaLegacyFmt::ABx,   // LOADK
-        2 => LuaLegacyFmt::ABx,   // LOADKX
-        30 => LuaLegacyFmt::AsBx, // JMP
-        39 => LuaLegacyFmt::AsBx, // FORLOOP
-        40 => LuaLegacyFmt::AsBx, // FORPREP
-        42 => LuaLegacyFmt::AsBx, // TFORLOOP
-        44 => LuaLegacyFmt::ABx,  // CLOSURE
+        // LOADK
+        // LOADKX
+        30 | 39 | 40 | 42 => LuaLegacyFmt::AsBx, // JMP
+        // FORLOOP
+        // FORPREP
+        // TFORLOOP
+        1 | 2 | 44 => LuaLegacyFmt::ABx,  // CLOSURE
         46 => LuaLegacyFmt::Ax,   // EXTRAARG
         _ => LuaLegacyFmt::Abc,
     }
@@ -659,6 +712,11 @@ pub const fn is_legacy_jump_op(version: LuaVersion, op: u8) -> bool {
 }
 
 /// Decode a legacy (5.1—"5.3) Lua instruction word.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_lua_legacy(
     version: LuaVersion,
     word: u32,
@@ -853,7 +911,7 @@ impl Architecture for LuaArch {
                         .address
                         .as_u64()
                         .wrapping_add(4)
-                        .wrapping_add(off as u64 * 4);
+                        .wrapping_add(off.cast_unsigned().wrapping_mul(4));
                     if instr.flags.contains(InstrFlags::CONDITIONAL) {
                         return vec![BranchInfo::conditional_jump(
                             target,
@@ -949,13 +1007,21 @@ pub const fn make_iabc(op: u8, a: u32, b: u32, c: u32, k: u32) -> u32 {
 /// Build a Lua 5.4 iAsBx instruction word.
 ///
 /// `sBx` is converted to unsigned by adding `MAXARG_SBX`.
+///
+/// # Panics
+///
+/// Panics when an argument is outside the range the instruction encoding
+/// can represent; callers must validate untrusted values first.
 #[must_use] 
 pub fn make_iasbx(op: u8, a: u32, sbx: i32) -> u32 {
     assert!(
         (-MAXARG_SBX..=MAXARG_SBX).contains(&sbx),
         "make_iasbx: sbx {sbx} is out of range [-{MAXARG_SBX}, {MAXARG_SBX}]"
     );
-    let bx = sbx.checked_add(MAXARG_SBX).expect("make_iasbx: sbx addition overflowed") as u32;
+    let bx = sbx
+        .checked_add(MAXARG_SBX)
+        .expect("make_iasbx: sbx addition overflowed")
+        .cast_unsigned();
     u32::from(op) | (a << 7) | (bx << 15)
 }
 
@@ -974,13 +1040,21 @@ pub const fn make_iax(op: u8, ax: u32) -> u32 {
 /// Build a Lua 5.4 isJ instruction word (JMP).
 ///
 /// `sj` is relative to the instruction after JMP, in instruction units.
+///
+/// # Panics
+///
+/// Panics when an argument is outside the range the instruction encoding
+/// can represent; callers must validate untrusted values first.
 #[must_use] 
 pub fn make_isj(op: u8, sj: i32) -> u32 {
     assert!(
         (-MAXARG_SJ..=MAXARG_SJ).contains(&sj),
         "make_isj: sj {sj} out of range [-{MAXARG_SJ}, {MAXARG_SJ}]"
     );
-    let uj = sj.checked_add(MAXARG_SJ).expect("make_isj: sj addition overflowed") as u32;
+    let uj = sj
+        .checked_add(MAXARG_SJ)
+        .expect("make_isj: sj addition overflowed")
+        .cast_unsigned();
     u32::from(op) | (uj << 7)
 }
 
@@ -999,13 +1073,21 @@ pub const fn make_legacy_iabx(op: u8, a: u32, bx: u32) -> u32 {
 }
 
 /// Build a legacy (5.1—"5.3) iAsBx instruction word.
+///
+/// # Panics
+///
+/// Panics when an argument is outside the range the instruction encoding
+/// can represent; callers must validate untrusted values first.
 #[must_use] 
 pub fn make_legacy_iasbx(op: u8, a: u32, sbx: i32) -> u32 {
     assert!(
         (-MAXARG_SBX_OLD..=MAXARG_SBX_OLD).contains(&sbx),
         "make_legacy_iasbx: sbx {sbx} is out of range [-{MAXARG_SBX_OLD}, {MAXARG_SBX_OLD}]"
     );
-    let bx = sbx.checked_add(MAXARG_SBX_OLD).expect("make_legacy_iasbx: sbx addition overflowed") as u32;
+    let bx = sbx
+        .checked_add(MAXARG_SBX_OLD)
+        .expect("make_legacy_iasbx: sbx addition overflowed")
+        .cast_unsigned();
     u32::from(op) | (a << 6) | (bx << 14)
 }
 
@@ -1042,7 +1124,7 @@ pub fn find_opcodes(version: LuaVersion, needle: &str) -> Vec<(u8, &'static str)
         .iter()
         .enumerate()
         .filter(|(_, name)| name.contains(needle_up.as_str()))
-        .map(|(i, name)| (i as u8, *name))
+        .filter_map(|(i, name)| u8::try_from(i).ok().map(|idx| (idx, *name)))
         .collect()
 }
 
@@ -1127,6 +1209,11 @@ impl fmt::Display for ChunkHeaderError {
 ///
 /// The function is deliberately lenient: it only validates the magic and
 /// version byte.  The remaining fields are read without further validation.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn parse_chunk_header(data: &[u8]) -> Result<LuaChunkHeader, ChunkHeaderError> {
     // Minimum: 4 bytes magic + 1 version + 3 size fields = 8 bytes
     if data.len() < 8 {
@@ -1424,7 +1511,7 @@ impl LuaChunkStats {
         if self.total == 0 {
             0.0
         } else {
-            self.branches as f64 / self.total as f64
+            count_as_f64(self.branches) / count_as_f64(self.total)
         }
     }
 }
@@ -1468,6 +1555,11 @@ impl fmt::Display for LuaChunkStats {
 /// Bx  = bits 14..31 (18 bits, unsigned)
 /// sBx = Bx - 131071
 /// ```
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_lua51(
     word: u32,
     _address: Address,
@@ -1516,8 +1608,7 @@ pub fn decode_lua51(
             //   TAILCALL=29                              â†' call + ret
             //   RETURN=30                                â†' ret
             let fl = match op {
-                23..=25 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                26 | 27 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                23..=27 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 33 => InstrFlags::BRANCH,
                 28 => InstrFlags::CALL,
                 29 => InstrFlags::CALL | InstrFlags::RET,
@@ -1550,6 +1641,11 @@ pub fn decode_lua51(
 /// Lua 5.2 keeps the same 6-bit opcode layout as 5.1 but reorganises the
 /// opcode table (adds GETTABUP/SETTABUP, removes GETGLOBAL/SETGLOBAL, adds
 /// LOADKX and EXTRAARG, TFORCALL replaces old TFORLOOP semantics).
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_lua52(
     word: u32,
     _address: Address,
@@ -1598,8 +1694,7 @@ pub fn decode_lua52(
             //   TAILCALL=30                             â†' call + ret
             //   RETURN=31                               â†' ret
             let fl = match op {
-                24..=26 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                27 | 28 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                24..=28 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 29 => InstrFlags::CALL,
                 30 => InstrFlags::CALL | InstrFlags::RET,
                 31 => InstrFlags::RET,
@@ -1608,9 +1703,8 @@ pub fn decode_lua52(
 
             match op {
                 // LOADNIL(4): range A..A+B-1 —" show B as immediate.
-                4 => (format!("R{a}, {b}"), fl),
                 // GETUPVAL(5), SETUPVAL(9): upvalue index in B.
-                5 | 9 => (format!("R{a}, {b}"), fl),
+                4 | 5 | 9 => (format!("R{a}, {b}"), fl),
                 // GETTABUP(6): A, upval-B, RK(C)
                 6 => (format!("R{a}, U{b}, RK{c}"), fl),
                 // SETTABUP(8): upval-A, RK(B), RK(C)
@@ -1630,6 +1724,11 @@ pub fn decode_lua52(
 /// Lua 5.3 is a superset of 5.2 in opcode layout: it adds integer/bitwise ops
 /// (BAND, BOR, BXOR, SHL, SHR, IDIV, BNOT) and TFORCALL/TFORLOOP (two ops
 /// instead of one).  There is still no TFORPREP; that was added in 5.4.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_lua53(
     word: u32,
     _address: Address,
@@ -1678,8 +1777,7 @@ pub fn decode_lua53(
             //   TAILCALL=37                             â†' call + ret
             //   RETURN=38                               â†' ret
             let fl = match op {
-                31..=33 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-                34 | 35 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                31..=35 => InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
                 36 => InstrFlags::CALL,
                 37 => InstrFlags::CALL | InstrFlags::RET,
                 38 => InstrFlags::RET,
@@ -1688,9 +1786,8 @@ pub fn decode_lua53(
 
             match op {
                 // LOADNIL(4): A, B where B = number of registers to nil.
-                4 => (format!("R{a}, {b}"), fl),
                 // GETUPVAL(5), SETUPVAL(9): B = upvalue index.
-                5 | 9 => (format!("R{a}, {b}"), fl),
+                4 | 5 | 9 => (format!("R{a}, {b}"), fl),
                 // GETTABUP(6): A, upval-B, RK(C)
                 6 => (format!("R{a}, U{b}, RK{c}"), fl),
                 // SETTABUP(8): upval-A, RK(B), RK(C)
@@ -1713,6 +1810,11 @@ pub fn decode_lua53(
 ///
 /// This is the canonical entry point used by [`LuaArch::disassemble`] once
 /// the 4-byte word has been read from the byte slice.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_by_version(
     version: LuaVersion,
     word: u32,
@@ -1848,8 +1950,8 @@ pub fn extract_constants_from_proto(code: &[u8], version: LuaVersion) -> Vec<Lua
     // Opcode numbers for LOADK in each version.
     let loadk_ops: &[u8] = match version {
         LuaVersion::Lua51 => &[1],    // LOADK=1 (no LOADKX)
-        LuaVersion::Lua52 => &[1, 2], // LOADK=1, LOADKX=2
-        LuaVersion::Lua53 => &[1, 2], // LOADK=1, LOADKX=2
+        LuaVersion::Lua52 | LuaVersion::Lua53 => &[1, 2], // LOADK=1, LOADKX=2
+        // LOADK=1, LOADKX=2
         LuaVersion::Lua54 => &[3, 4], // LOADK=3, LOADKX=4
     };
 
@@ -1903,22 +2005,38 @@ pub fn extract_constants_from_proto(code: &[u8], version: LuaVersion) -> Vec<Lua
 /// `luac` writes —" we strip it).
 ///
 /// Returns `None` if the slice is malformed or truncated.
+/// Read a little-endian `i32` from `data` at `pos`, advancing `pos`.
+fn const_pool_read_i32(data: &[u8], pos: &mut usize) -> Option<i32> {
+    let b = data.get(*pos..*pos + 4)?;
+    *pos += 4;
+    Some(i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// Read a little-endian `i64` from `data` at `pos`, advancing `pos`.
+fn const_pool_read_i64(data: &[u8], pos: &mut usize) -> Option<i64> {
+    let b = data.get(*pos..*pos + 8)?;
+    *pos += 8;
+    Some(i64::from_le_bytes([
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+    ]))
+}
+
+/// Read a little-endian IEEE-754 `f64` from `data` at `pos`, advancing `pos`.
+fn const_pool_read_f64(data: &[u8], pos: &mut usize) -> Option<f64> {
+    let bits = const_pool_read_i64(data, pos)?.cast_unsigned();
+    Some(f64::from_bits(bits))
+}
+
 #[must_use] 
 pub fn parse_const_pool_51(data: &[u8]) -> Option<Vec<LuaConst>> {
     let mut pos = 0usize;
 
-    /// Read a little-endian i32 from `data` at `pos`, advance pos.
-    fn read_i32(data: &[u8], pos: &mut usize) -> Option<i32> {
-        let b = data.get(*pos..*pos + 4)?;
-        *pos += 4;
-        Some(i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    }
 
     // A negative count cast straight to usize wraps to ~1.8e19 and makes
     // `Vec::with_capacity` abort with a capacity overflow; clamp at 0 first.
     // Each constant needs at least a one-byte type tag, so the bytes left in
     // `data` also bound how many can really be present.
-    let n = read_i32(data, &mut pos)?.max(0) as usize;
+    let n = usize::try_from(const_pool_read_i32(data, &mut pos)?.max(0)).unwrap_or(0);
     let mut out = Vec::with_capacity(n.min(data.len().saturating_sub(pos)));
 
     for _ in 0..n {
@@ -1942,7 +2060,7 @@ pub fn parse_const_pool_51(data: &[u8]) -> Option<Vec<LuaConst>> {
             }
             4 => {
                 // Lua string: int32 length (including NUL), then bytes.
-                let len = read_i32(data, &mut pos)? as usize;
+                let len = usize::try_from(const_pool_read_i32(data, &mut pos)?.max(0)).unwrap_or(0);
                 let bytes = data.get(pos..pos + len)?;
                 pos += len;
                 // Strip trailing NUL that luac includes in the length.
@@ -1974,30 +2092,14 @@ pub fn parse_const_pool_51(data: &[u8]) -> Option<Vec<LuaConst>> {
 pub fn parse_const_pool_53(data: &[u8]) -> Option<Vec<LuaConst>> {
     let mut pos = 0usize;
 
-    fn read_i32(data: &[u8], pos: &mut usize) -> Option<i32> {
-        let b = data.get(*pos..*pos + 4)?;
-        *pos += 4;
-        Some(i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    }
 
-    fn read_i64(data: &[u8], pos: &mut usize) -> Option<i64> {
-        let b = data.get(*pos..*pos + 8)?;
-        *pos += 8;
-        Some(i64::from_le_bytes([
-            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-        ]))
-    }
 
-    fn read_f64(data: &[u8], pos: &mut usize) -> Option<f64> {
-        let bits = read_i64(data, pos)? as u64;
-        Some(f64::from_bits(bits))
-    }
 
     // A negative count cast straight to usize wraps to ~1.8e19 and makes
     // `Vec::with_capacity` abort with a capacity overflow; clamp at 0 first.
     // Each constant needs at least a one-byte type tag, so the bytes left in
     // `data` also bound how many can really be present.
-    let n = read_i32(data, &mut pos)?.max(0) as usize;
+    let n = usize::try_from(const_pool_read_i32(data, &mut pos)?.max(0)).unwrap_or(0);
     let mut out = Vec::with_capacity(n.min(data.len().saturating_sub(pos)));
 
     for _ in 0..n {
@@ -2011,12 +2113,12 @@ pub fn parse_const_pool_53(data: &[u8]) -> Option<Vec<LuaConst>> {
             0x11 => out.push(LuaConst::Bool(true)),
             // 0x13 = integer (5.3+)
             0x13 => {
-                let v = read_i64(data, &mut pos)?;
+                let v = const_pool_read_i64(data, &mut pos)?;
                 out.push(LuaConst::Int(v));
             }
             // 0x03 = float (5.3) or 0x23 = float (5.4 sub-type)
             0x03 | 0x23 => {
-                let v = read_f64(data, &mut pos)?;
+                let v = const_pool_read_f64(data, &mut pos)?;
                 out.push(LuaConst::Float(v));
             }
             // 0x04 = short string, 0x14 = long string
@@ -2028,7 +2130,10 @@ pub fn parse_const_pool_53(data: &[u8]) -> Option<Vec<LuaConst>> {
                     // Extended size: read a u64 (size_t on 64-bit builds).
                     let b = data.get(pos..pos + 8)?;
                     pos += 8;
-                    u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]) as usize
+                    usize::try_from(u64::from_le_bytes([
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+    ]))
+    .unwrap_or(usize::MAX)
                 } else {
                     sz_byte as usize
                 };
@@ -2061,7 +2166,7 @@ pub fn parse_const_pool_53(data: &[u8]) -> Option<Vec<LuaConst>> {
 /// heuristic assumes at most one local per 4 instructions, capped at 64.
 #[must_use] 
 pub fn generate_local_var_names(proto_size: usize) -> Vec<String> {
-    let count = (proto_size / 4).min(64).max(1);
+    let count = (proto_size / 4).clamp(1, 64);
     (0..count).map(|i| format!("local_{i}")).collect()
 }
 
@@ -3319,7 +3424,7 @@ mod tests {
     #[test]
     fn test_chunk_stats_branch_ratio_zero() {
         let s = LuaChunkStats::default();
-        assert_eq!(s.branch_ratio(), 0.0);
+        assert!(s.branch_ratio().abs() < f64::EPSILON);
     }
 
     #[test]
@@ -3644,7 +3749,7 @@ mod tests {
     #[test]
     fn test_decode_lua51_all_opcodes_decode() {
         // Every valid 5.1 opcode must decode without error.
-        for op in 0u8..LUA51_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA51_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua51_fmt(op) {
                 LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
@@ -3743,11 +3848,10 @@ mod tests {
 
     #[test]
     fn test_decode_lua52_all_opcodes_decode() {
-        for op in 0u8..LUA52_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA52_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua52_fmt(op) {
-                LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
-                LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
+                LuaLegacyFmt::ABx | LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::Abc => make_legacy_iabc(op, 0, 0, 0),
             };
             assert!(
@@ -3848,11 +3952,10 @@ mod tests {
 
     #[test]
     fn test_decode_lua53_all_opcodes_decode() {
-        for op in 0u8..LUA53_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA53_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua53_fmt(op) {
-                LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
-                LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
+                LuaLegacyFmt::ABx | LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::Abc => make_legacy_iabc(op, 0, 0, 0),
             };
             assert!(
@@ -3913,7 +4016,7 @@ mod tests {
 
     #[test]
     fn test_lua_const_float_display() {
-        assert_eq!(LuaConst::Float(3.14_f64).to_string(), "3.14");
+        assert_eq!(LuaConst::Float(2.5_f64).to_string(), "2.5");
     }
 
     #[test]
@@ -4025,7 +4128,7 @@ mod tests {
         // n=1, type=4 (string), length=6 (5 chars + NUL), "hello\0"
         let s = b"hello\0";
         let mut data = vec![1u8, 0, 0, 0, 4];
-        data.extend_from_slice(&(s.len() as i32).to_le_bytes());
+        data.extend_from_slice(&i32::try_from(s.len()).unwrap_or(i32::MAX).to_le_bytes());
         data.extend_from_slice(s);
         let pool = parse_const_pool_51(&data).unwrap();
         assert_eq!(pool[0], LuaConst::String("hello".into()));
@@ -4090,7 +4193,7 @@ mod tests {
     fn test_parse_const_pool_53_string() {
         // Short string: type=0x04, length byte = 6 ("world\0"), then bytes.
         let s = b"world\0";
-        let mut data = vec![1u8, 0, 0, 0, 0x04, s.len() as u8];
+        let mut data = vec![1u8, 0, 0, 0, 0x04, u8::try_from(s.len()).unwrap_or(u8::MAX)];
         data.extend_from_slice(s);
         let pool = parse_const_pool_53(&data).unwrap();
         assert_eq!(pool[0], LuaConst::String("world".into()));
@@ -4804,7 +4907,7 @@ mod tests {
 
     #[test]
     fn test_decode_lua54_all_opcodes_decode() {
-        for op in 0u8..LUA54_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA54_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = make_iabc(op, 0, 0, 0, 0);
             let result = arch54().disassemble(Address::new(0), &w.to_le_bytes());
             assert!(
@@ -4820,7 +4923,7 @@ mod tests {
 
     #[test]
     fn test_lua51_all_opcodes_via_arch() {
-        for op in 0u8..LUA51_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA51_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua51_fmt(op) {
                 LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
@@ -4833,11 +4936,10 @@ mod tests {
 
     #[test]
     fn test_lua52_all_opcodes_via_arch() {
-        for op in 0u8..LUA52_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA52_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua52_fmt(op) {
-                LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
-                LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
+                LuaLegacyFmt::ABx | LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::Abc => make_legacy_iabc(op, 0, 0, 0),
             };
             let result = arch52().disassemble(Address::new(0), &w.to_le_bytes());
@@ -4847,11 +4949,10 @@ mod tests {
 
     #[test]
     fn test_lua53_all_opcodes_via_arch() {
-        for op in 0u8..LUA53_OPCODES.len() as u8 {
+        for op in 0u8..u8::try_from(LUA53_OPCODES.len()).unwrap_or(u8::MAX) {
             let w = match lua53_fmt(op) {
-                LuaLegacyFmt::ABx => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::AsBx => make_legacy_iasbx(op, 0, 0),
-                LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
+                LuaLegacyFmt::ABx | LuaLegacyFmt::Ax => make_legacy_iabx(op, 0, 0),
                 LuaLegacyFmt::Abc => make_legacy_iabc(op, 0, 0, 0),
             };
             let result = arch53().disassemble(Address::new(0), &w.to_le_bytes());

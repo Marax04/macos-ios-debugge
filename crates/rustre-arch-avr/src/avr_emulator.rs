@@ -192,6 +192,13 @@ impl Default for AvrState {
 
 impl AvrState {
     /// Create a new, reset-state AVR CPU.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the fixed-size flash allocation cannot be produced, which
+    /// requires the process to be out of memory: the `Vec` is built with exactly
+    /// `FLASH_SIZE` elements, so the conversion to `Box<[u8; FLASH_SIZE]>` can
+    /// never fail on length.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -462,6 +469,11 @@ impl AvrState {
             return Ok(1);
         }
 
+        self.execute_word_c(word, pc)
+    }
+
+    /// Continuation of [`execute_word`]; split out only to keep each function short.
+    fn execute_word_c(&mut self, word: u16, pc: u32) -> Result<u32, String> {
         // ADD Rd,Rr
         if (word & 0xFC00) == 0x0C00 {
             let d = ((word >> 4) & 0x1F) as usize;
@@ -520,6 +532,11 @@ impl AvrState {
             self.pc = pc + 2;
             return Ok(1);
         }
+        self.execute_word_b(word, pc)
+    }
+
+    /// Continuation of [`execute_word`]; split out only to keep each function short.
+    fn execute_word_b(&mut self, word: u16, pc: u32) -> Result<u32, String> {
         // EOR Rd,Rr
         if (word & 0xFC00) == 0x2400 {
             let d = ((word >> 4) & 0x1F) as usize;
@@ -627,6 +644,11 @@ impl AvrState {
             self.pc = pc + 2;
             return Ok(2);
         }
+        self.execute_word_more(word, pc)
+    }
+
+    /// Continuation of [`execute_word`]; split out only to keep each function short.
+    fn execute_word_more(&mut self, word: u16, pc: u32) -> Result<u32, String> {
         // POP Rd
         if (word & 0xFE0F) == 0x900F {
             let d = ((word >> 4) & 0x1F) as usize;
@@ -737,6 +759,11 @@ impl AvrState {
             self.pc = pc + 2;
             return Ok(1);
         }
+        self.execute_word_rest(word, pc)
+    }
+
+    /// Continuation of [`execute_word_more`]; split out only to keep each function short.
+    fn execute_word_rest(&mut self, word: u16, pc: u32) -> Result<u32, String> {
         // OUT A,Rr
         if (word & 0xF800) == 0xB800 {
             let r = ((word >> 4) & 0x1F) as usize;

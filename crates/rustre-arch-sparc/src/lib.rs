@@ -16,6 +16,7 @@ pub mod sparc_trap_handler;
 pub mod sparc_register_windows;
 pub mod sparc_delay_slot;
 pub mod sparc_trap_table;
+pub mod sparc_narrow;
 
 use rustre_core::arch::{
     Architecture, BranchInfo, CallingConvention, InstrFlags, Instruction, RegisterInfo,
@@ -58,7 +59,7 @@ const fn simm13(instr: u32) -> i32 {
     // Sign-extend the low 13 bits to a full i32.
     // Shift the 13-bit field to the top of an i32 (32-13=19 bits) and then
     // use an arithmetic right-shift to propagate the sign bit back down.
-    ((instr & 0x1FFF) as i32) << 19 >> 19
+    (instr & 0x1FFF).cast_signed() << 19 >> 19
 }
 
 const fn rs1(instr: u32) -> u32 {
@@ -201,437 +202,501 @@ fn decode_sparc(bytes: &[u8], pc: u64) -> Result<(String, String, usize, InstrFl
             ))
         }
 
-        0 => {
-            let op2 = (instr >> 22) & 7;
-            match op2 {
-                // SETHI
-                4 => {
-                    let imm22 = instr & 0x003F_FFFF;
-                    let r = rd(instr);
-                    if imm22 == 0 && r == 0 {
-                        Ok(("NOP".to_string(), String::new(), 4, InstrFlags::NONE))
-                    } else {
-                        Ok((
-                            "SETHI".to_string(),
-                            format!("%hi(${:06X}),{}", imm22 << 10, reg_name(r)),
-                            4,
-                            InstrFlags::NONE,
-                        ))
-                    }
-                }
-                // Bicc: integer condition branch
-                2 => {
-                    let cond = (instr >> 25) & 0xF;
-                    let a = (instr >> 29) & 1;
-                    let disp22_raw = (instr & 0x003F_FFFF) << 2;
-                    let disp22 = if disp22_raw & 0x80_0000 != 0 {
-                        i64::from(i32::from_ne_bytes((disp22_raw | 0xFF00_0000).to_ne_bytes()))
-                    } else {
-                        i64::from(disp22_raw)
-                    };
-                    let target = pc.wrapping_add_signed(disp22);
-                    let a_sfx = if a != 0 { ",a" } else { "" };
-                    let (mn, flags) = if cond == 8 {
-                        (format!("BA{a_sfx}"), InstrFlags::BRANCH)
-                    } else {
-                        (
-                            format!("B{}{}", icc_name(cond), a_sfx),
-                            InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
-                        )
-                    };
-                    Ok((mn, format!("${target:08X}"), 4, flags))
-                }
-                // FBfcc
-                6 => {
-                    let cond = (instr >> 25) & 0xF;
-                    let a = (instr >> 29) & 1;
-                    let disp22_raw = (instr & 0x003F_FFFF) << 2;
-                    let disp22 = if disp22_raw & 0x80_0000 != 0 {
-                        i64::from(i32::from_ne_bytes((disp22_raw | 0xFF00_0000).to_ne_bytes()))
-                    } else {
-                        i64::from(disp22_raw)
-                    };
-                    let target = pc.wrapping_add_signed(disp22);
-                    let a_sfx = if a != 0 { ",a" } else { "" };
-                    let mn = format!("FB{}{}", fcc_name(cond), a_sfx);
-                    Ok((
-                        mn,
-                        format!("${target:08X}"),
-                        4,
-                        InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
-                    ))
-                }
-                // BPcc (v9): predicted branch
-                1 => {
-                    let cond = (instr >> 25) & 0xF;
-                    let disp19_raw = (instr & 0x7_FFFF) << 2;
-                    let disp19 = if disp19_raw & 0x10_0000 != 0 {
-                        i64::from(i32::from_ne_bytes((disp19_raw | 0xFFE0_0000).to_ne_bytes()))
-                    } else {
-                        i64::from(disp19_raw)
-                    };
-                    let target = pc.wrapping_add_signed(disp19);
-                    let mn = format!("BP{}", icc_name(cond));
-                    Ok((
-                        mn,
-                        format!("${target:08X}"),
-                        4,
-                        InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
-                    ))
-                }
-                _ => Ok((
-                    "DC.W".to_string(),
-                    format!("${instr:08X}"),
-                    4,
-                    InstrFlags::NONE,
-                )),
-            }
-        }
+        0 => Ok(decode_sparc_fmt0(instr, pc)),
 
         // ── Format 3: Arithmetic (op=10), Load/Store (op=11) ─────────────────
-        _ => {
-            let op3 = (instr >> 19) & 0x3F;
-            let r1 = rs1(instr);
-            let rdest = rd(instr);
-            let s2 = src2_str(instr);
+        _ => Ok(decode_sparc_fmt3(instr)),
+    }
+}
 
-            // Load/Store ops — only when fmt=3 (op bits [31:30] = 11)
-            if fmt == 3 {
-                match op3 {
-                    0x00 | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 0x09 | 0x0A
-                    | 0x0B | 0x0C | 0x0D | 0x0E | 0x0F | 0x10 | 0x11 | 0x18 | 0x19 | 0x20
-                    | 0x21 | 0x23 | 0x24 | 0x25 | 0x26 | 0x27 | 0x3C | 0x3E => {
-                        let mn = ld_mn(op3);
-                        let addr = addr_str(instr);
-                        // Stores: op3 0x04-0x07 (ST,STB,STH,STD), 0x0C-0x0F (STA..STDA),
-                        //         0x24-0x27 (STF,STFSR,STDFQ,STDF), 0x3E (STX)
-                        let is_store = matches!(op3, 0x04..=0x07 | 0x0C..=0x0F |
-                                                     0x24..=0x27 | 0x3E);
-                        let (ops, flags) = if is_store {
-                            let src = if op3 >= 0x20 {
-                                freg(rdest)
-                            } else {
-                                reg_name(rdest)
-                            };
-                            (format!("{src},{addr}"), InstrFlags::WRITE_MEM)
-                        } else {
-                            let dst = if op3 >= 0x20 {
-                                freg(rdest)
-                            } else {
-                                reg_name(rdest)
-                            };
-                            (format!("{addr},{dst}"), InstrFlags::READ_MEM)
-                        };
-                        return Ok((mn.to_string(), ops, 4, flags));
-                    }
-                    _ => {}
+/// Decode a SPARC format-0 word: `SETHI` and the `Bicc`/`FBfcc` branches.
+///
+/// Split out of [`decode_sparc`] purely to keep each function readable.
+fn decode_sparc_fmt0(
+    instr: u32,
+    pc: u64,
+) -> (String, String, usize, InstrFlags) {
+    // Total: every format-0 word decodes, an unknown `op2` as a `DC.W`
+    // data word, so there is no error for the caller to handle.
+        let op2 = (instr >> 22) & 7;
+        match op2 {
+            // SETHI
+            4 => {
+                let imm22 = instr & 0x003F_FFFF;
+                let r = rd(instr);
+                if imm22 == 0 && r == 0 {
+                    ("NOP".to_string(), String::new(), 4, InstrFlags::NONE)
+                } else {
+                    (
+                        "SETHI".to_string(),
+                        format!("%hi(${:06X}),{}", imm22 << 10, reg_name(r)),
+                        4,
+                        InstrFlags::NONE,
+                    )
                 }
             }
-
-            // ALU ops
-            let (mn, operands, flags) = match op3 {
-                0x00 => (
-                    "ADD",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x01 => (
-                    "AND",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x02 => (
-                    "OR",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x03 => (
-                    "XOR",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x04 => (
-                    "SUB",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x05 => (
-                    "ANDN",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x06 => (
-                    "ORN",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x07 => (
-                    "XNOR",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x08 => (
-                    "ADDX",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x09 => (
-                    "MULX",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0A => (
-                    "UMUL",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0B => (
-                    "SMUL",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0C => (
-                    "SUBX",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0D => (
-                    "UDIVX",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0E => (
-                    "UDIV",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x0F => (
-                    "SDIV",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x10 => (
-                    "ADDCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x11 => (
-                    "ANDCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x12 => (
-                    "ORCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x13 => (
-                    "XORCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x14 => (
-                    "SUBCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x15 => (
-                    "ANDNCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x16 => (
-                    "ORNCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x17 => (
-                    "XNORCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x18 => (
-                    "ADDXCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x1A => (
-                    "UMULCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x1B => (
-                    "SMULCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x1C => (
-                    "SUBXCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x1E => (
-                    "UDIVCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x1F => (
-                    "SDIVCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x20 => (
-                    "TADDCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x21 => (
-                    "TSUBCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x24 => (
-                    "MULSCC",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x25 => (
-                    "SLL",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x26 => (
-                    "SRL",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x27 => (
-                    "SRA",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x28 => {
-                    // RD special register
-                    let asr = (instr >> 14) & 31;
-                    let sfx = match asr {
-                        0 => "%y",
-                        2 => "%ccr",
-                        _ => "%asr",
-                    };
+            // Bicc: integer condition branch
+            2 => {
+                let cond = (instr >> 25) & 0xF;
+                let a = (instr >> 29) & 1;
+                let disp22_raw = (instr & 0x003F_FFFF) << 2;
+                let disp22 = if disp22_raw & 0x80_0000 != 0 {
+                    i64::from(i32::from_ne_bytes((disp22_raw | 0xFF00_0000).to_ne_bytes()))
+                } else {
+                    i64::from(disp22_raw)
+                };
+                let target = pc.wrapping_add_signed(disp22);
+                let a_sfx = if a != 0 { ",a" } else { "" };
+                let (mn, flags) = if cond == 8 {
+                    (format!("BA{a_sfx}"), InstrFlags::BRANCH)
+                } else {
                     (
-                        "RD",
-                        format!("{},{}", sfx, reg_name(rdest)),
-                        InstrFlags::NONE,
+                        format!("B{}{}", icc_name(cond), a_sfx),
+                        InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
                     )
-                }
-                0x29 => ("MEMBAR", format!("{}", instr & 0x7F), InstrFlags::BARRIER),
-                0x2A => (
-                    "RDPR",
-                    format!("{},{}", (instr >> 14) & 31, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x2B | 0x3B => ("FLUSH", addr_str(instr).clone(), InstrFlags::BARRIER),
-                0x2C | 0x3C => (
-                    "SAVE",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x2D | 0x3D => (
-                    "RESTORE",
-                    format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
-                    InstrFlags::NONE,
-                ),
-                0x2E | 0x3E => ("DONE", String::new(), InstrFlags::RET),
-                0x30 => {
-                    // WR special register
-                    let asr = rdest;
-                    let sfx = match asr {
-                        0 => "%y",
-                        2 => "%ccr",
-                        _ => "%asr",
-                    };
-                    (
-                        "WR",
-                        format!("{},{},{}", reg_name(r1), s2, sfx),
-                        InstrFlags::NONE,
-                    )
-                }
-                0x32 => (
-                    "WRPR",
-                    format!("{},{},{}", reg_name(r1), s2, rdest),
-                    InstrFlags::NONE,
-                ),
-                0x34 => {
-                    // FP op 1 (single)
-                    let opf = (instr >> 5) & 0x1FF;
-                    let mn2 = match opf {
-                        0x01 => "FMOVS",
-                        0x05 => "FNEGS",
-                        0x09 => "FABSS",
-                        0x29 => "FSQRTS",
-                        0x2A => "FSQRTD",
-                        0x41 => "FADDS",
-                        0x42 => "FADDD",
-                        0x45 => "FSUBS",
-                        0x46 => "FSUBD",
-                        0x49 => "FMULS",
-                        0x4A => "FMULD",
-                        0x4D => "FDIVS",
-                        0x4E => "FDIVD",
-                        0x51 => "FCMPS",
-                        0x52 => "FCMPD",
-                        0x55 => "FCMPES",
-                        0x56 => "FCMPED",
-                        0xC4 => "FITOS",
-                        0xC8 => "FITOD",
-                        0xD1 => "FSTOI",
-                        0xD2 => "FDTOI",
-                        _ => "FOP",
-                    };
-                    let fs1 = (instr >> 14) & 31;
-                    let fs2 = instr & 31;
-                    let frd = rdest;
-                    (
-                        mn2,
-                        format!("{},{},{}", freg(fs1), freg(fs2), freg(frd)),
-                        InstrFlags::NONE,
-                    )
-                }
-                0x38 => {
-                    // JMPL
-                    let a = addr_str(instr);
-                    if rdest == 0 {
-                        ("RETURN", a.clone(), InstrFlags::RET)
-                    } else if rdest == 15 {
-                        (
-                            "CALL",
-                            a.clone(),
-                            InstrFlags::CALL.union(InstrFlags::INDIRECT),
-                        )
-                    } else {
-                        (
-                            "JMPL",
-                            format!("{},{}", a, reg_name(rdest)),
-                            InstrFlags::BRANCH.union(InstrFlags::INDIRECT),
-                        )
-                    }
-                }
-                0x39 => ("RETT", addr_str(instr).clone(), InstrFlags::RET),
-                0x3A => {
-                    // Tcc (trap)
-                    let cond = (instr >> 25) & 0xF;
-                    (
-                        "T",
-                        format!("{},{}", icc_name(cond), src2_str(instr)),
-                        InstrFlags::BRANCH,
-                    )
-                }
-                0x3F => ("RETRY", String::new(), InstrFlags::RET),
-                _ => ("DC.W", format!("${instr:08X}"), InstrFlags::NONE),
-            };
-            Ok((mn.to_string(), operands, 4, flags))
+                };
+                (mn, format!("${target:08X}"), 4, flags)
+            }
+            // FBfcc
+            6 => {
+                let cond = (instr >> 25) & 0xF;
+                let a = (instr >> 29) & 1;
+                let disp22_raw = (instr & 0x003F_FFFF) << 2;
+                let disp22 = if disp22_raw & 0x80_0000 != 0 {
+                    i64::from(i32::from_ne_bytes((disp22_raw | 0xFF00_0000).to_ne_bytes()))
+                } else {
+                    i64::from(disp22_raw)
+                };
+                let target = pc.wrapping_add_signed(disp22);
+                let a_sfx = if a != 0 { ",a" } else { "" };
+                let mn = format!("FB{}{}", fcc_name(cond), a_sfx);
+                (
+                    mn,
+                    format!("${target:08X}"),
+                    4,
+                    InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
+                )
+            }
+            // BPcc (v9): predicted branch
+            1 => {
+                let cond = (instr >> 25) & 0xF;
+                let disp19_raw = (instr & 0x7_FFFF) << 2;
+                let disp19 = if disp19_raw & 0x10_0000 != 0 {
+                    i64::from(i32::from_ne_bytes((disp19_raw | 0xFFE0_0000).to_ne_bytes()))
+                } else {
+                    i64::from(disp19_raw)
+                };
+                let target = pc.wrapping_add_signed(disp19);
+                let mn = format!("BP{}", icc_name(cond));
+                (
+                    mn,
+                    format!("${target:08X}"),
+                    4,
+                    InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
+                )
+            }
+            _ => (
+                "DC.W".to_string(),
+                format!("${instr:08X}"),
+                4,
+                InstrFlags::NONE,
+            ),
         }
-    }
+}
+
+/// Decode a SPARC format-3 word: arithmetic (`op=10`) and load/store (`op=11`).
+///
+/// Split out of [`decode_sparc`] purely to keep each function readable; the
+/// program counter is not needed here because no format-3 encoding is
+/// PC-relative.
+fn decode_sparc_fmt3(instr: u32) -> (String, String, usize, InstrFlags) {
+    let fmt = instr >> 30;
+        let op3 = (instr >> 19) & 0x3F;
+        let r1 = rs1(instr);
+        let rdest = rd(instr);
+        let s2 = src2_str(instr);
+
+        // Load/Store ops — only when fmt=3 (op bits [31:30] = 11)
+        if fmt == 3 {
+            match op3 {
+                0x00 | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 0x09 | 0x0A
+                | 0x0B | 0x0C | 0x0D | 0x0E | 0x0F | 0x10 | 0x11 | 0x18 | 0x19 | 0x20
+                | 0x21 | 0x23 | 0x24 | 0x25 | 0x26 | 0x27 | 0x3C | 0x3E => {
+                    let mn = ld_mn(op3);
+                    let addr = addr_str(instr);
+                    // Stores: op3 0x04-0x07 (ST,STB,STH,STD), 0x0C-0x0F (STA..STDA),
+                    //         0x24-0x27 (STF,STFSR,STDFQ,STDF), 0x3E (STX)
+                    let is_store = matches!(op3, 0x04..=0x07 | 0x0C..=0x0F |
+                                                 0x24..=0x27 | 0x3E);
+                    let (ops, flags) = if is_store {
+                        let src = if op3 >= 0x20 {
+                            freg(rdest)
+                        } else {
+                            reg_name(rdest)
+                        };
+                        (format!("{src},{addr}"), InstrFlags::WRITE_MEM)
+                    } else {
+                        let dst = if op3 >= 0x20 {
+                            freg(rdest)
+                        } else {
+                            reg_name(rdest)
+                        };
+                        (format!("{addr},{dst}"), InstrFlags::READ_MEM)
+                    };
+                    return (mn.to_string(), ops, 4, flags);
+                }
+                _ => {}
+            }
+        }
+
+
+        decode_sparc_alu(instr, op3, r1, rdest, &s2)
+}
+
+/// Decode the arithmetic/logic half of a SPARC format-3 word.
+///
+/// Total: an unrecognised `op3` is reported as a `DC.W` data word, so this
+/// always yields a decoding.
+fn decode_sparc_alu(
+    instr: u32,
+    op3: u32,
+    r1: u32,
+    rdest: u32,
+    s2: &str,
+) -> (String, String, usize, InstrFlags) {
+    let (mn, operands, flags) = match op3 {
+        0x00 => (
+            "ADD",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x01 => (
+            "AND",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x02 => (
+            "OR",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x03 => (
+            "XOR",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x04 => (
+            "SUB",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x05 => (
+            "ANDN",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x06 => (
+            "ORN",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x07 => (
+            "XNOR",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x08 => (
+            "ADDX",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x09 => (
+            "MULX",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x0A => (
+            "UMUL",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x0B => (
+            "SMUL",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        _ => return decode_sparc_alu_b(instr, op3, r1, rdest, s2),
+    };
+    (mn.to_string(), operands, 4, flags)
+}
+
+/// Continuation of [`decode_sparc_alu`]; split out only to keep each function short.
+fn decode_sparc_alu_b(instr: u32, op3: u32, r1: u32, rdest: u32, s2: &str) -> (String, String, usize, InstrFlags) {
+    let (mn, operands, flags) = match op3 {
+        0x0C => (
+            "SUBX",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x0D => (
+            "UDIVX",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x0E => (
+            "UDIV",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x0F => (
+            "SDIV",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x10 => (
+            "ADDCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x11 => (
+            "ANDCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x12 => (
+            "ORCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x13 => (
+            "XORCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x14 => (
+            "SUBCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x15 => (
+            "ANDNCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x16 => (
+            "ORNCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x17 => (
+            "XNORCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x18 => (
+            "ADDXCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        _ => return decode_sparc_alu_more(instr, op3, r1, rdest, s2),
+    };
+    (mn.to_string(), operands, 4, flags)
+}
+
+/// Continuation of [`decode_sparc_alu`]; split out only to keep each function short.
+fn decode_sparc_alu_more(instr: u32, op3: u32, r1: u32, rdest: u32, s2: &str) -> (String, String, usize, InstrFlags) {
+    let (mn, operands, flags) = match op3 {
+        0x1A => (
+            "UMULCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x1B => (
+            "SMULCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x1C => (
+            "SUBXCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x1E => (
+            "UDIVCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x1F => (
+            "SDIVCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x20 => (
+            "TADDCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x21 => (
+            "TSUBCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x24 => (
+            "MULSCC",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x25 => (
+            "SLL",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x26 => (
+            "SRL",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x27 => (
+            "SRA",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x28 => {
+            // RD special register
+            let asr = (instr >> 14) & 31;
+            let sfx = match asr {
+                0 => "%y",
+                2 => "%ccr",
+                _ => "%asr",
+            };
+            (
+                "RD",
+                format!("{},{}", sfx, reg_name(rdest)),
+                InstrFlags::NONE,
+            )
+        }
+        _ => return decode_sparc_alu_more_more(instr, op3, r1, rdest, s2),
+    };
+    (mn.to_string(), operands, 4, flags)
+}
+
+/// Continuation of [`decode_sparc_alu_more`]; split out only to keep each function short.
+fn decode_sparc_alu_more_more(instr: u32, op3: u32, r1: u32, rdest: u32, s2: &str) -> (String, String, usize, InstrFlags) {
+    let (mn, operands, flags) = match op3 {
+        0x29 => ("MEMBAR", format!("{}", instr & 0x7F), InstrFlags::BARRIER),
+        0x2A => (
+            "RDPR",
+            format!("{},{}", (instr >> 14) & 31, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x2B | 0x3B => ("FLUSH", addr_str(instr), InstrFlags::BARRIER),
+        0x2C | 0x3C => (
+            "SAVE",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x2D | 0x3D => (
+            "RESTORE",
+            format!("{},{},{}", reg_name(r1), s2, reg_name(rdest)),
+            InstrFlags::NONE,
+        ),
+        0x2E | 0x3E => ("DONE", String::new(), InstrFlags::RET),
+        _ => return decode_sparc_alu_more_more_more(instr, op3, r1, rdest, s2),
+    };
+    (mn.to_string(), operands, 4, flags)
+}
+
+/// Continuation of [`decode_sparc_alu_more_more`]; split out only to keep each function short.
+fn decode_sparc_alu_more_more_more(instr: u32, op3: u32, r1: u32, rdest: u32, s2: &str) -> (String, String, usize, InstrFlags) {
+    let (mn, operands, flags) = match op3 {
+        0x30 => {
+            // WR special register
+            let asr = rdest;
+            let sfx = match asr {
+                0 => "%y",
+                2 => "%ccr",
+                _ => "%asr",
+            };
+            (
+                "WR",
+                format!("{},{},{}", reg_name(r1), s2, sfx),
+                InstrFlags::NONE,
+            )
+        }
+        0x32 => (
+            "WRPR",
+            format!("{},{},{}", reg_name(r1), s2, rdest),
+            InstrFlags::NONE,
+        ),
+        0x34 => {
+            // FP op 1 (single)
+            let opf = (instr >> 5) & 0x1FF;
+            let mn2 = match opf {
+                0x01 => "FMOVS",
+                0x05 => "FNEGS",
+                0x09 => "FABSS",
+                0x29 => "FSQRTS",
+                0x2A => "FSQRTD",
+                0x41 => "FADDS",
+                0x42 => "FADDD",
+                0x45 => "FSUBS",
+                0x46 => "FSUBD",
+                0x49 => "FMULS",
+                0x4A => "FMULD",
+                0x4D => "FDIVS",
+                0x4E => "FDIVD",
+                0x51 => "FCMPS",
+                0x52 => "FCMPD",
+                0x55 => "FCMPES",
+                0x56 => "FCMPED",
+                0xC4 => "FITOS",
+                0xC8 => "FITOD",
+                0xD1 => "FSTOI",
+                0xD2 => "FDTOI",
+                _ => "FOP",
+            };
+            let fs1 = (instr >> 14) & 31;
+            let fs2 = instr & 31;
+            let frd = rdest;
+            (
+                mn2,
+                format!("{},{},{}", freg(fs1), freg(fs2), freg(frd)),
+                InstrFlags::NONE,
+            )
+        }
+        0x38 => {
+            // JMPL
+            let a = addr_str(instr);
+            if rdest == 0 {
+                ("RETURN", a, InstrFlags::RET)
+            } else if rdest == 15 {
+                (
+                    "CALL",
+                    a,
+                    InstrFlags::CALL.union(InstrFlags::INDIRECT),
+                )
+            } else {
+                (
+                    "JMPL",
+                    format!("{},{}", a, reg_name(rdest)),
+                    InstrFlags::BRANCH.union(InstrFlags::INDIRECT),
+                )
+            }
+        }
+        0x39 => ("RETT", addr_str(instr), InstrFlags::RET),
+        0x3A => {
+            // Tcc (trap)
+            let cond = (instr >> 25) & 0xF;
+            (
+                "T",
+                format!("{},{}", icc_name(cond), src2_str(instr)),
+                InstrFlags::BRANCH,
+            )
+        }
+        0x3F => ("RETRY", String::new(), InstrFlags::RET),
+        _ => ("DC.W", format!("${instr:08X}"), InstrFlags::NONE),
+    };
+    (mn.to_string(), operands, 4, flags)
 }
 
 // ── Main architecture struct ──────────────────────────────────────────────────
@@ -1474,7 +1539,7 @@ impl SparcBasicBlock {
 
             if in_delay_slot {
                 // End of block (delay slot consumed)
-                blocks.push(SparcBasicBlock {
+                blocks.push(Self {
                     start: current_start,
                     instructions: std::mem::take(&mut current_instrs),
                 });
@@ -1486,7 +1551,7 @@ impl SparcBasicBlock {
         }
 
         if !current_instrs.is_empty() {
-            blocks.push(SparcBasicBlock {
+            blocks.push(Self {
                 start: current_start,
                 instructions: current_instrs,
             });
@@ -1520,7 +1585,7 @@ impl SparcBasicBlock {
 #[must_use]
 pub fn encode_call(disp: i32) -> u32 {
     assert!(disp % 4 == 0, "CALL displacement must be 4-byte aligned");
-    let disp30 = (disp >> 2) as u32;
+    let disp30 = (disp >> 2).cast_unsigned();
     (1u32 << 30) | (disp30 & 0x3FFF_FFFF)
 }
 
@@ -1532,7 +1597,7 @@ pub const fn encode_sethi(rd: u32, imm22: u32) -> u32 {
 
 /// Encode a SPARC Format 2 NOP instruction.
 #[must_use]
-pub fn encode_nop() -> u32 {
+pub const fn encode_nop() -> u32 {
     encode_sethi(0, 0)
 }
 
@@ -1550,7 +1615,7 @@ pub const fn encode_alu_imm(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
         | ((op3 & 63) << 19)
         | ((rs1 & 31) << 14)
         | (1u32 << 13)
-        | (simm13 as u32 & 0x1FFF)
+        | ((simm13).cast_unsigned() & 0x1FFF)
 }
 
 /// Encode a SPARC Format 3 Load instruction (register+immediate addressing).
@@ -1561,12 +1626,12 @@ pub const fn encode_load(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
         | ((op3 & 63) << 19)
         | ((rs1 & 31) << 14)
         | (1u32 << 13)
-        | (simm13 as u32 & 0x1FFF)
+        | ((simm13).cast_unsigned() & 0x1FFF)
 }
 
 /// Encode a SPARC Format 3 Store instruction (register+immediate addressing).
 #[must_use]
-pub fn encode_store(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
+pub const fn encode_store(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
     encode_load(op3, rs1, simm13, rd)
 }
 
@@ -1583,14 +1648,14 @@ pub fn encode_store(op3: u32, rs1: u32, simm13: i32, rd: u32) -> u32 {
 pub fn encode_bicc(cond: u32, annul: bool, disp: i32) -> u32 {
     // Silently align to 4 bytes rather than panicking on misaligned input.
     let aligned = disp & !3;
-    let disp22 = (aligned >> 2) as u32;
+    let disp22 = (aligned >> 2).cast_unsigned();
     let a = u32::from(annul);
     (a << 29) | ((cond & 0xF) << 25) | (0b010u32 << 22) | (disp22 & 0x3F_FFFF)
 }
 
 /// Encode a SPARC Format 3 JMPL instruction.
 #[must_use]
-pub fn encode_jmpl(rs1: u32, simm13: i32, rd: u32) -> u32 {
+pub const fn encode_jmpl(rs1: u32, simm13: i32, rd: u32) -> u32 {
     encode_alu_imm(0x38, rs1, simm13, rd)
 }
 
@@ -3675,14 +3740,14 @@ pub fn build_prologue(framesize: u32) -> u32 {
         "framesize must be a multiple of 8 in [8, 4088], got {framesize}"
     );
     // SAVE %sp, -framesize, %sp: op3=0x3C, rs1=sp=14, i=1, simm13=-framesize, rd=sp=14
-    encode_alu_imm(0x3C, 14, -(framesize as i32), 14)
+    encode_alu_imm(0x3C, 14, -(framesize).cast_signed(), 14)
 }
 
 /// Build a minimal SPARC function epilogue sequence.
 ///
 /// Returns two words: `[RESTORE, NOP]`
 #[must_use]
-pub fn build_epilogue() -> [u32; 2] {
+pub const fn build_epilogue() -> [u32; 2] {
     // RESTORE %g0, %g0, %g0: op3=0x3D, rs1=0, rs2=0, rd=0
     let restore = encode_alu_reg(0x3D, 0, 0, 0);
     let nop = encode_nop();
@@ -3693,7 +3758,7 @@ pub fn build_epilogue() -> [u32; 2] {
 ///
 /// Returns two words: `[JMPL %i7+8, %g0, NOP]`
 #[must_use]
-pub fn build_return_seq() -> [u32; 2] {
+pub const fn build_return_seq() -> [u32; 2] {
     let jmpl = encode_jmpl(31, 8, 0); // JMPL %i7+8, %g0 -> RETURN
     let nop = encode_nop();
     [jmpl, nop]
@@ -4205,37 +4270,37 @@ pub fn synth_mov_imm(imm: i32, rd: u32) -> u32 {
 
 /// Synthetic instruction: `MOV %rs, %rd` → `OR %g0, %rs, %rd`.
 #[must_use]
-pub fn synth_mov_reg(rs: u32, rd: u32) -> u32 {
+pub const fn synth_mov_reg(rs: u32, rd: u32) -> u32 {
     encode_alu_reg(0x02, 0, rs, rd)
 }
 
 /// Synthetic instruction: `CLR %rd` → `OR %g0, %g0, %rd`.
 #[must_use]
-pub fn synth_clr(rd: u32) -> u32 {
+pub const fn synth_clr(rd: u32) -> u32 {
     encode_alu_reg(0x02, 0, 0, rd)
 }
 
 /// Synthetic instruction: `NOT %rs, %rd` → `XNOR %rs, %g0, %rd`.
 #[must_use]
-pub fn synth_not(rs: u32, rd: u32) -> u32 {
+pub const fn synth_not(rs: u32, rd: u32) -> u32 {
     encode_alu_reg(0x07, rs, 0, rd)
 }
 
 /// Synthetic instruction: `NEG %rs, %rd` → `SUB %g0, %rs, %rd`.
 #[must_use]
-pub fn synth_neg(rs: u32, rd: u32) -> u32 {
+pub const fn synth_neg(rs: u32, rd: u32) -> u32 {
     encode_alu_reg(0x04, 0, rs, rd)
 }
 
 /// Synthetic instruction: `TST %rs` → `ORCC %g0, %rs, %g0` (sets icc).
 #[must_use]
-pub fn synth_tst(rs: u32) -> u32 {
+pub const fn synth_tst(rs: u32) -> u32 {
     encode_alu_reg(0x12, 0, rs, 0)
 }
 
 /// Synthetic instruction: `CMP %rs1, %rs2` → `SUBCC %rs1, %rs2, %g0`.
 #[must_use]
-pub fn synth_cmp_reg(rs1: u32, rs2: u32) -> u32 {
+pub const fn synth_cmp_reg(rs1: u32, rs2: u32) -> u32 {
     encode_alu_reg(0x14, rs1, rs2, 0)
 }
 
@@ -4255,13 +4320,13 @@ pub fn synth_cmp_imm(rs1: u32, imm: i32) -> u32 {
 
 /// Synthetic instruction: `INC %rd` → `ADD %rd, 1, %rd`.
 #[must_use]
-pub fn synth_inc(rd: u32) -> u32 {
+pub const fn synth_inc(rd: u32) -> u32 {
     encode_alu_imm(0x00, rd, 1, rd)
 }
 
 /// Synthetic instruction: `DEC %rd` → `SUB %rd, 1, %rd`.
 #[must_use]
-pub fn synth_dec(rd: u32) -> u32 {
+pub const fn synth_dec(rd: u32) -> u32 {
     encode_alu_imm(0x04, rd, 1, rd)
 }
 
@@ -4272,14 +4337,14 @@ pub fn synth_dec(rd: u32) -> u32 {
 /// Otherwise returns `[SETHI %hi(val), %rd; OR %rd, %lo(val), %rd]`.
 #[must_use]
 pub fn synth_set(val: u32, rd: u32) -> Vec<u32> {
-    let sv = val as i32;
+    let sv = (val).cast_signed();
     if (-4096..=4095).contains(&sv) {
         vec![synth_mov_imm(sv, rd)]
     } else {
         let hi22 = val >> 10;
         let lo10 = val & 0x3FF;
         let sethi = encode_sethi(rd, hi22);
-        let or = encode_alu_imm(0x02, rd, lo10 as i32, rd);
+        let or = encode_alu_imm(0x02, rd, (lo10).cast_signed(), rd);
         vec![sethi, or]
     }
 }
@@ -4573,7 +4638,7 @@ mod final_tests {
 
     #[test]
     fn test_synth_set_large() {
-        let words = synth_set(0x12345678, 8);
+        let words = synth_set(0x1234_5678, 8);
         assert_eq!(words.len(), 2);
         let instr0 = arch()
             .disassemble(addr(0), &words[0].to_be_bytes())

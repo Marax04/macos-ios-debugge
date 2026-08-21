@@ -145,141 +145,128 @@ fn decode_avr_fixed(word: u16) -> Option<Decoded> {
     }
 }
 
+// ── Table-driven ALU decoding ────────────────────────────────────────────────
+//
+// The AVR ALU encodings fall into a handful of operand *shapes*. Splitting the
+// "which opcode is this" question (a mask/value table) from the "how are its
+// operands laid out" question (one small formatter per shape) keeps each
+// decoder short and makes an added opcode a one-line table entry.
+
+/// One mask/value entry of an ALU decode table.
+struct AluPattern {
+    /// Bits of the opcode word that are fixed for this encoding.
+    mask: u16,
+    /// Value those fixed bits must take.
+    value: u16,
+    /// Mnemonic emitted on a match.
+    mnemonic: &'static str,
+}
+
+/// Shorthand for building a table entry.
+const fn alu(mask: u16, value: u16, mnemonic: &'static str) -> AluPattern {
+    AluPattern { mask, value, mnemonic }
+}
+
+/// Return the mnemonic of the first entry whose fixed bits match `word`.
+fn match_alu(word: u16, table: &[AluPattern]) -> Option<&'static str> {
+    table
+        .iter()
+        .find(|p| (word & p.mask) == p.value)
+        .map(|p| p.mnemonic)
+}
+
+/// `Rd, Rr` over the whole register file: `xxxx xxrd dddd rrrr`.
+static ALU_REG_PAIR: &[AluPattern] = &[
+    alu(0xFC00, 0x0C00, "ADD"),
+    alu(0xFC00, 0x1C00, "ADC"),
+    alu(0xFC00, 0x1800, "SUB"),
+    alu(0xFC00, 0x0800, "SBC"),
+    alu(0xFC00, 0x2000, "AND"),
+    alu(0xFC00, 0x2800, "OR"),
+    alu(0xFC00, 0x2400, "EOR"),
+    alu(0xFC00, 0x9C00, "MUL"),
+    alu(0xFC00, 0x1400, "CP"),
+    alu(0xFC00, 0x0400, "CPC"),
+];
+
+/// `Rd, K` with `Rd` in r16..r31: `xxxx KKKK dddd KKKK`.
+static ALU_IMM_UPPER: &[AluPattern] = &[
+    alu(0xF000, 0x5000, "SUBI"),
+    alu(0xF000, 0x4000, "SBCI"),
+    alu(0xF000, 0x7000, "ANDI"),
+    alu(0xF000, 0x6000, "ORI"),
+    alu(0xF000, 0x3000, "CPI"),
+];
+
+/// Register-pair word immediate: `1001 011x KKdd KKKK`.
+static ALU_WORD_IMM: &[AluPattern] = &[
+    alu(0xFF00, 0x9600, "ADIW"),
+    alu(0xFF00, 0x9700, "SBIW"),
+];
+
+/// Single destination register: `1001 010d dddd xxxx`.
+static ALU_SINGLE_REG: &[AluPattern] = &[
+    alu(0xFE0F, 0x9400, "COM"),
+    alu(0xFE0F, 0x9401, "NEG"),
+    alu(0xFE0F, 0x9403, "INC"),
+    alu(0xFE0F, 0x940A, "DEC"),
+    alu(0xFE0F, 0x9406, "LSR"),
+    alu(0xFE0F, 0x9407, "ROR"),
+    alu(0xFE0F, 0x9405, "ASR"),
+    alu(0xFE0F, 0x9402, "SWAP"),
+];
+
+/// Bit within a register: `1111 10xd dddd 0bbb`.
+static ALU_REG_BIT: &[AluPattern] = &[
+    alu(0xFE08, 0xFA00, "BST"),
+    alu(0xFE08, 0xF800, "BLD"),
+];
+
+/// Bit within an I/O register: `1001 10x0 AAAA Abbb`.
+static ALU_IO_BIT: &[AluPattern] = &[
+    alu(0xFF00, 0x9A00, "SBI"),
+    alu(0xFF00, 0x9800, "CBI"),
+];
+
+/// Canonical `SEx` aliases of `BSET s`, indexed by SREG bit number.
+static BSET_ALIASES: [&str; 8] = ["SEC", "SEZ", "SEN", "SEV", "SES", "SEH", "SET", "SEI"];
+/// Canonical `CLx` aliases of `BCLR s`, indexed by SREG bit number.
+static BCLR_ALIASES: [&str; 8] = ["CLC", "CLZ", "CLN", "CLV", "CLS", "CLH", "CLT", "CLI"];
+
 /// Decode arithmetic/logic AVR instructions.
 fn decode_avr_alu(word: u16) -> Option<Decoded> {
-    // ── ADD Rd,Rr  0000 11rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x0C00 {
+    if let Some(mne) = match_alu(word, ALU_REG_PAIR) {
         let (d, r) = rdrr(word);
-        return Some(decoded("ADD", format!("R{d},R{r}"), 2, InstrFlags::NONE));
+        return Some(decoded(mne, format!("R{d},R{r}"), 2, InstrFlags::NONE));
     }
-    // ── ADC Rd,Rr  0001 11rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x1C00 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("ADC", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── ADIW Rd+1:Rd,K  1001 0110 KKdd KKKK ─────────────────────────────────
-    if (word & 0xFF00) == 0x9600 {
+    // `1001 011x KKdd KKKK` — must precede the I/O-bit table, which shares the
+    // same mask but a different fixed value.
+    if let Some(mne) = match_alu(word, ALU_WORD_IMM) {
         let d = 24 + (((word >> 4) & 3) * 2);
         let k = ((word & 0xC0) >> 2) | (word & 0x0F);
         return Some(decoded(
-            "ADIW",
+            mne,
             format!("R{}:R{},{}", d + 1, d, k),
             2,
             InstrFlags::NONE,
         ));
     }
-    // ── SUB Rd,Rr  0001 10rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x1800 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("SUB", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── SUBI Rd,K  0101 KKKK dddd KKKK ───────────────────────────────────────
-    if (word & 0xF000) == 0x5000 {
+    if let Some(mne) = match_alu(word, ALU_IMM_UPPER) {
         let d = 16 + ((word >> 4) & 0xF);
         let k = ((word & 0x0F00) >> 4) | (word & 0x0F);
-        return Some(decoded(
-            "SUBI",
-            format!("R{d},${k:02X}"),
-            2,
-            InstrFlags::NONE,
-        ));
+        return Some(decoded(mne, format!("R{d},${k:02X}"), 2, InstrFlags::NONE));
     }
-    // ── SBC Rd,Rr  0000 10rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x0800 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("SBC", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── SBCI Rd,K  0100 KKKK dddd KKKK ───────────────────────────────────────
-    if (word & 0xF000) == 0x4000 {
-        let d = 16 + ((word >> 4) & 0xF);
-        let k = ((word & 0x0F00) >> 4) | (word & 0x0F);
-        return Some(decoded(
-            "SBCI",
-            format!("R{d},${k:02X}"),
-            2,
-            InstrFlags::NONE,
-        ));
-    }
-    // ── SBIW Rd+1:Rd,K  1001 0111 KKdd KKKK ─────────────────────────────────
-    if (word & 0xFF00) == 0x9700 {
-        let d = 24 + (((word >> 4) & 3) * 2);
-        let k = ((word & 0xC0) >> 2) | (word & 0x0F);
-        return Some(decoded(
-            "SBIW",
-            format!("R{}:R{},{}", d + 1, d, k),
-            2,
-            InstrFlags::NONE,
-        ));
-    }
-    // ── AND Rd,Rr  0010 00rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x2000 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("AND", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── ANDI Rd,K  0111 KKKK dddd KKKK ───────────────────────────────────────
-    if (word & 0xF000) == 0x7000 {
-        let d = 16 + ((word >> 4) & 0xF);
-        let k = ((word & 0x0F00) >> 4) | (word & 0x0F);
-        return Some(decoded(
-            "ANDI",
-            format!("R{d},${k:02X}"),
-            2,
-            InstrFlags::NONE,
-        ));
-    }
-    // ── OR Rd,Rr  0010 10rd dddd rrrr ─────────────────────────────────────────
-    if (word & 0xFC00) == 0x2800 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("OR", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── ORI Rd,K  0110 KKKK dddd KKKK ────────────────────────────────────────
-    if (word & 0xF000) == 0x6000 {
-        let d = 16 + ((word >> 4) & 0xF);
-        let k = ((word & 0x0F00) >> 4) | (word & 0x0F);
-        return Some(decoded(
-            "ORI",
-            format!("R{d},${k:02X}"),
-            2,
-            InstrFlags::NONE,
-        ));
-    }
-    // ── EOR Rd,Rr  0010 01rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x2400 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("EOR", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── COM Rd  1001 010d dddd 0000 ────────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9400 {
+    if let Some(mne) = match_alu(word, ALU_SINGLE_REG) {
         let d = (word >> 4) & 0x1F;
-        return Some(decoded("COM", format!("R{d}"), 2, InstrFlags::NONE));
+        return Some(decoded(mne, format!("R{d}"), 2, InstrFlags::NONE));
     }
-    // ── NEG Rd  1001 010d dddd 0001 ────────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9401 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("NEG", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── INC Rd  1001 010d dddd 0011 ────────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9403 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("INC", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── DEC Rd  1001 010d dddd 1010 ────────────────────────────────────────────
-    if (word & 0xFE0F) == 0x940A {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("DEC", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── MUL Rd,Rr  1001 11rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x9C00 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("MUL", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── MULS Rd,Rr  0000 0010 dddd rrrr ──────────────────────────────────────
+    // ── MULS Rd,Rr  0000 0010 dddd rrrr — both operands in r16..r31 ──────────
     if (word & 0xFF00) == 0x0200 {
         let d = 16 + ((word >> 4) & 0xF);
         let r = 16 + (word & 0xF);
         return Some(decoded("MULS", format!("R{d},R{r}"), 2, InstrFlags::NONE));
     }
-    // ── MULSU Rd,Rr  0000 0011 0ddd 0rrr ─────────────────────────────────────
+    // ── MULSU Rd,Rr  0000 0011 0ddd 0rrr — both operands in r16..r23 ─────────
     if (word & 0xFF88) == 0x0300 {
         let d = 16 + ((word >> 4) & 7);
         let r = 16 + (word & 7);
@@ -288,97 +275,124 @@ fn decode_avr_alu(word: u16) -> Option<Decoded> {
     decode_avr_alu2(word)
 }
 
-/// Decode shift/bit/compare AVR instructions (second part of ALU decoding).
+/// Decode the SREG-bit and bit-addressing AVR instructions.
 fn decode_avr_alu2(word: u16) -> Option<Decoded> {
-    // ── LSR Rd  1001 010d dddd 0110 ───────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9406 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("LSR", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── ROR Rd  1001 010d dddd 0111 ───────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9407 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("ROR", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── ASR Rd  1001 010d dddd 0101 ───────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9405 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("ASR", format!("R{d}"), 2, InstrFlags::NONE));
-    }
-    // ── SWAP Rd  1001 010d dddd 0010 ──────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9402 {
-        let d = (word >> 4) & 0x1F;
-        return Some(decoded("SWAP", format!("R{d}"), 2, InstrFlags::NONE));
-    }
     // ── BSET s  1001 0100 0sss 1000 ───────────────────────────────────────────
     if (word & 0xFF8F) == 0x9408 {
-        let s = (word >> 4) & 7;
-        // Use canonical alias names for each SREG bit
-        let mne = match s {
-            0 => "SEC", 1 => "SEZ", 2 => "SEN", 3 => "SEV",
-            4 => "SES", 5 => "SEH", 6 => "SET", 7 => "SEI",
-            _ => "BSET",
-        };
-        let ops = if mne == "BSET" { format!("{s}") } else { String::new() };
-        return Some(decoded(mne, ops, 2, InstrFlags::NONE));
+        return Some(decoded_sreg_bit(word, &BSET_ALIASES));
     }
     // ── BCLR s  1001 0100 1sss 1000 ───────────────────────────────────────────
     if (word & 0xFF8F) == 0x9488 {
-        let s = (word >> 4) & 7;
-        let mne = match s {
-            0 => "CLC", 1 => "CLZ", 2 => "CLN", 3 => "CLV",
-            4 => "CLS", 5 => "CLH", 6 => "CLT", 7 => "CLI",
-            _ => "BCLR",
-        };
-        let ops = if mne == "BCLR" { format!("{s}") } else { String::new() };
-        return Some(decoded(mne, ops, 2, InstrFlags::NONE));
+        return Some(decoded_sreg_bit(word, &BCLR_ALIASES));
     }
-    // ── BST Rd,b  1111 101d dddd 0bbb ─────────────────────────────────────────
-    if (word & 0xFE08) == 0xFA00 {
+    if let Some(mne) = match_alu(word, ALU_REG_BIT) {
         let d = (word >> 4) & 0x1F;
         let b = word & 7;
-        return Some(decoded("BST", format!("R{d},{b}"), 2, InstrFlags::NONE));
+        return Some(decoded(mne, format!("R{d},{b}"), 2, InstrFlags::NONE));
     }
-    // ── BLD Rd,b  1111 100d dddd 0bbb ─────────────────────────────────────────
-    if (word & 0xFE08) == 0xF800 {
-        let d = (word >> 4) & 0x1F;
-        let b = word & 7;
-        return Some(decoded("BLD", format!("R{d},{b}"), 2, InstrFlags::NONE));
-    }
-    // ── SBI A,b  1001 1010 AAAA Abbb ──────────────────────────────────────────
-    if (word & 0xFF00) == 0x9A00 {
+    if let Some(mne) = match_alu(word, ALU_IO_BIT) {
         let a = (word >> 3) & 0x1F;
         let b = word & 7;
-        return Some(decoded("SBI", format!("${a:02X},{b}"), 2, InstrFlags::NONE));
-    }
-    // ── CBI A,b  1001 1000 AAAA Abbb ──────────────────────────────────────────
-    if (word & 0xFF00) == 0x9800 {
-        let a = (word >> 3) & 0x1F;
-        let b = word & 7;
-        return Some(decoded("CBI", format!("${a:02X},{b}"), 2, InstrFlags::NONE));
-    }
-    // ── CP Rd,Rr  0001 01rd dddd rrrr ─────────────────────────────────────────
-    if (word & 0xFC00) == 0x1400 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("CP", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── CPC Rd,Rr  0000 01rd dddd rrrr ────────────────────────────────────────
-    if (word & 0xFC00) == 0x0400 {
-        let (d, r) = rdrr(word);
-        return Some(decoded("CPC", format!("R{d},R{r}"), 2, InstrFlags::NONE));
-    }
-    // ── CPI Rd,K  0011 KKKK dddd KKKK ────────────────────────────────────────
-    if (word & 0xF000) == 0x3000 {
-        let d = 16 + ((word >> 4) & 0xF);
-        let k = ((word & 0x0F00) >> 4) | (word & 0x0F);
-        return Some(decoded(
-            "CPI",
-            format!("R{d},${k:02X}"),
-            2,
-            InstrFlags::NONE,
-        ));
+        return Some(decoded(mne, format!("${a:02X},{b}"), 2, InstrFlags::NONE));
     }
     None
+}
+
+/// Build the decoded form of a `BSET`/`BCLR` word using its canonical alias.
+///
+/// The `sss` field is three bits wide, so it always indexes the 8-entry alias
+/// table; there is no out-of-range case to handle.
+fn decoded_sreg_bit(word: u16, aliases: &[&str; 8]) -> Decoded {
+    let s = usize::from((word >> 4) & 7);
+    decoded(aliases[s], String::new(), 2, InstrFlags::NONE)
+}
+
+// ── Table-driven load/store decoding ─────────────────────────────────────────
+
+/// A memory-access encoding whose only variable field is one register number.
+struct MemForm {
+    /// Bits of the opcode word that are fixed for this encoding.
+    mask: u16,
+    /// Value those fixed bits must take.
+    value: u16,
+    /// Mnemonic emitted on a match.
+    mnemonic: &'static str,
+    /// Operand template; the `{}` placeholder receives `R<n>`.
+    operands: &'static str,
+    /// Memory-effect flags of the encoding.
+    flags: InstrFlags,
+}
+
+/// Shorthand for building a memory-form table entry.
+const fn mem(
+    mask: u16,
+    value: u16,
+    mnemonic: &'static str,
+    operands: &'static str,
+    flags: InstrFlags,
+) -> MemForm {
+    MemForm { mask, value, mnemonic, operands, flags }
+}
+
+/// Register-indirect loads and stores, plus the stack and program-memory forms.
+///
+/// Order is significant: `LD Rd,Y` / `LD Rd,Z` must be tried before the
+/// displaced `LDD` forms, whose mask is a strict subset of theirs.
+static MEM_FORMS: &[MemForm] = &[
+    // ── LD Rd,<ptr>  1001 000d dddd xxxx / 1000 000d dddd xxxx ──────────────
+    mem(0xFE0F, 0x900C, "LD", "R{},X", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x900D, "LD", "R{},X+", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x900E, "LD", "R{},-X", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x9009, "LD", "R{},Y+", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x900A, "LD", "R{},-Y", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x8008, "LD", "R{},Y", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x8000, "LD", "R{},Z", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x9001, "LD", "R{},Z+", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x9002, "LD", "R{},-Z", InstrFlags::READ_MEM),
+    // ── ST <ptr>,Rr  1001 001r rrrr xxxx ────────────────────────────────────
+    mem(0xFE0F, 0x920C, "ST", "X,R{}", InstrFlags::WRITE_MEM),
+    mem(0xFE0F, 0x920D, "ST", "X+,R{}", InstrFlags::WRITE_MEM),
+    mem(0xFE0F, 0x920E, "ST", "-X,R{}", InstrFlags::WRITE_MEM),
+    mem(0xFE0F, 0x9209, "ST", "Y+,R{}", InstrFlags::WRITE_MEM),
+    mem(0xFE0F, 0x9201, "ST", "Z+,R{}", InstrFlags::WRITE_MEM),
+    // ── Stack ───────────────────────────────────────────────────────────────
+    mem(0xFE0F, 0x920F, "PUSH", "R{}", InstrFlags::WRITE_MEM),
+    mem(0xFE0F, 0x900F, "POP", "R{}", InstrFlags::READ_MEM),
+    // ── Program memory ──────────────────────────────────────────────────────
+    mem(0xFE0F, 0x9004, "LPM", "R{},Z", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x9005, "LPM", "R{},Z+", InstrFlags::READ_MEM),
+    mem(0xFE0F, 0x9007, "ELPM", "R{},Z+", InstrFlags::READ_MEM),
+];
+
+/// Decode the register-indirect load/store forms via [`MEM_FORMS`].
+fn decode_avr_mem_form(word: u16) -> Option<Decoded> {
+    let form = MEM_FORMS.iter().find(|f| (word & f.mask) == f.value)?;
+    let n = (word >> 4) & 0x1F;
+    Some(decoded(
+        form.mnemonic,
+        form.operands.replace("{}", &format!("R{n}")),
+        2,
+        form.flags,
+    ))
+}
+
+/// Extract the 6-bit displacement `q` of the `LDD`/`STD` encodings.
+const fn ldd_displacement(word: u16) -> u16 {
+    ((word & 0x2000) >> 8) | ((word & 0x0C00) >> 7) | (word & 0x07)
+}
+
+/// Read the 16-bit immediate that follows a `LDS`/`STS` opcode word.
+///
+/// # Errors
+///
+/// Returns `InvalidFormat` if fewer than 4 bytes are available.
+fn direct_address(bytes: &[u8], mnemonic: &str) -> Result<u16, CoreError> {
+    if bytes.len() < 4 {
+        return Err(CoreError::InvalidFormat {
+            message: format!("truncated {mnemonic}"),
+        });
+    }
+    Ok(u16::from_le_bytes([bytes[2], bytes[3]]))
 }
 
 /// Decode load/store AVR instructions.
@@ -415,100 +429,13 @@ fn decode_avr_mem(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreError>
             InstrFlags::NONE,
         )));
     }
-    // ── LD Rd,X  1001 000d dddd 1100 ──────────────────────────────────────────
-    if (word & 0xFE0F) == 0x900C {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},X"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,X+  1001 000d dddd 1101 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x900D {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},X+"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,-X  1001 000d dddd 1110 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x900E {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},-X"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,Y+  1001 000d dddd 1001 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9009 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},Y+"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,-Y  1001 000d dddd 1010 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x900A {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},-Y"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,(Y)  1000 000d dddd 1000 ───────────────────────────────────────
-    if (word & 0xFE0F) == 0x8008 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},Y"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,(Z)  1000 000d dddd 0000 ───────────────────────────────────────
-    if (word & 0xFE0F) == 0x8000 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},Z"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,Z+  1001 000d dddd 0001 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9001 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},Z+"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LD Rd,-Z  1001 000d dddd 0010 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9002 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LD",
-            format!("R{d},-Z"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
+    if let Some(d) = decode_avr_mem_form(word) {
+        return Ok(Some(d));
     }
     // ── LDD Rd,Y+q  10q0 qq0d dddd 1qqq ──────────────────────────────────────
     if (word & 0xD208) == 0x8008 {
         let d = (word >> 4) & 0x1F;
-        let q = ((word & 0x2000) >> 8) | ((word & 0x0C00) >> 7) | (word & 0x07);
+        let q = ldd_displacement(word);
         return Ok(Some(decoded(
             "LDD",
             format!("R{d},Y+{q}"),
@@ -519,7 +446,7 @@ fn decode_avr_mem(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreError>
     // ── LDD Rd,Z+q  10q0 qq0d dddd 0qqq ──────────────────────────────────────
     if (word & 0xD208) == 0x8000 {
         let d = (word >> 4) & 0x1F;
-        let q = ((word & 0x2000) >> 8) | ((word & 0x0C00) >> 7) | (word & 0x07);
+        let q = ldd_displacement(word);
         return Ok(Some(decoded(
             "LDD",
             format!("R{d},Z+{q}"),
@@ -529,13 +456,8 @@ fn decode_avr_mem(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreError>
     }
     // ── LDS Rd,k  1001 000d dddd 0000 + 16-bit k ─────────────────────────────
     if (word & 0xFE0F) == 0x9000 {
-        if bytes.len() < 4 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated LDS".to_string(),
-            });
-        }
         let d = (word >> 4) & 0x1F;
-        let k = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let k = direct_address(bytes, "LDS")?;
         return Ok(Some(decoded(
             "LDS",
             format!("R{d},${k:04X}"),
@@ -546,92 +468,17 @@ fn decode_avr_mem(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreError>
     decode_avr_store(word, bytes)
 }
 
-/// Decode store/IO AVR instructions (second part of memory decoding).
+/// Decode the store/IO AVR instructions not covered by [`MEM_FORMS`].
 fn decode_avr_store(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreError> {
-    // ── ST X,Rr  1001 001r rrrr 1100 ──────────────────────────────────────────
-    if (word & 0xFE0F) == 0x920C {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ST",
-            format!("X,R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── ST X+,Rr  1001 001r rrrr 1101 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x920D {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ST",
-            format!("X+,R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── ST -X,Rr  1001 001r rrrr 1110 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x920E {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ST",
-            format!("-X,R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── ST Y+,Rr  1001 001r rrrr 1001 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9209 {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ST",
-            format!("Y+,R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── ST Z+,Rr  1001 001r rrrr 0001 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9201 {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ST",
-            format!("Z+,R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
     // ── STS k,Rr  1001 001r rrrr 0000 + 16-bit k ─────────────────────────────
     if (word & 0xFE0F) == 0x9200 {
-        if bytes.len() < 4 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated STS".to_string(),
-            });
-        }
         let r = (word >> 4) & 0x1F;
-        let k = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let k = direct_address(bytes, "STS")?;
         return Ok(Some(decoded(
             "STS",
             format!("${k:04X},R{r}"),
             4,
             InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── PUSH Rr  1001 001r rrrr 1111 ──────────────────────────────────────────
-    if (word & 0xFE0F) == 0x920F {
-        let r = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "PUSH",
-            format!("R{r}"),
-            2,
-            InstrFlags::WRITE_MEM,
-        )));
-    }
-    // ── POP Rd  1001 000d dddd 1111 ───────────────────────────────────────────
-    if (word & 0xFE0F) == 0x900F {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "POP",
-            format!("R{d}"),
-            2,
-            InstrFlags::READ_MEM,
         )));
     }
     // ── IN Rd,A  1011 0AAd dddd AAAA ──────────────────────────────────────────
@@ -656,36 +503,6 @@ fn decode_avr_store(word: u16, bytes: &[u8]) -> Result<Option<Decoded>, CoreErro
             InstrFlags::NONE,
         )));
     }
-    // ── LPM Rd,Z  1001 000d dddd 0100 ─────────────────────────────────────────
-    if (word & 0xFE0F) == 0x9004 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LPM",
-            format!("R{d},Z"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── LPM Rd,Z+  1001 000d dddd 0101 ───────────────────────────────────────
-    if (word & 0xFE0F) == 0x9005 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "LPM",
-            format!("R{d},Z+"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
-    // ── ELPM Rd,Z+  1001 000d dddd 0111 ──────────────────────────────────────
-    if (word & 0xFE0F) == 0x9007 {
-        let d = (word >> 4) & 0x1F;
-        return Ok(Some(decoded(
-            "ELPM",
-            format!("R{d},Z+"),
-            2,
-            InstrFlags::READ_MEM,
-        )));
-    }
     Ok(None)
 }
 
@@ -705,12 +522,56 @@ fn rel_target_i8(pc: u64, k: i8) -> u64 {
     pc.wrapping_add(2).wrapping_add_signed(i64::from(k) * 2)
 }
 
+/// Mnemonics of `BRBS s,k` (branch if SREG bit set), indexed by bit number.
+static BRBS_MNEMONICS: [&str; 8] = [
+    "BRCS", "BREQ", "BRMI", "BRVS", "BRLT", "BRHS", "BRTS", "BRIE",
+];
+/// Mnemonics of `BRBC s,k` (branch if SREG bit clear), indexed by bit number.
+static BRBC_MNEMONICS: [&str; 8] = [
+    "BRCC", "BRNE", "BRPL", "BRVC", "BRGE", "BRHC", "BRTC", "BRID",
+];
+
+/// Decode the 32-bit `JMP`/`CALL` forms: `1001 010k kkkk 11xk` + 16-bit low half.
+///
+/// # Errors
+///
+/// Returns `InvalidFormat` if fewer than 4 bytes are available.
+fn decode_avr_long_target(
+    word: u16,
+    bytes: &[u8],
+    mnemonic: &'static str,
+    flags: InstrFlags,
+) -> Result<Decoded, CoreError> {
+    if bytes.len() < 4 {
+        return Err(CoreError::InvalidFormat {
+            message: format!("truncated {mnemonic}"),
+        });
+    }
+    let k_hi = ((u32::from(word) & 0x01F0) >> 3) | (u32::from(word) & 1);
+    let k_lo = u32::from(u16::from_le_bytes([bytes[2], bytes[3]]));
+    let target = (k_hi << 16) | k_lo;
+    Ok(decoded(mnemonic, format!("${target:06X}"), 4, flags))
+}
+
+/// Decode a conditional branch (`BRBS`/`BRBC`) given its mnemonic table.
+///
+/// The `k` field is 7 bits with bit 6 as its sign; the `sss` field is 3 bits, so
+/// it always indexes the 8-entry mnemonic table.
+fn decode_avr_cond_branch(word: u16, pc: u64, mnemonics: &[&str; 8]) -> Decoded {
+    // Sign-extend the 7-bit `k` field into a full i8 by hand: the low byte of
+    // the masked field is exactly the field, and bit 6 is its sign bit.
+    let raw = ((word >> 3) & 0x7F).to_le_bytes()[0];
+    let k = if raw & 0x40 == 0 { raw } else { raw | 0x80 }.cast_signed();
+    let target = rel_target_i8(pc, k);
+    let s = usize::from(word & 7);
+    decoded(mnemonics[s], format!("${target:04X}"), 2, branch_flags())
+}
+
 /// Decode branch/jump AVR instructions.
 fn decode_avr_branch(word: u16, bytes: &[u8], pc: u64) -> Result<Option<Decoded>, CoreError> {
     // ── RJMP k  1100 kkkk kkkk kkkk ──────────────────────────────────────────
     if (word & 0xF000) == 0xC000 {
-        let k = sign_ext_12(word);
-        let target = rel_target(pc, k);
+        let target = rel_target(pc, sign_ext_12(word));
         return Ok(Some(decoded(
             "RJMP",
             format!("${target:04X}"),
@@ -720,8 +581,7 @@ fn decode_avr_branch(word: u16, bytes: &[u8], pc: u64) -> Result<Option<Decoded>
     }
     // ── RCALL k  1101 kkkk kkkk kkkk ─────────────────────────────────────────
     if (word & 0xF000) == 0xD000 {
-        let k = sign_ext_12(word);
-        let target = rel_target(pc, k);
+        let target = rel_target(pc, sign_ext_12(word));
         return Ok(Some(decoded(
             "RCALL",
             format!("${target:04X}"),
@@ -729,92 +589,21 @@ fn decode_avr_branch(word: u16, bytes: &[u8], pc: u64) -> Result<Option<Decoded>
             InstrFlags::CALL,
         )));
     }
-    // ── JMP k  1001 010k kkkk 110k kkkk kkkk kkkk kkkk (32-bit) ──────────────
+    // ── JMP k  1001 010k kkkk 110k (32-bit) ──────────────────────────────────
     if (word & 0xFE0E) == 0x940C {
-        if bytes.len() < 4 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated JMP".to_string(),
-            });
-        }
-        let k_hi = ((u32::from(word) & 0x01F0) >> 3) | (u32::from(word) & 1);
-        let k_lo = u32::from(u16::from_le_bytes([bytes[2], bytes[3]]));
-        let target = (k_hi << 16) | k_lo;
-        return Ok(Some(decoded(
-            "JMP",
-            format!("${target:06X}"),
-            4,
-            InstrFlags::BRANCH,
-        )));
+        return decode_avr_long_target(word, bytes, "JMP", InstrFlags::BRANCH).map(Some);
     }
     // ── CALL k  1001 010k kkkk 111k (32-bit) ─────────────────────────────────
     if (word & 0xFE0E) == 0x940E {
-        if bytes.len() < 4 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated CALL".to_string(),
-            });
-        }
-        let k_hi = ((u32::from(word) & 0x01F0) >> 3) | (u32::from(word) & 1);
-        let k_lo = u32::from(u16::from_le_bytes([bytes[2], bytes[3]]));
-        let target = (k_hi << 16) | k_lo;
-        return Ok(Some(decoded(
-            "CALL",
-            format!("${target:06X}"),
-            4,
-            InstrFlags::CALL,
-        )));
+        return decode_avr_long_target(word, bytes, "CALL", InstrFlags::CALL).map(Some);
     }
-    // ── Branch instructions: BRBS/BRBC s,k  1111 0kkk kkkk ksss ────────────────
+    // ── BRBS s,k  1111 0kkk kkkk ksss ────────────────────────────────────────
     if (word & 0xFC00) == 0xF000 {
-        let k_raw = ((word >> 3) & 0x7F) as i8;
-        let k = if k_raw & 0x40 != 0 {
-            k_raw | -0x80_i8
-        } else {
-            k_raw
-        };
-        let s = word & 7;
-        let target = rel_target_i8(pc, k);
-        let mn = match s {
-            0 => "BRCS",
-            1 => "BREQ",
-            2 => "BRMI",
-            3 => "BRVS",
-            4 => "BRLT",
-            5 => "BRHS",
-            6 => "BRTS",
-            _ => "BRIE",
-        };
-        return Ok(Some(decoded(
-            mn,
-            format!("${target:04X}"),
-            2,
-            branch_flags(),
-        )));
+        return Ok(Some(decode_avr_cond_branch(word, pc, &BRBS_MNEMONICS)));
     }
+    // ── BRBC s,k  1111 1kkk kkkk ksss ────────────────────────────────────────
     if (word & 0xFC00) == 0xF400 {
-        let k_raw = ((word >> 3) & 0x7F) as i8;
-        let k = if k_raw & 0x40 != 0 {
-            k_raw | -0x80_i8
-        } else {
-            k_raw
-        };
-        let s = word & 7;
-        let target = rel_target_i8(pc, k);
-        let mn = match s {
-            0 => "BRCC",
-            1 => "BRNE",
-            2 => "BRPL",
-            3 => "BRVC",
-            4 => "BRGE",
-            5 => "BRHC",
-            6 => "BRTC",
-            _ => "BRID",
-        };
-        return Ok(Some(decoded(
-            mn,
-            format!("${target:04X}"),
-            2,
-            branch_flags(),
-        )));
+        return Ok(Some(decode_avr_cond_branch(word, pc, &BRBC_MNEMONICS)));
     }
     // ── CPSE Rd,Rr  0001 00rd dddd rrrr ──────────────────────────────────────
     if (word & 0xFC00) == 0x1000 {

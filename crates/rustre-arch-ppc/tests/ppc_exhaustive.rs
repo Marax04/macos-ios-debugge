@@ -20,7 +20,7 @@ use rustre_arch_ppc::ppc_disassembler::PpcDisassembler;
 
 /// Build a word from the two fields that select an instruction: the primary
 /// opcode (bits 0-5, i.e. `word >> 26`) and the extended opcode (bits 21-30).
-fn selector_word(primary: u32, extended: u32) -> u32 {
+const fn selector_word(primary: u32, extended: u32) -> u32 {
     (primary << 26) | (extended << 1)
 }
 

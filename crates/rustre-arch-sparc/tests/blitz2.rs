@@ -16,8 +16,8 @@ fn mk_lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -30,12 +30,12 @@ fn arch() -> SparcArch {
 
 #[test]
 fn encode_call_disp_roundtrip_positive() {
-    for d in (0..200).map(|i| i * 4) {
+    for d in (0..200i32).map(|i| i * 4) {
         let w = encode_call(d);
         assert_eq!(w >> 30, 1, "CALL fmt bits");
         let targets = extract_branch_targets(&w.to_be_bytes(), 0);
         assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].1, d as u64);
+        assert_eq!(targets[0].1, u64::from(d.cast_unsigned()));
     }
 }
 
@@ -48,13 +48,13 @@ fn encode_call_disp_negative() {
         assert_eq!(targets.len(), 1);
         assert_eq!(
             targets[0].1,
-            (0x1_0000u64).wrapping_add(d as i64 as u64)
+            (0x1_0000u64).wrapping_add((i64::from(d)).cast_unsigned())
         );
     }
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "CALL displacement must be 4-byte aligned")]
 fn encode_call_unaligned_panics() {
     let _ = encode_call(3);
 }
@@ -138,19 +138,19 @@ fn build_prologue_returns_save_encoding() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_zero_panics() {
     let _ = build_prologue(0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_misaligned_panics() {
     let _ = build_prologue(9);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_too_large_panics() {
     let _ = build_prologue(4096);
 }
@@ -181,13 +181,13 @@ fn synth_mov_imm_boundaries() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of 13-bit range")]
 fn synth_mov_imm_overflow_high() {
     let _ = synth_mov_imm(4096, 8);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of 13-bit range")]
 fn synth_mov_imm_overflow_low() {
     let _ = synth_mov_imm(-4097, 8);
 }
@@ -241,7 +241,7 @@ fn synth_clr_neg_inc_dec_round_trip_decode() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of 13-bit range")]
 fn synth_cmp_imm_overflow_panics() {
     let _ = synth_cmp_imm(8, 5000);
 }
@@ -303,7 +303,7 @@ fn linear_disasm_lcg_words_never_panics() {
     let mut g = mk_lcg();
     let mut buf = Vec::with_capacity(4 * 200);
     for _ in 0..200 {
-        let w = (g() as u32).to_be_bytes();
+        let w = crate::sparc_narrow::low_u32_of_u64(g()).to_be_bytes();
         buf.extend_from_slice(&w);
     }
     let a = arch();
@@ -506,7 +506,7 @@ fn extract_branch_targets_lcg_fuzz() {
     let mut g = mk_lcg();
     let mut buf = Vec::new();
     for _ in 0..400 {
-        buf.extend_from_slice(&(g() as u32).to_be_bytes());
+        buf.extend_from_slice(&crate::sparc_narrow::low_u32_of_u64(g()).to_be_bytes());
     }
     // must not panic
     let _ = extract_branch_targets(&buf, 0x4000_0000);
@@ -541,7 +541,7 @@ fn raw_mix_lcg_never_panics() {
     let mut g = mk_lcg();
     let mut buf = Vec::with_capacity(4000);
     for _ in 0..1000 {
-        buf.extend_from_slice(&(g() as u32).to_be_bytes());
+        buf.extend_from_slice(&crate::sparc_narrow::low_u32_of_u64(g()).to_be_bytes());
     }
     let m = SparcRawMix::from_bytes(&buf);
     let total = m.calls + m.branches + m.sethis + m.alu + m.mem;
@@ -620,8 +620,8 @@ fn ds_analyze_branch_returns_none_for_alu() {
 fn ds_analyze_branch_lcg_no_panic() {
     let mut g = mk_lcg();
     for _ in 0..500 {
-        let b = g() as u32;
-        let d = g() as u32;
+        let b = crate::sparc_narrow::low_u32_of_u64(g());
+        let d = crate::sparc_narrow::low_u32_of_u64(g());
         let _ = analyze_branch(0x1000, b, d);
     }
 }
@@ -653,7 +653,7 @@ fn v9_decode_returns_none_for_non_v9() {
 fn v9_decode_lcg_never_panics() {
     let mut g = mk_lcg();
     for _ in 0..500 {
-        let _ = decode_v9_instr(g() as u32);
+        let _ = decode_v9_instr(crate::sparc_narrow::low_u32_of_u64(g()));
     }
 }
 
@@ -756,13 +756,13 @@ fn stack_layout_v9_bias_2047() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V8 frame size must be >= 96")]
 fn stack_layout_v8_below_min_panics() {
     let _ = SparcStackLayout::new_v8(80);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V9 frame size must be >= 128")]
 fn stack_layout_v9_misaligned_panics() {
     let _ = SparcStackLayout::new_v9(132);
 }

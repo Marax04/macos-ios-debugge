@@ -110,7 +110,7 @@ fn condcode_roundtrip_bits() {
         CondCode::Ge, CondCode::Lt, CondCode::Gt, CondCode::Le,
     ];
     for (i, &c) in codes.iter().enumerate() {
-        assert_eq!(CondCode::from_bits(i as u8), c, "code {i}");
+        assert_eq!(CondCode::from_bits(u8::try_from(i).unwrap()), c, "code {i}");
     }
 }
 
@@ -291,7 +291,7 @@ fn encode_bra16_zero_ok() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "BRA: use word form for zero displacement")]
 fn encode_bra8_zero_panics() {
     let _ = encode_bra8(0);
 }
@@ -313,7 +313,7 @@ fn encode_trap_range() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "TRAP: vector must be 0..15")]
 fn encode_trap_overflow_panics() {
     let _ = encode_trap(16);
 }
@@ -349,13 +349,13 @@ fn encode_subq_valid_range() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "SUBQ: data must be 1..8")]
 fn encode_subq_zero_panics() {
     let _ = encode_subq_word(0, 0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "SUBQ: data must be 1..8")]
 fn encode_subq_too_big_panics() {
     let _ = encode_subq_word(9, 0);
 }
@@ -391,7 +391,7 @@ fn encode_link_unlk() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "LINK: an must be 0..7")]
 fn encode_link_invalid_reg_panics() {
     let _ = encode_link(8, 0);
 }
@@ -708,7 +708,7 @@ fn patch_call_target_unknown_returns_false() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "patch_call_target: buf must be >= 6 bytes")]
 fn patch_call_target_buf_too_short_panics() {
     let mut b = [0u8; 4];
     let _ = patch_call_target(&mut b, 0);
@@ -1037,7 +1037,7 @@ fn fp_register_is_zero_default() {
 #[test]
 fn fp_register_from_f64_is_simplified_zero() {
     // simplified impl stores zero — record current behavior; flag if changed
-    let r = FpRegister::from_f64(3.14);
+    let r = FpRegister::from_f64(core::f64::consts::PI);
     assert!(r.is_zero(), "from_f64 currently always returns zero");
 }
 

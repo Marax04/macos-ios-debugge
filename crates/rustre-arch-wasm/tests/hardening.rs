@@ -88,7 +88,7 @@ fn random_noise_never_panics() {
     for _ in 0..300 {
         let len = (next() % 96) as usize;
         let buf: Vec<u8> = (0..len).map(|_| (next() & 0xFF) as u8).collect();
-        let pos = (next() as usize) % (buf.len() + 1);
+        let pos = usize::try_from(next()).unwrap_or(0) % (buf.len() + 1);
         let _ = ResultType::decode(&buf, pos);
     }
 }

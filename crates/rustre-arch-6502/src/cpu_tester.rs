@@ -2452,6 +2452,11 @@ fn push_cases_24(cases: &mut Vec<TestCase>) {
 }
 
 fn push_cases_25(cases: &mut Vec<TestCase>) {
+    push_cases_25a(cases);
+    push_cases_25b(cases);
+}
+
+fn push_cases_25a(cases: &mut Vec<TestCase>) {
 
     // BIT Absolute
     cases.push(
@@ -2518,6 +2523,9 @@ fn push_cases_25(cases: &mut Vec<TestCase>) {
     );
 
     // DEX
+}
+
+fn push_cases_25b(cases: &mut Vec<TestCase>) {
     cases.push(
         TestCase::new("DEX (X=0x01) → X=0x00, Z=1, N=0", vec![0xCA])
             .with_initial(StateSnapshot {
@@ -2631,7 +2639,7 @@ mod tests {
         let mut cc = CycleCounter::new();
         cc.record(0xA9, 2);
         cc.record(0xA9, 2);
-        assert_eq!(cc.average(0xA9), Some(2.0));
+        assert!(cc.average(0xA9).is_some_and(|v| (v - 2.0).abs() < f64::EPSILON));
         assert_eq!(cc.average(0xEA), None);
     }
 

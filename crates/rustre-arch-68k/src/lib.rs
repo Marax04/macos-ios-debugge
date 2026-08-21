@@ -404,7 +404,7 @@ fn ea_str(mode: u8, reg: u8, size: Size, ext: &[u8]) -> (String, usize) {
         6 => {
             if ext.len() >= 2 {
                 let brief = ext[0];
-                let disp = ext[1] as i8;
+                let disp = ext[1].cast_signed();
                 let idx_reg = (brief >> 4) & 0xF;
                 let idx_type = if brief & 0x80 != 0 { 'A' } else { 'D' };
                 (format!("{disp}(A{reg},{idx_type}{idx_reg})"), 2)
@@ -489,7 +489,7 @@ pub fn parse_ea(mode: u8, reg: u8, size: Size, ext: &[u8]) -> Result<(EaKind, us
                 });
             }
             let brief = ext[0];
-            let disp = ext[1] as i8;
+            let disp = ext[1].cast_signed();
             let idx_reg = (brief >> 4) & 7;
             let is_a = brief & 0x80 != 0;
             Ok((EaKind::AddrIndIdx(reg, disp, idx_reg, is_a), 2))
@@ -1459,6 +1459,32 @@ pub fn decode_68k_group_f(word: u16, ext: &[u8], pc: u64) -> Result<Decoded68k, 
 ///
 /// # Errors
 /// Returns `CoreError::InvalidInput` for truncated FPU instructions.
+/// Source-format suffix carried by the R/M=1 form of an FPU instruction.
+///
+/// Bits 12:10 of the coprocessor extension word name the in-memory format of
+/// the effective-address operand. Split out of `decode_fpu_instr` so that the
+/// table is nameable and testable on its own.
+#[must_use]
+pub const fn fpu_ea_format_suffix(r_sel: u16) -> &'static str {
+    match r_sel {
+        0 => ".L",
+        1 => ".S",
+        2 => ".X",
+        3 | 7 => ".P",
+        4 => ".W",
+        5 => ".D",
+        6 => ".B",
+        // packed decimal with dynamic k-factor
+        _ => "",
+    }
+}
+
+/// Decode a 68881/68882 coprocessor (FPU) instruction.
+///
+/// # Errors
+///
+/// Returns [`CoreError::InvalidFormat`] when `ext` is shorter than the
+/// coprocessor extension word the opcode requires.
 pub fn decode_fpu_instr(
     word: u16,
     ext: &[u8],
@@ -1555,17 +1581,7 @@ pub fn decode_fpu_instr(
         Ok((mn.to_string(), ops, 4, InstrFlags::NONE))
     } else {
         // EA source: r_sel (bits 12:10) encodes the data format
-        let fmt_suffix = match r_sel {
-            0 => ".L",
-            1 => ".S",
-            2 => ".X",
-            3 => ".P",
-            4 => ".W",
-            5 => ".D",
-            6 => ".B",
-            7 => ".P", // packed decimal with dynamic k-factor
-            _ => "",
-        };
+        let fmt_suffix = fpu_ea_format_suffix(r_sel);
         let ea_mode_f = (word >> 3) & 7;
         let ea_reg_f = word & 7;
         let (ea_str_val, ea_ext) = ea_str(ea_mode_f as u8, ea_reg_f as u8, Size::Long, &ext[2..]);
@@ -5085,7 +5101,7 @@ impl M68kHistogram {
     #[must_use]
     pub fn top_n(&self, n: usize) -> Vec<(&str, usize)> {
         let mut v: Vec<(&str, usize)> = self.counts.iter().map(|(k, &v)| (k.as_str(), v)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v.truncate(n);
         v
     }
@@ -5140,7 +5156,7 @@ pub fn detect_68k_prologue(instrs: &[Instruction]) -> Option<i16> {
                 // Try hex parse via u16 first (handles 0xFFE0 → -32 correctly),
                 // then fall back to signed decimal.
                 let parsed = u16::from_str_radix(size_str, 16)
-                    .map(|v| v as i16)
+                    .map(u16::cast_signed)
                     .or_else(|_| size_str.parse::<i16>());
                 if let Ok(n) = parsed {
                     return Some(n);

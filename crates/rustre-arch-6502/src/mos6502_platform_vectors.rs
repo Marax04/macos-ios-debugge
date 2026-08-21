@@ -284,7 +284,7 @@ impl Mos6502PlatformVectors {
     ///
     /// Heuristics are ordered from most specific to most generic.
     #[must_use]
-    pub fn platform(&self) -> PlatformKind {
+    pub const fn platform(&self) -> PlatformKind {
         platform_from_vectors(self)
     }
 

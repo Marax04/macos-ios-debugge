@@ -4,11 +4,11 @@
 //! These tests are designed to surface bugs in:
 //!   * LEB128 decoder edge cases (via call/i32.const)
 //!   * Instruction decoders (control, memory, prefix-FC/FD/FE)
-//!   * WasmModuleHeader parsing
-//!   * Limits / FuncType / GlobalType decoders
+//!   * `WasmModuleHeader` parsing
+//!   * Limits / `FuncType` / `GlobalType` decoders
 //!   * Linear disassembler iterator semantics
-//!   * WasmExecutor state transitions
-//!   * WasmControlFlow block/basic-block analysis
+//!   * `WasmExecutor` state transitions
+//!   * `WasmControlFlow` block/basic-block analysis
 
 use rustre_core::arch::{Architecture, InstrFlags};
 use rustre_arch_wasm::{
@@ -23,7 +23,7 @@ use rustre_arch_wasm::{
 use rustre_arch_wasm::atomics::{decode_atomics, AtomicInstr, AtomicOp, MemoryOrder};
 use rustre_core::address::Address;
 
-fn arch() -> WasmArch {
+const fn arch() -> WasmArch {
     WasmArch::new()
 }
 
@@ -247,8 +247,8 @@ fn simd_truncated_v128_const() {
 #[test]
 fn simd_i8x16_shuffle_with_lanes() {
     let mut buf = vec![0xFDu8, 0x0D];
-    for i in 0..16 {
-        buf.push(i as u8);
+    for i in 0u8..16 {
+        buf.push(i);
     }
     let i = dis(&buf);
     assert_eq!(i.mnemonic, "i8x16.shuffle");
@@ -456,7 +456,7 @@ fn linear_disassembler_iterates_two_instrs() {
     let mut it = WasmLinearDisassembler::new(&a, &bytes, Address::new(0x1000));
     let mnems: Vec<_> = (&mut it)
         .filter_map(Result::ok)
-        .map(|i| i.mnemonic.clone())
+        .map(|i| i.mnemonic)
         .collect();
     assert_eq!(mnems, vec!["nop", "i32.const", "end"]);
 }

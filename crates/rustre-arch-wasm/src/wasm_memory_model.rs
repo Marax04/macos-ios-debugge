@@ -114,7 +114,7 @@ impl WasmMemory {
             bytes: initial_bytes as u64,
             ..MemoryStats::default()
         };
-        WasmMemory {
+        Self {
             data: vec![0u8; initial_bytes],
             limits,
             bulk_memory_enabled,
@@ -140,10 +140,7 @@ impl WasmMemory {
     /// would violate the memory limits or exceed the implementation cap.
     pub fn grow(&mut self, delta_pages: u32) -> i32 {
         let old_pages = self.stats.pages;
-        let new_pages = match old_pages.checked_add(delta_pages) {
-            Some(n) => n,
-            None => return -1,
-        };
+        let Some(new_pages) = old_pages.checked_add(delta_pages) else { return -1 };
         if new_pages > self.limits.effective_max() {
             return -1;
         }
@@ -151,7 +148,7 @@ impl WasmMemory {
         self.data.resize(new_bytes, 0u8);
         self.stats.pages = new_pages;
         self.stats.bytes = new_bytes as u64;
-        old_pages as i32
+        old_pages.cast_signed()
     }
 
     // -----------------------------------------------------------------------
@@ -295,10 +292,7 @@ impl WasmMemory {
 
     /// Write `data` starting at `addr`. Returns `false` if out-of-bounds.
     pub fn write_bytes(&mut self, addr: u32, data: &[u8]) -> bool {
-        let len = match u32::try_from(data.len()) {
-            Ok(n) => n,
-            Err(_) => return false, // data too large for Wasm address space
-        };
+        let Ok(len) = u32::try_from(data.len()) else { return false };
         if self.check_bounds(addr, len).is_err() {
             return false;
         }
@@ -350,12 +344,12 @@ impl WasmMemory {
     }
 
     /// Copy `len` bytes from `src_mem` at `src` into this memory at `dst`.
-    pub fn copy_from(&mut self, dst: u32, src_mem: &WasmMemory, src: u32, len: u32) -> bool {
+    pub fn copy_from(&mut self, dst: u32, src_mem: &Self, src: u32, len: u32) -> bool {
         if !self.bulk_memory_enabled {
             self.stats.trap_count += 1;
             return false;
         }
-        let src_end = (src as usize).checked_add(len as usize).unwrap_or(usize::MAX);
+        let src_end = (src as usize).saturating_add(len as usize);
         if src_end > src_mem.data.len() {
             self.stats.trap_count += 1;
             return false;
@@ -379,12 +373,9 @@ impl WasmMemory {
     /// Returns `false` if the segment overflows the current memory.
     pub fn data_segment(&mut self, offset: u32, data: &[u8]) -> bool {
         let start = offset as usize;
-        let end = match start.checked_add(data.len()) {
-            Some(e) => e,
-            None => {
-                self.stats.trap_count += 1;
-                return false;
-            }
+        let Some(end) = start.checked_add(data.len()) else {
+            self.stats.trap_count += 1;
+            return false;
         };
         if end > self.data.len() {
             self.stats.trap_count += 1;
@@ -416,6 +407,14 @@ impl WasmMemory {
     /// Atomic compare-and-exchange on a 32-bit value.
     ///
     /// Returns `Ok(old_value)` on success, `Err(AccessError)` on out-of-bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AccessError`] if `addr` is unaligned or out of bounds.
+    ///
+    /// # Panics
+    ///
+    /// Never panics: the read below is bounds-checked first.
     pub fn atomic_cmpxchg_u32(&mut self, addr: u32, expected: u32, replacement: u32) -> Result<u32, AccessError> {
         self.check_bounds(addr, 4)?;
         let i = addr as usize;
@@ -430,6 +429,14 @@ impl WasmMemory {
     }
 
     /// Atomic compare-and-exchange on a 64-bit value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AccessError`] if `addr` is unaligned or out of bounds.
+    ///
+    /// # Panics
+    ///
+    /// Never panics: the read below is bounds-checked first.
     pub fn atomic_cmpxchg_u64(&mut self, addr: u32, expected: u64, replacement: u64) -> Result<u64, AccessError> {
         self.check_bounds(addr, 8)?;
         let i = addr as usize;
@@ -488,7 +495,7 @@ impl MemoryView {
         if (base as usize) + (len as usize) > mem.data.len() {
             return None;
         }
-        Some(MemoryView {
+        Some(Self {
             data: mem.data[base as usize..(base + len) as usize].to_vec(),
             base_addr: base,
         })

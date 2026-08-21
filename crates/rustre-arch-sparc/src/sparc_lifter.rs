@@ -20,37 +20,37 @@ pub enum Expr {
     /// Unsigned constant.
     UConst(u64),
     /// Binary add.
-    Add(Box<Expr>, Box<Expr>),
+    Add(Box<Self>, Box<Self>),
     /// Binary sub.
-    Sub(Box<Expr>, Box<Expr>),
+    Sub(Box<Self>, Box<Self>),
     /// Bitwise AND.
-    And(Box<Expr>, Box<Expr>),
+    And(Box<Self>, Box<Self>),
     /// Bitwise OR.
-    Or(Box<Expr>, Box<Expr>),
+    Or(Box<Self>, Box<Self>),
     /// Bitwise XOR.
-    Xor(Box<Expr>, Box<Expr>),
+    Xor(Box<Self>, Box<Self>),
     /// Bitwise NOT.
-    Not(Box<Expr>),
+    Not(Box<Self>),
     /// Logical shift left.
-    Shl(Box<Expr>, Box<Expr>),
+    Shl(Box<Self>, Box<Self>),
     /// Logical shift right.
-    Shr(Box<Expr>, Box<Expr>),
+    Shr(Box<Self>, Box<Self>),
     /// Arithmetic shift right.
-    AShr(Box<Expr>, Box<Expr>),
+    AShr(Box<Self>, Box<Self>),
     /// Unsigned multiply.
-    UMul(Box<Expr>, Box<Expr>),
+    UMul(Box<Self>, Box<Self>),
     /// Signed multiply.
-    SMul(Box<Expr>, Box<Expr>),
+    SMul(Box<Self>, Box<Self>),
     /// Unsigned divide.
-    UDiv(Box<Expr>, Box<Expr>),
+    UDiv(Box<Self>, Box<Self>),
     /// Signed divide.
-    SDiv(Box<Expr>, Box<Expr>),
+    SDiv(Box<Self>, Box<Self>),
     /// Zero-extend N bits.
-    ZxN(u32, Box<Expr>),
+    ZxN(u32, Box<Self>),
     /// Sign-extend N bits.
-    SxN(u32, Box<Expr>),
+    SxN(u32, Box<Self>),
     /// Load N bytes from an address.
-    Load(u32, Box<Expr>),
+    Load(u32, Box<Self>),
     /// PC-relative target.
     PcRel(i64),
     /// Unknown / nop expression.
@@ -60,27 +60,27 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::Reg(r) => write!(f, "{r}"),
-            Expr::Const(v) => write!(f, "{v}"),
-            Expr::UConst(v) => write!(f, "0x{v:x}"),
-            Expr::Add(a, b) => write!(f, "({a} + {b})"),
-            Expr::Sub(a, b) => write!(f, "({a} - {b})"),
-            Expr::And(a, b) => write!(f, "({a} & {b})"),
-            Expr::Or(a, b) => write!(f, "({a} | {b})"),
-            Expr::Xor(a, b) => write!(f, "({a} ^ {b})"),
-            Expr::Not(a) => write!(f, "~{a}"),
-            Expr::Shl(a, b) => write!(f, "({a} << {b})"),
-            Expr::Shr(a, b) => write!(f, "({a} >> {b})"),
-            Expr::AShr(a, b) => write!(f, "({a} >>a {b})"),
-            Expr::UMul(a, b) => write!(f, "({a} u* {b})"),
-            Expr::SMul(a, b) => write!(f, "({a} s* {b})"),
-            Expr::UDiv(a, b) => write!(f, "({a} u/ {b})"),
-            Expr::SDiv(a, b) => write!(f, "({a} s/ {b})"),
-            Expr::ZxN(n, a) => write!(f, "zx{n}({a})"),
-            Expr::SxN(n, a) => write!(f, "sx{n}({a})"),
-            Expr::Load(n, a) => write!(f, "mem{n}[{a}]"),
-            Expr::PcRel(v) => write!(f, "pc+({v}*4)"),
-            Expr::Nop => write!(f, "nop"),
+            Self::Reg(r) => write!(f, "{r}"),
+            Self::Const(v) => write!(f, "{v}"),
+            Self::UConst(v) => write!(f, "0x{v:x}"),
+            Self::Add(a, b) => write!(f, "({a} + {b})"),
+            Self::Sub(a, b) => write!(f, "({a} - {b})"),
+            Self::And(a, b) => write!(f, "({a} & {b})"),
+            Self::Or(a, b) => write!(f, "({a} | {b})"),
+            Self::Xor(a, b) => write!(f, "({a} ^ {b})"),
+            Self::Not(a) => write!(f, "~{a}"),
+            Self::Shl(a, b) => write!(f, "({a} << {b})"),
+            Self::Shr(a, b) => write!(f, "({a} >> {b})"),
+            Self::AShr(a, b) => write!(f, "({a} >>a {b})"),
+            Self::UMul(a, b) => write!(f, "({a} u* {b})"),
+            Self::SMul(a, b) => write!(f, "({a} s* {b})"),
+            Self::UDiv(a, b) => write!(f, "({a} u/ {b})"),
+            Self::SDiv(a, b) => write!(f, "({a} s/ {b})"),
+            Self::ZxN(n, a) => write!(f, "zx{n}({a})"),
+            Self::SxN(n, a) => write!(f, "sx{n}({a})"),
+            Self::Load(n, a) => write!(f, "mem{n}[{a}]"),
+            Self::PcRel(v) => write!(f, "pc+({v}*4)"),
+            Self::Nop => write!(f, "nop"),
         }
     }
 }
@@ -119,18 +119,18 @@ pub enum LlilOp {
 impl fmt::Display for LlilOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LlilOp::SetReg { dest, value } => write!(f, "{dest} = {value}"),
-            LlilOp::Store { size, addr, value } => write!(f, "mem{size}[{addr}] = {value}"),
-            LlilOp::Jump(e) => write!(f, "goto {e}"),
-            LlilOp::CondJump { cond, target } => write!(f, "if ({cond}) goto {target}"),
-            LlilOp::Call(e) => write!(f, "call {e}"),
-            LlilOp::Return(e) => write!(f, "return {e}"),
-            LlilOp::SetFlags(e) => write!(f, "flags = flags({e})"),
-            LlilOp::Trap(n) => write!(f, "trap {n}"),
-            LlilOp::Nop => write!(f, "nop"),
-            LlilOp::PushWindow { rd, rs1, src } => write!(f, "push_window {rd} = {rs1} + {src}"),
-            LlilOp::PopWindow { rd, rs1, src } => write!(f, "pop_window {rd} = {rs1} + {src}"),
-            LlilOp::Unimplemented(s) => write!(f, "unimpl({s})"),
+            Self::SetReg { dest, value } => write!(f, "{dest} = {value}"),
+            Self::Store { size, addr, value } => write!(f, "mem{size}[{addr}] = {value}"),
+            Self::Jump(e) => write!(f, "goto {e}"),
+            Self::CondJump { cond, target } => write!(f, "if ({cond}) goto {target}"),
+            Self::Call(e) => write!(f, "call {e}"),
+            Self::Return(e) => write!(f, "return {e}"),
+            Self::SetFlags(e) => write!(f, "flags = flags({e})"),
+            Self::Trap(n) => write!(f, "trap {n}"),
+            Self::Nop => write!(f, "nop"),
+            Self::PushWindow { rd, rs1, src } => write!(f, "push_window {rd} = {rs1} + {src}"),
+            Self::PopWindow { rd, rs1, src } => write!(f, "pop_window {rd} = {rs1} + {src}"),
+            Self::Unimplemented(s) => write!(f, "unimpl({s})"),
         }
     }
 }
@@ -266,7 +266,7 @@ impl RegisterBank {
     pub const fn set_icc(&mut self, result: i64, carry: bool, overflow: bool) {
         let n = result < 0;
         let z = result == 0;
-        let mut psr = self.psr & !0x00F00000;
+        let mut psr = self.psr & !0x00F0_0000;
         if n {
             psr |= 1 << 23;
         }
@@ -284,7 +284,7 @@ impl RegisterBank {
 
     /// Evaluate a branch condition against current PSR.
     #[must_use]
-    pub fn eval_condition(&self, cond: Cond) -> bool {
+    pub const fn eval_condition(&self, cond: Cond) -> bool {
         let n = self.n_flag();
         let z = self.z_flag();
         let v = self.v_flag();
@@ -364,12 +364,22 @@ impl SparcLifter {
     }
 
     /// Lift a single raw 32-bit word.
+    ///
+    /// # Errors
+    ///
+    /// Returns the decoder's [`DecodeError`] when the word is not a valid SPARC
+    /// encoding.
     pub fn lift(&mut self, raw: u32, pc: u64) -> Result<LiftedInsn, DecodeError> {
         let insn = self.decoder.decode(raw)?;
         Ok(self.lift_insn(insn, pc))
     }
 
     /// Lift from a byte slice (big-endian).
+    ///
+    /// # Errors
+    ///
+    /// Returns the decoder's [`DecodeError`] when the slice is shorter than one
+    /// instruction or does not hold a valid SPARC encoding.
     pub fn lift_bytes(&mut self, bytes: &[u8], pc: u64) -> Result<LiftedInsn, DecodeError> {
         let insn = self.decoder.decode_bytes(bytes)?;
         Ok(self.lift_insn(insn, pc))
@@ -381,13 +391,19 @@ impl SparcLifter {
     }
 
     /// Core lifting logic.
+    ///
+    /// # Panics
+    ///
+    /// Panics only on an allocation failure while building the returned
+    /// operation vector; every operand access falls back to a default rather
+    /// than indexing out of range.
     pub fn lift_sparc_insn(&self, insn: &SparcInsn, pc: u64) -> Vec<LlilOp> {
         let mn = insn.mnemonic.as_str();
         match mn {
             "nop" => vec![LlilOp::Nop],
 
             "call" => {
-                let target = self.lift_operand(
+                let target = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
@@ -402,14 +418,12 @@ impl SparcLifter {
             }
 
             "jmpl" => {
-                let addr = self.lift_operand(
+                let addr = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
                 let rd_name = insn
-                    .rd
-                    .map(reg_str)
-                    .unwrap_or_else(|| "%g0".to_string());
+                    .rd.map_or_else(|| "%g0".to_string(), reg_str);
                 if rd_name == "%g0" {
                     // ret / retl variants
                     vec![LlilOp::Return(addr)]
@@ -425,11 +439,11 @@ impl SparcLifter {
             }
 
             "rett" => {
-                let rs1 = self.lift_operand(
+                let rs1 = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
-                let src = self.lift_operand(
+                let src = Self::lift_operand(
                     insn.operands.get(1).unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
@@ -438,15 +452,15 @@ impl SparcLifter {
             }
 
             "save" => {
-                let rs1 = self.lift_operand(
+                let rs1 = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
-                let src = self.lift_operand(
+                let src = Self::lift_operand(
                     insn.operands.get(1).unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
-                let rd = insn.rd.map(reg_str).unwrap_or("%g0".to_string());
+                let rd = insn.rd.map_or_else(|| "%g0".to_string(), reg_str);
                 vec![LlilOp::PushWindow {
                     rd,
                     rs1: rs1.to_string(),
@@ -455,15 +469,15 @@ impl SparcLifter {
             }
 
             "restore" => {
-                let rs1 = self.lift_operand(
+                let rs1 = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
-                let src = self.lift_operand(
+                let src = Self::lift_operand(
                     insn.operands.get(1).unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
-                let rd = insn.rd.map(reg_str).unwrap_or("%g0".to_string());
+                let rd = insn.rd.map_or_else(|| "%g0".to_string(), reg_str);
                 vec![LlilOp::PopWindow {
                     rd,
                     rs1: rs1.to_string(),
@@ -472,7 +486,7 @@ impl SparcLifter {
             }
 
             "sethi" => {
-                let rd = insn.rd.map(reg_str).unwrap_or("%g0".to_string());
+                let rd = insn.rd.map_or_else(|| "%g0".to_string(), reg_str);
                 if let Some(Operand::Imm22(imm22)) = insn.operands.first() {
                     let val = (*imm22) << 10;
                     vec![LlilOp::SetReg {
@@ -484,52 +498,75 @@ impl SparcLifter {
                 }
             }
 
-            "add" | "addx" => self.lift_alu(insn, pc, |a, b| Expr::Add(Box::new(a), Box::new(b))),
-            "sub" | "subx" => self.lift_alu(insn, pc, |a, b| Expr::Sub(Box::new(a), Box::new(b))),
-            "and" => self.lift_alu(insn, pc, |a, b| Expr::And(Box::new(a), Box::new(b))),
-            "or" => self.lift_alu(insn, pc, |a, b| Expr::Or(Box::new(a), Box::new(b))),
-            "xor" => self.lift_alu(insn, pc, |a, b| Expr::Xor(Box::new(a), Box::new(b))),
-            "andn" => self.lift_alu(insn, pc, |a, b| {
+            "add" | "addx" => Self::lift_alu(insn, pc, |a, b| Expr::Add(Box::new(a), Box::new(b))),
+            _ => Self::lift_sparc_insn_b(insn, pc),
+        }
+    }
+
+    /// Continuation of [`lift_sparc_insn`]; split out only to keep each function short.
+    fn lift_sparc_insn_b(insn: &SparcInsn, pc: u64) -> Vec<LlilOp> {
+        let mn = insn.mnemonic.as_str();
+        match mn {
+            "sub" | "subx" => Self::lift_alu(insn, pc, |a, b| Expr::Sub(Box::new(a), Box::new(b))),
+            "and" => Self::lift_alu(insn, pc, |a, b| Expr::And(Box::new(a), Box::new(b))),
+            "or" => Self::lift_alu(insn, pc, |a, b| Expr::Or(Box::new(a), Box::new(b))),
+            "xor" => Self::lift_alu(insn, pc, |a, b| Expr::Xor(Box::new(a), Box::new(b))),
+            "andn" => Self::lift_alu(insn, pc, |a, b| {
                 Expr::And(Box::new(a), Box::new(Expr::Not(Box::new(b))))
             }),
-            "orn" => self.lift_alu(insn, pc, |a, b| {
+            "orn" => Self::lift_alu(insn, pc, |a, b| {
                 Expr::Or(Box::new(a), Box::new(Expr::Not(Box::new(b))))
             }),
-            "xnor" => self.lift_alu(insn, pc, |a, b| {
+            "xnor" => Self::lift_alu(insn, pc, |a, b| {
                 Expr::Not(Box::new(Expr::Xor(Box::new(a), Box::new(b))))
             }),
-            "sll" => self.lift_alu(insn, pc, |a, b| Expr::Shl(Box::new(a), Box::new(b))),
-            "srl" => self.lift_alu(insn, pc, |a, b| Expr::Shr(Box::new(a), Box::new(b))),
-            "sra" => self.lift_alu(insn, pc, |a, b| Expr::AShr(Box::new(a), Box::new(b))),
+            "sll" => Self::lift_alu(insn, pc, |a, b| Expr::Shl(Box::new(a), Box::new(b))),
+            "srl" => Self::lift_alu(insn, pc, |a, b| Expr::Shr(Box::new(a), Box::new(b))),
+            _ => Self::lift_sparc_insn_more(insn, pc),
+        }
+    }
+
+    /// Continuation of [`lift_sparc_insn`]; split out only to keep each function short.
+    fn lift_sparc_insn_more(insn: &SparcInsn, pc: u64) -> Vec<LlilOp> {
+        let mn = insn.mnemonic.as_str();
+        match mn {
+            "sra" => Self::lift_alu(insn, pc, |a, b| Expr::AShr(Box::new(a), Box::new(b))),
             "umul" | "mulscc" => {
-                self.lift_alu(insn, pc, |a, b| Expr::UMul(Box::new(a), Box::new(b)))
+                Self::lift_alu(insn, pc, |a, b| Expr::UMul(Box::new(a), Box::new(b)))
             }
-            "smul" => self.lift_alu(insn, pc, |a, b| Expr::SMul(Box::new(a), Box::new(b))),
-            "udiv" => self.lift_alu(insn, pc, |a, b| Expr::UDiv(Box::new(a), Box::new(b))),
-            "sdiv" => self.lift_alu(insn, pc, |a, b| Expr::SDiv(Box::new(a), Box::new(b))),
+            "smul" => Self::lift_alu(insn, pc, |a, b| Expr::SMul(Box::new(a), Box::new(b))),
+            "udiv" => Self::lift_alu(insn, pc, |a, b| Expr::UDiv(Box::new(a), Box::new(b))),
+            "sdiv" => Self::lift_alu(insn, pc, |a, b| Expr::SDiv(Box::new(a), Box::new(b))),
 
             // Loads
-            "ldsb" => self.lift_load(insn, pc, 1, true),
-            "ldsh" => self.lift_load(insn, pc, 2, true),
-            "ldub" => self.lift_load(insn, pc, 1, false),
-            "lduh" => self.lift_load(insn, pc, 2, false),
-            "ld" => self.lift_load(insn, pc, 4, false),
-            "ldd" => self.lift_load(insn, pc, 8, false),
-            "ldf" => self.lift_load(insn, pc, 4, false),
-            "lddf" => self.lift_load(insn, pc, 8, false),
+            "ldsb" => Self::lift_load(insn, pc, 1, true),
+            "ldsh" => Self::lift_load(insn, pc, 2, true),
+            "ldub" => Self::lift_load(insn, pc, 1, false),
+            _ => Self::lift_sparc_insn_more_more(insn, pc),
+        }
+    }
+
+    /// Continuation of [`lift_sparc_insn_more`]; split out only to keep each function short.
+    fn lift_sparc_insn_more_more(insn: &SparcInsn, pc: u64) -> Vec<LlilOp> {
+        let mn = insn.mnemonic.as_str();
+        match mn {
+            "lduh" => Self::lift_load(insn, pc, 2, false),
+            // The FP forms lift identically to the integer forms of the same
+            // width; only the register file they land in differs, and that is
+            // decided by the operand, not here.
+            "ld" | "ldf" => Self::lift_load(insn, pc, 4, false),
+            "ldd" | "lddf" => Self::lift_load(insn, pc, 8, false),
 
             // Stores
-            "stb" => self.lift_store(insn, pc, 1),
-            "sth" => self.lift_store(insn, pc, 2),
-            "st" => self.lift_store(insn, pc, 4),
-            "std" => self.lift_store(insn, pc, 8),
-            "stf" => self.lift_store(insn, pc, 4),
-            "stdf" => self.lift_store(insn, pc, 8),
+            "stb" => Self::lift_store(insn, pc, 1),
+            "sth" => Self::lift_store(insn, pc, 2),
+            "st" | "stf" => Self::lift_store(insn, pc, 4),
+            "std" | "stdf" => Self::lift_store(insn, pc, 8),
 
             // Branches
             _ if insn.branch_cond.is_some() => {
                 let cond = insn.branch_cond.unwrap();
-                let target = self.lift_operand(
+                let target = Self::lift_operand(
                     insn.operands.first().unwrap_or(&Operand::Reg(0)),
                     pc,
                 );
@@ -549,20 +586,21 @@ impl SparcLifter {
                 vec![LlilOp::Trap(0)]
             }
 
-            "rd" | "wr" | "flush" => vec![LlilOp::Unimplemented(mn.to_string())],
-
+            // RD/WR/FLUSH are state-register and cache operations with no
+            // data-flow model here, which is also how any unrecognised
+            // mnemonic is treated.
             _ => vec![LlilOp::Unimplemented(mn.to_string())],
         }
     }
 
-    fn lift_alu<F>(&self, insn: &SparcInsn, pc: u64, f: F) -> Vec<LlilOp>
+    fn lift_alu<F>(insn: &SparcInsn, pc: u64, f: F) -> Vec<LlilOp>
     where
         F: FnOnce(Expr, Expr) -> Expr,
     {
-        let rs1 = self.lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
-        let src = self.lift_operand(insn.operands.get(1).unwrap_or(&Operand::Reg(0)), pc);
+        let rs1 = Self::lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
+        let src = Self::lift_operand(insn.operands.get(1).unwrap_or(&Operand::Reg(0)), pc);
         let result = f(rs1, src);
-        let rd = insn.rd.map(reg_str).unwrap_or("%g0".to_string());
+        let rd = insn.rd.map_or_else(|| "%g0".to_string(), reg_str);
         let mut ops = Vec::new();
         if insn.sets_icc {
             ops.push(LlilOp::SetFlags(result.clone()));
@@ -576,15 +614,15 @@ impl SparcLifter {
         ops
     }
 
-    fn lift_load(&self, insn: &SparcInsn, pc: u64, size: u32, sign_extend: bool) -> Vec<LlilOp> {
-        let addr = self.lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
+    fn lift_load(insn: &SparcInsn, pc: u64, size: u32, sign_extend: bool) -> Vec<LlilOp> {
+        let addr = Self::lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
         let load_expr = Expr::Load(size, Box::new(addr));
         let value = if sign_extend {
             Expr::SxN(32, Box::new(load_expr))
         } else {
             Expr::ZxN(32, Box::new(load_expr))
         };
-        let rd = insn.rd.map(reg_str).unwrap_or("%g0".to_string());
+        let rd = insn.rd.map_or_else(|| "%g0".to_string(), reg_str);
         if rd == "%g0" {
             vec![LlilOp::Nop]
         } else {
@@ -592,10 +630,10 @@ impl SparcLifter {
         }
     }
 
-    fn lift_store(&self, insn: &SparcInsn, pc: u64, size: u32) -> Vec<LlilOp> {
+    fn lift_store(insn: &SparcInsn, pc: u64, size: u32) -> Vec<LlilOp> {
         // First operand is the value reg, second is address
-        let val = self.lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
-        let addr = self.lift_operand(insn.operands.get(1).unwrap_or(&Operand::Reg(0)), pc);
+        let val = Self::lift_operand(insn.operands.first().unwrap_or(&Operand::Reg(0)), pc);
+        let addr = Self::lift_operand(insn.operands.get(1).unwrap_or(&Operand::Reg(0)), pc);
         vec![LlilOp::Store {
             size,
             addr,
@@ -603,7 +641,7 @@ impl SparcLifter {
         }]
     }
 
-    fn lift_operand(&self, op: &Operand, pc: u64) -> Expr {
+    fn lift_operand(op: &Operand, pc: u64) -> Expr {
         match op {
             Operand::Reg(r) => {
                 if *r == 0 {
@@ -616,8 +654,8 @@ impl SparcLifter {
             Operand::Simm13(v) => Expr::Const(i64::from(*v)),
             Operand::Imm22(v) => Expr::UConst(u64::from(*v)),
             Operand::PcOff(v) => {
-                let target = (pc as i64) + i64::from(*v) * 4;
-                Expr::UConst(target as u64)
+                let target = (pc).cast_signed() + i64::from(*v) * 4;
+                Expr::UConst((target).cast_unsigned())
             }
             Operand::MemReg(b, i) => {
                 let base = if *b == 0 {
@@ -702,25 +740,25 @@ mod tests {
 
     fn encode_f3_rrr(op3: u8, rd: u8, rs1: u8, rs2: u8) -> u32 {
         (0b10 << 30)
-            | ((rd as u32) << 25)
-            | ((op3 as u32) << 19)
-            | ((rs1 as u32) << 14)
-            | (rs2 as u32)
+            | (u32::from(rd) << 25)
+            | (u32::from(op3) << 19)
+            | (u32::from(rs1) << 14)
+            | u32::from(rs2)
     }
     fn encode_f3_rri(op3: u8, rd: u8, rs1: u8, simm13: i16) -> u32 {
         (0b10 << 30)
-            | ((rd as u32) << 25)
-            | ((op3 as u32) << 19)
-            | ((rs1 as u32) << 14)
+            | (u32::from(rd) << 25)
+            | (u32::from(op3) << 19)
+            | (u32::from(rs1) << 14)
             | (1 << 13)
-            | ((simm13 as u32) & 0x1FFF)
+            | (u32::from(simm13.cast_unsigned()) & 0x1FFF)
     }
     fn encode_f3_mem(op3: u8, rd: u8, rs1: u8, rs2: u8) -> u32 {
         (0b11 << 30)
-            | ((rd as u32) << 25)
-            | ((op3 as u32) << 19)
-            | ((rs1 as u32) << 14)
-            | (rs2 as u32)
+            | (u32::from(rd) << 25)
+            | (u32::from(op3) << 19)
+            | (u32::from(rs1) << 14)
+            | u32::from(rs2)
     }
     fn encode_call(disp30: u32) -> u32 {
         (0b01 << 30) | (disp30 & 0x3FFF_FFFF)
@@ -967,7 +1005,7 @@ mod tests {
     fn test_lift_branch_always() {
         let mut l = lifter();
         // ba: op2=010, cond=A (1000), annul=0
-        let raw: u32 = (0b10000 << 25) | (0b010 << 22) | 50;
+        let raw: u32 = (0b10000 << 25) | (0b010 << 22) | 0x32;
         let lifted = l.lift(raw, 0x1000).unwrap();
         assert!(lifted.ops.iter().any(|o| matches!(o, LlilOp::Jump(_))));
     }
@@ -1063,7 +1101,7 @@ impl RegisterWindowSimulator {
 
     /// Execute a SAVE: rotate window, compute new %sp.
     pub fn execute_save(&mut self, rs1: u64, src: i64) -> u64 {
-        let new_sp = (rs1 as i64).wrapping_add(src) as u64;
+        let new_sp = rs1.cast_signed().wrapping_add(src).cast_unsigned();
         self.bank.save_window();
         self.bank.write(14, new_sp); // %sp = %o6
         self.call_depth += 1;
@@ -1071,8 +1109,8 @@ impl RegisterWindowSimulator {
     }
 
     /// Execute a RESTORE: rotate window back.
-    pub fn execute_restore(&mut self, rs1: u64, src: i64) -> u64 {
-        let result = (rs1 as i64).wrapping_add(src) as u64;
+    pub const fn execute_restore(&mut self, rs1: u64, src: i64) -> u64 {
+        let result = rs1.cast_signed().wrapping_add(src).cast_unsigned();
         self.bank.restore_window();
         self.call_depth = self.call_depth.saturating_sub(1);
         result
@@ -1102,10 +1140,10 @@ mod extra_tests {
 
     fn encode_f3_rrr(op3: u8, rd: u8, rs1: u8, rs2: u8) -> u32 {
         (0b10 << 30)
-            | ((rd as u32) << 25)
-            | ((op3 as u32) << 19)
-            | ((rs1 as u32) << 14)
-            | (rs2 as u32)
+            | (u32::from(rd) << 25)
+            | (u32::from(op3) << 19)
+            | (u32::from(rs1) << 14)
+            | u32::from(rs2)
     }
 
     #[test]
@@ -1145,15 +1183,15 @@ mod extra_tests {
     #[test]
     fn test_register_window_sim_save() {
         let mut sim = RegisterWindowSimulator::new();
-        let new_sp = sim.execute_save(0x7fff0000, -96);
-        assert_eq!(new_sp, 0x7fff0000u64.wrapping_add((-96i64) as u64));
+        let new_sp = sim.execute_save(0x7fff_0000, -96);
+        assert_eq!(new_sp, 0x7fff_0000u64.wrapping_add((-96i64).cast_unsigned()));
         assert_eq!(sim.call_depth, 1);
     }
 
     #[test]
     fn test_register_window_sim_restore() {
         let mut sim = RegisterWindowSimulator::new();
-        sim.execute_save(0x7fff0000, -96);
+        sim.execute_save(0x7fff_0000, -96);
         sim.execute_restore(0, 0);
         assert_eq!(sim.call_depth, 0);
     }
@@ -1161,9 +1199,9 @@ mod extra_tests {
     #[test]
     fn test_register_window_sim_sp() {
         let mut sim = RegisterWindowSimulator::new();
-        sim.execute_save(0x7fff0060, -96);
+        sim.execute_save(0x7fff_0060, -96);
         let sp = sim.current_sp();
-        assert_eq!(sp, 0x7fff0000);
+        assert_eq!(sp, 0x7fff_0000);
     }
 
     #[test]
@@ -1174,7 +1212,7 @@ mod extra_tests {
 
     #[test]
     fn test_expr_display_load() {
-        let e = Expr::Load(4, Box::new(Expr::UConst(0x401000)));
+        let e = Expr::Load(4, Box::new(Expr::UConst(0x40_1000)));
         assert!(e.to_string().contains("mem4"));
     }
 
@@ -1201,7 +1239,7 @@ mod extra_tests {
     #[test]
     fn test_lifted_insn_has_delay_slot_call() {
         let mut l = SparcLifter::new();
-        let call_raw: u32 = (0b01u32 << 30) | 100u32;
+        let call_raw: u32 = (0b01u32 << 30) | 0x64u32;
         let li = l.lift(call_raw, 0x1000).unwrap();
         assert!(li.insn.has_delay_slot);
     }

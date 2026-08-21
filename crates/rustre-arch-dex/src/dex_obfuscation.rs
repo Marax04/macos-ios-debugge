@@ -120,7 +120,7 @@ impl ProGuardPatterns {
         if self.total == 0 {
             0.0
         } else {
-            self.names.len() as f64 / self.total as f64
+            count_as_f64(self.names.len()) / count_as_f64(self.total)
         }
     }
 
@@ -256,7 +256,7 @@ impl SingleLetterNames {
         if self.total == 0 {
             0.0
         } else {
-            self.total_single_letter() as f64 / self.total as f64
+            count_as_f64(self.total_single_letter()) / count_as_f64(self.total)
         }
     }
 
@@ -321,7 +321,7 @@ impl EncryptedStrings {
         for &b in bytes {
             freq[b as usize] += 1;
         }
-        let len = bytes.len() as f64;
+        let len = count_as_f64(bytes.len());
         freq.iter()
             .filter(|&&c| c > 0)
             .map(|&c| {
@@ -360,7 +360,7 @@ impl EncryptedStrings {
         if self.total == 0 {
             0.0
         } else {
-            self.candidates.len() as f64 / self.total as f64
+            count_as_f64(self.candidates.len()) / count_as_f64(self.total)
         }
     }
 }
@@ -586,6 +586,14 @@ impl DexObfuscation {
 // Tests
 // ---------------------------------------------------------------------------
 
+/// Widen a count to `f64` for ratio arithmetic.
+///
+/// Counts here are bounded by the DEX index space (32-bit), so saturating at
+/// `u32::MAX` keeps the widening exact and free of precision loss.
+fn count_as_f64(n: usize) -> f64 {
+    f64::from(u32::try_from(n).unwrap_or(u32::MAX))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -740,7 +748,10 @@ mod tests {
     #[test]
     fn test_encrypted_entropy() {
         let uniform = vec![0xAAu8; 16];
-        assert_eq!(EncryptedStrings::entropy(&uniform), 0.0);
+        assert!(
+            EncryptedStrings::entropy(&uniform).abs() < f64::EPSILON,
+            "a single repeated byte carries zero entropy"
+        );
         let mixed: Vec<u8> = (0..=255u8).collect();
         let e = EncryptedStrings::entropy(&mixed);
         assert!((e - 8.0).abs() < 0.001);
@@ -749,7 +760,7 @@ mod tests {
     #[test]
     fn test_encrypted_record_high_entropy() {
         let mut es = EncryptedStrings::new();
-        let data: Vec<u8> = (0..200).map(|i| i as u8).collect();
+        let data: Vec<u8> = (0u8..200).collect();
         es.record(0, data);
         assert!(es.has_encrypted());
     }
@@ -774,7 +785,7 @@ mod tests {
     fn test_encrypted_ratio() {
         let mut es = EncryptedStrings::new();
         let plain = b"Normal string".to_vec();
-        let enc: Vec<u8> = (0..200).map(|i| i as u8).collect();
+        let enc: Vec<u8> = (0u8..200).collect();
         es.record(0, plain);
         es.record(1, enc);
         let ratio = es.encrypted_ratio();

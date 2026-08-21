@@ -1,6 +1,8 @@
-//! WebAssembly execution model: value stack simulation, frame stack, label stack
-//! for structured control flow (block/loop/if), locals array, operand type
-//! tracking, branch depth handling, and trap conditions.
+//! WebAssembly execution model.
+//!
+//! Value stack simulation, frame stack, label stack for structured control flow
+//! (block/loop/if), locals array, operand type tracking, branch depth handling,
+//! and trap conditions.
 
 use std::fmt;
 
@@ -182,15 +184,24 @@ impl ExecStack {
     /// Pop a value from the stack.
     ///
     /// Returns `Err(WasmTrap)` if the stack is empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WasmTrap::StackUnderflow`] if the value stack is empty.
     pub fn pop(&mut self) -> Result<WasmValue, WasmTrap> {
         self.values
             .pop()
-            .ok_or(WasmTrap::Other("stack underflow".into()))
+            .ok_or_else(|| WasmTrap::Other("stack underflow".into()))
     }
 
     /// Pop a value of a specific expected type.
     ///
     /// Returns `Err` if the stack is empty or the type does not match.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WasmTrap::StackUnderflow`] if the stack is empty, or
+    /// [`WasmTrap::TypeMismatch`] if the top value is not of `expected` type.
     pub fn pop_typed(&mut self, expected: WasmValType) -> Result<WasmValue, WasmTrap> {
         let v = self.pop()?;
         if v.val_type() != expected {
@@ -362,7 +373,7 @@ impl LabelStack {
     /// Return `true` when the current code position is unreachable.
     #[must_use]
     pub fn is_unreachable(&self) -> bool {
-        self.labels.last().map(|l| l.unreachable).unwrap_or(false)
+        self.labels.last().is_some_and(|l| l.unreachable)
     }
 }
 
@@ -408,12 +419,10 @@ impl CallFrame {
     ///
     /// Returns `false` when the index is out of bounds.
     pub fn set_local(&mut self, index: u32, value: WasmValue) -> bool {
-        if let Some(slot) = self.locals.get_mut(index as usize) {
+        self.locals.get_mut(index as usize).is_some_and(|slot| {
             *slot = value;
             true
-        } else {
-            false
-        }
+        })
     }
 
     /// Number of locals in this frame.
@@ -443,6 +452,11 @@ impl FrameStack {
     }
 
     /// Push a new frame, returning `Err(WasmTrap::StackOverflow)` if too deep.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WasmTrap::StackOverflow`] if the frame stack is already at
+    /// `MAX_DEPTH`.
     pub fn push(&mut self, frame: CallFrame) -> Result<(), WasmTrap> {
         if self.frames.len() >= Self::MAX_DEPTH {
             return Err(WasmTrap::StackOverflow);
@@ -584,14 +598,11 @@ impl WasmExecutor {
     /// Unwinds the stack to the label's recorded depth, preserving the
     /// label's result arity values on top.
     pub fn branch(&mut self, depth: u32) -> bool {
-        let label = match self.labels.get(depth) {
-            Some(l) => l.clone(),
-            None => {
-                self.trap = Some(WasmTrap::Other(format!(
-                    "branch depth {depth} out of range"
-                )));
-                return false;
-            }
+        let label = if let Some(l) = self.labels.get(depth) { l.clone() } else {
+            self.trap = Some(WasmTrap::Other(format!(
+                "branch depth {depth} out of range"
+            )));
+            return false;
         };
         let keep = label.result_arity;
         let target_depth = label.stack_depth;
@@ -713,7 +724,7 @@ impl<'a> BranchDepthResolver<'a> {
 
     /// Return `true` if `depth` is a valid branch depth.
     #[must_use]
-    pub fn is_valid(&self, depth: u32) -> bool {
+    pub const fn is_valid(&self, depth: u32) -> bool {
         (depth as usize) < self.labels.depth()
     }
 
@@ -737,13 +748,10 @@ impl<'a> BranchDepthResolver<'a> {
         if labels.is_empty() {
             return false;
         }
-        let first_arity = match self.result_arity(labels[0]) {
-            Some(a) => a,
-            None => return false,
-        };
+        let Some(first_arity) = self.result_arity(labels[0]) else { return false };
         labels.iter().all(|&d| {
             self.is_valid(d)
-                && self.result_arity(d).map_or(false, |a| a == first_arity)
+                && (self.result_arity(d) == Some(first_arity))
         })
     }
 }
@@ -827,7 +835,8 @@ mod tests {
         let mut fs = FrameStack::new();
         let limit = FrameStack::MAX_DEPTH;
         for i in 0..limit {
-            fs.push(CallFrame::new(i as u32, vec![], 0)).unwrap();
+            fs.push(CallFrame::new(u32::try_from(i).unwrap_or(u32::MAX), vec![], 0))
+                .unwrap();
         }
         let result = fs.push(CallFrame::new(999, vec![], 0));
         assert!(matches!(result, Err(WasmTrap::StackOverflow)));
@@ -835,7 +844,7 @@ mod tests {
 
     #[test]
     fn test_call_frame_locals() {
-        let locals = vec![WasmValue::I32(10), WasmValue::F64(3.14)];
+        let locals = vec![WasmValue::I32(10), WasmValue::F64(core::f64::consts::PI)];
         let mut frame = CallFrame::new(1, locals, 0);
         assert_eq!(frame.get_local(0).unwrap().as_i32(), Some(10));
         frame.set_local(0, WasmValue::I32(99));

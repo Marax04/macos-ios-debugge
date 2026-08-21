@@ -79,12 +79,9 @@ impl LuaType {
         }
         match (a, b) {
             (Self::Unknown, other) | (other, Self::Unknown) => other,
-            (Self::Integer, Self::Float)
-            | (Self::Float, Self::Integer) => Self::Number,
-            (Self::Integer, Self::Number)
-            | (Self::Number, Self::Integer) => Self::Number,
-            (Self::Float, Self::Number)
-            | (Self::Number, Self::Float) => Self::Number,
+            (Self::Integer | Self::Number, Self::Float) |
+(Self::Float | Self::Number, Self::Integer) |
+(Self::Integer | Self::Float, Self::Number) => Self::Number,
             (Self::Union(mut v), other) | (other, Self::Union(mut v)) => {
                 if !v.contains(&other) {
                     v.push(other);
@@ -480,7 +477,7 @@ impl TypeInferencer {
             changed = false;
             pass += 1;
             for instr in instrs {
-                let updated = self.process_instr(instr, &mut result.env, &mut result.tables);
+                let updated = Self::process_instr(instr, &mut result.env, &mut result.tables);
                 if updated {
                     changed = true;
                 }
@@ -503,7 +500,7 @@ impl TypeInferencer {
         result.unresolved.sort_unstable();
 
         // Infer signature from register types at function entry/exit.
-        result.signature = self.infer_signature(instrs, &result.env);
+        result.signature = Self::infer_signature(instrs, &result.env);
 
         result
     }
@@ -512,17 +509,13 @@ impl TypeInferencer {
     ///
     /// Returns `true` if the environment changed.
     fn process_instr(
-        &self,
         instr: &TypeInferInstr,
         env: &mut TypeEnv,
         tables: &mut HashMap<u32, TableShape>,
     ) -> bool {
-        let dst = match instr.dst {
-            Some(d) => d,
-            None => return false,
-        };
+        let Some(dst) = instr.dst else { return false };
         let old = env.get(dst).clone();
-        let new_ty = self.infer_instr_type(instr, env, tables);
+        let new_ty = Self::infer_instr_type(instr, env, tables);
         if new_ty == old {
             false
         } else {
@@ -533,20 +526,17 @@ impl TypeInferencer {
 
     /// Infer the type produced by an instruction.
     fn infer_instr_type(
-        &self,
         instr: &TypeInferInstr,
         env: &TypeEnv,
         tables: &mut HashMap<u32, TableShape>,
     ) -> LuaType {
         match instr.mnemonic.as_str() {
             // Load immediate integer.
-            "loadi" => LuaType::Integer,
             // Load immediate float.
-            "loadf" => LuaType::Float,
+            "loadf" | "div" | "divk" | "pow" | "powk" => LuaType::Float,
             // Load boolean false.
-            "loadfalse" | "loadbool" => LuaType::Boolean,
+            "loadfalse" | "loadbool" | "loadtrue" | "not" => LuaType::Boolean,
             // Load true.
-            "loadtrue" => LuaType::Boolean,
             // Load nil.
             "loadnil" => LuaType::Nil,
             // Load from constant pool; type depends on whether we have imm_int/float/str.
@@ -573,25 +563,20 @@ impl TypeInferencer {
                 infer_arith_result(ta, tb)
             }
             // Division always produces float.
-            "div" | "divk" => LuaType::Float,
             // Power always produces float.
-            "pow" | "powk" => LuaType::Float,
             // Unary minus: integer → integer, float → float, else number.
             "unm" => {
                 instr.src_a.map_or(LuaType::Number, |src| match env.get(src) {
                         LuaType::Integer => LuaType::Integer,
                         LuaType::Float => LuaType::Float,
-                        LuaType::Number => LuaType::Number,
                         _ => LuaType::Number,
                     })
             }
             // Bitwise ops: integer → integer.
-            "band" | "bor" | "bxor" | "shl" | "shr" | "bandk" | "bork" | "bxork"
-            | "shri" | "shli" | "bnot" => LuaType::Integer,
             // Length operator: integer.
-            "len" => LuaType::Integer,
+            "loadi" | "band" | "bor" | "bxor" | "shl" | "shr" | "bandk" | "bork" | "bxork"
+            | "shri" | "shli" | "bnot" | "len" => LuaType::Integer,
             // Logical not: boolean.
-            "not" => LuaType::Boolean,
             // Concatenation: string.
             "concat" => LuaType::String,
             // New table.
@@ -601,26 +586,19 @@ impl TypeInferencer {
                 LuaType::Table(TableShape::new())
             }
             // Get table field.
-            "gettable" | "gettabup" | "getfield" | "geti" => LuaType::Unknown,
             // Self: table + method lookup.
-            "self" => LuaType::Unknown,
             // Call result: unknown unless we track call targets.
-            "call" | "tailcall" => LuaType::Unknown,
             // Get upvalue.
-            "getupval" => LuaType::Unknown,
             // For loop index variable: number.
-            "forprep" | "forloop" | "tforprep" | "tforcall" | "tforloop" => LuaType::Unknown,
             // Closure: function type.
             "closure" => LuaType::Function(Box::new(FunctionSig::new())),
             // Vararg: unknown tuple.
-            "vararg" | "varargprep" => LuaType::Unknown,
             _ => LuaType::Unknown,
         }
     }
 
     /// Infer a function signature from the instruction sequence.
     fn infer_signature(
-        &self,
         instrs: &[TypeInferInstr],
         env: &TypeEnv,
     ) -> FunctionSig {
@@ -683,11 +661,9 @@ impl TypeInferencer {
 /// Infer the result type of an arithmetic operation given operand types.
 const fn infer_arith_result(a: &LuaType, b: &LuaType) -> LuaType {
     match (a, b) {
-        (LuaType::Integer, LuaType::Integer) => LuaType::Integer,
         (LuaType::Float, _) | (_, LuaType::Float) => LuaType::Float,
-        (LuaType::Number, _) | (_, LuaType::Number) => LuaType::Number,
-        (LuaType::Integer, LuaType::Unknown)
-        | (LuaType::Unknown, LuaType::Integer) => LuaType::Integer,
+        (LuaType::Integer | LuaType::Unknown, LuaType::Integer) |
+(LuaType::Integer, LuaType::Unknown) => LuaType::Integer,
         _ => LuaType::Number,
     }
 }
@@ -826,21 +802,15 @@ impl ConstraintSolver {
                 break;
             }
             iterations += 1;
-            self.apply_constraint(constraint, &mut result);
+            Self::apply_constraint(constraint, &mut result);
         }
 
         result
     }
 
-    fn apply_constraint(&self, constraint: &TypeConstraint, env: &mut TypeEnv) {
+    fn apply_constraint(constraint: &TypeConstraint, env: &mut TypeEnv) {
         match constraint {
-            TypeConstraint::Is { reg, ty } => {
-                let current = env.get(*reg).clone();
-                if current == LuaType::Unknown {
-                    env.set(*reg, ty.clone());
-                }
-            }
-            TypeConstraint::SubtypeOf { reg, ty } => {
+            TypeConstraint::Is { reg, ty } | TypeConstraint::SubtypeOf { reg, ty } => {
                 let current = env.get(*reg).clone();
                 if current == LuaType::Unknown {
                     env.set(*reg, ty.clone());

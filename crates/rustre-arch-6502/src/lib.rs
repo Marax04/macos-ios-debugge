@@ -102,6 +102,31 @@ pub enum AddrMode {
 }
 
 impl AddrMode {
+    /// Number of operand bytes (not counting the opcode byte), as a `u8`.
+    ///
+    /// Every arm yields 0, 1 or 2, so callers wanting a `u8` get one directly
+    /// instead of narrowing a wider value.
+    #[must_use]
+    pub const fn extra_bytes_u8(self) -> u8 {
+        match self {
+            Self::Implied | Self::Accumulator | Self::Illegal => 0,
+            Self::Immediate
+            | Self::ZeroPage
+            | Self::ZeroPageX
+            | Self::ZeroPageY
+            | Self::IndirectX
+            | Self::IndirectY
+            | Self::Relative
+            | Self::ZeroPageIndirect => 1,
+            Self::Absolute
+            | Self::AbsoluteX
+            | Self::AbsoluteY
+            | Self::Indirect
+            | Self::AbsoluteIndirectX
+            | Self::RelativeLong => 2,
+        }
+    }
+
     /// Number of operand bytes (not counting the opcode byte).
     #[must_use]
     pub const fn extra_bytes(self) -> u16 {
@@ -785,7 +810,7 @@ pub fn format_operand(mode: AddrMode, bytes: &[u8], pc: u64) -> String {
         AddrMode::IndirectX => format!("(${b1:02X},X)"),
         AddrMode::IndirectY => format!("(${b1:02X}),Y"),
         AddrMode::Relative => {
-            let offset = b1 as i8;
+            let offset = b1.cast_signed();
             let target = pc
                 .wrapping_add(2)
                 .wrapping_add(i64::from(offset).cast_unsigned());
@@ -957,9 +982,9 @@ impl Architecture for Cpu6502Arch {
         let target_val: Option<u64> = match bytes.len() {
             // Relative branches: opcode + 1-byte signed offset.
             2 => {
-                let offset = i64::from(bytes[1] as i8);
+                let offset = i64::from(bytes[1].cast_signed());
                 let next_pc = instr.address.as_u64().wrapping_add(2);
-                Some((next_pc as i64).wrapping_add(offset) as u64)
+                Some(next_pc.cast_signed().wrapping_add(offset).cast_unsigned())
             }
             // Absolute / absolute-X jumps: opcode + 2-byte little-endian address.
             3 => {
@@ -1292,6 +1317,30 @@ impl Cpu6502State {
 
 // ── Single-step emulator ──────────────────────────────────────────────────────
 
+/// Fields of one decoded instruction, gathered once so the opcode groups can
+/// share a single parameter instead of eight.
+#[derive(Clone, Copy)]
+struct ExecArgs {
+    opcode: u8,
+    op1: u8,
+    op2: u8,
+    mode: AddrMode,
+    pc: u16,
+    next_pc: u16,
+    eff_addr: u16,
+    base_cycles: u8,
+}
+
+/// Result of offering one opcode to a group of arms.
+enum ExecArm {
+    /// The opcode does not belong to this group; try the next one.
+    Unmatched,
+    /// The opcode executed; the caller finishes the PC and cycle bookkeeping.
+    Executed,
+    /// The opcode set the PC and cycle count itself; return this total.
+    Completed(u8),
+}
+
 /// Execute one instruction from `memory[state.pc]`.
 ///
 /// Returns the number of cycles consumed.  The emulation covers all official
@@ -1324,6 +1373,55 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
     let mut extra = extra_cycle;
     let mut branched = false;
 
+    let args = ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        pc,
+        next_pc,
+        eff_addr,
+        base_cycles,
+    };
+
+    for group in [
+        exec_load_store,
+            exec_arith,
+            exec_logic_cmp,
+        exec_shift_jump,
+        exec_branch_stack_flags,
+        exec_illegal_rmw,
+            exec_illegal_misc,
+    ] {
+        match group(state, memory, &args, &mut extra, &mut branched) {
+            ExecArm::Unmatched => {}
+            ExecArm::Executed => break,
+            ExecArm::Completed(c) => return c,
+        }
+    }
+
+    if !branched {
+        state.pc = next_pc;
+    }
+    base_cycles + extra
+}
+
+/// Loads and stores.
+const fn exec_load_store(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        eff_addr,
+        ..
+    } = *args;
     match opcode {
         // ── LDA ──────────────────────────────────────────────────────────────
         0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
@@ -1355,6 +1453,27 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
         0x84 | 0x94 | 0x8C => {
             memory[eff_addr as usize] = state.y;
         }
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// ADC and SBC.
+fn exec_arith(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        ..
+    } = *args;
+    match opcode {
         // ── ADC ──────────────────────────────────────────────────────────────
         0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
             let v = state.read_operand(memory, mode, op1, op2);
@@ -1381,6 +1500,28 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             state.a = result.to_le_bytes()[0];
             state.set_nz(state.a);
         }
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// Bitwise AND/ORA/EOR, compares, BIT and INC/DEC.
+const fn exec_logic_cmp(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        eff_addr,
+        ..
+    } = *args;
+    match opcode {
         // ── AND ──────────────────────────────────────────────────────────────
         0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
             let v = state.read_operand(memory, mode, op1, op2);
@@ -1455,6 +1596,30 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             state.y = state.y.wrapping_sub(1);
             state.set_nz(state.y);
         } // DEY
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// Shifts, rotates, jumps, subroutine calls and BRK.
+fn exec_shift_jump(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        pc,
+        next_pc,
+        base_cycles,
+        ..
+    } = *args;
+    match opcode {
         // ── ASL ──────────────────────────────────────────────────────────────
         0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
             let v = state.read_operand(memory, mode, op1, op2);
@@ -1493,7 +1658,7 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
         0x4C => {
             // JMP abs
             state.pc = u16::from_le_bytes([op1, op2]);
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
         0x6C => {
             // JMP (ind)
@@ -1502,20 +1667,20 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             // 6502 page-wrap bug
             let hi = u16::from(memory[((ptr & 0xFF00) | (ptr.wrapping_add(1) & 0x00FF)) as usize]);
             state.pc = (hi << 8) | lo;
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
         // ── JSR ──────────────────────────────────────────────────────────────
         0x20 => {
             let target = u16::from_le_bytes([op1, op2]);
             state.push16(memory, next_pc.wrapping_sub(1));
             state.pc = target;
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
         // ── RTS ──────────────────────────────────────────────────────────────
         0x60 => {
             let addr = state.pop16(memory).wrapping_add(1);
             state.pc = addr;
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
         // ── RTI ──────────────────────────────────────────────────────────────
         0x40 => {
@@ -1523,7 +1688,7 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             state.p = (p | status::U) & !status::B;
             let ret = state.pop16(memory);
             state.pc = ret;
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
         // ── BRK ──────────────────────────────────────────────────────────────
         0x00 => {
@@ -1533,8 +1698,29 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             let lo = u16::from(memory[0xFFFE]);
             let hi = u16::from(memory[0xFFFF]);
             state.pc = (hi << 8) | lo;
-            return base_cycles;
+            return ExecArm::Completed(base_cycles);
         }
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// Branches, stack push/pull, register transfers and flag ops.
+fn exec_branch_stack_flags(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    extra: &mut u8,
+    branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        pc: _,
+        next_pc,
+        ..
+    } = *args;
+    match opcode {
         // ── Branches ─────────────────────────────────────────────────────────
         0x90 | 0xB0 | 0xF0 | 0x30 | 0xD0 | 0x10 | 0x50 | 0x70 => {
             let taken = match opcode {
@@ -1552,8 +1738,8 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
                 let new_pc = next_pc.wrapping_add_signed(i16::from(op1.cast_signed()));
                 let page_cross_branch = (next_pc & 0xFF00) != (new_pc & 0xFF00);
                 state.pc = new_pc;
-                extra = 1 + u8::from(page_cross_branch);
-                branched = true;
+                *extra = 1 + u8::from(page_cross_branch);
+                *branched = true;
             }
         }
         // ── Stack push/pull ───────────────────────────────────────────────────
@@ -1602,7 +1788,28 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
         0xD8 => state.set_flag(status::D, false), // CLD
         0xF8 => state.set_flag(status::D, true),  // SED
         // ── NOP ──────────────────────────────────────────────────────────────
-        0xEA => {} // official NOP
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// Undocumented read-modify-write opcodes.
+fn exec_illegal_rmw(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        op2,
+        mode,
+        eff_addr,
+        ..
+    } = *args;
+    match opcode {
         // ── Illegal: LAX ─────────────────────────────────────────────────────
         0xA7 | 0xB7 | 0xAF | 0xBF | 0xA3 | 0xB3 => {
             let v = state.read_operand(memory, mode, op1, op2);
@@ -1681,6 +1888,26 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
             state.a = result.to_le_bytes()[0];
             state.set_nz(state.a);
         }
+        _ => return ExecArm::Unmatched,
+    }
+    ExecArm::Executed
+}
+
+/// Remaining undocumented opcodes.
+const fn exec_illegal_misc(
+    state: &mut Cpu6502State,
+    memory: &mut [u8; 65536],
+    args: &ExecArgs,
+    _extra: &mut u8,
+    _branched: &mut bool,
+) -> ExecArm {
+    let ExecArgs {
+        opcode,
+        op1,
+        eff_addr,
+        ..
+    } = *args;
+    match opcode {
         // ── Illegal: ALR ─────────────────────────────────────────────────────
         0x4B => {
             state.a &= op1;
@@ -1751,18 +1978,14 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
         // ── KIL / JAM ────────────────────────────────────────────────────────
         0x02 | 0x22 | 0x42 | 0x62 => {
             // CPU halts; in emulation we just stall by returning max cycles.
-            return 255;
+            return ExecArm::Completed(255);
         }
         // ── All other illegal NOPs (read and discard) ─────────────────────────
-        _ => {
-            // Extra NOPs and unimplemented illegals – consume cycles, do nothing.
-        }
+        // 0xEA is the official NOP; every other byte reaching here behaves
+        // identically.
+        _ => return ExecArm::Unmatched,
     }
-
-    if !branched {
-        state.pc = next_pc;
-    }
-    base_cycles + extra
+    ExecArm::Executed
 }
 
 // ── MemoryBus6502 ─────────────────────────────────────────────────────────────
@@ -1772,8 +1995,9 @@ pub fn execute_one(state: &mut Cpu6502State, memory: &mut [u8; 65536]) -> u8 {
 /// Provides a simple, non-banked address space with helpers for loading
 /// programs and setting the reset vector.
 pub struct MemoryBus6502 {
-    /// Raw 64 KiB RAM.
-    pub ram: [u8; 65536],
+    /// Raw 64 KiB RAM, held on the heap so constructing a bus never needs a
+    /// 64 KiB stack frame (which overflows small worker-thread stacks).
+    pub ram: Box<[u8; 65536]>,
 }
 
 impl Default for MemoryBus6502 {
@@ -1784,21 +2008,31 @@ impl Default for MemoryBus6502 {
 
 impl MemoryBus6502 {
     /// Create a zeroed 64 KiB memory bus.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the vector is built with exactly 65536 elements, so
+    /// the conversion to a fixed-size boxed array always succeeds.
     #[must_use]
-    pub const fn new() -> Self {
-        Self { ram: [0u8; 65536] }
+    pub fn new() -> Self {
+        let ram = vec![0u8; 65536].into_boxed_slice();
+        Self {
+            ram: ram
+                .try_into()
+                .expect("vec![0u8; 65536] is exactly 65536 bytes long"),
+        }
     }
 
     /// Read a byte from `addr`.
     #[inline]
     #[must_use]
-    pub const fn load(&self, addr: u16) -> u8 {
+    pub fn load(&self, addr: u16) -> u8 {
         self.ram[addr as usize]
     }
 
     /// Write `val` to `addr`.
     #[inline]
-    pub const fn store(&mut self, addr: u16, val: u8) {
+    pub fn store(&mut self, addr: u16, val: u8) {
         self.ram[addr as usize] = val;
     }
 
@@ -1806,10 +2040,16 @@ impl MemoryBus6502 {
     ///
     /// Bytes that would exceed address 0xFFFF are silently truncated.
     pub fn load_program(&mut self, program: &[u8], origin: u16) {
-        let start = origin as usize;
-        let end = (start + program.len()).min(65536);
-        let count = end - start;
-        self.ram[start..end].copy_from_slice(&program[..count]);
+        // Zipping bounds the copy to whichever side runs out first, so an
+        // oversized program is truncated instead of panicking.
+        for (dst, &byte) in self
+            .ram
+            .iter_mut()
+            .skip(usize::from(origin))
+            .zip(program.iter())
+        {
+            *dst = byte;
+        }
     }
 
     /// Write the 16-bit reset vector to 0xFFFC–0xFFFD (little-endian).
@@ -2111,6 +2351,54 @@ impl Cpu6502 {
         let mut extra = page_penalty;
         let mut branched = false;
 
+        let args = ExecArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            pc,
+            next_pc,
+            eff_addr,
+            base_cycles,
+        };
+
+        for group in [
+            Self::estep_load_store,
+            Self::estep_alu,
+            Self::estep_shift_jump,
+            Self::estep_branch_stack_flags,
+        ] {
+            match group(state, mem, &args, &mut extra, &mut branched) {
+                ExecArm::Unmatched => {}
+                ExecArm::Executed => break,
+                ExecArm::Completed(c) => return c,
+            }
+        }
+
+        if !branched {
+            state.pc = next_pc;
+        }
+        let total = base_cycles + extra;
+        state.cycles = state.cycles.saturating_add(u64::from(total));
+        total
+    }
+
+    /// Loads and stores.
+    fn estep_load_store(
+        state: &mut Cpu6502EmuState,
+        mem: &mut [u8],
+        args: &ExecArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> ExecArm {
+        let ExecArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            eff_addr,
+            ..
+        } = *args;
         match opcode {
             // ── LDA ──────────────────────────────────────────────────────────
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
@@ -2142,6 +2430,28 @@ impl Cpu6502 {
             0x84 | 0x94 | 0x8C => {
                 mem[eff_addr as usize] = state.y;
             }
+            _ => return ExecArm::Unmatched,
+        }
+        ExecArm::Executed
+    }
+
+    /// Arithmetic, logic, compares, BIT and INC/DEC.
+    fn estep_alu(
+        state: &mut Cpu6502EmuState,
+        mem: &mut [u8],
+        args: &ExecArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> ExecArm {
+        let ExecArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            eff_addr,
+            ..
+        } = *args;
+        match opcode {
             // ── ADC ──────────────────────────────────────────────────────────
             0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
                 let v = state.read_val(mem, mode, op1, op2);
@@ -2240,6 +2550,30 @@ impl Cpu6502 {
                 state.y = state.y.wrapping_sub(1);
                 state.update_nz(state.y);
             }
+            _ => return ExecArm::Unmatched,
+        }
+        ExecArm::Executed
+    }
+
+    /// Shifts, rotates, jumps, subroutine calls, returns and BRK.
+    fn estep_shift_jump(
+        state: &mut Cpu6502EmuState,
+        mem: &mut [u8],
+        args: &ExecArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> ExecArm {
+        let ExecArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            pc,
+            next_pc,
+            base_cycles,
+            ..
+        } = *args;
+        match opcode {
             // ── ASL ──────────────────────────────────────────────────────────
             0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
                 let v = state.read_val(mem, mode, op1, op2);
@@ -2279,7 +2613,7 @@ impl Cpu6502 {
                 state.pc = u16::from_le_bytes([op1, op2]);
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
             // ── JMP (ind) ────────────────────────────────────────────────────
             0x6C => {
@@ -2290,7 +2624,7 @@ impl Cpu6502 {
                 state.pc = (hi << 8) | lo;
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
             // ── JSR ──────────────────────────────────────────────────────────
             0x20 => {
@@ -2299,7 +2633,7 @@ impl Cpu6502 {
                 state.pc = target;
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
             // ── RTS ──────────────────────────────────────────────────────────
             0x60 => {
@@ -2307,7 +2641,7 @@ impl Cpu6502 {
                 state.pc = ret;
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
             // ── RTI ──────────────────────────────────────────────────────────
             0x40 => {
@@ -2317,7 +2651,7 @@ impl Cpu6502 {
                 state.pc = ret;
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
             // ── BRK ──────────────────────────────────────────────────────────
             0x00 => {
@@ -2330,8 +2664,29 @@ impl Cpu6502 {
                 state.pc = (hi << 8) | lo;
                 let c = base_cycles;
                 state.cycles = state.cycles.saturating_add(u64::from(c));
-                return c;
+                return ExecArm::Completed(c);
             }
+            _ => return ExecArm::Unmatched,
+        }
+        ExecArm::Executed
+    }
+
+    /// Branches, stack push/pull, register transfers and flag ops.
+    fn estep_branch_stack_flags(
+        state: &mut Cpu6502EmuState,
+        mem: &mut [u8],
+        args: &ExecArgs,
+        extra: &mut u8,
+        branched: &mut bool,
+    ) -> ExecArm {
+        let ExecArgs {
+            opcode,
+            op1,
+            pc: _,
+            next_pc,
+            ..
+        } = *args;
+        match opcode {
             // ── Conditional branches ──────────────────────────────────────────
             // BCC BCS BEQ BMI BNE BPL BVC BVS
             0x90 | 0xB0 | 0xF0 | 0x30 | 0xD0 | 0x10 | 0x50 | 0x70 => {
@@ -2351,8 +2706,8 @@ impl Cpu6502 {
                     let cross_page = (next_pc & 0xFF00) != (new_pc & 0xFF00);
                     state.pc = new_pc;
                     // +1 for branch taken, +1 more if page crossed.
-                    extra = 1 + u8::from(cross_page);
-                    branched = true;
+                    *extra = 1 + u8::from(cross_page);
+                    *branched = true;
                 }
             }
             // ── Stack push/pull ───────────────────────────────────────────────
@@ -2406,17 +2761,10 @@ impl Cpu6502 {
             0xD8 => state.set_flag(status::D, false), // CLD
             0xF8 => state.set_flag(status::D, true),  // SED
             // ── NOP ──────────────────────────────────────────────────────────
-            0xEA => {} // 2 cycles, no operation
-            // ── All other bytes treated as NOP ────────────────────────────────
-            _ => {}
+            // ── 0xEA (official NOP) and all other bytes act as NOP ────────────
+            _ => return ExecArm::Unmatched,
         }
-
-        if !branched {
-            state.pc = next_pc;
-        }
-        let total = base_cycles + extra;
-        state.cycles = state.cycles.saturating_add(u64::from(total));
-        total
+        ExecArm::Executed
     }
 
     /// Run the CPU until `state.pc == stop_pc` or `state.cycles` has
@@ -2470,7 +2818,8 @@ pub fn disassemble_range(data: &[u8], start_addr: u16, n_instrs: usize) -> Vec<S
 
         // Determine opcode and instruction length.
         let (mnemonic, operand_str, instr_len) = if let Some(entry) = opcode_table(slice[0]) {
-            let ilen = 1 + entry.mode.extra_bytes() as usize;
+            let instr_len_u16 = 1 + entry.mode.extra_bytes();
+            let ilen = usize::from(instr_len_u16);
             if slice.len() < ilen {
                 // Truncated – emit a single ?? byte.
                 let byte_hex = format!("{:02X}", slice[0]);
@@ -2482,7 +2831,7 @@ pub fn disassemble_range(data: &[u8], start_addr: u16, n_instrs: usize) -> Vec<S
             }
             let instr_bytes = &slice[..ilen];
             let operand = format_operand(entry.mode, instr_bytes, u64::from(addr));
-            (entry.mnemonic, operand, ilen)
+            (entry.mnemonic, operand, instr_len_u16)
         } else {
             // Unknown opcode.
             let byte_hex = format!("{:02X}", slice[0]);
@@ -2494,7 +2843,7 @@ pub fn disassemble_range(data: &[u8], start_addr: u16, n_instrs: usize) -> Vec<S
         };
 
         // Build the raw-bytes column (max 3 bytes, space-separated, padded).
-        let raw_bytes = &data[offset..offset + instr_len];
+        let raw_bytes = &data[offset..offset + usize::from(instr_len)];
         let bytes_str: String = raw_bytes
             .iter()
             .map(|b| format!("{b:02X}"))
@@ -2509,8 +2858,8 @@ pub fn disassemble_range(data: &[u8], start_addr: u16, n_instrs: usize) -> Vec<S
         };
 
         out.push(line);
-        offset += instr_len;
-        addr = addr.wrapping_add(instr_len as u16);
+        offset += usize::from(instr_len);
+        addr = addr.wrapping_add(instr_len);
     }
 
     out
@@ -2923,7 +3272,10 @@ mod tests {
     // ── Cpu6502State / execute_one ────────────────────────────────────────────
 
     fn make_state() -> (Cpu6502State, Box<[u8; 65536]>) {
-        let mut mem = Box::new([0u8; 65536]);
+        let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+            .into_boxed_slice()
+            .try_into()
+            .expect("vec![0u8; 65536] is exactly 65536 bytes long");
         // Write reset vector pointing to 0x0200
         mem[0xFFFC] = 0x00;
         mem[0xFFFD] = 0x02;
@@ -2937,7 +3289,8 @@ mod tests {
             mem[0x200 + i] = b;
         }
         // Execute all instructions until we hit a KIL or run past the program.
-        let end = 0x200u16 + program.len() as u16;
+        let end = 0x200u16
+            + u16::try_from(program.len()).expect("test program must fit in 16 bits");
         let mut guard = 0u32;
         while state.pc < end && guard < 10_000 {
             let c = execute_one(&mut state, &mut mem);

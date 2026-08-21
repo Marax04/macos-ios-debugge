@@ -286,6 +286,30 @@ pub struct Cpu6502Emu {
     pub mode: CpuMode,
 }
 
+/// Everything one decoded instruction needs, gathered once so the opcode groups
+/// below can share a single parameter.
+#[derive(Clone, Copy)]
+struct StepArgs {
+    opcode: u8,
+    op1: u8,
+    op2: u8,
+    mode: AddrMode,
+    pc: u16,
+    next_pc: u16,
+    eff_addr: u16,
+    base_c: u8,
+}
+
+/// Result of offering one opcode to a group of arms.
+enum StepArm {
+    /// The opcode does not belong to this group; try the next one.
+    Unmatched,
+    /// The opcode executed; the caller finishes the PC and cycle bookkeeping.
+    Executed,
+    /// The opcode set the PC and cycle count itself; return this total.
+    Completed(u8),
+}
+
 impl Cpu6502Emu {
     #[must_use]
     pub const fn new() -> Self {
@@ -357,6 +381,55 @@ impl Cpu6502Emu {
         let mut extra = page_pen;
         let mut branched = false;
 
+        let args = StepArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            pc,
+            next_pc,
+            eff_addr,
+            base_c,
+        };
+
+        for group in [
+            Self::step_load_store,
+            Self::step_arith,
+            Self::step_logic_cmp,
+            Self::step_shift_jump,
+            Self::step_branch_stack_flags,
+        ] {
+            match group(state, mem, &args, &mut extra, &mut branched) {
+                StepArm::Unmatched => {}
+                StepArm::Executed => break,
+                StepArm::Completed(c) => return c,
+            }
+        }
+
+        if !branched {
+            state.pc = next_pc;
+        }
+        let total = base_c + extra;
+        state.cycles = state.cycles.saturating_add(u64::from(total));
+        total
+    }
+
+    /// Loads and stores.
+    fn step_load_store(
+        state: &mut Cpu6502State,
+        mem: &mut [u8],
+        args: &StepArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> StepArm {
+        let StepArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            eff_addr,
+            ..
+        } = *args;
         match opcode {
             // ── LDA / LDX / LDY ──────────────────────────────────────────────
             0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 | 0xB2 => {
@@ -395,6 +468,27 @@ impl Cpu6502Emu {
                     mem[eff_addr as usize] = 0;
                 }
             }
+            _ => return StepArm::Unmatched,
+        }
+        StepArm::Executed
+    }
+
+    /// ADC and SBC.
+    fn step_arith(
+        state: &mut Cpu6502State,
+        mem: &mut [u8],
+        args: &StepArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> StepArm {
+        let StepArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            ..
+        } = *args;
+        match opcode {
             // ── ADC ──────────────────────────────────────────────────────────
             0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 | 0x72 => {
                 let v = state.read_val(mem, mode, op1, op2);
@@ -425,6 +519,28 @@ impl Cpu6502Emu {
                     state.set_nz(state.a);
                 }
             }
+            _ => return StepArm::Unmatched,
+        }
+        StepArm::Executed
+    }
+
+    /// Bitwise AND/ORA/EOR, compares, BIT and INC/DEC.
+    fn step_logic_cmp(
+        state: &mut Cpu6502State,
+        mem: &mut [u8],
+        args: &StepArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> StepArm {
+        let StepArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            eff_addr,
+            ..
+        } = *args;
+        match opcode {
             // ── AND / ORA / EOR ──────────────────────────────────────────────
             0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 | 0x32 => {
                 let v = state.read_val(mem, mode, op1, op2);
@@ -508,6 +624,30 @@ impl Cpu6502Emu {
                 state.y = state.y.wrapping_sub(1);
                 state.set_nz(state.y);
             } // DEY
+            _ => return StepArm::Unmatched,
+        }
+        StepArm::Executed
+    }
+
+    /// Shifts, rotates, TRB/TSB and the jump/return/BRK family.
+    fn step_shift_jump(
+        state: &mut Cpu6502State,
+        mem: &mut [u8],
+        args: &StepArgs,
+        _extra: &mut u8,
+        _branched: &mut bool,
+    ) -> StepArm {
+        let StepArgs {
+            opcode,
+            op1,
+            op2,
+            mode,
+            pc,
+            next_pc,
+            eff_addr,
+            base_c,
+        } = *args;
+        match opcode {
             // ── ASL / LSR / ROL / ROR ────────────────────────────────────────
             0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
                 let v = state.read_val(mem, mode, op1, op2);
@@ -560,32 +700,32 @@ impl Cpu6502Emu {
             0x4C => {
                 state.pc = u16::from_le_bytes([op1, op2]);
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             0x6C | 0x7C => {
                 state.pc = eff_addr;
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             // ── JSR ──────────────────────────────────────────────────────────
             0x20 => {
                 state.push16(mem, next_pc.wrapping_sub(1));
                 state.pc = u16::from_le_bytes([op1, op2]);
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             // ── RTS / RTI ────────────────────────────────────────────────────
             0x60 => {
                 state.pc = state.pop16(mem).wrapping_add(1);
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             0x40 => {
                 let p = state.pop(mem);
                 state.p = (p | status::U) & !status::B;
                 state.pc = state.pop16(mem);
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             // ── BRK ──────────────────────────────────────────────────────────
             0x00 => {
@@ -596,8 +736,30 @@ impl Cpu6502Emu {
                 let hi = u16::from(*mem.get(0xFFFF).unwrap_or(&0));
                 state.pc = (hi << 8) | lo;
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
+            _ => return StepArm::Unmatched,
+        }
+        StepArm::Executed
+    }
+
+    /// Branches, stack push/pull, register transfers and flag ops.
+    fn step_branch_stack_flags(
+        state: &mut Cpu6502State,
+        mem: &mut [u8],
+        args: &StepArgs,
+        extra: &mut u8,
+        branched: &mut bool,
+    ) -> StepArm {
+        let StepArgs {
+            opcode,
+            op1,
+            pc,
+            next_pc,
+            base_c,
+            ..
+        } = *args;
+        match opcode {
             // ── Branches ─────────────────────────────────────────────────────
             0x90 | 0xB0 | 0xF0 | 0x30 | 0xD0 | 0x10 | 0x50 | 0x70 | 0x80 => {
                 let taken = match opcode {
@@ -616,8 +778,8 @@ impl Cpu6502Emu {
                     let new_pc = next_pc.wrapping_add_signed(i16::from(op1.cast_signed()));
                     let cross = (next_pc & 0xFF00) != (new_pc & 0xFF00);
                     state.pc = new_pc;
-                    extra = 1 + u8::from(cross);
-                    branched = true;
+                    *extra = 1 + u8::from(cross);
+                    *branched = true;
                 }
             }
             // ── Stack push/pull ───────────────────────────────────────────────
@@ -682,18 +844,12 @@ impl Cpu6502Emu {
                 /* STP – halt; in emulation treat as infinite loop */
                 state.pc = pc;
                 state.cycles += u64::from(base_c);
-                return base_c;
+                return StepArm::Completed(base_c);
             }
             // ── NOP / unimplemented ───────────────────────────────────────────
-            _ => {}
+            _ => return StepArm::Unmatched,
         }
-
-        if !branched {
-            state.pc = next_pc;
-        }
-        let total = base_c + extra;
-        state.cycles = state.cycles.saturating_add(u64::from(total));
-        total
+        StepArm::Executed
     }
 
     /// Run until a BRK instruction is executed.  Returns cycle count.
@@ -830,6 +986,28 @@ impl Cpu65816State {
 #[derive(Debug, Clone, Default)]
 pub struct Cpu65816Emu;
 
+/// Decoded 65816 instruction fields shared by the opcode groups below.
+#[derive(Clone, Copy)]
+struct Decoded816Args {
+    mnemonic: &'static str,
+    op1: u8,
+    op2: u8,
+    op3: u8,
+    next_pc: u16,
+    base_c: u8,
+    mode: AddrMode816,
+}
+
+/// Result of offering one 65816 opcode to a group of arms.
+enum Arm816 {
+    /// The mnemonic does not belong to this group; try the next one.
+    Unmatched,
+    /// The mnemonic executed; the caller finishes the PC and cycle bookkeeping.
+    Executed,
+    /// The mnemonic set the PC and cycle count itself; return this total.
+    Completed(u8),
+}
+
 impl Cpu65816Emu {
     #[must_use]
     pub const fn new() -> Self {
@@ -899,10 +1077,48 @@ impl Cpu65816Emu {
         let base_c = decoded.base_cycles;
         let mut branched = false;
 
-        match decoded.mnemonic {
+        let args = Decoded816Args {
+            mnemonic: decoded.mnemonic,
+            op1,
+            op2,
+            op3,
+            next_pc,
+            base_c,
+            mode: decoded.mode,
+        };
+
+        for group in [Self::step816_load_store, Self::step816_control] {
+            match group(state, mem, &args, &mut branched) {
+                Arm816::Unmatched => {}
+                Arm816::Executed => break,
+                Arm816::Completed(c) => return c,
+            }
+        }
+
+        if !branched {
+            state.pc = next_pc;
+        }
+        state.cycles = state.cycles.saturating_add(u64::from(base_c));
+        base_c
+    }
+
+    /// 65816 loads and stores.
+    fn step816_load_store(
+        state: &mut Cpu65816State,
+        mem: &mut [u8],
+        d: &Decoded816Args,
+        _branched: &mut bool,
+    ) -> Arm816 {
+        let Decoded816Args {
+            mnemonic: _,
+            op1,
+            op2,
+            mode,
+            ..
+        } = *d;
+        match d.mnemonic {
             "LDA" => {
-                let v = match decoded.mode {
-                    AddrMode816::Immediate8 => u16::from(op1),
+                let v = match mode {
                     AddrMode816::Immediate16 => u16::from_le_bytes([op1, op2]),
                     AddrMode816::DirectPage => {
                         let ea = u32::from(state.d.wrapping_add(u16::from(op1)));
@@ -912,6 +1128,8 @@ impl Cpu65816Emu {
                             Self::rd16(mem, ea)
                         }
                     }
+                    // Immediate8 and every remaining mode take the operand byte
+                    // directly as the value.
                     _ => u16::from(op1),
                 };
                 if state.mode.acc_width() == 1 {
@@ -922,13 +1140,35 @@ impl Cpu65816Emu {
                 state.set_nz8(state.a());
             }
             "STA" => {
-                let ea: u32 = match decoded.mode {
+                let ea: u32 = match mode {
                     AddrMode816::DirectPage => u32::from(state.d.wrapping_add(u16::from(op1))),
                     AddrMode816::Absolute16 => u32::from(u16::from_le_bytes([op1, op2])),
                     _ => u32::from(op1),
                 };
                 Self::wr8(mem, ea, state.a());
             }
+            _ => return Arm816::Unmatched,
+        }
+        Arm816::Executed
+    }
+
+    /// 65816 jumps, returns and processor-mode instructions.
+    fn step816_control(
+        state: &mut Cpu65816State,
+        mem: &mut [u8],
+        d: &Decoded816Args,
+        branched: &mut bool,
+    ) -> Arm816 {
+        let Decoded816Args {
+            mnemonic: _,
+            op1,
+            op2,
+            op3,
+            next_pc,
+            base_c,
+            mode: _,
+        } = *d;
+        match d.mnemonic {
             "JSL" => {
                 let target = u32::from(op3) << 16 | u32::from(op2) << 8 | u32::from(op1);
                 // Push PBR and return PC-1.
@@ -938,7 +1178,7 @@ impl Cpu65816Emu {
                 state.pbr = t2;
                 state.pc = u16::from_le_bytes([t0, t1]);
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "RTL" => {
                 let ret_pc = Self::pop16(state, mem).wrapping_add(1);
@@ -946,19 +1186,19 @@ impl Cpu65816Emu {
                 state.pc = ret_pc;
                 state.pbr = ret_pbr;
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "JSR" => {
                 let target = u16::from_le_bytes([op1, op2]);
                 Self::push16(state, mem, next_pc.wrapping_sub(1));
                 state.pc = target;
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "RTS" => {
                 state.pc = Self::pop16(state, mem).wrapping_add(1);
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "JML" => {
                 let target = u32::from(op3) << 16 | u32::from(op2) << 8 | u32::from(op1);
@@ -966,7 +1206,7 @@ impl Cpu65816Emu {
                 state.pbr = t2;
                 state.pc = u16::from_le_bytes([t0, t1]);
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "XCE" => {
                 let old_c = state.p & status::C != 0;
@@ -994,20 +1234,15 @@ impl Cpu65816Emu {
                 // Stall: PC does not advance past the STP opcode.
                 state.pc = state.pc.wrapping_add(0);
                 state.cycles = state.cycles.saturating_add(u64::from(base_c));
-                return base_c;
+                return Arm816::Completed(base_c);
             }
             "BRL" => {
                 state.pc = next_pc.wrapping_add_signed(i16::from_le_bytes([op1, op2]));
-                branched = true;
+                *branched = true;
             }
-            _ => {}
+            _ => return Arm816::Unmatched,
         }
-
-        if !branched {
-            state.pc = next_pc;
-        }
-        state.cycles = state.cycles.saturating_add(u64::from(base_c));
-        base_c
+        Arm816::Executed
     }
 
     /// Run until PC equals `stop_pc` in the current bank.
@@ -1047,7 +1282,8 @@ mod tests {
         mem[0xFFFD] = 0x02;
         mem[0x0200..0x0200 + prog.len()].copy_from_slice(prog);
         let mut state = Cpu6502State::from_reset_vector(&mem);
-        let end = 0x0200u16.wrapping_add(prog.len() as u16);
+        let end = 0x0200u16
+            .wrapping_add(u16::try_from(prog.len()).expect("test program must fit in 16 bits"));
         let mut guard = 0u32;
         while state.pc < end && guard < 10_000 {
             let opcode = mem[state.pc as usize];

@@ -411,6 +411,11 @@ fn build_register_list(device: AvrDevice) -> Vec<IoRegister> {
         }
     }
 
+    build_register_list_more(device, regs)
+}
+
+/// Continuation of [`build_register_list`]; split out only to keep each function short.
+fn build_register_list_more(device: AvrDevice, mut regs: Vec<IoRegister>) -> Vec<IoRegister> {
     // ── SPI ──────────────────────────────────────────────────────────────────
     regs.push(IoRegister::new(0x2C, "SPCR", "SPI Control Register", IoAccess::ReadWrite, IoCategory::Spi)
         .with_bit(7, "SPIE", "SPI Interrupt Enable")

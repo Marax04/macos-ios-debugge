@@ -40,8 +40,7 @@ impl LuaValue {
         match self {
             Self::Nil => "nil",
             Self::Boolean(_) => "boolean",
-            Self::Integer(_) => "number",
-            Self::Float(_) => "number",
+            Self::Integer(_) | Self::Float(_) => "number",
             Self::String(_) => "string",
             Self::Table(_) => "table",
             Self::Function(_) => "function",
@@ -66,7 +65,7 @@ impl LuaValue {
     #[must_use] 
     pub fn to_f64(&self) -> Option<f64> {
         match self {
-            Self::Integer(n) => Some(*n as f64),
+            Self::Integer(n) => Some(crate::lua_int_to_f64(*n)),
             Self::Float(f) => Some(*f),
             Self::String(s) => s.parse::<f64>().ok(),
             _ => None,
@@ -78,7 +77,7 @@ impl LuaValue {
     pub fn to_integer(&self) -> Option<i64> {
         match self {
             Self::Integer(n) => Some(*n),
-            Self::Float(f) if f.fract() == 0.0 => Some(*f as i64),
+            Self::Float(f) => crate::f64_to_exact_i64(*f),
             Self::String(s) => s.trim().parse::<i64>().ok(),
             _ => None,
         }
@@ -86,9 +85,9 @@ impl LuaValue {
 
     /// Lua `#` length operator.
     #[must_use] 
-    pub const fn length(&self) -> Option<i64> {
+    pub fn length(&self) -> Option<i64> {
         match self {
-            Self::String(s) => Some(s.len() as i64),
+            Self::String(s) => i64::try_from(s.len()).ok(),
             _ => None,
         }
     }
@@ -149,11 +148,10 @@ impl LuaTable {
     /// Get a value by integer key (1-based).
     #[must_use] 
     pub fn rawgeti(&self, key: i64) -> &LuaValue {
-        if key >= 1 && key <= self.array.len() as i64 {
-            &self.array[(key - 1) as usize]
-        } else {
-            &LuaValue::Nil
-        }
+        let Ok(idx) = usize::try_from(key - 1) else {
+            return &LuaValue::Nil;
+        };
+        self.array.get(idx).unwrap_or(&LuaValue::Nil)
     }
 
     /// Maximum array index accepted by rawseti (prevents OOM on attacker-supplied keys).
@@ -162,7 +160,7 @@ impl LuaTable {
     /// Set a value by integer key (1-based).
     pub fn rawseti(&mut self, key: i64, value: LuaValue) {
         if (1..=Self::MAX_ARRAY_KEY).contains(&key) {
-            let idx = (key - 1) as usize;
+            let Ok(idx) = usize::try_from(key - 1) else { return };
             if idx >= self.array.len() {
                 self.array.resize(idx + 1, LuaValue::Nil);
             }
@@ -194,7 +192,7 @@ impl LuaTable {
         let mut len = 0i64;
         for (i, v) in self.array.iter().enumerate() {
             if v != &LuaValue::Nil {
-                len = (i + 1) as i64;
+                len = i64::try_from(i + 1).unwrap_or(i64::MAX);
             }
         }
         len
@@ -495,7 +493,7 @@ impl Upvalue {
     pub const fn get(&self) -> Option<&LuaValue> {
         match &self.state {
             UpvalueState::Closed(v) => Some(v),
-            _ => None,
+            UpvalueState::Open { .. } => None,
         }
     }
 }
@@ -574,8 +572,8 @@ impl std::fmt::Display for CoroutineStatus {
         let s = match self {
             Self::Running => "running",
             Self::Suspended => "suspended",
-            Self::Dead => "dead",
-            Self::Error => "dead", // Lua reports errors as dead
+            Self::Dead | Self::Error => "dead",
+            // Lua reports errors as dead
             Self::Normal => "normal",
         };
         write!(f, "{s}")
@@ -755,7 +753,7 @@ mod tests {
         assert_eq!(LuaValue::Nil.type_name(), "nil");
         assert_eq!(LuaValue::Boolean(true).type_name(), "boolean");
         assert_eq!(LuaValue::Integer(42).type_name(), "number");
-        assert_eq!(LuaValue::Float(3.14_f64).type_name(), "number");
+        assert_eq!(LuaValue::Float(2.5_f64).type_name(), "number");
         assert_eq!(LuaValue::String("x".into()).type_name(), "string");
         assert_eq!(LuaValue::Table(0).type_name(), "table");
         assert_eq!(LuaValue::Function(0).type_name(), "function");
@@ -1071,9 +1069,9 @@ mod tests {
 
     #[test]
     fn test_lua_string_to_f64() {
-        let v = LuaValue::String("3.14".into());
+        let v = LuaValue::String("2.5".into());
         let f = v.to_f64().unwrap();
-        assert!((f - 3.14_f64).abs() < 1e-9);
+        assert!((f - 2.5_f64).abs() < 1e-9);
     }
 
     #[test]

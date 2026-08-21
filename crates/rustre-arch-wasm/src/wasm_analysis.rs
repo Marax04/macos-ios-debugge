@@ -21,10 +21,10 @@ pub enum WasmAnalysisError {
 impl fmt::Display for WasmAnalysisError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WasmAnalysisError::FunctionNotFound(id) => write!(f, "function not found: {id}"),
-            WasmAnalysisError::InvalidTableIndex(i) => write!(f, "invalid table index: {i}"),
-            WasmAnalysisError::MalformedModule(msg) => write!(f, "malformed module: {msg}"),
-            WasmAnalysisError::InsufficientData(msg) => write!(f, "insufficient data: {msg}"),
+            Self::FunctionNotFound(id) => write!(f, "function not found: {id}"),
+            Self::InvalidTableIndex(i) => write!(f, "invalid table index: {i}"),
+            Self::MalformedModule(msg) => write!(f, "malformed module: {msg}"),
+            Self::InsufficientData(msg) => write!(f, "insufficient data: {msg}"),
         }
     }
 }
@@ -80,9 +80,10 @@ impl FunctionCallGraph {
         }
     }
 
-    pub fn add_call(&mut self, caller: u32, callee: u32) {
-        self.calls.entry(caller).or_default().insert(callee);
-        self.callers.entry(callee).or_default().insert(caller);
+    /// Record a call edge from `from_fn` to `to_fn`.
+    pub fn add_call(&mut self, from_fn: u32, to_fn: u32) {
+        self.calls.entry(from_fn).or_default().insert(to_fn);
+        self.callers.entry(to_fn).or_default().insert(from_fn);
     }
 
     #[must_use]
@@ -211,13 +212,13 @@ pub enum WasmValType {
 impl fmt::Display for WasmValType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WasmValType::I32 => write!(f, "i32"),
-            WasmValType::I64 => write!(f, "i64"),
-            WasmValType::F32 => write!(f, "f32"),
-            WasmValType::F64 => write!(f, "f64"),
-            WasmValType::V128 => write!(f, "v128"),
-            WasmValType::FuncRef => write!(f, "funcref"),
-            WasmValType::ExternRef => write!(f, "externref"),
+            Self::I32 => write!(f, "i32"),
+            Self::I64 => write!(f, "i64"),
+            Self::F32 => write!(f, "f32"),
+            Self::F64 => write!(f, "f64"),
+            Self::V128 => write!(f, "v128"),
+            Self::FuncRef => write!(f, "funcref"),
+            Self::ExternRef => write!(f, "externref"),
         }
     }
 }

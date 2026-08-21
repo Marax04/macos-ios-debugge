@@ -66,6 +66,7 @@ impl UpvalueRef {
         }
     }
 
+    #[must_use]
     /// Attach a name from debug information.
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
@@ -123,6 +124,7 @@ impl ClosureInfo {
         }
     }
 
+    #[must_use]
     /// Attach a name.
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());

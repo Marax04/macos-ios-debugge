@@ -170,14 +170,26 @@ pub enum ConstVal {
 }
 
 impl ConstVal {
+    /// Widen an integer constant to `f64` for mixed integer/float arithmetic.
+    ///
+    /// Magnitudes above 2^53 lose their low bits. That is the same rounding a
+    /// 68881 performs when an integer operand enters a floating-point
+    /// computation, so it is the modelled behaviour rather than an accident.
+    /// Every mixed-mode operation funnels through here so the conversion is
+    /// stated once instead of being repeated at each call site.
+    #[must_use]
+    pub const fn widen(v: i64) -> f64 {
+        v as f64
+    }
+
     /// Try to add two constants.
     #[must_use] 
     pub fn try_add(&self, other: &Self) -> Option<Self> {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_add(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a + b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 + b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a + *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(Self::widen(*a) + b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a + Self::widen(*b))),
             _ => None,
         }
     }
@@ -188,8 +200,8 @@ impl ConstVal {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_sub(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a - b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 - b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a - *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(Self::widen(*a) - b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a - Self::widen(*b))),
             _ => None,
         }
     }
@@ -200,8 +212,8 @@ impl ConstVal {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_mul(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a * b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 * b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a * *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(Self::widen(*a) * b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a * Self::widen(*b))),
             _ => None,
         }
     }
@@ -210,7 +222,7 @@ impl ConstVal {
     #[must_use] 
     pub fn try_div(&self, other: &Self) -> Option<Self> {
         let b = match other {
-            Self::Int(b) => *b as f64,
+            Self::Int(b) => Self::widen(*b),
             Self::Float(b) => *b,
             _ => return None,
         };
@@ -218,7 +230,7 @@ impl ConstVal {
             return None;
         }
         let a = match self {
-            Self::Int(a) => *a as f64,
+            Self::Int(a) => Self::widen(*a),
             Self::Float(a) => *a,
             _ => return None,
         };
@@ -229,12 +241,12 @@ impl ConstVal {
     #[must_use] 
     pub fn try_pow(&self, other: &Self) -> Option<Self> {
         let b = match other {
-            Self::Int(b) => *b as f64,
+            Self::Int(b) => Self::widen(*b),
             Self::Float(b) => *b,
             _ => return None,
         };
         let a = match self {
-            Self::Int(a) => *a as f64,
+            Self::Int(a) => Self::widen(*a),
             Self::Float(a) => *a,
             _ => return None,
         };
@@ -414,18 +426,13 @@ impl ConstFolder {
             out.push(folded);
         }
 
-        out
-            .iter_mut()
-            .for_each(|i| self.update_consts_from_load(i));
+        for i in &mut out { self.update_consts_from_load(i); }
 
         (out, result)
     }
 
     fn update_consts_from_load(&mut self, instr: &OptInstr) {
-        let dst = match instr.dst {
-            Some(d) => d,
-            None => return,
-        };
+        let Some(dst) = instr.dst else { return };
         match instr.mnemonic.as_str() {
             "loadi" => {
                 if let Some(v) = instr.imm_int {
@@ -463,10 +470,7 @@ impl ConstFolder {
     }
 
     fn try_fold(&self, instr: &OptInstr, result: &mut OptResult) -> OptInstr {
-        let dst = match instr.dst {
-            Some(d) => d,
-            None => return instr.clone(),
-        };
+        let Some(dst) = instr.dst else { return instr.clone() };
 
         // Get constants for source registers.
         let ca = instr.src_a.and_then(|r| self.consts.get(&r));
@@ -622,7 +626,7 @@ impl DeadCodeElim {
     }
 
     /// Mark dead instructions in-place without removing them (diagnostic mode).
-    pub fn mark_dead(&self, instrs: &mut Vec<OptInstr>) -> usize {
+    pub fn mark_dead(&self, instrs: &mut [OptInstr]) -> usize {
         let mut used: HashSet<u32> = instrs
             .iter()
             .flat_map(|i| [i.src_a, i.src_b].into_iter().flatten())
@@ -709,6 +713,19 @@ impl StrengthReducer {
         (out, result)
     }
 
+    /// The integer constant feeding an instruction's second operand.
+    ///
+    /// It may arrive through a register the analyzer has already folded to a
+    /// constant, or directly as an immediate on the instruction. Naming the
+    /// lookup once keeps every strength-reduction arm reading the same source.
+    fn src_b_int(&self, instr: &OptInstr) -> Option<i64> {
+        instr
+            .src_b
+            .and_then(|r| self.consts.get(&r))
+            .and_then(|c| match c { ConstVal::Int(n) => Some(*n), _ => None })
+            .or(instr.imm_int)
+    }
+
     fn try_reduce(&self, instr: &OptInstr, result: &mut OptResult) -> Option<OptInstr> {
         let dst = instr.dst?;
         let src_a = instr.src_a?;
@@ -751,11 +768,7 @@ impl StrengthReducer {
                     .src_b
                     .and_then(|r| self.consts.get(&r))
                     .or_else(|| instr.imm_int.map(|_| &ConstVal::Nil)); // placeholder
-                let b_int = instr
-                    .src_b
-                    .and_then(|r| self.consts.get(&r))
-                    .and_then(|c| match c { ConstVal::Int(n) => Some(*n), _ => None })
-                    .or(instr.imm_int);
+                let b_int = self.src_b_int(instr);
                 let _ = b_const;
                 match b_int {
                     Some(1) => Some(OptInstr::mov(dst, src_a)),
@@ -773,24 +786,8 @@ impl StrengthReducer {
                     _ => None,
                 }
             }
-            "add" | "addk" | "addi" => {
-                let b_int = instr
-                    .src_b
-                    .and_then(|r| self.consts.get(&r))
-                    .and_then(|c| match c { ConstVal::Int(n) => Some(*n), _ => None })
-                    .or(instr.imm_int);
-                if b_int == Some(0) {
-                    Some(OptInstr::mov(dst, src_a))
-                } else {
-                    None
-                }
-            }
-            "sub" | "subk" => {
-                let b_int = instr
-                    .src_b
-                    .and_then(|r| self.consts.get(&r))
-                    .and_then(|c| match c { ConstVal::Int(n) => Some(*n), _ => None })
-                    .or(instr.imm_int);
+            "add" | "addk" | "addi" | "sub" | "subk" => {
+                let b_int = self.src_b_int(instr);
                 if b_int == Some(0) {
                     Some(OptInstr::mov(dst, src_a))
                 } else {
@@ -798,11 +795,7 @@ impl StrengthReducer {
                 }
             }
             "idiv" | "idivk" => {
-                let b_int = instr
-                    .src_b
-                    .and_then(|r| self.consts.get(&r))
-                    .and_then(|c| match c { ConstVal::Int(n) => Some(*n), _ => None })
-                    .or(instr.imm_int);
+                let b_int = self.src_b_int(instr);
                 if b_int == Some(1) {
                     Some(OptInstr::mov(dst, src_a))
                 } else {
@@ -957,7 +950,7 @@ impl LuaOptimizer {
             let before_simplified = total_result.simplified;
 
             for &pass in &self.enabled_passes {
-                let (new_instrs, pass_result) = self.run_pass(pass, current);
+                let (new_instrs, pass_result) = Self::run_pass(pass, current);
                 current = new_instrs;
                 total_result.eliminated += pass_result.eliminated;
                 total_result.simplified += pass_result.simplified;
@@ -979,7 +972,7 @@ impl LuaOptimizer {
         (current, total_result)
     }
 
-    fn run_pass(&self, pass: OptPass, instrs: Vec<OptInstr>) -> (Vec<OptInstr>, OptResult) {
+    fn run_pass(pass: OptPass, instrs: Vec<OptInstr>) -> (Vec<OptInstr>, OptResult) {
         match pass {
             OptPass::ConstantFolding => ConstFolder::new().run(instrs),
             OptPass::CopyPropagation => CopyProp::new().run(instrs),
@@ -1204,18 +1197,18 @@ impl M68kReg {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            M68kReg::D0 => "D0", M68kReg::D1 => "D1", M68kReg::D2 => "D2", M68kReg::D3 => "D3",
-            M68kReg::D4 => "D4", M68kReg::D5 => "D5", M68kReg::D6 => "D6", M68kReg::D7 => "D7",
-            M68kReg::A0 => "A0", M68kReg::A1 => "A1", M68kReg::A2 => "A2", M68kReg::A3 => "A3",
-            M68kReg::A4 => "A4", M68kReg::A5 => "A5", M68kReg::A6 => "A6", M68kReg::A7 => "A7",
+            Self::D0 => "D0", Self::D1 => "D1", Self::D2 => "D2", Self::D3 => "D3",
+            Self::D4 => "D4", Self::D5 => "D5", Self::D6 => "D6", Self::D7 => "D7",
+            Self::A0 => "A0", Self::A1 => "A1", Self::A2 => "A2", Self::A3 => "A3",
+            Self::A4 => "A4", Self::A5 => "A5", Self::A6 => "A6", Self::A7 => "A7",
         }
     }
 
     /// True for a data register (D0-D7).
     #[must_use]
     pub const fn is_data(self) -> bool {
-        matches!(self, M68kReg::D0 | M68kReg::D1 | M68kReg::D2 | M68kReg::D3
-            | M68kReg::D4 | M68kReg::D5 | M68kReg::D6 | M68kReg::D7)
+        matches!(self, Self::D0 | Self::D1 | Self::D2 | Self::D3
+            | Self::D4 | Self::D5 | Self::D6 | Self::D7)
     }
 
     /// True for an address register (A0-A7).

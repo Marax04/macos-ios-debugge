@@ -33,7 +33,7 @@ use rustre_arch_sparc::{
 use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
-fn a(v: u64) -> Address {
+const fn a(v: u64) -> Address {
     Address::new(v)
 }
 fn arch() -> SparcArch {
@@ -232,7 +232,7 @@ fn synth_set_zero_one_word() {
 fn synth_set_large_values_disassemble() {
     // Values whose signed-i32 reinterpretation is outside [-4096, 4095].
     for v in [0x1234_5678u32, 0x8000_0000, 0x0000_4096, 0x7FFF_F000] {
-        let sv = v as i32;
+        let sv = (v).cast_signed();
         assert!(!(-4096..=4095).contains(&sv), "test setup: {v:#x} should be out of range");
         let words = synth_set(v, 8);
         assert_eq!(words.len(), 2, "expected 2 words for {v:#x}");
@@ -246,25 +246,25 @@ fn synth_set_large_values_disassemble() {
 // ── Stack layout invariants ──────────────────────────────────────────────────
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V8 frame size must be >= 96")]
 fn stack_layout_v8_below_96_panics() {
     let _ = SparcStackLayout::new_v8(64);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V8 frame size must be >= 96")]
 fn stack_layout_v8_unaligned_panics() {
     let _ = SparcStackLayout::new_v8(100); // not multiple of 8
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V9 frame size must be >= 128")]
 fn stack_layout_v9_below_128_panics() {
     let _ = SparcStackLayout::new_v9(96);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "V9 frame size must be >= 128")]
 fn stack_layout_v9_unaligned_panics() {
     let _ = SparcStackLayout::new_v9(136); // not multiple of 16
 }
@@ -286,19 +286,19 @@ fn stack_layout_v9_outgoing_args_offset_includes_bias() {
 // ── Build sequences ──────────────────────────────────────────────────────────
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_zero_panics() {
     let _ = build_prologue(0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_too_big_panics() {
     let _ = build_prologue(4096);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "framesize must be a multiple of 8")]
 fn build_prologue_unaligned_panics() {
     let _ = build_prologue(12);
 }
@@ -669,7 +669,7 @@ fn annotated_from_instr_call_has_delay_slot() {
 #[test]
 fn delay_analyze_branch_returns_none_on_add() {
     // Plain ADD (op=10) is not a branch.
-    let add = (0b10u32 << 30) | (0u32 << 19);
+    let add = 0b10u32 << 30;
     assert!(analyze_branch(0, add, 0).is_none());
 }
 
@@ -815,9 +815,9 @@ fn rw_register_class_prefix_all_variants() {
 
 #[test]
 fn rw_sparcreg_from_str_invalid() {
-    assert!(srw::SparcReg::from_str("%xyz").is_none());
-    assert!(srw::SparcReg::from_str("%z0").is_none());
-    assert!(srw::SparcReg::from_str("%i").is_none());
+    assert!(srw::SparcReg::parse_name("%xyz").is_none());
+    assert!(srw::SparcReg::parse_name("%z0").is_none());
+    assert!(srw::SparcReg::parse_name("%i").is_none());
 }
 
 #[test]
@@ -1141,7 +1141,7 @@ fn synth_helpers_decode_correctly() {
 
 // ── Concurrency: SparcArch is Send + Sync ────────────────────────────────────
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn arch_is_send_sync() {

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Write;
 
 // ── Lua control flow graph ────────────────────────────────────────────────────
 
@@ -49,15 +50,16 @@ pub struct LuaCfgInstr {
 
 impl LuaCfgInstr {
     #[must_use] 
-    pub const fn branch_target(&self) -> Option<u32> {
+    pub fn branch_target(&self) -> Option<u32> {
         if !self.is_branch { return None; }
         match self.opcode {
             // JMP (index 54 in LUA54_OPCODES)
-            54 => Some((self.pc as i32 + 1 + self.sbx) as u32),
             // FORLOOP (71), FORPREP (72)
-            71 | 72 => Some((self.pc as i32 + 1 + self.sbx) as u32),
             // TFORLOOP (75): target is pc+1+sbx (sBx encodes negative offset back to loop header)
-            75 => Some((self.pc as i32 + 1 + self.sbx) as u32),
+            54 | 71 | 72 | 75 => {
+                let target = i32::try_from(self.pc).unwrap_or(i32::MAX) + 1 + self.sbx;
+                u32::try_from(target).ok()
+            }
             // EQ..GEI (indices 55..=63 in LUA54_OPCODES)
             55..=63 => Some(self.pc + 2),
             _ => None,
@@ -208,7 +210,7 @@ impl LuaCfg {
     pub fn compute_dominators(&mut self) {
         let all_ids: HashSet<usize> = self.blocks.keys().map(|k| k.0).collect();
         for block in self.blocks.values_mut() {
-            block.dominators = all_ids.clone();
+            block.dominators.clone_from(&all_ids);
         }
         if let Some(entry_block) = self.blocks.get_mut(&self.entry) {
             let entry_id = entry_block.id.0;
@@ -259,8 +261,7 @@ impl LuaCfg {
             if let Some(block) = self.blocks.get(id) {
                 order.push(block);
                 for succ in &block.successors {
-                    if !visited.contains(&succ.0) {
-                        visited.insert(succ.0);
+                    if visited.insert(succ.0) {
                         queue.push_back(succ);
                     }
                 }
@@ -282,8 +283,7 @@ impl LuaCfg {
                     let mut worklist = vec![back_edge_src];
                     while let Some(n) = worklist.pop() {
                         for pred in self.predecessors(&BlockId(n)) {
-                            if !body.contains(&pred.id.0) {
-                                body.insert(pred.id.0);
+                            if body.insert(pred.id.0) {
                                 worklist.push(pred.id.0);
                             }
                         }
@@ -300,11 +300,11 @@ impl LuaCfg {
         let mut out = String::from("digraph lua_cfg {\n");
         for (id, block) in &self.blocks {
             let label = format!("BB{} [{}..{}]", id.0, block.start_pc, block.end_pc);
-            out.push_str(&format!("  {} [label=\"{}\"];\n", id.0, label));
+            let _ = writeln!(out, "  {} [label=\"{}\"];", id.0, label);
         }
         for (id, block) in &self.blocks {
             for succ in &block.successors {
-                out.push_str(&format!("  {} -> {};\n", id.0, succ.0));
+                let _ = writeln!(out, "  {} -> {};", id.0, succ.0);
             }
         }
         out.push_str("}\n");
@@ -352,6 +352,10 @@ pub struct ReachingDefs {
 }
 
 impl ReachingDefs {
+    /// # Panics
+    ///
+    /// Panics when an argument is outside the range the instruction encoding
+    /// can represent; callers must validate untrusted values first.
     #[must_use] 
     pub fn compute(cfg: &LuaCfg) -> Self {
         let mut r#gen: HashMap<usize, HashSet<Definition>> = HashMap::new();

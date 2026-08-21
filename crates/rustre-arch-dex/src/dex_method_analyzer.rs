@@ -24,6 +24,15 @@ pub enum CodeItemError {
 // Instruction — a decoded DEX instruction
 // ---------------------------------------------------------------------------
 
+/// How a DEX instruction transfers control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DexBranchKind {
+    /// `goto`, `throw`, `switch`: control always leaves via the target.
+    Unconditional,
+    /// `if-*`: control either takes the target or falls through.
+    Conditional,
+}
+
 /// A decoded DEX instruction within a code item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DexInstruction {
@@ -35,8 +44,11 @@ pub struct DexInstruction {
     pub size_units: usize,
     /// Mnemonic string.
     pub mnemonic: String,
-    /// Whether this instruction is a branch.
-    pub is_branch: bool,
+    /// How this instruction transfers control, or `None` if it does not branch.
+    ///
+    /// Modelled as an enum rather than a pair of `bool`s so that "conditional
+    /// but not a branch" is unrepresentable.
+    pub branch_kind: Option<DexBranchKind>,
     /// Whether this instruction is a return.
     pub is_return: bool,
     /// Whether this instruction is a call (invoke-*).
@@ -44,13 +56,23 @@ pub struct DexInstruction {
     /// Branch target offset (relative to start of instructions, in bytes).
     /// `None` for non-branches.
     pub branch_target: Option<usize>,
-    /// Whether this branch is conditional.
-    pub is_conditional: bool,
     /// Whether this instruction can throw.
     pub can_throw: bool,
 }
 
 impl DexInstruction {
+    /// Whether this instruction transfers control to a branch target.
+    #[must_use]
+    pub const fn is_branch(&self) -> bool {
+        self.branch_kind.is_some()
+    }
+
+    /// Whether this instruction is a *conditional* branch.
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool {
+        matches!(self.branch_kind, Some(DexBranchKind::Conditional))
+    }
+
     /// Byte size of this instruction.
     #[must_use]
     pub const fn byte_size(&self) -> usize {
@@ -273,7 +295,7 @@ impl CodeItem {
     /// Number of branch instructions.
     #[must_use]
     pub fn branch_count(&self) -> usize {
-        self.instructions.iter().filter(|i| i.is_branch).count()
+        self.instructions.iter().filter(|i| i.is_branch()).count()
     }
 
     /// Return instructions by opcode.
@@ -292,8 +314,10 @@ fn decode_instructions(bytes: &[u8]) -> Result<Vec<DexInstruction>, CodeItemErro
     let mut off = 0usize;
 
     while off < bytes.len() {
+        // A DEX instruction stream is a whole number of 16-bit code units, so a
+        // dangling odd byte is malformed rather than something to drop silently.
         if off + 1 >= bytes.len() {
-            break;
+            return Err(CodeItemError::TooShort(off));
         }
         let op = bytes[off];
         let hi = if off + 1 < bytes.len() { bytes[off + 1] } else { 0 };
@@ -303,7 +327,10 @@ fn decode_instructions(bytes: &[u8]) -> Result<Vec<DexInstruction>, CodeItemErro
 
         let branch_target = branch_target_opt.and_then(|rel_units: i32| {
             // branch_target is in code units relative to instruction start
-            let abs_off = (off as i64 + i64::from(rel_units) * 2) as usize;
+            // Signed arithmetic first: a negative `rel_units` near offset 0 must
+            // fail the conversion below rather than wrap into a huge `usize`.
+            let signed = i64::try_from(off).ok()?.checked_add(i64::from(rel_units) * 2)?;
+            let abs_off = usize::try_from(signed).ok()?;
             if abs_off < bytes.len() { Some(abs_off) } else { None }
         });
 
@@ -312,11 +339,18 @@ fn decode_instructions(bytes: &[u8]) -> Result<Vec<DexInstruction>, CodeItemErro
             opcode: op,
             size_units,
             mnemonic,
-            is_branch,
+            branch_kind: if is_branch {
+                if is_conditional {
+                    Some(DexBranchKind::Conditional)
+                } else {
+                    Some(DexBranchKind::Unconditional)
+                }
+            } else {
+                None
+            },
             is_return,
             is_call,
             branch_target,
-            is_conditional,
             can_throw,
         });
 
@@ -326,6 +360,24 @@ fn decode_instructions(bytes: &[u8]) -> Result<Vec<DexInstruction>, CodeItemErro
     Ok(instructions)
 }
 
+/// Read a little-endian signed 16-bit word at `o`, or `0` if `bytes` is too short.
+fn read_signed_word_at(bytes: &[u8], o: usize) -> i16 {
+    if o + 1 < bytes.len() {
+        i16::from_le_bytes([bytes[o], bytes[o + 1]])
+    } else {
+        0
+    }
+}
+
+/// Read a little-endian signed 32-bit word at `o`, or `0` if `bytes` is too short.
+fn read_signed_dword_at(bytes: &[u8], o: usize) -> i32 {
+    if o + 3 < bytes.len() {
+        i32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]])
+    } else {
+        0
+    }
+}
+
 /// Returns `(mnemonic, size_units, is_branch, is_return, is_call, is_conditional, branch_rel_units, can_throw)`
 fn classify_instruction(
     op: u8,
@@ -333,20 +385,8 @@ fn classify_instruction(
     bytes: &[u8],
     off: usize,
 ) -> (String, usize, bool, bool, bool, bool, Option<i32>, bool) {
-    let read_u16 = |o: usize| -> i16 {
-        if o + 1 < bytes.len() {
-            i16::from_le_bytes([bytes[o], bytes[o + 1]])
-        } else {
-            0
-        }
-    };
-    let read_i32 = |o: usize| -> i32 {
-        if o + 3 < bytes.len() {
-            i32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]])
-        } else {
-            0
-        }
-    };
+    let read_word = |o: usize| read_signed_word_at(bytes, o);
+    let read_signed_dword = |o: usize| read_signed_dword_at(bytes, o);
 
     match op {
         0x00 => ("nop".into(), 1, false, false, false, false, None, false),
@@ -355,37 +395,37 @@ fn classify_instruction(
         0x10 => ("return-wide".into(), 1, false, true, false, false, None, false),
         0x11 => ("return-object".into(), 1, false, true, false, false, None, false),
         0x28 => {
-            let rel = hi as i8;
+            let rel = hi.cast_signed();
             ("goto".into(), 1, true, false, false, false, Some(i32::from(rel)), false)
         }
         0x29 => {
-            let rel = read_u16(off + 2);
+            let rel = read_word(off + 2);
             ("goto/16".into(), 2, true, false, false, false, Some(i32::from(rel)), false)
         }
         0x2a => {
-            let rel = read_i32(off + 2);
+            let rel = read_signed_dword(off + 2);
             ("goto/32".into(), 3, true, false, false, false, Some(rel), false)
         }
         0x2b => {
-            let rel = read_i32(off + 2);
+            let rel = read_signed_dword(off + 2);
             ("packed-switch".into(), 3, true, false, false, false, Some(rel), false)
         }
         0x2c => {
-            let rel = read_i32(off + 2);
+            let rel = read_signed_dword(off + 2);
             ("sparse-switch".into(), 3, true, false, false, false, Some(rel), false)
         }
         0x32..=0x37 => {
             // if-{eq,ne,lt,ge,gt,le}
             let mnemonics = ["if-eq", "if-ne", "if-lt", "if-ge", "if-gt", "if-le"];
             let mnem = mnemonics[(op - 0x32) as usize];
-            let rel = read_u16(off + 2);
+            let rel = read_word(off + 2);
             (mnem.into(), 2, true, false, false, true, Some(i32::from(rel)), false)
         }
         0x38..=0x3d => {
             // if-{eqz,nez,ltz,gez,gtz,lez}
             let mnemonics = ["if-eqz", "if-nez", "if-ltz", "if-gez", "if-gtz", "if-lez"];
             let mnem = mnemonics[(op - 0x38) as usize];
-            let rel = read_u16(off + 2);
+            let rel = read_word(off + 2);
             (mnem.into(), 2, true, false, false, true, Some(i32::from(rel)), false)
         }
         0x6e => ("invoke-virtual".into(), 3, false, false, true, false, None, true),
@@ -411,11 +451,11 @@ fn classify_instruction(
         }
         0x12 => {
             let reg = hi & 0x0f;
-            let lit = (hi >> 4) as i8;
+            let lit = (hi >> 4).cast_signed();
             (format!("const/4 v{reg}, #{lit}"), 1, false, false, false, false, None, false)
         }
         0x13 => {
-            let lit = read_u16(off + 2);
+            let lit = read_word(off + 2);
             (format!("const/16 v{hi}, #{lit}"), 2, false, false, false, false, None, false)
         }
         0x1a => {
@@ -440,31 +480,40 @@ fn classify_instruction(
     }
 }
 
+const GENERIC_OPCODE_SIZE_TABLE: &[(u8, u8, usize)] = &[
+    (0x00, 0x0d, 1),
+    (0x0e, 0x11, 1),
+    (0x12, 0x12, 1),
+    (0x13, 0x17, 2),
+    (0x18, 0x18, 5),
+    (0x19, 0x1f, 2),
+    (0x20, 0x21, 1),
+    (0x23, 0x26, 3),
+    (0x28, 0x28, 1),
+    (0x29, 0x29, 2),
+    (0x2a, 0x2a, 3),
+    (0x2b, 0x2c, 3),
+    (0x2d, 0x31, 2),
+    (0x32, 0x3d, 2),
+    (0x44, 0x6d, 2),
+    (0x6e, 0x78, 3),
+    (0x7b, 0x8f, 1),
+    (0x90, 0xaf, 2),
+    (0xb0, 0xcf, 1),
+    (0xd0, 0xd7, 2),
+    (0xd8, 0xe2, 2),
+];
+
 const fn generic_opcode_size(op: u8) -> usize {
-    match op {
-        0x00..=0x0d => 1,
-        0x0e..=0x11 => 1,
-        0x12 => 1,
-        0x13..=0x17 => 2,
-        0x18 => 5,
-        0x19..=0x1f => 2,
-        0x20..=0x21 => 1,
-        0x23..=0x26 => 3,
-        0x28 => 1,
-        0x29 => 2,
-        0x2a => 3,
-        0x2b..=0x2c => 3,
-        0x2d..=0x31 => 2,
-        0x32..=0x3d => 2,
-        0x44..=0x6d => 2,
-        0x6e..=0x78 => 3,
-        0x7b..=0x8f => 1,
-        0x90..=0xaf => 2,
-        0xb0..=0xcf => 1,
-        0xd0..=0xd7 => 2,
-        0xd8..=0xe2 => 2,
-        _ => 1,
+    let mut i = 0;
+    while i < GENERIC_OPCODE_SIZE_TABLE.len() {
+        let (lo, hi, v) = GENERIC_OPCODE_SIZE_TABLE[i];
+        if op >= lo && op <= hi {
+            return v;
+        }
+        i += 1;
     }
+    1
 }
 
 fn parse_try_handlers(
@@ -483,14 +532,12 @@ fn parse_try_handlers(
         let start_off = u16::from_le_bytes([data[off], data[off + 1]]) as usize * 2;
         let length = u16::from_le_bytes([data[off + 2], data[off + 3]]) as usize * 2;
         let handler_off = u16::from_le_bytes([data[off + 4], data[off + 5]]) as usize * 2;
-        let handler_count_raw = data[off + 6] as i8;
+        let handler_count_raw = (data[off + 6]).cast_signed();
         off += 8;
 
-        let actual_count = if handler_count_raw < 0 {
-            (-handler_count_raw) as usize
-        } else {
-            handler_count_raw as usize
-        };
+        // A negative count marks "has a catch-all"; its magnitude is the real
+        // count. `unsigned_abs` also handles `i8::MIN`, which `-x` would overflow.
+        let actual_count = usize::from(handler_count_raw.unsigned_abs());
 
         for j in 0..actual_count {
             if off + 4 > data.len() {
@@ -538,16 +585,51 @@ pub struct DexMethodAnalyzer {
     offset_to_block: BTreeMap<usize, usize>,
 }
 
+    // Maximum recursion depth guard: a DEX method cannot have more blocks
+    // than instructions, and valid DEX limits code items to 65535 code units,
+    // so a limit of 65536 is generous while bounding stack use.
+    // Without this an adversarial CFG with depth > stack size causes a stack
+    // overflow (dos-unbounded-recursion).
+    const MAX_DFS_DEPTH: usize = 65536;
+
+    fn dfs(
+        id: usize,
+        depth: usize,
+        blocks: &[DexBasicBlock],
+        visited: &mut HashSet<usize>,
+        in_stack: &mut HashSet<usize>,
+        count: &mut usize,
+    ) {
+        if depth > MAX_DFS_DEPTH {
+            return;
+        }
+        if visited.contains(&id) {
+            return;
+        }
+        visited.insert(id);
+        in_stack.insert(id);
+        if let Some(block) = blocks.get(id) {
+            for &succ in &block.successors {
+                if in_stack.contains(&succ) {
+                    *count += 1;
+                } else if !visited.contains(&succ) {
+                    dfs(succ, depth + 1, blocks, visited, in_stack, count);
+                }
+            }
+        }
+        in_stack.remove(&id);
+    }
+
 impl DexMethodAnalyzer {
     /// Analyze a code item and build the CFG.
     #[must_use]
-    pub fn analyze(code_item: CodeItem) -> Self {
+    pub fn analyze(code_item: &CodeItem) -> Self {
         let mut analyzer = Self {
             code_item: code_item.clone(),
             blocks: Vec::new(),
             offset_to_block: BTreeMap::new(),
         };
-        analyzer.build_cfg(&code_item);
+        analyzer.build_cfg(code_item);
         analyzer
     }
 
@@ -561,7 +643,7 @@ impl DexMethodAnalyzer {
         leaders.insert(0); // entry
 
         for instr in &code_item.instructions {
-            if instr.is_branch {
+            if instr.is_branch() {
                 // Fallthrough (for conditional branches)
                 let fallthrough = instr.offset + instr.byte_size();
                 if fallthrough < code_item.insns_byte_size {
@@ -588,8 +670,7 @@ impl DexMethodAnalyzer {
         let mut sorted_leaders: Vec<usize> = leaders.into_iter().collect();
         sorted_leaders.sort_unstable();
 
-        // Assign instructions to blocks
-        let mut block_id = 0usize;
+        // Assign instructions to blocks; the enumeration index *is* the block id.
         let n_leaders = sorted_leaders.len();
         for (li, &leader) in sorted_leaders.iter().enumerate() {
             let end_offset = if li + 1 < n_leaders {
@@ -598,6 +679,7 @@ impl DexMethodAnalyzer {
                 code_item.insns_byte_size
             };
 
+            let block_id = li;
             let mut block = DexBasicBlock::new(block_id, leader);
             block.is_entry = block_id == 0;
 
@@ -616,9 +698,13 @@ impl DexMethodAnalyzer {
 
             self.offset_to_block.insert(leader, block_id);
             self.blocks.push(block);
-            block_id += 1;
         }
 
+        self.wire_edges(code_item);
+    }
+
+    /// Wire successor and predecessor edges between the blocks built above.
+    fn wire_edges(&mut self, code_item: &CodeItem) {
         // Wire up successors/predecessors
         let _block_starts: Vec<(usize, usize)> = self
             .blocks
@@ -635,14 +721,14 @@ impl DexMethodAnalyzer {
 
             if !has_return {
                 if let Some(term) = &terminator {
-                    if term.is_branch {
+                    if term.is_branch() {
                         // Branch target
                         if let Some(tgt) = term.branch_target
                             && let Some(&succ_id) = self.offset_to_block.get(&tgt) {
                                 succs.push(succ_id);
                             }
                         // Fallthrough (for conditional)
-                        if term.is_conditional
+                        if term.is_conditional()
                             && let Some(&succ_id) = self.offset_to_block.get(&block_end) {
                                 succs.push(succ_id);
                             }
@@ -674,7 +760,7 @@ impl DexMethodAnalyzer {
 
             succs.sort_unstable();
             succs.dedup();
-            self.blocks[i].successors = succs.clone();
+            self.blocks[i].successors.clone_from(&succs);
         }
 
         // Build predecessors from successor lists
@@ -749,41 +835,6 @@ impl DexMethodAnalyzer {
         let mut in_stack = HashSet::new();
         let mut count = 0usize;
 
-        // Maximum recursion depth guard: a DEX method cannot have more blocks
-        // than instructions, and valid DEX limits code items to 65535 code units,
-        // so a limit of 65536 is generous while bounding stack use.
-        // Without this an adversarial CFG with depth > stack size causes a stack
-        // overflow (dos-unbounded-recursion).
-        const MAX_DFS_DEPTH: usize = 65536;
-
-        fn dfs(
-            id: usize,
-            depth: usize,
-            blocks: &[DexBasicBlock],
-            visited: &mut HashSet<usize>,
-            in_stack: &mut HashSet<usize>,
-            count: &mut usize,
-        ) {
-            if depth > MAX_DFS_DEPTH {
-                return;
-            }
-            if visited.contains(&id) {
-                return;
-            }
-            visited.insert(id);
-            in_stack.insert(id);
-            if let Some(block) = blocks.get(id) {
-                for &succ in &block.successors {
-                    if in_stack.contains(&succ) {
-                        *count += 1;
-                    } else if !visited.contains(&succ) {
-                        dfs(succ, depth + 1, blocks, visited, in_stack, count);
-                    }
-                }
-            }
-            in_stack.remove(&id);
-        }
-
         dfs(0, 0, &self.blocks, &mut visited, &mut in_stack, &mut count);
         count
     }
@@ -830,7 +881,8 @@ mod tests {
 
     fn make_code_item(insns: &[u8]) -> CodeItem {
         // 16-byte header + insns
-        let insns_units = (insns.len() / 2) as u32;
+        let insns_units =
+            u32::try_from(insns.len() / 2).expect("test instruction stream must fit a u32");
         let mut data = vec![0u8; 16 + insns.len()];
         data[0] = 4; // registers_size = 4
         data[2] = 2; // ins_size = 2
@@ -859,15 +911,15 @@ mod tests {
     fn test_code_item_goto() {
         let insns = [0x28u8, 0x01]; // goto +1
         let ci = make_code_item(&insns);
-        assert!(ci.instructions[0].is_branch);
-        assert!(!ci.instructions[0].is_conditional);
+        assert!(ci.instructions[0].is_branch());
+        assert!(!ci.instructions[0].is_conditional());
     }
 
     #[test]
     fn test_cfg_single_block() {
         let insns = [0x0Eu8, 0x00]; // return-void
         let ci = make_code_item(&insns);
-        let analyzer = DexMethodAnalyzer::analyze(ci);
+        let analyzer = DexMethodAnalyzer::analyze(&ci);
         assert_eq!(analyzer.blocks.len(), 1);
         assert!(analyzer.blocks[0].is_entry);
         assert!(analyzer.blocks[0].has_return);
@@ -884,7 +936,7 @@ mod tests {
             0x0e, 0x00,                // return-void
         ];
         let ci = make_code_item(&insns);
-        let analyzer = DexMethodAnalyzer::analyze(ci);
+        let analyzer = DexMethodAnalyzer::analyze(&ci);
         assert!(analyzer.blocks.len() >= 2);
     }
 
@@ -896,7 +948,7 @@ mod tests {
             0x0e, 0x00,   // return-void
         ];
         let ci = make_code_item(&insns);
-        let analyzer = DexMethodAnalyzer::analyze(ci);
+        let analyzer = DexMethodAnalyzer::analyze(&ci);
         let cc = analyzer.cyclomatic_complexity();
         assert!(cc >= 1);
     }
@@ -941,7 +993,7 @@ mod tests {
     fn test_bfs_order() {
         let insns = [0x0Eu8, 0x00]; // return-void
         let ci = make_code_item(&insns);
-        let analyzer = DexMethodAnalyzer::analyze(ci);
+        let analyzer = DexMethodAnalyzer::analyze(&ci);
         let order = analyzer.bfs_order();
         assert!(!order.is_empty());
         assert_eq!(order[0], 0);

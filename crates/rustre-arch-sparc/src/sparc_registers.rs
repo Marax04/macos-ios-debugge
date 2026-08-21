@@ -217,7 +217,7 @@ impl FpReg {
     /// Panics if `index >= 64` or if index is odd.
     #[must_use]
     pub fn double(index: u8) -> Self {
-        assert!(index < 64 && index % 2 == 0, "double FP index must be even, 0–62");
+        assert!(index < 64 && index.is_multiple_of(2), "double FP index must be even, 0–62");
         Self {
             index,
             precision: FpPrecision::Double,
@@ -230,7 +230,7 @@ impl FpReg {
     /// Panics if `index >= 64` or if index is not divisible by 4.
     #[must_use]
     pub fn quad(index: u8) -> Self {
-        assert!(index < 64 && index % 4 == 0, "quad FP index must be 0,4,8,…,60");
+        assert!(index < 64 && index.is_multiple_of(4), "quad FP index must be 0,4,8,…,60");
         Self {
             index,
             precision: FpPrecision::Quad,
@@ -306,25 +306,25 @@ impl SparcCondCode {
             _ => 0x8000_0000_0000_0000,
         };
         let masked = if width == 64 {
-            result as u64
+            (result).cast_unsigned()
         } else {
-            (result & mask) as u64
+            (result & mask).cast_unsigned()
         };
         self.z = masked == 0;
         self.n = (masked & sign_bit) != 0;
         // Overflow: sign of result differs from expected
-        let a_sign = (prev_a as u64 & sign_bit) != 0;
-        let b_sign = (prev_b as u64 & sign_bit) != 0;
+        let a_sign = ((prev_a).cast_unsigned() & sign_bit) != 0;
+        let b_sign = ((prev_b).cast_unsigned() & sign_bit) != 0;
         let r_sign = self.n;
         self.v = (a_sign == b_sign) && (a_sign != r_sign);
         // Carry: unsigned overflow
-        let ua = prev_a as u64;
-        let _ub = prev_b as u64;
+        let ua = (prev_a).cast_unsigned();
+        let _ub = (prev_b).cast_unsigned();
         let ur = masked;
         self.c = if width == 64 {
             ur < ua
         } else {
-            (result as u64) > mask as u64
+            (result).cast_unsigned() > (mask).cast_unsigned()
         };
     }
 
@@ -334,7 +334,6 @@ impl SparcCondCode {
     #[must_use]
     pub const fn evaluate(&self, cond: u8) -> bool {
         match cond & 0xF {
-            0x0 => false,                          // BN  (never)
             0x1 => self.z,                         // BE
             0x2 => self.z || (self.n ^ self.v),    // BLE
             0x3 => self.n ^ self.v,                // BL
@@ -350,6 +349,8 @@ impl SparcCondCode {
             0xD => !self.c,                        // BCC / BGEU
             0xE => !self.n,                        // BPOS
             0xF => !self.v,                        // BVC
+            // 0x0 is BN, "branch never"; the mask above makes every other value
+            // unreachable. Both answer false.
             _ => false,
         }
     }
@@ -529,9 +530,10 @@ impl RegWindowState {
     #[must_use]
     pub fn read_reg(&self, index: u8) -> u64 {
         match index {
-            0 => 0, // %g0 = always 0
-            1..=7 => self.globals[index as usize],
+            1..=7 => self.globals[usize::from(index)],
             8..=31 => self.windows[self.cwp].read(index),
+            // %g0 reads as zero by architecture; an index above 31 names no
+            // register. Both answer 0.
             _ => 0,
         }
     }
@@ -540,9 +542,10 @@ impl RegWindowState {
     /// Writes to %g0 are silently discarded.
     pub fn write_reg(&mut self, index: u8, value: u64) {
         match index {
-            0 => {} // discard writes to %g0
-            1..=7 => self.globals[index as usize] = value,
+            1..=7 => self.globals[usize::from(index)] = value,
             8..=31 => self.windows[self.cwp].write(index, value),
+            // Writes to %g0 are discarded by architecture; an index above 31
+            // names no register. Both are no-ops.
             _ => {}
         }
     }
@@ -918,9 +921,9 @@ mod tests {
     #[test]
     fn test_fp_double_read_write() {
         let mut state = RegWindowState::new(8);
-        state.write_fp_double(0, 3.14);
+        state.write_fp_double(0, 2.5);
         let v = state.read_fp_double(0);
-        assert!((v - 3.14).abs() < 1e-10);
+        assert!((v - 2.5).abs() < 1e-10);
     }
 
     #[test]

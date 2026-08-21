@@ -82,6 +82,16 @@ impl fmt::Display for Lua54Error {
 }
 
 /// Parse the first 31 bytes of a Lua 5.4 chunk header.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
+///
+/// # Panics
+///
+/// Panics when an argument is outside the range the instruction encoding
+/// can represent; callers must validate untrusted values first.
 pub fn parse_lua54_header(data: &[u8]) -> Result<Lua54Header, Lua54Error> {
     if data.len() < 31 {
         return Err(Lua54Error::TooShort);
@@ -120,6 +130,11 @@ pub fn parse_lua54_header(data: &[u8]) -> Result<Lua54Header, Lua54Error> {
 ///
 /// This is a convenience wrapper over [`parse_lua54_header`] for callers that
 /// use `anyhow` error chains across multiple fallible parsing steps.
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn parse_lua54_header_anyhow(data: &[u8]) -> anyhow::Result<Lua54Header> {
     parse_lua54_header(data)
         .map_err(|e| anyhow::anyhow!("{e}"))
@@ -192,6 +207,11 @@ impl fmt::Display for Lua54Insn {
 }
 
 /// Decode a single Lua 5.4 instruction word into a [`Lua54Insn`].
+///
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn decode_lua54_insn(word: u32, address: Address) -> Result<Lua54Insn, Lua54Error> {
     let op = get_op54(word);
     let (mnemonic, operands, flags) =
@@ -270,12 +290,22 @@ impl Lua54Proto {
             // JMP = 54 (isJ format), FORPREP/FORLOOP/TFORPREP/TFORLOOP = 71-73,75
             if op == 54 {
                 let sj = get_sj54(word);
-                let raw = (i as i64).wrapping_add(1).wrapping_add(i64::from(sj));
-                if raw >= 0 { targets.push(raw as usize); }
+                let raw = i64::try_from(i)
+                        .unwrap_or(i64::MAX)
+                        .wrapping_add(1)
+                        .wrapping_add(i64::from(sj));
+                if let Ok(target) = usize::try_from(raw) {
+                        targets.push(target);
+                    }
             } else if matches!(op, 71 | 72 | 73 | 75) {
                 let sbx = get_sbx54(word);
-                let raw = (i as i64).wrapping_add(1).wrapping_add(i64::from(sbx));
-                if raw >= 0 { targets.push(raw as usize); }
+                let raw = i64::try_from(i)
+                        .unwrap_or(i64::MAX)
+                        .wrapping_add(1)
+                        .wrapping_add(i64::from(sbx));
+                if let Ok(target) = usize::try_from(raw) {
+                        targets.push(target);
+                    }
             }
         }
         targets
@@ -497,7 +527,7 @@ pub const fn make_close(a: u32) -> u32 {
 #[must_use] 
 pub const fn make_shri(a: u32, b: u32, c: i32) -> u32 {
     // SHRI = opcode 30; C is signed (bias 127)
-    let c_biased = (c + 127) as u32 & 0xff;
+    let c_biased = (c + 127).cast_unsigned() & 0xff;
     crate::make_iabc(30, a, b, c_biased, 0)
 }
 
@@ -505,7 +535,7 @@ pub const fn make_shri(a: u32, b: u32, c: i32) -> u32 {
 #[must_use] 
 pub const fn make_shli(a: u32, b: u32, c: i32) -> u32 {
     // SHLI = opcode 31
-    let c_biased = (c + 127) as u32 & 0xff;
+    let c_biased = (c + 127).cast_unsigned() & 0xff;
     crate::make_iabc(31, a, b, c_biased, 0)
 }
 

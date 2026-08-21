@@ -5,7 +5,7 @@ use rustre_arch_wasm::*;
 use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
-fn arch() -> WasmArch {
+const fn arch() -> WasmArch {
     WasmArch::new()
 }
 
@@ -18,8 +18,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -508,20 +508,21 @@ fn section_id_name_unique() {
 
 #[test]
 fn arch_send_sync_threaded() {
+    use std::sync::Arc;
+    use std::thread;
+
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<WasmArch>();
 
-    use std::sync::Arc;
-    use std::thread;
     let a = Arc::new(WasmArch::new());
     let mut handles = vec![];
     for t in 0..4u8 {
         let aa = Arc::clone(&a);
         handles.push(thread::spawn(move || {
-            for i in 0..100 {
-                let op = (t.wrapping_add(i as u8) & 0x7) | 0x6a; // arith ops 0x6a..0x71 range
+            for i in 0u8..100 {
+                let op = (t.wrapping_add(i) & 0x7) | 0x6a; // arith ops 0x6a..0x71 range
                 let opcode = match op {
-                    o if o >= 0x6a && o <= 0x78 => o,
+                    o if (0x6a..=0x78).contains(&o) => o,
                     _ => 0x6a,
                 };
                 let _ = aa.disassemble(Address::new(0), &[opcode]);
@@ -540,7 +541,7 @@ fn arch_send_sync_threaded() {
 fn fuzz_disasm_never_panics() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() as usize) % 16) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 16) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -553,7 +554,7 @@ fn fuzz_disasm_never_panics() {
 fn fuzz_limits_never_panics() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() as usize) % 8) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 8) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -566,7 +567,7 @@ fn fuzz_limits_never_panics() {
 fn fuzz_functype_never_panics() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() as usize) % 12) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 12) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -579,7 +580,7 @@ fn fuzz_functype_never_panics() {
 fn fuzz_header_never_panics() {
     let mut g = lcg();
     for _ in 0..500 {
-        let len = ((g() as usize) % 12) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 12) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -592,7 +593,7 @@ fn fuzz_header_never_panics() {
 fn fuzz_global_type_never_panics() {
     let mut g = lcg();
     for _ in 0..200 {
-        let len = ((g() as usize) % 5) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 5) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);
@@ -605,7 +606,7 @@ fn fuzz_global_type_never_panics() {
 fn fuzz_table_type_never_panics() {
     let mut g = lcg();
     for _ in 0..200 {
-        let len = ((g() as usize) % 6) + 1;
+        let len = (usize::try_from(g()).unwrap_or(0) % 6) + 1;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
             buf.push((g() & 0xff) as u8);

@@ -135,6 +135,11 @@ impl WasmValueStack {
     }
 
     /// Pop a value and check it matches `expected`. Returns an error on mismatch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ValidationError`] if the operand stack is empty or its top value
+    /// does not have the expected type.
     pub fn pop_expect(
         &mut self,
         expected: WasmValueType,
@@ -276,7 +281,7 @@ impl TypeChecker {
     }
 
     #[must_use]
-    pub fn stack_depth(&self) -> usize {
+    pub const fn stack_depth(&self) -> usize {
         self.stack.depth()
     }
 
@@ -320,181 +325,196 @@ impl FunctionValidator {
         while pos < body.len() {
             let op = body[pos];
             pos += 1;
-            match op {
-                0x00 => {} // unreachable
-                0x01 => {} // nop
-                0x0b => {} // end
-                0x0f => {} // return
-                0x10 => {
-                    // call funcidx
-                    match read_uleb128(body, pos) {
-                        Ok((idx, n)) => {
-                            pos += n;
-                            if idx as u32 >= self.known_func_count {
-                                self.errors.push(ValidationError::InvalidFuncIndex {
-                                    index: idx as u32,
-                                    max: self.known_func_count.saturating_sub(1),
-                                });
-                            }
-                        }
-                        Err(_) => {
-                            self.errors.push(ValidationError::MalformedSection {
-                                section: "code".to_string(),
-                                detail: format!("truncated call at {pos:#x}"),
-                            });
-                            break;
-                        }
-                    }
-                }
-                0x11 => {
-                    // call_indirect typeidx tableidx
-                    match read_uleb128(body, pos) {
-                        Ok((type_idx, n1)) => {
-                            pos += n1;
-                            if type_idx as u32 >= self.known_type_count {
-                                self.errors.push(ValidationError::InvalidTypeIndex {
-                                    index: type_idx as u32,
-                                    max: self.known_type_count.saturating_sub(1),
-                                });
-                            }
-                            // consume table idx
-                            if let Ok((_, n2)) = read_uleb128(body, pos) {
-                                pos += n2;
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-                // Variable ops: consume one LEB128
-                0x20..=0x24 => match read_uleb128(body, pos) {
-                    Ok((_, n)) => pos += n,
-                    Err(_) => {
-                        self.errors.push(ValidationError::MalformedSection {
-                            section: "code".to_string(),
-                            detail: "truncated variable op".to_string(),
-                        });
-                        break;
-                    }
-                },
-                // Memory ops: consume align + offset
-                0x28..=0x3e => {
-                    match read_uleb128(body, pos) {
-                        Ok((_, n)) => pos += n,
-                        Err(_) => break,
-                    }
-                    match read_uleb128(body, pos) {
-                        Ok((mem_offset, n)) => {
-                            pos += n;
-                            // Check if offset exceeds declared memory
-                            if self.memory_pages > 0 {
-                                let limit_bytes = u64::from(self.memory_pages) * 65536;
-                                if mem_offset > limit_bytes {
-                                    self.errors.push(ValidationError::MemoryOutOfBounds {
-                                        offset: mem_offset,
-                                        access_size: 4,
-                                        memory_limit_pages: self.memory_pages,
-                                    });
-                                }
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-                // memory.size / memory.grow: consume reserved byte
-                0x3f | 0x40 => {
-                    if pos >= body.len() {
-                        self.errors.push(ValidationError::MalformedSection {
-                            section: "code".to_string(),
-                            detail: format!("truncated memory.size/grow at {pos:#x}"),
-                        });
-                        break;
-                    }
-                    pos += 1;
-                }
-                // i32.const: consume SLEB128
-                0x41 => {
-                    let mut p = pos;
-                    while p < body.len() {
-                        let b = body[p];
-                        p += 1;
-                        if b & 0x80 == 0 {
-                            break;
-                        }
-                    }
-                    pos = p;
-                }
-                // i64.const: consume SLEB128
-                0x42 => {
-                    let mut p = pos;
-                    while p < body.len() {
-                        let b = body[p];
-                        p += 1;
-                        if b & 0x80 == 0 {
-                            break;
-                        }
-                    }
-                    pos = p;
-                }
-                // f32.const: 4 bytes
-                0x43 => {
-                    pos += 4.min(body.len() - pos);
-                }
-                // f64.const: 8 bytes
-                0x44 => {
-                    pos += 8.min(body.len() - pos);
-                }
-                // No-operand numeric ops (0x45 – 0xc4)
-                0x45..=0xc4 => {}
-                // br / br_if: one LEB128
-                0x0c | 0x0d => match read_uleb128(body, pos) {
-                    Ok((_, n)) => pos += n,
-                    Err(_) => break,
-                },
-                // br_table
-                0x0e => {
-                    const MAX_BR_TABLE_LABELS: u64 = 65_536;
-                    match read_uleb128(body, pos) {
-                        Ok((count, n)) => {
-                            pos += n;
-                            if count > MAX_BR_TABLE_LABELS {
-                                self.errors.push(ValidationError::MalformedSection {
-                                    section: "code".to_string(),
-                                    detail: format!("br_table count {count} exceeds limit"),
-                                });
-                                break;
-                            }
-                            // consume count+1 labels
-                            for _ in 0..=count {
-                                match read_uleb128(body, pos) {
-                                    Ok((_, n2)) => pos += n2,
-                                    Err(_) => {
-                                        pos = body.len();
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-                0xfc..=0xfe => {
-                    // Skip multi-byte opcodes: consume sub-opcode LEB128
-                    match read_uleb128(body, pos) {
-                        Ok((_, n)) => pos += n,
-                        Err(_) => break,
-                    }
-                }
-                // Unknown opcode
-                other => {
-                    self.errors.push(ValidationError::InvalidOpcode {
-                        offset: pos - 1,
-                        opcode: other,
-                    });
-                }
+            if !self.validate_op_part0(body, op, &mut pos) {
+                break;
             }
         }
         self.errors.is_empty()
     }
+
+    /// Opcode-immediate consumption chunk 0 of [`Self::validate_body`].
+    ///
+    /// Returns `false` when the body is malformed and scanning must stop.
+    fn validate_op_part0(&mut self, body: &[u8], op: u8, pos: &mut usize) -> bool {
+        match op {
+                    // Single-byte opcodes with no immediate to consume: unreachable
+                    // (0x00), nop (0x01), end (0x0b), return (0x0f), and the whole
+                    // no-operand numeric range 0x45..=0xc4.
+                    0x00 | 0x01 | 0x0b | 0x0f | 0x45..=0xc4 => {}
+                    0x10 => {
+                        // call funcidx
+                        if let Ok((idx, n)) = read_uleb128(body, *pos) {
+                            *pos += n;
+                            // A funcidx wider than u32 cannot name a real function;
+                            // saturate so it stays out of range instead of truncating
+                            // into a valid index.
+                            let idx = u32::try_from(idx).unwrap_or(u32::MAX);
+                            if idx >= self.known_func_count {
+                                self.errors.push(ValidationError::InvalidFuncIndex {
+                                    index: idx,
+                                    max: self.known_func_count.saturating_sub(1),
+                                });
+                            }
+                        } else {
+                            self.errors.push(ValidationError::MalformedSection {
+                                section: "code".to_string(),
+                                detail: format!("truncated call at {pos:#x}"),
+                            });
+                            return false;
+                        }
+                    }
+                    0x11 => {
+                        // call_indirect typeidx tableidx
+                        match read_uleb128(body, *pos) {
+                            Ok((type_idx, n1)) => {
+                                *pos += n1;
+                                // Same saturation rule as for funcidx above.
+                                let type_idx = u32::try_from(type_idx).unwrap_or(u32::MAX);
+                                if type_idx >= self.known_type_count {
+                                    self.errors.push(ValidationError::InvalidTypeIndex {
+                                        index: type_idx,
+                                        max: self.known_type_count.saturating_sub(1),
+                                    });
+                                }
+                                // consume table idx
+                                if let Ok((_, n2)) = read_uleb128(body, *pos) {
+                                    *pos += n2;
+                                }
+                            }
+                            Err(_) => return false,
+                        }
+                    }
+                    // Variable ops: consume one LEB128
+                    0x20..=0x24 => if let Ok((_, n)) = read_uleb128(body, *pos) { *pos += n } else {
+                        self.errors.push(ValidationError::MalformedSection {
+                            section: "code".to_string(),
+                            detail: "truncated variable op".to_string(),
+                        });
+                        return false;
+                    },
+            _ => return self.validate_op_part1(body, op, pos),
+        }
+        true
+    }
+
+    /// Opcode-immediate consumption chunk 1 of [`Self::validate_body`].
+    ///
+    /// Returns `false` when the body is malformed and scanning must stop.
+    fn validate_op_part1(&mut self, body: &[u8], op: u8, pos: &mut usize) -> bool {
+        match op {
+                    // Memory ops: consume align + offset
+                    0x28..=0x3e => {
+                        match read_uleb128(body, *pos) {
+                            Ok((_, n)) => *pos += n,
+                            Err(_) => return false,
+                        }
+                        match read_uleb128(body, *pos) {
+                            Ok((mem_offset, n)) => {
+                                *pos += n;
+                                // Check if offset exceeds declared memory
+                                if self.memory_pages > 0 {
+                                    let limit_bytes = u64::from(self.memory_pages) * 65536;
+                                    if mem_offset > limit_bytes {
+                                        self.errors.push(ValidationError::MemoryOutOfBounds {
+                                            offset: mem_offset,
+                                            access_size: 4,
+                                            memory_limit_pages: self.memory_pages,
+                                        });
+                                    }
+                                }
+                            }
+                            Err(_) => return false,
+                        }
+                    }
+                    // memory.size / memory.grow: consume reserved byte
+                    0x3f | 0x40 => {
+                        if *pos >= body.len() {
+                            self.errors.push(ValidationError::MalformedSection {
+                                section: "code".to_string(),
+                                detail: format!("truncated memory.size/grow at {pos:#x}"),
+                            });
+                            return false;
+                        }
+                        *pos += 1;
+                    }
+                    // i32.const (0x41) / i64.const (0x42): consume the SLEB128
+                    // immediate; the encoding is identical for both widths.
+                    0x41 | 0x42 => {
+                        let mut p = *pos;
+                        while p < body.len() {
+                            let b = body[p];
+                            p += 1;
+                            if b & 0x80 == 0 {
+                                break;
+                            }
+                        }
+                        *pos = p;
+                    }
+                    // f32.const: 4 bytes
+                    0x43 => {
+                        *pos += 4.min(body.len() - *pos);
+                    }
+                    // f64.const: 8 bytes
+                    0x44 => {
+                        *pos += 8.min(body.len() - *pos);
+                    }
+            _ => return self.validate_op_part2(body, op, pos),
+        }
+        true
+    }
+
+    /// Opcode-immediate consumption chunk 2 of [`Self::validate_body`].
+    ///
+    /// Returns `false` when the body is malformed and scanning must stop.
+    fn validate_op_part2(&mut self, body: &[u8], op: u8, pos: &mut usize) -> bool {
+        match op {
+                    // br / br_if: one LEB128
+                    0x0c | 0x0d => match read_uleb128(body, *pos) {
+                        Ok((_, n)) => *pos += n,
+                        Err(_) => return false,
+                    },
+                    // br_table
+                    0x0e => {
+                        const MAX_BR_TABLE_LABELS: u64 = 65_536;
+                        match read_uleb128(body, *pos) {
+                            Ok((count, n)) => {
+                                *pos += n;
+                                if count > MAX_BR_TABLE_LABELS {
+                                    self.errors.push(ValidationError::MalformedSection {
+                                        section: "code".to_string(),
+                                        detail: format!("br_table count {count} exceeds limit"),
+                                    });
+                                    return false;
+                                }
+                                // consume count+1 labels
+                                for _ in 0..=count {
+                                    if let Ok((_, n2)) = read_uleb128(body, *pos) { *pos += n2 } else {
+                                        *pos = body.len();
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(_) => return false,
+                        }
+                    }
+                    0xfc..=0xfe => {
+                        // Skip multi-byte opcodes: consume sub-opcode LEB128
+                        match read_uleb128(body, *pos) {
+                            Ok((_, n)) => *pos += n,
+                            Err(_) => return false,
+                        }
+                    }
+                    // Unknown opcode
+                    other => {
+                        self.errors.push(ValidationError::InvalidOpcode {
+                            offset: *pos - 1,
+                            opcode: other,
+                        });
+                    }
+        }
+        true
+    }
+
 }
 
 // ─── ModuleValidator ──────────────────────────────────────────────────────────
@@ -540,12 +560,9 @@ impl ModuleValidator {
         let mut report = ValidationReport::new();
 
         // 1. Magic + version
-        match WasmModuleHeader::parse(wasm_bytes) {
-            Ok(_) => {}
-            Err(_) => {
-                report.add_error(ValidationError::InvalidMagic);
-                return report; // can't go further
-            }
+        if WasmModuleHeader::parse(wasm_bytes).is_err() {
+            report.add_error(ValidationError::InvalidMagic);
+            return report; // can't go further
         }
 
         if wasm_bytes.len() < 8 {
@@ -569,28 +586,22 @@ impl ModuleValidator {
             let section_id = wasm_bytes[pos];
             pos += 1;
 
-            let (section_size, n) = match read_uleb128(wasm_bytes, pos) {
-                Ok(v) => v,
-                Err(_) => {
-                    report.add_error(ValidationError::MalformedSection {
-                        section: format!("id={section_id}"),
-                        detail: "cannot read section size".to_string(),
-                    });
-                    break;
-                }
+            let Ok((section_size, n)) = read_uleb128(wasm_bytes, pos) else {
+                report.add_error(ValidationError::MalformedSection {
+                    section: format!("id={section_id}"),
+                    detail: "cannot read section size".to_string(),
+                });
+                break;
             };
             pos += n;
 
             let section_size_usize = usize::try_from(section_size).unwrap_or(usize::MAX);
-            let section_end = match pos.checked_add(section_size_usize) {
-                Some(e) => e,
-                None => {
-                    report.add_error(ValidationError::MalformedSection {
-                        section: format!("id={section_id}"),
-                        detail: "section size overflows address space".to_string(),
-                    });
-                    break;
-                }
+            let Some(section_end) = pos.checked_add(section_size_usize) else {
+                report.add_error(ValidationError::MalformedSection {
+                    section: format!("id={section_id}"),
+                    detail: "section size overflows address space".to_string(),
+                });
+                break;
             };
             if section_end > wasm_bytes.len() {
                 report.add_error(ValidationError::MalformedSection {
@@ -609,14 +620,14 @@ impl ModuleValidator {
                 Some(WasmSectionId::Type) => {
                     // Count types
                     if let Ok((count, _)) = read_uleb128(section_body, 0) {
-                        type_section_count = count as u32;
-                        report.type_count = count as u32;
+                        type_section_count = u32::try_from(count).unwrap_or(u32::MAX);
+                        report.type_count = type_section_count;
                     }
                 }
                 Some(WasmSectionId::Function) => {
                     if let Ok((count, _)) = read_uleb128(section_body, 0) {
-                        func_section_count = count as u32;
-                        report.function_count = count as u32;
+                        func_section_count = u32::try_from(count).unwrap_or(u32::MAX);
+                        report.function_count = func_section_count;
                     }
                 }
                 Some(WasmSectionId::Memory) => {
@@ -627,7 +638,7 @@ impl ModuleValidator {
                         // kind: 0x00 = min only, 0x01 = min+max.
                         debug_assert!(kind <= 1);
                         if let Ok((min_pages, _)) = read_uleb128(section_body, 2) {
-                            memory_pages = min_pages as u32;
+                            memory_pages = u32::try_from(min_pages).unwrap_or(u32::MAX);
                             report.memory_pages = memory_pages;
                         }
                     }
@@ -636,7 +647,7 @@ impl ModuleValidator {
                     self.check_imports(section_body, &mut report);
                 }
                 Some(WasmSectionId::Code) => {
-                    self.validate_code_section(
+                    Self::validate_code_section(
                         section_body,
                         func_section_count,
                         type_section_count,
@@ -667,24 +678,31 @@ impl ModuleValidator {
                 break;
             };
             pos += n;
-            if pos + mod_len as usize > body.len() {
+            let Ok(mod_len) = usize::try_from(mod_len) else {
                 break;
-            }
-            let module = String::from_utf8_lossy(&body[pos..pos + mod_len as usize]).to_string();
-            pos += mod_len as usize;
+            };
+            let Some(mod_end) = pos.checked_add(mod_len).filter(|e| *e <= body.len()) else {
+                break;
+            };
+            let module = String::from_utf8_lossy(&body[pos..mod_end]).to_string();
+            pos = mod_end;
             // Read name
             let Ok((name_len, n)) = read_uleb128(body, pos) else {
                 break;
             };
             pos += n;
-            if pos + name_len as usize > body.len() {
+            let Ok(name_len) = usize::try_from(name_len) else {
                 break;
-            }
-            let name = String::from_utf8_lossy(&body[pos..pos + name_len as usize]).to_string();
-            pos += name_len as usize;
+            };
+            let Some(name_end) = pos.checked_add(name_len).filter(|e| *e <= body.len()) else {
+                break;
+            };
+            let name = String::from_utf8_lossy(&body[pos..name_end]).to_string();
+            pos = name_end;
             // Skip import descriptor (1 byte kind + 1 LEB128 index)
             if pos < body.len() {
-                let _kind = body[pos];
+                // The descriptor kind byte is skipped here; the per-kind checks
+                // happen in `validate_body`.
                 pos += 1;
                 if let Ok((_, n)) = read_uleb128(body, pos) {
                     pos += n;
@@ -699,7 +717,6 @@ impl ModuleValidator {
     }
 
     fn validate_code_section(
-        &self,
         body: &[u8],
         func_count: u32,
         type_count: u32,
@@ -715,15 +732,12 @@ impl ModuleValidator {
             };
             pos += n;
             let body_size_usize = usize::try_from(body_size).unwrap_or(usize::MAX);
-            let func_end = match pos.checked_add(body_size_usize) {
-                Some(e) => e,
-                None => {
-                    report.add_error(ValidationError::MalformedSection {
-                        section: "code".to_string(),
-                        detail: format!("function {func_idx} body size overflows"),
-                    });
-                    break;
-                }
+            let Some(func_end) = pos.checked_add(body_size_usize) else {
+                report.add_error(ValidationError::MalformedSection {
+                    section: "code".to_string(),
+                    detail: format!("function {func_idx} body size overflows"),
+                });
+                break;
             };
             if func_end > body.len() {
                 report.add_error(ValidationError::MalformedSection {
@@ -734,7 +748,12 @@ impl ModuleValidator {
             }
             let func_body = &body[pos..func_end];
             let mut fv =
-                FunctionValidator::new(func_idx as u32, func_count, type_count, memory_pages);
+                FunctionValidator::new(
+                    u32::try_from(func_idx).unwrap_or(u32::MAX),
+                    func_count,
+                    type_count,
+                    memory_pages,
+                );
             // Skip locals declaration at the start of the function body
             if let Ok((local_decl_count, ln)) = read_uleb128(func_body, 0) {
                 let mut lpos = ln;
@@ -859,8 +878,11 @@ mod tests {
             v.extend_from_slice(func_body);
             v
         };
-        let body_size = inner.len() as u8;
-        let section_size = (2 + inner.len()) as u8; // count(1) + size_leb(1) + inner
+        // Test fixture: a single-byte LEB size only encodes bodies < 128 bytes.
+        let body_size = u8::try_from(inner.len()).expect("test function body must fit one LEB byte");
+        // count(1) + size_leb(1) + inner
+        let section_size =
+            u8::try_from(2 + inner.len()).expect("test code section must fit one LEB byte");
         m.extend_from_slice(&[0x0a, section_size, 0x01, body_size]);
         m.extend_from_slice(&inner);
         m
@@ -1120,7 +1142,7 @@ mod tests {
     #[test]
     fn test_memory_out_of_bounds_error() {
         let e = ValidationError::MemoryOutOfBounds {
-            offset: 999999,
+            offset: 999_999,
             access_size: 4,
             memory_limit_pages: 1,
         };

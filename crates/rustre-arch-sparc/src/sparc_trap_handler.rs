@@ -201,17 +201,22 @@ impl TrapTable {
             let entry_bytes = &bytes[offset..offset + TRAP_ENTRY_BYTES];
             let entry_addr = base_addr + offset as u64;
 
-            let handler = Self::decode_handler(&arch, trap_num as u8, entry_bytes, entry_addr);
-            let (is_hw, is_sw) = Self::classify_trap_number(trap_num as u16, &arch);
+            // `count` never exceeds the 256-entry architectural trap table, so
+            // the index always fits a u16; saturate rather than truncate if a
+            // caller ever passes a larger table.
+            let tt = u16::try_from(trap_num).unwrap_or(u16::MAX);
+            let handler =
+                Self::decode_handler(&arch, crate::sparc_narrow::low_u8_of_usize(trap_num), entry_bytes, entry_addr);
+            let (hardware, software) = Self::classify_trap_number(tt, &arch);
 
             entries.insert(
-                trap_num as u16,
+                tt,
                 TrapTableEntry {
-                    number: trap_num as u16,
+                    number: tt,
                     offset,
                     handler,
-                    is_hardware: is_hw,
-                    is_software: is_sw,
+                    is_hardware: hardware,
+                    is_software: software,
                 },
             );
         }
@@ -401,14 +406,14 @@ impl TrapTable {
         } else {
             SPARC_V8_TRAPS
         };
-        let is_hw = table.iter().any(|e| u16::from(e.number) == n);
+        let is_hardware = table.iter().any(|e| u16::from(e.number) == n);
         // Software traps: V8 = 0x80–0xFF, V9 = 0x100–0x1FF
-        let is_sw = if arch.bits == 64 {
+        let is_software = if arch.bits == 64 {
             (0x100..=0x1FF).contains(&n)
         } else {
             (0x80..=0xFF).contains(&n)
         };
-        (is_hw, is_sw)
+        (is_hardware, is_software)
     }
 }
 
@@ -418,6 +423,7 @@ impl fmt::Debug for TrapTable {
             .field("base_addr", &format_args!("{:#010x}", self.base_addr))
             .field("entry_count", &self.entry_count)
             .field("arch", &self.arch.name())
+            .field("entries", &self.entries.len())
             .finish()
     }
 }
@@ -546,10 +552,10 @@ mod tests {
 
     /// Build a single trap entry with: SETHI, NOP, NOP, RETT %i7+8
     fn make_rett_entry() -> [u8; 16] {
-        let sethi: u32 = (1u32 << 25) | (0b100u32 << 22) | 0; // SETHI %hi(0), %g0 = NOP
+        let sethi: u32 = (1u32 << 25) | (0b100u32 << 22); // SETHI %hi(0), %g0 = NOP
         let nop: u32 = encode_nop();
         // RETT %i7+8: fmt=2, op3=0x39, rs1=31, i=1, simm13=8
-        let rett: u32 = (0b10u32 << 30) | (0u32 << 25) | (0x39u32 << 19) | (31u32 << 14) | (1u32 << 13) | 8u32;
+        let rett: u32 = (0b10u32 << 30) | (0x39u32 << 19) | (31u32 << 14) | (1u32 << 13) | 8u32;
         let mut out = [0u8; 16];
         out[0..4].copy_from_slice(&sethi.to_be_bytes());
         out[4..8].copy_from_slice(&nop.to_be_bytes());
@@ -706,7 +712,7 @@ mod tests {
     #[test]
     fn test_scanner_no_false_positives_random() {
         // Random bytes should not look like a trap table.
-        let bytes: Vec<u8> = (0..256).map(|i| (i as u8).wrapping_mul(17)).collect();
+        let bytes: Vec<u8> = (0..=u8::MAX).map(|i| i.wrapping_mul(17)).collect();
         let scanner = TrapTableScanner { arch: v8_arch(), min_entries: 8 };
         let candidates = scanner.scan(&bytes, 0);
         // Might find some — just verify it doesn't panic.

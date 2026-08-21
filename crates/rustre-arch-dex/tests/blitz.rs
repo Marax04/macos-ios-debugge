@@ -914,8 +914,8 @@ fn magic_constants() {
     assert_eq!(DEX_MAGIC_035, b"dex\n035\0");
     assert_eq!(DEX_MAGIC_039, b"dex\n039\0");
     assert_eq!(CDEX_MAGIC, b"cdex");
-    assert_eq!(DEX_ENDIAN_CONSTANT, 0x12345678);
-    assert_eq!(DEX_REVERSE_ENDIAN_CONSTANT, 0x78563412);
+    assert_eq!(DEX_ENDIAN_CONSTANT, 0x1234_5678);
+    assert_eq!(DEX_REVERSE_ENDIAN_CONSTANT, 0x7856_3412);
 }
 
 #[test]

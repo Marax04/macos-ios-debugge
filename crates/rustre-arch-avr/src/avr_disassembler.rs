@@ -275,6 +275,11 @@ impl AvrDisassembler {
             }
             return make(addr, w, "out", vec![AvrOperand::IOAddr(io), AvrOperand::Reg(rd5(w))], 1);
         }
+        Self::decode_full_more(w, w2, addr)
+    }
+
+    /// Continuation of [`decode_full`]; split out only to keep each function short.
+    fn decode_full_more(w: u16, w2: Option<u16>, addr: u32) -> AvrInsn {
         // PUSH / POP
         if w & 0xFE0F == 0x920F { return make(addr, w, "push", vec![AvrOperand::Reg(rd5(w))], 2); }
         if w & 0xFE0F == 0x900F { return make(addr, w, "pop",  vec![AvrOperand::Reg(rd5(w))], 2); }
@@ -607,7 +612,7 @@ mod tests {
     #[test]
     fn test_in_out() {
         // IN r16, 0x00 → 0xB0 00
-        let w: u16 = 0xB000 | (0 << 4); // rd=0, io=0
+        let w: u16 = 0xB000; // rd=0, io=0
         let i = dec(w);
         assert_eq!(i.mnemonic, "in");
     }

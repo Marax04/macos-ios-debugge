@@ -176,8 +176,8 @@ impl ConstVal {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_add(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a + b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 + b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a + *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(crate::lua_int_to_f64(*a) + b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a + crate::lua_int_to_f64(*b))),
             _ => None,
         }
     }
@@ -188,8 +188,8 @@ impl ConstVal {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_sub(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a - b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 - b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a - *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(crate::lua_int_to_f64(*a) - b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a - crate::lua_int_to_f64(*b))),
             _ => None,
         }
     }
@@ -200,8 +200,8 @@ impl ConstVal {
         match (self, other) {
             (Self::Int(a), Self::Int(b)) => Some(Self::Int(a.wrapping_mul(*b))),
             (Self::Float(a), Self::Float(b)) => Some(Self::Float(a * b)),
-            (Self::Int(a), Self::Float(b)) => Some(Self::Float(*a as f64 * b)),
-            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a * *b as f64)),
+            (Self::Int(a), Self::Float(b)) => Some(Self::Float(crate::lua_int_to_f64(*a) * b)),
+            (Self::Float(a), Self::Int(b)) => Some(Self::Float(a * crate::lua_int_to_f64(*b))),
             _ => None,
         }
     }
@@ -210,7 +210,7 @@ impl ConstVal {
     #[must_use] 
     pub fn try_div(&self, other: &Self) -> Option<Self> {
         let b = match other {
-            Self::Int(b) => *b as f64,
+            Self::Int(b) => crate::lua_int_to_f64(*b),
             Self::Float(b) => *b,
             _ => return None,
         };
@@ -218,7 +218,7 @@ impl ConstVal {
             return None;
         }
         let a = match self {
-            Self::Int(a) => *a as f64,
+            Self::Int(a) => crate::lua_int_to_f64(*a),
             Self::Float(a) => *a,
             _ => return None,
         };
@@ -229,12 +229,12 @@ impl ConstVal {
     #[must_use] 
     pub fn try_pow(&self, other: &Self) -> Option<Self> {
         let b = match other {
-            Self::Int(b) => *b as f64,
+            Self::Int(b) => crate::lua_int_to_f64(*b),
             Self::Float(b) => *b,
             _ => return None,
         };
         let a = match self {
-            Self::Int(a) => *a as f64,
+            Self::Int(a) => crate::lua_int_to_f64(*a),
             Self::Float(a) => *a,
             _ => return None,
         };
@@ -414,18 +414,15 @@ impl ConstFolder {
             out.push(folded);
         }
 
-        out
-            .iter_mut()
-            .for_each(|i| self.update_consts_from_load(i));
+        for instr in &mut out {
+            self.update_consts_from_load(instr);
+        }
 
         (out, result)
     }
 
     fn update_consts_from_load(&mut self, instr: &OptInstr) {
-        let dst = match instr.dst {
-            Some(d) => d,
-            None => return,
-        };
+        let Some(dst) = instr.dst else { return };
         match instr.mnemonic.as_str() {
             "loadi" => {
                 if let Some(v) = instr.imm_int {
@@ -463,9 +460,8 @@ impl ConstFolder {
     }
 
     fn try_fold(&self, instr: &OptInstr, result: &mut OptResult) -> OptInstr {
-        let dst = match instr.dst {
-            Some(d) => d,
-            None => return instr.clone(),
+        let Some(dst) = instr.dst else {
+            return instr.clone();
         };
 
         // Get constants for source registers.
@@ -622,7 +618,7 @@ impl DeadCodeElim {
     }
 
     /// Mark dead instructions in-place without removing them (diagnostic mode).
-    pub fn mark_dead(&self, instrs: &mut Vec<OptInstr>) -> usize {
+    pub fn mark_dead(&self, instrs: &mut [OptInstr]) -> usize {
         let mut used: HashSet<u32> = instrs
             .iter()
             .flat_map(|i| [i.src_a, i.src_b].into_iter().flatten())
@@ -713,7 +709,20 @@ impl StrengthReducer {
         let dst = instr.dst?;
         let src_a = instr.src_a?;
 
-        let reduced = match instr.mnemonic.as_str() {
+        let reduced = self
+            .reduce_mul_pow(instr, dst, src_a)
+            .or_else(|| self.reduce_add_sub_div(instr, dst, src_a));
+
+        if reduced.is_some() {
+            result.strength_reductions += 1;
+            result.record_pass(OptPass::StrengthReduction);
+        }
+        reduced
+    }
+
+    /// Strength-reduce `pow` and `mul` by a constant operand.
+    fn reduce_mul_pow(&self, instr: &OptInstr, dst: u32, src_a: u32) -> Option<OptInstr> {
+        match instr.mnemonic.as_str() {
             "pow" | "powk" => {
                 // pow(x, 2) → mul(x, x)
                 let exp = instr
@@ -773,6 +782,13 @@ impl StrengthReducer {
                     _ => None,
                 }
             }
+            _ => None,
+        }
+    }
+
+    /// Strength-reduce `add`, `sub` and `idiv` by a constant operand.
+    fn reduce_add_sub_div(&self, instr: &OptInstr, dst: u32, src_a: u32) -> Option<OptInstr> {
+        match instr.mnemonic.as_str() {
             "add" | "addk" | "addi" => {
                 let b_int = instr
                     .src_b
@@ -810,13 +826,7 @@ impl StrengthReducer {
                 }
             }
             _ => None,
-        };
-
-        if reduced.is_some() {
-            result.strength_reductions += 1;
-            result.record_pass(OptPass::StrengthReduction);
         }
-        reduced
     }
 }
 
@@ -957,7 +967,7 @@ impl LuaOptimizer {
             let before_simplified = total_result.simplified;
 
             for &pass in &self.enabled_passes {
-                let (new_instrs, pass_result) = self.run_pass(pass, current);
+                let (new_instrs, pass_result) = Self::run_pass(pass, current);
                 current = new_instrs;
                 total_result.eliminated += pass_result.eliminated;
                 total_result.simplified += pass_result.simplified;
@@ -979,7 +989,7 @@ impl LuaOptimizer {
         (current, total_result)
     }
 
-    fn run_pass(&self, pass: OptPass, instrs: Vec<OptInstr>) -> (Vec<OptInstr>, OptResult) {
+    fn run_pass(pass: OptPass, instrs: Vec<OptInstr>) -> (Vec<OptInstr>, OptResult) {
         match pass {
             OptPass::ConstantFolding => ConstFolder::new().run(instrs),
             OptPass::CopyPropagation => CopyProp::new().run(instrs),

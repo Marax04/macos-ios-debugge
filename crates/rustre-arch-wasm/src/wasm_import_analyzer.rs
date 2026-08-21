@@ -1,9 +1,10 @@
-//! Analyze WebAssembly imports/exports: categorize imports by module
-//! (`wasi_snapshot_preview1`, env, emscripten), identify WASI syscall wrappers,
-//! detect Emscripten stdlib functions, find imported memory and table entries,
-//! compute import complexity score.
+//! Analyze WebAssembly imports and exports.
+//!
+//! Categorizes imports by module (`wasi_snapshot_preview1`, env, emscripten),
+//! identifies WASI syscall wrappers, detects Emscripten stdlib functions, finds
+//! imported memory and table entries, and computes an import complexity score.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 // ── ImportModule ─────────────────────────────────────────────────────────────
@@ -352,10 +353,6 @@ pub struct ImportAnalysis {
     pub is_emscripten: bool,
     /// Whether the module uses WASI.
     pub is_wasi: bool,
-    /// Whether the module imports memory (as opposed to defining it locally).
-    pub has_imported_memory: bool,
-    /// Whether the module imports a table.
-    pub has_imported_table: bool,
     /// Number of imported functions.
     pub imported_func_count: usize,
     /// Number of exported functions.
@@ -369,15 +366,32 @@ pub struct ImportAnalysis {
 }
 
 impl ImportAnalysis {
+    /// Whether the module imports memory (as opposed to defining it locally).
+    ///
+    /// Derived from [`Self::imports`] rather than stored, so it cannot drift
+    /// out of sync with the import list.
+    #[must_use]
+    pub fn has_imported_memory(&self) -> bool {
+        self.imports
+            .iter()
+            .any(|i| matches!(i.kind, ImportKind::Memory { .. }))
+    }
+
+    /// Whether the module imports a table. Derived from [`Self::imports`].
+    #[must_use]
+    pub fn has_imported_table(&self) -> bool {
+        self.imports
+            .iter()
+            .any(|i| matches!(i.kind, ImportKind::Table { .. }))
+    }
+
     /// Build an `ImportAnalysis` from a list of imports and exports.
     #[must_use]
     pub fn analyze(imports: Vec<WasmImport>, exports: Vec<WasmExport>) -> Self {
         let mut by_module: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut wasi_categories_set: HashMap<WasiCategory, ()> = HashMap::new();
+        let mut wasi_categories_set: HashSet<WasiCategory> = HashSet::new();
         let mut is_emscripten = false;
         let mut is_wasi = false;
-        let mut has_imported_memory = false;
-        let mut has_imported_table = false;
         let mut imported_func_count = 0usize;
         let mut emscripten_funcs: Vec<String> = Vec::new();
         let mut unknown_imports: Vec<WasmImport> = Vec::new();
@@ -390,16 +404,17 @@ impl ImportAnalysis {
 
             match &imp.kind {
                 ImportKind::Function { .. } => imported_func_count += 1,
-                ImportKind::Memory { .. } => has_imported_memory = true,
-                ImportKind::Table { .. } => has_imported_table = true,
-                ImportKind::Global { .. } => {}
+                // Memory, table and global imports carry no per-kind counters
+                // here; `has_imported_memory`/`has_imported_table` derive them
+                // from the import list instead.
+                ImportKind::Memory { .. } | ImportKind::Table { .. } | ImportKind::Global { .. } => {}
             }
 
             match &imp.module_category {
                 ImportModule::WasiSnapshotPreview1 | ImportModule::WasiUnstable | ImportModule::WasiIO => {
                     is_wasi = true;
                     if let Some(wf) = imp.wasi_descriptor() {
-                        wasi_categories_set.insert(wf.category, ());
+                        wasi_categories_set.insert(wf.category);
                     }
                 }
                 ImportModule::Emscripten | ImportModule::GotFunc | ImportModule::GotMem => {
@@ -427,7 +442,7 @@ impl ImportAnalysis {
             .count();
 
         let wasi_categories: Vec<WasiCategory> =
-            wasi_categories_set.into_keys().collect();
+            wasi_categories_set.into_iter().collect();
 
         let complexity_score =
             compute_complexity_score(&imports, &exports, imported_func_count, is_wasi, is_emscripten);
@@ -439,8 +454,6 @@ impl ImportAnalysis {
             wasi_categories,
             is_emscripten,
             is_wasi,
-            has_imported_memory,
-            has_imported_table,
             imported_func_count,
             exported_func_count,
             complexity_score,
@@ -454,13 +467,12 @@ impl ImportAnalysis {
     pub fn wasi_imports_by_category(&self) -> HashMap<String, Vec<&WasmImport>> {
         let mut map: HashMap<String, Vec<&WasmImport>> = HashMap::new();
         for imp in &self.imports {
-            if imp.module_category.is_wasi() {
-                if let Some(wf) = imp.wasi_descriptor() {
+            if imp.module_category.is_wasi()
+                && let Some(wf) = imp.wasi_descriptor() {
                     map.entry(wf.category.to_string())
                         .or_default()
                         .push(imp);
                 }
-            }
         }
         map
     }
@@ -495,7 +507,7 @@ impl ImportAnalysis {
         if self.is_emscripten {
             parts.push(format!("emscripten({})", self.emscripten_funcs.len()));
         }
-        if self.has_imported_memory {
+        if self.has_imported_memory() {
             parts.push("imported_memory".into());
         }
         parts.push(format!("complexity={:.2}", self.complexity_score));
@@ -557,7 +569,9 @@ fn compute_complexity_score(
     is_wasi: bool,
     is_emscripten: bool,
 ) -> f32 {
-    let func_score = (imported_func_count as f32 / 100.0).min(1.0) * 0.55;
+    // Clamped to 100 first, so the widening to f32 is exact and infallible.
+        let clamped = u16::try_from(imported_func_count.min(100)).unwrap_or(100);
+        let func_score = (f32::from(clamped) / 100.0) * 0.55;
     let wasi_bonus = if is_wasi { 0.15 } else { 0.0 };
     let emsc_bonus = if is_emscripten { 0.20 } else { 0.0 };
     let mem_bonus = if imports.iter().any(WasmImport::is_imported_memory) { 0.10 } else { 0.0 };
@@ -610,18 +624,20 @@ impl ImportAnalyzer {
         let mut parsed = 0usize;
         for _ in 0..count {
             let Some((mod_len, n)) = decode_uleb128_simple(bytes, pos) else { break };
-            let mod_len = mod_len as usize;
+            // A ULEB128 length is attacker-controlled: convert (never truncate)
+            // and add with `checked_add` so it cannot wrap past the bound check.
+            let Ok(mod_len) = usize::try_from(mod_len) else { break };
             pos += n;
-            if pos + mod_len > bytes.len() { break; }
-            let module = String::from_utf8_lossy(&bytes[pos..pos + mod_len]).into_owned();
-            pos += mod_len;
+            let Some(mod_end) = pos.checked_add(mod_len).filter(|e| *e <= bytes.len()) else { break };
+            let module = String::from_utf8_lossy(&bytes[pos..mod_end]).into_owned();
+            pos = mod_end;
 
             let Some((name_len, n2)) = decode_uleb128_simple(bytes, pos) else { break };
-            let name_len = name_len as usize;
+            let Ok(name_len) = usize::try_from(name_len) else { break };
             pos += n2;
-            if pos + name_len > bytes.len() { break; }
-            let name = String::from_utf8_lossy(&bytes[pos..pos + name_len]).into_owned();
-            pos += name_len;
+            let Some(name_end) = pos.checked_add(name_len).filter(|e| *e <= bytes.len()) else { break };
+            let name = String::from_utf8_lossy(&bytes[pos..name_end]).into_owned();
+            pos = name_end;
 
             if pos >= bytes.len() { break; }
             let kind_byte = bytes[pos];
@@ -632,7 +648,8 @@ impl ImportAnalyzer {
                     // Function: type index
                     let Some((type_idx, n3)) = decode_uleb128_simple(bytes, pos) else { break };
                     pos += n3;
-                    WasmImport::function(module, name, type_idx as u32)
+                    let Ok(type_idx) = u32::try_from(type_idx) else { break };
+                    WasmImport::function(module, name, type_idx)
                 }
                 0x01 => {
                     // Table: element_type, limits
@@ -646,9 +663,11 @@ impl ImportAnalyzer {
                     let max = if kind == 1 {
                         let Some((m, n5)) = decode_uleb128_simple(bytes, pos) else { break };
                         pos += n5;
-                        Some(m as u32)
+                        let Ok(m) = u32::try_from(m) else { break };
+                        Some(m)
                     } else { None };
-                    WasmImport::table(module, name, elem_type, min as u32, max)
+                    let Ok(min) = u32::try_from(min) else { break };
+                    WasmImport::table(module, name, elem_type, min, max)
                 }
                 0x02 => {
                     // Memory: limits
@@ -660,9 +679,11 @@ impl ImportAnalyzer {
                     let max = if kind == 1 {
                         let Some((m, n5)) = decode_uleb128_simple(bytes, pos) else { break };
                         pos += n5;
-                        Some(m as u32)
+                        let Ok(m) = u32::try_from(m) else { break };
+                        Some(m)
                     } else { None };
-                    WasmImport::memory(module, name, min as u32, max)
+                    let Ok(min) = u32::try_from(min) else { break };
+                    WasmImport::memory(module, name, min, max)
                 }
                 _ => break,
             };
@@ -752,7 +773,7 @@ mod tests {
         let analysis = analyzer.analyze();
         assert!(analysis.is_wasi);
         assert!(!analysis.is_emscripten);
-        assert!(analysis.has_imported_memory);
+        assert!(analysis.has_imported_memory());
         assert_eq!(analysis.imported_func_count, 2);
         assert!(analysis.entry_point().is_some());
         assert!(analysis.complexity_score > 0.0);

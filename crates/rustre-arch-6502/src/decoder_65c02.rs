@@ -619,10 +619,10 @@ mod tests {
         assert_eq!(bbr2.bbr_bbs_offset(), Some(5i8));
 
         // BBS7 zp=$10, offset=-2
-        let bbs7 = decode_65c02(&[0xFF, 0x10, 0xFE]).unwrap();
-        assert_eq!(bbs7.entry.mnemonic, "BBS7");
-        assert_eq!(bbs7.size, 3);
-        assert_eq!(bbs7.bit_index(), Some(7));
+        let branch_bbs7 = decode_65c02(&[0xFF, 0x10, 0xFE]).unwrap();
+        assert_eq!(branch_bbs7.entry.mnemonic, "BBS7");
+        assert_eq!(branch_bbs7.size, 3);
+        assert_eq!(branch_bbs7.bit_index(), Some(7));
     }
 
     #[test]

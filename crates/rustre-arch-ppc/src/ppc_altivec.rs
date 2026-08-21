@@ -93,13 +93,11 @@ impl VmxRegister {
     #[must_use]
     pub fn as_u32x4(self) -> [u32; 4] {
         let v = self.to_u128();
-        let mask = u128::from(u32::MAX);
-        [
-            ((v >> 96) & mask) as u32,
-            ((v >> 64) & mask) as u32,
-            ((v >> 32) & mask) as u32,
-            (v & mask) as u32,
-        ]
+        // Each shift-and-mask leaves at most 32 significant bits, so the
+        // conversion is exact; `try_from` states that instead of asserting it
+        // in a comment, and the fallback can never be reached.
+        let lane = |shift: u32| u32::try_from((v >> shift) & u128::from(u32::MAX)).unwrap_or(0);
+        [lane(96), lane(64), lane(32), lane(0)]
     }
 
     /// Set from 4 × 32-bit lanes.
@@ -336,6 +334,14 @@ impl AltiVecInsn {
             Self::Vcmpgtsh { .. } => "vcmpgtsh",
             Self::Vcmpgtsw { .. } => "vcmpgtsw",
             Self::Vcmpgtub { .. } => "vcmpgtub",
+            _ => self.mnemonic_rest(),
+        }
+    }
+
+    /// Second half of the mnemonic table, split out so that neither arm
+    /// list exceeds the length a reader can hold in their head.
+    const fn mnemonic_rest(&self) -> &'static str {
+        match self {
             Self::Vcmpgtuh { .. } => "vcmpgtuh",
             Self::Vcmpgtuw { .. } => "vcmpgtuw",
             Self::Vaddfp { .. } => "vaddfp",
@@ -392,6 +398,10 @@ impl AltiVecInsn {
             Self::Vmrglb { .. } => "vmrglb",
             Self::Vmrglh { .. } => "vmrglh",
             Self::Vmrglw { .. } => "vmrglw",
+            // Every remaining variant is answered by `mnemonic` before it
+            // delegates here, so this arm is unreachable; it exists only so
+            // the split table does not have to repeat the first half.
+            _ => "",
         }
     }
 

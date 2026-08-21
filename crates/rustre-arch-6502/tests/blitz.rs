@@ -16,7 +16,7 @@ fn opcode_table_every_byte_returns_entry_or_none() {
     // Just exercise to make sure no panic, and confirm extra_bytes is sane.
     for b in 0u8..=255 {
         if let Some(e) = opcode_table(b) {
-            assert!(e.extra_bytes_or().is_some() || true);
+            assert!(e.extra_bytes_or().is_some());
             assert!(matches!(e.mode.extra_bytes(), 0..=2));
             assert!(e.cycles >= 2 && e.cycles <= 8, "opcode 0x{:02X} cycles={}", b, e.cycles);
             assert!(!e.mnemonic.is_empty());
@@ -25,7 +25,7 @@ fn opcode_table_every_byte_returns_entry_or_none() {
 }
 
 trait Probe { fn extra_bytes_or(&self) -> Option<u8>; }
-impl Probe for OpcodeEntry { fn extra_bytes_or(&self) -> Option<u8> { Some(self.mode.extra_bytes() as u8) } }
+impl Probe for OpcodeEntry { fn extra_bytes_or(&self) -> Option<u8> { Some(self.mode.extra_bytes_u8()) } }
 
 #[test]
 fn addr_mode_extra_bytes_all_variants() {
@@ -38,7 +38,7 @@ fn addr_mode_extra_bytes_all_variants() {
         (AbsoluteIndirectX, 2), (RelativeLong, 2),
     ];
     for (m, eb) in pairs {
-        assert_eq!(m.extra_bytes(), eb, "{:?}", m);
+        assert_eq!(m.extra_bytes(), eb, "{m:?}");
         assert!(!m.name().is_empty());
     }
 }
@@ -307,15 +307,15 @@ fn read_vector_table_full() {
 fn shannon_entropy_uniform_max() {
     let data: Vec<u8> = (0..=255u8).collect();
     let e = shannon_entropy(&data);
-    assert!((e - 8.0).abs() < 1e-9, "got {}", e);
+    assert!((e - 8.0).abs() < 1e-9, "got {e}");
 }
 #[test]
 fn shannon_entropy_constant_zero() {
-    assert_eq!(shannon_entropy(&[7u8; 100]), 0.0);
+    assert!(shannon_entropy(&[7u8; 100]).abs() < f64::EPSILON);
 }
 #[test]
 fn shannon_entropy_empty_zero() {
-    assert_eq!(shannon_entropy(&[]), 0.0);
+    assert!(shannon_entropy(&[]).abs() < f64::EPSILON);
 }
 #[test]
 fn scan_strings_basic() {
@@ -373,7 +373,7 @@ fn collect_entry_points_dedup_sorted() {
 #[test]
 fn identify_rom_type_nes() {
     let mut d = b"NES\x1A".to_vec();
-    d.extend(std::iter::repeat(0).take(12));
+    d.extend(std::iter::repeat_n(0, 12));
     assert_eq!(identify_rom_type(&d), RomType::Nes);
 }
 #[test]
@@ -410,7 +410,7 @@ fn parse_ines_header_basic() {
     d.push(1); // chr banks
     d.push(0b0000_0001); // flags6: vertical mirror
     d.push(0); // flags7
-    d.extend(std::iter::repeat(0).take(8));
+    d.extend(std::iter::repeat_n(0, 8));
     let h = parse_ines_header(&d).unwrap();
     assert_eq!(h.prg_rom_size, 2);
     assert_eq!(h.chr_rom_size, 1);
@@ -453,7 +453,7 @@ fn read_vectors_basic() {
 #[test]
 fn rom_type_display_strings_nonempty() {
     for t in [RomType::Nes, RomType::Snes, RomType::C64, RomType::Apple2, RomType::Atari2600, RomType::Generic] {
-        assert!(!format!("{}", t).is_empty());
+        assert!(!format!("{t}").is_empty());
     }
 }
 #[test]
@@ -633,7 +633,10 @@ fn assembler_empty_source_ok() {
 
 #[test]
 fn cpu6502_state_reset_sp_fd() {
-    let mut mem = Box::new([0u8; 65536]);
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0xFFFC] = 0x00;
     mem[0xFFFD] = 0xC0;
     let s = Cpu6502State::reset(&mem);

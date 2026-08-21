@@ -200,7 +200,7 @@ impl BytecodeStats {
         if self.instruction_count == 0 {
             return 0.0;
         }
-        self.loadk_count as f64 / self.instruction_count as f64
+        crate::count_as_f64(self.loadk_count) / crate::count_as_f64(self.instruction_count)
     }
 
     /// Return the most common opcode and its hit count.
@@ -308,16 +308,11 @@ impl AnalysisResult {
     #[must_use] 
     pub fn obfuscation_score(&self) -> usize {
         self.patterns.iter().map(|p| match p {
-            ObfuscationPattern::InvalidOpcode { .. } => 3,
             ObfuscationPattern::HighConstantLoad { fraction } if fraction.0 > 0.6 => 2,
-            ObfuscationPattern::HighConstantLoad { .. } => 1,
-            ObfuscationPattern::UpvalueMismatch { .. } => 2,
-            ObfuscationPattern::OutOfBoundsJump { .. } => 3,
-            ObfuscationPattern::InvalidClosure { .. } => 2,
-            ObfuscationPattern::MissingMagic => 1,
-            ObfuscationPattern::ExcessiveCalls { .. } => 1,
-            ObfuscationPattern::AlignmentAnomaly { .. } => 2,
-        }).sum()
+            ObfuscationPattern::HighConstantLoad { .. } | ObfuscationPattern::MissingMagic | ObfuscationPattern::ExcessiveCalls { .. } => 1,
+            ObfuscationPattern::UpvalueMismatch { .. } | ObfuscationPattern::InvalidClosure { .. } | ObfuscationPattern::AlignmentAnomaly { .. } => 2,
+            ObfuscationPattern::InvalidOpcode { .. } | ObfuscationPattern::OutOfBoundsJump { .. } => 3,
+            }).sum()
     }
 }
 
@@ -458,7 +453,7 @@ impl LuaBytecodeAnalyzer {
 
             // Classify by opcode semantics.
             match self.version {
-                LuaVersion::Lua54 => self.classify54(
+                LuaVersion::Lua54 => Self::classify54(
                     InstrCtx {
                         op,
                         word,
@@ -513,7 +508,8 @@ impl LuaBytecodeAnalyzer {
         // Post-pass: excessive call check.
         let total_calls = stats.call_count + stats.tailcall_count;
         if stats.instruction_count > 0 {
-            let call_frac = total_calls as f64 / stats.instruction_count as f64;
+            let call_frac =
+            crate::count_as_f64(total_calls) / crate::count_as_f64(stats.instruction_count);
             if call_frac > self.config.call_density_threshold {
                 patterns.push(ObfuscationPattern::ExcessiveCalls {
                     count: total_calls,
@@ -534,7 +530,7 @@ impl LuaBytecodeAnalyzer {
 
     // ── Lua 5.4 opcode classifier ────────────────────────────────────────────
 
-    fn classify54(&self, ctx: InstrCtx, sink: &mut ClassifySink<'_>) {
+    fn classify54(ctx: InstrCtx, sink: &mut ClassifySink<'_>) {
         let InstrCtx { op, word, offset, word_count, declared_protos, check_jumps } = ctx;
         // Reborrowed one by one so each binding has the same `&mut T` type the
         // parameters used to have; destructuring the struct through `&mut`
@@ -576,9 +572,8 @@ impl LuaBytecodeAnalyzer {
             // GETTABLE (10) / SETTABLE (14)
             10 | 14 | 11 | 15 | 12 | 16 => stats.table_access_count += 1,
             // ADD..BXOR (32..41), ADDI (19), ADDK..BXORK (20..29), SHRI/SHLI (30/31)
-            19..=43 => stats.arithmetic_count += 1,
+            19..=43 | 47 | 48 => stats.arithmetic_count += 1,
             // UNM (47) / BNOT (48)
-            47 | 48 => stats.arithmetic_count += 1,
             // CALL (66)
             66 => stats.call_count += 1,
             // TAILCALL (67)
@@ -591,8 +586,8 @@ impl LuaBytecodeAnalyzer {
                 if check_jumps {
                     let sj_raw = (word >> 7) & 0x01ff_ffff;
                     let sj = i64::from(sj_raw) - 16_777_215;
-                    let target = offset as i64 + 1 + sj;
-                    if target < 0 || target >= word_count as i64 {
+                    let target = i64::try_from(offset).unwrap_or(i64::MAX) + 1 + sj;
+                    if target < 0 || target >= i64::try_from(word_count).unwrap_or(i64::MAX) {
                         patterns.push(ObfuscationPattern::OutOfBoundsJump {
                             offset,
                             target,
@@ -602,9 +597,8 @@ impl LuaBytecodeAnalyzer {
                 }
             }
             // EQ..GEI (55..63), TEST (64), TESTSET (65)
-            55..=65 => stats.branch_count += 1,
+            55..=65 | 71..=75 => stats.branch_count += 1,
             // FORLOOP/FORPREP/TFORPREP/TFORCALL/TFORLOOP (71..75)
-            71..=75 => stats.branch_count += 1,
             // CLOSURE (77)
             77 => {
                 stats.closure_count += 1;
@@ -649,7 +643,7 @@ impl LuaBytecodeAnalyzer {
                 stats.loadk_count += 1;
             }
             // GETUPVAL: Lua51=4, Lua52/53=5
-            (LuaVersion::Lua51, 4) | (LuaVersion::Lua52 | LuaVersion::Lua53, 5) => {
+            (LuaVersion::Lua51, 4 | 8) | (LuaVersion::Lua52 | LuaVersion::Lua53, 5 | 9) => {
                 stats.upvalue_ops += 1;
                 *upval_refs += 1;
                 if b as usize > *max_upval {
@@ -657,13 +651,6 @@ impl LuaBytecodeAnalyzer {
                 }
             }
             // SETUPVAL: Lua51=8, Lua52/53=9
-            (LuaVersion::Lua51, 8) | (LuaVersion::Lua52 | LuaVersion::Lua53, 9) => {
-                stats.upvalue_ops += 1;
-                *upval_refs += 1;
-                if b as usize > *max_upval {
-                    *max_upval = b as usize;
-                }
-            }
             // GETTABUP: Lua52/53=6
             (LuaVersion::Lua52 | LuaVersion::Lua53, 6) => {
                 stats.table_access_count += 1;
@@ -674,12 +661,9 @@ impl LuaBytecodeAnalyzer {
                 }
             }
             // GETTABLE/SETTABLE (Lua51: 6/9, Lua52/53: 7/10)
-            (LuaVersion::Lua51, 6 | 9) => stats.table_access_count += 1,
-            (LuaVersion::Lua52 | LuaVersion::Lua53, 7 | 10) => stats.table_access_count += 1,
+            (LuaVersion::Lua51, 6 | 9) | (LuaVersion::Lua52 | LuaVersion::Lua53, 7 | 10) => stats.table_access_count += 1,
             // Arithmetic: ADD/SUB/MUL/DIV/MOD/POW (Lua51: 12-17, Lua52/53 similar)
-            (LuaVersion::Lua51, 12..=17) => stats.arithmetic_count += 1,
-            (LuaVersion::Lua52, 13..=18) => stats.arithmetic_count += 1,
-            (LuaVersion::Lua53, 13..=24) => stats.arithmetic_count += 1,
+            (LuaVersion::Lua51, 12..=17) | (LuaVersion::Lua52, 13..=18) | (LuaVersion::Lua53, 13..=24) => stats.arithmetic_count += 1,
             // CALL (Lua51:28, Lua52:29, Lua53:36)
             (LuaVersion::Lua51, 28) | (LuaVersion::Lua52, 29) | (LuaVersion::Lua53, 36) => {
                 stats.call_count += 1;
@@ -698,8 +682,8 @@ impl LuaBytecodeAnalyzer {
                 if check_jumps {
                     const MAXARG_SBX_OLD: i64 = ((1 << 18) - 1) >> 1;
                     let sbx = i64::from(bx) - MAXARG_SBX_OLD;
-                    let target = offset as i64 + 1 + sbx;
-                    if target < 0 || target >= word_count as i64 {
+                    let target = i64::try_from(offset).unwrap_or(i64::MAX) + 1 + sbx;
+                    if target < 0 || target >= i64::try_from(word_count).unwrap_or(i64::MAX) {
                         patterns.push(ObfuscationPattern::OutOfBoundsJump {
                             offset,
                             target,
@@ -721,13 +705,10 @@ impl LuaBytecodeAnalyzer {
                 }
             }
             // Comparison branches
-            (LuaVersion::Lua51, 23..=27) => stats.branch_count += 1,
-            (LuaVersion::Lua52, 24..=28) => stats.branch_count += 1,
-            (LuaVersion::Lua53, 31..=35) => stats.branch_count += 1,
+            (LuaVersion::Lua51, 23..=27 | 31 | 32) |
+(LuaVersion::Lua52, 24..=28 | 32 | 33 | 35) |
+(LuaVersion::Lua53, 31..=35 | 39 | 40 | 42) => stats.branch_count += 1,
             // FORLOOP/FORPREP (Lua51: 31/32, Lua52: 32/33, Lua53: 39/40)
-            (LuaVersion::Lua51, 31 | 32) => stats.branch_count += 1,
-            (LuaVersion::Lua52, 32 | 33 | 35) => stats.branch_count += 1,
-            (LuaVersion::Lua53, 39 | 40 | 42) => stats.branch_count += 1,
             _ => {}
         }
 
@@ -757,7 +738,7 @@ const fn extract_opcode(version: LuaVersion, word: u32) -> u8 {
 }
 
 /// Mark the string table entry at `index` as referenced.
-fn mark_string_referenced(table: &mut Vec<StringTableEntry>, index: usize) {
+fn mark_string_referenced(table: &mut [StringTableEntry], index: usize) {
     if let Some(entry) = table.get_mut(index) {
         entry.referenced = true;
     }
@@ -806,8 +787,8 @@ mod tests {
 
     fn make_54_jmp(sj: i32) -> u32 {
         // op=54 (JMP), sJ encoded with bias 16_777_215
-        let uj = (sj + 16_777_215) as u32;
-        54u32 | (uj << 7)
+        let uj = (sj + 16_777_215).cast_unsigned();
+        0x36u32 | (uj << 7)
     }
 
     #[test]

@@ -126,9 +126,15 @@ impl SparcMemory {
     /// Silently stops mapping once [`MAX_MAPPED_PAGES`] pages have been
     /// allocated.  This caps the per-`SparcMemory` allocation at 16 MiB even
     /// when `data` is gigabytes long (dos-memory-exhaustion mitigation).
+    ///
+    /// # Panics
+    ///
+    /// Panics only on an allocation failure while creating a new 4 KiB page;
+    /// the page index itself is derived by masking, so it cannot go out of
+    /// range for any `base`/`data` pair.
     pub fn load(&mut self, base: u32, data: &[u8]) {
         for (i, &b) in data.iter().enumerate() {
-            let addr = base.wrapping_add(i as u32);
+            let addr = base.wrapping_add(crate::sparc_narrow::low_u32_of_usize(i));
             let key = Self::page_key(addr);
             // Enforce the page-count cap before creating a new page.
             if !self.pages.contains_key(&key) {
@@ -150,12 +156,10 @@ impl SparcMemory {
 
     pub fn write_byte(&mut self, addr: u32, val: u8) -> bool {
         let key = Self::page_key(addr);
-        if let Some(page) = self.pages.get_mut(&key) {
+        self.pages.get_mut(&key).is_some_and(|page| {
             page[Self::page_off(addr)] = val;
             true
-        } else {
-            false
-        }
+        })
     }
 
     #[must_use]
@@ -325,6 +329,11 @@ impl SparcState {
     // ── Window management ─────────────────────────────────────────────────────
 
     /// SAVE: decrement CWP (mod NWINDOWS), check WIM.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SparcError::Trap`] with [`TrapType::WindowOverflow`] when the
+    /// new CWP is marked invalid in the window-invalid mask.
     pub const fn do_save(&mut self) -> SparcResult<()> {
         let new_cwp = (self.cwp + NWINDOWS - 1) % NWINDOWS;
         if self.wim & (1 << new_cwp) != 0 {
@@ -339,6 +348,11 @@ impl SparcState {
     }
 
     /// RESTORE: increment CWP (mod NWINDOWS), check WIM.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SparcError::Trap`] with [`TrapType::WindowUnderflow`] when the
+    /// new CWP is marked invalid in the window-invalid mask.
     pub const fn do_restore(&mut self) -> SparcResult<()> {
         let new_cwp = (self.cwp + 1) % NWINDOWS;
         if self.wim & (1 << new_cwp) != 0 {
@@ -363,7 +377,7 @@ impl SparcState {
         self.windows[self.cwp].local[2] = self.npc;
         // Update PSR: supervisor, traps disabled, update CWP field.
         self.psr = (self.psr | PSR_S) & !PSR_ET;
-        self.psr = (self.psr & !0x1F) | (old_cwp as u32 & 0x1F);
+        self.psr = (self.psr & !0x1F) | (crate::sparc_narrow::low_u32_of_usize(old_cwp) & 0x1F);
         // Build TBR with tt.
         let tt_val = u32::from(tt.tt()) << 4;
         self.tbr = (self.tbr & !0xFF0) | tt_val;
@@ -374,6 +388,12 @@ impl SparcState {
     // ── Single-step ───────────────────────────────────────────────────────────
 
     /// Fetch and execute one instruction.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SparcError::InstructionFault`] when the program counter points
+    /// at unmapped memory, or whichever error the executed instruction raises
+    /// (a window trap, an unimplemented opcode, a memory fault).
     pub fn step(&mut self) -> SparcResult<()> {
         let instr = self
             .mem
@@ -383,11 +403,11 @@ impl SparcState {
         let op = instr >> 30;
         let rd = (instr >> 25) & 0x1F;
         let next_pc = self.npc;
-        let next_npc = self.npc.wrapping_add(4);
+        let following_pc = self.npc.wrapping_add(4);
 
         match op {
             0 => self.exec_fmt0(instr, rd)?,
-            1 => self.exec_call(instr)?,
+            1 => self.exec_call(instr),
             2 => self.exec_fmt2(instr, rd)?,
             3 => self.exec_fmt3(instr, rd)?,
             _ => return Err(SparcError::Unimplemented(instr)),
@@ -397,7 +417,7 @@ impl SparcState {
         if self.pc == next_pc.wrapping_sub(4) {
             // Not yet advanced — normal sequential flow.
             self.pc = next_pc;
-            self.npc = next_npc;
+            self.npc = following_pc;
         }
 
         self.cycles += 1;
@@ -411,7 +431,7 @@ impl SparcState {
         match op2 {
             0b100 => {
                 // SETHI
-                let imm22 = instr & 0x3FFFFF;
+                let imm22 = instr & 0x3F_FFFF;
                 self.rset(rd, imm22 << 10);
                 self.pc = self.npc;
                 self.npc = self.npc.wrapping_add(4);
@@ -420,8 +440,8 @@ impl SparcState {
                 // Bicc (Branch on Integer Condition Codes)
                 let cond = (instr >> 25) & 0xF;
                 let a = (instr >> 29) & 0x1; // annul bit
-                let disp22 = ((instr & 0x3FFFFF) as i32) << 10 >> 10; // sign extend
-                let target = self.pc.wrapping_add(disp22.wrapping_mul(4) as u32);
+                let disp22 = (instr & 0x3F_FFFF).cast_signed() << 10 >> 10; // sign extend
+                let target = self.pc.wrapping_add((disp22.wrapping_mul(4)).cast_unsigned());
                 let taken = self.eval_bicc(cond);
                 if taken {
                     self.pc = self.npc; // execute delay slot
@@ -440,13 +460,12 @@ impl SparcState {
         Ok(())
     }
 
-    fn eval_bicc(&self, cond: u32) -> bool {
+    const fn eval_bicc(&self, cond: u32) -> bool {
         let n = self.icc_n();
         let z = self.icc_z();
         let v = self.icc_v();
         let c = self.icc_c();
         match cond {
-            0x0 => false,           // BN (never)
             0x1 => z,               // BE
             0x2 => n ^ v,           // BL (signed <)
             0x3 => z || (n ^ v),    // BLE (signed ≤)
@@ -462,27 +481,33 @@ impl SparcState {
             0xD => !v,              // BVC (no overflow)
             0xE => !(z || (n ^ v)), // BGE (signed ≥)  [inv of BLE]
             0xF => !(n ^ v),        // BG (signed >)   [inv of BL]
+            // 0x0 is BN, "branch never"; anything above 0xF cannot occur in a
+            // 4-bit condition field. Both answer false.
             _ => false,
         }
     }
 
     // ── Format 1: CALL ────────────────────────────────────────────────────────
 
-    fn exec_call(&mut self, instr: u32) -> SparcResult<()> {
+    /// Execute `CALL`. Infallible: every 30-bit displacement names a valid
+    /// target, so there is no error for the caller to propagate.
+    fn exec_call(&mut self, instr: u32) {
         // Sign-extend the 30-bit disp field to i32, then scale by 4.
         // We work in i64 to avoid any overflow before the sign extension,
         // sign-extend by shifting left then right, and truncate to i32.
         let field = i64::from(instr & 0x3FFF_FFFF);
         // Sign-extend 30-bit value: shift MSB to bit 63, arithmetic-shift back.
         let sign_ext = (field << 34) >> 34; // 64 - 30 = 34
-        let disp30 = (sign_ext * 4) as i32;
+        // `sign_ext` holds a sign-extended 30-bit value, i.e. -2^29..2^29-1;
+        // multiplied by 4 that is -2^31..2^31-4, exactly the i32 range. Take the
+        // low word so the narrowing is a total operation rather than a cast.
+        let disp30 = crate::sparc_narrow::low_i32_of_u64((sign_ext * 4).cast_unsigned());
         // %o7 = current PC (return address for CALL)
         let ret_addr = self.pc;
         self.rset(15, ret_addr); // r15 = %o7
-        let target = self.pc.wrapping_add(disp30 as u32);
+        let target = self.pc.wrapping_add((disp30).cast_unsigned());
         self.pc = self.npc; // execute delay slot
         self.npc = target;
-        Ok(())
     }
 
     // ── Format 2: SETHI (same as fmt0 really) ────────────────────────────────
@@ -492,10 +517,10 @@ impl SparcState {
         let rs1 = (instr >> 14) & 0x1F;
         let i = (instr >> 13) & 1;
         let rs2 = instr & 0x1F;
-        let simm13 = ((instr & 0x1FFF) as i32) << 19 >> 19;
+        let simm13 = (instr & 0x1FFF).cast_signed() << 19 >> 19;
 
         let src2 = if i == 1 {
-            simm13 as u32
+            (simm13).cast_unsigned()
         } else {
             self.rget(rs2)
         };
@@ -562,7 +587,7 @@ impl SparcState {
             0x27 => {
                 // SRA
                 let sh = src2 & 31;
-                self.rset(rd, ((src1 as i32) >> sh) as u32);
+                self.rset(rd, (src1.cast_signed() >> sh).cast_unsigned());
             }
             0x38 => {
                 // JMPL
@@ -607,9 +632,9 @@ impl SparcState {
         let rs1 = (instr >> 14) & 0x1F;
         let i = (instr >> 13) & 1;
         let rs2 = instr & 0x1F;
-        let simm13 = ((instr & 0x1FFF) as i32) << 19 >> 19;
+        let simm13 = (instr & 0x1FFF).cast_signed() << 19 >> 19;
         let src2 = if i == 1 {
-            simm13 as u32
+            (simm13).cast_unsigned()
         } else {
             self.rget(rs2)
         };
@@ -649,12 +674,11 @@ impl SparcState {
             }
             0x09 => {
                 // LDSB (signed byte)
-                let val = self
+                let val = (self
                     .mem
                     .read_byte(addr)
-                    .ok_or(SparcError::DataFault { addr, write: false })?
-                    as i8;
-                self.rset(rd, i32::from(val) as u32);
+                    .ok_or(SparcError::DataFault { addr, write: false })?).cast_signed();
+                self.rset(rd, (i32::from(val)).cast_unsigned());
             }
             0x04 => {
                 // ST (32-bit store)
@@ -665,7 +689,7 @@ impl SparcState {
             }
             0x05 => {
                 // STB (byte store)
-                let val = self.rget(rd) as u8;
+                let val = crate::sparc_narrow::low_u8_of_u32(self.rget(rd));
                 if !self.mem.write_byte(addr, val) {
                     return Err(SparcError::DataFault { addr, write: true });
                 }
@@ -703,10 +727,10 @@ mod tests {
     fn test_sethi() {
         let mut c = cpu();
         // SETHI 0x3FFFFF, %g1
-        let instr: u32 = (1 << 25) | (0b100 << 22) | 0x3FFFFF;
+        let instr: u32 = (1 << 25) | (0b100 << 22) | 0x3F_FFFF;
         load(&mut c, 0x1000, &[instr]);
         c.step().unwrap();
-        assert_eq!(c.rget(1), 0x3FFFFF << 10);
+        assert_eq!(c.rget(1), 0x3F_FFFF << 10);
     }
 
     #[test]

@@ -161,7 +161,7 @@ impl fmt::Display for MetamethodKind {
 impl MetamethodKind {
     /// Parse a metamethod name from a string key (with or without `__` prefix).
     #[must_use] 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_str(s: &str) -> Self {
         let key = s.trim_start_matches("__");
         match key {
             "index" => Self::Index,
@@ -301,6 +301,7 @@ impl PatternMatch {
         }
     }
 
+    #[must_use]
     /// Add a named capture.
     pub fn with_capture(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.captures.insert(name.into(), value.into());
@@ -446,7 +447,7 @@ impl PatternMatcher {
         }
         // Also detect multi-statement patterns (OOP class definition).
         if self.detect_oop {
-            matches.extend(self.detect_class_definitions(stmts));
+            matches.extend(Self::detect_class_definitions(stmts));
         }
         matches
     }
@@ -460,15 +461,15 @@ impl PatternMatcher {
                     PatternMatch::new(LuaPattern::NumericFor, idx)
                         .with_capture("var", var),
                 );
-                matches.extend(self.detect_loop_pattern(stmt, idx));
+                matches.extend(Self::detect_loop_pattern(stmt, idx));
             }
             Stmt::GenericFor { vars, iterators, .. } => {
-                let pat = self.classify_generic_for(iterators);
+                let pat = Self::classify_generic_for(iterators);
                 matches.push(
                     PatternMatch::new(pat, idx)
                         .with_capture("vars", vars.join(",")),
                 );
-                matches.extend(self.detect_loop_pattern(stmt, idx));
+                matches.extend(Self::detect_loop_pattern(stmt, idx));
             }
             Stmt::Expr(expr) => {
                 matches.extend(self.match_expr(expr, idx));
@@ -477,7 +478,7 @@ impl PatternMatcher {
                 matches.extend(self.match_assignment(targets, values, idx));
             }
             Stmt::Local { names, values } => {
-                matches.extend(self.match_local(names, values, idx));
+                matches.extend(Self::match_local(names, values, idx));
             }
             Stmt::Function { name, .. } => {
                 matches.extend(self.match_function_def(name, idx));
@@ -488,7 +489,7 @@ impl PatternMatcher {
     }
 
     /// Classify a generic for iterator list.
-    fn classify_generic_for(&self, iterators: &[AstNode]) -> LuaPattern {
+    fn classify_generic_for(iterators: &[AstNode]) -> LuaPattern {
         if let Some(AstNode::Call { func, .. }) = iterators.first()
             && let AstNode::Var(name) = func.as_ref() {
                 return match name.as_str() {
@@ -622,7 +623,7 @@ impl PatternMatcher {
             for (target, value) in targets.iter().zip(values.iter()) {
                 if let AstNode::Field { obj: _, field } = target
                     && field.starts_with("__") {
-                        let kind = MetamethodKind::from_str(field);
+                        let kind = MetamethodKind::parse_str(field);
                         matches.push(
                             PatternMatch::new(LuaPattern::MetamethodDef(kind), idx)
                                 .with_capture("field", field),
@@ -653,7 +654,6 @@ impl PatternMatcher {
 
     /// Match local assignment patterns.
     fn match_local(
-        &self,
         names: &[String],
         values: &[AstNode],
         idx: usize,
@@ -692,7 +692,7 @@ impl PatternMatcher {
         let mut matches = Vec::new();
         if let AstNode::Field { obj: _, field } = name
             && self.detect_metatables && field.starts_with("__") {
-                let kind = MetamethodKind::from_str(field);
+                let kind = MetamethodKind::parse_str(field);
                 matches.push(
                     PatternMatch::new(LuaPattern::MetamethodDef(kind), idx)
                         .with_capture("field", field),
@@ -702,7 +702,7 @@ impl PatternMatcher {
     }
 
     /// Detect class definition patterns across multiple statements.
-    fn detect_class_definitions(&self, stmts: &[Stmt]) -> Vec<PatternMatch> {
+    fn detect_class_definitions(stmts: &[Stmt]) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
         for (idx, stmt) in stmts.iter().enumerate() {
             // Pattern: `ClassName = {}` followed later by `ClassName.__index = ClassName`
@@ -735,7 +735,7 @@ impl PatternMatcher {
 
     /// Detect loop patterns and return `LoopPattern` descriptors embedded in
     /// `PatternMatch` captures.
-    fn detect_loop_pattern(&self, stmt: &Stmt, idx: usize) -> Vec<PatternMatch> {
+    fn detect_loop_pattern(stmt: &Stmt, idx: usize) -> Vec<PatternMatch> {
         let mut out = Vec::new();
         match stmt {
             Stmt::NumericFor { var, body, .. } => {
@@ -746,7 +746,7 @@ impl PatternMatcher {
                 );
             }
             Stmt::GenericFor { vars, iterators, body } => {
-                let kind = self.classify_generic_for(iterators);
+                let kind = Self::classify_generic_for(iterators);
                 out.push(
                     PatternMatch::new(kind, idx)
                         .with_capture("vars", vars.join(","))
@@ -799,18 +799,12 @@ fn collect_method_calls_from_stmt(stmt: &Stmt, out: &mut Vec<MethodCallPattern>)
                 collect_method_calls_from_expr(e, out);
             }
         }
-        Stmt::Local { values, .. } => {
-            for v in values { collect_method_calls_from_expr(v, out); }
-        }
-        Stmt::Assign { values, .. } => {
+        Stmt::Local { values, .. } | Stmt::Assign { values, .. } => {
             for v in values { collect_method_calls_from_expr(v, out); }
         }
         Stmt::NumericFor { body, .. }
         | Stmt::While { body, .. }
-        | Stmt::Repeat { body, .. } => {
-            for s in body { collect_method_calls_from_stmt(s, out); }
-        }
-        Stmt::GenericFor { body, .. } => {
+        | Stmt::Repeat { body, .. } | Stmt::GenericFor { body, .. } => {
             for s in body { collect_method_calls_from_stmt(s, out); }
         }
         Stmt::If { then_body, else_body, .. } => {
@@ -860,7 +854,7 @@ impl PatternStats {
             .iter()
             .map(|(k, &c)| (k.as_str(), c))
             .collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|&(_, count)| core::cmp::Reverse(count));
         v.truncate(n);
         v
     }
@@ -893,25 +887,25 @@ mod tests {
 
     #[test]
     fn test_pcall_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![make_pcall_stmt()];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::Pcall));
     }
 
     #[test]
     fn test_require_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![make_require_stmt("json")];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::RequireCall));
-        let req = matches.iter().find(|m| m.pattern == LuaPattern::RequireCall).unwrap();
-        assert_eq!(req.captures.get("module").map(std::string::String::as_str), Some("json"));
+        let require_match = matches.iter().find(|m| m.pattern == LuaPattern::RequireCall).unwrap();
+        assert_eq!(require_match.captures.get("module").map(std::string::String::as_str), Some("json"));
     }
 
     #[test]
     fn test_numeric_for_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::NumericFor {
             var: "i".into(),
             start: AstNode::Int(1),
@@ -919,13 +913,13 @@ mod tests {
             step: None,
             body: vec![],
         }];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::NumericFor));
     }
 
     #[test]
     fn test_pairs_loop_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::GenericFor {
             vars: vec!["k".into(), "v".into()],
             iterators: vec![AstNode::Call {
@@ -934,38 +928,38 @@ mod tests {
             }],
             body: vec![],
         }];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::PairsLoop));
     }
 
     #[test]
     fn test_method_call_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::Expr(AstNode::MethodCall {
             obj: Box::new(AstNode::Var("obj".into())),
             method: "doThing".into(),
             args: vec![],
         })];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::MethodCall));
     }
 
     #[test]
     fn test_setmetatable_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::Expr(AstNode::Call {
             func: Box::new(AstNode::Var("setmetatable".into())),
             args: vec![AstNode::Var("t".into()), AstNode::Var("mt".into())],
         })];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::SetMetatable));
     }
 
     #[test]
     fn test_metamethod_from_str() {
-        assert_eq!(MetamethodKind::from_str("__index"), MetamethodKind::Index);
-        assert_eq!(MetamethodKind::from_str("index"), MetamethodKind::Index);
-        assert_eq!(MetamethodKind::from_str("__add"), MetamethodKind::Add);
+        assert_eq!(MetamethodKind::parse_str("__index"), MetamethodKind::Index);
+        assert_eq!(MetamethodKind::parse_str("index"), MetamethodKind::Index);
+        assert_eq!(MetamethodKind::parse_str("__add"), MetamethodKind::Add);
     }
 
     #[test]
@@ -983,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_coroutine_create_detection() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::Expr(AstNode::Call {
             func: Box::new(AstNode::Field {
                 obj: Box::new(AstNode::Var("coroutine".into())),
@@ -991,18 +985,18 @@ mod tests {
             }),
             args: vec![AstNode::Var("f".into())],
         })];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::CoroutineCreate));
     }
 
     #[test]
     fn test_table_constructor_in_assign() {
-        let matcher = PatternMatcher::new();
+        let pattern_matcher = PatternMatcher::new();
         let stmts = vec![Stmt::Assign {
             targets: vec![AstNode::Var("t".into())],
             values: vec![AstNode::Table(vec![])],
         }];
-        let matches = matcher.match_block(&stmts);
+        let matches = pattern_matcher.match_block(&stmts);
         assert!(matches.iter().any(|m| m.pattern == LuaPattern::TableConstructor));
     }
 

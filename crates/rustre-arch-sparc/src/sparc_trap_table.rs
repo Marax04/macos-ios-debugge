@@ -215,7 +215,7 @@ fn e(tt: u8, name: &str, desc: &str, kind: TrapKind, priority: u8, sparc_version
 /// Build the SPARC v8 trap table.
 #[must_use]
 pub fn sparc_v8_trap_table() -> SparcTrapTable {
-    use TrapKind::*;
+    use TrapKind::{Reset, InstructionAccess, IllegalInstruction, PrivilegedInstruction, FpDisabled, WindowOverflow, WindowUnderflow, MemAddressNotAligned, FpException, DataAccess, TagOverflow, Watchpoint, DivisionByZero, Interrupt, CpDisabled, UnimplementedFlush, SoftwareTrap, Spare};
     let v = 8u8;
     let mut entries = vec![
         e(0x00, "reset",                "Power-on/reset trap",                         Reset,                  1, v),
@@ -236,7 +236,7 @@ pub fn sparc_v8_trap_table() -> SparcTrapTable {
     // Interrupt levels 1–15 (tt = 0x11..0x1F)
     for lvl in 1u8..=15 {
         let tt = 0x10 + lvl;
-        entries.push(e(tt, &format!("irq_level_{lvl}"), &format!("Interrupt Level {lvl}"), Interrupt(lvl), (16 - lvl) as u8, v));
+        entries.push(e(tt, &format!("irq_level_{lvl}"), &format!("Interrupt Level {lvl}"), Interrupt(lvl), 16 - lvl, v));
     }
 
     // CP disabled (0x24)
@@ -265,7 +265,7 @@ pub fn sparc_v8_trap_table() -> SparcTrapTable {
 /// Build the SPARC v9 trap table (extends v8 with additional traps).
 #[must_use]
 pub fn sparc_v9_trap_table() -> SparcTrapTable {
-    use TrapKind::*;
+    use TrapKind::{CleanWindows, InstructionAccess, IllegalInstruction, CpDisabled, DataAccessProtection, MemAddressNotAligned, DivisionByZero};
     let v = 9u8;
     let mut base = sparc_v8_trap_table().entries;
 
@@ -377,7 +377,7 @@ impl TrapHandlerScanner {
             let off = i * 4;
             if off + 4 > data.len() { break; }
             let w = u32::from_be_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
-            let pc = base_addr + off as u32;
+            let pc = base_addr + crate::sparc_narrow::low_u32_of_usize(off);
 
             // Heuristic 1: `sethi` followed by `jmpl` is a typical 2-instr handler jump
             let is_sethi = (w >> 30) == 0 && (w >> 22) & 0x7 == 0x4; // op=00, op2=100 = SETHI
@@ -388,8 +388,8 @@ impl TrapHandlerScanner {
                     let tbr_base = tbr & 0xFFFF_F000;
                     if pc >= tbr_base {
                         let slot_off = pc - tbr_base;
-                        if slot_off & 0x3F == 0 {
-                            let tt = (slot_off >> 4) as u8;
+                        if slot_off.trailing_zeros() >= 6 {
+                            let tt = crate::sparc_narrow::low_u8_of_u32(slot_off >> 4);
                             let entry = table.by_tt(tt).cloned();
                             hits.push(TrapHandlerHit {
                                 offset: off,

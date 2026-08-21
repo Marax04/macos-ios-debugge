@@ -241,7 +241,7 @@ impl DexStringPool {
                 return Err(StringPoolError::TooShort(off));
             }
             let data_offset = u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
-            let sid = StringId::new(i as u32, data_offset);
+            let sid = StringId::new(u32::try_from(i).unwrap_or(u32::MAX), data_offset);
 
             let data_off = data_offset as usize;
             if data_off >= data.len() {
@@ -266,7 +266,10 @@ impl DexStringPool {
             let string_bytes = &data[string_data_start..string_data_end];
             let value = decode_mutf8(string_bytes)?;
 
-            value_to_indices.entry(value.clone()).or_default().push(i as u32);
+            value_to_indices
+                .entry(value.clone())
+                .or_default()
+                .push(u32::try_from(i).unwrap_or(u32::MAX));
             strings.push(DexString {
                 value,
                 utf16_size,
@@ -291,11 +294,11 @@ impl DexStringPool {
                 value_to_indices
                     .entry(v.clone())
                     .or_default()
-                    .push(i as u32);
-                let utf16_len = v.encode_utf16().count() as u32;
+                    .push(u32::try_from(i).unwrap_or(u32::MAX));
+                let utf16_len = u32::try_from(v.encode_utf16().count()).unwrap_or(u32::MAX);
                 DexString {
                     utf16_size: utf16_len,
-                    string_id: StringId::new(i as u32, 0),
+                    string_id: StringId::new(u32::try_from(i).unwrap_or(u32::MAX), 0),
                     value: v,
                 }
             })
@@ -400,7 +403,7 @@ impl DexStringPool {
             .iter()
             .map(|(v, indices)| (v.as_str(), indices.len()))
             .collect();
-        counts.sort_by(|a, b| b.1.cmp(&a.1));
+        counts.sort_by_key(|c| std::cmp::Reverse(c.1));
         counts.truncate(n);
         counts
     }
@@ -429,6 +432,11 @@ impl std::fmt::Debug for DexStringPool {
 // ---------------------------------------------------------------------------
 
 /// Parse only the string ID list from a DEX file, returning raw (index, offset) pairs.
+///
+/// # Errors
+///
+/// Returns [`StringPoolError::TooShort`] if `data` does not hold `count`
+/// four-byte string identifiers starting at `off`.
 pub fn parse_string_id_list(
     data: &[u8],
     string_ids_offset: u32,
@@ -448,7 +456,7 @@ pub fn parse_string_id_list(
         }
         let data_offset =
             u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
-        ids.push(StringId::new(i as u32, data_offset));
+        ids.push(StringId::new(u32::try_from(i).unwrap_or(u32::MAX), data_offset));
     }
     Ok(ids)
 }

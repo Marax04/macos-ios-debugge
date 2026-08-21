@@ -1,7 +1,7 @@
 //! blitz2 — deep adversarial integration tests for rustre-arch-avr.
 //!
 //! Strategy: only exercise public API confirmed in lib.rs. Use a seeded LCG
-//! (no rand / no std::time) for fuzz-style coverage. Every test asserts
+//! (no rand / no `std::time`) for fuzz-style coverage. Every test asserts
 //! a no-panic / well-formed-Ok-or-Err contract.
 
 use rustre_core::arch::{Architecture, InstrFlags};
@@ -19,35 +19,59 @@ use rustre_core::address::Address;
 use rustre_core::endian::Endian;
 
 // ── LCG fuzz helper ──────────────────────────────────────────────────────────
+
+/// Multiplier of Knuth's MMIX linear congruential generator.
+const LCG_MULTIPLIER: u64 = 6_364_136_223_846_793_005;
+/// Increment of Knuth's MMIX linear congruential generator.
+const LCG_INCREMENT: u64 = 1_442_695_040_888_963_407;
+
+/// Deterministic, dependency-free pseudo-random source for the fuzz tests.
+///
+/// Every narrowing accessor takes a documented slice of the 64-bit state with
+/// `to_le_bytes` rather than a lossy cast, so it is total by construction: for
+/// a random stream "the low N bits" is the intended value, not an accident.
 struct Lcg(u64);
 impl Lcg {
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self(seed)
     }
-    fn next_u64(&mut self) -> u64 {
+    const fn next_u64(&mut self) -> u64 {
         self.0 = self
             .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(LCG_MULTIPLIER)
+            .wrapping_add(LCG_INCREMENT);
         self.0
     }
-    fn next_u16(&mut self) -> u16 {
-        self.next_u64() as u16
+    /// Low 32 bits of the next state.
+    const fn next_u32(&mut self) -> u32 {
+        let b = self.next_u64().to_le_bytes();
+        u32::from_le_bytes([b[0], b[1], b[2], b[3]])
     }
-    fn next_u8(&mut self) -> u8 {
-        self.next_u64() as u8
+    /// Low 16 bits of the next state.
+    const fn next_u16(&mut self) -> u16 {
+        let b = self.next_u64().to_le_bytes();
+        u16::from_le_bytes([b[0], b[1]])
+    }
+    /// Low 8 bits of the next state.
+    const fn next_u8(&mut self) -> u8 {
+        self.next_u64().to_le_bytes()[0]
     }
 }
+
+/// Encoder taking a destination and a source register.
+type Encoder2 = fn(u8, u8) -> u16;
+/// Encoder taking a single register operand.
+type Encoder1 = fn(u8) -> u16;
 
 fn arch() -> AvrArch {
     AvrArch::default()
 }
 
-fn addr(v: u64) -> Address {
+const fn addr(v: u64) -> Address {
     Address::new(v)
 }
 
-fn enc_le(word: u16) -> [u8; 2] {
+const fn enc_le(word: u16) -> [u8; 2] {
     word.to_le_bytes()
 }
 
@@ -105,7 +129,7 @@ fn rt_add_all_pairs() {
 #[test]
 fn rt_adc_sub_and_or_eor_cp_cpc_cpse() {
     let a = arch();
-    let cases: &[(fn(u8, u8) -> u16, &str)] = &[
+    let cases: &[(Encoder2, &str)] = &[
         (encode_adc, "ADC"),
         (encode_sub, "SUB"),
         (encode_and, "AND"),
@@ -142,7 +166,7 @@ fn rt_ldi_all_combos() {
 #[test]
 fn rt_subi_sbci_andi_ori_cpi() {
     let a = arch();
-    let cases: &[(fn(u8, u8) -> u16, &str)] = &[
+    let cases: &[(Encoder2, &str)] = &[
         (encode_subi, "SUBI"),
         (encode_sbci, "SBCI"),
         (encode_andi, "ANDI"),
@@ -163,7 +187,7 @@ fn rt_subi_sbci_andi_ori_cpi() {
 #[test]
 fn rt_inc_dec_neg_com_lsr_asr_ror_swap() {
     let a = arch();
-    let cases: &[(fn(u8) -> u16, &str)] = &[
+    let cases: &[(Encoder1, &str)] = &[
         (encode_inc, "INC"),
         (encode_dec, "DEC"),
         (encode_neg, "NEG"),
@@ -220,31 +244,31 @@ fn rt_rcall_boundary_displacements() {
 // ── 2. Panic-path tests (encoder out-of-range) ──────────────────────────────
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "RJMP displacement out of range")]
 fn encode_rjmp_too_high_panics() {
     let _ = encode_rjmp(2048);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "RJMP displacement out of range")]
 fn encode_rjmp_too_low_panics() {
     let _ = encode_rjmp(-2049);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "RCALL displacement out of range")]
 fn encode_rcall_too_high_panics() {
     let _ = encode_rcall(2048);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "MOV register out of range")]
 fn encode_mov_bad_reg_panics() {
     let _ = encode_mov(32, 0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "LDI destination must be r16")]
 fn encode_ldi_bad_reg_panics() {
     let _ = encode_ldi(15, 0);
 }
@@ -253,27 +277,21 @@ fn encode_ldi_bad_reg_panics() {
 
 #[test]
 fn fuzz_disassemble_random_words() {
-    let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0xDEAD_BEEF_CAFE_BABE);
     let a = arch();
     for _ in 0..5000 {
-        let v = g();
+        let v = g.next_u64();
         let bytes = v.to_le_bytes();
         // 2- and 4-byte slices
         for take in [2usize, 4] {
-            let pc = (g() >> 1) & 0x3F_FFFF;
+            let pc = (g.next_u64() >> 1) & 0x3F_FFFF;
             let result = a.disassemble(addr(pc), &bytes[..take]);
-            match result {
-                Ok(instr) => {
-                    assert!(instr.size == 2 || instr.size == 4);
-                    assert!(!instr.mnemonic.is_empty());
-                    assert!(instr.size <= take);
-                }
-                Err(_) => {} // CoreError ok
+            // A `CoreError` is a legitimate outcome for random bytes; only the
+            // success path carries invariants worth asserting.
+            if let Ok(instr) = result {
+                assert!(instr.size == 2 || instr.size == 4);
+                assert!(!instr.mnemonic.is_empty());
+                assert!(instr.size <= take);
             }
         }
     }
@@ -281,17 +299,12 @@ fn fuzz_disassemble_random_words() {
 
 #[test]
 fn fuzz_disassemble_4byte_no_panic() {
-    let mut s: u64 = 0x1234_5678_9ABC_DEF0;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0x1234_5678_9ABC_DEF0);
     let a = arch();
     for _ in 0..4000 {
-        let v = g();
+        let v = g.next_u64();
         let bytes = v.to_le_bytes();
-        let pc = (g() >> 1) & 0xFFFF;
+        let pc = (g.next_u64() >> 1) & 0xFFFF;
         let _ = a.disassemble(addr(pc), &bytes[..2]);
         let _ = a.disassemble(addr(pc), &bytes[..4]);
     }
@@ -299,17 +312,12 @@ fn fuzz_disassemble_4byte_no_panic() {
 
 #[test]
 fn fuzz_linear_disassembler_random_stream() {
-    let mut s: u64 = 0xAAAA_BBBB_CCCC_DDDD;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0xAAAA_BBBB_CCCC_DDDD);
     let a = arch();
     for _ in 0..50 {
         let mut buf = Vec::with_capacity(128);
         for _ in 0..64 {
-            buf.push(g() as u8);
+            buf.push(g.next_u8());
         }
         let mut count = 0;
         for r in AvrLinearDisassembler::new(&a, &buf, addr(0)) {
@@ -317,9 +325,7 @@ fn fuzz_linear_disassembler_random_stream() {
             if let Ok(instr) = r {
                 assert!(instr.size == 2 || instr.size == 4);
             }
-            if count > 200 {
-                panic!("linear sweep ran away");
-            }
+            assert!(count <= 200, "linear sweep ran away");
         }
         assert!(count > 0);
     }
@@ -327,17 +333,12 @@ fn fuzz_linear_disassembler_random_stream() {
 
 #[test]
 fn fuzz_code_stats_never_panic() {
-    let mut s: u64 = 0x9999_8888_7777_6666;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0x9999_8888_7777_6666);
     let a = arch();
     for _ in 0..20 {
         let mut buf = Vec::with_capacity(256);
         for _ in 0..128 {
-            buf.push(g() as u8);
+            buf.push(g.next_u8());
         }
         let stats = AvrCodeStats::from_bytes(&a, &buf, addr(0));
         // total + errors must be > 0 (stream non-empty)
@@ -364,17 +365,12 @@ fn fuzz_code_stats_never_panic() {
 
 #[test]
 fn fuzz_basic_blocks_never_panic() {
-    let mut s: u64 = 0x1111_2222_3333_4444;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0x1111_2222_3333_4444);
     let a = arch();
     for _ in 0..20 {
         let mut buf = Vec::with_capacity(64);
         for _ in 0..32 {
-            buf.push(g() as u8);
+            buf.push(g.next_u8());
         }
         // Errors propagate as Err; either Ok with vec or Err — neither panic.
         let _ = AvrBasicBlock::find_blocks(&a, &buf, addr(0));
@@ -521,9 +517,7 @@ fn linear_sweep_terminates_on_truncated_last_byte() {
     let mut count = 0;
     for _ in AvrLinearDisassembler::new(&a, &bytes, addr(0)) {
         count += 1;
-        if count > 5 {
-            panic!("did not terminate");
-        }
+        assert!(count <= 5, "did not terminate");
     }
 }
 
@@ -815,15 +809,10 @@ fn calling_conv_present_and_has_r24() {
 
 #[test]
 fn decoded_mnemonic_classified_to_known_kind() {
-    let mut s: u64 = 0xFFFF_0000_AAAA_5555;
-    let mut g = || {
-        s = s.wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        s
-    };
+    let mut g = Lcg::new(0xFFFF_0000_AAAA_5555);
     let a = arch();
     for _ in 0..2000 {
-        let bytes = (g() as u32).to_le_bytes();
+        let bytes = g.next_u32().to_le_bytes();
         if let Ok(instr) = a.disassemble(addr(0), &bytes) {
             // from_mnemonic must produce a defined variant — never panic.
             let _ = AvrInstrKind::from_mnemonic(&instr.mnemonic);
@@ -842,14 +831,9 @@ fn arch_send_sync_4_threads_100_ops() {
     for t in 0..4u64 {
         let arc2 = Arc::clone(&arc);
         handles.push(thread::spawn(move || {
-            let mut s: u64 = 0xCAFE_BABE ^ (t * 0x9E37_79B9);
-            let mut g = || {
-                s = s.wrapping_mul(6364136223846793005)
-                    .wrapping_add(1442695040888963407);
-                s
-            };
+            let mut g = Lcg::new(0xCAFE_BABE ^ (t * 0x9E37_79B9));
             for _ in 0..100 {
-                let w = g() as u16;
+                let w = g.next_u16();
                 let bytes = w.to_le_bytes();
                 let _ = arc2.disassemble(addr(0), &bytes);
             }

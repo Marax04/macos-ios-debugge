@@ -457,9 +457,11 @@ impl M68kEmulator {
                 let idx = if ext & 0x0800 != 0 {
                     idx_raw.cast_signed()
                 } else {
-                    i32::from((idx_raw as u16).cast_signed())
+                    // Index registers use only the low word in .W mode; select the
+                    // bytes instead of narrowing so the discard is explicit.
+                    i32::from(i16::from_le_bytes([idx_raw.to_le_bytes()[0], idx_raw.to_le_bytes()[1]]))
                 };
-                let disp = i32::from((ext as u8).cast_signed());
+                let disp = i32::from(ext.to_le_bytes()[0].cast_signed());
                 let addr = self.state.a[reg as usize]
                     .wrapping_add_signed(disp)
                     .wrapping_add_signed(idx);

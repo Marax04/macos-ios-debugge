@@ -10,21 +10,21 @@ struct Lcg {
     s: u64,
 }
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { s: 0xDEAD_BEEF_CAFE_BABE }
     }
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.s = self
             .s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         self.s
     }
     fn next_u8(&mut self) -> u8 {
-        (self.next() >> 56) as u8
+        u8::try_from((self.next() >> 56) & 0xFF).unwrap_or(0)
     }
     fn next_u16(&mut self) -> u16 {
-        (self.next() >> 48) as u16
+        u16::try_from((self.next() >> 48) & 0xFFFF).unwrap_or(0)
     }
 }
 
@@ -42,7 +42,7 @@ fn opcode_table_extra_bytes_consistent_with_mode() {
     for b in 0u8..=255 {
         if let Some(e) = opcode_table(b) {
             let eb = e.mode.extra_bytes();
-            assert!(eb <= 2, "opcode 0x{:02X} eb={}", b, eb);
+            assert!(eb <= 2, "opcode 0x{b:02X} eb={eb}");
             assert!(e.cycles > 0);
             assert!(!e.mnemonic.is_empty());
             assert!(!e.mode.name().is_empty());
@@ -53,11 +53,10 @@ fn opcode_table_extra_bytes_consistent_with_mode() {
 #[test]
 fn opcode_table_illegal_flag_consistent_with_variant() {
     for b in 0u8..=255 {
-        if let Some(e) = opcode_table(b) {
-            if e.illegal {
+        if let Some(e) = opcode_table(b)
+            && e.illegal {
                 assert_eq!(e.variant, CpuVariant::Illegal6502);
             }
-        }
     }
 }
 
@@ -86,7 +85,7 @@ fn addrmode_extra_bytes_bounded() {
         Illegal,
     ] {
         let eb = m.extra_bytes();
-        assert!(eb <= 2, "{:?} eb={}", m, eb);
+        assert!(eb <= 2, "{m:?} eb={eb}");
         assert!(!m.name().is_empty());
         // Equality / Copy
         let n = m;
@@ -165,14 +164,14 @@ fn format_operand_absolute_round_trip_50() {
 fn format_operand_relative_round_trip() {
     let mut lcg = Lcg::new();
     for _ in 0..60 {
-        let pc = (lcg.next_u16() as u64) & 0xFFFF;
+        let pc = u64::from(lcg.next_u16()) & 0xFFFF;
         let off = lcg.next_u8();
         let s = format_operand(AddrMode::Relative, &[0xD0, off], pc);
         // Format is "$XXXX"
         let parsed = u64::from_str_radix(&s[1..], 16).unwrap();
         let expected = pc
             .wrapping_add(2)
-            .wrapping_add(i64::from(off as i8) as u64)
+            .wrapping_add(i64::from(off.cast_signed()).cast_unsigned())
             & 0xFFFF;
         assert_eq!(parsed, expected);
     }
@@ -200,7 +199,7 @@ fn branch_target_negative_offset_50() {
     for i in 0..60u8 {
         let off = 0u8.wrapping_sub(i);
         let t = branch_target(0x8000, &[0xD0, off]).unwrap();
-        let expected = (0x8000_u64.wrapping_add(2).wrapping_add(off as i8 as i64 as u64)) & 0xFFFF;
+        let expected = (0x8000_u64.wrapping_add(2).wrapping_add(i64::from(off.cast_signed()).cast_unsigned())) & 0xFFFF;
         assert_eq!(t, expected);
     }
 }
@@ -271,7 +270,7 @@ fn disassemble_fuzz_no_panic_500() {
     let mut lcg = Lcg::new();
     for _ in 0..500 {
         let buf: [u8; 3] = [lcg.next_u8(), lcg.next_u8(), lcg.next_u8()];
-        let addr = Address::new(lcg.next_u16() as u64);
+        let addr = Address::new(u64::from(lcg.next_u16()));
         let _ = a.disassemble(addr, &buf);
         let _ = a.disassemble(addr, &buf[..1]);
         let _ = a.disassemble(addr, &buf[..2]);
@@ -401,16 +400,14 @@ fn linear_disassembler_fuzz_terminates() {
     let mut lcg = Lcg::new();
     let mut buf = [0u8; 64];
     for _ in 0..20 {
-        for b in buf.iter_mut() {
+        for b in &mut buf {
             *b = lcg.next_u8();
         }
         let d = Cpu6502LinearDisassembler::new(&a, &buf, Address::new(0));
         let mut steps = 0;
         for _ in d {
             steps += 1;
-            if steps > 256 {
-                panic!("linear disassembler did not terminate");
-            }
+            assert!(steps <= 256, "linear disassembler did not terminate");
         }
     }
 }
@@ -449,7 +446,7 @@ fn disassemble_one_fuzz_400() {
     let mut lcg = Lcg::new();
     let mut buf = [0u8; 8];
     for _ in 0..400 {
-        for b in buf.iter_mut() {
+        for b in &mut buf {
             *b = lcg.next_u8();
         }
         let off = (lcg.next_u8() as usize) % 9; // include out-of-range
@@ -467,7 +464,7 @@ fn cycles_default_for_undefined_is_two() {
     for b in 0u8..=255 {
         let c = cycles(b, false);
         let c2 = cycles(b, true);
-        assert!(c >= 2, "cycles for 0x{:02X} = {}", b, c);
+        assert!(c >= 2, "cycles for 0x{b:02X} = {c}");
         assert!(c2 >= c);
     }
 }
@@ -491,7 +488,7 @@ fn status_bits_are_distinct_and_cover_byte() {
     let bits = [C, Z, I, D, B, U, V, N];
     for i in 0..bits.len() {
         for j in (i + 1)..bits.len() {
-            assert_eq!(bits[i] & bits[j], 0, "bits {} & {} overlap", i, j);
+            assert_eq!(bits[i] & bits[j], 0, "bits {i} & {j} overlap");
         }
     }
 }
@@ -500,7 +497,10 @@ fn status_bits_are_distinct_and_cover_byte() {
 
 #[test]
 fn cpu6502state_reset_reads_vector() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0xFFFC] = 0x34;
     mem[0xFFFD] = 0x12;
     let s = Cpu6502State::reset(&mem);
@@ -513,7 +513,10 @@ fn cpu6502state_reset_reads_vector() {
 
 #[test]
 fn execute_one_lda_imm_sets_a_and_nz() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0x0000] = 0xA9; // LDA #
     mem[0x0001] = 0x00;
     let mut s = Cpu6502State {
@@ -532,7 +535,10 @@ fn execute_one_lda_imm_sets_a_and_nz() {
 
 #[test]
 fn execute_one_lda_imm_negative_flag() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0x0000] = 0xA9;
     mem[0x0001] = 0x80;
     let mut s = Cpu6502State {
@@ -551,7 +557,10 @@ fn execute_one_lda_imm_negative_flag() {
 
 #[test]
 fn execute_one_inx_wraps() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0] = 0xE8; // INX
     let mut s = Cpu6502State {
         a: 0,
@@ -569,7 +578,10 @@ fn execute_one_inx_wraps() {
 #[test]
 fn execute_one_fuzz_random_program_no_panic() {
     let mut lcg = Lcg::new();
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     for b in mem.iter_mut().take(256) {
         *b = lcg.next_u8();
     }
@@ -588,7 +600,10 @@ fn execute_one_fuzz_random_program_no_panic() {
 
 #[test]
 fn execute_one_jsr_rts_round_trip() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     // JSR 0x0010
     mem[0x0000] = 0x20;
     mem[0x0001] = 0x10;
@@ -612,7 +627,10 @@ fn execute_one_jsr_rts_round_trip() {
 
 #[test]
 fn execute_one_branch_taken_and_not() {
-    let mut mem = [0u8; 65536];
+    let mut mem: Box<[u8; 65536]> = vec![0u8; 65536]
+        .into_boxed_slice()
+        .try_into()
+        .expect("vec![0u8; 65536] is exactly 65536 bytes long");
     mem[0] = 0xD0;
     mem[1] = 0x10; // BNE +16
     // Z=0 → taken
@@ -730,11 +748,11 @@ fn emu_state_push_pop_round_trip() {
     let mut vals = Vec::new();
     for _ in 0..30 {
         let v = lcg.next_u8();
-        s.push(v, &mut mem);
+        s.push(v, &mut mem[..]);
         vals.push(v);
     }
     for &v in vals.iter().rev() {
-        let popped = s.pop(&mem);
+        let popped = s.pop(&mem[..]);
         assert_eq!(popped, v);
     }
 }
@@ -790,10 +808,10 @@ fn arch_send_sync_threaded_stress() {
         let a = Arc::clone(&arch);
         handles.push(thread::spawn(move || {
             let mut lcg = Lcg::new();
-            lcg.s ^= (t as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            lcg.s ^= u64::try_from(t).unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15);
             for _ in 0..100 {
                 let buf = [lcg.next_u8(), lcg.next_u8(), lcg.next_u8()];
-                let _ = a.disassemble(Address::new(lcg.next_u16() as u64), &buf);
+                let _ = a.disassemble(Address::new(u64::from(lcg.next_u16())), &buf);
             }
         }));
     }
@@ -822,7 +840,7 @@ fn disassemble_every_defined_opcode_with_padding() {
             let need = 1 + e.mode.extra_bytes() as usize;
             let buf = [b, lcg.next_u8(), lcg.next_u8(), lcg.next_u8(), lcg.next_u8()];
             let r = a.disassemble(Address::new(0x1000), &buf[..need]);
-            assert!(r.is_ok(), "failed opcode 0x{:02X}", b);
+            assert!(r.is_ok(), "failed opcode 0x{b:02X}");
             let i = r.unwrap();
             assert_eq!(i.size, need);
             assert_eq!(i.mnemonic, e.mnemonic);

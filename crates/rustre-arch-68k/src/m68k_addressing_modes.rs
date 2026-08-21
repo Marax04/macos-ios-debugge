@@ -302,7 +302,7 @@ impl std::fmt::Display for EffectiveAddress {
 
 /// High-level addressing mode descriptor combining a kind tag with a fully
 /// decoded [`EffectiveAddress`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct M68kAddressingMode {
     /// The EA kind.
     pub kind: AddressingModeKind,

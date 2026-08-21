@@ -125,15 +125,15 @@ pub enum LlilExpr {
     /// Register read.
     Reg(LlilReg),
     /// Memory read of `bits` bits at `address`.
-    Load { bits: u32, address: Box<LlilExpr> },
+    Load { bits: u32, address: Box<Self> },
     /// Binary arithmetic / logical operation.
     BinOp {
         op: BinOp,
-        left: Box<LlilExpr>,
-        right: Box<LlilExpr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     /// Unary operation.
-    UnOp { op: UnOp, operand: Box<LlilExpr> },
+    UnOp { op: UnOp, operand: Box<Self> },
     /// Stack-pop placeholder (used when the value stack underflows during
     /// recovery).
     StackPop,
@@ -455,7 +455,7 @@ impl WasmLifter {
             self.locals[index as usize] = (reg, bits);
         } else {
             while self.locals.len() < index as usize {
-                let idx = self.locals.len() as u32;
+                let idx = u32::try_from(self.locals.len()).unwrap_or(u32::MAX);
                 self.locals.push((LlilReg::local(idx, 32), 32));
             }
             self.locals.push((reg, bits));
@@ -477,7 +477,7 @@ impl WasmLifter {
             self.globals[index as usize] = (reg, bits);
         } else {
             while self.globals.len() < index as usize {
-                let idx = self.globals.len() as u32;
+                let idx = u32::try_from(self.globals.len()).unwrap_or(u32::MAX);
                 self.globals.push((LlilReg::global(idx, 32), 32));
             }
             self.globals.push((reg, bits));
@@ -508,11 +508,11 @@ impl WasmLifter {
     }
 
     fn local_reg(&mut self, idx: u64) -> LlilReg {
-        let idx = idx as usize;
+        let idx = usize::try_from(idx).unwrap_or(usize::MAX);
         if idx < self.locals.len() {
             self.locals[idx].0.clone()
         } else {
-            let reg = LlilReg::local(idx as u32, 32);
+            let reg = LlilReg::local(u32::try_from(idx).unwrap_or(u32::MAX), 32);
             self.warnings
                 .push(format!("local {idx} not declared; assuming i32"));
             reg
@@ -520,11 +520,11 @@ impl WasmLifter {
     }
 
     fn global_reg(&mut self, idx: u64) -> LlilReg {
-        let idx = idx as usize;
+        let idx = usize::try_from(idx).unwrap_or(usize::MAX);
         if idx < self.globals.len() {
             self.globals[idx].0.clone()
         } else {
-            let reg = LlilReg::global(idx as u32, 32);
+            let reg = LlilReg::global(u32::try_from(idx).unwrap_or(u32::MAX), 32);
             self.warnings
                 .push(format!("global {idx} not declared; assuming i32"));
             reg
@@ -541,6 +541,11 @@ impl WasmLifter {
     /// # Errors
     ///
     /// Returns [`CoreError::InvalidFormat`] on malformed input.
+    ///
+    /// # Panics
+    ///
+    /// Panics only on an internal inconsistency in the lifter state machine;
+    /// malformed bytecode is reported through the returned error instead.
     pub fn lift_wasm_function(
         &mut self,
         bytes: &[u8],
@@ -557,21 +562,6 @@ impl WasmLifter {
         let mut pos = 0usize;
         let mut decoded_count: usize = 0;
 
-        macro_rules! uleb {
-            () => {{
-                let (v, n) = read_uleb128(bytes, pos)?;
-                pos += n;
-                v
-            }};
-        }
-        macro_rules! sleb {
-            () => {{
-                let (v, n) = read_sleb128(bytes, pos)?;
-                pos += n;
-                v
-            }};
-        }
-
         while pos < bytes.len() {
             if decoded_count >= self.opts.max_ops {
                 self.warnings.push(format!(
@@ -585,598 +575,7 @@ impl WasmLifter {
             let op = bytes[pos];
             pos += 1;
 
-            match op {
-                // Control
-                0x00 => {
-                    ops.push(LlilOp::Trap);
-                }
-                0x01 => {
-                    if self.opts.emit_nops {
-                        ops.push(LlilOp::Nop);
-                    }
-                }
-                0x02 => {
-                    let _bt = sleb!();
-                    let lbl = self.alloc_label();
-                    let depth = self.cf_depth;
-                    self.cf_depth += 1;
-                    ops.push(LlilOp::BlockBegin { depth, label: lbl });
-                }
-                0x03 => {
-                    let _bt = sleb!();
-                    let lbl = self.alloc_label();
-                    let depth = self.cf_depth;
-                    self.cf_depth += 1;
-                    ops.push(LlilOp::LoopBegin { depth, label: lbl });
-                }
-                0x04 => {
-                    let _bt = sleb!();
-                    let cond = self.pop();
-                    let depth = self.cf_depth;
-                    self.cf_depth += 1;
-                    ops.push(LlilOp::IfBegin {
-                        condition: cond,
-                        depth,
-                    });
-                }
-                0x05 => {
-                    let depth = self.cf_depth.saturating_sub(1);
-                    ops.push(LlilOp::Else { depth });
-                }
-                0x0b => {
-                    let depth = self.cf_depth;
-                    if depth > 0 {
-                        self.cf_depth -= 1;
-                    }
-                    ops.push(LlilOp::BlockEnd { depth });
-                }
-                0x0c => {
-                    let _label_idx = uleb!();
-                    let lbl = self.alloc_label();
-                    ops.push(LlilOp::Branch { label: lbl });
-                }
-                0x0d => {
-                    let _label_idx = uleb!();
-                    let cond = self.pop();
-                    let lbl = self.alloc_label();
-                    ops.push(LlilOp::BranchIf {
-                        condition: cond,
-                        label: lbl,
-                    });
-                }
-                0x0e => {
-                    const MAX_BR_TABLE_ENTRIES: u64 = 65_536;
-                    let count_raw = uleb!();
-                    if count_raw > MAX_BR_TABLE_ENTRIES {
-                        return Err(CoreError::InvalidFormat {
-                            message: format!("br_table count {count_raw} exceeds limit"),
-                        });
-                    }
-                    let count = count_raw as usize;
-                    let mut labels = Vec::with_capacity(count + 1);
-                    for _ in 0..=count {
-                        let _ = uleb!();
-                        labels.push(self.alloc_label());
-                    }
-                    let default = labels.pop().unwrap_or(0);
-                    let index = self.pop();
-                    ops.push(LlilOp::BranchTable {
-                        index,
-                        labels,
-                        default,
-                    });
-                }
-                0x0f => {
-                    let value = if self.stack.is_empty() {
-                        None
-                    } else {
-                        Some(self.pop())
-                    };
-                    ops.push(LlilOp::Return { value });
-                }
-                0x10 => {
-                    let target = uleb!();
-                    ops.push(LlilOp::Call { target });
-                }
-                0x11 => {
-                    let type_idx = uleb!();
-                    let table_idx = uleb!();
-                    ops.push(LlilOp::CallIndirect {
-                        type_idx,
-                        table_idx,
-                    });
-                }
-
-                // Parametric
-                0x1a => {
-                    let _ = self.pop();
-                    ops.push(LlilOp::Drop);
-                }
-                0x1b => {
-                    // select: cond, val1, val2
-                    let cond = self.pop();
-                    let v2 = self.pop();
-                    let v1 = self.pop();
-                    let dest = self.alloc_temp(32);
-                    ops.push(LlilOp::Select {
-                        condition: cond,
-                        true_val: v1,
-                        false_val: v2,
-                        dest: dest.clone(),
-                    });
-                    self.push(LlilExpr::Reg(dest));
-                }
-
-                // Variable
-                0x20 => {
-                    let idx = uleb!();
-                    let reg = self.local_reg(idx);
-                    self.push(LlilExpr::Reg(reg));
-                }
-                0x21 => {
-                    let idx = uleb!();
-                    let reg = self.local_reg(idx);
-                    let val = self.pop();
-                    ops.push(LlilOp::SetReg {
-                        dest: reg,
-                        expr: val,
-                    });
-                }
-                0x22 => {
-                    let idx = uleb!();
-                    let reg = self.local_reg(idx);
-                    let val = self.pop();
-                    ops.push(LlilOp::SetReg {
-                        dest: reg.clone(),
-                        expr: val,
-                    });
-                    self.push(LlilExpr::Reg(reg));
-                }
-                0x23 => {
-                    let idx = uleb!();
-                    let reg = self.global_reg(idx);
-                    self.push(LlilExpr::Reg(reg));
-                }
-                0x24 => {
-                    let idx = uleb!();
-                    let reg = self.global_reg(idx);
-                    let val = self.pop();
-                    ops.push(LlilOp::SetReg {
-                        dest: reg,
-                        expr: val,
-                    });
-                }
-
-                // Memory loads — emit Load(addr + offset) exprs.
-                op @ 0x28..=0x35 => {
-                    let _align = uleb!();
-                    let offset = uleb!();
-                    let bits = match op {
-                        0x28 | 0x2c | 0x2d => 32,
-                        0x29 | 0x30..=0x35 => 64,
-                        0x2a => 32,
-                        0x2b => 64,
-                        0x2e | 0x2f => 32,
-                        _ => 32,
-                    };
-                    let base_addr = self.pop();
-                    let addr_expr = if offset == 0 {
-                        base_addr
-                    } else {
-                        LlilExpr::BinOp {
-                            op: BinOp::Add,
-                            left: base_addr.boxed(),
-                            right: LlilExpr::Const(offset as i64).boxed(),
-                        }
-                    };
-                    let dest = self.alloc_temp(bits);
-                    let load = LlilExpr::Load {
-                        bits,
-                        address: addr_expr.boxed(),
-                    };
-                    ops.push(LlilOp::SetReg {
-                        dest: dest.clone(),
-                        expr: load,
-                    });
-                    self.push(LlilExpr::Reg(dest));
-                }
-
-                // Memory stores.
-                op @ 0x36..=0x3e => {
-                    let _align = uleb!();
-                    let offset = uleb!();
-                    let bits = match op {
-                        0x36 => 32,
-                        0x37 => 64,
-                        0x38 => 32,
-                        0x39 => 64,
-                        0x3a => 8,
-                        0x3b => 16,
-                        0x3c => 8,
-                        0x3d => 16,
-                        0x3e => 32,
-                        _ => 32,
-                    };
-                    let value = self.pop();
-                    let base_addr = self.pop();
-                    let addr_expr = if offset == 0 {
-                        base_addr
-                    } else {
-                        LlilExpr::BinOp {
-                            op: BinOp::Add,
-                            left: base_addr.boxed(),
-                            right: LlilExpr::Const(offset as i64).boxed(),
-                        }
-                    };
-                    ops.push(LlilOp::Store {
-                        bits,
-                        address: addr_expr,
-                        value,
-                    });
-                }
-
-                // memory.size / memory.grow
-                0x3f => {
-                    let _mem = uleb!();
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x40 => {
-                    let _mem = uleb!();
-                    let _ = self.pop();
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // Constants
-                0x41 => {
-                    let v = sleb!();
-                    self.push(LlilExpr::Const(v));
-                }
-                0x42 => {
-                    let v = sleb!();
-                    self.push(LlilExpr::Const(v));
-                }
-                0x43 => {
-                    if pos + 4 > bytes.len() {
-                        return Err(CoreError::InvalidFormat {
-                            message: "truncated f32.const".into(),
-                        });
-                    }
-                    let bits = u32::from_le_bytes([
-                        bytes[pos],
-                        bytes[pos + 1],
-                        bytes[pos + 2],
-                        bytes[pos + 3],
-                    ]);
-                    pos += 4;
-                    self.push(LlilExpr::ConstFloat(f64::from(f32::from_bits(bits))));
-                }
-                0x44 => {
-                    if pos + 8 > bytes.len() {
-                        return Err(CoreError::InvalidFormat {
-                            message: "truncated f64.const".into(),
-                        });
-                    }
-                    let bits = u64::from_le_bytes(bytes[pos..pos + 8].try_into().unwrap());
-                    pos += 8;
-                    self.push(LlilExpr::ConstFloat(f64::from_bits(bits)));
-                }
-
-                // i32 compare / arithmetic (emit BinOp / UnOp into temps)
-                0x45 => {
-                    let a = self.pop();
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::UnOp {
-                            op: UnOp::Eqz,
-                            operand: a.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x46 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Eq,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x47 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Ne,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x48 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::LtS,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x49 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::LtU,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                0x67 => {
-                    let a = self.pop();
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::UnOp {
-                            op: UnOp::Clz,
-                            operand: a.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x68 => {
-                    let a = self.pop();
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::UnOp {
-                            op: UnOp::Ctz,
-                            operand: a.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x6a => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Add,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x6b => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Sub,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x6c => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Mul,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x6d => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::DivS,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x71 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::And,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x72 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Or,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x73 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Xor,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x74 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Shl,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // i64 add/sub/mul
-                0x7c => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(64);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Add,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x7d => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(64);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Sub,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0x7e => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(64);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::Mul,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // f32 / f64 ops
-                0x92 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::FAdd,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-                0xa0 => {
-                    let (r, l) = (self.pop(), self.pop());
-                    let t = self.alloc_temp(64);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::BinOp {
-                            op: BinOp::FAdd,
-                            left: l.boxed(),
-                            right: r.boxed(),
-                        },
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // Conversions (emit as undef temp for now)
-                0xa7..=0xc4 => {
-                    let _ = self.pop();
-                    let t = self.alloc_temp(32);
-                    ops.push(LlilOp::SetReg {
-                        dest: t.clone(),
-                        expr: LlilExpr::Undef,
-                    });
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // Prefixed extensions — skip without error.
-                0xfc..=0xfe => {
-                    // Read and discard the LEB128 sub-opcode.
-                    let (_, n) = read_uleb128(bytes, pos)?;
-                    pos += n;
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                // Reference types
-                0x25 | 0x26 => {
-                    let _idx = uleb!();
-                }
-                0xd0 => {
-                    pos += 1;
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-                0xd1 => {
-                    let _ = self.pop();
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-                0xd2 => {
-                    let _idx = uleb!();
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-
-                unknown => {
-                    self.warnings.push(format!(
-                        "unknown opcode 0x{unknown:02x} at offset {}",
-                        pos - 1
-                    ));
-                    // Emit an undef to keep the stack consistent.
-                    let t = self.alloc_temp(32);
-                    self.push(LlilExpr::Reg(t));
-                }
-            }
+            self.lift_op_part0(bytes, op, &mut pos, &mut ops)?;
         }
 
         let temp_count = self.temp_counter;
@@ -1188,9 +587,845 @@ impl WasmLifter {
             warnings: self.warnings.clone(),
         })
     }
+
+    /// Opcode-lifting chunk 0 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part0(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        macro_rules! sleb {
+            () => {{
+                let (v, n) = read_sleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+            // Control
+            0x00 => {
+                ops.push(LlilOp::Trap);
+            }
+            0x01 => {
+                if self.opts.emit_nops {
+                    ops.push(LlilOp::Nop);
+                }
+            }
+            0x02 => {
+                let _bt = sleb!();
+                let lbl = self.alloc_label();
+                let depth = self.cf_depth;
+                self.cf_depth += 1;
+                ops.push(LlilOp::BlockBegin { depth, label: lbl });
+            }
+            0x03 => {
+                let _bt = sleb!();
+                let lbl = self.alloc_label();
+                let depth = self.cf_depth;
+                self.cf_depth += 1;
+                ops.push(LlilOp::LoopBegin { depth, label: lbl });
+            }
+            0x04 => {
+                let _bt = sleb!();
+                let cond = self.pop();
+                let depth = self.cf_depth;
+                self.cf_depth += 1;
+                ops.push(LlilOp::IfBegin {
+                    condition: cond,
+                    depth,
+                });
+            }
+            0x05 => {
+                let depth = self.cf_depth.saturating_sub(1);
+                ops.push(LlilOp::Else { depth });
+            }
+            0x0b => {
+                let depth = self.cf_depth;
+                if depth > 0 {
+                    self.cf_depth -= 1;
+                }
+                ops.push(LlilOp::BlockEnd { depth });
+            }
+            0x0c => {
+                let _label_idx = uleb!();
+                let lbl = self.alloc_label();
+                ops.push(LlilOp::Branch { label: lbl });
+            }
+            0x0d => {
+                let _label_idx = uleb!();
+                let cond = self.pop();
+                let lbl = self.alloc_label();
+                ops.push(LlilOp::BranchIf {
+                    condition: cond,
+                    label: lbl,
+                });
+            }
+            _ => return self.lift_op_part1(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 1 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part1(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+            0x0e => {
+                const MAX_BR_TABLE_ENTRIES: u64 = 65_536;
+                let count_raw = uleb!();
+                if count_raw > MAX_BR_TABLE_ENTRIES {
+                    return Err(CoreError::InvalidFormat {
+                        message: format!("br_table count {count_raw} exceeds limit"),
+                    });
+                }
+                // Bounded by MAX_BR_TABLE_ENTRIES just above, so this fits.
+                let count = usize::try_from(count_raw).unwrap_or(0);
+                let mut labels = Vec::with_capacity(count + 1);
+                for _ in 0..=count {
+                    let _ = uleb!();
+                    labels.push(self.alloc_label());
+                }
+                let default = labels.pop().unwrap_or(0);
+                let index = self.pop();
+                ops.push(LlilOp::BranchTable {
+                    index,
+                    labels,
+                    default,
+                });
+            }
+            0x0f => {
+                let value = if self.stack.is_empty() {
+                    None
+                } else {
+                    Some(self.pop())
+                };
+                ops.push(LlilOp::Return { value });
+            }
+            0x10 => {
+                let target = uleb!();
+                ops.push(LlilOp::Call { target });
+            }
+            0x11 => {
+                let type_idx = uleb!();
+                let table_idx = uleb!();
+                ops.push(LlilOp::CallIndirect {
+                    type_idx,
+                    table_idx,
+                });
+            }
+
+            // Parametric
+            0x1a => {
+                let _ = self.pop();
+                ops.push(LlilOp::Drop);
+            }
+            _ => return self.lift_op_part2(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 2 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part2(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+            0x1b => {
+                // select: cond, val1, val2
+                let cond = self.pop();
+                let v2 = self.pop();
+                let v1 = self.pop();
+                let dest = self.alloc_temp(32);
+                ops.push(LlilOp::Select {
+                    condition: cond,
+                    true_val: v1,
+                    false_val: v2,
+                    dest: dest.clone(),
+                });
+                self.push(LlilExpr::Reg(dest));
+            }
+
+            // Variable
+            0x20 => {
+                let idx = uleb!();
+                let reg = self.local_reg(idx);
+                self.push(LlilExpr::Reg(reg));
+            }
+            0x21 => {
+                let idx = uleb!();
+                let reg = self.local_reg(idx);
+                let val = self.pop();
+                ops.push(LlilOp::SetReg {
+                    dest: reg,
+                    expr: val,
+                });
+            }
+            0x22 => {
+                let idx = uleb!();
+                let reg = self.local_reg(idx);
+                let val = self.pop();
+                ops.push(LlilOp::SetReg {
+                    dest: reg.clone(),
+                    expr: val,
+                });
+                self.push(LlilExpr::Reg(reg));
+            }
+            0x23 => {
+                let idx = uleb!();
+                let reg = self.global_reg(idx);
+                self.push(LlilExpr::Reg(reg));
+            }
+            0x24 => {
+                let idx = uleb!();
+                let reg = self.global_reg(idx);
+                let val = self.pop();
+                ops.push(LlilOp::SetReg {
+                    dest: reg,
+                    expr: val,
+                });
+            }
+            _ => return self.lift_op_part3(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 3 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part3(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+
+            // Memory loads — emit Load(addr + offset) exprs.
+            op @ 0x28..=0x35 => {
+                let _align = uleb!();
+                let offset = uleb!();
+                let bits = load_result_bits(op);
+                let base_addr = self.pop();
+                let addr_expr = if offset == 0 {
+                    base_addr
+                } else {
+                    LlilExpr::BinOp {
+                        op: BinOp::Add,
+                        left: base_addr.boxed(),
+                        right: LlilExpr::Const(offset.cast_signed()).boxed(),
+                    }
+                };
+                let dest = self.alloc_temp(bits);
+                let load = LlilExpr::Load {
+                    bits,
+                    address: addr_expr.boxed(),
+                };
+                ops.push(LlilOp::SetReg {
+                    dest: dest.clone(),
+                    expr: load,
+                });
+                self.push(LlilExpr::Reg(dest));
+            }
+
+            // Memory stores.
+            op @ 0x36..=0x3e => {
+                let _align = uleb!();
+                let offset = uleb!();
+                let bits = store_value_bits(op);
+                let value = self.pop();
+                let base_addr = self.pop();
+                let addr_expr = if offset == 0 {
+                    base_addr
+                } else {
+                    LlilExpr::BinOp {
+                        op: BinOp::Add,
+                        left: base_addr.boxed(),
+                        right: LlilExpr::Const(offset.cast_signed()).boxed(),
+                    }
+                };
+                ops.push(LlilOp::Store {
+                    bits,
+                    address: addr_expr,
+                    value,
+                });
+            }
+
+            // memory.size (0x3f) and ref.func (0xd2): both consume one
+            // ULEB128 immediate and push an untyped 32-bit temporary.
+            0x3f | 0xd2 => {
+                let _imm = uleb!();
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part4(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 4 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part4(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        macro_rules! sleb {
+            () => {{
+                let (v, n) = read_sleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+            0x40 => {
+                let _mem = uleb!();
+                let _ = self.pop();
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+
+            // Constants: i32.const (0x41) and i64.const (0x42) both push a
+            // SLEB128 immediate; the IL constant is already 64-bit.
+            0x41 | 0x42 => {
+                let v = sleb!();
+                self.push(LlilExpr::Const(v));
+            }
+            0x43 => {
+                if *pos + 4 > bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated f32.const".into(),
+                    });
+                }
+                let bits = u32::from_le_bytes([
+                    bytes[*pos],
+                    bytes[*pos + 1],
+                    bytes[*pos + 2],
+                    bytes[*pos + 3],
+                ]);
+                *pos += 4;
+                self.push(LlilExpr::ConstFloat(f64::from(f32::from_bits(bits))));
+            }
+            0x44 => {
+                if *pos + 8 > bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated f64.const".into(),
+                    });
+                }
+                let bits = u64::from_le_bytes(bytes[*pos..*pos + 8].try_into().unwrap());
+                *pos += 8;
+                self.push(LlilExpr::ConstFloat(f64::from_bits(bits)));
+            }
+
+            // i32 compare / arithmetic (emit BinOp / UnOp into temps)
+            0x45 => {
+                let a = self.pop();
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::UnOp {
+                        op: UnOp::Eqz,
+                        operand: a.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part5(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 5 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part5(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        match op {
+            0x46 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Eq,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x47 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Ne,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x48 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::LtS,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x49 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::LtU,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part6(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 6 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part6(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        match op {
+
+            0x67 => {
+                let a = self.pop();
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::UnOp {
+                        op: UnOp::Clz,
+                        operand: a.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x68 => {
+                let a = self.pop();
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::UnOp {
+                        op: UnOp::Ctz,
+                        operand: a.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x6a => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Add,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x6b => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Sub,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part7(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 7 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part7(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        match op {
+            0x6c => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Mul,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x6d => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::DivS,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x71 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::And,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x72 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Or,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part8(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 8 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part8(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        match op {
+            0x73 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Xor,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x74 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Shl,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+
+            // i64 add/sub/mul
+            0x7c => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(64);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Add,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0x7d => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(64);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Sub,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part9(bytes, op, pos, ops),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 9 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part9(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+        ops: &mut Vec<LlilOp>,
+    ) -> Result<(), CoreError> {
+        match op {
+            0x7e => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(64);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::Mul,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+
+            // f32 / f64 ops
+            0x92 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::FAdd,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            0xa0 => {
+                let (r, l) = (self.pop(), self.pop());
+                let t = self.alloc_temp(64);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::BinOp {
+                        op: BinOp::FAdd,
+                        left: l.boxed(),
+                        right: r.boxed(),
+                    },
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+
+            // Conversions (emit as undef temp for now)
+            0xa7..=0xc4 => {
+                let _ = self.pop();
+                let t = self.alloc_temp(32);
+                ops.push(LlilOp::SetReg {
+                    dest: t.clone(),
+                    expr: LlilExpr::Undef,
+                });
+                self.push(LlilExpr::Reg(t));
+            }
+            _ => return self.lift_op_part10(bytes, op, pos),
+        }
+        Ok(())
+    }
+
+    /// Opcode-lifting chunk 10 of [`Self::lift_wasm_function`];
+    /// unmatched opcodes fall through to the next chunk.
+    fn lift_op_part10(
+        &mut self,
+        bytes: &[u8],
+        op: u8,
+        pos: &mut usize,
+    ) -> Result<(), CoreError> {
+        macro_rules! uleb {
+            () => {{
+                let (v, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                v
+            }};
+        }
+        match op {
+
+            // Prefixed extensions — skip without error.
+            0xfc..=0xfe => {
+                // Read and discard the LEB128 sub-opcode.
+                let (_, n) = read_uleb128(bytes, *pos)?;
+                *pos += n;
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+
+            // Reference types
+            0x25 | 0x26 => {
+                let _idx = uleb!();
+            }
+            0xd0 => {
+                *pos += 1;
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+            0xd1 => {
+                let _ = self.pop();
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+
+            unknown => {
+                self.warnings.push(format!(
+                    "unknown opcode 0x{unknown:02x} at offset {}",
+                    *pos - 1
+                ));
+                // Emit an undef to keep the stack consistent.
+                let t = self.alloc_temp(32);
+                self.push(LlilExpr::Reg(t));
+            }
+        }
+        Ok(())
+    }
+
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
+
+/// Result width, in bits, of each Wasm memory-load opcode (`0x28..=0x35`).
+///
+/// Held as an ordered table rather than a `match` so every opcode keeps its own
+/// row even where several share a width.
+const LOAD_RESULT_BITS: &[(u8, u8, u32)] = &[
+    (0x28, 0x28, 32), // i32.load
+    (0x29, 0x29, 64), // i64.load
+    (0x2a, 0x2a, 32), // f32.load
+    (0x2b, 0x2b, 64), // f64.load
+    (0x2c, 0x2d, 32), // i32.load8_s / i32.load8_u
+    (0x2e, 0x2f, 32), // i32.load16_s / i32.load16_u
+    (0x30, 0x35, 64), // i64.load8/16/32 variants
+];
+
+/// Value width, in bits, of each Wasm memory-store opcode (`0x36..=0x3e`).
+const STORE_VALUE_BITS: &[(u8, u8, u32)] = &[
+    (0x36, 0x36, 32), // i32.store
+    (0x37, 0x37, 64), // i64.store
+    (0x38, 0x38, 32), // f32.store
+    (0x39, 0x39, 64), // f64.store
+    (0x3a, 0x3a, 8),  // i32.store8
+    (0x3b, 0x3b, 16), // i32.store16
+    (0x3c, 0x3c, 8),  // i64.store8
+    (0x3d, 0x3d, 16), // i64.store16
+    (0x3e, 0x3e, 32), // i64.store32
+];
+
+/// Look `op` up in an ordered `(lo, hi, bits)` table; first match wins.
+const fn bits_of(table: &[(u8, u8, u32)], op: u8, fallback: u32) -> u32 {
+    let mut i = 0;
+    while i < table.len() {
+        let (lo, hi, bits) = table[i];
+        if op >= lo && op <= hi {
+            return bits;
+        }
+        i += 1;
+    }
+    fallback
+}
+
+/// Width in bits produced by a Wasm memory-load opcode.
+const fn load_result_bits(op: u8) -> u32 {
+    bits_of(LOAD_RESULT_BITS, op, 32)
+}
+
+/// Width in bits consumed by a Wasm memory-store opcode.
+const fn store_value_bits(op: u8) -> u32 {
+    bits_of(STORE_VALUE_BITS, op, 32)
+}
 
 #[cfg(test)]
 mod tests {

@@ -502,6 +502,179 @@ fn ru64(bytes: &[u8], offset: usize) -> Option<u64> {
         .map(|s| u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
 }
 
+/// Operand fields recovered from one decoded DEX instruction.
+#[derive(Default)]
+struct Operands {
+    v_a: u16,
+    v_b: u16,
+    v_c: u16,
+    literal: i64,
+    index: u32,
+    offset: i32,
+}
+
+/// Operand-decoding chunk 0; returns `false` when `entry.format` is
+/// handled by a later chunk.
+fn decode_operands_part0(o: &mut Operands, bytes: &[u8], hi: u8, op: u8, entry: &OpcodeEntry) -> bool {
+    match entry.format {
+            OpcodeFormat::F10x => {}
+            OpcodeFormat::F12x => {
+                o.v_a = u16::from(hi & 0x0f);
+                o.v_b = u16::from((hi >> 4) & 0x0f);
+            }
+            OpcodeFormat::F11n => {
+                o.v_a = u16::from(hi & 0x0f);
+                let raw = ((hi >> 4) & 0x0f).cast_signed();
+                o.literal = if raw & 0x8 != 0 {
+                    i64::from(raw) | -16i64
+                } else {
+                    i64::from(raw)
+                };
+            }
+            OpcodeFormat::F11x => {
+                o.v_a = u16::from(hi);
+            }
+            OpcodeFormat::F10t => {
+                o.offset = i32::from(hi.cast_signed());
+            }
+            OpcodeFormat::F20t => {
+                let raw = (ru16(bytes, 2).unwrap()).cast_signed();
+                o.offset = i32::from(raw);
+            }
+            OpcodeFormat::F22x => {
+                o.v_a = u16::from(hi);
+                o.v_b = ru16(bytes, 2).unwrap();
+            }
+            OpcodeFormat::F21t => {
+                o.v_a = u16::from(hi);
+                let raw = (ru16(bytes, 2).unwrap()).cast_signed();
+                o.offset = i32::from(raw);
+            }
+            OpcodeFormat::F21s => {
+                o.v_a = u16::from(hi);
+                let raw = (ru16(bytes, 2).unwrap()).cast_signed();
+                o.literal = i64::from(raw);
+            }
+            OpcodeFormat::F21h => {
+                o.v_a = u16::from(hi);
+                let raw = i64::from((ru16(bytes, 2).unwrap()).cast_signed());
+                // The literal has the 16-bit value in the high bits
+                o.literal = if op == 0x19 { raw << 48 } else { raw << 16 };
+            }
+            // F20bc (opcode+AA, index BBBB) and F21c decode identically here: the
+            // difference is only in how the index is later interpreted.
+            OpcodeFormat::F20bc | OpcodeFormat::F21c => {
+                o.v_a = u16::from(hi);
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+            }
+            OpcodeFormat::F23x => {
+                o.v_a = u16::from(hi);
+                o.v_b = u16::from(bytes[2]);
+                o.v_c = u16::from(bytes[3]);
+            }
+            OpcodeFormat::F22b => {
+                o.v_a = u16::from(hi);
+                o.v_b = u16::from(bytes[2]);
+                o.literal = i64::from(bytes[3].cast_signed());
+            }
+            OpcodeFormat::F22t => {
+                o.v_a = u16::from(hi & 0x0f);
+                o.v_b = u16::from((hi >> 4) & 0x0f);
+                let raw = (ru16(bytes, 2).unwrap()).cast_signed();
+                o.offset = i32::from(raw);
+            }
+        _ => return false,
+    }
+    true
+}
+
+/// Operand-decoding chunk 1; returns `false` when `entry.format` is
+/// handled by a later chunk.
+fn decode_operands_part1(o: &mut Operands, bytes: &[u8], hi: u8, entry: &OpcodeEntry) -> bool {
+    match entry.format {
+            OpcodeFormat::F22s => {
+                o.v_a = u16::from(hi & 0x0f);
+                o.v_b = u16::from((hi >> 4) & 0x0f);
+                let raw = (ru16(bytes, 2).unwrap()).cast_signed();
+                o.literal = i64::from(raw);
+            }
+            OpcodeFormat::F22c | OpcodeFormat::F22cs => {
+                o.v_a = u16::from(hi & 0x0f);
+                o.v_b = u16::from((hi >> 4) & 0x0f);
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+            }
+            OpcodeFormat::F30t => {
+                let raw = (ru32(bytes, 2).unwrap()).cast_signed();
+                o.offset = raw;
+            }
+            OpcodeFormat::F32x => {
+                o.v_a = ru16(bytes, 2).unwrap();
+                o.v_b = ru16(bytes, 4).unwrap();
+            }
+            OpcodeFormat::F31i => {
+                o.v_a = u16::from(hi);
+                o.literal = i64::from((ru32(bytes, 2).unwrap()).cast_signed());
+            }
+            OpcodeFormat::F31t => {
+                o.v_a = u16::from(hi);
+                let raw = (ru32(bytes, 2).unwrap()).cast_signed();
+                o.offset = raw;
+            }
+            OpcodeFormat::F31c => {
+                o.v_a = u16::from(hi);
+                o.index = ru32(bytes, 2).unwrap();
+            }
+            OpcodeFormat::F35c | OpcodeFormat::F35ms | OpcodeFormat::F35mi => {
+                // count = hi[7:4], G = hi[3:0]
+                let count = u16::from((hi >> 4) & 0x0f);
+                o.v_a = count; // repurpose v_a for count
+                o.v_c = u16::from(hi & 0x0f); // vG
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+                // register nibbles packed in bytes[4..6]
+                o.v_b = if bytes.len() > 4 {
+                    u16::from(bytes[4])
+                } else {
+                    0
+                };
+            }
+            OpcodeFormat::F3rc | OpcodeFormat::F3rms | OpcodeFormat::F3rmi => {
+                o.v_a = u16::from(hi); // count
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+                o.v_b = ru16(bytes, 4).unwrap(); // first register
+            }
+            OpcodeFormat::F45cc => {
+                o.v_a = u16::from((hi >> 4) & 0x0f); // count
+                o.v_c = u16::from(hi & 0x0f); // G
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+                // proto_index in bytes[6..8]
+                o.literal = i64::from(ru16(bytes, 6).unwrap());
+            }
+            OpcodeFormat::F4rcc => {
+                o.v_a = u16::from(hi); // count
+                o.index = u32::from(ru16(bytes, 2).unwrap());
+                o.v_b = ru16(bytes, 4).unwrap(); // first register
+                o.literal = i64::from(ru16(bytes, 6).unwrap()); // proto index
+            }
+            OpcodeFormat::F51l => {
+                o.v_a = u16::from(hi);
+                o.literal = (ru64(bytes, 2).unwrap()).cast_signed();
+            }
+        // Formats handled by an earlier chunk leave the fields at their defaults.
+        _ => {}
+    }
+    true
+}
+
+/// Decode the operand fields for `entry` from `bytes`.
+fn decode_operands(bytes: &[u8], hi: u8, op: u8, entry: &OpcodeEntry) -> Operands {
+    let mut o = Operands::default();
+    if decode_operands_part0(&mut o, bytes, hi, op, entry) {
+        return o;
+    }
+    decode_operands_part1(&mut o, bytes, hi, entry);
+    o
+}
+
 /// Decode one Dalvik instruction from the given byte slice.
 ///
 /// Returns the [`DecodedInsn`] on success, or a [`DecodeError`] if the bytes
@@ -511,6 +684,11 @@ fn ru64(bytes: &[u8], offset: usize) -> Option<u64> {
 /// Returns [`DecodeError::Truncated`] when fewer bytes are available than the
 /// instruction format requires, and [`DecodeError::Unused`] for opcodes marked
 /// `unused-*` in the standard table.
+///
+/// # Panics
+///
+/// Panics only on an internal inconsistency between the opcode table and the
+/// per-format decoders; malformed input yields [`DecodeError`] instead.
 pub fn decode_dex_insn(bytes: &[u8]) -> Result<DecodedInsn, DecodeError> {
     if bytes.is_empty() {
         return Err(DecodeError::Truncated { needed: 2, got: 0 });
@@ -532,150 +710,15 @@ pub fn decode_dex_insn(bytes: &[u8]) -> Result<DecodedInsn, DecodeError> {
         return Err(DecodeError::Unused(op));
     }
 
-    let mut v_a: u16 = 0;
-    let mut v_b: u16 = 0;
-    let mut v_c: u16 = 0;
-    let mut literal: i64 = 0;
-    let mut index: u32 = 0;
-    let mut offset: i32 = 0;
-
-    match entry.format {
-        OpcodeFormat::F10x => {}
-        OpcodeFormat::F12x => {
-            v_a = u16::from(hi & 0x0f);
-            v_b = u16::from((hi >> 4) & 0x0f);
-        }
-        OpcodeFormat::F11n => {
-            v_a = u16::from(hi & 0x0f);
-            let raw = ((hi >> 4) & 0x0f) as i8;
-            literal = if raw & 0x8 != 0 {
-                i64::from(raw) | -16i64
-            } else {
-                i64::from(raw)
-            };
-        }
-        OpcodeFormat::F11x => {
-            v_a = u16::from(hi);
-        }
-        OpcodeFormat::F10t => {
-            offset = i32::from(hi as i8);
-        }
-        OpcodeFormat::F20t => {
-            let raw = ru16(bytes, 2).unwrap() as i16;
-            offset = i32::from(raw);
-        }
-        OpcodeFormat::F20bc => {
-            v_a = u16::from(hi);
-            index = u32::from(ru16(bytes, 2).unwrap());
-        }
-        OpcodeFormat::F22x => {
-            v_a = u16::from(hi);
-            v_b = ru16(bytes, 2).unwrap();
-        }
-        OpcodeFormat::F21t => {
-            v_a = u16::from(hi);
-            let raw = ru16(bytes, 2).unwrap() as i16;
-            offset = i32::from(raw);
-        }
-        OpcodeFormat::F21s => {
-            v_a = u16::from(hi);
-            let raw = ru16(bytes, 2).unwrap() as i16;
-            literal = i64::from(raw);
-        }
-        OpcodeFormat::F21h => {
-            v_a = u16::from(hi);
-            let raw = i64::from(ru16(bytes, 2).unwrap() as i16);
-            // The literal has the 16-bit value in the high bits
-            literal = if op == 0x19 { raw << 48 } else { raw << 16 };
-        }
-        OpcodeFormat::F21c => {
-            v_a = u16::from(hi);
-            index = u32::from(ru16(bytes, 2).unwrap());
-        }
-        OpcodeFormat::F23x => {
-            v_a = u16::from(hi);
-            v_b = u16::from(bytes[2]);
-            v_c = u16::from(bytes[3]);
-        }
-        OpcodeFormat::F22b => {
-            v_a = u16::from(hi);
-            v_b = u16::from(bytes[2]);
-            literal = i64::from(bytes[3] as i8);
-        }
-        OpcodeFormat::F22t => {
-            v_a = u16::from(hi & 0x0f);
-            v_b = u16::from((hi >> 4) & 0x0f);
-            let raw = ru16(bytes, 2).unwrap() as i16;
-            offset = i32::from(raw);
-        }
-        OpcodeFormat::F22s => {
-            v_a = u16::from(hi & 0x0f);
-            v_b = u16::from((hi >> 4) & 0x0f);
-            let raw = ru16(bytes, 2).unwrap() as i16;
-            literal = i64::from(raw);
-        }
-        OpcodeFormat::F22c | OpcodeFormat::F22cs => {
-            v_a = u16::from(hi & 0x0f);
-            v_b = u16::from((hi >> 4) & 0x0f);
-            index = u32::from(ru16(bytes, 2).unwrap());
-        }
-        OpcodeFormat::F30t => {
-            let raw = ru32(bytes, 2).unwrap() as i32;
-            offset = raw;
-        }
-        OpcodeFormat::F32x => {
-            v_a = ru16(bytes, 2).unwrap();
-            v_b = ru16(bytes, 4).unwrap();
-        }
-        OpcodeFormat::F31i => {
-            v_a = u16::from(hi);
-            literal = i64::from(ru32(bytes, 2).unwrap() as i32);
-        }
-        OpcodeFormat::F31t => {
-            v_a = u16::from(hi);
-            let raw = ru32(bytes, 2).unwrap() as i32;
-            offset = raw;
-        }
-        OpcodeFormat::F31c => {
-            v_a = u16::from(hi);
-            index = ru32(bytes, 2).unwrap();
-        }
-        OpcodeFormat::F35c | OpcodeFormat::F35ms | OpcodeFormat::F35mi => {
-            // count = hi[7:4], G = hi[3:0]
-            let count = u16::from((hi >> 4) & 0x0f);
-            v_a = count; // repurpose v_a for count
-            v_c = u16::from(hi & 0x0f); // vG
-            index = u32::from(ru16(bytes, 2).unwrap());
-            // register nibbles packed in bytes[4..6]
-            v_b = if bytes.len() > 4 {
-                u16::from(bytes[4])
-            } else {
-                0
-            };
-        }
-        OpcodeFormat::F3rc | OpcodeFormat::F3rms | OpcodeFormat::F3rmi => {
-            v_a = u16::from(hi); // count
-            index = u32::from(ru16(bytes, 2).unwrap());
-            v_b = ru16(bytes, 4).unwrap(); // first register
-        }
-        OpcodeFormat::F45cc => {
-            v_a = u16::from((hi >> 4) & 0x0f); // count
-            v_c = u16::from(hi & 0x0f); // G
-            index = u32::from(ru16(bytes, 2).unwrap());
-            // proto_index in bytes[6..8]
-            literal = i64::from(ru16(bytes, 6).unwrap());
-        }
-        OpcodeFormat::F4rcc => {
-            v_a = u16::from(hi); // count
-            index = u32::from(ru16(bytes, 2).unwrap());
-            v_b = ru16(bytes, 4).unwrap(); // first register
-            literal = i64::from(ru16(bytes, 6).unwrap()); // proto index
-        }
-        OpcodeFormat::F51l => {
-            v_a = u16::from(hi);
-            literal = ru64(bytes, 2).unwrap() as i64;
-        }
-    }
+    let o = decode_operands(bytes, hi, op, entry);
+    let Operands {
+        v_a,
+        v_b,
+        v_c,
+        literal,
+        index,
+        offset,
+    } = o;
 
     Ok(DecodedInsn {
         entry,
@@ -852,11 +895,11 @@ mod tests {
     #[test]
     fn test_decode_const_wide_51l() {
         let mut buf = vec![0x18_u8, 0x00];
-        buf.extend_from_slice(&0x0102030405060708_u64.to_le_bytes());
+        buf.extend_from_slice(&0x0102_0304_0506_0708_u64.to_le_bytes());
         let insn = decode_dex_insn(&buf).unwrap();
         assert_eq!(insn.entry.mnemonic, "const-wide");
         assert_eq!(insn.width, 10);
-        assert_eq!(insn.literal, 0x0102030405060708_u64 as i64);
+        assert_eq!(insn.literal, 0x0102_0304_0506_0708_u64.cast_signed());
     }
 
     #[test]

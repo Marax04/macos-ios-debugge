@@ -168,6 +168,11 @@ pub struct TypeDescriptorParser;
 
 impl TypeDescriptorParser {
     /// Parse a single type descriptor, returning (`DalvikType`, `chars_consumed`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DalvikTypeError`] if `desc` is not a well-formed Dalvik type
+    /// descriptor.
     pub fn parse_one(desc: &str) -> Result<(DalvikType, usize), DalvikTypeError> {
         let chars: Vec<char> = desc.chars().collect();
         Self::parse_at(&chars, 0)
@@ -210,6 +215,11 @@ impl TypeDescriptorParser {
     }
 
     /// Parse a full descriptor string (one type only).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DalvikTypeError`] if `desc` is not a well-formed Dalvik type
+    /// descriptor, or if it is followed by trailing characters.
     pub fn parse(desc: &str) -> Result<DalvikType, DalvikTypeError> {
         let (ty, consumed) = Self::parse_one(desc)?;
         if consumed != desc.chars().count() {
@@ -233,6 +243,11 @@ pub struct MethodSignature {
 
 impl MethodSignature {
     /// Parse a DEX method descriptor like "(ILjava/lang/String;)V".
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DalvikTypeError`] if `descriptor` is not a well-formed method
+    /// descriptor.
     pub fn parse(descriptor: &str) -> Result<Self, DalvikTypeError> {
         let chars: Vec<char> = descriptor.chars().collect();
         if chars.first() != Some(&'(') {

@@ -277,7 +277,7 @@ fn lift_65816_ops(
             let offset   = i64::from(i16::from_le_bytes([d.bytes[1], d.bytes[2]]));
             let bank     = next_addr & 0xFF_0000;
             let pc_base  = i64::try_from(next_addr & 0xFFFF).unwrap_or(0);
-            let pc       = (pc_base.wrapping_add(offset) as u64) & 0xFFFF;
+            let pc       = pc_base.wrapping_add(offset).cast_unsigned() & 0xFFFF;
             ops.push(O::Jump(E::Const32(u32::try_from(bank | pc).unwrap_or(0))));
         }
         "XCE" => { ops.push(O::Unimplemented("XCE".into())); }
@@ -449,6 +449,16 @@ fn lift_common_compute(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<
 
 /// Lifting for arithmetic/bitwise/shift/compare/inc-dec/transfer instructions.
 fn lift_common_alu(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp> {
+    match mnemonic {
+        "ADC" | "SBC" | "AND" | "ORA" | "EOR" => lift_alu_arith(mnemonic, op1, op2, mode),
+        "ASL" | "LSR" | "ROL" | "ROR" => lift_alu_shift(mnemonic, op1, op2, mode),
+        "CMP" | "CPX" | "CPY" | "BIT" => lift_alu_compare(mnemonic, op1, op2, mode),
+        _ => lift_common_incdec_transfer(mnemonic, op1, op2, mode),
+    }
+}
+
+/// Lift ADC/SBC and the bitwise AND/ORA/EOR family.
+fn lift_alu_arith(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp> {
     use IlExpr as E;
     use IlOp as O;
 
@@ -490,6 +500,32 @@ fn lift_common_alu(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp
             ops.push(O::SetReg(IL_REG_A.into(), result.clone()));
             set_nz(&result, &mut ops);
         }
+        // Unreachable: the caller dispatches only the mnemonics above.
+        _ => {}
+    }
+    ops
+}
+
+/// Lift the ASL/LSR/ROL/ROR shift and rotate family.
+fn lift_alu_shift(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp> {
+    use IlExpr as E;
+    use IlOp as O;
+
+    let mut ops: Vec<IlOp> = Vec::new();
+
+    let ea = || addr_expr_6502(mode, op1, op2).unwrap_or(E::Const8(op1));
+    let read = || match mode {
+        AddrMode::Immediate => E::Const8(op1),
+        AddrMode::Accumulator => E::reg(IL_REG_A),
+        _ => E::mem8(ea()),
+    };
+
+    let set_nz = |expr: &E, ops: &mut Vec<IlOp>| {
+        ops.push(O::SetFlag('Z', E::Cmp(Box::new(expr.clone()), Box::new(E::Const8(0)))));
+        ops.push(O::SetFlag('N', E::Shr(Box::new(expr.clone()), 7)));
+    };
+
+    match mnemonic {
         // ── Bitwise ──────────────────────────────────────────────────────
         "AND" => {
             let result = E::and(E::reg(IL_REG_A), read());
@@ -506,6 +542,32 @@ fn lift_common_alu(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp
             ops.push(O::SetReg(IL_REG_A.into(), result.clone()));
             set_nz(&result, &mut ops);
         }
+        // Unreachable: the caller dispatches only the mnemonics above.
+        _ => {}
+    }
+    ops
+}
+
+/// Lift the CMP/CPX/CPY comparisons and BIT.
+fn lift_alu_compare(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp> {
+    use IlExpr as E;
+    use IlOp as O;
+
+    let mut ops: Vec<IlOp> = Vec::new();
+
+    let ea = || addr_expr_6502(mode, op1, op2).unwrap_or(E::Const8(op1));
+    let read = || match mode {
+        AddrMode::Immediate => E::Const8(op1),
+        AddrMode::Accumulator => E::reg(IL_REG_A),
+        _ => E::mem8(ea()),
+    };
+
+    let set_nz = |expr: &E, ops: &mut Vec<IlOp>| {
+        ops.push(O::SetFlag('Z', E::Cmp(Box::new(expr.clone()), Box::new(E::Const8(0)))));
+        ops.push(O::SetFlag('N', E::Shr(Box::new(expr.clone()), 7)));
+    };
+
+    match mnemonic {
         // ── Shift / Rotate ───────────────────────────────────────────────
         "ASL" => {
             let v = read();
@@ -587,9 +649,8 @@ fn lift_common_alu(mnemonic: &str, op1: u8, op2: u8, mode: AddrMode) -> Vec<IlOp
             ops.push(O::SetFlag('V', E::and(v.clone(), E::Const8(0x40))));
             ops.push(O::SetFlag('N', E::Shr(Box::new(v), 7)));
         }
-        _ => {
-            ops.extend(lift_common_incdec_transfer(mnemonic, op1, op2, mode));
-        }
+        // Unreachable: the caller dispatches only the mnemonics above.
+        _ => {}
     }
     ops
 }

@@ -145,7 +145,7 @@ impl Mos6502AddressMode {
             AddrMode::Indirect => Self::Indirect(u16::from_le_bytes([b1, b2])),
             AddrMode::IndirectX => Self::IndirectX(b1),
             AddrMode::IndirectY => Self::IndirectY(b1),
-            AddrMode::Relative => Self::Relative(b1 as i8),
+            AddrMode::Relative => Self::Relative(b1.cast_signed()),
             AddrMode::ZeroPageIndirect => Self::ZeroPageIndirect(b1),
             AddrMode::AbsoluteIndirectX => Self::AbsoluteIndirectX(u16::from_le_bytes([b1, b2])),
             AddrMode::RelativeLong => Self::RelativeLong(i16::from_le_bytes([b1, b2])),
@@ -181,7 +181,7 @@ impl Mos6502AddressMode {
     /// Number of operand bytes (not counting the opcode).
     #[must_use]
     pub const fn operand_bytes(self) -> u8 {
-        self.tag().extra_bytes() as u8
+        self.tag().extra_bytes_u8()
     }
 
     /// Total instruction length in bytes (opcode + operands).
@@ -292,7 +292,11 @@ pub fn resolve_effective_address(
 
         Mos6502AddressMode::Immediate(v) => EffectiveAddress::Immediate(v),
 
-        Mos6502AddressMode::ZeroPage(zp) => EffectiveAddress::Memory(u16::from(zp)),
+        // ZeroPage, IndirectY and ZeroPageIndirect all name a zero-page byte;
+        // for the indirect forms this is the *pointer*, not the target.
+        Mos6502AddressMode::ZeroPage(zp)
+        | Mos6502AddressMode::IndirectY(zp)
+        | Mos6502AddressMode::ZeroPageIndirect(zp) => EffectiveAddress::Memory(u16::from(zp)),
         Mos6502AddressMode::ZeroPageX(zp) => {
             EffectiveAddress::Memory(u16::from(zp.wrapping_add(x)))
         }
@@ -301,7 +305,7 @@ pub fn resolve_effective_address(
         }
 
         Mos6502AddressMode::Absolute(abs) => EffectiveAddress::Memory(abs),
-        Mos6502AddressMode::AbsoluteX(abs) => {
+        Mos6502AddressMode::AbsoluteX(abs) | Mos6502AddressMode::AbsoluteIndirectX(abs) => {
             EffectiveAddress::Memory(abs.wrapping_add(u16::from(x)))
         }
         Mos6502AddressMode::AbsoluteY(abs) => {
@@ -315,23 +319,18 @@ pub fn resolve_effective_address(
             let ptr = u16::from(zp.wrapping_add(x));
             EffectiveAddress::Memory(ptr)
         }
-        Mos6502AddressMode::IndirectY(zp) => EffectiveAddress::Memory(u16::from(zp)),
-        Mos6502AddressMode::ZeroPageIndirect(zp) => EffectiveAddress::Memory(u16::from(zp)),
-        Mos6502AddressMode::AbsoluteIndirectX(abs) => {
-            EffectiveAddress::Memory(abs.wrapping_add(u16::from(x)))
-        }
 
         Mos6502AddressMode::Relative(offset) => {
             // PC points at the opcode; branch target = pc + 2 + offset.
             let target = pc
                 .wrapping_add(2)
-                .wrapping_add(i16::from(offset) as u16);
+                .wrapping_add(i16::from(offset).cast_unsigned());
             EffectiveAddress::BranchTarget(target)
         }
         Mos6502AddressMode::RelativeLong(offset) => {
             let target = pc
                 .wrapping_add(3)
-                .wrapping_add(offset as u16);
+                .wrapping_add(offset.cast_unsigned());
             EffectiveAddress::BranchTarget(target)
         }
     }
@@ -347,20 +346,28 @@ pub fn resolve_effective_address(
 #[must_use]
 pub const fn cycles_for_mode(mode: AddrMode) -> u8 {
     match mode {
-        AddrMode::Implied | AddrMode::Accumulator => 2,
-        AddrMode::Immediate => 2,
+        // 2 cycles: no memory operand, an inline byte, or an untaken branch.
+        // Illegal opcodes are billed as the 2-cycle NOP they behave like.
+        AddrMode::Implied
+        | AddrMode::Accumulator
+        | AddrMode::Immediate
+        | AddrMode::Relative // +1 if taken, +1 more if page crossed
+        | AddrMode::Illegal => 2,
+        // 3 cycles: a single zero-page fetch.
         AddrMode::ZeroPage => 3,
-        AddrMode::ZeroPageX | AddrMode::ZeroPageY => 4,
-        AddrMode::Absolute => 4,
-        AddrMode::AbsoluteX | AddrMode::AbsoluteY => 4, // +1 if page crossed
-        AddrMode::Indirect => 5,
-        AddrMode::IndirectX => 6,
-        AddrMode::IndirectY => 5, // +1 if page crossed
-        AddrMode::Relative => 2,  // +1 if taken, +1 more if page crossed
-        AddrMode::ZeroPageIndirect => 5,
-        AddrMode::AbsoluteIndirectX => 6,
-        AddrMode::RelativeLong => 4,
-        AddrMode::Illegal => 2,
+        // 4 cycles: indexed zero-page, or a full 16-bit operand fetch.
+        AddrMode::ZeroPageX
+        | AddrMode::ZeroPageY
+        | AddrMode::Absolute
+        | AddrMode::AbsoluteX // +1 if page crossed
+        | AddrMode::AbsoluteY // +1 if page crossed
+        | AddrMode::RelativeLong => 4,
+        // 5 cycles: pointer fetch followed by the target fetch.
+        AddrMode::Indirect
+        | AddrMode::IndirectY // +1 if page crossed
+        | AddrMode::ZeroPageIndirect => 5,
+        // 6 cycles: pre-indexed pointer fetch followed by the target fetch.
+        AddrMode::IndirectX | AddrMode::AbsoluteIndirectX => 6,
     }
 }
 
@@ -408,7 +415,7 @@ impl AddressModeDecoder {
     pub fn instruction_len(opcode: u8) -> Option<u8> {
         crate::opcode_table(opcode)
             .filter(|e| !e.illegal)
-            .map(|e| 1 + e.mode.extra_bytes() as u8)
+            .map(|e| 1 + e.mode.extra_bytes_u8())
     }
 
     /// Return the base cycle count for `opcode`.
@@ -492,7 +499,7 @@ mod tests {
                 assert_eq!(needed, 3);
                 assert_eq!(available, 1);
             }
-            _ => panic!("unexpected error"),
+            AddressModeError::UnknownOpcode(_) => panic!("unexpected error"),
         }
     }
 
@@ -602,6 +609,6 @@ mod tests {
         let e = AddressModeError::UnknownOpcode(0xFF);
         assert!(e.to_string().contains("0xFF"));
         let e2 = AddressModeError::InsufficientBytes { needed: 3, available: 1 };
-        assert!(e2.to_string().contains("3"));
+        assert!(e2.to_string().contains('3'));
     }
 }

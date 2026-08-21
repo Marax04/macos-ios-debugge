@@ -182,7 +182,7 @@ pub fn decode_address(
         Mos6502Operand::IndirectY(zp) => effective_address_ind_y(mem, zp, y),
         Mos6502Operand::Relative(off) => {
             // Branch offset is relative to next instruction (PC + 2).
-            pc.wrapping_add(2).wrapping_add(i16::from(off) as u16)
+            pc.wrapping_add(2).wrapping_add(i16::from(off).cast_unsigned())
         }
     }
 }

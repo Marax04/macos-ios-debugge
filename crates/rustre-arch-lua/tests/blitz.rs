@@ -121,10 +121,10 @@ fn make_legacy_iabc_layout() {
 
 #[test]
 fn make_legacy_iabx_layout() {
-    let w = make_legacy_iabx(1, 5, 200000);
+    let w = make_legacy_iabx(1, 5, 200_000);
     assert_eq!(w & 0x3f, 1);
     assert_eq!((w >> 6) & 0xff, 5);
-    assert_eq!(w >> 14, 200000);
+    assert_eq!(w >> 14, 200_000);
 }
 
 #[test]
@@ -445,7 +445,7 @@ fn format_listing_joins_newlines() {
 fn stats_empty() {
     let s = LuaChunkStats::from_instructions(LuaVersion::Lua54, &[]);
     assert_eq!(s.total, 0);
-    assert_eq!(s.branch_ratio(), 0.0);
+    assert!(s.branch_ratio().abs() < f64::EPSILON);
 }
 
 #[test]

@@ -34,38 +34,38 @@ pub enum WasmExpr {
     /// Pointer-sized memory load.
     Load {
         mem_op: String,
-        addr: Box<WasmExpr>,
+        addr: Box<Self>,
         offset: u64,
     },
     /// Binary arithmetic / comparison.
     BinOp {
         op: WasmBinOp,
-        lhs: Box<WasmExpr>,
-        rhs: Box<WasmExpr>,
+        lhs: Box<Self>,
+        rhs: Box<Self>,
     },
     /// Unary operation.
     UnaryOp {
         op: WasmUnaryOp,
-        expr: Box<WasmExpr>,
+        expr: Box<Self>,
     },
     /// Convert / wrap / extend / trunc.
-    Convert { op: String, expr: Box<WasmExpr> },
+    Convert { op: String, expr: Box<Self> },
     /// Function call: `func_idx(args)`.
-    Call { func_idx: u32, args: Vec<WasmExpr> },
+    Call { func_idx: u32, args: Vec<Self> },
     /// Indirect call: `table[type_idx](args)`.
-    CallIndirect { type_idx: u32, args: Vec<WasmExpr> },
+    CallIndirect { type_idx: u32, args: Vec<Self> },
     /// Select: `cond ? a : b`.
     Select {
-        cond: Box<WasmExpr>,
-        a: Box<WasmExpr>,
-        b: Box<WasmExpr>,
+        cond: Box<Self>,
+        a: Box<Self>,
+        b: Box<Self>,
     },
     /// Drop result.
-    Drop(Box<WasmExpr>),
+    Drop(Box<Self>),
     /// Memory size.
     MemorySize,
     /// Memory grow.
-    MemoryGrow(Box<WasmExpr>),
+    MemoryGrow(Box<Self>),
     /// Unreachable placeholder.
     Unreachable,
 }
@@ -167,10 +167,10 @@ pub enum WasmBinOp {
 impl fmt::Display for WasmBinOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Self::Add => "+",
-            Self::Sub => "-",
-            Self::Mul => "*",
-            Self::DivS | Self::DivU => "/",
+            Self::Add | Self::FAdd => "+",
+            Self::Sub | Self::FSub => "-",
+            Self::Mul | Self::FMul => "*",
+            Self::DivS | Self::DivU | Self::FDiv => "/",
             Self::RemS | Self::RemU => "%",
             Self::And => "&",
             Self::Or => "|",
@@ -185,10 +185,6 @@ impl fmt::Display for WasmBinOp {
             Self::GtS | Self::GtU | Self::FGt => ">",
             Self::LeS | Self::LeU | Self::FLe => "<=",
             Self::GeS | Self::GeU | Self::FGe => ">=",
-            Self::FAdd => "+",
-            Self::FSub => "-",
-            Self::FMul => "*",
-            Self::FDiv => "/",
             Self::FMin => "min",
             Self::FMax => "max",
         };
@@ -256,13 +252,13 @@ pub enum WasmStmt {
     /// `if (cond) { then } else { else_ }`.
     If {
         cond: WasmExpr,
-        then: Vec<WasmStmt>,
-        else_: Vec<WasmStmt>,
+        then: Vec<Self>,
+        else_: Vec<Self>,
     },
     /// `while (cond) { body }`.
-    While { cond: WasmExpr, body: Vec<WasmStmt> },
+    While { cond: WasmExpr, body: Vec<Self> },
     /// `loop { body }` — loop block (may break/continue).
-    Loop(Vec<WasmStmt>),
+    Loop(Vec<Self>),
     /// `break N;` — break with label depth.
     Break(u32),
     /// `return value;`.
@@ -490,216 +486,222 @@ impl ExpressionBuilder {
 
     /// Process one mnemonic and produce optional statement.
     pub fn process(&mut self, mnemonic: &str, operands: &str) -> Option<WasmStmt> {
+        self.process_part0(mnemonic, operands)
+    }
+
+    /// Mnemonic-dispatch chunk 0 of [`Self::process`]; unmatched mnemonics
+    /// fall through to the next chunk.
+    fn process_part0(&mut self, mnemonic: &str, operands: &str) -> Option<WasmStmt> {
         match mnemonic {
-            "unreachable" => {
-                self.push(WasmExpr::Unreachable);
-                None
-            }
-            "nop" => None,
-            "i32.const" => {
-                let v = operands.parse::<i32>().unwrap_or(0);
-                self.push(WasmExpr::I32Const(v));
-                None
-            }
-            "i64.const" => {
-                let v = operands.parse::<i64>().unwrap_or(0);
-                self.push(WasmExpr::I64Const(v));
-                None
-            }
-            "local.get" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                let name = self.locals.name(idx);
-                self.push(WasmExpr::LocalGet { idx, name });
-                None
-            }
-            "local.set" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                let name = self.locals.name(idx);
-                let value = self.pop()?;
-                Some(WasmStmt::LocalSet { idx, name, value })
-            }
-            "local.tee" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                let name = self.locals.name(idx);
-                let value = self.stack.last()?.clone();
-                Some(WasmStmt::LocalSet { idx, name, value })
-            }
-            "global.get" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                self.push(WasmExpr::GlobalGet(idx));
-                None
-            }
-            "global.set" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                let value = self.pop()?;
-                Some(WasmStmt::GlobalSet { idx, value })
-            }
-            "i32.add" => {
-                let e = self.bin(WasmBinOp::Add)?;
-                self.push(e);
-                None
-            }
-            "i32.sub" => {
-                let e = self.bin(WasmBinOp::Sub)?;
-                self.push(e);
-                None
-            }
-            "i32.mul" => {
-                let e = self.bin(WasmBinOp::Mul)?;
-                self.push(e);
-                None
-            }
-            "i32.div_s" => {
-                let e = self.bin(WasmBinOp::DivS)?;
-                self.push(e);
-                None
-            }
-            "i32.div_u" => {
-                let e = self.bin(WasmBinOp::DivU)?;
-                self.push(e);
-                None
-            }
-            "i32.and" => {
-                let e = self.bin(WasmBinOp::And)?;
-                self.push(e);
-                None
-            }
-            "i32.or" => {
-                let e = self.bin(WasmBinOp::Or)?;
-                self.push(e);
-                None
-            }
-            "i32.xor" => {
-                let e = self.bin(WasmBinOp::Xor)?;
-                self.push(e);
-                None
-            }
-            "i32.shl" => {
-                let e = self.bin(WasmBinOp::Shl)?;
-                self.push(e);
-                None
-            }
-            "i32.shr_s" => {
-                let e = self.bin(WasmBinOp::ShrS)?;
-                self.push(e);
-                None
-            }
-            "i32.shr_u" => {
-                let e = self.bin(WasmBinOp::ShrU)?;
-                self.push(e);
-                None
-            }
-            "i64.add" => {
-                let e = self.bin(WasmBinOp::Add)?;
-                self.push(e);
-                None
-            }
-            "i64.mul" => {
-                let e = self.bin(WasmBinOp::Mul)?;
-                self.push(e);
-                None
-            }
-            "f32.add" => {
-                let e = self.bin(WasmBinOp::FAdd)?;
-                self.push(e);
-                None
-            }
-            "f64.add" => {
-                let e = self.bin(WasmBinOp::FAdd)?;
-                self.push(e);
-                None
-            }
-            "i32.eq" => {
-                let e = self.bin(WasmBinOp::Eq)?;
-                self.push(e);
-                None
-            }
-            "i32.ne" => {
-                let e = self.bin(WasmBinOp::Ne)?;
-                self.push(e);
-                None
-            }
-            "i32.lt_s" => {
-                let e = self.bin(WasmBinOp::LtS)?;
-                self.push(e);
-                None
-            }
-            "i32.gt_s" => {
-                let e = self.bin(WasmBinOp::GtS)?;
-                self.push(e);
-                None
-            }
-            "i32.eqz" => {
-                let e = self.unary(WasmUnaryOp::Eqz)?;
-                self.push(e);
-                None
-            }
-            "i64.eqz" => {
-                let e = self.unary(WasmUnaryOp::Eqz)?;
-                self.push(e);
-                None
-            }
-            "drop" => {
-                self.pop();
-                None
-            }
-            "return" => {
-                let v = self.pop();
-                Some(WasmStmt::Return(v))
-            }
-            "i32.load" => {
-                let addr = self.pop()?;
-                let offset = parse_offset(operands);
-                self.push(WasmExpr::Load {
-                    mem_op: "i32.load".to_string(),
-                    addr: Box::new(addr),
-                    offset,
-                });
-                None
-            }
-            "i32.store" => {
-                let value = self.pop()?;
-                let addr = self.pop()?;
-                let offset = parse_offset(operands);
-                Some(WasmStmt::Store {
-                    mem_op: "i32.store".to_string(),
-                    addr,
-                    value,
-                    offset,
-                })
-            }
-            "memory.size" => {
-                self.push(WasmExpr::MemorySize);
-                None
-            }
-            "memory.grow" => {
-                let e = self.pop().unwrap_or(WasmExpr::I32Const(0));
-                self.push(WasmExpr::MemoryGrow(Box::new(e)));
-                None
-            }
-            "call" => {
-                let idx = operands.parse::<u32>().unwrap_or(0);
-                let e = WasmExpr::Call {
-                    func_idx: idx,
-                    args: Vec::new(),
-                };
-                self.push(e);
-                None
-            }
-            "select" => {
-                let cond = self.pop()?;
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(WasmExpr::Select {
-                    cond: Box::new(cond),
-                    a: Box::new(a),
-                    b: Box::new(b),
-                });
-                None
-            }
-            _ => None,
+                "unreachable" => {
+                    self.push(WasmExpr::Unreachable);
+                    None
+                }
+                "i32.const" => {
+                    let v = operands.parse::<i32>().unwrap_or(0);
+                    self.push(WasmExpr::I32Const(v));
+                    None
+                }
+                "i64.const" => {
+                    let v = operands.parse::<i64>().unwrap_or(0);
+                    self.push(WasmExpr::I64Const(v));
+                    None
+                }
+                "local.get" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    let name = self.locals.name(idx);
+                    self.push(WasmExpr::LocalGet { idx, name });
+                    None
+                }
+                "local.set" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    let name = self.locals.name(idx);
+                    let value = self.pop()?;
+                    Some(WasmStmt::LocalSet { idx, name, value })
+                }
+                "local.tee" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    let name = self.locals.name(idx);
+                    let value = self.stack.last()?.clone();
+                    Some(WasmStmt::LocalSet { idx, name, value })
+                }
+                "global.get" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    self.push(WasmExpr::GlobalGet(idx));
+                    None
+                }
+                "global.set" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    let value = self.pop()?;
+                    Some(WasmStmt::GlobalSet { idx, value })
+                }
+                // i32.add and i64.add lower identically; the operand width is carried
+                // by the expressions themselves.
+                "i32.add" | "i64.add" => {
+                    let e = self.bin(WasmBinOp::Add)?;
+                    self.push(e);
+                    None
+                }
+                "i32.sub" => {
+                    let e = self.bin(WasmBinOp::Sub)?;
+                    self.push(e);
+                    None
+                }
+                "i32.mul" | "i64.mul" => {
+                    let e = self.bin(WasmBinOp::Mul)?;
+                    self.push(e);
+                    None
+                }
+                "i32.div_s" => {
+                    let e = self.bin(WasmBinOp::DivS)?;
+                    self.push(e);
+                    None
+                }
+                "i32.div_u" => {
+                    let e = self.bin(WasmBinOp::DivU)?;
+                    self.push(e);
+                    None
+                }
+            _ => self.process_part1(mnemonic, operands),
         }
     }
+
+    /// Mnemonic-dispatch chunk 1 of [`Self::process`]; unmatched mnemonics
+    /// fall through to the next chunk.
+    fn process_part1(&mut self, mnemonic: &str, operands: &str) -> Option<WasmStmt> {
+        match mnemonic {
+                "i32.and" => {
+                    let e = self.bin(WasmBinOp::And)?;
+                    self.push(e);
+                    None
+                }
+                "i32.or" => {
+                    let e = self.bin(WasmBinOp::Or)?;
+                    self.push(e);
+                    None
+                }
+                "i32.xor" => {
+                    let e = self.bin(WasmBinOp::Xor)?;
+                    self.push(e);
+                    None
+                }
+                "i32.shl" => {
+                    let e = self.bin(WasmBinOp::Shl)?;
+                    self.push(e);
+                    None
+                }
+                "i32.shr_s" => {
+                    let e = self.bin(WasmBinOp::ShrS)?;
+                    self.push(e);
+                    None
+                }
+                "i32.shr_u" => {
+                    let e = self.bin(WasmBinOp::ShrU)?;
+                    self.push(e);
+                    None
+                }
+                "f32.add" | "f64.add" => {
+                    let e = self.bin(WasmBinOp::FAdd)?;
+                    self.push(e);
+                    None
+                }
+                "i32.eq" => {
+                    let e = self.bin(WasmBinOp::Eq)?;
+                    self.push(e);
+                    None
+                }
+                "i32.ne" => {
+                    let e = self.bin(WasmBinOp::Ne)?;
+                    self.push(e);
+                    None
+                }
+                "i32.lt_s" => {
+                    let e = self.bin(WasmBinOp::LtS)?;
+                    self.push(e);
+                    None
+                }
+                "i32.gt_s" => {
+                    let e = self.bin(WasmBinOp::GtS)?;
+                    self.push(e);
+                    None
+                }
+                "i32.eqz" | "i64.eqz" => {
+                    let e = self.unary(WasmUnaryOp::Eqz)?;
+                    self.push(e);
+                    None
+                }
+                "drop" => {
+                    self.pop();
+                    None
+                }
+                "return" => {
+                    let v = self.pop();
+                    Some(WasmStmt::Return(v))
+                }
+            _ => self.process_part2(mnemonic, operands),
+        }
+    }
+
+    /// Mnemonic-dispatch chunk 2 of [`Self::process`]; unmatched mnemonics
+    /// fall through to the next chunk.
+    fn process_part2(&mut self, mnemonic: &str, operands: &str) -> Option<WasmStmt> {
+        match mnemonic {
+                "i32.load" => {
+                    let addr = self.pop()?;
+                    let offset = parse_offset(operands);
+                    self.push(WasmExpr::Load {
+                        mem_op: "i32.load".to_string(),
+                        addr: Box::new(addr),
+                        offset,
+                    });
+                    None
+                }
+                "i32.store" => {
+                    let value = self.pop()?;
+                    let addr = self.pop()?;
+                    let offset = parse_offset(operands);
+                    Some(WasmStmt::Store {
+                        mem_op: "i32.store".to_string(),
+                        addr,
+                        value,
+                        offset,
+                    })
+                }
+                "memory.size" => {
+                    self.push(WasmExpr::MemorySize);
+                    None
+                }
+                "memory.grow" => {
+                    let e = self.pop().unwrap_or(WasmExpr::I32Const(0));
+                    self.push(WasmExpr::MemoryGrow(Box::new(e)));
+                    None
+                }
+                "call" => {
+                    let idx = operands.parse::<u32>().unwrap_or(0);
+                    let e = WasmExpr::Call {
+                        func_idx: idx,
+                        args: Vec::new(),
+                    };
+                    self.push(e);
+                    None
+                }
+                "select" => {
+                    let cond = self.pop()?;
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    self.push(WasmExpr::Select {
+                        cond: Box::new(cond),
+                        a: Box::new(a),
+                        b: Box::new(b),
+                    });
+                    None
+                }
+                // "nop", and any opcode this lowering does not model, produce no
+                // statement.
+                _ => None,
+        }
+    }
+
 }
 
 fn parse_offset(operands: &str) -> u64 {
@@ -874,8 +876,7 @@ impl WasmLocalAnalysis {
                 }
                 Self::visit_expr(value, reads);
             }
-            WasmStmt::ExprStmt(e) => Self::visit_expr(e, reads),
-            WasmStmt::Return(Some(e)) => Self::visit_expr(e, reads),
+            WasmStmt::ExprStmt(e) | WasmStmt::Return(Some(e)) => Self::visit_expr(e, reads),
             WasmStmt::Store { addr, value, .. } => {
                 Self::visit_expr(addr, reads);
                 Self::visit_expr(value, reads);
@@ -1122,14 +1123,12 @@ impl WasmPrinter {
     /// Render a function to a string.
     #[must_use]
     pub fn print_function(&mut self, func: &DecompiledWasmFunc) -> String {
+        use std::fmt::Write as _;
         let mut out = String::new();
-        out.push_str(&format!(
-            "void func_{}({} locals) {{\n",
-            func.index, func.local_count
-        ));
+        let _ = writeln!(out, "void func_{}({} locals) {{", func.index, func.local_count);
         self.indent += 1;
         for stmt in &func.stmts {
-            out.push_str(&format!("{}{}", self.indent_str(), stmt));
+            let _ = write!(out, "{}{}", self.indent_str(), stmt);
         }
         self.indent -= 1;
         out.push_str("}\n");
@@ -1183,8 +1182,7 @@ impl WasmMemoryModel {
     #[must_use]
     pub fn in_bounds(&self, addr: u64, access_size: u64) -> bool {
         addr.checked_add(access_size)
-            .map(|end| end <= self.byte_size())
-            .unwrap_or(false)
+            .is_some_and(|end| end <= self.byte_size())
     }
 }
 

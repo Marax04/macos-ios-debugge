@@ -49,19 +49,19 @@ pub enum Mos6502Operand {
 impl fmt::Display for Mos6502Operand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Mos6502Operand::Implied => Ok(()),
-            Mos6502Operand::Accumulator => write!(f, "A"),
-            Mos6502Operand::Immediate(v) => write!(f, "#${v:02X}"),
-            Mos6502Operand::ZeroPage(a) => write!(f, "${a:02X}"),
-            Mos6502Operand::ZeroPageX(a) => write!(f, "${a:02X},X"),
-            Mos6502Operand::ZeroPageY(a) => write!(f, "${a:02X},Y"),
-            Mos6502Operand::Absolute(a) => write!(f, "${a:04X}"),
-            Mos6502Operand::AbsoluteX(a) => write!(f, "${a:04X},X"),
-            Mos6502Operand::AbsoluteY(a) => write!(f, "${a:04X},Y"),
-            Mos6502Operand::Indirect(a) => write!(f, "(${a:04X})"),
-            Mos6502Operand::IndirectX(a) => write!(f, "(${a:02X},X)"),
-            Mos6502Operand::IndirectY(a) => write!(f, "(${a:02X}),Y"),
-            Mos6502Operand::Relative(off) => write!(f, "{off:+}"),
+            Self::Implied => Ok(()),
+            Self::Accumulator => write!(f, "A"),
+            Self::Immediate(v) => write!(f, "#${v:02X}"),
+            Self::ZeroPage(a) => write!(f, "${a:02X}"),
+            Self::ZeroPageX(a) => write!(f, "${a:02X},X"),
+            Self::ZeroPageY(a) => write!(f, "${a:02X},Y"),
+            Self::Absolute(a) => write!(f, "${a:04X}"),
+            Self::AbsoluteX(a) => write!(f, "${a:04X},X"),
+            Self::AbsoluteY(a) => write!(f, "${a:04X},Y"),
+            Self::Indirect(a) => write!(f, "(${a:04X})"),
+            Self::IndirectX(a) => write!(f, "(${a:02X},X)"),
+            Self::IndirectY(a) => write!(f, "(${a:02X}),Y"),
+            Self::Relative(off) => write!(f, "{off:+}"),
         }
     }
 }
@@ -87,6 +87,14 @@ pub struct Mos6502Insn {
     pub illegal: bool,
 }
 
+/// Wrap a byte offset into the 16-bit 6502 address space.
+///
+/// The mask makes the conversion total, so no attacker-controlled length
+/// can make the `try_from` fail, let alone panic.
+fn wrap_to_addr(offset: usize) -> u16 {
+    u16::try_from(offset & 0xFFFF).unwrap_or(0)
+}
+
 impl Mos6502Insn {
     /// Number of bytes this instruction occupies.
     #[must_use]
@@ -107,8 +115,22 @@ impl Mos6502Insn {
 
     /// Address of the next instruction.
     #[must_use]
-    pub fn next_addr(&self) -> u16 {
-        self.addr.wrapping_add(self.len() as u16)
+    pub const fn next_addr(&self) -> u16 {
+        // A 6502 instruction is at most 3 bytes; enumerating the cases proves
+        // the length fits a `u16` without a narrowing cast, and stays const.
+        let len = match self.bytes.len() {
+            0 => 0u16,
+            1 => 1,
+            2 => 2,
+            _ => 3,
+        };
+        self.addr.wrapping_add(len)
+    }
+
+    /// True when this instruction carries no bytes (never for decoded output).
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
 
     /// Resolve the absolute branch target (for `Relative` operands).
@@ -116,7 +138,7 @@ impl Mos6502Insn {
     pub fn branch_target(&self) -> Option<u16> {
         if let Mos6502Operand::Relative(off) = self.operand {
             let next = self.next_addr();
-            Some(next.wrapping_add(i16::from(off) as u16))
+            Some(next.wrapping_add(i16::from(off).cast_unsigned()))
         } else {
             None
         }
@@ -159,15 +181,15 @@ enum AddrMode {
 impl AddrMode {
     const fn byte_count(self) -> usize {
         match self {
-            AddrMode::Imp | AddrMode::Acc | AddrMode::Kil => 1,
-            AddrMode::Imm
-            | AddrMode::Zpg
-            | AddrMode::ZpgX
-            | AddrMode::ZpgY
-            | AddrMode::IndX
-            | AddrMode::IndY
-            | AddrMode::Rel => 2,
-            AddrMode::Abs | AddrMode::AbsX | AddrMode::AbsY | AddrMode::Ind => 3,
+            Self::Imp | Self::Acc | Self::Kil => 1,
+            Self::Imm
+            | Self::Zpg
+            | Self::ZpgX
+            | Self::ZpgY
+            | Self::IndX
+            | Self::IndY
+            | Self::Rel => 2,
+            Self::Abs | Self::AbsX | Self::AbsY | Self::Ind => 3,
         }
     }
 }
@@ -464,7 +486,7 @@ impl Mos6502Disassembler {
         if offset + needed > data.len() {
             // Emit a 1-byte "truncated" NOP for safety.
             return Some(Mos6502Insn {
-                addr: base_addr.wrapping_add(offset as u16),
+                addr: base_addr.wrapping_add(wrap_to_addr(offset)),
                 opcode,
                 bytes: vec![opcode],
                 mnemonic: "???",
@@ -473,7 +495,7 @@ impl Mos6502Disassembler {
                 illegal: true,
             });
         }
-        let addr = base_addr.wrapping_add(offset as u16);
+        let addr = base_addr.wrapping_add(wrap_to_addr(offset));
         let raw = &data[offset..offset + needed];
         let operand = Self::build_operand(entry.mode, raw, addr);
         Some(Mos6502Insn {
@@ -504,7 +526,7 @@ impl Mos6502Disassembler {
             AddrMode::Rel => {
                 let next = addr.wrapping_add(2);
                 let _ = next; // branch target resolved lazily
-                Mos6502Operand::Relative(raw[1] as i8)
+                Mos6502Operand::Relative(raw[1].cast_signed())
             }
         }
     }

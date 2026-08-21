@@ -112,9 +112,9 @@ fn exhaustive_opcode_sweep_short_extension_never_panics() {
 fn group_decoders_never_panic() {
     let exts: [&[u8]; 5] = [&[], &[0x00], &[0xFF, 0xFF], &[0x00, 0x01, 0x02, 0x03], &[0xFF; 8]];
     let mut w: u32 = 0;
-    while u16::try_from(w).is_ok() {
+    while let Ok(word) = u16::try_from(w) {
         for ext in exts {
-            exercise_groups(w as u16, ext);
+            exercise_groups(word, ext);
         }
         w += 37; // coprime-ish step: hits every group and many mode/reg fields
     }

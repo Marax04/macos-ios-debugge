@@ -239,17 +239,21 @@ impl AvrDecoder {
     pub fn decode(&self, pc: u32, bytes: &[u8]) -> Option<AvrInstr> {
         if bytes.len() < 2 { return None; }
         let word = u16::from_le_bytes([bytes[0], bytes[1]]);
-        Self::decode_word(pc, word, bytes)
+        Some(Self::decode_word(pc, word, bytes))
     }
 
-    fn decode_word(pc: u32, word: u16, bytes: &[u8]) -> Option<AvrInstr> {
+    /// Decode one already-fetched opcode word.
+    ///
+    /// Total by construction: a word matching no encoding is still returned, as
+    /// a `DC.W` data word, so this never yields "no answer" for a 2-byte input.
+    fn decode_word(pc: u32, word: u16, bytes: &[u8]) -> AvrInstr {
         // Fixed single-byte equivalents
-        if let Some(i) = Self::decode_fixed(pc, word) { return Some(i); }
-        if let Some(i) = Self::decode_alu(word) { return Some(i); }
-        if let Some(i) = Self::decode_mem(word, bytes) { return Some(i); }
-        if let Some(i) = Self::decode_branch(pc, word, bytes) { return Some(i); }
+        if let Some(i) = Self::decode_fixed(pc, word) { return i; }
+        if let Some(i) = Self::decode_alu(word) { return i; }
+        if let Some(i) = Self::decode_mem(word, bytes) { return i; }
+        if let Some(i) = Self::decode_branch(pc, word, bytes) { return i; }
         // Unknown
-        Some(AvrInstr {
+        AvrInstr {
             raw: [bytes[0], bytes[1], 0, 0],
             len: 2, opcode: AvrOpcode::Unknown,
             mnemonic: "DC.W".to_string(),
@@ -257,7 +261,7 @@ impl AvrDecoder {
             branch_target: None,
             reads_mem: false, writes_mem: false,
             is_call: false, is_ret: false, is_conditional: false, is_branch: false,
-        })
+        }
     }
 
     fn decode_fixed(pc: u32, word: u16) -> Option<AvrInstr> {
@@ -359,6 +363,11 @@ impl AvrDecoder {
             let r = u8::try_from(16 + (word & 7)).unwrap_or(u8::MAX);
             return Some(reg_instr(word, AvrOpcode::Mulsu, "MULSU", d, r));
         }
+        Self::decode_alu_more(word)
+    }
+
+    /// Continuation of [`decode_alu`]; split out only to keep each function short.
+    fn decode_alu_more(word: u16) -> Option<AvrInstr> {
         // FMUL
         if (word & 0xFF88) == 0x0308 {
             let d = u8::try_from(16 + ((word >> 4) & 7)).unwrap_or(u8::MAX);

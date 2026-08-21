@@ -290,19 +290,19 @@ pub fn analyze_branch(pc: u32, branch_word: u32, delay_word: u32) -> Option<Spar
     // Sign-extend the 22-bit displacement (in words) for Bicc/FBfcc
     let disp22 = branch_word & 0x003F_FFFF;
     let disp_signed = if disp22 & 0x0020_0000 != 0 {
-        (disp22 | 0xFFC0_0000) as i32
+        (disp22 | 0xFFC0_0000).cast_signed()
     } else {
-        disp22 as i32
+        (disp22).cast_signed()
     };
 
     let target_pc = match kind {
         BranchKind::Call => {
             // 30-bit displacement
-            let d30 = (branch_word & 0x3FFF_FFFF) as i32;
+            let d30 = (branch_word & 0x3FFF_FFFF).cast_signed();
             let d30s = if d30 & 0x2000_0000 != 0 { d30 | -0x4000_0000i32 } else { d30 };
-            pc.wrapping_add((d30s * 4) as u32)
+            pc.wrapping_add((d30s * 4).cast_unsigned())
         }
-        _ => pc.wrapping_add((disp_signed * 4) as u32),
+        _ => pc.wrapping_add((disp_signed * 4).cast_unsigned()),
     };
 
     let delay_is_nop = is_nop(delay_word);
@@ -343,7 +343,7 @@ pub const fn is_nop(word: u32) -> bool {
     word == 0x0100_0000
 }
 
-fn heuristic_instr_name(word: u32) -> &'static str {
+const fn heuristic_instr_name(word: u32) -> &'static str {
     if is_nop(word) { return "nop"; }
     let op = (word >> 30) & 3;
     let op3 = (word >> 19) & 0x3F;
@@ -406,7 +406,7 @@ impl DelaySlotScanner {
             let off = i * 4;
             let bw = u32::from_be_bytes([data[off], data[off+1], data[off+2], data[off+3]]);
             let dw = u32::from_be_bytes([data[off+4], data[off+5], data[off+6], data[off+7]]);
-            let pc = base_pc + off as u32;
+            let pc = base_pc + crate::sparc_narrow::low_u32_of_usize(off);
             if let Some(ds) = analyze_branch(pc, bw, dw) {
                 if !self.report_nop_delays && ds.delay_is_nop { continue; }
                 if !self.report_annulled && ds.annul.is_set() { continue; }
@@ -436,9 +436,9 @@ mod tests {
 
     /// Build a format-2 branch word: op=00, cond, annul, op2=010 (Bicc), disp22.
     fn make_bicc(cond: u8, annul: bool, disp22: i32) -> u32 {
-        let a: u32 = if annul { 1 } else { 0 };
-        let d = (disp22 as u32) & 0x003F_FFFF;
-        (0b00 << 30) | (a << 29) | ((cond as u32) << 25) | (0b010 << 22) | d
+        let a: u32 = u32::from(annul);
+        let d = (disp22).cast_unsigned() & 0x003F_FFFF;
+        (a << 29) | (u32::from(cond) << 25) | (0b010 << 22) | d
     }
 
     #[test]
@@ -462,7 +462,7 @@ mod tests {
     #[test]
     fn test_analyze_non_branch_returns_none() {
         // ADD %g0, %g0, %g0: op=10, op3=0
-        let word: u32 = (0b10 << 30) | (0 << 25) | (0 << 19);
+        let word: u32 = 0b10 << 30;
         assert!(analyze_branch(0, word, 0).is_none());
     }
 
@@ -582,7 +582,7 @@ mod tests {
     #[test]
     fn test_negative_disp() {
         // Negative displacement: disp22 = -1 (all ones in 22 bits)
-        let word = make_bicc(0b1000, false, -1i32 & 0x3FFFFF as i32);
+        let word = make_bicc(0b1000, false, 0x3F_FFFFi32);
         let ds = analyze_branch(0x1000, word, 0x0100_0000).unwrap();
         // target = 0x1000 + (-1 * 4) = 0xFFC
         assert_eq!(ds.target_pc, 0x0FFC);

@@ -14,8 +14,8 @@ fn make_lcg(seed: u64) -> impl FnMut() -> u64 {
     let mut s = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -116,13 +116,13 @@ fn iasbx_boundary_values() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of range")]
 fn iasbx_over_max_panics() {
     let _ = make_iasbx(1, 0, MAXARG_SBX + 1);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of range")]
 fn iasbx_under_min_panics() {
     let _ = make_iasbx(1, 0, -MAXARG_SBX - 1);
 }
@@ -141,7 +141,7 @@ fn isj_boundary_values() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "out of range")]
 fn isj_over_max_panics() {
     // MAXARG_SJ private; compute upper bound from layout: 25-bit signed => 2^24 - 1.
     let _ = make_isj(54, (1 << 24) + 1);
@@ -290,7 +290,7 @@ fn chunk_header_eq_hash_consistent() {
 fn parse_chunk_header_fuzz_never_panics() {
     let mut g = make_lcg(0xDEAD_BEEF_CAFE_BABE);
     for _ in 0..500 {
-        let n = (g() as usize) % 40;
+        let n = usize::try_from(g() % 40).unwrap_or(0);
         let mut buf = vec![0u8; n];
         for b in &mut buf {
             *b = (g() & 0xff) as u8;
@@ -312,7 +312,7 @@ fn disassemble_fuzz_never_panics_all_versions() {
     ] {
         let arch = LuaArch::with_version(v);
         for _ in 0..1000 {
-            let w = g() as u32;
+            let w = u32::try_from(g() & 0xFFFF_FFFF).unwrap_or(0);
             let _ = arch.disassemble(Address::new(0), &w.to_le_bytes());
         }
     }
@@ -323,10 +323,10 @@ fn disassemble_chunk_fuzz_never_panics() {
     let mut g = make_lcg(0xFADE_C0DE_DEAD_F00D);
     let arch = LuaArch::default();
     for _ in 0..50 {
-        let n_words = (g() as usize) % 30 + 1;
+        let n_words = usize::try_from(g() % 30).unwrap_or(0) + 1;
         let mut bytes = Vec::with_capacity(n_words * 4);
         for _ in 0..n_words {
-            let w = g() as u32;
+            let w = u32::try_from(g() & 0xFFFF_FFFF).unwrap_or(0);
             bytes.extend_from_slice(&w.to_le_bytes());
         }
         let out = disassemble_chunk(&arch, Address::new(0), &bytes);
@@ -406,12 +406,12 @@ fn parse_const_pool_51_basic() {
     data.push(1); // bool
     data.push(1); // true
     data.push(3); // number
-    data.extend_from_slice(&3.14f64.to_le_bytes());
+    data.extend_from_slice(&2.5f64.to_le_bytes());
     let pool = parse_const_pool_51(&data).unwrap();
     assert_eq!(pool.len(), 3);
     assert!(pool[0].is_nil());
     assert_eq!(pool[1].as_bool(), Some(true));
-    assert_eq!(pool[2].as_float(), Some(3.14));
+    assert_eq!(pool[2].as_float(), Some(2.5));
 }
 
 #[test]
@@ -443,7 +443,7 @@ fn parse_const_pool_51_truncated_returns_none() {
 fn parse_const_pool_51_fuzz_never_panics() {
     let mut g = make_lcg(0xAAAA_BBBB_CCCC_DDDD);
     for _ in 0..300 {
-        let n = (g() as usize) % 64;
+        let n = usize::try_from(g() % 64).unwrap_or(0);
         let mut buf = vec![0u8; n];
         for b in &mut buf {
             *b = (g() & 0xff) as u8;
@@ -487,7 +487,7 @@ fn parse_const_pool_53_short_string() {
 fn parse_const_pool_53_fuzz_never_panics() {
     let mut g = make_lcg(0xFEED_FACE_DEAD_BEEF);
     for _ in 0..300 {
-        let n = (g() as usize) % 64;
+        let n = usize::try_from(g() % 64).unwrap_or(0);
         let mut buf = vec![0u8; n];
         for b in &mut buf {
             *b = (g() & 0xff) as u8;
@@ -569,7 +569,7 @@ fn opcode_category_display_nonempty() {
 fn stats_empty() {
     let s = LuaChunkStats::from_instructions(LuaVersion::Lua54, &[]);
     assert_eq!(s.total, 0);
-    assert_eq!(s.branch_ratio(), 0.0);
+    assert!(s.branch_ratio().abs() < f64::EPSILON);
 }
 
 #[test]
@@ -663,7 +663,7 @@ fn detect_version_too_short_is_none() {
 fn detect_version_fuzz_never_panics() {
     let mut g = make_lcg(0xC001_D00D_FACE_FEED);
     for _ in 0..500 {
-        let n = (g() as usize) % 20;
+        let n = usize::try_from(g() % 20).unwrap_or(0);
         let mut buf = vec![0u8; n];
         for b in &mut buf {
             *b = (g() & 0xff) as u8;
@@ -705,10 +705,10 @@ fn extract_constants_fuzz() {
         LuaVersion::Lua54,
     ] {
         for _ in 0..50 {
-            let n_words = (g() as usize) % 16;
+            let n_words = usize::try_from(g() % 16).unwrap_or(0);
             let mut buf = Vec::with_capacity(n_words * 4);
             for _ in 0..n_words {
-                buf.extend_from_slice(&(g() as u32).to_le_bytes());
+                buf.extend_from_slice(&u32::try_from(g() & 0xFFFF_FFFF).unwrap_or(0).to_le_bytes());
             }
             let _ = extract_constants_from_proto(&buf, v);
         }
@@ -880,9 +880,9 @@ fn lua_arch_threaded_disassemble_stress() {
     for t in 0..4 {
         let arch = Arc::clone(&arch);
         handles.push(thread::spawn(move || {
-            let mut g = make_lcg(0x1_0000_0000_u64.wrapping_mul(t as u64 + 1).wrapping_add(7));
+            let mut g = make_lcg(0x1_0000_0000_u64.wrapping_mul(u64::try_from(t).unwrap_or(0) + 1).wrapping_add(7));
             for _ in 0..100 {
-                let w = g() as u32;
+                let w = u32::try_from(g() & 0xFFFF_FFFF).unwrap_or(0);
                 let _ = arch.disassemble(Address::new(0), &w.to_le_bytes());
             }
         }));

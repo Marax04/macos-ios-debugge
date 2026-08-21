@@ -318,275 +318,301 @@ pub enum ConvertKind {
 // Mnemonic table (all 256 standard opcodes)
 // ---------------------------------------------------------------------------
 
+/// Opcode-dispatch chunk 0 of [`dalvik_mnemonic`]; unmatched opcodes fall through to the next chunk.
+const fn dalvik_mnemonic_part0(op: u8) -> &'static str {
+    match op {
+            0x00 => "nop",
+            0x01 => "move",
+            0x02 => "move/from16",
+            0x03 => "move/16",
+            0x04 => "move-wide",
+            0x05 => "move-wide/from16",
+            0x06 => "move-wide/16",
+            0x07 => "move-object",
+            0x08 => "move-object/from16",
+            0x09 => "move-object/16",
+            0x0a => "move-result",
+            0x0b => "move-result-wide",
+            0x0c => "move-result-object",
+            0x0d => "move-exception",
+            0x0e => "return-void",
+            0x0f => "return",
+            0x10 => "return-wide",
+            0x11 => "return-object",
+            0x12 => "const/4",
+            0x13 => "const/16",
+            0x14 => "const",
+            0x15 => "const/high16",
+            0x16 => "const-wide/16",
+            0x17 => "const-wide/32",
+            0x18 => "const-wide",
+            0x19 => "const-wide/high16",
+            0x1a => "const-string",
+            0x1b => "const-string/jumbo",
+            0x1c => "const-class",
+            0x1d => "monitor-enter",
+            0x1e => "monitor-exit",
+            0x1f => "check-cast",
+            0x20 => "instance-of",
+            0x21 => "array-length",
+            0x22 => "new-instance",
+            0x23 => "new-array",
+            0x24 => "filled-new-array",
+            0x25 => "filled-new-array/range",
+            0x26 => "fill-array-data",
+            0x27 => "throw",
+            0x28 => "goto",
+            0x29 => "goto/16",
+            0x2a => "goto/32",
+            0x2b => "packed-switch",
+            0x2c => "sparse-switch",
+            0x2d => "cmpl-float",
+            0x2e => "cmpg-float",
+            0x2f => "cmpl-double",
+            0x30 => "cmpg-double",
+            0x31 => "cmp-long",
+            0x32 => "if-eq",
+            0x33 => "if-ne",
+            0x34 => "if-lt",
+            0x35 => "if-ge",
+            0x36 => "if-gt",
+            0x37 => "if-le",
+            0x38 => "if-eqz",
+            0x39 => "if-nez",
+            0x3a => "if-ltz",
+            0x3b => "if-gez",
+            0x3c => "if-gtz",
+            0x3d => "if-lez",
+            0x44 => "aget",
+            0x45 => "aget-wide",
+            0x46 => "aget-object",
+            0x47 => "aget-boolean",
+            0x48 => "aget-byte",
+            0x49 => "aget-char",
+            0x4a => "aget-short",
+            0x4b => "aput",
+            0x4c => "aput-wide",
+            0x4d => "aput-object",
+            0x4e => "aput-boolean",
+            0x4f => "aput-byte",
+            0x50 => "aput-char",
+        _ => dalvik_mnemonic_part1(op),
+    }
+}
+
+/// Opcode-dispatch chunk 1 of [`dalvik_mnemonic`]; unmatched opcodes fall through to the next chunk.
+const fn dalvik_mnemonic_part1(op: u8) -> &'static str {
+    match op {
+            0x51 => "aput-short",
+            0x52 => "iget",
+            0x53 => "iget-wide",
+            0x54 => "iget-object",
+            0x55 => "iget-boolean",
+            0x56 => "iget-byte",
+            0x57 => "iget-char",
+            0x58 => "iget-short",
+            0x59 => "iput",
+            0x5a => "iput-wide",
+            0x5b => "iput-object",
+            0x5c => "iput-boolean",
+            0x5d => "iput-byte",
+            0x5e => "iput-char",
+            0x5f => "iput-short",
+            0x60 => "sget",
+            0x61 => "sget-wide",
+            0x62 => "sget-object",
+            0x63 => "sget-boolean",
+            0x64 => "sget-byte",
+            0x65 => "sget-char",
+            0x66 => "sget-short",
+            0x67 => "sput",
+            0x68 => "sput-wide",
+            0x69 => "sput-object",
+            0x6a => "sput-boolean",
+            0x6b => "sput-byte",
+            0x6c => "sput-char",
+            0x6d => "sput-short",
+            0x6e => "invoke-virtual",
+            0x6f => "invoke-super",
+            0x70 => "invoke-direct",
+            0x71 => "invoke-static",
+            0x72 => "invoke-interface",
+            0x74 => "invoke-virtual/range",
+            0x75 => "invoke-super/range",
+            0x76 => "invoke-direct/range",
+            0x77 => "invoke-static/range",
+            0x78 => "invoke-interface/range",
+            0x7b => "neg-int",
+            0x7c => "not-int",
+            0x7d => "neg-long",
+            0x7e => "not-long",
+            0x7f => "neg-float",
+            0x80 => "neg-double",
+            0x81 => "int-to-long",
+            0x82 => "int-to-float",
+            0x83 => "int-to-double",
+            0x84 => "long-to-int",
+            0x85 => "long-to-float",
+            0x86 => "long-to-double",
+            0x87 => "float-to-int",
+            0x88 => "float-to-long",
+            0x89 => "float-to-double",
+            0x8a => "double-to-int",
+            0x8b => "double-to-long",
+            0x8c => "double-to-float",
+            0x8d => "int-to-byte",
+            0x8e => "int-to-char",
+            0x8f => "int-to-short",
+            0x90 => "add-int",
+            0x91 => "sub-int",
+            0x92 => "mul-int",
+            0x93 => "div-int",
+            0x94 => "rem-int",
+            0x95 => "and-int",
+            0x96 => "or-int",
+            0x97 => "xor-int",
+            0x98 => "shl-int",
+            0x99 => "shr-int",
+            0x9a => "ushr-int",
+            0x9b => "add-long",
+            0x9c => "sub-long",
+            0x9d => "mul-long",
+            0x9e => "div-long",
+        _ => dalvik_mnemonic_part2(op),
+    }
+}
+
+/// Opcode-dispatch chunk 2 of [`dalvik_mnemonic`]; unmatched opcodes fall through to the next chunk.
+const fn dalvik_mnemonic_part2(op: u8) -> &'static str {
+    match op {
+            0x9f => "rem-long",
+            0xa0 => "and-long",
+            0xa1 => "or-long",
+            0xa2 => "xor-long",
+            0xa3 => "shl-long",
+            0xa4 => "shr-long",
+            0xa5 => "ushr-long",
+            0xa6 => "add-float",
+            0xa7 => "sub-float",
+            0xa8 => "mul-float",
+            0xa9 => "div-float",
+            0xaa => "rem-float",
+            0xab => "add-double",
+            0xac => "sub-double",
+            0xad => "mul-double",
+            0xae => "div-double",
+            0xaf => "rem-double",
+            0xb0 => "add-int/2addr",
+            0xb1 => "sub-int/2addr",
+            0xb2 => "mul-int/2addr",
+            0xb3 => "div-int/2addr",
+            0xb4 => "rem-int/2addr",
+            0xb5 => "and-int/2addr",
+            0xb6 => "or-int/2addr",
+            0xb7 => "xor-int/2addr",
+            0xb8 => "shl-int/2addr",
+            0xb9 => "shr-int/2addr",
+            0xba => "ushr-int/2addr",
+            0xbb => "add-long/2addr",
+            0xbc => "sub-long/2addr",
+            0xbd => "mul-long/2addr",
+            0xbe => "div-long/2addr",
+            0xbf => "rem-long/2addr",
+            0xc0 => "and-long/2addr",
+            0xc1 => "or-long/2addr",
+            0xc2 => "xor-long/2addr",
+            0xc3 => "shl-long/2addr",
+            0xc4 => "shr-long/2addr",
+            0xc5 => "ushr-long/2addr",
+            0xc6 => "add-float/2addr",
+            0xc7 => "sub-float/2addr",
+            0xc8 => "mul-float/2addr",
+            0xc9 => "div-float/2addr",
+            0xca => "rem-float/2addr",
+            0xcb => "add-double/2addr",
+            0xcc => "sub-double/2addr",
+            0xcd => "mul-double/2addr",
+            0xce => "div-double/2addr",
+            0xcf => "rem-double/2addr",
+            0xd0 => "add-int/lit16",
+            0xd1 => "rsub-int",
+            0xd2 => "mul-int/lit16",
+            0xd3 => "div-int/lit16",
+            0xd4 => "rem-int/lit16",
+            0xd5 => "and-int/lit16",
+            0xd6 => "or-int/lit16",
+            0xd7 => "xor-int/lit16",
+            0xd8 => "add-int/lit8",
+            0xd9 => "rsub-int/lit8",
+            0xda => "mul-int/lit8",
+            0xdb => "div-int/lit8",
+            0xdc => "rem-int/lit8",
+            0xdd => "and-int/lit8",
+            0xde => "or-int/lit8",
+            0xdf => "xor-int/lit8",
+            0xe0 => "shl-int/lit8",
+            0xe1 => "shr-int/lit8",
+            0xe2 => "ushr-int/lit8",
+            // Extended / ART opcodes 0xE3–0xFF
+            0xe3 => "iget-quick",
+            0xe4 => "iget-wide-quick",
+            0xe5 => "iget-object-quick",
+            0xe6 => "iput-quick",
+            0xe7 => "iput-wide-quick",
+            0xe8 => "iput-object-quick",
+        _ => dalvik_mnemonic_part3(op),
+    }
+}
+
+/// Opcode-dispatch chunk 3 of [`dalvik_mnemonic`]; unmatched opcodes fall through to the next chunk.
+const fn dalvik_mnemonic_part3(op: u8) -> &'static str {
+    match op {
+            0xe9 => "invoke-virtual-quick",
+            // `/range` is a terminal format suffix, so the range variant of
+            // `invoke-virtual-quick` is `invoke-virtual-quick/range`.  This read
+            // "invoke-virtual/range-quick", which splits the base mnemonic and
+            // contradicts its own neighbour at 0xe9 above.  `full_opcode_table` and
+            // `lib.rs` both spell it the other way.
+            0xea => "invoke-virtual-quick/range",
+            0xeb => "iput-boolean-quick",
+            0xec => "iput-byte-quick",
+            0xed => "iput-char-quick",
+            0xee => "iput-short-quick",
+            0xef => "iget-boolean-quick",
+            0xf0 => "iget-byte-quick",
+            0xf1 => "iget-char-quick",
+            0xf2 => "iget-short-quick",
+            // 0xf3..=0xf9 and 0xfa..=0xfd follow `full_opcode_table.rs`, the 256-entry
+            // table in this crate that also records each opcode's instruction format.
+            //
+            // Two errors were corrected here:
+            //  * a phantom `unused-f4` pushed the six experimental lambda opcodes one
+            //    slot too high, so every one of them was mislabelled;
+            //  * invoke-custom and invoke-polymorphic were swapped.  The formats
+            //    settle that independently: invoke-polymorphic is 45cc/4rcc and
+            //    carries an extra `proto@HHHH` operand, invoke-custom is 35c/3rc and
+            //    does not.
+            0xf3 => "invoke-lambda",
+            0xf4 => "capture-variable",
+            0xf5 => "create-lambda",
+            0xf6 => "liberate-variable",
+            0xf7 => "box-lambda",
+            0xf8 => "unbox-lambda",
+            0xf9 => "unused-f9",
+            0xfa => "invoke-polymorphic",
+            0xfb => "invoke-polymorphic/range",
+            0xfc => "invoke-custom",
+            0xfd => "invoke-custom/range",
+            0xfe => "const-method-handle",
+            0xff => "const-method-type",
+            _ => "unused",
+    }
+}
+
 /// Return the mnemonic for Dalvik opcode `op`, or `"unknown"`.
 #[must_use] 
 pub const fn dalvik_mnemonic(op: u8) -> &'static str {
-    match op {
-        0x00 => "nop",
-        0x01 => "move",
-        0x02 => "move/from16",
-        0x03 => "move/16",
-        0x04 => "move-wide",
-        0x05 => "move-wide/from16",
-        0x06 => "move-wide/16",
-        0x07 => "move-object",
-        0x08 => "move-object/from16",
-        0x09 => "move-object/16",
-        0x0a => "move-result",
-        0x0b => "move-result-wide",
-        0x0c => "move-result-object",
-        0x0d => "move-exception",
-        0x0e => "return-void",
-        0x0f => "return",
-        0x10 => "return-wide",
-        0x11 => "return-object",
-        0x12 => "const/4",
-        0x13 => "const/16",
-        0x14 => "const",
-        0x15 => "const/high16",
-        0x16 => "const-wide/16",
-        0x17 => "const-wide/32",
-        0x18 => "const-wide",
-        0x19 => "const-wide/high16",
-        0x1a => "const-string",
-        0x1b => "const-string/jumbo",
-        0x1c => "const-class",
-        0x1d => "monitor-enter",
-        0x1e => "monitor-exit",
-        0x1f => "check-cast",
-        0x20 => "instance-of",
-        0x21 => "array-length",
-        0x22 => "new-instance",
-        0x23 => "new-array",
-        0x24 => "filled-new-array",
-        0x25 => "filled-new-array/range",
-        0x26 => "fill-array-data",
-        0x27 => "throw",
-        0x28 => "goto",
-        0x29 => "goto/16",
-        0x2a => "goto/32",
-        0x2b => "packed-switch",
-        0x2c => "sparse-switch",
-        0x2d => "cmpl-float",
-        0x2e => "cmpg-float",
-        0x2f => "cmpl-double",
-        0x30 => "cmpg-double",
-        0x31 => "cmp-long",
-        0x32 => "if-eq",
-        0x33 => "if-ne",
-        0x34 => "if-lt",
-        0x35 => "if-ge",
-        0x36 => "if-gt",
-        0x37 => "if-le",
-        0x38 => "if-eqz",
-        0x39 => "if-nez",
-        0x3a => "if-ltz",
-        0x3b => "if-gez",
-        0x3c => "if-gtz",
-        0x3d => "if-lez",
-        0x44 => "aget",
-        0x45 => "aget-wide",
-        0x46 => "aget-object",
-        0x47 => "aget-boolean",
-        0x48 => "aget-byte",
-        0x49 => "aget-char",
-        0x4a => "aget-short",
-        0x4b => "aput",
-        0x4c => "aput-wide",
-        0x4d => "aput-object",
-        0x4e => "aput-boolean",
-        0x4f => "aput-byte",
-        0x50 => "aput-char",
-        0x51 => "aput-short",
-        0x52 => "iget",
-        0x53 => "iget-wide",
-        0x54 => "iget-object",
-        0x55 => "iget-boolean",
-        0x56 => "iget-byte",
-        0x57 => "iget-char",
-        0x58 => "iget-short",
-        0x59 => "iput",
-        0x5a => "iput-wide",
-        0x5b => "iput-object",
-        0x5c => "iput-boolean",
-        0x5d => "iput-byte",
-        0x5e => "iput-char",
-        0x5f => "iput-short",
-        0x60 => "sget",
-        0x61 => "sget-wide",
-        0x62 => "sget-object",
-        0x63 => "sget-boolean",
-        0x64 => "sget-byte",
-        0x65 => "sget-char",
-        0x66 => "sget-short",
-        0x67 => "sput",
-        0x68 => "sput-wide",
-        0x69 => "sput-object",
-        0x6a => "sput-boolean",
-        0x6b => "sput-byte",
-        0x6c => "sput-char",
-        0x6d => "sput-short",
-        0x6e => "invoke-virtual",
-        0x6f => "invoke-super",
-        0x70 => "invoke-direct",
-        0x71 => "invoke-static",
-        0x72 => "invoke-interface",
-        0x74 => "invoke-virtual/range",
-        0x75 => "invoke-super/range",
-        0x76 => "invoke-direct/range",
-        0x77 => "invoke-static/range",
-        0x78 => "invoke-interface/range",
-        0x7b => "neg-int",
-        0x7c => "not-int",
-        0x7d => "neg-long",
-        0x7e => "not-long",
-        0x7f => "neg-float",
-        0x80 => "neg-double",
-        0x81 => "int-to-long",
-        0x82 => "int-to-float",
-        0x83 => "int-to-double",
-        0x84 => "long-to-int",
-        0x85 => "long-to-float",
-        0x86 => "long-to-double",
-        0x87 => "float-to-int",
-        0x88 => "float-to-long",
-        0x89 => "float-to-double",
-        0x8a => "double-to-int",
-        0x8b => "double-to-long",
-        0x8c => "double-to-float",
-        0x8d => "int-to-byte",
-        0x8e => "int-to-char",
-        0x8f => "int-to-short",
-        0x90 => "add-int",
-        0x91 => "sub-int",
-        0x92 => "mul-int",
-        0x93 => "div-int",
-        0x94 => "rem-int",
-        0x95 => "and-int",
-        0x96 => "or-int",
-        0x97 => "xor-int",
-        0x98 => "shl-int",
-        0x99 => "shr-int",
-        0x9a => "ushr-int",
-        0x9b => "add-long",
-        0x9c => "sub-long",
-        0x9d => "mul-long",
-        0x9e => "div-long",
-        0x9f => "rem-long",
-        0xa0 => "and-long",
-        0xa1 => "or-long",
-        0xa2 => "xor-long",
-        0xa3 => "shl-long",
-        0xa4 => "shr-long",
-        0xa5 => "ushr-long",
-        0xa6 => "add-float",
-        0xa7 => "sub-float",
-        0xa8 => "mul-float",
-        0xa9 => "div-float",
-        0xaa => "rem-float",
-        0xab => "add-double",
-        0xac => "sub-double",
-        0xad => "mul-double",
-        0xae => "div-double",
-        0xaf => "rem-double",
-        0xb0 => "add-int/2addr",
-        0xb1 => "sub-int/2addr",
-        0xb2 => "mul-int/2addr",
-        0xb3 => "div-int/2addr",
-        0xb4 => "rem-int/2addr",
-        0xb5 => "and-int/2addr",
-        0xb6 => "or-int/2addr",
-        0xb7 => "xor-int/2addr",
-        0xb8 => "shl-int/2addr",
-        0xb9 => "shr-int/2addr",
-        0xba => "ushr-int/2addr",
-        0xbb => "add-long/2addr",
-        0xbc => "sub-long/2addr",
-        0xbd => "mul-long/2addr",
-        0xbe => "div-long/2addr",
-        0xbf => "rem-long/2addr",
-        0xc0 => "and-long/2addr",
-        0xc1 => "or-long/2addr",
-        0xc2 => "xor-long/2addr",
-        0xc3 => "shl-long/2addr",
-        0xc4 => "shr-long/2addr",
-        0xc5 => "ushr-long/2addr",
-        0xc6 => "add-float/2addr",
-        0xc7 => "sub-float/2addr",
-        0xc8 => "mul-float/2addr",
-        0xc9 => "div-float/2addr",
-        0xca => "rem-float/2addr",
-        0xcb => "add-double/2addr",
-        0xcc => "sub-double/2addr",
-        0xcd => "mul-double/2addr",
-        0xce => "div-double/2addr",
-        0xcf => "rem-double/2addr",
-        0xd0 => "add-int/lit16",
-        0xd1 => "rsub-int",
-        0xd2 => "mul-int/lit16",
-        0xd3 => "div-int/lit16",
-        0xd4 => "rem-int/lit16",
-        0xd5 => "and-int/lit16",
-        0xd6 => "or-int/lit16",
-        0xd7 => "xor-int/lit16",
-        0xd8 => "add-int/lit8",
-        0xd9 => "rsub-int/lit8",
-        0xda => "mul-int/lit8",
-        0xdb => "div-int/lit8",
-        0xdc => "rem-int/lit8",
-        0xdd => "and-int/lit8",
-        0xde => "or-int/lit8",
-        0xdf => "xor-int/lit8",
-        0xe0 => "shl-int/lit8",
-        0xe1 => "shr-int/lit8",
-        0xe2 => "ushr-int/lit8",
-        // Extended / ART opcodes 0xE3–0xFF
-        0xe3 => "iget-quick",
-        0xe4 => "iget-wide-quick",
-        0xe5 => "iget-object-quick",
-        0xe6 => "iput-quick",
-        0xe7 => "iput-wide-quick",
-        0xe8 => "iput-object-quick",
-        0xe9 => "invoke-virtual-quick",
-        // `/range` is a terminal format suffix, so the range variant of
-        // `invoke-virtual-quick` is `invoke-virtual-quick/range`.  This read
-        // "invoke-virtual/range-quick", which splits the base mnemonic and
-        // contradicts its own neighbour at 0xe9 above.  `full_opcode_table` and
-        // `lib.rs` both spell it the other way.
-        0xea => "invoke-virtual-quick/range",
-        0xeb => "iput-boolean-quick",
-        0xec => "iput-byte-quick",
-        0xed => "iput-char-quick",
-        0xee => "iput-short-quick",
-        0xef => "iget-boolean-quick",
-        0xf0 => "iget-byte-quick",
-        0xf1 => "iget-char-quick",
-        0xf2 => "iget-short-quick",
-        // 0xf3..=0xf9 and 0xfa..=0xfd follow `full_opcode_table.rs`, the 256-entry
-        // table in this crate that also records each opcode's instruction format.
-        //
-        // Two errors were corrected here:
-        //  * a phantom `unused-f4` pushed the six experimental lambda opcodes one
-        //    slot too high, so every one of them was mislabelled;
-        //  * invoke-custom and invoke-polymorphic were swapped.  The formats
-        //    settle that independently: invoke-polymorphic is 45cc/4rcc and
-        //    carries an extra `proto@HHHH` operand, invoke-custom is 35c/3rc and
-        //    does not.
-        0xf3 => "invoke-lambda",
-        0xf4 => "capture-variable",
-        0xf5 => "create-lambda",
-        0xf6 => "liberate-variable",
-        0xf7 => "box-lambda",
-        0xf8 => "unbox-lambda",
-        0xf9 => "unused-f9",
-        0xfa => "invoke-polymorphic",
-        0xfb => "invoke-polymorphic/range",
-        0xfc => "invoke-custom",
-        0xfd => "invoke-custom/range",
-        0xfe => "const-method-handle",
-        0xff => "const-method-type",
-        _ => "unused",
-    }
+    dalvik_mnemonic_part0(op)
 }
 
 // ---------------------------------------------------------------------------
@@ -613,560 +639,7 @@ impl DalvikLifterFull {
         let va = DalvikReg(u16::from(src_a));
         let vb = DalvikReg(u16::from(src_b));
 
-        match op {
-            0x00 => vec![DalvikLiftedOp::Nop],
-
-            // ── Move ─────────────────────────────────────────────────────────
-            0x01..=0x09 => vec![DalvikLiftedOp::Move { dst: vd, src: va }],
-            0x0a..=0x0c => vec![DalvikLiftedOp::MoveResult { dst: vd }],
-            0x0d => vec![DalvikLiftedOp::MoveResult { dst: vd }], // move-exception
-
-            // ── Return ───────────────────────────────────────────────────────
-            0x0e => vec![DalvikLiftedOp::ReturnVoid],
-            0x0f..=0x11 => vec![DalvikLiftedOp::Return { src: vd }],
-
-            // ── Const ────────────────────────────────────────────────────────
-            0x12..=0x19 => vec![DalvikLiftedOp::LoadImm { dst: vd, imm }],
-            0x1a | 0x1b => vec![DalvikLiftedOp::SGet {
-                dst: vd,
-                field_idx: cp_idx,
-            }], // const-string → sget approximation
-            0x1c => vec![DalvikLiftedOp::SGet {
-                dst: vd,
-                field_idx: cp_idx,
-            }],
-
-            // ── Monitor ─────────────────────────────────────────────────────
-            0x1d => vec![DalvikLiftedOp::MonitorEnter { obj: vd }],
-            0x1e => vec![DalvikLiftedOp::MonitorExit { obj: vd }],
-
-            // ── Cast / type ops ──────────────────────────────────────────────
-            0x1f => vec![DalvikLiftedOp::CheckCast {
-                reg: vd,
-                type_idx: cp_idx,
-            }],
-            0x20 => vec![DalvikLiftedOp::InstanceOf {
-                dst: vd,
-                reg: va,
-                type_idx: cp_idx,
-            }],
-            0x21 => vec![DalvikLiftedOp::ArrayLength { dst: vd, array: va }],
-            0x22 => vec![DalvikLiftedOp::NewInstance {
-                dst: vd,
-                type_idx: cp_idx,
-            }],
-            0x23 => vec![DalvikLiftedOp::NewArray {
-                dst: vd,
-                size: va,
-                type_idx: cp_idx,
-            }],
-            0x24 | 0x25 => vec![DalvikLiftedOp::FilledNewArray {
-                type_idx: cp_idx,
-                args: vec![vd],
-            }],
-            0x26 => vec![DalvikLiftedOp::Nop], // fill-array-data
-            0x27 => vec![DalvikLiftedOp::Throw { exc: vd }],
-
-            // ── Branch ──────────────────────────────────────────────────────
-            0x28..=0x2a => vec![DalvikLiftedOp::Goto { offset: imm as i32 }],
-            0x2b | 0x2c => vec![DalvikLiftedOp::Goto { offset: imm as i32 }], // switch
-
-            // ── Compare ─────────────────────────────────────────────────────
-            0x2d..=0x31 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Sub,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-
-            // ── If ──────────────────────────────────────────────────────────
-            0x32 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Eq,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x33 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Ne,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x34 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Lt,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x35 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Ge,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x36 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Gt,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x37 => vec![DalvikLiftedOp::If {
-                cond: DalvikCond::Le,
-                lhs: vd,
-                rhs: va,
-                offset: imm as i32,
-            }],
-            0x38 => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Eq,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-            0x39 => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Ne,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-            0x3a => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Lt,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-            0x3b => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Ge,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-            0x3c => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Gt,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-            0x3d => vec![DalvikLiftedOp::IfZ {
-                cond: DalvikCond::Le,
-                lhs: vd,
-                offset: imm as i32,
-            }],
-
-            // ── Array get ────────────────────────────────────────────────────
-            0x44..=0x4a => vec![DalvikLiftedOp::AGet {
-                dst: vd,
-                array: va,
-                index: vb,
-            }],
-
-            // ── Array put ────────────────────────────────────────────────────
-            0x4b..=0x51 => vec![DalvikLiftedOp::APut {
-                src: vd,
-                array: va,
-                index: vb,
-            }],
-
-            // ── iget ────────────────────────────────────────────────────────
-            0x52..=0x58 => vec![DalvikLiftedOp::IGet {
-                dst: vd,
-                obj: va,
-                field_idx: cp_idx,
-            }],
-
-            // ── iput ────────────────────────────────────────────────────────
-            0x59..=0x5f => vec![DalvikLiftedOp::IPut {
-                src: vd,
-                obj: va,
-                field_idx: cp_idx,
-            }],
-
-            // ── sget ────────────────────────────────────────────────────────
-            0x60..=0x66 => vec![DalvikLiftedOp::SGet {
-                dst: vd,
-                field_idx: cp_idx,
-            }],
-
-            // ── sput ────────────────────────────────────────────────────────
-            0x67..=0x6d => vec![DalvikLiftedOp::SPut {
-                src: vd,
-                field_idx: cp_idx,
-            }],
-
-            // ── invoke ───────────────────────────────────────────────────────
-            0x6e => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Virtual,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x6f => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Super,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x70 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Direct,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x71 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Static,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x72 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Interface,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x74 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::VirtualRange,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x75 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::SuperRange,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x76 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::DirectRange,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x77 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::StaticRange,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-            0x78 => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::InterfaceRange,
-                method_idx: cp_idx,
-                args: vec![vd, va],
-            }],
-
-            // ── Unary neg/not ────────────────────────────────────────────────
-            0x7b | 0x7d | 0x7f | 0x80 => vec![DalvikLiftedOp::UnaryNeg { dst: vd, src: va }],
-            0x7c | 0x7e => vec![DalvikLiftedOp::UnaryNot { dst: vd, src: va }],
-
-            // ── Conversion ───────────────────────────────────────────────────
-            0x81 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToLong,
-            }],
-            0x82 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToFloat,
-            }],
-            0x83 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToDouble,
-            }],
-            0x84 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::LongToInt,
-            }],
-            0x85 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::LongToFloat,
-            }],
-            0x86 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::LongToDouble,
-            }],
-            0x87 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::FloatToInt,
-            }],
-            0x88 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::FloatToLong,
-            }],
-            0x89 => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::FloatToDouble,
-            }],
-            0x8a => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::DoubleToInt,
-            }],
-            0x8b => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::DoubleToLong,
-            }],
-            0x8c => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::DoubleToFloat,
-            }],
-            0x8d => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToByte,
-            }],
-            0x8e => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToChar,
-            }],
-            0x8f => vec![DalvikLiftedOp::Convert {
-                dst: vd,
-                src: va,
-                kind: ConvertKind::IntToShort,
-            }],
-
-            // ── 2-register binop ─────────────────────────────────────────────
-            0x90 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Add,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x91 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Sub,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x92 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Mul,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x93 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Div,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x94 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Rem,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x95 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::And,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x96 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Or,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x97 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Xor,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x98 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Shl,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x99 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Shr,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            0x9a => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Ushr,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-
-            // Long binops
-            0x9b..=0xa5 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::AddLong,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            // Float binops
-            0xa6..=0xaa => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::AddFloat,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-            // Double binops
-            0xab..=0xaf => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::AddDouble,
-                dst: vd,
-                lhs: va,
-                rhs: vb,
-            }],
-
-            // ── 2addr ────────────────────────────────────────────────────────
-            0xb0 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Add,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb1 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Sub,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb2 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Mul,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb3 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Div,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb4 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Rem,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb5 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::And,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb6 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Or,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb7 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Xor,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb8 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Shl,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xb9 => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Shr,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xba => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::Ushr,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-            0xbb..=0xcf => vec![DalvikLiftedOp::BinOp {
-                op: DalvikBinOp::AddLong,
-                dst: vd,
-                lhs: vd,
-                rhs: va,
-            }],
-
-            // ── lit16 / lit8 ─────────────────────────────────────────────────
-            0xd0 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Add,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd1 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Sub,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd2 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Mul,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd3 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Div,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd4 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Rem,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd5 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::And,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd6 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Or,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd7 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Xor,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-            0xd8..=0xe2 => vec![DalvikLiftedOp::BinOpImm {
-                op: DalvikBinOp::Add,
-                dst: vd,
-                lhs: va,
-                imm,
-            }],
-
-            // ── Extended / ART ───────────────────────────────────────────────
-            0xe3..=0xef => vec![DalvikLiftedOp::IGet {
-                dst: vd,
-                obj: va,
-                field_idx: cp_idx,
-            }],
-            // 0xfa is invoke-polymorphic and 0xfc is invoke-custom — these two
-            // were swapped here as well as in the mnemonic table above, so the
-            // lifted `InvokeKind` agreed with the wrong name and neither could
-            // reveal the other.
-            0xfa => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Polymorphic,
-                method_idx: cp_idx,
-                args: vec![vd],
-            }],
-            0xfc => vec![DalvikLiftedOp::Invoke {
-                kind: InvokeKind::Custom,
-                method_idx: cp_idx,
-                args: vec![vd],
-            }],
-            0xfe | 0xff => vec![DalvikLiftedOp::LoadImm {
-                dst: vd,
-                imm: i64::from(cp_idx),
-            }],
-
-            _ => vec![DalvikLiftedOp::Unknown(op)],
-        }
+        lift_opcode_part0(op, vd, va, vb, imm, cp_idx)
     }
 
     /// Lift all opcodes in a raw byte stream (each byte is an opcode for simplicity).
@@ -1182,6 +655,615 @@ impl DalvikLifterFull {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/// Opcode-dispatch chunk 0 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part0(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+                // 0x00 nop, and 0x26 fill-array-data whose payload lives outside the
+                // instruction stream and so lifts to nothing.
+                0x00 | 0x26 => vec![DalvikLiftedOp::Nop],
+
+                // ── Move ─────────────────────────────────────────────────────────
+                0x01..=0x09 => vec![DalvikLiftedOp::Move { dst: vd, src: va }],
+                // 0x0a..=0x0c move-result*, 0x0d move-exception: all deliver a value
+                // produced outside the instruction into vAA.
+                0x0a..=0x0d => vec![DalvikLiftedOp::MoveResult { dst: vd }],
+
+                // ── Return ───────────────────────────────────────────────────────
+                0x0e => vec![DalvikLiftedOp::ReturnVoid],
+                0x0f..=0x11 => vec![DalvikLiftedOp::Return { src: vd }],
+
+                // ── Const ────────────────────────────────────────────────────────
+                0x12..=0x19 => vec![DalvikLiftedOp::LoadImm { dst: vd, imm }],
+                // const-string (0x1a/0x1b), const-class (0x1c) and the sget family
+                // 0x60..=0x66 all read a constant-pool-addressed slot into vAA.
+                0x1a..=0x1c | 0x60..=0x66 => vec![DalvikLiftedOp::SGet {
+                    dst: vd,
+                    field_idx: cp_idx,
+                }],
+
+                // ── Monitor ─────────────────────────────────────────────────────
+                0x1d => vec![DalvikLiftedOp::MonitorEnter { obj: vd }],
+                0x1e => vec![DalvikLiftedOp::MonitorExit { obj: vd }],
+
+                // ── Cast / type ops ──────────────────────────────────────────────
+                0x1f => vec![DalvikLiftedOp::CheckCast {
+                    reg: vd,
+                    type_idx: cp_idx,
+                }],
+                0x20 => vec![DalvikLiftedOp::InstanceOf {
+                    dst: vd,
+                    reg: va,
+                    type_idx: cp_idx,
+                }],
+                0x21 => vec![DalvikLiftedOp::ArrayLength { dst: vd, array: va }],
+                0x22 => vec![DalvikLiftedOp::NewInstance {
+                    dst: vd,
+                    type_idx: cp_idx,
+                }],
+                0x23 => vec![DalvikLiftedOp::NewArray {
+                    dst: vd,
+                    size: va,
+                    type_idx: cp_idx,
+                }],
+                0x24 | 0x25 => vec![DalvikLiftedOp::FilledNewArray {
+                    type_idx: cp_idx,
+                    args: vec![vd],
+                }],
+                0x27 => vec![DalvikLiftedOp::Throw { exc: vd }],
+
+                // ── Branch ──────────────────────────────────────────────────────
+                // goto/goto16/goto32 (0x28..=0x2a) and packed/sparse-switch
+                // (0x2b/0x2c), which are modelled as an unconditional transfer.
+                0x28..=0x2c => vec![DalvikLiftedOp::Goto { offset: branch_offset(imm) }],
+
+                // ── Compare ─────────────────────────────────────────────────────
+                // cmp* (0x2d..=0x31) and sub-int (0x91): both a subtraction of two
+                // registers into vAA.
+                0x2d..=0x31 | 0x91 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Sub,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+
+                // ── If ──────────────────────────────────────────────────────────
+                0x32 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Eq,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+        _ => lift_opcode_part1(op, vd, va, vb, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 1 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part1(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+                0x33 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Ne,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+                0x34 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Lt,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+                0x35 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Ge,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+                0x36 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Gt,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+                0x37 => vec![DalvikLiftedOp::If {
+                    cond: DalvikCond::Le,
+                    lhs: vd,
+                    rhs: va,
+                    offset: branch_offset(imm),
+                }],
+                0x38 => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Eq,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+                0x39 => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Ne,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+                0x3a => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Lt,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+                0x3b => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Ge,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+                0x3c => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Gt,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+                0x3d => vec![DalvikLiftedOp::IfZ {
+                    cond: DalvikCond::Le,
+                    lhs: vd,
+                    offset: branch_offset(imm),
+                }],
+
+                // ── Array get ────────────────────────────────────────────────────
+                0x44..=0x4a => vec![DalvikLiftedOp::AGet {
+                    dst: vd,
+                    array: va,
+                    index: vb,
+                }],
+
+                // ── Array put ────────────────────────────────────────────────────
+                0x4b..=0x51 => vec![DalvikLiftedOp::APut {
+                    src: vd,
+                    array: va,
+                    index: vb,
+                }],
+        _ => lift_opcode_part2(op, vd, va, vb, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 2 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part2(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+
+                // ── iget ────────────────────────────────────────────────────────
+                // …and the ART extended quick-field range 0xe3..=0xef, which lifts to
+                // the same instance-field read.
+                0x52..=0x58 | 0xe3..=0xef => vec![DalvikLiftedOp::IGet {
+                    dst: vd,
+                    obj: va,
+                    field_idx: cp_idx,
+                }],
+
+                // ── iput ────────────────────────────────────────────────────────
+                0x59..=0x5f => vec![DalvikLiftedOp::IPut {
+                    src: vd,
+                    obj: va,
+                    field_idx: cp_idx,
+                }],
+
+                // ── sput ────────────────────────────────────────────────────────
+                0x67..=0x6d => vec![DalvikLiftedOp::SPut {
+                    src: vd,
+                    field_idx: cp_idx,
+                }],
+
+                // ── invoke ───────────────────────────────────────────────────────
+                0x6e => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Virtual,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x6f => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Super,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x70 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Direct,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x71 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Static,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x72 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Interface,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x74 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::VirtualRange,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x75 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::SuperRange,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x76 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::DirectRange,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x77 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::StaticRange,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+                0x78 => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::InterfaceRange,
+                    method_idx: cp_idx,
+                    args: vec![vd, va],
+                }],
+        _ => lift_opcode_part3(op, vd, va, vb, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 3 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part3(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+
+                // ── Unary neg/not ────────────────────────────────────────────────
+                0x7b | 0x7d | 0x7f | 0x80 => vec![DalvikLiftedOp::UnaryNeg { dst: vd, src: va }],
+                0x7c | 0x7e => vec![DalvikLiftedOp::UnaryNot { dst: vd, src: va }],
+
+                // ── Conversion ───────────────────────────────────────────────────
+                0x81 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToLong,
+                }],
+                0x82 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToFloat,
+                }],
+                0x83 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToDouble,
+                }],
+                0x84 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::LongToInt,
+                }],
+                0x85 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::LongToFloat,
+                }],
+                0x86 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::LongToDouble,
+                }],
+                0x87 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::FloatToInt,
+                }],
+                0x88 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::FloatToLong,
+                }],
+                0x89 => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::FloatToDouble,
+                }],
+                0x8a => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::DoubleToInt,
+                }],
+                0x8b => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::DoubleToLong,
+                }],
+                0x8c => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::DoubleToFloat,
+                }],
+                0x8d => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToByte,
+                }],
+        _ => lift_opcode_part4(op, vd, va, vb, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 4 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part4(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+                0x8e => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToChar,
+                }],
+                0x8f => vec![DalvikLiftedOp::Convert {
+                    dst: vd,
+                    src: va,
+                    kind: ConvertKind::IntToShort,
+                }],
+
+                // ── 2-register binop ─────────────────────────────────────────────
+                0x90 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Add,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x92 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Mul,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x93 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Div,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x94 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Rem,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x95 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::And,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x96 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Or,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x97 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Xor,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x98 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Shl,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x99 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Shr,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                0x9a => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Ushr,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+        _ => lift_opcode_part5(op, vd, va, vb, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 5 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part5(op: u8, vd: DalvikReg, va: DalvikReg, vb: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+
+                // Long binops
+                0x9b..=0xa5 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::AddLong,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                // Float binops
+                0xa6..=0xaa => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::AddFloat,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+                // Double binops
+                0xab..=0xaf => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::AddDouble,
+                    dst: vd,
+                    lhs: va,
+                    rhs: vb,
+                }],
+
+                // ── 2addr ────────────────────────────────────────────────────────
+                0xb0 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Add,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb1 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Sub,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb2 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Mul,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb3 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Div,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb4 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Rem,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb5 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::And,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb6 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Or,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb7 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Xor,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+        _ => lift_opcode_part6(op, vd, va, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 6 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part6(op: u8, vd: DalvikReg, va: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+                0xb8 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Shl,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xb9 => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Shr,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xba => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::Ushr,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+                0xbb..=0xcf => vec![DalvikLiftedOp::BinOp {
+                    op: DalvikBinOp::AddLong,
+                    dst: vd,
+                    lhs: vd,
+                    rhs: va,
+                }],
+
+                // ── lit16 / lit8 ─────────────────────────────────────────────────
+                // add-int/lit16 (0xd0) and the lit8 range 0xd8..=0xe2, all modelled
+                // as an add of an immediate.
+                0xd0 | 0xd8..=0xe2 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Add,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd1 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Sub,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd2 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Mul,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd3 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Div,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd4 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Rem,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd5 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::And,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+                0xd6 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Or,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+        _ => lift_opcode_part7(op, vd, va, imm, cp_idx),
+    }
+}
+
+/// Opcode-dispatch chunk 7 of [`DalvikLifterFull::lift_opcode`];
+/// unmatched opcodes fall through to the next chunk.
+fn lift_opcode_part7(op: u8, vd: DalvikReg, va: DalvikReg, imm: i64, cp_idx: u16) -> Vec<DalvikLiftedOp> {
+    match op {
+                0xd7 => vec![DalvikLiftedOp::BinOpImm {
+                    op: DalvikBinOp::Xor,
+                    dst: vd,
+                    lhs: va,
+                    imm,
+                }],
+
+                // ── Extended / ART ───────────────────────────────────────────────
+                // 0xfa is invoke-polymorphic and 0xfc is invoke-custom — these two
+                // were swapped here as well as in the mnemonic table above, so the
+                // lifted `InvokeKind` agreed with the wrong name and neither could
+                // reveal the other.
+                0xfa => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Polymorphic,
+                    method_idx: cp_idx,
+                    args: vec![vd],
+                }],
+                0xfc => vec![DalvikLiftedOp::Invoke {
+                    kind: InvokeKind::Custom,
+                    method_idx: cp_idx,
+                    args: vec![vd],
+                }],
+                0xfe | 0xff => vec![DalvikLiftedOp::LoadImm {
+                    dst: vd,
+                    imm: i64::from(cp_idx),
+                }],
+
+                _ => vec![DalvikLiftedOp::Unknown(op)],
+    }
+}
+
+/// Narrow a decoded Dalvik immediate to the 32-bit branch offset the lifted IL
+/// uses.
+///
+/// Dalvik encodes branch offsets in at most 32 bits, so a wider value can only
+/// come from a malformed instruction; saturate instead of truncating, which
+/// would otherwise turn a bogus operand into a plausible-looking target.
+fn branch_offset(imm: i64) -> i32 {
+    i32::try_from(imm).unwrap_or(if imm < 0 { i32::MIN } else { i32::MAX })
+}
 
 #[cfg(test)]
 mod tests {

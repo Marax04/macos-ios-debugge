@@ -138,6 +138,526 @@ impl std::fmt::Display for AtomicInstr {
 
 // ─── decode_atomics ──────────────────────────────────────────────────────────
 
+/// Sub-opcode dispatch chunk 0 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part0(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            // Notify / Wait
+            0x00 => (
+                "memory.atomic.notify",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x01 => (
+                "memory.atomic.wait32",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x02 => (
+                "memory.atomic.wait64",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // Fence
+            0x03 => {
+                // atomic.fence has a reserved byte (must be 0x00) but no memarg.
+                if *pos >= full_bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated atomic.fence".into(),
+                    });
+                }
+                *pos += 1; // skip the reserved byte
+                ("atomic.fence", String::new(), InstrFlags::NONE)
+            }
+
+            // ── Atomic loads ─────────────────────────────────────────────────────
+            0x10 => (
+                "i32.atomic.load",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+            0x11 => (
+                "i64.atomic.load",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+            0x12 => (
+                "i32.atomic.load8_u",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+            0x13 => (
+                "i32.atomic.load16_u",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+            0x14 => (
+                "i64.atomic.load8_u",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+            0x15 => (
+                "i64.atomic.load16_u",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+        _ => return decode_atomics_part1(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 1 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part1(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            0x16 => (
+                "i64.atomic.load32_u",
+                memarg!(),
+                InstrFlags::READ_MEM,
+            ),
+
+            // ── Atomic stores ────────────────────────────────────────────────────
+            0x17 => (
+                "i32.atomic.store",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x18 => (
+                "i64.atomic.store",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x19 => (
+                "i32.atomic.store8",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x1a => (
+                "i32.atomic.store16",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x1b => (
+                "i64.atomic.store8",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x1c => (
+                "i64.atomic.store16",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+            0x1d => (
+                "i64.atomic.store32",
+                memarg!(),
+                InstrFlags::WRITE_MEM,
+            ),
+
+            // ── i32 RMW ops ──────────────────────────────────────────────────────
+            0x1e => (
+                "i32.atomic.rmw.add",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x1f => (
+                "i64.atomic.rmw.add",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x20 => (
+                "i32.atomic.rmw8.add_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+        _ => return decode_atomics_part2(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 2 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part2(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            0x21 => (
+                "i32.atomic.rmw16.add_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x22 => (
+                "i64.atomic.rmw8.add_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x23 => (
+                "i64.atomic.rmw16.add_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x24 => (
+                "i64.atomic.rmw32.add_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // ── sub ──────────────────────────────────────────────────────────────
+            0x25 => (
+                "i32.atomic.rmw.sub",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x26 => (
+                "i64.atomic.rmw.sub",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x27 => (
+                "i32.atomic.rmw8.sub_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x28 => (
+                "i32.atomic.rmw16.sub_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x29 => (
+                "i64.atomic.rmw8.sub_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x2a => (
+                "i64.atomic.rmw16.sub_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x2b => (
+                "i64.atomic.rmw32.sub_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+        _ => return decode_atomics_part3(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 3 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part3(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+
+            // ── and ──────────────────────────────────────────────────────────────
+            0x2c => (
+                "i32.atomic.rmw.and",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x2d => (
+                "i64.atomic.rmw.and",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x2e => (
+                "i32.atomic.rmw8.and_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x2f => (
+                "i32.atomic.rmw16.and_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x30 => (
+                "i64.atomic.rmw8.and_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x31 => (
+                "i64.atomic.rmw16.and_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x32 => (
+                "i64.atomic.rmw32.and_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // ── or ───────────────────────────────────────────────────────────────
+            0x33 => (
+                "i32.atomic.rmw.or",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x34 => (
+                "i64.atomic.rmw.or",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x35 => (
+                "i32.atomic.rmw8.or_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x36 => (
+                "i32.atomic.rmw16.or_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+        _ => return decode_atomics_part4(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 4 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part4(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            0x37 => (
+                "i64.atomic.rmw8.or_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x38 => (
+                "i64.atomic.rmw16.or_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x39 => (
+                "i64.atomic.rmw32.or_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // ── xor ──────────────────────────────────────────────────────────────
+            0x3a => (
+                "i32.atomic.rmw.xor",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x3b => (
+                "i64.atomic.rmw.xor",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x3c => (
+                "i32.atomic.rmw8.xor_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x3d => (
+                "i32.atomic.rmw16.xor_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x3e => (
+                "i64.atomic.rmw8.xor_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x3f => (
+                "i64.atomic.rmw16.xor_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x40 => (
+                "i64.atomic.rmw32.xor_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // ── xchg ─────────────────────────────────────────────────────────────
+            0x41 => (
+                "i32.atomic.rmw.xchg",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+        _ => return decode_atomics_part5(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 5 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part5(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            0x42 => (
+                "i64.atomic.rmw.xchg",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x43 => (
+                "i32.atomic.rmw8.xchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x44 => (
+                "i32.atomic.rmw16.xchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x45 => (
+                "i64.atomic.rmw8.xchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x46 => (
+                "i64.atomic.rmw16.xchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x47 => (
+                "i64.atomic.rmw32.xchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            // ── cmpxchg ──────────────────────────────────────────────────────────
+            0x48 => (
+                "i32.atomic.rmw.cmpxchg",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x49 => (
+                "i64.atomic.rmw.cmpxchg",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x4a => (
+                "i32.atomic.rmw8.cmpxchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x4b => (
+                "i32.atomic.rmw16.cmpxchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x4c => (
+                "i64.atomic.rmw8.cmpxchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+        _ => return decode_atomics_part6(full_bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 6 of [`decode_atomics`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_atomics_part6(
+    full_bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(&'static str, String, InstrFlags), CoreError> {
+    /// Read a memarg (align + offset) from `full_bytes` at `*pos`.
+    macro_rules! memarg {
+        () => {{
+            let (align, n1) = read_uleb128(full_bytes, *pos)?;
+            let (offset, n2) = read_uleb128(full_bytes, *pos + n1)?;
+            *pos += n1 + n2;
+            format!("align={align} offset={offset}")
+        }};
+    }
+
+    Ok(match sub {
+            0x4d => (
+                "i64.atomic.rmw16.cmpxchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+            0x4e => (
+                "i64.atomic.rmw32.cmpxchg_u",
+                memarg!(),
+                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+            ),
+
+            other => {
+                return Err(CoreError::InvalidFormat {
+                    message: format!("unknown atomic sub-opcode 0x{other:02x}"),
+                });
+            }
+    })
+}
+
 /// Decode a `0xFE`-prefixed WASM atomic instruction.
 ///
 /// `full_bytes` must start with `0xFE`.
@@ -158,385 +678,8 @@ pub fn decode_atomics(full_bytes: &[u8]) -> Result<(String, String, usize, Instr
     let (sub, n) = read_uleb128(full_bytes, 1)?;
     let mut pos = 1 + n;
 
-    /// Read a memarg (align + offset) from `full_bytes` at `pos`.
-    macro_rules! memarg {
-        () => {{
-            let (align, n1) = read_uleb128(full_bytes, pos)?;
-            let (offset, n2) = read_uleb128(full_bytes, pos + n1)?;
-            pos += n1 + n2;
-            format!("align={align} offset={offset}")
-        }};
-    }
-
-    let (mnemonic, operands, flags): (&str, String, InstrFlags) = match sub {
-        // Notify / Wait
-        0x00 => (
-            "memory.atomic.notify",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x01 => (
-            "memory.atomic.wait32",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x02 => (
-            "memory.atomic.wait64",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // Fence
-        0x03 => {
-            // atomic.fence has a reserved byte (must be 0x00) but no memarg.
-            if pos >= full_bytes.len() {
-                return Err(CoreError::InvalidFormat {
-                    message: "truncated atomic.fence".into(),
-                });
-            }
-            pos += 1; // skip the reserved byte
-            ("atomic.fence", String::new(), InstrFlags::NONE)
-        }
-
-        // ── Atomic loads ─────────────────────────────────────────────────────
-        0x10 => (
-            "i32.atomic.load",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x11 => (
-            "i64.atomic.load",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x12 => (
-            "i32.atomic.load8_u",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x13 => (
-            "i32.atomic.load16_u",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x14 => (
-            "i64.atomic.load8_u",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x15 => (
-            "i64.atomic.load16_u",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-        0x16 => (
-            "i64.atomic.load32_u",
-            memarg!(),
-            InstrFlags::READ_MEM,
-        ),
-
-        // ── Atomic stores ────────────────────────────────────────────────────
-        0x17 => (
-            "i32.atomic.store",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x18 => (
-            "i64.atomic.store",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x19 => (
-            "i32.atomic.store8",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x1a => (
-            "i32.atomic.store16",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x1b => (
-            "i64.atomic.store8",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x1c => (
-            "i64.atomic.store16",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-        0x1d => (
-            "i64.atomic.store32",
-            memarg!(),
-            InstrFlags::WRITE_MEM,
-        ),
-
-        // ── i32 RMW ops ──────────────────────────────────────────────────────
-        0x1e => (
-            "i32.atomic.rmw.add",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x1f => (
-            "i64.atomic.rmw.add",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x20 => (
-            "i32.atomic.rmw8.add_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x21 => (
-            "i32.atomic.rmw16.add_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x22 => (
-            "i64.atomic.rmw8.add_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x23 => (
-            "i64.atomic.rmw16.add_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x24 => (
-            "i64.atomic.rmw32.add_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── sub ──────────────────────────────────────────────────────────────
-        0x25 => (
-            "i32.atomic.rmw.sub",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x26 => (
-            "i64.atomic.rmw.sub",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x27 => (
-            "i32.atomic.rmw8.sub_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x28 => (
-            "i32.atomic.rmw16.sub_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x29 => (
-            "i64.atomic.rmw8.sub_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x2a => (
-            "i64.atomic.rmw16.sub_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x2b => (
-            "i64.atomic.rmw32.sub_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── and ──────────────────────────────────────────────────────────────
-        0x2c => (
-            "i32.atomic.rmw.and",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x2d => (
-            "i64.atomic.rmw.and",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x2e => (
-            "i32.atomic.rmw8.and_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x2f => (
-            "i32.atomic.rmw16.and_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x30 => (
-            "i64.atomic.rmw8.and_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x31 => (
-            "i64.atomic.rmw16.and_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x32 => (
-            "i64.atomic.rmw32.and_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── or ───────────────────────────────────────────────────────────────
-        0x33 => (
-            "i32.atomic.rmw.or",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x34 => (
-            "i64.atomic.rmw.or",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x35 => (
-            "i32.atomic.rmw8.or_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x36 => (
-            "i32.atomic.rmw16.or_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x37 => (
-            "i64.atomic.rmw8.or_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x38 => (
-            "i64.atomic.rmw16.or_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x39 => (
-            "i64.atomic.rmw32.or_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── xor ──────────────────────────────────────────────────────────────
-        0x3a => (
-            "i32.atomic.rmw.xor",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x3b => (
-            "i64.atomic.rmw.xor",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x3c => (
-            "i32.atomic.rmw8.xor_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x3d => (
-            "i32.atomic.rmw16.xor_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x3e => (
-            "i64.atomic.rmw8.xor_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x3f => (
-            "i64.atomic.rmw16.xor_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x40 => (
-            "i64.atomic.rmw32.xor_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── xchg ─────────────────────────────────────────────────────────────
-        0x41 => (
-            "i32.atomic.rmw.xchg",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x42 => (
-            "i64.atomic.rmw.xchg",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x43 => (
-            "i32.atomic.rmw8.xchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x44 => (
-            "i32.atomic.rmw16.xchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x45 => (
-            "i64.atomic.rmw8.xchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x46 => (
-            "i64.atomic.rmw16.xchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x47 => (
-            "i64.atomic.rmw32.xchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        // ── cmpxchg ──────────────────────────────────────────────────────────
-        0x48 => (
-            "i32.atomic.rmw.cmpxchg",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x49 => (
-            "i64.atomic.rmw.cmpxchg",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x4a => (
-            "i32.atomic.rmw8.cmpxchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x4b => (
-            "i32.atomic.rmw16.cmpxchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x4c => (
-            "i64.atomic.rmw8.cmpxchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x4d => (
-            "i64.atomic.rmw16.cmpxchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-        0x4e => (
-            "i64.atomic.rmw32.cmpxchg_u",
-            memarg!(),
-            InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-        ),
-
-        other => {
-            return Err(CoreError::InvalidFormat {
-                message: format!("unknown atomic sub-opcode 0x{other:02x}"),
-            });
-        }
-    };
+    let (mnemonic, operands, flags): (&str, String, InstrFlags) =
+        decode_atomics_part0(full_bytes, sub, &mut pos)?;
 
     Ok((mnemonic.to_string(), operands, pos, flags))
 }

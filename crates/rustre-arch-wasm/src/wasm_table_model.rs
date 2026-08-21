@@ -148,7 +148,7 @@ impl WasmTable {
     #[must_use]
     pub fn new(limits: TableLimits, ref_type: WasmRefType) -> Self {
         let alloc = (limits.min as usize).min(MAX_TABLE_ALLOC);
-        WasmTable {
+        Self {
             elements: vec![TableElement::Null; alloc],
             limits,
             ref_type,
@@ -162,7 +162,7 @@ impl WasmTable {
     #[must_use]
     pub fn with_typed(limits: TableLimits, ref_type: WasmRefType, typed: TypedTable) -> Self {
         let alloc = (limits.min as usize).min(MAX_TABLE_ALLOC);
-        WasmTable {
+        Self {
             elements: vec![TableElement::Null; alloc],
             limits,
             ref_type,
@@ -172,8 +172,9 @@ impl WasmTable {
 
     /// Current number of elements.
     #[must_use]
-    pub const fn size(&self) -> u32 {
-        self.elements.len() as u32
+    pub fn size(&self) -> u32 {
+        // A Wasm table is indexed by u32, so a longer vector is unreachable.
+        u32::try_from(self.elements.len()).unwrap_or(u32::MAX)
     }
 
     /// Get a reference to the element at `idx`, or `None` if out-of-bounds.
@@ -201,15 +202,12 @@ impl WasmTable {
     /// limits or overflow.
     pub fn grow(&mut self, delta: u32, init: TableElement) -> i32 {
         let old = self.size();
-        let new_size = match old.checked_add(delta) {
-            Some(n) => n,
-            None => return -1,
-        };
+        let Some(new_size) = old.checked_add(delta) else { return -1 };
         if new_size > self.limits.effective_max() {
             return -1;
         }
         self.elements.resize(new_size as usize, init);
-        old as i32
+        old.cast_signed()
     }
 
     // -----------------------------------------------------------------------
@@ -219,11 +217,8 @@ impl WasmTable {
     /// Fill `len` elements starting at `dst` with `val`.
     ///
     /// Returns `false` if the range is out-of-bounds.
-    pub fn fill(&mut self, dst: u32, val: TableElement, len: u32) -> bool {
-        let end = match dst.checked_add(len) {
-            Some(e) => e,
-            None => return false,
-        };
+    pub fn fill(&mut self, dst: u32, val: &TableElement, len: u32) -> bool {
+        let Some(end) = dst.checked_add(len) else { return false };
         if end as usize > self.elements.len() {
             return false;
         }
@@ -243,20 +238,14 @@ impl WasmTable {
     /// the case where `dst_table` and `src_table` are the same table — callers
     /// must check that case separately.
     pub fn copy(
-        dst_table: &mut WasmTable,
+        dst_table: &mut Self,
         dst: u32,
-        src_table: &WasmTable,
+        src_table: &Self,
         src: u32,
         len: u32,
     ) -> bool {
-        let src_end = match src.checked_add(len) {
-            Some(e) => e,
-            None => return false,
-        };
-        let dst_end = match dst.checked_add(len) {
-            Some(e) => e,
-            None => return false,
-        };
+        let Some(src_end) = src.checked_add(len) else { return false };
+        let Some(dst_end) = dst.checked_add(len) else { return false };
         if src_end as usize > src_table.elements.len() {
             return false;
         }
@@ -271,14 +260,8 @@ impl WasmTable {
 
     /// Copy within the same table, handling overlaps correctly.
     pub fn copy_within(&mut self, dst: u32, src: u32, len: u32) -> bool {
-        let src_end = match src.checked_add(len) {
-            Some(e) => e,
-            None => return false,
-        };
-        let dst_end = match dst.checked_add(len) {
-            Some(e) => e,
-            None => return false,
-        };
+        let Some(src_end) = src.checked_add(len) else { return false };
+        let Some(dst_end) = dst.checked_add(len) else { return false };
         if src_end as usize > self.elements.len() || dst_end as usize > self.elements.len() {
             return false;
         }
@@ -296,11 +279,10 @@ impl WasmTable {
     ///
     /// Returns `false` if the segment would overflow the table.
     pub fn apply_element_segment(&mut self, segment: &TableInit, offset: u32) -> bool {
-        let len = segment.data.len() as u32;
-        let end = match offset.checked_add(len) {
-            Some(e) => e,
-            None => return false,
+        let Ok(len) = u32::try_from(segment.data.len()) else {
+            return false;
         };
+        let Some(end) = offset.checked_add(len) else { return false };
         if end as usize > self.elements.len() {
             return false;
         }
@@ -355,7 +337,7 @@ impl WasmTable {
             .iter()
             .enumerate()
             .filter(|(_, e)| !e.is_null())
-            .map(|(i, e)| (i as u32, e))
+            .map(|(i, e)| (u32::try_from(i).unwrap_or(u32::MAX), e))
     }
 
     /// Count of non-null elements.
@@ -468,7 +450,7 @@ mod tests {
     #[test]
     fn fill_range() {
         let mut t = func_table(8, 16);
-        assert!(t.fill(2, TableElement::FuncRef(7), 3));
+        assert!(t.fill(2, &TableElement::FuncRef(7), 3));
         for i in 2..5 {
             assert_eq!(t.get(i), Some(&TableElement::FuncRef(7)));
         }
@@ -479,7 +461,7 @@ mod tests {
     #[test]
     fn fill_out_of_bounds() {
         let mut t = func_table(4, 8);
-        assert!(!t.fill(3, TableElement::FuncRef(0), 5));
+        assert!(!t.fill(3, &TableElement::FuncRef(0), 5));
     }
 
     #[test]
@@ -555,8 +537,7 @@ mod tests {
         let mut t = func_table(4, 8);
         t.set(1, TableElement::FuncRef(7));
         t.set(3, TableElement::ExternRef(999));
-        let nn: Vec<_> = t.non_null_elements().collect();
-        assert_eq!(nn.len(), 2);
+        assert_eq!(t.non_null_elements().count(), 2);
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use anyhow::{Result, bail};
+use std::fmt::Write;
 
 // ── Lua bytecode disassembler (LuaJIT 2.1 + Lua 5.4) ─────────────────────────
 
@@ -142,7 +143,7 @@ impl Lua54Disassembler {
     }
 
     fn read_i64(&mut self) -> Result<i64> {
-        Ok(self.read_u64()? as i64)
+        Ok(self.read_u64()?.cast_signed())
     }
 
     fn read_f64(&mut self) -> Result<f64> {
@@ -206,6 +207,10 @@ impl Lua54Disassembler {
         self.data.starts_with(b"\x1bLua")
     }
 
+    /// # Errors
+    ///
+    /// Returns an error when the input bytes are malformed, truncated, or
+    /// otherwise cannot be decoded.
     pub fn parse_header54(&mut self) -> Result<()> {
         if !self.check_magic() { bail!("Not a Lua bytecode file"); }
         self.pos = 4; // skip magic
@@ -224,14 +229,18 @@ impl Lua54Disassembler {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Returns an error when the input bytes are malformed, truncated, or
+    /// otherwise cannot be decoded.
     pub fn parse_proto54(&mut self) -> Result<LuaProto> {
         if self.proto_depth >= MAX_PROTO_DEPTH {
             bail!("proto nesting too deep (max {MAX_PROTO_DEPTH})");
         }
         self.proto_depth += 1;
         let name = self.read_string54()?.unwrap_or_default();
-        let first_line = self.read_varint()? as i32;
-        let last_line = self.read_varint()? as i32;
+        let first_line = i32::try_from(self.read_varint()?).unwrap_or(i32::MAX);
+        let last_line = i32::try_from(self.read_varint()?).unwrap_or(i32::MAX);
         let num_params = self.read_byte()?;
         let is_vararg = self.read_byte()?;
         let max_stack = self.read_byte()?;
@@ -255,7 +264,6 @@ impl Lua54Disassembler {
         for _ in 0..num_consts {
             let tag = self.read_byte()?;
             let c = match tag {
-                0 => LuaConstant::Nil,
                 1 | 17 => LuaConstant::Boolean(self.read_byte()? != 0),
                 3 => LuaConstant::Float(self.read_f64()?),
                 19 => LuaConstant::Integer(self.read_i64()?),
@@ -290,6 +298,42 @@ impl Lua54Disassembler {
             protos.push(self.parse_proto54()?);
         }
 
+        // Debug info: line table and local-variable records.
+        let (line_info, locals) = self.parse_proto54_debug()?;
+
+        // Update upvalue names
+        let upval_names_count = self.read_varint()?;
+        for i in 0..upval_names_count.min(upvalues.len()) {
+            if let Some(name) = self.read_string54()? {
+                upvalues[i].name = name;
+            }
+        }
+
+        self.proto_depth -= 1;
+        Ok(LuaProto {
+            name,
+            first_line,
+            last_line,
+            num_upvalues: u8::try_from(num_upvals.min(usize::from(u8::MAX))).unwrap_or(u8::MAX),
+            num_params,
+            is_vararg,
+            max_stack,
+            instructions,
+            constants,
+            upvalues,
+            protos,
+            locals,
+            line_info,
+        })
+    }
+
+    /// Parse the Lua 5.4 debug section: the line table and the local-variable
+    /// records that follow the nested prototypes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the input bytes are malformed or truncated.
+    fn parse_proto54_debug(&mut self) -> Result<(Vec<i32>, Vec<LuaLocal>)> {
         // Debug info
         let num_lines = self.read_varint()?;
         // Line entries are 1, 2 or 4 bytes; use the 1-byte minimum as the bound.
@@ -305,7 +349,7 @@ impl Lua54Disassembler {
                         let hi = u16::from(self.read_byte()?);
                         i32::from((hi << 8) | lo)
                     }
-                    4 => self.read_u32()? as i32,
+                    4 => self.read_u32()?.cast_signed(),
                     _ => 0,
                 };
                 line_info.push(line);
@@ -318,35 +362,11 @@ impl Lua54Disassembler {
             Vec::with_capacity(num_locals.min(self.data.len().saturating_sub(self.pos) / 3));
         for _ in 0..num_locals {
             let name = self.read_string54()?.unwrap_or_default();
-            let start_pc = self.read_varint()? as u32;
-            let end_pc = self.read_varint()? as u32;
+            let start_pc = u32::try_from(self.read_varint()?).unwrap_or(u32::MAX);
+            let end_pc = u32::try_from(self.read_varint()?).unwrap_or(u32::MAX);
             locals.push(LuaLocal { name, start_pc, end_pc });
         }
-
-        // Update upvalue names
-        let upval_names_count = self.read_varint()?;
-        for i in 0..upval_names_count.min(upvalues.len()) {
-            if let Some(name) = self.read_string54()? {
-                upvalues[i].name = name;
-            }
-        }
-
-        self.proto_depth -= 1;
-        Ok(LuaProto {
-            name,
-            first_line,
-            last_line,
-            num_upvalues: num_upvals.min(u8::MAX as usize) as u8,
-            num_params,
-            is_vararg,
-            max_stack,
-            instructions,
-            constants,
-            upvalues,
-            protos,
-            locals,
-            line_info,
-        })
+        Ok((line_info, locals))
     }
 }
 
@@ -361,7 +381,7 @@ fn decode_lua54_instruction(raw: u32, offset: usize) -> LuaInstruction {
     let b = ((raw >> 16) & 0x1FF) as u16;
     let c = ((raw >> 25) & 0x7F) as u16;  // simplified
     let bx = (raw >> 15) & 0x1FFFF;
-    let sbx = bx as i32 - ((1 << 16) - 1);
+    let sbx = bx.cast_signed() - ((1 << 16) - 1);
     let ax = raw >> 7 ;
 
     let (mnemonic, format, category, operands) = decode_lua54_opcode(opcode, a, b, c, bx, sbx, ax);
@@ -409,7 +429,7 @@ fn decode_lua54_opcode(
         0x12 => ("SETFIELD", InsnFormat::ABC, InsnCategory::SetField, format!("R{a}[K[{b}]] := RK[{c}]")),
         0x13 => ("NEWTABLE", InsnFormat::ABC, InsnCategory::NewTable, format!("R{a} := {{}} (b={b},c={c})")),
         0x14 => ("SELF", InsnFormat::ABC, InsnCategory::Self_, format!("R{}:=R{}; R{}:=R{}[RK[{}]]", a+1, b, a, b, c)),
-        0x15 => ("ADDI", InsnFormat::ABC, InsnCategory::Add, format!("R{} := R{} + {}", a, b, c as i16)),
+        0x15 => ("ADDI", InsnFormat::ABC, InsnCategory::Add, format!("R{} := R{} + {}", a, b, c.cast_signed())),
         0x16 => ("ADDK", InsnFormat::ABC, InsnCategory::Add, format!("R{a} := R{b} + K[{c}]")),
         0x17 => ("SUBK", InsnFormat::ABC, InsnCategory::Sub, format!("R{a} := R{b} - K[{c}]")),
         0x18 => ("MULK", InsnFormat::ABC, InsnCategory::Mul, format!("R{a} := R{b} * K[{c}]")),
@@ -420,7 +440,7 @@ fn decode_lua54_opcode(
         0x1D => ("BANDK", InsnFormat::ABC, InsnCategory::Band, format!("R{a} := R{b} & K[{c}]")),
         0x1E => ("BORK", InsnFormat::ABC, InsnCategory::Bor, format!("R{a} := R{b} | K[{c}]")),
         0x1F => ("BXORK", InsnFormat::ABC, InsnCategory::Bxor, format!("R{a} := R{b} ~ K[{c}]")),
-        0x20 => ("SHRI", InsnFormat::ABC, InsnCategory::Shr, format!("R{} := R{} >> {}", a, b, c as i16)),
+        0x20 => ("SHRI", InsnFormat::ABC, InsnCategory::Shr, format!("R{} := R{} >> {}", a, b, c.cast_signed())),
         0x21 => ("SHLI", InsnFormat::ABC, InsnCategory::Shl, format!("R{a} := K[{c}] << R{b}")),
         0x22 => ("ADD", InsnFormat::ABC, InsnCategory::Add, format!("R{a} := R{b} + R{c}")),
         0x23 => ("SUB", InsnFormat::ABC, InsnCategory::Sub, format!("R{a} := R{b} - R{c}")),
@@ -449,11 +469,11 @@ fn decode_lua54_opcode(
         0x3A => ("LT", InsnFormat::ABC, InsnCategory::Test, format!("if (R{a} < R{b}) == {c} then skip")),
         0x3B => ("LE", InsnFormat::ABC, InsnCategory::Test, format!("if (R{a} <= R{b}) == {c} then skip")),
         0x3C => ("EQK", InsnFormat::ABC, InsnCategory::Test, format!("if (R{a} == K[{b}]) == {c} then skip")),
-        0x3D => ("EQI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} == {}) == {} then skip", a, b as i16, c)),
-        0x3E => ("LTI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} < {}) == {} then skip", a, b as i16, c)),
-        0x3F => ("LEI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} <= {}) == {} then skip", a, b as i16, c)),
-        0x40 => ("GTI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} > {}) == {} then skip", a, b as i16, c)),
-        0x41 => ("GEI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} >= {}) == {} then skip", a, b as i16, c)),
+        0x3D => ("EQI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} == {}) == {} then skip", a, b.cast_signed(), c)),
+        0x3E => ("LTI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} < {}) == {} then skip", a, b.cast_signed(), c)),
+        0x3F => ("LEI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} <= {}) == {} then skip", a, b.cast_signed(), c)),
+        0x40 => ("GTI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} > {}) == {} then skip", a, b.cast_signed(), c)),
+        0x41 => ("GEI", InsnFormat::ABC, InsnCategory::Test, format!("if (R{} >= {}) == {} then skip", a, b.cast_signed(), c)),
         0x42 => ("TEST", InsnFormat::ABC, InsnCategory::Test, format!("if not (bool(R{a}) == {c}) then skip")),
         0x43 => ("TESTSET", InsnFormat::ABC, InsnCategory::TestSet, format!("if (bool(R{b}) == {c}) then R{a} := R{b}")),
         0x44 => ("CALL", InsnFormat::ABC, InsnCategory::Call, format!("R[{}..{}] := R{}(R[{}..{}])", a, u16::from(a)+c-2, a, a+1, u16::from(a)+b-1)),
@@ -485,26 +505,26 @@ impl LuaDisasmPrinter {
     pub fn print_proto(proto: &LuaProto, depth: usize) -> String {
         let indent = "  ".repeat(depth);
         let mut out = String::new();
-        out.push_str(&format!("{}; function {} lines [{}-{}]\n", indent, proto.name, proto.first_line, proto.last_line));
-        out.push_str(&format!("{}; params={}, upvals={}, maxstack={}\n",
-            indent, proto.num_params, proto.num_upvalues, proto.max_stack));
+        let _ = writeln!(out, "{}; function {} lines [{}-{}]", indent, proto.name, proto.first_line, proto.last_line);
+        let _ = writeln!(out, "{}; params={}, upvals={}, maxstack={}",
+            indent, proto.num_params, proto.num_upvalues, proto.max_stack);
 
         if !proto.upvalues.is_empty() {
-            out.push_str(&format!("{indent}; upvalues:\n"));
+            let _ = writeln!(out, "{indent}; upvalues:");
             for (i, uv) in proto.upvalues.iter().enumerate() {
-                out.push_str(&format!("{}; [{}] {} instack={} idx={}\n",
-                    indent, i, uv.name, uv.instack, uv.idx));
+                let _ = writeln!(out, "{}; [{}] {} instack={} idx={}",
+                    indent, i, uv.name, uv.instack, uv.idx);
             }
         }
 
         if !proto.constants.is_empty() {
-            out.push_str(&format!("{}; constants ({}):\n", indent, proto.constants.len()));
+            let _ = writeln!(out, "{}; constants ({}):", indent, proto.constants.len());
             for (i, c) in proto.constants.iter().enumerate() {
-                out.push_str(&format!("{}; K[{}] = {}\n", indent, i, c.to_display()));
+                let _ = writeln!(out, "{}; K[{}] = {}", indent, i, c.to_display());
             }
         }
 
-        out.push_str(&format!("{}; bytecode ({} instructions):\n", indent, proto.instructions.len()));
+        let _ = writeln!(out, "{}; bytecode ({} instructions):", indent, proto.instructions.len());
         for (i, insn) in proto.instructions.iter().enumerate() {
             let line = proto.line_info.get(i).copied().unwrap_or(0);
             let local_hint = if proto.locals.is_empty() { String::new() } else {
@@ -517,16 +537,16 @@ impl LuaDisasmPrinter {
                     })
             };
 
-            out.push_str(&format!("{}{:4} [{:4}] {:>12}  {:<40}",
-                indent, i, line, insn.mnemonic, insn.operands));
+            let _ = write!(out, "{}{:4} [{:4}] {:>12}  {:<40}",
+                indent, i, line, insn.mnemonic, insn.operands);
             if !local_hint.is_empty() {
-                out.push_str(&format!("  ; locals: {local_hint}"));
+                let _ = write!(out, "  ; locals: {local_hint}");
             }
             out.push('\n');
         }
 
         for (i, sub) in proto.protos.iter().enumerate() {
-            out.push_str(&format!("\n{indent}; -- sub-proto {i} --\n"));
+            let _ = writeln!(out, "\n{indent}; -- sub-proto {i} --");
             out.push_str(&Self::print_proto(sub, depth + 1));
         }
 
@@ -555,6 +575,10 @@ impl LuaDisasmPrinter {
     }
 }
 
+/// # Errors
+///
+/// Returns an error when the input bytes are malformed, truncated, or
+/// otherwise cannot be decoded.
 pub fn disassemble_lua54_file(path: &std::path::Path) -> Result<String> {
     let data = std::fs::read(path)?;
     let mut disasm = Lua54Disassembler::new(data);

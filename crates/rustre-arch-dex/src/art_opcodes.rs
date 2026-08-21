@@ -243,21 +243,21 @@ impl ArtInsnInfo {
     /// Format the instruction as an assembly-like string.
     #[must_use]
     pub fn display_string(&self) -> String {
-        match self.operand {
-            Some(op) => format!(
+        self.operand.map_or_else(
+            || format!(
+                "{} v{}, v{}",
+                self.opcode.mnemonic(),
+                self.reg_a,
+                self.reg_b
+            ),
+            |op| format!(
                 "{} v{}, v{}, #{:#x}",
                 self.opcode.mnemonic(),
                 self.reg_a,
                 self.reg_b,
                 op
             ),
-            None => format!(
-                "{} v{}, v{}",
-                self.opcode.mnemonic(),
-                self.reg_a,
-                self.reg_b,
-            ),
-        }
+        )
     }
 }
 

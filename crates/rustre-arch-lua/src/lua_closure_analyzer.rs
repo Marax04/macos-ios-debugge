@@ -318,7 +318,7 @@ impl LuaClosureAnalyzer {
         if let Some(info) = self.infos.get_mut(idx as usize) {
             info.upvalues.clear();
             for (i, desc) in descs.iter().enumerate() {
-                let mut cap = desc.to_capture(i as u8);
+                let mut cap = desc.to_capture(u8::try_from(i).unwrap_or(u8::MAX));
                 if let Some(name) = names.get(i).and_then(|n| n.as_ref()) {
                     cap = cap.with_name(name.clone());
                     if name == "_ENV" {
@@ -431,7 +431,7 @@ impl fmt::Debug for LuaClosureAnalyzer {
         f.debug_struct("LuaClosureAnalyzer")
             .field("n_protos", &self.infos.len())
             .field("total_upvalues", &self.total_upvalue_count())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

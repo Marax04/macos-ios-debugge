@@ -16,8 +16,8 @@ fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -117,10 +117,11 @@ fn cond_code_from_bits_round_trip() {
         CondCode::Le,
     ];
     for (i, c) in codes.iter().enumerate() {
-        let decoded = CondCode::from_bits(i as u8);
+        let bits = u8::try_from(i).unwrap();
+        let decoded = CondCode::from_bits(bits);
         assert_eq!(decoded, *c, "bits={i}");
         // Upper bits ignored
-        assert_eq!(CondCode::from_bits(i as u8 | 0xF0), *c);
+        assert_eq!(CondCode::from_bits(bits | 0xF0), *c);
     }
 }
 
@@ -208,30 +209,30 @@ fn encode_bra8_round_trip() {
     for disp in [-128i8, -64, -1, 1, 42, 127] {
         let b = encode_bra8(disp);
         assert_eq!(b[0], 0x60);
-        assert_eq!(b[1] as i8, disp);
+        assert_eq!(b[1].cast_signed(), disp);
     }
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "BRA: use word form for zero displacement")]
 fn encode_bra8_zero_panics() {
     let _ = encode_bra8(0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "BSR: use word form for zero displacement")]
 fn encode_bsr8_zero_panics() {
     let _ = encode_bsr8(0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "MOVEQ: dn must be 0..7")]
 fn encode_moveq_bad_reg_panics() {
     let _ = encode_moveq(8, 0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "TRAP: vector must be 0..15")]
 fn encode_trap_bad_vec_panics() {
     let _ = encode_trap(16);
 }
@@ -310,7 +311,7 @@ fn encode_link_unlk_dbra() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "LINK: an must be 0..7")]
 fn encode_link_bad_reg_panics() {
     let _ = encode_link(8, 0);
 }
@@ -333,13 +334,13 @@ fn encode_addi_subq_basics() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "SUBQ: data must be 1..8")]
 fn encode_subq_zero_panics() {
     let _ = encode_subq_word(0, 0);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "SUBQ: data must be 1..8")]
 fn encode_subq_nine_panics() {
     let _ = encode_subq_word(9, 0);
 }
@@ -783,7 +784,7 @@ fn patch_call_target_jsr_jmp() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "patch_call_target: buf must be >= 6 bytes")]
 fn patch_call_target_too_short_panics() {
     let mut buf = [0u8; 4];
     let _ = patch_call_target(&mut buf, 0);

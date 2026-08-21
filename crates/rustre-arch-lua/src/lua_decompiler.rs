@@ -265,6 +265,7 @@ impl DecompileFunction {
         }
     }
 
+    #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
@@ -353,6 +354,7 @@ impl LuaFormatter {
     pub fn new() -> Self {
         Self::default()
     }
+    #[must_use]
     pub fn with_indent(mut self, s: impl Into<String>) -> Self {
         self.indent_str = s.into();
         self
@@ -373,9 +375,7 @@ impl LuaFormatter {
                         count += 1;
                     }
                 }
-                LuaStmt::While { body, .. } => count += Self::count_calls(body),
-                LuaStmt::Do(body) => count += Self::count_calls(body),
-                LuaStmt::Repeat { body, .. } => count += Self::count_calls(body),
+                LuaStmt::While { body, .. } | LuaStmt::Do(body) | LuaStmt::Repeat { body, .. } => count += Self::count_calls(body),
                 LuaStmt::If {
                     then_body,
                     elseif,
@@ -507,6 +507,15 @@ impl LuaFormatter {
                     self.fmt_expr(until, 0)
                 )
             }
+            _ => self.fmt_stmt_compound(stmt, depth),
+        }
+    }
+
+    /// Formatting for the multi-line compound statements (loops, `if`,
+    /// `return`, jumps and function definitions).
+    fn fmt_stmt_compound(&self, stmt: &LuaStmt, depth: usize) -> String {
+        let ind = self.indent(depth);
+        match stmt {
             LuaStmt::NumericFor {
                 var,
                 start,
@@ -546,16 +555,16 @@ impl LuaFormatter {
                     self.fmt_stmts(then_body, depth + 1)
                 );
                 for (ei_cond, ei_body) in elseif {
-                    s.push_str(&format!(
+                    let _ = write!(s, 
                         "\n{ind}elseif {} then\n{}",
                         self.fmt_expr(ei_cond, 0),
                         self.fmt_stmts(ei_body, depth + 1)
-                    ));
+                    );
                 }
                 if let Some(eb) = else_body {
-                    s.push_str(&format!("\n{ind}else\n{}", self.fmt_stmts(eb, depth + 1)));
+                    let _ = write!(s, "\n{ind}else\n{}", self.fmt_stmts(eb, depth + 1));
                 }
-                s.push_str(&format!("\n{ind}end"));
+                let _ = write!(s, "\n{ind}end");
                 s
             }
             LuaStmt::Return(vals) => {
@@ -586,6 +595,8 @@ impl LuaFormatter {
                     self.fmt_stmts(body, depth + 1)
                 )
             }
+            // Handled by `fmt_stmt`; unreachable via that entry point.
+            _ => String::new(),
         }
     }
 

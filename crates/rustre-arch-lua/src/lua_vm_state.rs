@@ -27,6 +27,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Write;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LuaValue
@@ -68,17 +69,17 @@ impl LuaValue {
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Self::Integer(i) => Some(*i),
-            Self::Float(f) if f.fract() == 0.0 => Some(*f as i64),
+            Self::Float(f) => crate::f64_to_exact_i64(*f),
             _ => None,
         }
     }
 
     /// Attempt to get a float value.
     #[must_use]
-    pub const fn as_float(&self) -> Option<f64> {
+    pub fn as_float(&self) -> Option<f64> {
         match self {
             Self::Float(f) => Some(*f),
-            Self::Integer(i) => Some(*i as f64),
+            Self::Integer(i) => Some(crate::lua_int_to_f64(*i)),
             _ => None,
         }
     }
@@ -285,115 +286,132 @@ pub enum VmStepResult {
 #[must_use]
 pub fn vm_step(state: &mut LuaVmState, instruction: u32) -> VmStepResult {
     let opcode = (instruction & 0x7F) as u8;
-    let a = ((instruction >> 7) & 0xFF) as usize;
-    let b = ((instruction >> 16) & 0xFF) as usize;
-    let c = ((instruction >> 24) & 0xFF) as usize;
+    let reg_a = ((instruction >> 7) & 0xFF) as usize;
+    let reg_b = ((instruction >> 16) & 0xFF) as usize;
+    let reg_c = ((instruction >> 24) & 0xFF) as usize;
     let bx = ((instruction >> 15) & 0x1FFFF) as usize;
-    let sbx = bx as i32 - 0xFFFF;
-    let _k = ((instruction >> 15) & 1) as u8;
+    let sbx = i32::try_from(bx).unwrap_or(i32::MAX) - 0xFFFF;
 
     match opcode {
         // MOVE
         0 => {
-            let v = state.stack.get(b).clone();
-            state.stack.set(a, v);
+            let v = state.stack.get(reg_b).clone();
+            state.stack.set(reg_a, v);
             state.pc += 1;
             VmStepResult::Continue
         }
         // LOADI
         1 => {
-            state.stack.set(a, LuaValue::Integer(i64::from(sbx)));
+            state.stack.set(reg_a, LuaValue::Integer(i64::from(sbx)));
             state.pc += 1;
             VmStepResult::Continue
         }
         // LOADK
         3 => {
             let v = state.get_constant(bx).clone();
-            state.stack.set(a, v);
+            state.stack.set(reg_a, v);
             state.pc += 1;
             VmStepResult::Continue
         }
         // LOADFALSE
         5 => {
-            state.stack.set(a, LuaValue::Boolean(false));
+            state.stack.set(reg_a, LuaValue::Boolean(false));
             state.pc += 1;
             VmStepResult::Continue
         }
         // LOADTRUE
         7 => {
-            state.stack.set(a, LuaValue::Boolean(true));
+            state.stack.set(reg_a, LuaValue::Boolean(true));
             state.pc += 1;
             VmStepResult::Continue
         }
         // LOADNIL
         8 => {
-            state.stack.clear_range(a, a + b);
+            state.stack.clear_range(reg_a, reg_a + reg_b);
             state.pc += 1;
             VmStepResult::Continue
         }
+        // Arithmetic, comparison and control-flow opcodes.
+        _ => vm_step_alu_control(state, opcode, reg_a, reg_b, reg_c, bx, sbx),
+    }
+}
+
+/// Execute the arithmetic, comparison and control-flow half of one Lua 5.4
+/// instruction. Split out of `vm_step` so each half stays readable.
+fn vm_step_alu_control(
+    state: &mut LuaVmState,
+    opcode: u8,
+    reg_a: usize,
+    reg_b: usize,
+    reg_c: usize,
+    bx: usize,
+    sbx: i32,
+) -> VmStepResult {
+    match opcode {
         // ADD
         38 => {
-            let lhs = state.stack.get(b).as_float();
-            let rhs = state.stack.get(c).as_float();
+            let lhs = state.stack.get(reg_b).as_float();
+            let rhs = state.stack.get(reg_c).as_float();
             let result = match (lhs, rhs) {
                 (Some(l), Some(r)) => LuaValue::Float(l + r),
                 _ => LuaValue::Unknown,
             };
-            state.stack.set(a, result);
+            state.stack.set(reg_a, result);
             state.pc += 1;
             VmStepResult::Continue
         }
         // SUB
         39 => {
-            let lhs = state.stack.get(b).as_float();
-            let rhs = state.stack.get(c).as_float();
+            let lhs = state.stack.get(reg_b).as_float();
+            let rhs = state.stack.get(reg_c).as_float();
             let result = match (lhs, rhs) {
                 (Some(l), Some(r)) => LuaValue::Float(l - r),
                 _ => LuaValue::Unknown,
             };
-            state.stack.set(a, result);
+            state.stack.set(reg_a, result);
             state.pc += 1;
             VmStepResult::Continue
         }
         // MUL
         40 => {
-            let lhs = state.stack.get(b).as_float();
-            let rhs = state.stack.get(c).as_float();
+            let lhs = state.stack.get(reg_b).as_float();
+            let rhs = state.stack.get(reg_c).as_float();
             let result = match (lhs, rhs) {
                 (Some(l), Some(r)) => LuaValue::Float(l * r),
                 _ => LuaValue::Unknown,
             };
-            state.stack.set(a, result);
+            state.stack.set(reg_a, result);
             state.pc += 1;
             VmStepResult::Continue
         }
         // NOT
         55 => {
-            let truthy = state.stack.get(b).is_truthy();
-            state.stack.set(a, LuaValue::Boolean(!truthy));
+            let truthy = state.stack.get(reg_b).is_truthy();
+            state.stack.set(reg_a, LuaValue::Boolean(!truthy));
             state.pc += 1;
             VmStepResult::Continue
         }
         // JMP (isJ format — sJ encoded differently but we use sbx for simplicity)
         60 => {
             let offset = sbx;
-            let target = (state.pc as i64 + 1 + i64::from(offset)) as usize;
+            let raw = i64::try_from(state.pc).unwrap_or(i64::MAX) + 1 + i64::from(offset);
+            let target = usize::try_from(raw).unwrap_or(0);
             state.pc = target;
             VmStepResult::Branch { target }
         }
         // EQ
         61 => {
-            let lhs = state.stack.get(a).clone();
-            let rhs = state.stack.get(b).clone();
+            let lhs = state.stack.get(reg_a).clone();
+            let rhs = state.stack.get(reg_b).clone();
             let eq = lhs == rhs;
             state.pc += if eq { 2 } else { 1 };
             VmStepResult::Continue
         }
         // CALL
         72 => {
-            let func = state.stack.get(a).clone();
+            let func = state.stack.get(reg_a).clone();
             if let LuaValue::Function(proto) = func {
-                let new_base = state.stack.base() + a + 1;
+                let new_base = state.stack.base() + reg_a + 1;
                 state.pc += 1;
                 state.call_stack.push(CallInfo::new(proto, new_base, state.call_stack.len()));
                 return VmStepResult::Call { proto, base: new_base };
@@ -403,15 +421,17 @@ pub fn vm_step(state: &mut LuaVmState, instruction: u32) -> VmStepResult {
         }
         // RETURN / RETURN0 / RETURN1
         74..=76 => {
-            let n = if opcode == 75 { 0 } else if opcode == 76 { 1 } else { b };
+            let n = if opcode == 75 { 0 } else if opcode == 76 { 1 } else { reg_b };
             if let Some(_frame) = state.call_stack.pop() {
-                // Restore pc from saved frame in a real interpreter; here just mark.
+                // Restore pc from saved frame in reg_a real interpreter; here just mark.
             }
             VmStepResult::Return { n_values: n }
         }
         // CLOSURE
         82 => {
-            state.stack.set(a, LuaValue::Function(bx as u32));
+            state
+                .stack
+                .set(reg_a, LuaValue::Function(u32::try_from(bx).unwrap_or(u32::MAX)));
             state.pc += 1;
             VmStepResult::Continue
         }
@@ -490,8 +510,7 @@ impl LuaVmState {
             taken += 1;
             self.steps += 1;
             match result {
-                VmStepResult::Return { .. } => break,
-                VmStepResult::Yield => break,
+                VmStepResult::Return { .. } | VmStepResult::Yield => break,
                 _ => {}
             }
         }
@@ -521,7 +540,7 @@ impl LuaVmState {
         let mut out = String::new();
         for i in 0..n_regs {
             let v = self.stack.get(i);
-            out.push_str(&format!("  R[{i:2}] = {v}\n"));
+            let _ = writeln!(out, "  R[{i:2}] = {v}");
         }
         out
     }
@@ -540,7 +559,7 @@ impl fmt::Debug for LuaVmState {
             .field("stack_size", &self.stack.len())
             .field("call_depth", &self.call_stack.len())
             .field("steps", &self.steps)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -557,7 +576,7 @@ mod tests {
     }
 
     fn encode_asbx(op: u8, a: u8, sbx: i32) -> u32 {
-        let bx = (sbx + 0xFFFF) as u32;
+        let bx = (sbx + 0xFFFF).cast_unsigned();
         u32::from(op) | (u32::from(a) << 7) | (bx << 15)
     }
 
@@ -690,7 +709,7 @@ mod tests {
         let mut state = LuaVmState::new();
         // CLOSURE R[0] Bx=3  — encode_abc won't encode Bx; build manually
         let bx: u32 = 3;
-        let instr: u32 = 82 | (bx << 15);
+        let instr: u32 = 0x52 | (bx << 15);
         let _ = vm_step(&mut state, instr);
         assert_eq!(state.stack.get(0), &LuaValue::Function(3));
     }

@@ -96,6 +96,754 @@ const fn valtype_str(vt: i64) -> &'static str {
     }
 }
 
+/// Opcode-dispatch chunk 0 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part0(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    macro_rules! sleb {
+        () => {{
+            let (v, n) = read_sleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            // Control
+            0x00 => ("unreachable".into(), String::new(), InstrFlags::BARRIER),
+            0x01 => ("nop".into(), String::new(), InstrFlags::NONE),
+            0x02 => {
+                let bt = sleb!();
+                ("block".into(), valtype_str(bt).into(), InstrFlags::NONE)
+            }
+            0x03 => {
+                let bt = sleb!();
+                ("loop".into(), valtype_str(bt).into(), InstrFlags::NONE)
+            }
+            0x04 => {
+                let bt = sleb!();
+                (
+                    "if".into(),
+                    valtype_str(bt).into(),
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                )
+            }
+            0x05 => ("else".into(), String::new(), InstrFlags::NONE),
+            0x0b => ("end".into(), String::new(), InstrFlags::NONE),
+            0x0c => {
+                let l = uleb!();
+                ("br".into(), format!("{l}"), InstrFlags::BRANCH)
+            }
+            0x0d => {
+                let l = uleb!();
+                (
+                    "br_if".into(),
+                    format!("{l}"),
+                    InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
+                )
+            }
+            0x0e => {
+                // br_table: vector of labels + default
+                const MAX_BR_TABLE_ENTRIES: usize = 65_536;
+                let count_raw = uleb!();
+                let count = usize::try_from(count_raw).unwrap_or(usize::MAX);
+                if count > MAX_BR_TABLE_ENTRIES {
+                    return Err(CoreError::InvalidFormat {
+                        message: format!("br_table count {count_raw} exceeds limit"),
+                    });
+                }
+                let mut labels = Vec::with_capacity(count + 1);
+                for _ in 0..=count {
+                    labels.push(uleb!().to_string());
+                }
+                (
+                    "br_table".into(),
+                    labels.join(", "),
+                    InstrFlags::BRANCH | InstrFlags::INDIRECT,
+                )
+            }
+            0x0f => ("return".into(), String::new(), InstrFlags::RET),
+            0x10 => {
+                let idx = uleb!();
+                ("call".into(), format!("{idx}"), InstrFlags::CALL)
+            }
+        _ => return decode_wasm_part1(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 1 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part1(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x11 => {
+                let type_idx = uleb!();
+                let table_idx = uleb!();
+                (
+                    "call_indirect".into(),
+                    format!("{type_idx}, {table_idx}"),
+                    InstrFlags::CALL | InstrFlags::INDIRECT,
+                )
+            }
+            // Parametric
+            0x1a => ("drop".into(), String::new(), InstrFlags::NONE),
+            0x1b => ("select".into(), String::new(), InstrFlags::NONE),
+            // Variable
+            0x20 => {
+                let idx = uleb!();
+                ("local.get".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            0x21 => {
+                let idx = uleb!();
+                ("local.set".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            0x22 => {
+                let idx = uleb!();
+                ("local.tee".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            0x23 => {
+                let idx = uleb!();
+                ("global.get".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            0x24 => {
+                let idx = uleb!();
+                ("global.set".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            // Memory load ops
+            0x28 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.load".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x29 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+        _ => return decode_wasm_part2(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 2 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part2(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x2a => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "f32.load".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x2b => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "f64.load".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x2c => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.load8_s".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x2d => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.load8_u".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x2e => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.load16_s".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x2f => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.load16_u".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+        _ => return decode_wasm_part3(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 3 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part3(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x30 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load8_s".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x31 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load8_u".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x32 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load16_s".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x33 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load16_u".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x34 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load32_s".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+            0x35 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.load32_u".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::READ_MEM,
+                )
+            }
+        _ => return decode_wasm_part4(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 4 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part4(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            // Memory store ops
+            0x36 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.store".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x37 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.store".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x38 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "f32.store".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x39 => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "f64.store".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x3a => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.store8".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x3b => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i32.store16".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+        _ => return decode_wasm_part5(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 5 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part5(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    macro_rules! sleb {
+        () => {{
+            let (v, n) = read_sleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x3c => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.store8".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x3d => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.store16".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            0x3e => {
+                let align = uleb!();
+                let offset = uleb!();
+                (
+                    "i64.store32".into(),
+                    format!("align={align} offset={offset}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            // Memory size/grow
+            0x3f => {
+                let _mem = uleb!();
+                ("memory.size".into(), String::new(), InstrFlags::NONE)
+            }
+            0x40 => {
+                let _mem = uleb!();
+                ("memory.grow".into(), String::new(), InstrFlags::NONE)
+            }
+            // Numeric constants
+            0x41 => {
+                let v = sleb!();
+                ("i32.const".into(), format!("{v}"), InstrFlags::NONE)
+            }
+            0x42 => {
+                let v = sleb!();
+                ("i64.const".into(), format!("{v}"), InstrFlags::NONE)
+            }
+            0x43 => {
+                if *pos + 4 > bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated f32.const".into(),
+                    });
+                }
+                let bits =
+                    u32::from_le_bytes([bytes[*pos], bytes[*pos + 1], bytes[*pos + 2], bytes[*pos + 3]]);
+                *pos += 4;
+                let f = f32::from_bits(bits);
+                ("f32.const".into(), format!("{f}"), InstrFlags::NONE)
+            }
+        _ => return decode_wasm_part6(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 6 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part6(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x44 => {
+                if *pos + 8 > bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated f64.const".into(),
+                    });
+                }
+                let bits = u64::from_le_bytes([
+                    bytes[*pos],
+                    bytes[*pos + 1],
+                    bytes[*pos + 2],
+                    bytes[*pos + 3],
+                    bytes[*pos + 4],
+                    bytes[*pos + 5],
+                    bytes[*pos + 6],
+                    bytes[*pos + 7],
+                ]);
+                *pos += 8;
+                let f = f64::from_bits(bits);
+                ("f64.const".into(), format!("{f}"), InstrFlags::NONE)
+            }
+            // i32 numeric ops (no operands)
+            0x45 => ("i32.eqz".into(), String::new(), InstrFlags::NONE),
+            0x46 => ("i32.eq".into(), String::new(), InstrFlags::NONE),
+            0x47 => ("i32.ne".into(), String::new(), InstrFlags::NONE),
+            0x48 => ("i32.lt_s".into(), String::new(), InstrFlags::NONE),
+            0x49 => ("i32.lt_u".into(), String::new(), InstrFlags::NONE),
+            0x4a => ("i32.gt_s".into(), String::new(), InstrFlags::NONE),
+            0x4b => ("i32.gt_u".into(), String::new(), InstrFlags::NONE),
+            0x4c => ("i32.le_s".into(), String::new(), InstrFlags::NONE),
+            0x4d => ("i32.le_u".into(), String::new(), InstrFlags::NONE),
+            0x4e => ("i32.ge_s".into(), String::new(), InstrFlags::NONE),
+            0x4f => ("i32.ge_u".into(), String::new(), InstrFlags::NONE),
+            // i64 compare
+            0x50 => ("i64.eqz".into(), String::new(), InstrFlags::NONE),
+            0x51 => ("i64.eq".into(), String::new(), InstrFlags::NONE),
+            0x52 => ("i64.ne".into(), String::new(), InstrFlags::NONE),
+            0x53 => ("i64.lt_s".into(), String::new(), InstrFlags::NONE),
+            0x54 => ("i64.lt_u".into(), String::new(), InstrFlags::NONE),
+            0x55 => ("i64.gt_s".into(), String::new(), InstrFlags::NONE),
+            0x56 => ("i64.gt_u".into(), String::new(), InstrFlags::NONE),
+            0x57 => ("i64.le_s".into(), String::new(), InstrFlags::NONE),
+            0x58 => ("i64.le_u".into(), String::new(), InstrFlags::NONE),
+            0x59 => ("i64.ge_s".into(), String::new(), InstrFlags::NONE),
+            0x5a => ("i64.ge_u".into(), String::new(), InstrFlags::NONE),
+            // f32 compare
+            0x5b => ("f32.eq".into(), String::new(), InstrFlags::NONE),
+            0x5c => ("f32.ne".into(), String::new(), InstrFlags::NONE),
+            0x5d => ("f32.lt".into(), String::new(), InstrFlags::NONE),
+            0x5e => ("f32.gt".into(), String::new(), InstrFlags::NONE),
+            0x5f => ("f32.le".into(), String::new(), InstrFlags::NONE),
+            0x60 => ("f32.ge".into(), String::new(), InstrFlags::NONE),
+            // f64 compare
+            0x61 => ("f64.eq".into(), String::new(), InstrFlags::NONE),
+            0x62 => ("f64.ne".into(), String::new(), InstrFlags::NONE),
+            0x63 => ("f64.lt".into(), String::new(), InstrFlags::NONE),
+            0x64 => ("f64.gt".into(), String::new(), InstrFlags::NONE),
+            0x65 => ("f64.le".into(), String::new(), InstrFlags::NONE),
+            0x66 => ("f64.ge".into(), String::new(), InstrFlags::NONE),
+            // i32 arithmetic
+            0x67 => ("i32.clz".into(), String::new(), InstrFlags::NONE),
+        _ => return decode_wasm_part7(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 7 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part7(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x68 => ("i32.ctz".into(), String::new(), InstrFlags::NONE),
+            0x69 => ("i32.popcnt".into(), String::new(), InstrFlags::NONE),
+            0x6a => ("i32.add".into(), String::new(), InstrFlags::NONE),
+            0x6b => ("i32.sub".into(), String::new(), InstrFlags::NONE),
+            0x6c => ("i32.mul".into(), String::new(), InstrFlags::NONE),
+            0x6d => ("i32.div_s".into(), String::new(), InstrFlags::NONE),
+            0x6e => ("i32.div_u".into(), String::new(), InstrFlags::NONE),
+            0x6f => ("i32.rem_s".into(), String::new(), InstrFlags::NONE),
+            0x70 => ("i32.rem_u".into(), String::new(), InstrFlags::NONE),
+            0x71 => ("i32.and".into(), String::new(), InstrFlags::NONE),
+            0x72 => ("i32.or".into(), String::new(), InstrFlags::NONE),
+            0x73 => ("i32.xor".into(), String::new(), InstrFlags::NONE),
+            0x74 => ("i32.shl".into(), String::new(), InstrFlags::NONE),
+            0x75 => ("i32.shr_s".into(), String::new(), InstrFlags::NONE),
+            0x76 => ("i32.shr_u".into(), String::new(), InstrFlags::NONE),
+            0x77 => ("i32.rotl".into(), String::new(), InstrFlags::NONE),
+            0x78 => ("i32.rotr".into(), String::new(), InstrFlags::NONE),
+            // i64 arithmetic
+            0x79 => ("i64.clz".into(), String::new(), InstrFlags::NONE),
+            0x7a => ("i64.ctz".into(), String::new(), InstrFlags::NONE),
+            0x7b => ("i64.popcnt".into(), String::new(), InstrFlags::NONE),
+            0x7c => ("i64.add".into(), String::new(), InstrFlags::NONE),
+            0x7d => ("i64.sub".into(), String::new(), InstrFlags::NONE),
+            0x7e => ("i64.mul".into(), String::new(), InstrFlags::NONE),
+            0x7f => ("i64.div_s".into(), String::new(), InstrFlags::NONE),
+            0x80 => ("i64.div_u".into(), String::new(), InstrFlags::NONE),
+            0x81 => ("i64.rem_s".into(), String::new(), InstrFlags::NONE),
+            0x82 => ("i64.rem_u".into(), String::new(), InstrFlags::NONE),
+            0x83 => ("i64.and".into(), String::new(), InstrFlags::NONE),
+            0x84 => ("i64.or".into(), String::new(), InstrFlags::NONE),
+            0x85 => ("i64.xor".into(), String::new(), InstrFlags::NONE),
+            0x86 => ("i64.shl".into(), String::new(), InstrFlags::NONE),
+            0x87 => ("i64.shr_s".into(), String::new(), InstrFlags::NONE),
+            0x88 => ("i64.shr_u".into(), String::new(), InstrFlags::NONE),
+            0x89 => ("i64.rotl".into(), String::new(), InstrFlags::NONE),
+            0x8a => ("i64.rotr".into(), String::new(), InstrFlags::NONE),
+            // f32 arithmetic
+            0x8b => ("f32.abs".into(), String::new(), InstrFlags::NONE),
+            0x8c => ("f32.neg".into(), String::new(), InstrFlags::NONE),
+            0x8d => ("f32.ceil".into(), String::new(), InstrFlags::NONE),
+            0x8e => ("f32.floor".into(), String::new(), InstrFlags::NONE),
+            0x8f => ("f32.trunc".into(), String::new(), InstrFlags::NONE),
+            0x90 => ("f32.nearest".into(), String::new(), InstrFlags::NONE),
+            0x91 => ("f32.sqrt".into(), String::new(), InstrFlags::NONE),
+            0x92 => ("f32.add".into(), String::new(), InstrFlags::NONE),
+            0x93 => ("f32.sub".into(), String::new(), InstrFlags::NONE),
+            0x94 => ("f32.mul".into(), String::new(), InstrFlags::NONE),
+            0x95 => ("f32.div".into(), String::new(), InstrFlags::NONE),
+            0x96 => ("f32.min".into(), String::new(), InstrFlags::NONE),
+            0x97 => ("f32.max".into(), String::new(), InstrFlags::NONE),
+            0x98 => ("f32.copysign".into(), String::new(), InstrFlags::NONE),
+            // f64 arithmetic
+            0x99 => ("f64.abs".into(), String::new(), InstrFlags::NONE),
+            0x9a => ("f64.neg".into(), String::new(), InstrFlags::NONE),
+            0x9b => ("f64.ceil".into(), String::new(), InstrFlags::NONE),
+            0x9c => ("f64.floor".into(), String::new(), InstrFlags::NONE),
+            0x9d => ("f64.trunc".into(), String::new(), InstrFlags::NONE),
+            0x9e => ("f64.nearest".into(), String::new(), InstrFlags::NONE),
+            0x9f => ("f64.sqrt".into(), String::new(), InstrFlags::NONE),
+            0xa0 => ("f64.add".into(), String::new(), InstrFlags::NONE),
+        _ => return decode_wasm_part8(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 8 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part8(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0xa1 => ("f64.sub".into(), String::new(), InstrFlags::NONE),
+            0xa2 => ("f64.mul".into(), String::new(), InstrFlags::NONE),
+            0xa3 => ("f64.div".into(), String::new(), InstrFlags::NONE),
+            0xa4 => ("f64.min".into(), String::new(), InstrFlags::NONE),
+            0xa5 => ("f64.max".into(), String::new(), InstrFlags::NONE),
+            0xa6 => ("f64.copysign".into(), String::new(), InstrFlags::NONE),
+            // Conversions
+            0xa7 => ("i32.wrap_i64".into(), String::new(), InstrFlags::NONE),
+            0xa8 => ("i32.trunc_f32_s".into(), String::new(), InstrFlags::NONE),
+            0xa9 => ("i32.trunc_f32_u".into(), String::new(), InstrFlags::NONE),
+            0xaa => ("i32.trunc_f64_s".into(), String::new(), InstrFlags::NONE),
+            0xab => ("i32.trunc_f64_u".into(), String::new(), InstrFlags::NONE),
+            0xac => ("i64.extend_i32_s".into(), String::new(), InstrFlags::NONE),
+            0xad => ("i64.extend_i32_u".into(), String::new(), InstrFlags::NONE),
+            0xae => ("i64.trunc_f32_s".into(), String::new(), InstrFlags::NONE),
+            0xaf => ("i64.trunc_f32_u".into(), String::new(), InstrFlags::NONE),
+            0xb0 => ("i64.trunc_f64_s".into(), String::new(), InstrFlags::NONE),
+            0xb1 => ("i64.trunc_f64_u".into(), String::new(), InstrFlags::NONE),
+            0xb2 => ("f32.convert_i32_s".into(), String::new(), InstrFlags::NONE),
+            0xb3 => ("f32.convert_i32_u".into(), String::new(), InstrFlags::NONE),
+            0xb4 => ("f32.convert_i64_s".into(), String::new(), InstrFlags::NONE),
+            0xb5 => ("f32.convert_i64_u".into(), String::new(), InstrFlags::NONE),
+            0xb6 => ("f32.demote_f64".into(), String::new(), InstrFlags::NONE),
+            0xb7 => ("f64.convert_i32_s".into(), String::new(), InstrFlags::NONE),
+            0xb8 => ("f64.convert_i32_u".into(), String::new(), InstrFlags::NONE),
+            0xb9 => ("f64.convert_i64_s".into(), String::new(), InstrFlags::NONE),
+            0xba => ("f64.convert_i64_u".into(), String::new(), InstrFlags::NONE),
+            0xbb => ("f64.promote_f32".into(), String::new(), InstrFlags::NONE),
+            0xbc => (
+                "i32.reinterpret_f32".into(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            0xbd => (
+                "i64.reinterpret_f64".into(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            0xbe => (
+                "f32.reinterpret_i32".into(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            0xbf => (
+                "f64.reinterpret_i64".into(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            // Sign-extension operators (MVP extension, single byte no operands)
+            0xc0 => ("i32.extend8_s".into(), String::new(), InstrFlags::NONE),
+            0xc1 => ("i32.extend16_s".into(), String::new(), InstrFlags::NONE),
+            0xc2 => ("i64.extend8_s".into(), String::new(), InstrFlags::NONE),
+            0xc3 => ("i64.extend16_s".into(), String::new(), InstrFlags::NONE),
+            0xc4 => ("i64.extend32_s".into(), String::new(), InstrFlags::NONE),
+            // Reference types (proposal)
+            0x25 => {
+                let idx = uleb!();
+                ("table.get".into(), format!("{idx}"), InstrFlags::READ_MEM)
+            }
+        _ => return decode_wasm_part9(bytes, op, pos),
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
+/// Opcode-dispatch chunk 9 of [`decode_wasm`]; unmatched opcodes
+/// fall through to the next chunk.
+fn decode_wasm_part9(
+    bytes: &[u8],
+    op: u8,
+    pos: &mut usize,
+) -> Result<(String, String, usize, InstrFlags), CoreError> {
+    macro_rules! uleb {
+        () => {{
+            let (v, n) = read_uleb128(bytes, *pos)?;
+            *pos += n;
+            v
+        }};
+    }
+    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
+            0x26 => {
+                let idx = uleb!();
+                ("table.set".into(), format!("{idx}"), InstrFlags::WRITE_MEM)
+            }
+            0xd0 => {
+                // ref.null <reftype byte>
+                if *pos >= bytes.len() {
+                    return Err(CoreError::InvalidFormat {
+                        message: "truncated ref.null".into(),
+                    });
+                }
+                let rt = bytes[*pos];
+                *pos += 1;
+                let tn = match rt {
+                    0x70 => "funcref",
+                    0x6f => "externref",
+                    _ => "unknown",
+                };
+                ("ref.null".into(), tn.to_string(), InstrFlags::NONE)
+            }
+            0xd1 => ("ref.is_null".into(), String::new(), InstrFlags::NONE),
+            0xd2 => {
+                let idx = uleb!();
+                ("ref.func".into(), format!("{idx}"), InstrFlags::NONE)
+            }
+            // Prefixed encodings — delegate to specialised decoders
+            0xfc => {
+                return decode_fc_prefix(bytes);
+            }
+            0xfd => {
+                return decode_fd_prefix(bytes);
+            }
+            0xfe => {
+                return decode_fe_prefix(bytes);
+            }
+            _ => {
+                return Err(CoreError::InvalidFormat {
+                    message: format!("unknown Wasm opcode 0x{op:02x}"),
+                });
+            }
+    };
+    Ok((mnemonic, operands, *pos, flags))
+}
+
 /// Decode a Wasm instruction. Returns (mnemonic, operands, size, flags).
 fn decode_wasm(bytes: &[u8]) -> Result<(String, String, usize, InstrFlags), CoreError> {
     if bytes.is_empty() {
@@ -107,574 +855,7 @@ fn decode_wasm(bytes: &[u8]) -> Result<(String, String, usize, InstrFlags), Core
     let op = bytes[0];
     let mut pos = 1usize;
 
-    macro_rules! uleb {
-        () => {{
-            let (v, n) = read_uleb128(bytes, pos)?;
-            pos += n;
-            v
-        }};
-    }
-    macro_rules! sleb {
-        () => {{
-            let (v, n) = read_sleb128(bytes, pos)?;
-            pos += n;
-            v
-        }};
-    }
-
-    let (mnemonic, operands, flags): (String, String, InstrFlags) = match op {
-        // Control
-        0x00 => ("unreachable".into(), String::new(), InstrFlags::BARRIER),
-        0x01 => ("nop".into(), String::new(), InstrFlags::NONE),
-        0x02 => {
-            let bt = sleb!();
-            ("block".into(), valtype_str(bt).into(), InstrFlags::NONE)
-        }
-        0x03 => {
-            let bt = sleb!();
-            ("loop".into(), valtype_str(bt).into(), InstrFlags::NONE)
-        }
-        0x04 => {
-            let bt = sleb!();
-            (
-                "if".into(),
-                valtype_str(bt).into(),
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            )
-        }
-        0x05 => ("else".into(), String::new(), InstrFlags::NONE),
-        0x0b => ("end".into(), String::new(), InstrFlags::NONE),
-        0x0c => {
-            let l = uleb!();
-            ("br".into(), format!("{l}"), InstrFlags::BRANCH)
-        }
-        0x0d => {
-            let l = uleb!();
-            (
-                "br_if".into(),
-                format!("{l}"),
-                InstrFlags::BRANCH | InstrFlags::CONDITIONAL,
-            )
-        }
-        0x0e => {
-            // br_table: vector of labels + default
-            const MAX_BR_TABLE_ENTRIES: usize = 65_536;
-            let count_raw = uleb!();
-            let count = usize::try_from(count_raw).unwrap_or(usize::MAX);
-            if count > MAX_BR_TABLE_ENTRIES {
-                return Err(CoreError::InvalidFormat {
-                    message: format!("br_table count {count_raw} exceeds limit"),
-                });
-            }
-            let mut labels = Vec::with_capacity(count + 1);
-            for _ in 0..=count {
-                labels.push(uleb!().to_string());
-            }
-            (
-                "br_table".into(),
-                labels.join(", "),
-                InstrFlags::BRANCH | InstrFlags::INDIRECT,
-            )
-        }
-        0x0f => ("return".into(), String::new(), InstrFlags::RET),
-        0x10 => {
-            let idx = uleb!();
-            ("call".into(), format!("{idx}"), InstrFlags::CALL)
-        }
-        0x11 => {
-            let type_idx = uleb!();
-            let table_idx = uleb!();
-            (
-                "call_indirect".into(),
-                format!("{type_idx}, {table_idx}"),
-                InstrFlags::CALL | InstrFlags::INDIRECT,
-            )
-        }
-        // Parametric
-        0x1a => ("drop".into(), String::new(), InstrFlags::NONE),
-        0x1b => ("select".into(), String::new(), InstrFlags::NONE),
-        // Variable
-        0x20 => {
-            let idx = uleb!();
-            ("local.get".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        0x21 => {
-            let idx = uleb!();
-            ("local.set".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        0x22 => {
-            let idx = uleb!();
-            ("local.tee".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        0x23 => {
-            let idx = uleb!();
-            ("global.get".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        0x24 => {
-            let idx = uleb!();
-            ("global.set".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        // Memory load ops
-        0x28 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.load".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x29 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2a => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "f32.load".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2b => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "f64.load".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2c => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.load8_s".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2d => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.load8_u".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2e => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.load16_s".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x2f => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.load16_u".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x30 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load8_s".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x31 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load8_u".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x32 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load16_s".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x33 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load16_u".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x34 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load32_s".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        0x35 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.load32_u".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::READ_MEM,
-            )
-        }
-        // Memory store ops
-        0x36 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.store".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x37 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.store".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x38 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "f32.store".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x39 => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "f64.store".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x3a => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.store8".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x3b => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i32.store16".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x3c => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.store8".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x3d => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.store16".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        0x3e => {
-            let align = uleb!();
-            let offset = uleb!();
-            (
-                "i64.store32".into(),
-                format!("align={align} offset={offset}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        // Memory size/grow
-        0x3f => {
-            let _mem = uleb!();
-            ("memory.size".into(), String::new(), InstrFlags::NONE)
-        }
-        0x40 => {
-            let _mem = uleb!();
-            ("memory.grow".into(), String::new(), InstrFlags::NONE)
-        }
-        // Numeric constants
-        0x41 => {
-            let v = sleb!();
-            ("i32.const".into(), format!("{v}"), InstrFlags::NONE)
-        }
-        0x42 => {
-            let v = sleb!();
-            ("i64.const".into(), format!("{v}"), InstrFlags::NONE)
-        }
-        0x43 => {
-            if pos + 4 > bytes.len() {
-                return Err(CoreError::InvalidFormat {
-                    message: "truncated f32.const".into(),
-                });
-            }
-            let bits =
-                u32::from_le_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]]);
-            pos += 4;
-            let f = f32::from_bits(bits);
-            ("f32.const".into(), format!("{f}"), InstrFlags::NONE)
-        }
-        0x44 => {
-            if pos + 8 > bytes.len() {
-                return Err(CoreError::InvalidFormat {
-                    message: "truncated f64.const".into(),
-                });
-            }
-            let bits = u64::from_le_bytes([
-                bytes[pos],
-                bytes[pos + 1],
-                bytes[pos + 2],
-                bytes[pos + 3],
-                bytes[pos + 4],
-                bytes[pos + 5],
-                bytes[pos + 6],
-                bytes[pos + 7],
-            ]);
-            pos += 8;
-            let f = f64::from_bits(bits);
-            ("f64.const".into(), format!("{f}"), InstrFlags::NONE)
-        }
-        // i32 numeric ops (no operands)
-        0x45 => ("i32.eqz".into(), String::new(), InstrFlags::NONE),
-        0x46 => ("i32.eq".into(), String::new(), InstrFlags::NONE),
-        0x47 => ("i32.ne".into(), String::new(), InstrFlags::NONE),
-        0x48 => ("i32.lt_s".into(), String::new(), InstrFlags::NONE),
-        0x49 => ("i32.lt_u".into(), String::new(), InstrFlags::NONE),
-        0x4a => ("i32.gt_s".into(), String::new(), InstrFlags::NONE),
-        0x4b => ("i32.gt_u".into(), String::new(), InstrFlags::NONE),
-        0x4c => ("i32.le_s".into(), String::new(), InstrFlags::NONE),
-        0x4d => ("i32.le_u".into(), String::new(), InstrFlags::NONE),
-        0x4e => ("i32.ge_s".into(), String::new(), InstrFlags::NONE),
-        0x4f => ("i32.ge_u".into(), String::new(), InstrFlags::NONE),
-        // i64 compare
-        0x50 => ("i64.eqz".into(), String::new(), InstrFlags::NONE),
-        0x51 => ("i64.eq".into(), String::new(), InstrFlags::NONE),
-        0x52 => ("i64.ne".into(), String::new(), InstrFlags::NONE),
-        0x53 => ("i64.lt_s".into(), String::new(), InstrFlags::NONE),
-        0x54 => ("i64.lt_u".into(), String::new(), InstrFlags::NONE),
-        0x55 => ("i64.gt_s".into(), String::new(), InstrFlags::NONE),
-        0x56 => ("i64.gt_u".into(), String::new(), InstrFlags::NONE),
-        0x57 => ("i64.le_s".into(), String::new(), InstrFlags::NONE),
-        0x58 => ("i64.le_u".into(), String::new(), InstrFlags::NONE),
-        0x59 => ("i64.ge_s".into(), String::new(), InstrFlags::NONE),
-        0x5a => ("i64.ge_u".into(), String::new(), InstrFlags::NONE),
-        // f32 compare
-        0x5b => ("f32.eq".into(), String::new(), InstrFlags::NONE),
-        0x5c => ("f32.ne".into(), String::new(), InstrFlags::NONE),
-        0x5d => ("f32.lt".into(), String::new(), InstrFlags::NONE),
-        0x5e => ("f32.gt".into(), String::new(), InstrFlags::NONE),
-        0x5f => ("f32.le".into(), String::new(), InstrFlags::NONE),
-        0x60 => ("f32.ge".into(), String::new(), InstrFlags::NONE),
-        // f64 compare
-        0x61 => ("f64.eq".into(), String::new(), InstrFlags::NONE),
-        0x62 => ("f64.ne".into(), String::new(), InstrFlags::NONE),
-        0x63 => ("f64.lt".into(), String::new(), InstrFlags::NONE),
-        0x64 => ("f64.gt".into(), String::new(), InstrFlags::NONE),
-        0x65 => ("f64.le".into(), String::new(), InstrFlags::NONE),
-        0x66 => ("f64.ge".into(), String::new(), InstrFlags::NONE),
-        // i32 arithmetic
-        0x67 => ("i32.clz".into(), String::new(), InstrFlags::NONE),
-        0x68 => ("i32.ctz".into(), String::new(), InstrFlags::NONE),
-        0x69 => ("i32.popcnt".into(), String::new(), InstrFlags::NONE),
-        0x6a => ("i32.add".into(), String::new(), InstrFlags::NONE),
-        0x6b => ("i32.sub".into(), String::new(), InstrFlags::NONE),
-        0x6c => ("i32.mul".into(), String::new(), InstrFlags::NONE),
-        0x6d => ("i32.div_s".into(), String::new(), InstrFlags::NONE),
-        0x6e => ("i32.div_u".into(), String::new(), InstrFlags::NONE),
-        0x6f => ("i32.rem_s".into(), String::new(), InstrFlags::NONE),
-        0x70 => ("i32.rem_u".into(), String::new(), InstrFlags::NONE),
-        0x71 => ("i32.and".into(), String::new(), InstrFlags::NONE),
-        0x72 => ("i32.or".into(), String::new(), InstrFlags::NONE),
-        0x73 => ("i32.xor".into(), String::new(), InstrFlags::NONE),
-        0x74 => ("i32.shl".into(), String::new(), InstrFlags::NONE),
-        0x75 => ("i32.shr_s".into(), String::new(), InstrFlags::NONE),
-        0x76 => ("i32.shr_u".into(), String::new(), InstrFlags::NONE),
-        0x77 => ("i32.rotl".into(), String::new(), InstrFlags::NONE),
-        0x78 => ("i32.rotr".into(), String::new(), InstrFlags::NONE),
-        // i64 arithmetic
-        0x79 => ("i64.clz".into(), String::new(), InstrFlags::NONE),
-        0x7a => ("i64.ctz".into(), String::new(), InstrFlags::NONE),
-        0x7b => ("i64.popcnt".into(), String::new(), InstrFlags::NONE),
-        0x7c => ("i64.add".into(), String::new(), InstrFlags::NONE),
-        0x7d => ("i64.sub".into(), String::new(), InstrFlags::NONE),
-        0x7e => ("i64.mul".into(), String::new(), InstrFlags::NONE),
-        0x7f => ("i64.div_s".into(), String::new(), InstrFlags::NONE),
-        0x80 => ("i64.div_u".into(), String::new(), InstrFlags::NONE),
-        0x81 => ("i64.rem_s".into(), String::new(), InstrFlags::NONE),
-        0x82 => ("i64.rem_u".into(), String::new(), InstrFlags::NONE),
-        0x83 => ("i64.and".into(), String::new(), InstrFlags::NONE),
-        0x84 => ("i64.or".into(), String::new(), InstrFlags::NONE),
-        0x85 => ("i64.xor".into(), String::new(), InstrFlags::NONE),
-        0x86 => ("i64.shl".into(), String::new(), InstrFlags::NONE),
-        0x87 => ("i64.shr_s".into(), String::new(), InstrFlags::NONE),
-        0x88 => ("i64.shr_u".into(), String::new(), InstrFlags::NONE),
-        0x89 => ("i64.rotl".into(), String::new(), InstrFlags::NONE),
-        0x8a => ("i64.rotr".into(), String::new(), InstrFlags::NONE),
-        // f32 arithmetic
-        0x8b => ("f32.abs".into(), String::new(), InstrFlags::NONE),
-        0x8c => ("f32.neg".into(), String::new(), InstrFlags::NONE),
-        0x8d => ("f32.ceil".into(), String::new(), InstrFlags::NONE),
-        0x8e => ("f32.floor".into(), String::new(), InstrFlags::NONE),
-        0x8f => ("f32.trunc".into(), String::new(), InstrFlags::NONE),
-        0x90 => ("f32.nearest".into(), String::new(), InstrFlags::NONE),
-        0x91 => ("f32.sqrt".into(), String::new(), InstrFlags::NONE),
-        0x92 => ("f32.add".into(), String::new(), InstrFlags::NONE),
-        0x93 => ("f32.sub".into(), String::new(), InstrFlags::NONE),
-        0x94 => ("f32.mul".into(), String::new(), InstrFlags::NONE),
-        0x95 => ("f32.div".into(), String::new(), InstrFlags::NONE),
-        0x96 => ("f32.min".into(), String::new(), InstrFlags::NONE),
-        0x97 => ("f32.max".into(), String::new(), InstrFlags::NONE),
-        0x98 => ("f32.copysign".into(), String::new(), InstrFlags::NONE),
-        // f64 arithmetic
-        0x99 => ("f64.abs".into(), String::new(), InstrFlags::NONE),
-        0x9a => ("f64.neg".into(), String::new(), InstrFlags::NONE),
-        0x9b => ("f64.ceil".into(), String::new(), InstrFlags::NONE),
-        0x9c => ("f64.floor".into(), String::new(), InstrFlags::NONE),
-        0x9d => ("f64.trunc".into(), String::new(), InstrFlags::NONE),
-        0x9e => ("f64.nearest".into(), String::new(), InstrFlags::NONE),
-        0x9f => ("f64.sqrt".into(), String::new(), InstrFlags::NONE),
-        0xa0 => ("f64.add".into(), String::new(), InstrFlags::NONE),
-        0xa1 => ("f64.sub".into(), String::new(), InstrFlags::NONE),
-        0xa2 => ("f64.mul".into(), String::new(), InstrFlags::NONE),
-        0xa3 => ("f64.div".into(), String::new(), InstrFlags::NONE),
-        0xa4 => ("f64.min".into(), String::new(), InstrFlags::NONE),
-        0xa5 => ("f64.max".into(), String::new(), InstrFlags::NONE),
-        0xa6 => ("f64.copysign".into(), String::new(), InstrFlags::NONE),
-        // Conversions
-        0xa7 => ("i32.wrap_i64".into(), String::new(), InstrFlags::NONE),
-        0xa8 => ("i32.trunc_f32_s".into(), String::new(), InstrFlags::NONE),
-        0xa9 => ("i32.trunc_f32_u".into(), String::new(), InstrFlags::NONE),
-        0xaa => ("i32.trunc_f64_s".into(), String::new(), InstrFlags::NONE),
-        0xab => ("i32.trunc_f64_u".into(), String::new(), InstrFlags::NONE),
-        0xac => ("i64.extend_i32_s".into(), String::new(), InstrFlags::NONE),
-        0xad => ("i64.extend_i32_u".into(), String::new(), InstrFlags::NONE),
-        0xae => ("i64.trunc_f32_s".into(), String::new(), InstrFlags::NONE),
-        0xaf => ("i64.trunc_f32_u".into(), String::new(), InstrFlags::NONE),
-        0xb0 => ("i64.trunc_f64_s".into(), String::new(), InstrFlags::NONE),
-        0xb1 => ("i64.trunc_f64_u".into(), String::new(), InstrFlags::NONE),
-        0xb2 => ("f32.convert_i32_s".into(), String::new(), InstrFlags::NONE),
-        0xb3 => ("f32.convert_i32_u".into(), String::new(), InstrFlags::NONE),
-        0xb4 => ("f32.convert_i64_s".into(), String::new(), InstrFlags::NONE),
-        0xb5 => ("f32.convert_i64_u".into(), String::new(), InstrFlags::NONE),
-        0xb6 => ("f32.demote_f64".into(), String::new(), InstrFlags::NONE),
-        0xb7 => ("f64.convert_i32_s".into(), String::new(), InstrFlags::NONE),
-        0xb8 => ("f64.convert_i32_u".into(), String::new(), InstrFlags::NONE),
-        0xb9 => ("f64.convert_i64_s".into(), String::new(), InstrFlags::NONE),
-        0xba => ("f64.convert_i64_u".into(), String::new(), InstrFlags::NONE),
-        0xbb => ("f64.promote_f32".into(), String::new(), InstrFlags::NONE),
-        0xbc => (
-            "i32.reinterpret_f32".into(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        0xbd => (
-            "i64.reinterpret_f64".into(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        0xbe => (
-            "f32.reinterpret_i32".into(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        0xbf => (
-            "f64.reinterpret_i64".into(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        // Sign-extension operators (MVP extension, single byte no operands)
-        0xc0 => ("i32.extend8_s".into(), String::new(), InstrFlags::NONE),
-        0xc1 => ("i32.extend16_s".into(), String::new(), InstrFlags::NONE),
-        0xc2 => ("i64.extend8_s".into(), String::new(), InstrFlags::NONE),
-        0xc3 => ("i64.extend16_s".into(), String::new(), InstrFlags::NONE),
-        0xc4 => ("i64.extend32_s".into(), String::new(), InstrFlags::NONE),
-        // Reference types (proposal)
-        0x25 => {
-            let idx = uleb!();
-            ("table.get".into(), format!("{idx}"), InstrFlags::READ_MEM)
-        }
-        0x26 => {
-            let idx = uleb!();
-            ("table.set".into(), format!("{idx}"), InstrFlags::WRITE_MEM)
-        }
-        0xd0 => {
-            // ref.null <reftype byte>
-            if pos >= bytes.len() {
-                return Err(CoreError::InvalidFormat {
-                    message: "truncated ref.null".into(),
-                });
-            }
-            let rt = bytes[pos];
-            pos += 1;
-            let tn = match rt {
-                0x70 => "funcref",
-                0x6f => "externref",
-                _ => "unknown",
-            };
-            ("ref.null".into(), tn.to_string(), InstrFlags::NONE)
-        }
-        0xd1 => ("ref.is_null".into(), String::new(), InstrFlags::NONE),
-        0xd2 => {
-            let idx = uleb!();
-            ("ref.func".into(), format!("{idx}"), InstrFlags::NONE)
-        }
-        // Prefixed encodings — delegate to specialised decoders
-        0xfc => {
-            return decode_fc_prefix(bytes);
-        }
-        0xfd => {
-            return decode_fd_prefix(bytes);
-        }
-        0xfe => {
-            return decode_fe_prefix(bytes);
-        }
-        _ => {
-            return Err(CoreError::InvalidFormat {
-                message: format!("unknown Wasm opcode 0x{op:02x}"),
-            });
-        }
-    };
-
-    Ok((mnemonic, operands, pos, flags))
+    decode_wasm_part0(bytes, op, &mut pos)
 }
 
 /// Architecture support for WebAssembly.
@@ -1461,6 +1642,13 @@ pub struct WasmFuncType {
     pub results: Vec<WasmValueType>,
 }
 
+/// Cap on the parameter/result count accepted from a function type.
+///
+/// The Wasm spec allows up to 2^32-1 in theory but practical implementations cap
+/// far lower. Capping here prevents an attacker-controlled LEB128 value from
+/// causing a gigabyte allocation before the per-byte bounds check can fire.
+const MAX_FUNC_PARAMS: u64 = 32_768;
+
 impl WasmFuncType {
     /// Decode a function type from binary format.
     ///
@@ -1473,11 +1661,6 @@ impl WasmFuncType {
                 message: "expected functype marker 0x60".into(),
             });
         }
-        // Cap at a sane limit: the Wasm spec allows up to 2^32-1 parameters in
-        // theory but practical implementations cap far lower. We cap here to
-        // prevent an attacker-controlled LEB128 value from causing a gigabyte
-        // allocation before the per-byte bounds check can fire.
-        const MAX_FUNC_PARAMS: u64 = 32_768;
         let mut pos = 1usize;
         let (param_count, n) = read_uleb128(bytes, pos)?;
         pos += n;
@@ -1546,6 +1729,11 @@ impl WasmModuleHeader {
     /// # Errors
     ///
     /// Returns `CoreError` if the magic or version is invalid.
+    ///
+    /// # Panics
+    ///
+    /// Panics only on an internal inconsistency in the section walker; malformed
+    /// input is reported through [`CoreError`] instead.
     pub fn parse(bytes: &[u8]) -> Result<Self, CoreError> {
         if bytes.len() < 8 {
             return Err(CoreError::InvalidFormat {
@@ -1690,6 +1878,186 @@ pub struct WasmExport {
 
 // ── Extended decode for 0xFC, 0xFD, 0xFE prefixes ───────────────────────────
 
+/// Sub-opcode dispatch chunk 0 of [`decode_fc_prefix`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_fc_prefix_part0(
+    bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(String, String, InstrFlags), CoreError> {
+    Ok(match sub {
+            0 => (
+                "i32.trunc_sat_f32_s".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            1 => (
+                "i32.trunc_sat_f32_u".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            2 => (
+                "i32.trunc_sat_f64_s".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            3 => (
+                "i32.trunc_sat_f64_u".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            4 => (
+                "i64.trunc_sat_f32_s".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            5 => (
+                "i64.trunc_sat_f32_u".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            6 => (
+                "i64.trunc_sat_f64_s".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            7 => (
+                "i64.trunc_sat_f64_u".to_string(),
+                String::new(),
+                InstrFlags::NONE,
+            ),
+            // memory.init seg mem
+            8 => {
+                let (seg, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                let (mem, n2) = read_uleb128(bytes, *pos)?;
+                *pos += n2;
+                (
+                    "memory.init".to_string(),
+                    format!("{seg} {mem}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            // data.drop seg
+            9 => {
+                let (seg, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                ("data.drop".to_string(), format!("{seg}"), InstrFlags::NONE)
+            }
+        _ => return decode_fc_prefix_part1(bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 1 of [`decode_fc_prefix`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_fc_prefix_part1(
+    bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(String, String, InstrFlags), CoreError> {
+    Ok(match sub {
+            // memory.copy dst src
+            10 => {
+                let (dst, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                let (src, n2) = read_uleb128(bytes, *pos)?;
+                *pos += n2;
+                (
+                    "memory.copy".to_string(),
+                    format!("{dst} {src}"),
+                    InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+                )
+            }
+            // memory.fill mem
+            11 => {
+                let (mem, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                (
+                    "memory.fill".to_string(),
+                    format!("{mem}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            // table.init
+            12 => {
+                let (elem, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                let (table, n2) = read_uleb128(bytes, *pos)?;
+                *pos += n2;
+                (
+                    "table.init".to_string(),
+                    format!("{elem} {table}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            // elem.drop
+            13 => {
+                let (elem, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                ("elem.drop".to_string(), format!("{elem}"), InstrFlags::NONE)
+            }
+            // table.copy
+            14 => {
+                let (dst, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                let (src, n2) = read_uleb128(bytes, *pos)?;
+                *pos += n2;
+                (
+                    "table.copy".to_string(),
+                    format!("{dst} {src}"),
+                    InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
+                )
+            }
+        _ => return decode_fc_prefix_part2(bytes, sub, pos),
+    })
+}
+
+/// Sub-opcode dispatch chunk 2 of [`decode_fc_prefix`];
+/// unmatched sub-opcodes fall through to the next chunk.
+fn decode_fc_prefix_part2(
+    bytes: &[u8],
+    sub: u64,
+    pos: &mut usize,
+) -> Result<(String, String, InstrFlags), CoreError> {
+    Ok(match sub {
+            // table.grow
+            15 => {
+                let (table, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                (
+                    "table.grow".to_string(),
+                    format!("{table}"),
+                    InstrFlags::NONE,
+                )
+            }
+            // table.size
+            16 => {
+                let (table, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                (
+                    "table.size".to_string(),
+                    format!("{table}"),
+                    InstrFlags::NONE,
+                )
+            }
+            // table.fill
+            17 => {
+                let (table, n1) = read_uleb128(bytes, *pos)?;
+                *pos += n1;
+                (
+                    "table.fill".to_string(),
+                    format!("{table}"),
+                    InstrFlags::WRITE_MEM,
+                )
+            }
+            _ => {
+                return Err(CoreError::InvalidFormat {
+                    message: format!("unknown 0xFC sub-opcode {sub}"),
+                });
+            }
+    })
+}
+
 /// Decode a 0xFC-prefixed instruction (saturating truncation + bulk memory).
 ///
 /// # Errors
@@ -1704,153 +2072,7 @@ pub fn decode_fc_prefix(bytes: &[u8]) -> Result<(String, String, usize, InstrFla
     let (sub, n) = read_uleb128(bytes, 1)?;
     let mut pos = 1 + n;
 
-    let (mnemonic, operands, flags) = match sub {
-        0 => (
-            "i32.trunc_sat_f32_s".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        1 => (
-            "i32.trunc_sat_f32_u".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        2 => (
-            "i32.trunc_sat_f64_s".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        3 => (
-            "i32.trunc_sat_f64_u".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        4 => (
-            "i64.trunc_sat_f32_s".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        5 => (
-            "i64.trunc_sat_f32_u".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        6 => (
-            "i64.trunc_sat_f64_s".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        7 => (
-            "i64.trunc_sat_f64_u".to_string(),
-            String::new(),
-            InstrFlags::NONE,
-        ),
-        // memory.init seg mem
-        8 => {
-            let (seg, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            let (mem, n2) = read_uleb128(bytes, pos)?;
-            pos += n2;
-            (
-                "memory.init".to_string(),
-                format!("{seg} {mem}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        // data.drop seg
-        9 => {
-            let (seg, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            ("data.drop".to_string(), format!("{seg}"), InstrFlags::NONE)
-        }
-        // memory.copy dst src
-        10 => {
-            let (dst, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            let (src, n2) = read_uleb128(bytes, pos)?;
-            pos += n2;
-            (
-                "memory.copy".to_string(),
-                format!("{dst} {src}"),
-                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-            )
-        }
-        // memory.fill mem
-        11 => {
-            let (mem, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            (
-                "memory.fill".to_string(),
-                format!("{mem}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        // table.init
-        12 => {
-            let (elem, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            let (table, n2) = read_uleb128(bytes, pos)?;
-            pos += n2;
-            (
-                "table.init".to_string(),
-                format!("{elem} {table}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        // elem.drop
-        13 => {
-            let (elem, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            ("elem.drop".to_string(), format!("{elem}"), InstrFlags::NONE)
-        }
-        // table.copy
-        14 => {
-            let (dst, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            let (src, n2) = read_uleb128(bytes, pos)?;
-            pos += n2;
-            (
-                "table.copy".to_string(),
-                format!("{dst} {src}"),
-                InstrFlags::READ_MEM | InstrFlags::WRITE_MEM,
-            )
-        }
-        // table.grow
-        15 => {
-            let (table, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            (
-                "table.grow".to_string(),
-                format!("{table}"),
-                InstrFlags::NONE,
-            )
-        }
-        // table.size
-        16 => {
-            let (table, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            (
-                "table.size".to_string(),
-                format!("{table}"),
-                InstrFlags::NONE,
-            )
-        }
-        // table.fill
-        17 => {
-            let (table, n1) = read_uleb128(bytes, pos)?;
-            pos += n1;
-            (
-                "table.fill".to_string(),
-                format!("{table}"),
-                InstrFlags::WRITE_MEM,
-            )
-        }
-        _ => {
-            return Err(CoreError::InvalidFormat {
-                message: format!("unknown 0xFC sub-opcode {sub}"),
-            });
-        }
-    };
+    let (mnemonic, operands, flags) = decode_fc_prefix_part0(bytes, sub, &mut pos)?;
     Ok((mnemonic, operands, pos, flags))
 }
 
@@ -3822,149 +4044,188 @@ impl WasmExecutor {
         op: &WasmOpcode,
         _immediate: Option<u64>,
     ) -> Result<(), CoreError> {
+        self.execute_instruction_part0(op)
+    }
+
+    /// Opcode-dispatch chunk 0 of [`Self::execute_instruction`];
+    /// unhandled opcodes fall through to the next chunk.
+    fn execute_instruction_part0(&mut self, op: &WasmOpcode) -> Result<(), CoreError> {
         match op {
-            WasmOpcode::Nop | WasmOpcode::End => {}
+                // Nothing to execute: nop/end, and the control opcodes the executor
+                // does not follow (it runs a straight-line instruction list).
+                WasmOpcode::Nop
+                | WasmOpcode::End
+                | WasmOpcode::Br(_)
+                | WasmOpcode::BrIf(_)
+                | WasmOpcode::Return => {}
 
-            WasmOpcode::Unreachable => {
-                return Err(CoreError::InvalidFormat {
-                    message: "Wasm trap: unreachable executed".into(),
-                });
-            }
-
-            WasmOpcode::Drop => {
-                self.stack.pop()?;
-            }
-
-            // ── Constants ────────────────────────────────────────────────────
-            WasmOpcode::I32Const(v) => self.stack.push(WasmValue::I32(*v)),
-            WasmOpcode::I64Const(v) => self.stack.push(WasmValue::I64(*v)),
-            WasmOpcode::F32Const(v) => self.stack.push(WasmValue::F32(*v)),
-            WasmOpcode::F64Const(v) => self.stack.push(WasmValue::F64(*v)),
-
-            // ── i32 arithmetic ───────────────────────────────────────────────
-            WasmOpcode::I32Add => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a.wrapping_add(b)));
-            }
-            WasmOpcode::I32Sub => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a.wrapping_sub(b)));
-            }
-            WasmOpcode::I32Mul => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a.wrapping_mul(b)));
-            }
-            WasmOpcode::I32DivS => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                if b == 0 {
+                WasmOpcode::Unreachable => {
                     return Err(CoreError::InvalidFormat {
-                        message: "Wasm trap: i32.div_s by zero".into(),
+                        message: "Wasm trap: unreachable executed".into(),
                     });
                 }
-                self.stack.push(WasmValue::I32(a.wrapping_div(b)));
-            }
-            WasmOpcode::I32RemS => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                if b == 0 {
-                    return Err(CoreError::InvalidFormat {
-                        message: "Wasm trap: i32.rem_s by zero".into(),
-                    });
-                }
-                self.stack.push(WasmValue::I32(a.wrapping_rem(b)));
-            }
-            WasmOpcode::I32And => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a & b));
-            }
-            WasmOpcode::I32Or => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a | b));
-            }
-            WasmOpcode::I32Xor => {
-                let b = self.pop_i32()?;
-                let a = self.pop_i32()?;
-                self.stack.push(WasmValue::I32(a ^ b));
-            }
 
-            // ── Memory ───────────────────────────────────────────────────────
-            WasmOpcode::I32Load => {
-                let addr = self.pop_i32()? as usize;
-                if addr + 4 > self.memory.len() {
-                    return Err(CoreError::InvalidFormat {
-                        message: format!("i32.load out of bounds: addr={addr}"),
-                    });
+                // drop discards the top value; global.set does the same, since the
+                // executor keeps no global store.
+                WasmOpcode::Drop | WasmOpcode::GlobalSet(_) => {
+                    self.stack.pop()?;
                 }
-                let bytes = [
-                    self.memory[addr],
-                    self.memory[addr + 1],
-                    self.memory[addr + 2],
-                    self.memory[addr + 3],
-                ];
-                self.stack.push(WasmValue::I32(i32::from_le_bytes(bytes)));
-            }
-            WasmOpcode::I32Store => {
-                let val = self.pop_i32()?;
-                let addr = self.pop_i32()? as usize;
-                if addr + 4 > self.memory.len() {
-                    return Err(CoreError::InvalidFormat {
-                        message: format!("i32.store out of bounds: addr={addr}"),
-                    });
-                }
-                let bytes = val.to_le_bytes();
-                self.memory[addr..addr + 4].copy_from_slice(&bytes);
-            }
 
-            // ── Locals ───────────────────────────────────────────────────────
-            WasmOpcode::LocalGet(i) => {
-                let v = self
-                    .locals
-                    .get(*i)
-                    .ok_or_else(|| CoreError::InvalidFormat {
-                        message: format!("local.get: index {i} out of range"),
-                    })?
-                    .clone();
-                self.stack.push(v);
-            }
-            WasmOpcode::LocalSet(i) => {
-                let v = self.stack.pop()?;
-                if *i >= self.locals.len() {
-                    return Err(CoreError::InvalidFormat {
-                        message: format!("local.set: index {i} out of range"),
-                    });
-                }
-                self.locals[*i] = v;
-            }
-            WasmOpcode::LocalTee(i) => {
-                let v = self.stack.peek()?.clone();
-                if *i >= self.locals.len() {
-                    return Err(CoreError::InvalidFormat {
-                        message: format!("local.tee: index {i} out of range"),
-                    });
-                }
-                self.locals[*i] = v;
-                // value remains on stack
-            }
+                // ── Constants ────────────────────────────────────────────────────
+                WasmOpcode::I32Const(v) => self.stack.push(WasmValue::I32(*v)),
+                WasmOpcode::I64Const(v) => self.stack.push(WasmValue::I64(*v)),
+                WasmOpcode::F32Const(v) => self.stack.push(WasmValue::F32(*v)),
+                WasmOpcode::F64Const(v) => self.stack.push(WasmValue::F64(*v)),
 
-            // ── Globals (stub — no global store in executor) ──────────────────
-            WasmOpcode::GlobalGet(_) => {
-                self.stack.push(WasmValue::I32(0));
-            }
-            WasmOpcode::GlobalSet(_) => {
-                self.stack.pop()?;
-            }
-
-            // ── Control (stubs — executor does not follow branches) ───────────
-            WasmOpcode::Br(_) | WasmOpcode::BrIf(_) | WasmOpcode::Return => {}
+                // ── i32 arithmetic ───────────────────────────────────────────────
+                WasmOpcode::I32Add => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a.wrapping_add(b)));
+                }
+                WasmOpcode::I32Sub => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a.wrapping_sub(b)));
+                }
+                WasmOpcode::I32Mul => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a.wrapping_mul(b)));
+                }
+                WasmOpcode::I32DivS => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    if b == 0 {
+                        return Err(CoreError::InvalidFormat {
+                            message: "Wasm trap: i32.div_s by zero".into(),
+                        });
+                    }
+                    self.stack.push(WasmValue::I32(a.wrapping_div(b)));
+                }
+            _ => return self.execute_instruction_part1(op),
         }
         Ok(())
     }
+
+    /// Opcode-dispatch chunk 1 of [`Self::execute_instruction`];
+    /// unhandled opcodes fall through to the next chunk.
+    fn execute_instruction_part1(&mut self, op: &WasmOpcode) -> Result<(), CoreError> {
+        match op {
+                WasmOpcode::I32RemS => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    if b == 0 {
+                        return Err(CoreError::InvalidFormat {
+                            message: "Wasm trap: i32.rem_s by zero".into(),
+                        });
+                    }
+                    self.stack.push(WasmValue::I32(a.wrapping_rem(b)));
+                }
+                WasmOpcode::I32And => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a & b));
+                }
+                WasmOpcode::I32Or => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a | b));
+                }
+                WasmOpcode::I32Xor => {
+                    let b = self.pop_i32()?;
+                    let a = self.pop_i32()?;
+                    self.stack.push(WasmValue::I32(a ^ b));
+                }
+
+                // ── Memory ───────────────────────────────────────────────────────
+                WasmOpcode::I32Load => {
+                    // Wasm addresses are unsigned 32-bit: reinterpret the operand's
+                    // bits rather than sign-extending a negative value.
+                    let addr = usize::try_from(self.pop_i32()?.cast_unsigned()).unwrap_or(usize::MAX);
+                    if addr + 4 > self.memory.len() {
+                        return Err(CoreError::InvalidFormat {
+                            message: format!("i32.load out of bounds: addr={addr}"),
+                        });
+                    }
+                    let bytes = [
+                        self.memory[addr],
+                        self.memory[addr + 1],
+                        self.memory[addr + 2],
+                        self.memory[addr + 3],
+                    ];
+                    self.stack.push(WasmValue::I32(i32::from_le_bytes(bytes)));
+                }
+                WasmOpcode::I32Store => {
+                    let val = self.pop_i32()?;
+                    // Wasm addresses are unsigned 32-bit: reinterpret the operand's
+                    // bits rather than sign-extending a negative value.
+                    let addr = usize::try_from(self.pop_i32()?.cast_unsigned()).unwrap_or(usize::MAX);
+                    if addr + 4 > self.memory.len() {
+                        return Err(CoreError::InvalidFormat {
+                            message: format!("i32.store out of bounds: addr={addr}"),
+                        });
+                    }
+                    let bytes = val.to_le_bytes();
+                    self.memory[addr..addr + 4].copy_from_slice(&bytes);
+                }
+            _ => return self.execute_instruction_part2(op),
+        }
+        Ok(())
+    }
+
+    /// Opcode-dispatch chunk 2 of [`Self::execute_instruction`];
+    /// unhandled opcodes fall through to the next chunk.
+    fn execute_instruction_part2(&mut self, op: &WasmOpcode) -> Result<(), CoreError> {
+        match op {
+
+                // ── Locals ───────────────────────────────────────────────────────
+                WasmOpcode::LocalGet(i) => {
+                    let v = self
+                        .locals
+                        .get(*i)
+                        .ok_or_else(|| CoreError::InvalidFormat {
+                            message: format!("local.get: index {i} out of range"),
+                        })?
+                        .clone();
+                    self.stack.push(v);
+                }
+                WasmOpcode::LocalSet(i) => {
+                    let v = self.stack.pop()?;
+                    if *i >= self.locals.len() {
+                        return Err(CoreError::InvalidFormat {
+                            message: format!("local.set: index {i} out of range"),
+                        });
+                    }
+                    self.locals[*i] = v;
+                }
+                WasmOpcode::LocalTee(i) => {
+                    let v = self.stack.peek()?.clone();
+                    if *i >= self.locals.len() {
+                        return Err(CoreError::InvalidFormat {
+                            message: format!("local.tee: index {i} out of range"),
+                        });
+                    }
+                    self.locals[*i] = v;
+                    // value remains on stack
+                }
+
+                // ── Globals (stub — no global store in executor) ──────────────────
+                WasmOpcode::GlobalGet(_) => {
+                    self.stack.push(WasmValue::I32(0));
+                }
+
+            // The chunks above cover every variant; this arm keeps each
+            // chunk a total function over `WasmOpcode`.
+            _ => {
+                return Err(CoreError::InvalidFormat {
+                    message: format!("unhandled Wasm opcode {op:?}"),
+                });
+            }
+        }
+        Ok(())
+    }
+
 
     /// Convenience: pop a value and unwrap as `i32`.
     fn pop_i32(&mut self) -> Result<i32, CoreError> {
@@ -4057,8 +4318,8 @@ impl WasmControlFlow {
 
         let mut blocks = Vec::new();
         let mut block_start = 0;
-        for i in 1..instrs.len() {
-            if leaders[i] {
+        for (i, &is_leader) in leaders.iter().enumerate().take(instrs.len()).skip(1) {
+            if is_leader {
                 blocks.push((block_start, i));
                 block_start = i;
             }
@@ -4304,7 +4565,7 @@ mod exec_tests {
         // store 0xDEAD at address 0
         e.execute_instruction(&WasmOpcode::I32Const(0), None)
             .unwrap();
-        e.execute_instruction(&WasmOpcode::I32Const(0x0000_DEAD_u32 as i32), None)
+        e.execute_instruction(&WasmOpcode::I32Const(0x0000_DEAD_u32.cast_signed()), None)
             .unwrap();
         e.execute_instruction(&WasmOpcode::I32Store, None).unwrap();
         // load it back
@@ -4313,7 +4574,7 @@ mod exec_tests {
         e.execute_instruction(&WasmOpcode::I32Load, None).unwrap();
         assert_eq!(
             e.stack.peek().unwrap(),
-            &WasmValue::I32(0x0000_DEAD_u32 as i32)
+            &WasmValue::I32(0x0000_DEAD_u32.cast_signed())
         );
     }
 
@@ -4480,9 +4741,9 @@ mod exec_tests {
 
     #[test]
     fn test_f32_const() {
-        let e = exec(&[WasmOpcode::F32Const(3.14_f32)]);
+        let e = exec(&[WasmOpcode::F32Const(core::f32::consts::PI)]);
         if let WasmValue::F32(v) = e.stack.peek().unwrap() {
-            assert!((v - 3.14_f32).abs() < 1e-5);
+            assert!((v - core::f32::consts::PI).abs() < 1e-5);
         } else {
             panic!("expected F32");
         }
@@ -4490,9 +4751,9 @@ mod exec_tests {
 
     #[test]
     fn test_f64_const() {
-        let e = exec(&[WasmOpcode::F64Const(2.718_281_828_f64)]);
+        let e = exec(&[WasmOpcode::F64Const(core::f64::consts::E)]);
         if let WasmValue::F64(v) = e.stack.peek().unwrap() {
-            assert!((v - 2.718_281_828_f64).abs() < 1e-10);
+            assert!((v - core::f64::consts::E).abs() < 1e-10);
         } else {
             panic!("expected F64");
         }

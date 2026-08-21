@@ -456,8 +456,46 @@ impl AvrSregAnalysis {
 }
 
 /// Return (defs, uses) SREG flag sets for a mnemonic.
-fn sreg_def_use(mnem: &str) -> (SregLiveness, SregLiveness) {
-    let arith_def = SregLiveness {
+/// One bit of the AVR status register, used to name a single-bit liveness set.
+#[derive(Clone, Copy)]
+enum SregBitSel {
+    /// Carry.
+    C,
+    /// Zero.
+    Z,
+    /// Negative.
+    N,
+    /// Two's-complement overflow.
+    V,
+    /// Sign.
+    S,
+    /// Half carry.
+    H,
+    /// Bit-copy storage.
+    T,
+    /// Global interrupt enable.
+    I,
+}
+
+/// A liveness set containing exactly the named SREG bit.
+fn only(bit: SregBitSel) -> SregLiveness {
+    let mut l = SregLiveness::default();
+    match bit {
+        SregBitSel::C => l.c = true,
+        SregBitSel::Z => l.z = true,
+        SregBitSel::N => l.n = true,
+        SregBitSel::V => l.v = true,
+        SregBitSel::S => l.s = true,
+        SregBitSel::H => l.h = true,
+        SregBitSel::T => l.t = true,
+        SregBitSel::I => l.i = true,
+    }
+    l
+}
+
+/// SREG bits written by the general arithmetic instructions.
+fn arith_def() -> SregLiveness {
+    SregLiveness {
         c: true,
         z: true,
         n: true,
@@ -465,126 +503,81 @@ fn sreg_def_use(mnem: &str) -> (SregLiveness, SregLiveness) {
         s: true,
         h: true,
         ..Default::default()
-    };
-    let cz_def = SregLiveness {
+    }
+}
+
+/// SREG bits written by the logic/compare instructions (no half carry).
+fn logic_def() -> SregLiveness {
+    SregLiveness {
         c: true,
         z: true,
         n: true,
         v: true,
         s: true,
         ..Default::default()
-    };
-    let flag_use = SregLiveness {
-        c: true,
-        z: true,
-        n: true,
-        v: true,
-        s: true,
-        ..Default::default()
-    };
+    }
+}
+
+/// Conditional branches and the single SREG bit each one reads.
+static BRANCH_FLAG_USE: &[(&str, SregBitSel)] = &[
+    ("BRCS", SregBitSel::C),
+    ("BRCC", SregBitSel::C),
+    ("BREQ", SregBitSel::Z),
+    ("BRNE", SregBitSel::Z),
+    ("BRMI", SregBitSel::N),
+    ("BRPL", SregBitSel::N),
+    ("BRLT", SregBitSel::S),
+    ("BRGE", SregBitSel::S),
+    ("BRVS", SregBitSel::V),
+    ("BRVC", SregBitSel::V),
+    ("BRHS", SregBitSel::H),
+    ("BRHC", SregBitSel::H),
+    ("BRIE", SregBitSel::I),
+    ("BRID", SregBitSel::I),
+];
+
+/// Instructions that write exactly one SREG bit and read none.
+static SINGLE_BIT_DEF: &[(&str, SregBitSel)] = &[
+    ("BST", SregBitSel::T),
+    ("SEI", SregBitSel::I),
+    ("CLI", SregBitSel::I),
+    ("SEC", SregBitSel::C),
+    ("CLC", SregBitSel::C),
+];
+
+/// Data-movement and control-transfer instructions that touch no SREG bit.
+static SREG_NEUTRAL: &[&str] = &[
+    "MOV", "LDI", "LD", "ST", "PUSH", "POP", "MOVW", "LDS", "STS", "NOP", "RET", "RETI", "CALL",
+    "RCALL", "JMP", "RJMP", "IJMP", "ICALL", "SLEEP", "WDR", "BREAK",
+];
+
+/// SREG bits an instruction defines and uses, as `(def, use)`.
+fn sreg_def_use(mnem: &str) -> (SregLiveness, SregLiveness) {
     let no_flags = SregLiveness::default();
+
+    if let Some((_, bit)) = BRANCH_FLAG_USE.iter().find(|(m, _)| *m == mnem) {
+        return (no_flags, only(*bit));
+    }
+    if let Some((_, bit)) = SINGLE_BIT_DEF.iter().find(|(m, _)| *m == mnem) {
+        return (only(*bit), no_flags);
+    }
+    if SREG_NEUTRAL.contains(&mnem) {
+        return (no_flags, no_flags);
+    }
 
     match mnem {
         "ADD" | "SUB" | "SUBI" | "ADIW" | "SBIW" | "NEG" | "MUL" | "MULS" | "MULSU" => {
-            (arith_def, no_flags)
+            (arith_def(), no_flags)
         }
         // Add-with-carry / subtract-with-carry: write arith flags AND read carry-in.
-        "ADC" | "SBC" | "SBCI" => (
-            arith_def,
-            SregLiveness {
-                c: true,
-                ..Default::default()
-            },
-        ),
-        "AND" | "ANDI" | "OR" | "ORI" | "EOR" | "COM" | "INC" | "DEC" | "CP" | "CPC" | "CPI" => (cz_def, no_flags),
-        "LSR" | "ROR" | "ASR" | "SWAP" => (
-            cz_def,
-            SregLiveness {
-                c: true,
-                ..Default::default()
-            },
-        ),
-        "BRCS" | "BRCC" => (
-            no_flags,
-            SregLiveness {
-                c: true,
-                ..Default::default()
-            },
-        ),
-        "BREQ" | "BRNE" => (
-            no_flags,
-            SregLiveness {
-                z: true,
-                ..Default::default()
-            },
-        ),
-        "BRMI" | "BRPL" => (
-            no_flags,
-            SregLiveness {
-                n: true,
-                ..Default::default()
-            },
-        ),
-        "BRLT" | "BRGE" => (
-            no_flags,
-            SregLiveness {
-                s: true,
-                ..Default::default()
-            },
-        ),
-        "BRVS" | "BRVC" => (
-            no_flags,
-            SregLiveness {
-                v: true,
-                ..Default::default()
-            },
-        ),
-        "BRHS" | "BRHC" => (
-            no_flags,
-            SregLiveness {
-                h: true,
-                ..Default::default()
-            },
-        ),
-        "BRIE" | "BRID" => (
-            no_flags,
-            SregLiveness {
-                i: true,
-                ..Default::default()
-            },
-        ),
-        "BST" => (
-            SregLiveness {
-                t: true,
-                ..Default::default()
-            },
-            no_flags,
-        ),
-        "BLD" => (
-            no_flags,
-            SregLiveness {
-                t: true,
-                ..Default::default()
-            },
-        ),
-        "SEI" | "CLI" => (
-            SregLiveness {
-                i: true,
-                ..Default::default()
-            },
-            no_flags,
-        ),
-        "SEC" | "CLC" => (
-            SregLiveness {
-                c: true,
-                ..Default::default()
-            },
-            no_flags,
-        ),
-        "MOV" | "LDI" | "LD" | "ST" | "PUSH" | "POP" | "MOVW" | "LDS" | "STS" | "NOP" | "RET"
-        | "RETI" | "CALL" | "RCALL" | "JMP" | "RJMP" | "IJMP" | "ICALL" | "SLEEP" | "WDR"
-        | "BREAK" => (no_flags, no_flags),
-        _ if mnem.starts_with("BR") => (no_flags, flag_use),
+        "ADC" | "SBC" | "SBCI" => (arith_def(), only(SregBitSel::C)),
+        "AND" | "ANDI" | "OR" | "ORI" | "EOR" | "COM" | "INC" | "DEC" | "CP" | "CPC" | "CPI" => {
+            (logic_def(), no_flags)
+        }
+        "LSR" | "ROR" | "ASR" | "SWAP" => (logic_def(), only(SregBitSel::C)),
+        "BLD" => (no_flags, only(SregBitSel::T)),
+        // Any other conditional branch conservatively reads the arithmetic flags.
+        _ if mnem.starts_with("BR") => (no_flags, logic_def()),
         _ => (no_flags, no_flags),
     }
 }
