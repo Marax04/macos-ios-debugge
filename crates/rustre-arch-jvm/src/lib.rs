@@ -4304,77 +4304,71 @@ impl JvmStackEffect {
     }
 }
 
+/// Ordered `(lo, hi, pops, pushes)` rows giving the stack effect of each JVM
+/// opcode range. Scanned in order by [`jvm_stack_effect`]; an opcode matched by
+/// no row has a variable or context-dependent effect and yields `None`.
+const JVM_STACK_EFFECT_TABLE: &[(u8, u8, i8, i8)] = &[
+    (0x00, 0x00, 0, 0), // Nop
+    (0x01, 0x01, 0, 1), // AconstNull
+    (0x02, 0x08, 0, 1), // IconstM1..Iconst5
+    (0x09, 0x0a, 0, 2), // Lconst0, Lconst1 (long = 2 slots)
+    (0x0b, 0x0d, 0, 1), // Fconst0..Fconst2
+    (0x0e, 0x0f, 0, 2), // Dconst0, Dconst1
+    (0x10, 0x10, 0, 1), // Bipush
+    (0x11, 0x11, 0, 1), // Sipush
+    (0x12, 0x12, 0, 1), // Ldc
+    (0x13, 0x13, 0, 1), // LdcW
+    (0x14, 0x14, 0, 2), // Ldc2W
+    (0x15, 0x19, 0, 1), // *load (variable slot count simplified)
+    (0x1a, 0x2d, 0, 1), // Iload0..Aload3
+    (0x2e, 0x35, 2, 1), // Iaload..Saload (pop arrayref + index, push element)
+    (0x36, 0x4e, 1, 0), // Istore..Astore, Istore0..Astore3
+    (0x4f, 0x56, 3, 0), // Iastore..Sastore (arrayref + index + value -> void)
+    (0x57, 0x57, 1, 0), // Pop
+    (0x58, 0x58, 2, 0), // Pop2
+    (0x59, 0x59, 1, 2), // Dup
+    (0x5a, 0x5a, 2, 3), // DupX1
+    (0x5b, 0x5b, 3, 4), // DupX2
+    (0x5c, 0x5c, 2, 4), // Dup2
+    (0x5d, 0x5d, 3, 5), // Dup2X1
+    (0x5e, 0x5e, 4, 6), // Dup2X2
+    (0x5f, 0x5f, 2, 2), // Swap
+    (0x60, 0x84, 2, 1), // Iadd..Lxor arithmetic (simplified to net 0 for binops)
+    (0x85, 0x93, 1, 1), // I2l..I2s conversions
+    (0x94, 0x98, 2, 1), // Lcmp, Fcmpl, Fcmpg, Dcmpl, Dcmpg
+    (0x99, 0x9e, 1, 0), // Ifeq..Ifle (pop 1, branch)
+    (0x9f, 0xa6, 2, 0), // IfIcmpeq..IfAcmpne (pop 2, branch)
+    (0xa7, 0xa7, 0, 0), // Goto
+    (0xa8, 0xa8, 0, 1), // Jsr
+    (0xa9, 0xa9, 0, 0), // Ret
+    (0xac, 0xb0, 1, 0), // Ireturn..Areturn (pop return value)
+    (0xb1, 0xb1, 0, 0), // return (void)
+    (0xb2, 0xb2, 0, 1), // Getstatic
+    (0xb3, 0xb3, 1, 0), // Putstatic
+    (0xb4, 0xb4, 1, 1), // Getfield
+    (0xb5, 0xb5, 2, 0), // Putfield
+    (0xbe, 0xbe, 1, 1), // Arraylength
+    (0xbf, 0xbf, 1, 0), // Athrow
+    (0xc0, 0xc1, 1, 1), // Checkcast, Instanceof
+    (0xc2, 0xc3, 1, 0), // Monitorenter, Monitorexit
+    (0xc6, 0xc7, 1, 0), // Ifnull, Ifnonnull
+];
+
 /// Return the stack effect of a single-byte JVM opcode.
 ///
 /// Returns `None` for opcodes with variable or context-dependent effects
-/// (`invoke*`, `return*`, `Tableswitch`, `Lookupswitch`, `Wide`, reserved).
+/// (`invoke*`, `Tableswitch`, `Lookupswitch`, `Wide`, reserved).
 #[must_use]
 pub const fn jvm_stack_effect(op: u8) -> Option<JvmStackEffect> {
-    macro_rules! se {
-        ($p:expr, $s:expr) => {
-            Some(JvmStackEffect {
-                pops: $p,
-                pushes: $s,
-            })
-        };
+    let mut i = 0;
+    while i < JVM_STACK_EFFECT_TABLE.len() {
+        let (lo, hi, pops, pushes) = JVM_STACK_EFFECT_TABLE[i];
+        if op >= lo && op <= hi {
+            return Some(JvmStackEffect { pops, pushes });
+        }
+        i += 1;
     }
-    match op {
-        0x00 => se!(0, 0),                             // Nop
-        0x01 => se!(0, 1),                             // AconstNull
-        0x02..=0x08 => se!(0, 1),                      // IconstM1..Iconst5
-        0x09 | 0x0a => se!(0, 2),                      // Lconst0, Lconst1 (long = 2 slots)
-        0x0b..=0x0d => se!(0, 1),                      // Fconst0..Fconst2
-        0x0e | 0x0f => se!(0, 2),                      // Dconst0, Dconst1
-        0x10 => se!(0, 1),                             // Bipush
-        0x11 => se!(0, 1),                             // Sipush
-        0x12 => se!(0, 1),                             // Ldc
-        0x13 => se!(0, 1),                             // LdcW
-        0x14 => se!(0, 2),                             // Ldc2W
-        0x15..=0x19 => se!(0, 1), // *load (variable slot count simplified)
-        // Iload0..Aload3
-        0x1a..=0x2d => se!(0, 1),
-        // Iaload..Saload  (Pop arrayref + index, push element)
-        0x2e..=0x35 => se!(2, 1),
-        // Istore..Astore, Istore0..Astore3
-        0x36..=0x4e => se!(1, 0),
-        // Iastore..Sastore (arrayref + index + value -> void)
-        0x4f..=0x56 => se!(3, 0),
-        0x57 => se!(1, 0), // Pop
-        0x58 => se!(2, 0), // Pop2
-        0x59 => se!(1, 2), // Dup
-        0x5a => se!(2, 3), // DupX1
-        0x5b => se!(3, 4), // DupX2
-        0x5c => se!(2, 4), // Dup2
-        0x5d => se!(3, 5), // Dup2X1
-        0x5e => se!(4, 6), // Dup2X2
-        0x5f => se!(2, 2), // Swap
-        // Iadd..Lxor arithmetic (simplified to net 0 for binops)
-        0x60..=0x84 => se!(2, 1),
-        // I2l, I2f, I2d, L2i, L2f, L2d, F2i, F2l, F2d, D2i, D2l, D2f, I2b, I2c, I2s
-        0x85..=0x93 => se!(1, 1),
-        // Lcmp, Fcmpl, Fcmpg, Dcmpl, Dcmpg
-        0x94..=0x98 => se!(2, 1),
-        // Ifeq..Ifle (Pop 1, branch)
-        0x99..=0x9e => se!(1, 0),
-        // IfIcmpeq..IfAcmpne (Pop 2, branch)
-        0x9f..=0xa6 => se!(2, 0),
-        0xa7 => se!(0, 0), // Goto
-        0xa8 => se!(0, 1), // Jsr
-        0xa9 => se!(0, 0), // Ret
-        // Ireturn..Areturn (Pop return value)
-        0xac..=0xb0 => se!(1, 0),
-        0xb1 => se!(0, 0),        // return (void)
-        0xb2 => se!(0, 1),        // Getstatic
-        0xb3 => se!(1, 0),        // Putstatic
-        0xb4 => se!(1, 1),        // Getfield
-        0xb5 => se!(2, 0),        // Putfield
-        0xbe => se!(1, 1),        // Arraylength
-        0xbf => se!(1, 0),        // Athrow
-        0xc0 | 0xc1 => se!(1, 1), // Checkcast, Instanceof
-        0xc2 | 0xc3 => se!(1, 0), // Monitorenter, Monitorexit
-        0xc6 | 0xc7 => se!(1, 0), // Ifnull, Ifnonnull
-        _ => None,
-    }
+    None
 }
 
 // ---------------------------------------------------------------------------
