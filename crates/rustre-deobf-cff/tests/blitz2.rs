@@ -15,12 +15,12 @@ use rustre_deobf_cff::ollvm::{
 fn lcg() -> impl FnMut() -> u64 {
     let mut s: u64 = 0xDEAD_BEEF_CAFE_BABE;
     move || {
-        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
 
-fn bb(addr: u64, succ: usize, pred: usize, instr: usize) -> SimpleBb {
+const fn bb(addr: u64, succ: usize, pred: usize, instr: usize) -> SimpleBb {
     SimpleBb {
         address: Address::new(addr),
         successor_count: succ,
@@ -87,7 +87,7 @@ fn t03_blockmapping_insert_roundtrip_50() {
         // Last write wins (HashMap semantics) — find what was actually mapped.
         let got = m.block_for_state(*s).unwrap();
         let states = m.states_for_block(got);
-        assert!(states.contains(s), "state {} should map back to its block", s);
+        assert!(states.contains(s), "state {s} should map back to its block");
         let _ = addr;
     }
     assert!(m.is_complete());
@@ -102,7 +102,7 @@ fn t04_blockmapping_multiple_states_one_block() {
     m.insert(3, a);
     assert_eq!(m.block_count(), 1);
     let mut s = m.states_for_block(a).to_vec();
-    s.sort();
+    s.sort_unstable();
     assert_eq!(s, vec![1, 2, 3]);
 }
 
@@ -255,7 +255,7 @@ fn t20_cffpattern_display_all() {
         (CffPattern::NestedDispatch, "NestedDispatch"),
         (CffPattern::Unknown, "Unknown"),
     ] {
-        assert_eq!(format!("{}", p), s);
+        assert_eq!(format!("{p}"), s);
     }
 }
 
@@ -336,7 +336,7 @@ fn t25_trace_state_max_depth() {
 fn t26_scan_mov_r32_imm32() {
     // MOV EAX, 0xCAFEBABE → B8 BE BA FE CA
     let bytes = [0xB8, 0xBE, 0xBA, 0xFE, 0xCA];
-    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0xCAFEBABE));
+    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0xCAFE_BABE));
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn t27_scan_mov_r64_imm64_rexw() {
     let bytes = [0x48, 0xB8, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11];
     assert_eq!(
         CffRecoverer::scan_block_state_const(&bytes),
-        Some(0x1122334455667788)
+        Some(0x1122_3344_5566_7788)
     );
 }
 
@@ -353,7 +353,7 @@ fn t27_scan_mov_r64_imm64_rexw() {
 fn t28_scan_mov_rm32_imm32_c7_form() {
     // C7 C0 imm32 → MOV EAX, imm32
     let bytes = [0xC7, 0xC0, 0xEF, 0xBE, 0xAD, 0xDE];
-    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0xDEADBEEF));
+    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0xDEAD_BEEF));
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn t36_verifier_clean_on_recovered() {
 fn t37_pass_rejects_non_cff_linear() {
     let pass = CffDeobfuscationPass::new();
     let cfg = SimpleCfg {
-        blocks: (0..4).map(|i| bb(0x2000 + i * 0x10, if i < 3 {1} else {0}, if i > 0 {1} else {0}, 3)).collect(),
+        blocks: (0..4).map(|i| bb(0x2000 + i * 0x10, usize::from(i < 3), usize::from(i > 0), 3)).collect(),
         edges: vec![
             (0, 1, EdgeType::Unconditional),
             (1, 2, EdgeType::Unconditional),
@@ -571,7 +571,7 @@ fn t48_state_var_tracker_basic() {
     assert_eq!(blocks.len(), 2);
     assert_eq!(t.writer_count(), 2);
     let mut states = t.all_states();
-    states.sort();
+    states.sort_unstable();
     assert_eq!(states, vec![42]);
 }
 
@@ -688,10 +688,10 @@ fn t57_propagate_dataflow_with_seeded_constants() {
     assert_eq!(lattice.len(), cfg.blocks.len());
     // Body blocks have state_const set in make_cff → must be Const(_).
     for i in 0..5 {
-        let addr = 0x1020 + (i as u64) * 0x10;
+        let addr = 0x1020 + i * 0x10;
         match lattice.get(&addr) {
             Some(ConstLattice::Const(v)) => assert_eq!(*v, 0x100 + i),
-            other => panic!("expected Const for block {:#x}, got {:?}", addr, other),
+            other => panic!("expected Const for block {addr:#x}, got {other:?}"),
         }
     }
 }

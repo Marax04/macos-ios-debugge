@@ -1164,11 +1164,11 @@ impl ConstLattice {
     /// Meet operator: `Top` is the identity; two equal `Const` values stay
     /// `Const`; anything else collapses to `Bottom`.
     #[must_use]
-    pub const fn meet(self, other: ConstLattice) -> ConstLattice {
+    pub const fn meet(self, other: Self) -> Self {
         match (self, other) {
-            (ConstLattice::Top, x) | (x, ConstLattice::Top) => x,
-            (ConstLattice::Const(a), ConstLattice::Const(b)) if a == b => ConstLattice::Const(a),
-            _ => ConstLattice::Bottom,
+            (Self::Top, x) | (x, Self::Top) => x,
+            (Self::Const(a), Self::Const(b)) if a == b => Self::Const(a),
+            _ => Self::Bottom,
         }
     }
 
@@ -1176,7 +1176,7 @@ impl ConstLattice {
     #[must_use]
     pub const fn as_const(self) -> Option<u64> {
         match self {
-            ConstLattice::Const(v) => Some(v),
+            Self::Const(v) => Some(v),
             _ => None,
         }
     }
@@ -1277,8 +1277,7 @@ impl StateVarTracker {
                 // but also record any block that has a known constant — the
                 // caller can filter by context.
                 let feeds_dispatcher = dispatcher_idx
-                    .map(|d| cfg.edges.iter().any(|&(f, t, _)| f == i && t == d))
-                    .unwrap_or(false);
+                    .is_some_and(|d| cfg.edges.iter().any(|&(f, t, _)| f == i && t == d));
                 if feeds_dispatcher {
                     self.record(bb.address, v, false);
                 }
@@ -1450,7 +1449,7 @@ impl Default for CffDeobfuscationPass {
 impl CffDeobfuscationPass {
     /// Create a pass with default detector and recoverer settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             detector: CffDetector::new(),
             recoverer: CffRecoverer::new(),
@@ -2029,8 +2028,8 @@ mod tests {
         let blocks: Vec<SimpleBb> = (0u64..4)
             .map(|i| SimpleBb {
                 address: Address::new(0x2000 + i * 0x10),
-                successor_count: if i < 3 { 1 } else { 0 },
-                predecessor_count: if i > 0 { 1 } else { 0 },
+                successor_count: usize::from(i < 3),
+                predecessor_count: usize::from(i > 0),
                 instr_count: 3,
                 ends_with_indirect_jump: false,
                 ends_with_conditional: false,
@@ -2805,8 +2804,8 @@ impl SmtSort {
     #[must_use]
     pub fn to_smtlib2(&self) -> String {
         match self {
-            SmtSort::BitVec(n) => format!("(_ BitVec {n})"),
-            SmtSort::Bool => "Bool".to_owned(),
+            Self::BitVec(n) => format!("(_ BitVec {n})"),
+            Self::Bool => "Bool".to_owned(),
         }
     }
 }
@@ -3710,9 +3709,7 @@ impl CfgRewriter {
         match instr {
             MlilInstruction::SetConst { dest, .. } => dest == sv,
             MlilInstruction::SetReg { dest, src } => dest == sv || src == sv,
-            MlilInstruction::Xor { dest, lhs, rhs } => dest == sv || lhs == sv || rhs == sv,
-            MlilInstruction::Add { dest, lhs, rhs } => dest == sv || lhs == sv || rhs == sv,
-            MlilInstruction::And { dest, lhs, rhs } => dest == sv || lhs == sv || rhs == sv,
+            MlilInstruction::Xor { dest, lhs, rhs } | MlilInstruction::Add { dest, lhs, rhs } | MlilInstruction::And { dest, lhs, rhs } => dest == sv || lhs == sv || rhs == sv,
             MlilInstruction::Ite { dest, cond, .. } => dest == sv || cond == sv,
             MlilInstruction::CondBranch { cond, .. } => cond == sv,
             _ => false,
@@ -3822,8 +3819,7 @@ impl OllvmDetectorV2 {
             .blocks
             .iter()
             .max_by_key(|bb| func.predecessors_of(bb.address).len())
-            .map(|bb| bb.address)
-            .unwrap_or(0);
+            .map_or(0, |bb| bb.address);
 
         let back_edge_count = func
             .edges
@@ -3948,7 +3944,7 @@ impl OllvmDetectorV2 {
         }
 
         // Sort by in-degree descending.
-        candidates.sort_by(|a, b| b.in_degree.cmp(&a.in_degree));
+        candidates.sort_by_key(|b| std::cmp::Reverse(b.in_degree));
         candidates
     }
 

@@ -73,7 +73,7 @@ impl Default for OllvmDetector {
 impl OllvmDetector {
     /// Create an `OllvmDetector` with default settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             inner: CffDetector::new().with_min_confidence(0.5),
             min_back_edges: 2,
@@ -527,7 +527,7 @@ impl Default for OllvmDeobfuscationPass {
 impl OllvmDeobfuscationPass {
     /// Create a new pass with default settings.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             detector: OllvmDetector::new(),
             recoverer: CffRecoverer::new(),

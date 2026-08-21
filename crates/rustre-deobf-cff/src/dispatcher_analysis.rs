@@ -717,7 +717,7 @@ impl StateVariableCandidateFinder {
             })
             .collect();
 
-        candidates.sort_by(|a, b| b.confidence.cmp(&a.confidence));
+        candidates.sort_by_key(|b| std::cmp::Reverse(b.confidence));
         candidates
     }
 

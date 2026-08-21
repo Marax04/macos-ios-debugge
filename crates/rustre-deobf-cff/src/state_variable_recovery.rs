@@ -72,7 +72,7 @@ impl CffBlock {
 
     /// Whether this block is a purely routing block with no real work.
     #[must_use]
-    pub fn is_routing_only(&self) -> bool {
+    pub const fn is_routing_only(&self) -> bool {
         self.is_dispatcher && !self.is_real_block && self.size() < 64
     }
 }
@@ -426,15 +426,14 @@ impl StateVariableRecoverer {
                 .nth(idx) // naive index-based pairing (real impl uses data-flow)
                 .copied();
 
-            if let Some(addr) = candidate_addr {
-                if let Some(block) = block_map.get(&addr) {
-                    if !block.is_routing_only() {
-                        mapping.add(state_val, addr);
-                    } else {
+            if let Some(addr) = candidate_addr
+                && let Some(block) = block_map.get(&addr) {
+                    if block.is_routing_only() {
                         mapping.dispatcher_blocks.push(addr);
+                    } else {
+                        mapping.add(state_val, addr);
                     }
                 }
-            }
         }
 
         mapping
@@ -508,7 +507,7 @@ impl StateVariableRecoverer {
 
         // Overall confidence
         let dispatcher_conf = if dispatcher.is_some() { 0.35 } else { 0.0 };
-        let state_var_conf = if result.state_var != StateVariable::Unknown { 0.25 } else { 0.0 };
+        let state_var_conf = if result.state_var == StateVariable::Unknown { 0.0 } else { 0.25 };
         let mapping_conf = result.mapping.coverage(result.state_values.len()) * 0.30;
         let transition_conf =
             if result.transitions.is_empty() { 0.0 } else { 0.10 };

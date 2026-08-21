@@ -152,7 +152,7 @@ pub struct LiftedOp {
     pub operands: Vec<LiftedOperand>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LiftedOperand {
     Immediate(u64),
     VmRegister(String),
@@ -267,8 +267,8 @@ impl VmHandlerAnalyzer {
     pub fn identify_dispatch_loop(&self) -> Result<VmDispatchLoop, VmError> {
         for (&block_addr, insns) in &self.code {
             for insn in insns {
-                if insn.is_indirect_jmp {
-                    if let Some(ref tbl_reg) = insn.indirect_table_reg {
+                if insn.is_indirect_jmp
+                    && let Some(ref tbl_reg) = insn.indirect_table_reg {
                         // Heuristic: look backwards for a byte-load from a pc-like register
                         let fetch_addr = self.find_pc_fetch(block_addr, insn.addr);
                         return Ok(VmDispatchLoop {
@@ -280,7 +280,6 @@ impl VmHandlerAnalyzer {
                             opcode_reg: tbl_reg.clone(),
                         });
                     }
-                }
             }
         }
         Err(VmError::DispatchLoopNotFound)
@@ -391,13 +390,13 @@ impl VmHandlerAnalyzer {
         }
 
         // Jmp / JmpCond
-        if mnemonics.iter().any(|&m| m == "jmp") {
+        if mnemonics.contains(&"jmp") {
             return HandlerSemantics::Jmp;
         }
         if mnemonics.iter().any(|&m| matches!(m, "je" | "jne" | "jz" | "jnz" | "jl" | "jg")) {
             return HandlerSemantics::JmpCond;
         }
-        if mnemonics.iter().any(|&m| m == "call") {
+        if mnemonics.contains(&"call") {
             return HandlerSemantics::Call;
         }
         if mnemonics.iter().any(|&m| m == "ret" || m == "retn") {
@@ -410,13 +409,13 @@ impl VmHandlerAnalyzer {
         // LoadMem / StoreMem
         if has_mem_read && !has_mem_write {
             // Distinguish push-stack (stack write) from generic load
-            if mnemonics.iter().any(|&m| m == "push") {
+            if mnemonics.contains(&"push") {
                 return HandlerSemantics::Push;
             }
             return HandlerSemantics::LoadMem;
         }
         if has_mem_write && !has_mem_read {
-            if mnemonics.iter().any(|&m| m == "pop") {
+            if mnemonics.contains(&"pop") {
                 return HandlerSemantics::Pop;
             }
             return HandlerSemantics::StoreMem;
@@ -427,7 +426,7 @@ impl VmHandlerAnalyzer {
         }
 
         // LoadImm: mov reg, imm
-        if mnemonics.iter().any(|&m| m == "mov") {
+        if mnemonics.contains(&"mov") {
             let has_imm = limited
                 .iter()
                 .any(|i| i.operands.iter().any(|o| o.starts_with("0x") || o.chars().all(|c| c.is_ascii_digit())));
@@ -437,14 +436,14 @@ impl VmHandlerAnalyzer {
         }
 
         // Arithmetic patterns
-        if mnemonics.iter().any(|&m| m == "add") { return HandlerSemantics::Add; }
-        if mnemonics.iter().any(|&m| m == "sub") { return HandlerSemantics::Sub; }
+        if mnemonics.contains(&"add") { return HandlerSemantics::Add; }
+        if mnemonics.contains(&"sub") { return HandlerSemantics::Sub; }
         if mnemonics.iter().any(|&m| m == "imul" || m == "mul") { return HandlerSemantics::Mul; }
         if mnemonics.iter().any(|&m| m == "idiv" || m == "div") { return HandlerSemantics::Div; }
-        if mnemonics.iter().any(|&m| m == "and") { return HandlerSemantics::And; }
-        if mnemonics.iter().any(|&m| m == "or") { return HandlerSemantics::Or; }
-        if mnemonics.iter().any(|&m| m == "xor") { return HandlerSemantics::Xor; }
-        if mnemonics.iter().any(|&m| m == "not") { return HandlerSemantics::Not; }
+        if mnemonics.contains(&"and") { return HandlerSemantics::And; }
+        if mnemonics.contains(&"or") { return HandlerSemantics::Or; }
+        if mnemonics.contains(&"xor") { return HandlerSemantics::Xor; }
+        if mnemonics.contains(&"not") { return HandlerSemantics::Not; }
         if mnemonics.iter().any(|&m| m == "shl" || m == "sal") { return HandlerSemantics::Shl; }
         if mnemonics.iter().any(|&m| m == "shr" || m == "sar") { return HandlerSemantics::Shr; }
 
@@ -644,7 +643,7 @@ mod tests {
         let mut a = VmHandlerAnalyzer::new();
         let mut table = HashMap::new();
         for opcode in 0u8..4 {
-            let addr = 0x1000 + opcode as u64 * 0x100;
+            let addr = 0x1000 + u64::from(opcode) * 0x100;
             table.insert(opcode, addr);
             a.add_block(addr, vec![make_insn(addr, "nop")]);
         }

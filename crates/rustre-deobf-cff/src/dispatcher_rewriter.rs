@@ -88,15 +88,14 @@ impl Cfg {
         let mut queue = VecDeque::new();
         queue.push_back(self.entry);
         while let Some(addr) = queue.pop_front() {
-            if visited.insert(addr) {
-                if let Some(block) = self.blocks.get(&addr) {
+            if visited.insert(addr)
+                && let Some(block) = self.blocks.get(&addr) {
                     for &succ in &block.successors {
                         if !visited.contains(&succ) {
                             queue.push_back(succ);
                         }
                     }
                 }
-            }
         }
         visited
     }
@@ -431,14 +430,13 @@ impl DispatcherRewriter {
 
         // Blocks whose instructions changed
         for (addr, after_block) in &after.blocks {
-            if let Some(before_block) = before.blocks.get(addr) {
-                if before_block.insns != after_block.insns {
+            if let Some(before_block) = before.blocks.get(addr)
+                && before_block.insns != after_block.insns {
                     result.add_action(RewriteAction::ReplaceBlock {
                         addr: *addr,
                         new_insns: after_block.insns.clone(),
                     });
                 }
-            }
         }
 
         result

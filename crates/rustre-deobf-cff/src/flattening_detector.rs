@@ -444,7 +444,7 @@ impl FlatteningDetector {
             }
         }
         // Sort by arm_count descending so the main dispatcher is first.
-        result.sort_by(|a, b| b.arm_count.cmp(&a.arm_count));
+        result.sort_by_key(|b| std::cmp::Reverse(b.arm_count));
         result
     }
 

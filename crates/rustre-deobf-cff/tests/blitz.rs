@@ -10,7 +10,7 @@ use rustre_deobf_cff::{
 };
 
 // ---------- helpers ----------
-fn bb(addr: u64, succ: usize, pred: usize, instr: usize) -> SimpleBb {
+const fn bb(addr: u64, succ: usize, pred: usize, instr: usize) -> SimpleBb {
     SimpleBb {
         address: Address::new(addr),
         successor_count: succ,
@@ -368,7 +368,7 @@ fn scan_state_const_empty() {
 fn scan_state_const_mov_r32_imm32() {
     // B8 78 56 34 12  → MOV EAX, 0x12345678
     let bytes = [0xB8u8, 0x78, 0x56, 0x34, 0x12];
-    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0x12345678));
+    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0x1234_5678));
 }
 #[test]
 fn scan_state_const_mov_r64_imm64() {
@@ -376,14 +376,14 @@ fn scan_state_const_mov_r64_imm64() {
     let bytes = [0x48u8, 0xB8, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
     assert_eq!(
         CffRecoverer::scan_block_state_const(&bytes),
-        Some(0x8877665544332211)
+        Some(0x8877_6655_4433_2211)
     );
 }
 #[test]
 fn scan_state_const_mov_rm32_imm32() {
     // C7 C0 78 56 34 12 → MOV EAX, 0x12345678
     let bytes = [0xC7u8, 0xC0, 0x78, 0x56, 0x34, 0x12];
-    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0x12345678));
+    assert_eq!(CffRecoverer::scan_block_state_const(&bytes), Some(0x1234_5678));
 }
 #[test]
 fn scan_state_const_returns_last() {

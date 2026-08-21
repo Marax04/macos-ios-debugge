@@ -248,7 +248,7 @@ impl TransitionMap {
     /// Build from a [`StateMachine`].
     #[must_use]
     pub fn from_machine(sm: &StateMachine) -> Self {
-        let mut map = TransitionMap::default();
+        let mut map = Self::default();
         for t in &sm.transitions {
             map.inner.entry(t.from).or_default().push(t.clone());
         }
@@ -492,7 +492,7 @@ pub struct StateMachineRecovery {
 
 impl Default for StateMachineRecovery {
     fn default() -> Self {
-        StateMachineRecovery {
+        Self {
             min_states: 3,
             eliminate_pass_throughs: true,
         }
@@ -896,7 +896,7 @@ mod tests {
         // All states should be reachable from 0.
         for id in [0u64, 1, 2, 3] {
             if sm.states.contains_key(&id) {
-                assert!(reach.contains(&id), "state {} not reachable", id);
+                assert!(reach.contains(&id), "state {id} not reachable");
             }
         }
     }
