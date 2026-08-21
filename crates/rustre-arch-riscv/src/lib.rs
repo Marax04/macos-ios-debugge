@@ -8281,9 +8281,7 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
         let imm5 = rv_sign_ext((word >> 15) & 0x1f, 5);
         format!("{}, {}, {imm5}{}", vr(vd), vr(vs2), mask)
     };
-    let ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
     let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
-    let ops_red = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
 
     match funct3 {
         // OPIVV / OPIVX / OPIVI
@@ -8346,6 +8344,112 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
         }
 
         // OPMVV / OPMVX
+        _ => decode_rvv_rest(address, word, bytes),
+    }
+}
+
+/// Second half of the RVV funct3 dispatch.
+fn decode_rvv_rest(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
+    let funct3 = (word >> 12) & 7;
+    let funct6 = (word >> 26) & 0x3F;
+    let vm = (word >> 25) & 1;
+    let vd = ((word >> 7) & 0x1F) as usize;
+    let vs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let rs1 = vs1;
+    let rd = vd;
+    let mask = vmask(vm);
+
+    // VSETVL family — funct3 == 7
+    if funct3 == 7 {
+        let b31 = (word >> 31) & 1;
+        let b30 = (word >> 30) & 1;
+        if b31 == 0 {
+            // VSETVLI: rd, rs1, vtypei[10:0]
+            let vtypei = (word >> 20) & 0x7FF;
+            let ops = format!("{}, {}, {vtypei:#05x}", xr(rd), xr(rs1));
+            return Some(plain(address, "vsetvli", ops, bytes));
+        }
+        if b31 == 1 && b30 == 1 {
+            // VSETIVLI: rd, uimm5, vtypei[9:0]  (bits[31:30]=0b11)
+            let uimm5 = (word >> 15) & 0x1F;
+            let vtypei = (word >> 20) & 0x3FF;
+            let ops = format!("{}, {uimm5}, {vtypei:#05x}", xr(rd));
+            return Some(plain(address, "vsetivli", ops, bytes));
+        }
+        // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
+        let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
+        return Some(plain(address, "vsetvl", ops, bytes));
+    }
+
+    // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
+    let nf = (word >> 29) & 7;
+    let mew = (word >> 28) & 1;
+    let mop = (word >> 26) & 3;
+    let lumop = vs2; // for unit-stride
+    let width_bits: u32 = match (mew, (word >> 12) & 7) {
+        (0, 5) => 16,
+        (0, 6) => 32,
+        (0, 7) => 64,
+        _ => 8,
+    };
+
+    if (word & 0x7F) == 0x07 {
+        // Vector load
+        let base = xr(rs1);
+        let mn = match mop {
+            0 => {
+                // unit stride
+                match lumop {
+                    0 => format!("vle{width_bits}.v"),
+                    16 => format!("vlse{width_bits}.v"),
+                    _ => format!("vluxei{width_bits}.v"),
+                }
+            }
+            2 => format!("vlse{width_bits}.v"),
+            1 => format!("vluxei{width_bits}.v"),
+            3 => format!("vloxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vd))
+        };
+        let nf_str = if nf > 0 {
+            format!("  // nf={nf}")
+        } else {
+            String::new()
+        };
+        let _ = nf_str;
+        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
+    }
+    if (word & 0x7F) == 0x27 {
+        // Vector store
+        let base = xr(rs1);
+        let vs3 = vd;
+        let mn = match mop {
+            0 => format!("vse{width_bits}.v"),
+            2 => format!("vsse{width_bits}.v"),
+            1 => format!("vsuxei{width_bits}.v"),
+            3 => format!("vsoxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vs3))
+        };
+        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    }
+
+    // Arithmetic — opcode == 0x57
+    let ops_vvv = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
+    let ops_vec_scalar = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
+    let ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
+    let ops_red = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
+
+    match funct3 {
         4 | 6 => {
             let mn: Option<&str> = match funct6 {
                 0x00 => Some("vredsum"),
@@ -8810,9 +8914,7 @@ fn rv_lift_word_mid(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
     let funct3 = (word >> 12) & 7;
     let rs1 = ((word >> 15) & 0x1F) as usize;
     let rs2 = ((word >> 20) & 0x1F) as usize;
-    let funct7 = (word >> 25) & 0x7F;
     let imm_i = i64::from(rv_imm_i(word));
-    let imm_s = i64::from(rv_imm_s(word));
     let imm_b = i64::from(rv_imm_b(word));
 
     let ra1 = xabi(rs1);
@@ -8874,6 +8976,37 @@ fn rv_lift_word_mid(pc: u64, word: u32, xlen: u32) -> Vec<LlilOp> {
         }
 
         // STORE
+        _ => rv_lift_word_mid2(word, xlen),
+    }
+}
+
+/// Continuation of the opcode dispatch in `rv_lift_word`.
+fn rv_lift_word_mid2(word: u32, xlen: u32) -> Vec<LlilOp> {
+    let opcode = (word & 0x7F) as u8;
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let funct3 = (word >> 12) & 7;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+    let rs2 = ((word >> 20) & 0x1F) as usize;
+    let funct7 = (word >> 25) & 0x7F;
+    let imm_i = i64::from(rv_imm_i(word));
+    let imm_s = i64::from(rv_imm_s(word));
+
+    let ra1 = xabi(rs1);
+    let ra2 = xabi(rs2);
+    let rda = xabi(rd);
+
+    let skip = || vec![LlilOp::Nop]; // unhandled but safe
+
+    // Helper to produce: rda = expr, but only if rd != x0
+    let setreg = |expr: LlilExpr| {
+        if rd == 0 {
+            vec![LlilOp::Nop]
+        } else {
+            vec![llil_set(&rda, expr)]
+        }
+    };
+
+    match opcode {
         0x23 => {
             let addr = llil_add(llil_reg(&ra1), llil_const(imm_s));
             let size = match funct3 {
@@ -8970,7 +9103,6 @@ fn rv_lift_word_rest(word: u32, xlen: u32) -> Vec<LlilOp> {
     let ra2 = xabi(rs2);
     let rda = xabi(rd);
 
-    let nop = || vec![LlilOp::Nop];
     let skip = || vec![LlilOp::Nop]; // unhandled but safe
 
     // Helper to produce: rda = expr, but only if rd != x0
@@ -9066,6 +9198,25 @@ fn rv_lift_word_rest(word: u32, xlen: u32) -> Vec<LlilOp> {
         }
 
         // FENCE / FENCE.I
+        _ => rv_lift_word_rest2(word),
+    }
+}
+
+/// Continuation of the opcode dispatch in `rv_lift_word`.
+fn rv_lift_word_rest2(word: u32) -> Vec<LlilOp> {
+    let opcode = (word & 0x7F) as u8;
+    let rd = ((word >> 7) & 0x1F) as usize;
+    let funct3 = (word >> 12) & 7;
+    let rs1 = ((word >> 15) & 0x1F) as usize;
+
+    let ra1 = xabi(rs1);
+    let rda = xabi(rd);
+
+    let nop = || vec![LlilOp::Nop];
+
+    // Helper to produce: rda = expr, but only if rd != x0
+
+    match opcode {
         0x0F => nop(),
 
         // SYSTEM
