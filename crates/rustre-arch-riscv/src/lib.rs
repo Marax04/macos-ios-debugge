@@ -7919,12 +7919,6 @@ const fn vmask(m: u32) -> &'static str {
 #[must_use]
 pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruction> {
     let funct3 = (word >> 12) & 7;
-    let vm = (word >> 25) & 1;
-    let vd = ((word >> 7) & 0x1F) as usize;
-    let vs1 = ((word >> 15) & 0x1F) as usize;
-    let vs2 = ((word >> 20) & 0x1F) as usize;
-    let rs1 = vs1;
-    let mask = vmask(vm);
 
     // VSETVL family — funct3 == 7
     if funct3 == 7 {
@@ -7932,68 +7926,11 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
-    let nf = (word >> 29) & 7;
-    let mew = (word >> 28) & 1;
-    let mop = (word >> 26) & 3;
-    let lumop = vs2; // for unit-stride
-    let width_bits: u32 = match (mew, (word >> 12) & 7) {
-        (0, 5) => 16,
-        (0, 6) => 32,
-        (0, 7) => 64,
-        _ => 8,
-    };
-
-    if (word & 0x7F) == 0x07 {
-        // Vector load
-        let base = xr(rs1);
-        let mn = match mop {
-            0 => {
-                // unit stride
-                match lumop {
-                    0 => format!("vle{width_bits}.v"),
-                    16 => format!("vlse{width_bits}.v"),
-                    _ => format!("vluxei{width_bits}.v"),
-                }
-            }
-            2 => format!("vlse{width_bits}.v"),
-            1 => format!("vluxei{width_bits}.v"),
-            3 => format!("vloxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vd))
-        };
-        let nf_str = if nf > 0 {
-            format!("  // nf={nf}")
-        } else {
-            String::new()
-        };
-        let _ = nf_str;
-        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
-    }
-    if (word & 0x7F) == 0x27 {
-        // Vector store
-        let base = xr(rs1);
-        let vs3 = vd;
-        let mn = match mop {
-            0 => format!("vse{width_bits}.v"),
-            2 => format!("vsse{width_bits}.v"),
-            1 => format!("vsuxei{width_bits}.v"),
-            3 => format!("vsoxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vs3))
-        };
-        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    if let Some(insn) = decode_rvv_mem(address, word, &bytes) {
+        return Some(insn);
     }
 
     // Arithmetic — opcode == 0x57
-    let _ops_vx = || format!("{}, {}{}", vr(vd), xr(rs1), mask);
 
     decode_rvv_mid(address, word, bytes)
 }
@@ -8015,64 +7952,8 @@ fn decode_rvv_mid(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
-    let nf = (word >> 29) & 7;
-    let mew = (word >> 28) & 1;
-    let mop = (word >> 26) & 3;
-    let lumop = vs2; // for unit-stride
-    let width_bits: u32 = match (mew, (word >> 12) & 7) {
-        (0, 5) => 16,
-        (0, 6) => 32,
-        (0, 7) => 64,
-        _ => 8,
-    };
-
-    if (word & 0x7F) == 0x07 {
-        // Vector load
-        let base = xr(rs1);
-        let mn = match mop {
-            0 => {
-                // unit stride
-                match lumop {
-                    0 => format!("vle{width_bits}.v"),
-                    16 => format!("vlse{width_bits}.v"),
-                    _ => format!("vluxei{width_bits}.v"),
-                }
-            }
-            2 => format!("vlse{width_bits}.v"),
-            1 => format!("vluxei{width_bits}.v"),
-            3 => format!("vloxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vd))
-        };
-        let nf_str = if nf > 0 {
-            format!("  // nf={nf}")
-        } else {
-            String::new()
-        };
-        let _ = nf_str;
-        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
-    }
-    if (word & 0x7F) == 0x27 {
-        // Vector store
-        let base = xr(rs1);
-        let vs3 = vd;
-        let mn = match mop {
-            0 => format!("vse{width_bits}.v"),
-            2 => format!("vsse{width_bits}.v"),
-            1 => format!("vsuxei{width_bits}.v"),
-            3 => format!("vsoxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vs3))
-        };
-        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    if let Some(insn) = decode_rvv_mem(address, word, &bytes) {
+        return Some(insn);
     }
 
     // Arithmetic — opcode == 0x57
@@ -8145,64 +8026,8 @@ fn decode_rvv_rest(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
-    let nf = (word >> 29) & 7;
-    let mew = (word >> 28) & 1;
-    let mop = (word >> 26) & 3;
-    let lumop = vs2; // for unit-stride
-    let width_bits: u32 = match (mew, (word >> 12) & 7) {
-        (0, 5) => 16,
-        (0, 6) => 32,
-        (0, 7) => 64,
-        _ => 8,
-    };
-
-    if (word & 0x7F) == 0x07 {
-        // Vector load
-        let base = xr(rs1);
-        let mn = match mop {
-            0 => {
-                // unit stride
-                match lumop {
-                    0 => format!("vle{width_bits}.v"),
-                    16 => format!("vlse{width_bits}.v"),
-                    _ => format!("vluxei{width_bits}.v"),
-                }
-            }
-            2 => format!("vlse{width_bits}.v"),
-            1 => format!("vluxei{width_bits}.v"),
-            3 => format!("vloxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vd))
-        };
-        let nf_str = if nf > 0 {
-            format!("  // nf={nf}")
-        } else {
-            String::new()
-        };
-        let _ = nf_str;
-        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
-    }
-    if (word & 0x7F) == 0x27 {
-        // Vector store
-        let base = xr(rs1);
-        let vs3 = vd;
-        let mn = match mop {
-            0 => format!("vse{width_bits}.v"),
-            2 => format!("vsse{width_bits}.v"),
-            1 => format!("vsuxei{width_bits}.v"),
-            3 => format!("vsoxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vs3))
-        };
-        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    if let Some(insn) = decode_rvv_mem(address, word, &bytes) {
+        return Some(insn);
     }
 
     // Arithmetic — opcode == 0x57
@@ -8339,64 +8164,8 @@ fn decode_rvv_tail(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instru
     }
 
     // Vector loads / stores — funct3 == 0,5 (unit-stride), 2,6 (strided), 3,7 (indexed)
-    let nf = (word >> 29) & 7;
-    let mew = (word >> 28) & 1;
-    let mop = (word >> 26) & 3;
-    let lumop = vs2; // for unit-stride
-    let width_bits: u32 = match (mew, (word >> 12) & 7) {
-        (0, 5) => 16,
-        (0, 6) => 32,
-        (0, 7) => 64,
-        _ => 8,
-    };
-
-    if (word & 0x7F) == 0x07 {
-        // Vector load
-        let base = xr(rs1);
-        let mn = match mop {
-            0 => {
-                // unit stride
-                match lumop {
-                    0 => format!("vle{width_bits}.v"),
-                    16 => format!("vlse{width_bits}.v"),
-                    _ => format!("vluxei{width_bits}.v"),
-                }
-            }
-            2 => format!("vlse{width_bits}.v"),
-            1 => format!("vluxei{width_bits}.v"),
-            3 => format!("vloxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vd))
-        };
-        let nf_str = if nf > 0 {
-            format!("  // nf={nf}")
-        } else {
-            String::new()
-        };
-        let _ = nf_str;
-        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes));
-    }
-    if (word & 0x7F) == 0x27 {
-        // Vector store
-        let base = xr(rs1);
-        let vs3 = vd;
-        let mn = match mop {
-            0 => format!("vse{width_bits}.v"),
-            2 => format!("vsse{width_bits}.v"),
-            1 => format!("vsuxei{width_bits}.v"),
-            3 => format!("vsoxei{width_bits}.v"),
-            _ => return None,
-        };
-        let ops = if mop == 2 {
-            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
-        } else {
-            format!("{}, ({base}){mask}", vr(vs3))
-        };
-        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes));
+    if let Some(insn) = decode_rvv_mem(address, word, &bytes) {
+        return Some(insn);
     }
 
     // Arithmetic — opcode == 0x57
@@ -12301,4 +12070,79 @@ fn decode_rvv_vsetvl(address: Address, word: u32, bytes: Vec<u8>) -> Instruction
     // VSETVL: rd, rs1, rs2  (bits[31:30]=0b10)
     let ops = format!("{}, {}, {}", xr(rd), xr(rs1), xr(vs2));
     plain(address, "vsetvl", ops, bytes)
+}
+
+/// Vector load and store forms of the RVV encoding (opcodes 0x07 / 0x27).
+///
+/// Shared by every RVV dispatch entry point; returns `None` when the word is
+/// not a vector memory operation, leaving the caller to try the arithmetic
+/// tables.
+fn decode_rvv_mem(address: Address, word: u32, bytes: &[u8]) -> Option<Instruction> {
+    let vm = (word >> 25) & 1;
+    let vd = ((word >> 7) & 0x1F) as usize;
+    let vs1 = ((word >> 15) & 0x1F) as usize;
+    let vs2 = ((word >> 20) & 0x1F) as usize;
+    let rs1 = vs1;
+    let mask = vmask(vm);
+    let nf = (word >> 29) & 7;
+    let mew = (word >> 28) & 1;
+    let mop = (word >> 26) & 3;
+    let lumop = vs2; // for unit-stride
+    let width_bits: u32 = match (mew, (word >> 12) & 7) {
+        (0, 5) => 16,
+        (0, 6) => 32,
+        (0, 7) => 64,
+        _ => 8,
+    };
+
+    if (word & 0x7F) == 0x07 {
+        // Vector load
+        let base = xr(rs1);
+        let mn = match mop {
+            0 => {
+                // unit stride
+                match lumop {
+                    0 => format!("vle{width_bits}.v"),
+                    16 => format!("vlse{width_bits}.v"),
+                    _ => format!("vluxei{width_bits}.v"),
+                }
+            }
+            2 => format!("vlse{width_bits}.v"),
+            1 => format!("vluxei{width_bits}.v"),
+            3 => format!("vloxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vd), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vd))
+        };
+        let nf_str = if nf > 0 {
+            format!("  // nf={nf}")
+        } else {
+            String::new()
+        };
+        let _ = nf_str;
+        return Some(mk(address, 4, &mn, ops, InstrFlags::READ_MEM, bytes.to_vec()));
+    }
+    if (word & 0x7F) == 0x27 {
+        // Vector store
+        let base = xr(rs1);
+        let vs3 = vd;
+        let mn = match mop {
+            0 => format!("vse{width_bits}.v"),
+            2 => format!("vsse{width_bits}.v"),
+            1 => format!("vsuxei{width_bits}.v"),
+            3 => format!("vsoxei{width_bits}.v"),
+            _ => return None,
+        };
+        let ops = if mop == 2 {
+            format!("{}, ({base}), {}{mask}", vr(vs3), xr(vs2))
+        } else {
+            format!("{}, ({base}){mask}", vr(vs3))
+        };
+        return Some(mk(address, 4, &mn, ops, InstrFlags::WRITE_MEM, bytes.to_vec()));
+    }
+
+    None
 }
