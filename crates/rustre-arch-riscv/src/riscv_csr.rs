@@ -946,21 +946,91 @@ impl McauseDecoder {
 // MstatusDecoder
 // ---------------------------------------------------------------------------
 
+/// The single-bit fields of `mstatus`, kept together in one word.
+///
+/// Storing them as a bit image rather than a dozen separate `bool`s keeps the
+/// layout identical to the register itself, and makes it impossible to pass
+/// two of them to a constructor in the wrong order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MstatusFlags(u64);
+
+impl MstatusFlags {
+    /// UIE — user-mode interrupt enable.
+    pub const UIE: u64 = 1 << 0;
+    /// SIE — supervisor-mode interrupt enable.
+    pub const SIE: u64 = 1 << 1;
+    /// MIE — machine-mode interrupt enable.
+    pub const MIE: u64 = 1 << 3;
+    /// UPIE — user-mode prior interrupt enable.
+    pub const UPIE: u64 = 1 << 4;
+    /// SPIE — supervisor-mode prior interrupt enable.
+    pub const SPIE: u64 = 1 << 5;
+    /// MPIE — machine-mode prior interrupt enable.
+    pub const MPIE: u64 = 1 << 7;
+    /// MPRV — modify privilege for load/store.
+    pub const MPRV: u64 = 1 << 17;
+    /// SUM — supervisor access to user memory.
+    pub const SUM: u64 = 1 << 18;
+    /// MXR — make executable readable.
+    pub const MXR: u64 = 1 << 19;
+    /// TVM — trap virtual-memory management.
+    pub const TVM: u64 = 1 << 20;
+    /// TW — timeout wait (trap WFI below M-mode).
+    pub const TW: u64 = 1 << 21;
+    /// TSR — trap SRET.
+    pub const TSR: u64 = 1 << 22;
+    /// SD — state dirty (FS or XS dirty).
+    pub const SD: u64 = 1 << 63;
+
+    /// Every bit this type tracks.
+    pub const MASK: u64 = Self::UIE
+        | Self::SIE
+        | Self::MIE
+        | Self::UPIE
+        | Self::SPIE
+        | Self::MPIE
+        | Self::MPRV
+        | Self::SUM
+        | Self::MXR
+        | Self::TVM
+        | Self::TW
+        | Self::TSR
+        | Self::SD;
+
+    /// Keep only the single-bit fields of a raw `mstatus` value.
+    #[must_use]
+    pub const fn from_bits(v: u64) -> Self {
+        Self(v & Self::MASK)
+    }
+
+    /// The bit image, ready to be OR-ed into a raw `mstatus` value.
+    #[must_use]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    /// True when `bit` (one of the associated constants) is set.
+    #[must_use]
+    pub const fn has(self, bit: u64) -> bool {
+        self.0 & bit != 0
+    }
+
+    /// A copy with `bit` set or cleared.
+    #[must_use]
+    pub const fn with(self, bit: u64, on: bool) -> Self {
+        if on {
+            Self(self.0 | bit)
+        } else {
+            Self(self.0 & !bit)
+        }
+    }
+}
+
 /// Decoded fields of the `mstatus` register (RV64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MstatusDecode {
-    /// UIE: User-mode interrupt enable.
-    pub uie: bool,
-    /// SIE: Supervisor-mode interrupt enable.
-    pub sie: bool,
-    /// MIE: Machine-mode interrupt enable.
-    pub mie: bool,
-    /// UPIE: User-mode prior interrupt enable.
-    pub upie: bool,
-    /// SPIE: Supervisor-mode prior interrupt enable.
-    pub spie: bool,
-    /// MPIE: Machine-mode prior interrupt enable.
-    pub mpie: bool,
+    /// All single-bit fields, in hardware bit order.
+    pub flags: MstatusFlags,
     /// SPP: Supervisor-mode previous privilege (0=U, 1=S).
     pub spp: u8,
     /// MPP: Machine-mode previous privilege (0=U, 1=S, 3=M).
@@ -969,20 +1039,74 @@ pub struct MstatusDecode {
     pub fs: u8,
     /// XS: User extension status.
     pub xs: u8,
-    /// MPRV: Modify privilege for load/store.
-    pub mprv: bool,
-    /// SUM: Supervisor User Memory access.
-    pub sum: bool,
-    /// MXR: Make eXecutable Readable.
-    pub mxr: bool,
-    /// TVM: Trap virtual memory.
-    pub tvm: bool,
-    /// TW: Timeout Wait (trap WFI in S/U mode).
-    pub tw: bool,
-    /// TSR: Trap SRET.
-    pub tsr: bool,
-    /// SD: State Dirty (FS or XS dirty).
-    pub sd: bool,
+}
+
+impl MstatusDecode {
+    /// UIE — user-mode interrupt enable.
+    #[must_use]
+    pub const fn uie(&self) -> bool {
+        self.flags.has(MstatusFlags::UIE)
+    }
+    /// SIE — supervisor-mode interrupt enable.
+    #[must_use]
+    pub const fn sie(&self) -> bool {
+        self.flags.has(MstatusFlags::SIE)
+    }
+    /// MIE — machine-mode interrupt enable.
+    #[must_use]
+    pub const fn mie(&self) -> bool {
+        self.flags.has(MstatusFlags::MIE)
+    }
+    /// UPIE — user-mode prior interrupt enable.
+    #[must_use]
+    pub const fn upie(&self) -> bool {
+        self.flags.has(MstatusFlags::UPIE)
+    }
+    /// SPIE — supervisor-mode prior interrupt enable.
+    #[must_use]
+    pub const fn spie(&self) -> bool {
+        self.flags.has(MstatusFlags::SPIE)
+    }
+    /// MPIE — machine-mode prior interrupt enable.
+    #[must_use]
+    pub const fn mpie(&self) -> bool {
+        self.flags.has(MstatusFlags::MPIE)
+    }
+    /// MPRV — modify privilege for load/store.
+    #[must_use]
+    pub const fn mprv(&self) -> bool {
+        self.flags.has(MstatusFlags::MPRV)
+    }
+    /// SUM — supervisor access to user memory.
+    #[must_use]
+    pub const fn sum(&self) -> bool {
+        self.flags.has(MstatusFlags::SUM)
+    }
+    /// MXR — make executable readable.
+    #[must_use]
+    pub const fn mxr(&self) -> bool {
+        self.flags.has(MstatusFlags::MXR)
+    }
+    /// TVM — trap virtual-memory management.
+    #[must_use]
+    pub const fn tvm(&self) -> bool {
+        self.flags.has(MstatusFlags::TVM)
+    }
+    /// TW — timeout wait.
+    #[must_use]
+    pub const fn tw(&self) -> bool {
+        self.flags.has(MstatusFlags::TW)
+    }
+    /// TSR — trap SRET.
+    #[must_use]
+    pub const fn tsr(&self) -> bool {
+        self.flags.has(MstatusFlags::TSR)
+    }
+    /// SD — state dirty.
+    #[must_use]
+    pub const fn sd(&self) -> bool {
+        self.flags.has(MstatusFlags::SD)
+    }
 }
 
 /// Decoder for the `mstatus` register.
@@ -993,47 +1117,22 @@ impl MstatusDecoder {
     #[must_use]
     pub const fn decode(v: u64) -> MstatusDecode {
         MstatusDecode {
-            uie: v & 1 == 1,
-            sie: (v >> 1) & 1 == 1,
-            mie: (v >> 3) & 1 == 1,
-            upie: (v >> 4) & 1 == 1,
-            spie: (v >> 5) & 1 == 1,
-            mpie: (v >> 7) & 1 == 1,
+            flags: MstatusFlags::from_bits(v),
             spp: ((v >> 8) & 1) as u8,
             mpp: ((v >> 11) & 3) as u8,
             fs: ((v >> 13) & 3) as u8,
             xs: ((v >> 15) & 3) as u8,
-            mprv: (v >> 17) & 1 == 1,
-            sum: (v >> 18) & 1 == 1,
-            mxr: (v >> 19) & 1 == 1,
-            tvm: (v >> 20) & 1 == 1,
-            tw: (v >> 21) & 1 == 1,
-            tsr: (v >> 22) & 1 == 1,
-            sd: (v >> 63) & 1 == 1,
         }
     }
 
     /// Encode an `MstatusDecode` back to a u64.
     #[must_use]
     pub const fn encode(s: &MstatusDecode) -> u64 {
-        let mut v = 0u64;
-        v |= s.uie as u64;
-        v |= (s.sie as u64) << 1;
-        v |= (s.mie as u64) << 3;
-        v |= (s.upie as u64) << 4;
-        v |= (s.spie as u64) << 5;
-        v |= (s.mpie as u64) << 7;
+        let mut v = s.flags.bits();
         v |= (s.spp as u64) << 8;
         v |= (s.mpp as u64) << 11;
         v |= (s.fs as u64) << 13;
         v |= (s.xs as u64) << 15;
-        v |= (s.mprv as u64) << 17;
-        v |= (s.sum as u64) << 18;
-        v |= (s.mxr as u64) << 19;
-        v |= (s.tvm as u64) << 20;
-        v |= (s.tw as u64) << 21;
-        v |= (s.tsr as u64) << 22;
-        v |= (s.sd as u64) << 63;
         v
     }
 }
@@ -1310,8 +1409,8 @@ mod tests {
     fn test_mstatus_mie_bit() {
         let v = 1u64 << 3; // MIE bit
         let s = MstatusDecoder::decode(v);
-        assert!(s.mie);
-        assert!(!s.sie);
+        assert!(s.mie());
+        assert!(!s.sie());
     }
 
     #[test]
@@ -1325,29 +1424,23 @@ mod tests {
     fn test_mstatus_sd_bit() {
         let v = 1u64 << 63;
         let s = MstatusDecoder::decode(v);
-        assert!(s.sd);
+        assert!(s.sd());
     }
 
     #[test]
     fn test_mstatus_encode_decode_roundtrip() {
+        let flags = MstatusFlags::default()
+            .with(MstatusFlags::SIE, true)
+            .with(MstatusFlags::MIE, true)
+            .with(MstatusFlags::MPIE, true)
+            .with(MstatusFlags::SUM, true)
+            .with(MstatusFlags::SD, true);
         let orig = MstatusDecode {
-            uie: false,
-            sie: true,
-            mie: true,
-            upie: false,
-            spie: false,
-            mpie: true,
+            flags,
             spp: 1,
             mpp: 3,
             fs: 2,
             xs: 0,
-            mprv: false,
-            sum: true,
-            mxr: false,
-            tvm: false,
-            tw: false,
-            tsr: false,
-            sd: true,
         };
         let enc = MstatusDecoder::encode(&orig);
         let dec = MstatusDecoder::decode(enc);
@@ -1448,17 +1541,17 @@ mod tests {
     fn test_mstatus_sum_mxr() {
         let v = (1u64 << 18) | (1u64 << 19); // SUM | MXR
         let s = MstatusDecoder::decode(v);
-        assert!(s.sum);
-        assert!(s.mxr);
+        assert!(s.sum());
+        assert!(s.mxr());
     }
 
     #[test]
     fn test_mstatus_tsr_tw_tvm() {
         let v = (1u64 << 20) | (1u64 << 21) | (1u64 << 22);
         let s = MstatusDecoder::decode(v);
-        assert!(s.tvm);
-        assert!(s.tw);
-        assert!(s.tsr);
+        assert!(s.tvm());
+        assert!(s.tw());
+        assert!(s.tsr());
     }
 
     #[test]

@@ -19,6 +19,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use crate::riscv_csr::MstatusFlags;
 
 // ── Privilege level ───────────────────────────────────────────────────────────
 
@@ -484,14 +485,8 @@ pub const fn mcause_decode(mcause: u64, xlen: u32) -> (bool, u64, &'static str) 
 /// Decode a subset of important mstatus fields for RV64.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MstatusFields {
-    /// Machine Interrupt Enable.
-    pub mie: bool,
-    /// Supervisor Interrupt Enable.
-    pub sie: bool,
-    /// User Interrupt Enable.
-    pub uie: bool,
-    /// Previous MIE (saved across traps).
-    pub mpie: bool,
+    /// All single-bit fields, in hardware bit order.
+    pub flags: MstatusFlags,
     /// Machine Previous Privilege.
     pub mpp: CsrPrivilege,
     /// Supervisor Previous Privilege.
@@ -500,12 +495,44 @@ pub struct MstatusFields {
     pub fs: u8,
     /// XS field (extension context status).
     pub xs: u8,
+}
+
+impl MstatusFields {
+    /// Machine Interrupt Enable.
+    #[must_use]
+    pub const fn mie(&self) -> bool {
+        self.flags.has(MstatusFlags::MIE)
+    }
+    /// Supervisor Interrupt Enable.
+    #[must_use]
+    pub const fn sie(&self) -> bool {
+        self.flags.has(MstatusFlags::SIE)
+    }
+    /// User Interrupt Enable.
+    #[must_use]
+    pub const fn uie(&self) -> bool {
+        self.flags.has(MstatusFlags::UIE)
+    }
+    /// Previous MIE, saved across traps.
+    #[must_use]
+    pub const fn mpie(&self) -> bool {
+        self.flags.has(MstatusFlags::MPIE)
+    }
     /// Memory privilege (MPRV).
-    pub mprv: bool,
-    /// Supervisor User Memory access.
-    pub sum: bool,
+    #[must_use]
+    pub const fn mprv(&self) -> bool {
+        self.flags.has(MstatusFlags::MPRV)
+    }
+    /// Supervisor access to User Memory.
+    #[must_use]
+    pub const fn sum(&self) -> bool {
+        self.flags.has(MstatusFlags::SUM)
+    }
     /// Make eXecutable Readable.
-    pub mxr: bool,
+    #[must_use]
+    pub const fn mxr(&self) -> bool {
+        self.flags.has(MstatusFlags::MXR)
+    }
 }
 
 impl MstatusFields {
@@ -525,17 +552,11 @@ impl MstatusFields {
             CsrPrivilege::User
         };
         Self {
-            mie:  (val >> 3) & 1 == 1,
-            sie:  (val >> 1) & 1 == 1,
-            uie:  val & 1 == 1,
-            mpie: (val >> 7) & 1 == 1,
+            flags: MstatusFlags::from_bits(val),
             mpp,
             spp,
             fs: ((val >> 13) & 0x3) as u8,
             xs: ((val >> 15) & 0x3) as u8,
-            mprv: (val >> 17) & 1 == 1,
-            sum:  (val >> 18) & 1 == 1,
-            mxr:  (val >> 19) & 1 == 1,
         }
     }
 }
@@ -667,19 +688,19 @@ mod tests {
         // mie=1 (bit3), mpie=1 (bit7), mpp=3 (bits[12:11]), fs=1 (bits[14:13])
         let val: u64 = (1 << 3) | (1 << 7) | (3 << 11) | (1 << 13);
         let f = MstatusFields::decode_rv64(val);
-        assert!(f.mie);
-        assert!(f.mpie);
+        assert!(f.mie());
+        assert!(f.mpie());
         assert_eq!(f.mpp, CsrPrivilege::Machine);
         assert_eq!(f.fs, 1);
-        assert!(!f.mprv);
+        assert!(!f.mprv());
     }
 
     #[test]
     fn test_mstatus_sum_mxr() {
         let val: u64 = (1 << 18) | (1 << 19);
         let f = MstatusFields::decode_rv64(val);
-        assert!(f.sum);
-        assert!(f.mxr);
+        assert!(f.sum());
+        assert!(f.mxr());
     }
 
     #[test]
