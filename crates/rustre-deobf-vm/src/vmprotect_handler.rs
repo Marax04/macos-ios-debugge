@@ -35,11 +35,11 @@ pub enum Vmp3Mode {
 impl std::fmt::Display for Vmp3Mode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Vmp3Mode::VirtualProtect => write!(f, "VirtualProtect"),
-            Vmp3Mode::VirtualMachine => write!(f, "VirtualMachine"),
-            Vmp3Mode::Mutation => write!(f, "Mutation"),
-            Vmp3Mode::MutationPlusVm => write!(f, "Mutation+VM"),
-            Vmp3Mode::Unknown => write!(f, "Unknown"),
+            Self::VirtualProtect => write!(f, "VirtualProtect"),
+            Self::VirtualMachine => write!(f, "VirtualMachine"),
+            Self::Mutation => write!(f, "Mutation"),
+            Self::MutationPlusVm => write!(f, "Mutation+VM"),
+            Self::Unknown => write!(f, "Unknown"),
         }
     }
 }
@@ -555,7 +555,7 @@ impl VmpHandlerIdentifier {
 
         // Heuristic 1: presence of encrypted jmp [reg] dispatch → VM mode
         let encrypted_dispatch_score = self.score_encrypted_dispatch(bytes);
-        vm_score += encrypted_dispatch_score * 0.45;
+        vm_score = encrypted_dispatch_score.mul_add(0.45, vm_score);
 
         // Heuristic 2: high instruction entropy → mutation or VM packing
         let entropy = byte_entropy(bytes);
@@ -595,7 +595,7 @@ impl VmpHandlerIdentifier {
 
         if vm_score >= mutation_score && vm_score >= protect_score {
             if mutation_score > 0.3 {
-                (Vmp3Mode::MutationPlusVm, (vm_score + mutation_score) / 2.0)
+                (Vmp3Mode::MutationPlusVm, f32::midpoint(vm_score, mutation_score))
             } else {
                 (Vmp3Mode::VirtualMachine, vm_score.min(1.0))
             }
@@ -613,9 +613,8 @@ impl VmpHandlerIdentifier {
         for window in bytes.windows(3) {
             match window {
                 // FF E0 → jmp rax
-                [0xFF, 0xE0, _] => score += 0.15,
                 // FF E1 → jmp rcx
-                [0xFF, 0xE1, _] => score += 0.15,
+                [0xFF, 0xE0 | 0xE1, _] => score += 0.15,
                 // FF 25 → jmp [rip+disp32]
                 [0xFF, 0x25, _] => score += 0.10,
                 _ => {}
@@ -649,18 +648,16 @@ impl VmpHandlerIdentifier {
             // Pattern: jmp [rax] / jmp [rcx] / jmp [rdx]
             if window.len() >= 2 && window[0] == 0xFF {
                 let pattern = match window[1] {
-                    0xE0 => Some((VmpDispatchPattern::IndirectJmpReg, 0.75)),
-                    0xE1 => Some((VmpDispatchPattern::IndirectJmpReg, 0.75)),
+                    0xE0 | 0xE1 => Some((VmpDispatchPattern::IndirectJmpReg, 0.75)),
                     0xE2 => Some((VmpDispatchPattern::IndirectJmpReg, 0.70)),
                     0xE3 => Some((VmpDispatchPattern::IndirectJmpReg, 0.65)),
                     0x25 => Some((VmpDispatchPattern::IndirectJmpReg, 0.60)),
                     _ => None,
                 };
-                if let Some((pat, conf)) = pattern {
-                    if conf >= self.min_confidence || self.speculative {
+                if let Some((pat, conf)) = pattern
+                    && (conf >= self.min_confidence || self.speculative) {
                         result.push(VmpDispatcher::new(addr, pat, conf));
                     }
-                }
             }
 
             // Pattern: push rax; ret (PushRet disguised jmp)
@@ -881,11 +878,10 @@ impl VmpHandlerIdentifier {
         for disp in &result.dispatchers {
             let start = disp.address.saturating_sub(base_address) as usize;
             let end = (start + 128).min(bytes.len());
-            if start < end {
-                if let Some(info) = self.identify_handler(disp.address, &bytes[start..end]) {
+            if start < end
+                && let Some(info) = self.identify_handler(disp.address, &bytes[start..end]) {
                     result.handlers.push(info);
                 }
-            }
         }
 
         // Overall confidence
@@ -895,8 +891,7 @@ impl VmpHandlerIdentifier {
             result.handlers.iter().map(|h| h.confidence).sum::<f32>()
                 / result.handlers.len() as f32
         };
-        result.overall_confidence = (mode_conf * 0.5
-            + handler_conf * 0.3
+        result.overall_confidence = (mode_conf.mul_add(0.5, handler_conf * 0.3)
             + if result.dispatchers.is_empty() { 0.0 } else { 0.2 })
         .min(1.0);
 
@@ -976,7 +971,7 @@ fn count_context_block_refs(bytes: &[u8]) -> usize {
 
 fn infer_operand_width(body: &[u8]) -> u8 {
     // REX.W prefix (0x48) → 64-bit; no REX.W → 32-bit
-    if body.iter().any(|&b| b == 0x48) {
+    if body.contains(&0x48) {
         64
     } else {
         32

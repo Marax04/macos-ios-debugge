@@ -564,7 +564,7 @@ impl ThemidaHandlerAnalyzer {
             }
         }
 
-        candidate_tables.sort_by(|a, b| b.1.cmp(&a.1));
+        candidate_tables.sort_by_key(|b| std::cmp::Reverse(b.1));
         let (table_offset, count) = candidate_tables.first()?;
 
         let table_base = base_address + *table_offset as u64;

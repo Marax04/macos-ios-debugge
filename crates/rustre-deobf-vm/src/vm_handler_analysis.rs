@@ -276,14 +276,12 @@ impl DetectedProtector {
         match self {
             Self::VMProtect2 => (100, 220),
             Self::VMProtect3 => (150, 280),
-            Self::Themida => (80, 200),
-            Self::WinLicense => (80, 200),
+            Self::Themida | Self::WinLicense => (80, 200),
             Self::CodeVirtualizer => (20, 80),
             Self::Enigma => (30, 120),
             Self::Obsidium => (50, 150),
-            Self::Custom => (4, 512),
-            Self::Unknown => (4, 512),
-        }
+            Self::Custom | Self::Unknown => (4, 512),
+            }
     }
 }
 
@@ -878,7 +876,7 @@ impl VmHandlerAnalyzer {
                 // Found PUSHFD; look for POPFD within 128 bytes.
                 for j in (i + 4)..(i + 128).min(limit) {
                     if binary[j] == 0x9D {
-                        let body = binary[i..j + 1].to_vec();
+                        let body = binary[i..=j].to_vec();
                         let mut h = HandlerCandidate::new(i as u64, body);
                         classify_handler_body(&mut h);
                         candidates.push(h);
@@ -1017,9 +1015,8 @@ impl HandlerSemanticClassifier {
         if features.mov_mem_count >= 2 {
             if features.push_count > features.pop_count {
                 return (HandlerSemantic::Load, 0.60);
-            } else {
-                return (HandlerSemantic::Store, 0.60);
             }
+            return (HandlerSemantic::Store, 0.60);
         }
 
         // NOP-heavy
@@ -1063,7 +1060,7 @@ struct BodyFeatures {
 
 impl BodyFeatures {
     fn extract(body: &[u8]) -> Self {
-        let mut f = BodyFeatures::default();
+        let mut f = Self::default();
         let mut i = 0;
         while i < body.len() {
             let b = body[i];
@@ -1163,8 +1160,8 @@ impl BodyFeatures {
                         i += 1;
                     }
                 }
-                0xFF => {
-                    if i + 1 < body.len() {
+                0xFF
+                    if i + 1 < body.len() => {
                         let modrm = body[i + 1];
                         if (0xE0..=0xE7).contains(&modrm) || modrm == 0x24 {
                             f.has_indirect_jmp = true;
@@ -1174,7 +1171,6 @@ impl BodyFeatures {
                         }
                         i += 1;
                     }
-                }
                 _ => {}
             }
             i += 1;
@@ -1200,7 +1196,7 @@ fn classify_handler_body(h: &mut HandlerCandidate) {
             h.stack_pop_count = 0;
             h.stack_push_count = 1;
         }
-        HandlerSemantic::Pop => {
+        HandlerSemantic::Pop | HandlerSemantic::Jmp | HandlerSemantic::Call | HandlerSemantic::Ret => {
             h.stack_pop_count = 1;
             h.stack_push_count = 0;
         }
@@ -1215,14 +1211,6 @@ fn classify_handler_body(h: &mut HandlerCandidate) {
         HandlerSemantic::Not | HandlerSemantic::Neg => {
             h.stack_pop_count = 1;
             h.stack_push_count = 1;
-        }
-        HandlerSemantic::Jmp | HandlerSemantic::Call => {
-            h.stack_pop_count = 1;
-            h.stack_push_count = 0;
-        }
-        HandlerSemantic::Ret => {
-            h.stack_pop_count = 1;
-            h.stack_push_count = 0;
         }
         _ => {}
     }

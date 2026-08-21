@@ -276,13 +276,13 @@ fn handler_clusterer_groups_by_kind() {
     let clusters = HandlerClusterer::new().cluster(&handlers);
     assert_eq!(clusters.len(), 2);
     // Sorted alphabetically by label.
-    let total: usize = clusters.iter().map(|c| c.size()).sum();
+    let total: usize = clusters.iter().map(rustre_deobf_vm::HandlerCluster::size).sum();
     assert_eq!(total, 3);
 }
 
 #[test]
 fn handler_clusterer_empty() {
-    let clusters = HandlerClusterer::default().cluster(&[]);
+    let clusters = HandlerClusterer.cluster(&[]);
     assert!(clusters.is_empty());
 }
 
@@ -814,7 +814,7 @@ fn run_pass_does_not_panic() {
 // Send + Sync bounds
 // ──────────────────────────────────────────────────────────────────────────
 
-fn assert_send_sync<T: Send + Sync>() {}
+const fn assert_send_sync<T: Send + Sync>() {}
 
 #[test]
 fn public_types_are_send_sync() {

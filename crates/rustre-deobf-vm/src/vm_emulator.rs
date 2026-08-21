@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// One semantically-meaningful operation recorded during emulation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SemanticOp {
     /// Push a value onto the VM stack.
     Push { value: u64 },
@@ -510,7 +510,7 @@ impl VmEmulator {
                     0
                 }
             }
-            BinOpKind::And => lhs & rhs,
+            BinOpKind::And | BinOpKind::Test => lhs & rhs,
             BinOpKind::Or => lhs | rhs,
             BinOpKind::Xor => lhs ^ rhs,
             BinOpKind::Shl => lhs.wrapping_shl(rhs as u32),
@@ -519,8 +519,7 @@ impl VmEmulator {
             BinOpKind::Rol => lhs.rotate_left(rhs as u32),
             BinOpKind::Ror => lhs.rotate_right(rhs as u32),
             BinOpKind::Cmp => (lhs as i64).wrapping_sub(rhs as i64) as u64,
-            BinOpKind::Test => lhs & rhs,
-        }
+            }
     }
 
     const fn apply_unary(op: UnaryOpKind, operand: u64) -> u64 {
@@ -594,12 +593,9 @@ impl VmEmulator {
             ip += opcode_step;
             self.trace.cycles += 1;
 
-            let spec = match self.isa.handlers.get(&opcode).cloned() {
-                Some(s) => s,
-                None => {
-                    self.trace.push(SemanticOp::Unknown { opcode });
-                    continue;
-                }
+            let spec = if let Some(s) = self.isa.handlers.get(&opcode).cloned() { s } else {
+                self.trace.push(SemanticOp::Unknown { opcode });
+                continue;
             };
 
             let imm = if spec.imm_bytes > 0 {
@@ -750,7 +746,7 @@ fn find_repeated_subsequences(
         .map(|(k, c)| (k.into_iter().map(std::string::ToString::to_string).collect(), c))
         .collect();
 
-    results.sort_by(|a, b| b.1.cmp(&a.1));
+    results.sort_by_key(|b| std::cmp::Reverse(b.1));
     results
 }
 

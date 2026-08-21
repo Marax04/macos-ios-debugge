@@ -404,7 +404,7 @@ impl LoopIterationCounter {
     #[must_use]
     pub fn all_sorted(&self) -> Vec<(u64, u32)> {
         let mut v: Vec<(u64, u32)> = self.counts.iter().map(|(&h, &c)| (h, c)).collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|b| std::cmp::Reverse(b.1));
         v
     }
 }

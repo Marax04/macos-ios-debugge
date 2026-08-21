@@ -1,6 +1,6 @@
 //! blitz2: deep adversarial coverage of rustre-deobf-vm public API.
 //!
-//! No external rand; uses a seeded LCG. No std::time. No #[allow], no #[ignore].
+//! No external rand; uses a seeded LCG. No `std::time`. No #[allow], no #[ignore].
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,13 +15,13 @@ use rustre_deobf_vm::{
     VmDispatcherDetector, VmHandler, VmLifter, VmLifterConfig, VmProtectorDetector, VmSemanticOp,
 };
 
-/// Seeded LCG; never use std::time or rand.
+/// Seeded LCG; never use `std::time` or rand.
 fn make_lcg(seed: u64) -> impl FnMut() -> u64 {
     let mut s: u64 = seed;
     move || {
         s = s
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         s
     }
 }
@@ -224,7 +224,7 @@ fn vm_dispatcher_eq_copy() {
 fn vm_handler_new_fields() {
     let h = VmHandler::new(
         7,
-        Address::new(0x400000),
+        Address::new(0x0040_0000),
         vec![0x55, 0x53, 0x48, 0x89],
         HandlerKind::Arithmetic,
         "ADD",
@@ -232,7 +232,7 @@ fn vm_handler_new_fields() {
         1,
     );
     assert_eq!(h.index, 7);
-    assert_eq!(h.address, Address::new(0x400000));
+    assert_eq!(h.address, Address::new(0x0040_0000));
     assert_eq!(h.kind, HandlerKind::Arithmetic);
     assert!(h.is_arithmetic());
     assert!(!h.is_control_flow());
@@ -300,7 +300,7 @@ fn vm_detector_none() {
 fn vm_detector_vmprotect_marker() {
     let det = VmDetector::new();
     let mut data = b"prefix_VMProtect_suffix".to_vec();
-    data.extend(std::iter::repeat(0u8).take(100));
+    data.extend(std::iter::repeat_n(0u8, 100));
     let r = det.detect(&data);
     assert!(r.arch_hints.iter().any(|s| s.contains("VMProtect")));
 }
@@ -331,7 +331,7 @@ fn vm_detector_dispatcher_pattern_found() {
 #[test]
 fn vm_detector_fuzz_no_panic() {
     let det = VmDetector::new();
-    let mut g = make_lcg(0xCAFEF00D);
+    let mut g = make_lcg(0xCAFE_F00D);
     for _ in 0..200 {
         let n = (g() as usize) % 512;
         let data: Vec<u8> = (0..n).map(|_| g() as u8).collect();
@@ -556,7 +556,7 @@ fn lifter_simulate_shl_shr_mask31() {
 fn lifter_simulate_load_store_round_trip() {
     let lifter = VmLifter::new();
     let mut state = VirtualMachineState::new();
-    state.push(0xDEADBEEF); // value
+    state.push(0xDEAD_BEEF); // value
     state.push(0x1000); // addr
     let ops = vec![VmSemanticOp::Store32];
     let state = lifter.simulate(&ops, state).unwrap();
@@ -565,7 +565,7 @@ fn lifter_simulate_load_store_round_trip() {
     state2.push(0x1000);
     let ops = vec![VmSemanticOp::Load32];
     let s = lifter.simulate(&ops, state2).unwrap();
-    assert_eq!(*s.stack.last().unwrap(), 0xDEADBEEF);
+    assert_eq!(*s.stack.last().unwrap(), 0xDEAD_BEEF);
 }
 
 #[test]
@@ -841,7 +841,7 @@ fn handler_edge_forward_back() {
 
 #[test]
 fn handler_graph_builder_dispatcher_only_on_empty() {
-    let g = HandlerGraphBuilder::build_handler_graph(0x401000, &[]);
+    let g = HandlerGraphBuilder::build_handler_graph(0x0040_1000, &[]);
     assert_eq!(g.node_count(), 1);
     assert_eq!(g.edge_count(), 0);
     let dot = HandlerGraphBuilder::export_dot(&g);
@@ -907,7 +907,7 @@ fn handler_kind_hash_eq_consistency() {
         HandlerKind::Compare,
         HandlerKind::Unknown,
     ];
-    for k in kinds.iter().copied() {
+    for k in &kinds {
         let mut h1 = DefaultHasher::new();
         let mut h2 = DefaultHasher::new();
         k.hash(&mut h1);
