@@ -177,6 +177,95 @@ pub mod cpsr_bits {
 }
 
 /// Snapshot of the NZCV condition flags.
+/// The four ARM condition flags, packed into one value in CPSR bit order.
+///
+/// Four adjacent `bool` parameters can be swapped without the compiler
+/// noticing; one `Nzcv` cannot. Build them by OR-ing the associated constants
+/// (`Nzcv::N | Nzcv::V`) or with the `with_*` builders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
+pub struct Nzcv(u32);
+
+impl Nzcv {
+    /// No flag set.
+    pub const NONE: Self = Self(0);
+    /// Negative.
+    pub const N: Self = Self(1 << 3);
+    /// Zero.
+    pub const Z: Self = Self(1 << 2);
+    /// Carry.
+    pub const C: Self = Self(1 << 1);
+    /// Overflow.
+    pub const V: Self = Self(1);
+
+    /// The packed nibble, N in bit 3 down to V in bit 0.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// Rebuild from a packed nibble produced by [`Self::bits`].
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits & 0xF)
+    }
+
+    /// Negative flag.
+    #[must_use]
+    pub const fn n(self) -> bool {
+        self.0 & Self::N.0 != 0
+    }
+    /// Zero flag.
+    #[must_use]
+    pub const fn z(self) -> bool {
+        self.0 & Self::Z.0 != 0
+    }
+    /// Carry flag.
+    #[must_use]
+    pub const fn c(self) -> bool {
+        self.0 & Self::C.0 != 0
+    }
+    /// Overflow flag.
+    #[must_use]
+    pub const fn v(self) -> bool {
+        self.0 & Self::V.0 != 0
+    }
+
+    const fn with(self, bit: Self, on: bool) -> Self {
+        if on {
+            Self(self.0 | bit.0)
+        } else {
+            Self(self.0 & !bit.0)
+        }
+    }
+    /// A copy with the negative flag set or cleared.
+    #[must_use]
+    pub const fn with_n(self, on: bool) -> Self {
+        self.with(Self::N, on)
+    }
+    /// A copy with the zero flag set or cleared.
+    #[must_use]
+    pub const fn with_z(self, on: bool) -> Self {
+        self.with(Self::Z, on)
+    }
+    /// A copy with the carry flag set or cleared.
+    #[must_use]
+    pub const fn with_c(self, on: bool) -> Self {
+        self.with(Self::C, on)
+    }
+    /// A copy with the overflow flag set or cleared.
+    #[must_use]
+    pub const fn with_v(self, on: bool) -> Self {
+        self.with(Self::V, on)
+    }
+}
+
+impl std::ops::BitOr for Nzcv {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
 pub struct CpsrFlags {
     raw: u32,
@@ -189,15 +278,30 @@ impl CpsrFlags {
         Self { raw }
     }
 
-    /// Construct from individual flag values.
+    /// Construct from a condition-flag group.
     #[must_use]
-    pub const fn from_flags(n: bool, z: bool, c: bool, v: bool) -> Self {
-        let mut raw = 0u32;
-        if n { raw |= 1 << cpsr_bits::N; }
-        if z { raw |= 1 << cpsr_bits::Z; }
-        if c { raw |= 1 << cpsr_bits::C; }
-        if v { raw |= 1 << cpsr_bits::V; }
-        Self { raw }
+    pub const fn from_nzcv(flags: Nzcv) -> Self {
+        Self { raw: Self::nzcv_to_raw(0, flags) }
+    }
+
+    /// Place `flags` into the NZCV bits of `raw`, leaving every other bit as-is.
+    const fn nzcv_to_raw(raw: u32, flags: Nzcv) -> u32 {
+        let mut raw = raw & !cpsr_bits::NZCV_MASK;
+        if flags.n() { raw |= 1 << cpsr_bits::N; }
+        if flags.z() { raw |= 1 << cpsr_bits::Z; }
+        if flags.c() { raw |= 1 << cpsr_bits::C; }
+        if flags.v() { raw |= 1 << cpsr_bits::V; }
+        raw
+    }
+
+    /// The current condition flags as one group.
+    #[must_use]
+    pub const fn nzcv(self) -> Nzcv {
+        Nzcv::NONE
+            .with_n(self.n())
+            .with_z(self.z())
+            .with_c(self.c())
+            .with_v(self.v())
     }
 
     #[must_use]
@@ -229,13 +333,8 @@ impl CpsrFlags {
 
     /// Update only the NZCV bits in this flags snapshot.
     #[must_use]
-    pub const fn with_nzcv(self, n: bool, z: bool, c: bool, v: bool) -> Self {
-        let mut raw = self.raw & !cpsr_bits::NZCV_MASK;
-        if n { raw |= 1 << cpsr_bits::N; }
-        if z { raw |= 1 << cpsr_bits::Z; }
-        if c { raw |= 1 << cpsr_bits::C; }
-        if v { raw |= 1 << cpsr_bits::V; }
-        Self { raw }
+    pub const fn with_nzcv(self, flags: Nzcv) -> Self {
+        Self { raw: Self::nzcv_to_raw(self.raw, flags) }
     }
 
     /// Set or clear the Thumb bit (T).
@@ -492,17 +591,37 @@ impl BarrelShifter {
 /// Result of an ALU operation with full flag computation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AluResult {
+    /// The 32-bit result value.
     pub value: u32,
-    pub n: bool,
-    pub z: bool,
-    pub c: bool,
-    pub v: bool,
+    /// The condition flags the operation produced.
+    pub flags: Nzcv,
 }
 
 impl AluResult {
+    /// The result as a CPSR snapshot with only NZCV set.
     #[must_use]
     pub const fn to_flags(self) -> CpsrFlags {
-        CpsrFlags::from_flags(self.n, self.z, self.c, self.v)
+        CpsrFlags::from_nzcv(self.flags)
+    }
+    /// Negative flag.
+    #[must_use]
+    pub const fn n(self) -> bool {
+        self.flags.n()
+    }
+    /// Zero flag.
+    #[must_use]
+    pub const fn z(self) -> bool {
+        self.flags.z()
+    }
+    /// Carry flag.
+    #[must_use]
+    pub const fn c(self) -> bool {
+        self.flags.c()
+    }
+    /// Overflow flag.
+    #[must_use]
+    pub const fn v(self) -> bool {
+        self.flags.v()
     }
 }
 
@@ -519,10 +638,17 @@ impl AluOps {
     pub fn add(a: u32, b: u32) -> AluResult {
         let result64 = u64::from(a).wrapping_add(u64::from(b));
         let value = low32(result64);
-        let (n, z) = Self::nz(value);
-        let c = result64 > u64::from(u32::MAX);
-        let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
-        AluResult { value, n, z, c, v }
+        let (neg, zero) = Self::nz(value);
+        let carry = result64 > u64::from(u32::MAX);
+        let overflow = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
+        AluResult {
+            value,
+            flags: Nzcv::NONE
+                .with_n(neg)
+                .with_z(zero)
+                .with_c(carry)
+                .with_v(overflow),
+        }
     }
 
     /// ADD with carry.
@@ -530,10 +656,17 @@ impl AluOps {
     pub fn adc(a: u32, b: u32, carry_in: bool) -> AluResult {
         let result64 = u64::from(a).wrapping_add(u64::from(b)).wrapping_add(u64::from(carry_in));
         let value = low32(result64);
-        let (n, z) = Self::nz(value);
-        let c = result64 > u64::from(u32::MAX);
-        let v = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
-        AluResult { value, n, z, c, v }
+        let (neg, zero) = Self::nz(value);
+        let carry = result64 > u64::from(u32::MAX);
+        let overflow = ((!(a ^ b)) & (a ^ value) & 0x8000_0000) != 0;
+        AluResult {
+            value,
+            flags: Nzcv::NONE
+                .with_n(neg)
+                .with_z(zero)
+                .with_c(carry)
+                .with_v(overflow),
+        }
     }
 
     /// SUB — a - b, updates NZCV.
@@ -558,39 +691,54 @@ impl AluOps {
     #[must_use]
     pub const fn and(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// ORR — bitwise OR.
     #[must_use]
     pub const fn orr(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a | b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// EOR — exclusive OR.
     #[must_use]
     pub const fn eor(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// BIC — bit clear (a AND NOT b).
     #[must_use]
     pub const fn bic(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & !b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// MOV — move (sets NZ, C from shifter).
     #[must_use]
     pub const fn mov(b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
-        let (n, z) = Self::nz(b);
-        AluResult { value: b, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(b);
+        AluResult {
+            value: b,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// MVN — move NOT.
@@ -616,8 +764,11 @@ impl AluOps {
     #[must_use]
     pub const fn tst(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a & b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// TEQ — test equivalence (same as EOR but result discarded).
@@ -625,16 +776,22 @@ impl AluOps {
     #[must_use]
     pub const fn teq(a: u32, b: u32, shifter_carry: bool, old_v: bool) -> AluResult {
         let value = a ^ b;
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: shifter_carry, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(shifter_carry).with_v(old_v),
+        }
     }
 
     /// MUL — 32-bit multiply (result is low 32 bits); N and Z updated, C and V unpredictable.
     #[must_use]
     pub const fn mul(a: u32, b: u32, old_c: bool, old_v: bool) -> AluResult {
         let value = a.wrapping_mul(b);
-        let (n, z) = Self::nz(value);
-        AluResult { value, n, z, c: old_c, v: old_v }
+        let (neg, zero) = Self::nz(value);
+        AluResult {
+            value,
+            flags: Nzcv::NONE.with_n(neg).with_z(zero).with_c(old_c).with_v(old_v),
+        }
     }
 
     /// UMULL — unsigned 64-bit multiply.
@@ -961,7 +1118,7 @@ impl ArmInstructionSemantics {
 
     /// Apply ALU flags to CPSR (when S bit is set).
     pub const fn apply_alu_flags(&mut self, result: AluResult) {
-        self.cpsr = self.cpsr.with_nzcv(result.n, result.z, result.c, result.v);
+        self.cpsr = self.cpsr.with_nzcv(result.flags);
     }
 
     /// Exception entry: save CPSR to SPSR, switch mode, set PC.
@@ -1067,75 +1224,75 @@ mod tests {
 
     #[test]
     fn test_cond_eq_true_when_z_set() {
-        let flags = CpsrFlags::from_flags(false, true, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::Z);
         assert!(ConditionCode::EQ.evaluate(flags));
     }
 
     #[test]
     fn test_cond_eq_false_when_z_clear() {
-        let flags = CpsrFlags::from_flags(false, false, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::NONE);
         assert!(!ConditionCode::EQ.evaluate(flags));
     }
 
     #[test]
     fn test_cond_ne_false_when_z_set() {
-        let flags = CpsrFlags::from_flags(false, true, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::Z);
         assert!(!ConditionCode::NE.evaluate(flags));
     }
 
     #[test]
     fn test_cond_cs_true_when_c_set() {
-        let flags = CpsrFlags::from_flags(false, false, true, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::C);
         assert!(ConditionCode::CS.evaluate(flags));
     }
 
     #[test]
     fn test_cond_cc_true_when_c_clear() {
-        let flags = CpsrFlags::from_flags(false, false, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::NONE);
         assert!(ConditionCode::CC.evaluate(flags));
     }
 
     #[test]
     fn test_cond_mi_true_when_n_set() {
-        let flags = CpsrFlags::from_flags(true, false, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::N);
         assert!(ConditionCode::MI.evaluate(flags));
     }
 
     #[test]
     fn test_cond_pl_true_when_n_clear() {
-        let flags = CpsrFlags::from_flags(false, false, false, false);
+        let flags = CpsrFlags::from_nzcv(Nzcv::NONE);
         assert!(ConditionCode::PL.evaluate(flags));
     }
 
     #[test]
     fn test_cond_vs_true_when_v_set() {
-        let flags = CpsrFlags::from_flags(false, false, false, true);
+        let flags = CpsrFlags::from_nzcv(Nzcv::V);
         assert!(ConditionCode::VS.evaluate(flags));
     }
 
     #[test]
     fn test_cond_hi_requires_c_and_not_z() {
-        let f1 = CpsrFlags::from_flags(false, false, true, false);
+        let f1 = CpsrFlags::from_nzcv(Nzcv::C);
         assert!(ConditionCode::HI.evaluate(f1));
-        let f2 = CpsrFlags::from_flags(false, true, true, false);
+        let f2 = CpsrFlags::from_nzcv(Nzcv::Z | Nzcv::C);
         assert!(!ConditionCode::HI.evaluate(f2));
     }
 
     #[test]
     fn test_cond_ge_when_n_eq_v() {
-        let f1 = CpsrFlags::from_flags(true, false, false, true);
+        let f1 = CpsrFlags::from_nzcv(Nzcv::N | Nzcv::V);
         assert!(ConditionCode::GE.evaluate(f1));
-        let f2 = CpsrFlags::from_flags(false, false, false, false);
+        let f2 = CpsrFlags::from_nzcv(Nzcv::NONE);
         assert!(ConditionCode::GE.evaluate(f2));
-        let f3 = CpsrFlags::from_flags(true, false, false, false);
+        let f3 = CpsrFlags::from_nzcv(Nzcv::N);
         assert!(!ConditionCode::GE.evaluate(f3));
     }
 
     #[test]
     fn test_cond_gt() {
-        let f = CpsrFlags::from_flags(true, false, false, true);
+        let f = CpsrFlags::from_nzcv(Nzcv::N | Nzcv::V);
         assert!(ConditionCode::GT.evaluate(f));
-        let f2 = CpsrFlags::from_flags(true, true, false, true);
+        let f2 = CpsrFlags::from_nzcv(Nzcv::N | Nzcv::Z | Nzcv::V);
         assert!(!ConditionCode::GT.evaluate(f2));
     }
 
@@ -1238,40 +1395,40 @@ mod tests {
     fn test_add_zero() {
         let r = AluOps::add(0, 0);
         assert_eq!(r.value, 0);
-        assert!(r.z);
-        assert!(!r.n);
-        assert!(!r.c);
-        assert!(!r.v);
+        assert!(r.z());
+        assert!(!r.n());
+        assert!(!r.c());
+        assert!(!r.v());
     }
 
     #[test]
     fn test_add_carry() {
         let r = AluOps::add(0xFFFF_FFFF, 1);
         assert_eq!(r.value, 0);
-        assert!(r.c);
-        assert!(r.z);
+        assert!(r.c());
+        assert!(r.z());
     }
 
     #[test]
     fn test_add_overflow() {
         let r = AluOps::add(0x7FFF_FFFF, 1);
-        assert!(r.v);
-        assert!(r.n);
+        assert!(r.v());
+        assert!(r.n());
     }
 
     #[test]
     fn test_sub_basic() {
         let r = AluOps::sub(10, 5);
         assert_eq!(r.value, 5);
-        assert!(!r.n);
-        assert!(!r.z);
+        assert!(!r.n());
+        assert!(!r.z());
     }
 
     #[test]
     fn test_sub_zero_result() {
         let r = AluOps::sub(5, 5);
         assert_eq!(r.value, 0);
-        assert!(r.z);
+        assert!(r.z());
     }
 
     #[test]
@@ -1310,7 +1467,7 @@ mod tests {
     fn test_eor() {
         let r = AluOps::eor(0xFF, 0xFF, false, false);
         assert_eq!(r.value, 0);
-        assert!(r.z);
+        assert!(r.z());
     }
 
     #[test]
@@ -1323,14 +1480,14 @@ mod tests {
     fn test_mvn() {
         let r = AluOps::mvn(0, false, false);
         assert_eq!(r.value, 0xFFFF_FFFF);
-        assert!(r.n);
+        assert!(r.n());
     }
 
     // --- CPSR tests ---
 
     #[test]
     fn test_cpsr_flags_roundtrip() {
-        let f = CpsrFlags::from_flags(true, false, true, false);
+        let f = CpsrFlags::from_nzcv(Nzcv::N | Nzcv::C);
         assert!(f.n());
         assert!(!f.z());
         assert!(f.c());
@@ -1360,7 +1517,7 @@ mod tests {
 
     #[test]
     fn test_cpsr_display() {
-        let f = CpsrFlags::from_flags(true, false, true, false);
+        let f = CpsrFlags::from_nzcv(Nzcv::N | Nzcv::C);
         assert_eq!(format!("{f}"), "NzCv");
     }
 
@@ -1408,7 +1565,7 @@ mod tests {
     #[test]
     fn test_semantics_condition_passes() {
         let mut sem = ArmInstructionSemantics::new();
-        sem.write_cpsr(CpsrFlags::from_flags(false, true, false, false));
+        sem.write_cpsr(CpsrFlags::from_nzcv(Nzcv::Z));
         assert!(sem.condition_passes(ConditionCode::EQ));
         assert!(!sem.condition_passes(ConditionCode::NE));
     }
@@ -1425,7 +1582,7 @@ mod tests {
     #[test]
     fn test_semantics_exception_entry_and_return() {
         let mut sem = ArmInstructionSemantics::new();
-        sem.write_cpsr(CpsrFlags::from_flags(true, false, true, false));
+        sem.write_cpsr(CpsrFlags::from_nzcv(Nzcv::N | Nzcv::C));
         let before = sem.cpsr();
         sem.exception_entry(ProcessorMode::Supervisor, false);
         assert_eq!(sem.cpsr().mode(), ProcessorMode::Supervisor);
@@ -1509,8 +1666,8 @@ mod tests {
     fn test_adc_with_carry() {
         let r = AluOps::adc(0xFFFF_FFFF, 0, true);
         assert_eq!(r.value, 0);
-        assert!(r.c);
-        assert!(r.z);
+        assert!(r.c());
+        assert!(r.z());
     }
 
     #[test]
@@ -1522,26 +1679,26 @@ mod tests {
     #[test]
     fn test_cmp_equal() {
         let r = AluOps::cmp(5, 5);
-        assert!(r.z);
+        assert!(r.z());
     }
 
     #[test]
     fn test_cmn() {
         let r = AluOps::cmn(1, 0xFFFF_FFFF);
-        assert!(r.z);
-        assert!(r.c);
+        assert!(r.z());
+        assert!(r.c());
     }
 
     #[test]
     fn test_tst_zero() {
         let r = AluOps::tst(0xFF, 0, false, false);
-        assert!(r.z);
+        assert!(r.z());
     }
 
     #[test]
     fn test_teq_same_values() {
         let r = AluOps::teq(0xAB, 0xAB, false, false);
-        assert!(r.z);
+        assert!(r.z());
     }
 
     #[test]
