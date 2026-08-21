@@ -201,8 +201,11 @@ fn decode_cb(op: u8) -> Decoded {
 
 /// Decode an ED-prefixed instruction.
 fn decode_ed(op: u8, bytes: &[u8]) -> Decoded {
+    if op < 0x60 {
+        return decode_ed_low_group(op, bytes);
+    }
     if op < 0xA0 {
-        return decode_ed_load_group(op, bytes);
+        return decode_ed_high_group(op, bytes);
     }
     decode_ed_block_group(op)
 }
@@ -212,8 +215,8 @@ fn ed_unknown(op: u8) -> (String, String, InstrFlags) {
     ("DB".to_string(), format!("ED,${op:02X}"), InstrFlags::NONE)
 }
 
-/// ED opcodes below 0xA0: IN/OUT (C), 16-bit ADC/SBC, LD (nn),rp, IM, RRD/RLD.
-fn decode_ed_load_group(op: u8, bytes: &[u8]) -> Decoded {
+/// ED opcodes below 0x60: the B/C/D/E register IN, OUT, ADC, SBC and LD forms.
+fn decode_ed_low_group(op: u8, bytes: &[u8]) -> Decoded {
     let mut size = 2usize;
     let (mnemonic, operands, flags) = match op {
         0x40 => ("IN".to_string(), "B,(C)".to_string(), InstrFlags::NONE),
@@ -290,6 +293,20 @@ fn decode_ed_load_group(op: u8, bytes: &[u8]) -> Decoded {
         }
         0x5E => ("IM".to_string(), "2".to_string(), InstrFlags::NONE),
         0x5F => ("LD".to_string(), "A,R".to_string(), InstrFlags::NONE),
+        _ => ed_unknown(op),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// ED opcodes 0x60..0x9F: the H/L/A register forms plus RRD, RLD and LD SP.
+fn decode_ed_high_group(op: u8, bytes: &[u8]) -> Decoded {
+    let mut size = 2usize;
+    let (mnemonic, operands, flags) = match op {
         0x60 => ("IN".to_string(), "H,(C)".to_string(), InstrFlags::NONE),
         0x61 => ("OUT".to_string(), "(C),H".to_string(), InstrFlags::NONE),
         0x62 => ("SBC".to_string(), "HL,HL".to_string(), InstrFlags::NONE),
@@ -406,7 +423,10 @@ fn decode_index_prefix(op: u8, bytes: &[u8], idx: &str) -> Decoded {
     if op < 0x46 {
         return decode_index_arith_group(op, bytes, idx, &disp);
     }
-    decode_index_memory_group(op, idx, &disp)
+    if op < 0x86 {
+        return decode_index_load_group(op, &disp);
+    }
+    decode_index_alu_group(op, idx, &disp)
 }
 
 /// A DD/FD opcode with no indexed form: rendered as a data byte.
@@ -498,8 +518,8 @@ fn decode_index_arith_group(op: u8, bytes: &[u8], idx: &str, disp: &str) -> Deco
     }
 }
 
-/// DD/FD opcodes 0x46 and above: the (ix+d) load, ALU and stack forms.
-fn decode_index_memory_group(op: u8, idx: &str, disp: &str) -> Decoded {
+/// DD/FD opcodes 0x46..0x85: the LD r,(ix+d) and LD (ix+d),r forms.
+fn decode_index_load_group(op: u8, disp: &str) -> Decoded {
     let (mnemonic, operands, size, flags) = match op {
         0x46 => (
             "LD".to_string(),
@@ -585,6 +605,19 @@ fn decode_index_memory_group(op: u8, idx: &str, disp: &str) -> Decoded {
             3,
             InstrFlags::READ_MEM,
         ),
+        _ => index_unknown(op),
+    };
+    Decoded {
+        mnemonic,
+        operands,
+        size,
+        flags,
+    }
+}
+
+/// DD/FD opcodes 0x86 and above: ALU A,(ix+d) plus the index-register stack ops.
+fn decode_index_alu_group(op: u8, idx: &str, disp: &str) -> Decoded {
+    let (mnemonic, operands, size, flags) = match op {
         0x86 => (
             "ADD".to_string(),
             format!("A,({disp})"),
@@ -897,89 +930,9 @@ fn decode_x0_z47(yb: u8, zb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
     })
 }
 
-/// Decode an unprefixed Z80 instruction.
-///
-/// # Errors
-/// Returns `CoreError::InvalidInput` when the byte slice is too short.
-pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
-    if bytes.is_empty() {
-        return Err(CoreError::InvalidFormat {
-            message: "empty Z80 instruction".to_string(),
-        });
-    }
-    let op = bytes[0];
-
-    // CB prefix — handled before general decoding
-    if op == 0xCB {
-        if bytes.len() < 2 {
-            return Err(CoreError::InvalidFormat {
-                message: "truncated CB prefix".to_string(),
-            });
-        }
-        return Ok(decode_cb(bytes[1]));
-    }
-
-    // Z80 opcode field decomposition (Zilog notation: x/y/z/p/q)
-    let xb = (op >> 6) & 3;
-    let yb = (op >> 3) & 7;
-    let zb = op & 7;
-    let pb = (yb >> 1) & 3;
-    let qb = yb & 1;
-
-    let result = match xb {
-        // x=0: misc loads, 16-bit INC/DEC/LD, 8-bit INC/DEC/LD, rotate accumulator
-        0 => match zb {
-            0 | 1 => decode_x0_z01(op, yb, zb, pb, qb, bytes, pc)?,
-            2 | 3 => decode_x0_z23(op, zb, pb, qb, bytes)?,
-            _ => decode_x0_z47(yb, zb, bytes)?,
-        },
-
-        // x=1: 8-bit LD r,r (or HALT for 0x76)
-        1 => {
-            if op == 0x76 {
-                Decoded {
-                    mnemonic: "HALT".to_string(),
-                    operands: String::new(),
-                    size: 1,
-                    flags: InstrFlags::NONE,
-                }
-            } else {
-                Decoded {
-                    mnemonic: "LD".to_string(),
-                    operands: format!("{},{}", reg8(yb), reg8(zb)),
-                    size: 1,
-                    flags: InstrFlags::NONE,
-                }
-            }
-        }
-
-        // x=2: 8-bit ALU op A,r
-        2 => {
-            let mn = match yb {
-                0 => "ADD",
-                1 => "ADC",
-                2 => "SUB",
-                3 => "SBC",
-                4 => "AND",
-                5 => "XOR",
-                6 => "OR",
-                _ => "CP",
-            };
-            let ops = if matches!(mn, "ADD" | "ADC" | "SBC") {
-                format!("A,{}", reg8(zb))
-            } else {
-                reg8(zb).to_string()
-            };
-            Decoded {
-                mnemonic: mn.to_string(),
-                operands: ops,
-                size: 1,
-                flags: InstrFlags::NONE,
-            }
-        }
-
-        // x=3: control, stack, misc
-        _ => match zb {
+/// x=3, z=0..2: RET cc, POP/RET/EXX/JP (HL)/LD SP,HL and JP cc,nn.
+fn decode_x3_z012(op: u8, yb: u8, zb: u8, pb: u8, qb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             0 => {
                 let cond = cc_name(yb);
                 Decoded {
@@ -1038,6 +991,13 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::BRANCH.union(InstrFlags::CONDITIONAL),
                 }
             }
+        _ => undefined_byte(op),
+    })
+}
+
+/// x=3, z=3: JP nn, the I/O forms, EX (SP),HL, EX DE,HL and DI/EI.
+fn decode_x3_z3(op: u8, yb: u8, zb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             3 => match yb {
                 0 => {
                     if bytes.len() < 3 {
@@ -1110,6 +1070,13 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::NONE,
                 },
             },
+        _ => undefined_byte(op),
+    })
+}
+
+/// x=3, z=4..7: CALL cc,nn, PUSH/CALL, ALU A,n and RST.
+fn decode_x3_z47(yb: u8, zb: u8, pb: u8, qb: u8, bytes: &[u8]) -> Result<Decoded, CoreError> {
+    Ok(match zb {
             4 => {
                 if bytes.len() < 3 {
                     return Err(CoreError::InvalidFormat {
@@ -1193,6 +1160,95 @@ pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
                     flags: InstrFlags::CALL,
                 }
             }
+    })
+}
+
+/// Decode an unprefixed Z80 instruction.
+///
+/// # Errors
+/// Returns `CoreError::InvalidInput` when the byte slice is too short.
+pub fn decode_main(bytes: &[u8], pc: u64) -> Result<Decoded, CoreError> {
+    if bytes.is_empty() {
+        return Err(CoreError::InvalidFormat {
+            message: "empty Z80 instruction".to_string(),
+        });
+    }
+    let op = bytes[0];
+
+    // CB prefix — handled before general decoding
+    if op == 0xCB {
+        if bytes.len() < 2 {
+            return Err(CoreError::InvalidFormat {
+                message: "truncated CB prefix".to_string(),
+            });
+        }
+        return Ok(decode_cb(bytes[1]));
+    }
+
+    // Z80 opcode field decomposition (Zilog notation: x/y/z/p/q)
+    let xb = (op >> 6) & 3;
+    let yb = (op >> 3) & 7;
+    let zb = op & 7;
+    let pb = (yb >> 1) & 3;
+    let qb = yb & 1;
+
+    let result = match xb {
+        // x=0: misc loads, 16-bit INC/DEC/LD, 8-bit INC/DEC/LD, rotate accumulator
+        0 => match zb {
+            0 | 1 => decode_x0_z01(op, yb, zb, pb, qb, bytes, pc)?,
+            2 | 3 => decode_x0_z23(op, zb, pb, qb, bytes)?,
+            _ => decode_x0_z47(yb, zb, bytes)?,
+        },
+
+        // x=1: 8-bit LD r,r (or HALT for 0x76)
+        1 => {
+            if op == 0x76 {
+                Decoded {
+                    mnemonic: "HALT".to_string(),
+                    operands: String::new(),
+                    size: 1,
+                    flags: InstrFlags::NONE,
+                }
+            } else {
+                Decoded {
+                    mnemonic: "LD".to_string(),
+                    operands: format!("{},{}", reg8(yb), reg8(zb)),
+                    size: 1,
+                    flags: InstrFlags::NONE,
+                }
+            }
+        }
+
+        // x=2: 8-bit ALU op A,r
+        2 => {
+            let mn = match yb {
+                0 => "ADD",
+                1 => "ADC",
+                2 => "SUB",
+                3 => "SBC",
+                4 => "AND",
+                5 => "XOR",
+                6 => "OR",
+                _ => "CP",
+            };
+            let ops = if matches!(mn, "ADD" | "ADC" | "SBC") {
+                format!("A,{}", reg8(zb))
+            } else {
+                reg8(zb).to_string()
+            };
+            Decoded {
+                mnemonic: mn.to_string(),
+                operands: ops,
+                size: 1,
+                flags: InstrFlags::NONE,
+            }
+        }
+
+        // x=3: control, stack, misc
+        _ => match zb {
+            0..=2 => decode_x3_z012(op, yb, zb, pb, qb, bytes)?,
+            3 => decode_x3_z3(op, yb, zb, bytes)?,
+            _ => decode_x3_z47(yb, zb, pb, qb, bytes)?,
         },
     };
 
