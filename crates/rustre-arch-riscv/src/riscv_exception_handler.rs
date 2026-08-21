@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Write as _;
 
 // ── Trap cause ────────────────────────────────────────────────────────────────
 
@@ -391,7 +392,7 @@ impl TrapConfig {
     /// In Vectored mode, interrupts are dispatched to `BASE + 4*cause_code`.
     /// In Direct mode, all traps go to `BASE`.
     #[must_use]
-    pub fn handler_for(&self, cause: u64, xlen: u32) -> u64 {
+    pub const fn handler_for(&self, cause: u64, xlen: u32) -> u64 {
         let trap = mcause_decode(cause, xlen);
         match (self.mode, &trap) {
             (TvecMode::Vectored, TrapCause::Interrupt(c)) => {
@@ -451,7 +452,7 @@ impl RiscvExceptionHandler {
     /// - `xlen` — 32 or 64
     /// - `mtvec` — machine trap vector CSR value
     #[must_use]
-    pub fn new(xlen: u32, mtvec: u64) -> Self {
+    pub const fn new(xlen: u32, mtvec: u64) -> Self {
         Self {
             xlen,
             machine: TrapConfig::from_tvec(mtvec),
@@ -461,7 +462,7 @@ impl RiscvExceptionHandler {
     }
 
     /// Set the supervisor-mode trap vector.
-    pub fn set_stvec(&mut self, stvec: u64) {
+    pub const fn set_stvec(&mut self, stvec: u64) {
         self.supervisor = Some(TrapConfig::from_tvec(stvec));
     }
 
@@ -507,7 +508,7 @@ impl RiscvExceptionHandler {
 
     /// Compute the machine-mode handler for a given cause value.
     #[must_use]
-    pub fn machine_handler(&self, cause: u64) -> u64 {
+    pub const fn machine_handler(&self, cause: u64) -> u64 {
         self.machine.handler_for(cause, self.xlen)
     }
 
@@ -544,22 +545,23 @@ impl RiscvExceptionHandler {
     /// Summarise the trap configuration as a human-readable string.
     #[must_use]
     pub fn summary(&self) -> String {
-        let mut s = format!(
-            "RISC-V{} Exception Handler Summary\n",
-            self.xlen
-        );
-        s.push_str(&format!(
-            "  mtvec = 0x{:016X}  mode={}\n",
+        let mut s = format!("RISC-V{} Exception Handler Summary\n", self.xlen);
+        // Writing into a String is infallible; `expect` records that.
+        let w = &mut s;
+        writeln!(
+            w,
+            "  mtvec = 0x{:016X}  mode={}",
             self.machine.tvec, self.machine.mode
-        ));
-        s.push_str(&format!("  M-mode base = 0x{:016X}\n", self.machine.base));
+        )
+        .expect("writing into a String cannot fail");
+        writeln!(w, "  M-mode base = 0x{:016X}", self.machine.base)
+            .expect("writing into a String cannot fail");
         if let Some(ref sup) = self.supervisor {
-            s.push_str(&format!(
-                "  stvec = 0x{:016X}  mode={}\n",
-                sup.tvec, sup.mode
-            ));
+            writeln!(w, "  stvec = 0x{:016X}  mode={}", sup.tvec, sup.mode)
+                .expect("writing into a String cannot fail");
         }
-        s.push_str(&format!("  Trap history: {} records\n", self.history.len()));
+        writeln!(w, "  Trap history: {} records", self.history.len())
+            .expect("writing into a String cannot fail");
         s
     }
 }

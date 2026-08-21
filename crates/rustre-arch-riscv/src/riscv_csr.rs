@@ -10,6 +10,12 @@
 
 use std::collections::HashMap;
 
+/// An all-zero CSR value bank.
+///
+/// Held as a `static` so the 32 KiB of zeroes lives in static data rather than
+/// being built as a temporary on the caller's stack.
+static ZERO_CSR_FILE: [u64; 4096] = [0u64; 4096];
+
 // ---------------------------------------------------------------------------
 // CsrAccess — privilege / access level
 // ---------------------------------------------------------------------------
@@ -725,7 +731,7 @@ impl RiscVCsr {
             lookup.insert(desc.id.0, i);
         }
         Self {
-            values: [0u64; 4096],
+            values: ZERO_CSR_FILE,
             lookup,
         }
     }
@@ -742,6 +748,8 @@ impl RiscVCsr {
     }
 
     /// Write a value to a CSR.
+    ///
+    /// # Errors
     ///
     /// Returns `Err` if:
     /// - The address is out of range.

@@ -162,7 +162,7 @@ impl VType {
     /// Encode back to CSR value.
     #[must_use]
     pub const fn to_csr(&self) -> u64 {
-        let vlmul = match self.lmul {
+        let vlmul: u64 = match self.lmul {
             Lmul::M1 => 0,
             Lmul::M2 => 1,
             Lmul::M4 => 2,
@@ -170,13 +170,13 @@ impl VType {
             Lmul::MF8 => 5,
             Lmul::MF4 => 6,
             Lmul::MF2 => 7,
-        } as u64;
-        let vsew = match self.sew {
+        };
+        let vsew: u64 = match self.sew {
             Sew::E8 => 0,
             Sew::E16 => 1,
             Sew::E32 => 2,
             Sew::E64 => 3,
-        } as u64;
+        };
         vlmul | (vsew << 3) | ((self.ta as u64) << 6) | ((self.ma as u64) << 7)
     }
 }

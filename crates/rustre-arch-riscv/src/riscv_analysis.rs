@@ -767,7 +767,12 @@ impl RiscVAnalysis {
         if total == 0 {
             0.0
         } else {
-            self.compressed_count as f64 / total as f64
+            // Instruction counts come from a decoded image; reaching 2^32
+            // instructions would need a multi-gigabyte text section, so both
+            // conversions are exact for any input this crate can be given.
+            let compressed = u32::try_from(self.compressed_count).unwrap_or(u32::MAX);
+            let total = u32::try_from(total).unwrap_or(u32::MAX);
+            f64::from(compressed) / f64::from(total)
         }
     }
 
@@ -1087,7 +1092,10 @@ mod tests {
     #[test]
     fn test_analysis_compression_ratio_empty() {
         let a = RiscVAnalysis::new();
-        assert_eq!(a.compression_ratio(), 0.0);
+        assert!(
+            a.compression_ratio().abs() < f64::EPSILON,
+            "empty analysis has a zero compression ratio"
+        );
         assert!(!a.uses_compressed());
     }
 

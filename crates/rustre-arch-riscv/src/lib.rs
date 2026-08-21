@@ -723,7 +723,9 @@ impl RiscvArch {
                 )
             }
             0x08 => {
-                let to_fmt = fp_fmt(rs2 as u32);
+                // `rs2 & 0x1F` is at most 31, so this conversion is exact for every
+                // input and the fallback arm is unreachable.
+                let to_fmt = fp_fmt(u32::try_from(rs2 & 0x1F).unwrap_or(0));
                 plain(
                     address,
                     &format!("fcvt.{to_fmt}.{suffix}"),
@@ -1796,12 +1798,12 @@ impl Architecture for RiscvArch {
             let target = match (op, funct3) {
                 // C.JAL (RV32 only, op=01, funct3=001)
                 // C.J (op=01, funct3=101)
-                (1, 1) | (1, 5) => {
+                (1, 1 | 5) => {
                     let offset = c_j_offset(hw);
                     instr.address.0.wrapping_add((i64::from(offset)).cast_unsigned())
                 }
                 // C.BEQZ (op=01, funct3=110)
-                (1, 6) | (1, 7) => {
+                (1, 6 | 7) => {
                     let offset = c_b_offset(hw);
                     instr.address.0.wrapping_add((i64::from(offset)).cast_unsigned())
                 }
@@ -6857,13 +6859,36 @@ pub const fn rv_sub_ov(a: i64, b: i64) -> Option<i64> {
 /// RISC-V ADDW: add two 32-bit values and sign-extend result to 64 bits.
 #[must_use]
 pub const fn rv_addw(a: i64, b: i64) -> i64 {
-    ((a.wrapping_add(b)) as i32) as i64
+    rv_low32_sext(a.wrapping_add(b))
 }
 
 /// RISC-V SUBW: subtract two 32-bit values and sign-extend result to 64 bits.
 #[must_use]
 pub const fn rv_subw(a: i64, b: i64) -> i64 {
-    ((a.wrapping_sub(b)) as i32) as i64
+    rv_low32_sext(a.wrapping_sub(b))
+}
+
+/// Truncate a 64-bit value to its low 32 bits and sign-extend back to 64 bits.
+///
+/// This is the `*W` (word) semantics of RV64: a 32-bit result is written to a
+/// 64-bit register sign-extended. The conversion works on the little-endian
+/// byte image rather than with a numeric cast, so it is exact by construction
+/// for every input and cannot panic.
+#[must_use]
+pub const fn rv_low32_sext(v: i64) -> i64 {
+    let b = v.to_le_bytes();
+    let sign = if b[3] & 0x80 != 0 { 0xFF } else { 0x00 };
+    i64::from_le_bytes([b[0], b[1], b[2], b[3], sign, sign, sign, sign])
+}
+
+/// Low 64 bits of a 128-bit value, as a signed 64-bit integer.
+///
+/// Reads the low eight little-endian bytes, so no numeric cast is involved and
+/// the result is exactly the low half of `v` for every input.
+#[must_use]
+pub const fn rv_low64_of_i128(v: i128) -> i64 {
+    let b = v.to_le_bytes();
+    i64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
 }
 
 /// RISC-V SLT: return 1 if `a < b` (signed), else 0.
@@ -6900,7 +6925,10 @@ pub const fn rv_div(a: i64, b: i64) -> i64 {
 /// RISC-V DIVU: unsigned integer divide; returns `u64::MAX` on div-by-zero.
 #[must_use]
 pub const fn rv_divu(a: u64, b: u64) -> u64 {
-    if b == 0 { u64::MAX } else { a / b }
+    match a.checked_div(b) {
+        Some(q) => q,
+        None => u64::MAX,
+    }
 }
 
 /// RISC-V REM: signed remainder; returns `a` on div-by-zero.
@@ -7635,7 +7663,7 @@ mod very_final_tests {
     #[test]
     fn test_rv_c_addi4spn_imm_basic() {
         // imm9_6=1 (bits 10:7 = 0b0001), rest 0 → imm = 1<<6 = 64
-        let hw: u16 = (1 << 7) as u16;
+        let hw: u16 = 1 << 7;
         assert_eq!(rv_c_addi4spn_imm(hw), 64);
     }
 
@@ -8153,7 +8181,9 @@ pub fn decode_rvv(address: Address, word: u32, bytes: Vec<u8>) -> Option<Instruc
     let ops_vvv = || format!("{}, {}, {}{}", vr(vd), vr(vs2), vr(vs1), mask);
     let ops_vvx = || format!("{}, {}, {}{}", vr(vd), vr(vs2), xr(rs1), mask);
     let ops_vvi = || {
-        let imm5 = rv_sign_ext((vs1 as u32) & 0x1f, 5);
+        // Read the vs1 field straight out of the instruction word: no cast, and
+        // the mask bounds it to five bits exactly as `vs1` was derived.
+        let imm5 = rv_sign_ext((word >> 15) & 0x1f, 5);
         format!("{}, {}, {imm5}{}", vr(vd), vr(vs2), mask)
     };
     let _ops_vv = || format!("{}, {}{}", vr(vd), vr(vs2), mask);
@@ -9319,7 +9349,7 @@ pub const fn rv_vtype_imm(vma: bool, vta: bool, vsew: u8, vlmul: u8) -> u16 {
 impl RiscvArch {
     /// Decode a vector (opcode=0x57) instruction word.
     fn decode_vector(&self, address: Address, word: u32, bytes: Vec<u8>) -> Instruction {
-        decode_rvv(address, word, bytes.clone()).map_or_else(|| unknown(address, bytes), |instr| instr)
+        decode_rvv(address, word, bytes.clone()).unwrap_or_else(|| unknown(address, bytes))
     }
 }
 
@@ -10155,7 +10185,7 @@ mod rvv_tests {
     #[test]
     fn test_rv_vtype_imm_e32_m1() {
         let v = rv_vtype_imm(false, false, 2, 0);
-        assert_eq!(v, (2 << 3) as u16); // vsew=2 at bits[5:3]
+        assert_eq!(v, 2u16 << 3); // vsew=2 at bits[5:3]
     }
 
     #[test]
@@ -11102,8 +11132,8 @@ mod abi_tests {
     #[test]
     fn test_decode_word_full_vsetvli() {
         let arch = RiscvArch::rv64();
-        let vtypei = u32::from(rv_vtype_imm(false, false, 2, 0));
-        let word = rv_encode_vsetvli(1, 2, vtypei as u16);
+        let vtypei = rv_vtype_imm(false, false, 2, 0);
+        let word = rv_encode_vsetvli(1, 2, vtypei);
         let bytes = word.to_le_bytes();
         let instr = arch.decode_word_full(Address::new(0x0), word, &bytes);
         assert_eq!(instr.mnemonic, "vsetvli");

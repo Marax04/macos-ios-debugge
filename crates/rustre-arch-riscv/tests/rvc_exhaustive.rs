@@ -18,7 +18,7 @@ fn every_halfword_decodes_without_panic() {
         let dec = RiscvCompressedDecoder::new(rv64);
         let mut ok = 0usize;
         for w in 0u16..=u16::MAX {
-            if let Ok(_) = dec.decode(w) { ok += 1 }
+            if dec.decode(w).is_ok() { ok += 1 }
         }
         // Anti-vacuity: a decoder that rejected everything would satisfy
         // "never panics" without decoding anything at all.
@@ -36,7 +36,7 @@ fn noise(n: usize, seed: u64) -> Vec<u8> {
     (0..n)
         .map(|_| {
             s = s.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
-            (s >> 24) as u8
+            (s >> 24).to_le_bytes()[0]
         })
         .collect()
 }

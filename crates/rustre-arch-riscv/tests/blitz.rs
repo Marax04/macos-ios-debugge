@@ -696,7 +696,7 @@ fn is_compressed_detects_low_bits() {
 fn c_op_funct3_split() {
     let hw: u16 = 0xE003;
     let (op, f3) = rv_c_op_funct3(hw);
-    assert_eq!(op, hw as u8 & 0x3);
+    assert_eq!(op, hw.to_le_bytes()[0] & 0x3);
     assert_eq!(f3, ((hw >> 13) & 0x7) as u8);
 }
 
@@ -732,7 +732,7 @@ fn qemu_mmio_lookup() {
     let r = rv_qemu_region_lookup(0x0200_0000);
     // We don't assert specifically; just that the function runs.
     let _ = r;
-    assert!(rv_qemu_region_lookup(0xFFFF_FFFF_FFFF_FFFF).is_none() || true);
+    assert!(rv_qemu_region_lookup(0xFFFF_FFFF_FFFF_FFFF).is_none());
 }
 
 #[test]

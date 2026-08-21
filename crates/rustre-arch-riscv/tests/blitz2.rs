@@ -24,10 +24,10 @@ impl Lcg {
             .wrapping_add(1_442_695_040_888_963_407);
         self.0
     }
-    fn u32(&mut self) -> u32 {
+    const fn u32(&mut self) -> u32 {
         (self.next() >> 32) as u32
     }
-    fn u16(&mut self) -> u16 {
+    const fn u16(&mut self) -> u16 {
         (self.next() >> 48) as u16
     }
 }
@@ -41,7 +41,8 @@ fn imm_i_roundtrip_50_inputs() {
     // Range [-2048, 2047]. Pick 50 evenly spread values.
     for k in 0..50 {
         let imm = -2048 + (k * 4095) / 49;
-        let imm = imm.clamp(-2048, 2047) as i16;
+        // The clamp bounds the value to the i16 range, so this cannot fail.
+        let imm = i16::try_from(imm.clamp(-2048, 2047)).unwrap_or(0);
         let w = rv_encode_addi(1, 2, imm);
         assert_eq!(rv_imm_i(w), i32::from(imm), "addi imm round-trip {imm}");
         assert_eq!(rv_rd(w), 1);
@@ -54,7 +55,8 @@ fn imm_i_roundtrip_50_inputs() {
 fn imm_s_roundtrip_50_inputs() {
     for k in 0..50 {
         let imm = -2048 + (k * 4095) / 49;
-        let imm = imm.clamp(-2048, 2047) as i16;
+        // The clamp bounds the value to the i16 range, so this cannot fail.
+        let imm = i16::try_from(imm.clamp(-2048, 2047)).unwrap_or(0);
         let w = rv_encode_sw(3, 4, imm);
         assert_eq!(rv_imm_s(w), i32::from(imm), "sw S-imm round-trip {imm}");
         assert_eq!(rv_rs2(w), 3);
@@ -422,8 +424,8 @@ fn mul_mulh_consistent() {
         let hi = rv_mulh(a, b);
         // Reconstruct 128-bit product and verify.
         let prod = i128::from(a).wrapping_mul(i128::from(b));
-        assert_eq!(lo, prod as i64);
-        assert_eq!(hi, (prod >> 64) as i64);
+        assert_eq!(lo, rv_low64_of_i128(prod));
+        assert_eq!(hi, rv_low64_of_i128(prod >> 64));
     }
 }
 
@@ -507,7 +509,10 @@ fn popcount_clz_ctz_consistency() {
             assert!((1..=32).contains(&pop));
             assert!(clz <= 31);
             assert!(ctz <= 31);
-            assert!(clz + ctz + pop >= 32 - (pop - 1) || true); // sanity
+            assert!(
+        clz + ctz + pop >= 32 - (pop - 1),
+        "clz/ctz/popcount are mutually consistent"
+    );
         }
     }
 }

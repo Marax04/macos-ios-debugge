@@ -27,6 +27,13 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
+
+    /// Low 16 bits of the next value, read from its little-endian byte image
+    /// so the narrowing is exact by construction rather than a numeric cast.
+    const fn next_u16(&mut self) -> u16 {
+        let b = self.next().to_le_bytes();
+        u16::from_le_bytes([b[0], b[1]])
+    }
 }
 
 /// Exhaustive sweep of every 16-bit halfword on RV32.
@@ -81,7 +88,7 @@ fn extreme_addresses_never_panic() {
     ] {
         let addr = Address::new(a);
         for _ in 0..512 {
-            let hw = rng.next() as u16;
+            let hw = rng.next_u16();
             let _ = decode_compressed(hw, 32, addr);
             let _ = decode_compressed(hw, 64, addr);
         }
@@ -97,7 +104,7 @@ fn extreme_addresses_never_panic() {
 fn random_words_never_panic() {
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     for _ in 0..20_000 {
-        let hw = rng.next() as u16;
+        let hw = rng.next_u16();
         let xlen = (rng.next() % 200) as u32;
         let addr = Address::new(rng.next());
         let _ = decode_compressed(hw, xlen, addr);
